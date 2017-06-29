@@ -33,9 +33,9 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.TableSQL, "t", "", "create table sql")
 	fs.StringVar(&cfg.IndexSQL, "i", "", "create index sql")
 
-	fs.IntVar(&cfg.WorkerCount, "c", 1, "parallel worker count")
-	fs.IntVar(&cfg.JobCount, "n", 1, "total job count")
-	fs.IntVar(&cfg.Batch, "b", 1, "insert batch commit count")
+	fs.IntVar(&cfg.WorkerCount, "c", 2, "parallel worker count")
+	fs.IntVar(&cfg.JobCount, "n", 10000, "total job count")
+	fs.IntVar(&cfg.Batch, "b", 1000, "insert batch commit count")
 
 	fs.StringVar(&cfg.DBCfg.Host, "h", "127.0.0.1", "set the database host ip")
 	fs.StringVar(&cfg.DBCfg.User, "u", "root", "set the database user")
