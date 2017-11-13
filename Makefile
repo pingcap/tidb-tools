@@ -5,10 +5,10 @@ LDFLAGS += -X "github.com/pingcap/tidb-tools/pkg/utils.GitHash=$(shell git rev-p
 
 CURDIR   := $(shell pwd)
 GO       := GO15VENDOREXPERIMENT="1" go
-GOTEST   := GOPATH=$(CURDIR)/_vendor:$(GOPATH) CGO_ENABLED=1 $(GO) test
+GOTEST   := CGO_ENABLED=1 $(GO) test
 PACKAGES := $$(go list ./... | grep -vE 'vendor')
 
-.PHONY: build importer checker dump_region test check deps
+.PHONY: build importer checker dump_region gen_meta test check deps
 
 build: importer checker check test
 
@@ -20,6 +20,9 @@ checker:
 
 dump_region:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/dump_region ./dump_region
+
+gen_meta:
+	$(GO) build -ldflags '$(LDFLAGS)' -o bin/gen_meta ./gen_meta
 
 test:
 	@export log_level=error; \
