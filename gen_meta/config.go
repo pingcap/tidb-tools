@@ -23,7 +23,6 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
-	"github.com/pingcap/tidb-binlog/pkg/flags"
 )
 
 const (
@@ -118,10 +117,6 @@ func (cfg *Config) Parse(args []string) error {
 	if len(cfg.FlagSet.Args()) > 0 {
 		return errors.Errorf("'%s' is not a valid flag", cfg.FlagSet.Arg(0))
 	}
-	// replace with environment vars
-	if err := flags.SetFlagsFromEnv("BINLOG_SERVER", cfg.FlagSet); err != nil {
-		return errors.Trace(err)
-	}
 	// adjust configuration
 	adjustString(&cfg.ListenAddr, defaultListenAddr)
 	cfg.ListenAddr = "http://" + cfg.ListenAddr // add 'http:' scheme to facilitate parsing
@@ -159,7 +154,7 @@ func (cfg *Config) validate() error {
 		return errors.Errorf("bad ListenAddr host format: %s, %v", urllis.Host, err)
 	}
 	// check EtcdEndpoints
-	urlv, err := flags.NewURLsValue(cfg.EtcdURLs)
+	urlv, err := NewURLsValue(cfg.EtcdURLs)
 	if err != nil {
 		return errors.Errorf("parse EtcdURLs error: %s, %v", cfg.EtcdURLs, err)
 	}
