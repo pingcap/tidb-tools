@@ -154,14 +154,9 @@ func (cfg *Config) validate() error {
 		return errors.Errorf("bad ListenAddr host format: %s, %v", urllis.Host, err)
 	}
 	// check EtcdEndpoints
-	urlv, err := NewURLsValue(cfg.EtcdURLs)
+	_, err = NewURLsValue(cfg.EtcdURLs)
 	if err != nil {
 		return errors.Errorf("parse EtcdURLs error: %s, %v", cfg.EtcdURLs, err)
-	}
-	for _, u := range urlv.URLSlice() {
-		if _, _, err := net.SplitHostPort(u.Host); err != nil {
-			return errors.Errorf("bad EtcdURL host format: %s, %v", u.Host, err)
-		}
 	}
 	return nil
 }
