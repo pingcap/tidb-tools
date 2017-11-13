@@ -17,6 +17,4 @@ Usage of gen_meta:
 ./bin/generate_binlog_position --pd-urls="http://127.0.0.1:2375" --data-dir="data.example"
 >cat data.example/savePoint
 commitTS = 395986424387338242
-
-[suffixs]
 ```

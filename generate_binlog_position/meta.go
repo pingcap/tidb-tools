@@ -15,7 +15,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"sync"
 	"time"
@@ -23,7 +22,6 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tipb/go-binlog"
 	"github.com/siddontang/go/ioutil2"
 )
 
@@ -37,13 +35,13 @@ type Meta interface {
 	Load() error
 
 	// Save saves meta information.
-	Save(int64, map[string]binlog.Pos) error
+	Save(int64) error
 
 	// Check checks whether we should save meta.
 	Check() bool
 
 	// Pos gets position information.
-	Pos() (int64, map[string]binlog.Pos)
+	Pos() int64
 }
 
 // LocalMeta is local meta struct.
@@ -55,12 +53,12 @@ type localMeta struct {
 
 	CommitTS int64 `toml:"commitTS" json:"commitTS"`
 	// drainer only stores the binlog file suffix
-	Suffixs map[string]uint64 `toml:"suffixs" json:"suffixs"`
+	//Suffixs map[string]uint64 `toml:"suffixs" json:"suffixs"`
 }
 
 // NewLocalMeta creates a new LocalMeta.
 func NewLocalMeta(name string) Meta {
-	return &localMeta{name: name, Suffixs: make(map[string]uint64)}
+	return &localMeta{name: name}
 }
 
 // Load implements Meta.Load interface.
@@ -79,20 +77,10 @@ func (lm *localMeta) Load() error {
 }
 
 // Save implements Meta.Save interface.
-func (lm *localMeta) Save(ts int64, poss map[string]binlog.Pos) error {
+func (lm *localMeta) Save(ts int64) error {
 	log.Infof("local meta save")
 	lm.Lock()
 	defer lm.Unlock()
-
-	for nodeID, pos := range poss {
-		// for safe restart, we should forward two binlog files
-		// make sure drainer can get binlogs larger than commitTS
-		// this is a simple way , if meet problem we would replace by an accurate algorithm
-		lm.Suffixs[nodeID] = 0
-		if pos.Suffix > 2 {
-			lm.Suffixs[nodeID] = pos.Suffix - 2
-		}
-	}
 
 	lm.CommitTS = ts
 
@@ -127,21 +115,9 @@ func (lm *localMeta) Check() bool {
 }
 
 // Pos implements Meta.Pos interface.
-func (lm *localMeta) Pos() (int64, map[string]binlog.Pos) {
+func (lm *localMeta) Pos() (int64) {
 	lm.RLock()
 	defer lm.RUnlock()
 
-	poss := make(map[string]binlog.Pos)
-	for nodeID, suffix := range lm.Suffixs {
-		poss[nodeID] = binlog.Pos{
-			Suffix: suffix,
-			Offset: 0,
-		}
-	}
-	return lm.CommitTS, poss
-}
-
-func (lm *localMeta) String() string {
-	ts, poss := lm.Pos()
-	return fmt.Sprintf("binlog %s commitTS = %d positions = %+v", lm.name, ts, poss)
+	return lm.CommitTS
 }

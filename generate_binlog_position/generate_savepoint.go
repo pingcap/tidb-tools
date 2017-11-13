@@ -25,7 +25,6 @@ import (
 	"github.com/pingcap/pd/pd-client"
 	"github.com/pingcap/tidb"
 	"github.com/pingcap/tidb/store/tikv"
-	"github.com/pingcap/tipb/go-binlog"
 	"golang.org/x/net/context"
 )
 
@@ -50,7 +49,6 @@ func GenSavepointInfo(cfg *Config) error {
 	}
 	defer tiStore.Close()
 
-	binlogPos := make(map[string]binlog.Pos)
 	// get newest ts from pd
 	commitTS, err := getTSO(cfg)
 	if err != nil {
@@ -60,7 +58,7 @@ func GenSavepointInfo(cfg *Config) error {
 
 	// generate meta infomation
 	meta := NewLocalMeta(path.Join(cfg.DataDir, "savePoint"))
-	err = meta.Save(commitTS, binlogPos)
+	err = meta.Save(commitTS)
 	return errors.Trace(err)
 }
 
