@@ -28,8 +28,8 @@ const (
 // Config holds the configuration of drainer
 type Config struct {
 	*flag.FlagSet
-	DataDir         string        `toml:"data-dir" json:"data-dir"`
-	EtcdURLs        string        `toml:"pd-urls" json:"pd-urls"`
+	DataDir  string `toml:"data-dir" json:"data-dir"`
+	EtcdURLs string `toml:"pd-urls" json:"pd-urls"`
 }
 
 // NewConfig return an instance of configuration
