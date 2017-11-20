@@ -1,11 +1,11 @@
-## gen_meta
+## Generate_binlog_position
 
-gen_meta is a tool to generate fake drainer savepoint file.
+generate_binlog_position is a tool to generate fake drainer savepoint file.
 
 ## How to use
 
 ```
-Usage of gen_meta:
+Usage of generate_binlog_position:
   --pd-urls string
 	a comma separated list of PD endpoints
   --data-dir string
@@ -18,3 +18,4 @@ Usage of gen_meta:
 >cat data.example/savePoint
 commitTS = 395986424387338242
 ```
+

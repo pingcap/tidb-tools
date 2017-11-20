@@ -115,7 +115,7 @@ func (lm *localMeta) Check() bool {
 }
 
 // Pos implements Meta.Pos interface.
-func (lm *localMeta) Pos() (int64) {
+func (lm *localMeta) Pos() int64 {
 	lm.RLock()
 	defer lm.RUnlock()
 
