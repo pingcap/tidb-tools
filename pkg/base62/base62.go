@@ -1,60 +1,47 @@
 package base62
 
-import "math"
-
-const ary = 62
+// base charset [0-9A-Za-z]
+const base int64 = 62
 
 // Encode encodes m to a string
-func Encode(m int64, length int64) string {
-	arr := make([]int64, length)
-	i := 0
-	for m != 0 {
-		res := m % ary
-		arr[i] = res
-		i++
-		m /= ary
+func Encode(m int64, length int) string {
+	bits := make([]int64, length)
+	strs := make([]byte, length)
+	
+	for i := 0; m != 0 && i < length; i++ {
+		res := m % base
+		bits[i] = res
+		m /= base
 	}
-
-	return encodeCore(arr, length)
-}
-
-func encodeCore(arr []int64, length int64) string {
-	var result string
-	var value int64
-	for _, v := range arr {
-		if v < 0 {
-			panic("invalid number")
-		} else if v < 10 {
-			value = v + '0'
+	
+	for i, v := range bits {
+		if v < 10 {
+			strs[i] = byte(v) + '0'
 		} else if v < 36 {
-			value = v + 'A' - 10
+			strs[i] = byte(v-10) + 'A'
 		} else {
-			value = v + 'a' - 36
+			strs[i] = byte(v-36) + 'a'
 		}
-
-		result += string(value)
 	}
 
-	return string(result)
+	return string(strs)
 }
 
 // Decode decodes a string to a int64
 func Decode(str string) int64 {
-	var value float64
-	var sum float64
+	var magnitude int64 = 1
+	var origin int64
 
-	for i, v := range str {
-		if v < '0' {
-			panic("invalid rune")
-		} else if v <= '9' {
-			value = float64(v - '0')
+	for _, v := range str {
+		if v <= '9' {
+			origin += int64(v - '0')*magnitude
 		} else if v <= 'Z' {
-			value = float64(v - 'A' + 10)
+			origin += int64(v - 'A' + 10)*magnitude
 		} else {
-			value = float64(v - 'a' + 36)
+			origin += int64(v - 'a' + 36)*magnitude
 		}
-		sum += value * math.Pow(float64(ary), float64(i))
+		magnitude = magnitude*base
 	}
 
-	return int64(sum)
+	return origin
 }
