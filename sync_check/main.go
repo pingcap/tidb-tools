@@ -56,9 +56,13 @@ func checkSyncState(sourceDB, targetDB *sql.DB, cfg *Config) bool {
 
 	if cfg.Delay != 0 {
 		endTime = time.Now().Add(time.Duration(-cfg.Delay) * time.Second).Format(dateTimeFormat)
-	} else if cfg.EndTime != "" {
-		endTime = cfg.EndTime
-		beginTime = cfg.BeginTime
+	} else {
+		if cfg.EndTime != "" {
+			endTime = cfg.EndTime
+		}
+		if cfg.BeginTime != "" {
+			beginTime = cfg.BeginTime
+		}
 	}
 
 	d := util.NewDiff(sourceDB, targetDB, cfg.SourceDBCfg.Name, cfg.TimeField, beginTime, endTime, cfg.SplitField, cfg.ChunkSize, cfg.Sample, cfg.CheckThCount)
