@@ -10,13 +10,13 @@ import (
 	"github.com/siddontang/go-mysql/schema"
 )
 
-// Range represents chunk range
+// chunkRange represents chunk range
 type chunkRange struct {
 	begin interface{}
 	end   interface{}
 	// for example:
 	// containB and containE is true, means [begin, end]
-	// containB is true, containE is false is false, means [begin, end)
+	// containB is true, containE is false, means [begin, end)
 	containB bool
 	containE bool
 	notNil   bool
@@ -189,7 +189,7 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbname string, table
 }
 
 func findSuitableField(db *sql.DB, dbname string, table string) (*schema.TableColumn, error) {
-	// first select the index with number type
+	// first select the index, and number type index first
 	column, err := FindSuitableIndex(db, dbname, table, true)
 	if err != nil {
 		return nil, errors.Trace(err)
