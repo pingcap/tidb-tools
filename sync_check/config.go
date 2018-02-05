@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
 
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
@@ -103,11 +102,6 @@ func (c *Config) configFromFile(path string) error {
 }
 
 func (c *Config) checkConfig() bool {
-	if c.Delay == 0 && c.EndTime == "" {
-		log.Errorf("you must set delay or end-time!")
-		return false
-	}
-
 	if c.Sample > 100 || c.Sample < 0 {
 		log.Errorf("sample must be greater than 0 and less than or equal to 100!")
 		return false

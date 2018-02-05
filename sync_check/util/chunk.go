@@ -246,10 +246,12 @@ func generateDumpJob(db *sql.DB, dbname, tableName, timeField, beginTime, endTim
 		}
 	}
 
-	timeRange := ""
-	if beginTime != "" {
+	timeRange := "true"
+	if beginTime != "" && endTime != "" {
 		timeRange = fmt.Sprintf("`%s` <= \"%s\" AND `%s` >= \"%s\"", timeField, endTime, timeField, beginTime)
-	} else {
+	} else if beginTime != "" {
+		timeRange = fmt.Sprintf("`%s` >= \"%s\"", timeField, beginTime)
+	} else if endTime != "" {
 		timeRange = fmt.Sprintf("`%s` <= \"%s\"", timeField, endTime)
 	}
 
