@@ -78,8 +78,8 @@ func GetSchemaTables(db *sql.DB, schemaName string, tableNames []string) (tables
 }
 
 // GetCount get count rows of the table for specific field.
-func GetCount(db *sql.DB, dbname string, table string, field string, lastTime string) (int64, error) {
-	query := fmt.Sprintf("SELECT count(*) cnt from `%s`.`%s` where `e` < \"%s\"", dbname, table, lastTime)
+func GetCount(db *sql.DB, dbname string, table string, timeRange string) (int64, error) {
+	query := fmt.Sprintf("SELECT count(1) cnt from `%s`.`%s` where %s", dbname, table, timeRange)
 	rows, err := db.Query(query)
 	if err != nil {
 		return 0, errors.Trace(err)
@@ -149,7 +149,7 @@ func FindSuitableIndex(db *sql.DB, dbName string, table string, numberFirst bool
 	// seek pk
 	for _, fields := range rowsData {
 		if string(fields["Key_name"]) == "PRIMARY" && string(fields["Seq_in_index"]) == "1" {
-			column, valid := getColumnByName(tableInfo, string(fields["Column_name"]))
+			column, valid := GetColumnByName(tableInfo, string(fields["Column_name"]))
 			if !valid {
 				return nil, fmt.Errorf("can't find column %s in %s.%s", string(fields["Column_name"]), dbName, table)
 			}
@@ -163,7 +163,7 @@ func FindSuitableIndex(db *sql.DB, dbName string, table string, numberFirst bool
 	// no pk found, seek unique index
 	for _, fields := range rowsData {
 		if string(fields["Non_unique"]) == "0" && string(fields["Seq_in_index"]) == "1" {
-			column, valid := getColumnByName(tableInfo, string(fields["Column_name"]))
+			column, valid := GetColumnByName(tableInfo, string(fields["Column_name"]))
 			if !valid {
 				return nil, fmt.Errorf("can't find column %s in %s.%s", string(fields["Column_name"]), dbName, table)
 			}
@@ -186,7 +186,7 @@ func FindSuitableIndex(db *sql.DB, dbName string, table string, numberFirst bool
 				return nil, errors.Trace(err)
 			}
 			if cardinality > maxCardinality {
-				column, valid := getColumnByName(tableInfo, string(fields["Column_name"]))
+				column, valid := GetColumnByName(tableInfo, string(fields["Column_name"]))
 				if !valid {
 					return nil, fmt.Errorf("can't find column %s in %s.%s", string(fields["Column_name"]), dbName, table)
 				}
@@ -233,9 +233,10 @@ func GetFirstColumn(db *sql.DB, dbname string, table string) (*schema.TableColum
 }
 
 // GetRandomValues returns some random value of a table
-func GetRandomValues(db *sql.DB, dbname string, table string, field string, num int64, min, max interface{}, lastTime string) ([]string, error) {
+func GetRandomValues(db *sql.DB, dbname string, table string, field string, num int64, min, max interface{}, timeRange string) ([]string, error) {
 	randomValue := make([]string, 0, num)
-	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` > \"%v\" AND `%s` < \"%v\" AND `e` <= \"%s\" ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`", field, field, dbname, table, field, min, field, max, lastTime, num, field)
+	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` > \"%v\" AND `%s` < \"%v\" AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
+		field, field, dbname, table, field, min, field, max, timeRange, num, field)
 	log.Infof("GetRandomValues sql: %s", query)
 	rows, err := db.Query(query)
 	if err != nil {
@@ -255,7 +256,8 @@ func GetRandomValues(db *sql.DB, dbname string, table string, field string, num 
 	return randomValue, nil
 }
 
-func getColumnByName(table *schema.Table, name string) (*schema.TableColumn, bool) {
+// GetColumnByName get column by name
+func GetColumnByName(table *schema.Table, name string) (*schema.TableColumn, bool) {
 	var c *schema.TableColumn
 	for _, column := range table.Columns {
 		if column.Name == name {

@@ -7,18 +7,19 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
+	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/sync_check/util"
 )
 
 // NewConfig creates a new config.
 func NewConfig() *Config {
 	cfg := &Config{}
-	cfg.FlagSet = flag.NewFlagSet("wormholeTest", flag.ContinueOnError)
+	cfg.FlagSet = flag.NewFlagSet("sync-check", flag.ContinueOnError)
 	fs := cfg.FlagSet
 
 	fs.StringVar(&cfg.ConfigFile, "config", "", "Config file")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
-	fs.IntVar(&cfg.Delay, "delay", 5, "check data 5 second befor")
+	fs.IntVar(&cfg.Delay, "delay", 0, "check data 5 second before")
 	fs.IntVar(&cfg.ChunkSize, "chunk-size", 1000, "diff check chunk size")
 	fs.IntVar(&cfg.Sample, "sample", 100, "the percent of sampling check")
 	fs.IntVar(&cfg.CheckThCount, "check-thcount", 1, "the count of check thread count")
@@ -85,11 +86,6 @@ func (c *Config) Parse(arguments []string) error {
 		return errors.Errorf("'%s' is an invalid flag", c.FlagSet.Arg(0))
 	}
 
-	host := os.Getenv("MYSQL_HOST")
-	if host != "" {
-		c.SourceDBCfg.Host = host
-	}
-
 	return nil
 }
 
@@ -104,4 +100,23 @@ func (c *Config) String() string {
 func (c *Config) configFromFile(path string) error {
 	_, err := toml.DecodeFile(path, c)
 	return errors.Trace(err)
+}
+
+func (c *Config) checkConfig() bool {
+	if c.Delay == 0 && c.EndTime == "" {
+		log.Errorf("you must set delay or end-time!")
+		return false
+	}
+
+	if c.Sample > 100 || c.Sample < 0 {
+		log.Errorf("sample must be greater than 0 and less than or equal to 100!")
+		return false
+	}
+
+	if c.CheckThCount <= 0 {
+		log.Errorf("check-thcount must greater than 0!")
+		return false
+	}
+
+	return true
 }

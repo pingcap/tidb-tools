@@ -9,9 +9,10 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-tools/sync_check/test"
 	"github.com/pingcap/tidb-tools/sync_check/util"
 )
+
+const dateTimeFormat = "2006-01-02 15:04:05"
 
 func main() {
 	cfg := NewConfig()
@@ -23,6 +24,12 @@ func main() {
 	default:
 		log.Errorf("parse cmd flags err %s\n", err)
 		os.Exit(2)
+	}
+
+	ok := cfg.checkConfig()
+	if !ok {
+		log.Error("there is something wrong with your config, please check it!")
+		return
 	}
 
 	sourceDB, err := util.CreateDB(cfg.SourceDBCfg)
@@ -44,9 +51,17 @@ func main() {
 }
 
 func checkSyncState(sourceDB, targetDB *sql.DB, cfg *Config) bool {
-	lastTime := time.Now().Add(time.Duration(-cfg.Delay) * time.Second).Format("2006-01-02 15:04:05")
+	beginTime := ""
+	endTime := ""
 
-	d := util.NewDiff(cfg.SourceDBCfg.Name, sourceDB, targetDB, lastTime, cfg.ChunkSize, cfg.Sample, cfg.CheckThCount)
+	if cfg.Delay != 0 {
+		endTime = time.Now().Add(time.Duration(-cfg.Delay) * time.Second).Format(dateTimeFormat)
+	} else if cfg.EndTime != "" {
+		endTime = cfg.EndTime
+		beginTime = cfg.BeginTime
+	}
+
+	d := util.NewDiff(sourceDB, targetDB, cfg.SourceDBCfg.Name, cfg.TimeField, beginTime, endTime, cfg.SplitField, cfg.ChunkSize, cfg.Sample, cfg.CheckThCount)
 	ok, err := d.Equal()
 	if err != nil {
 		log.Fatal(err)

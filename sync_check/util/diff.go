@@ -14,7 +14,10 @@ import (
 type Diff struct {
 	db1          *sql.DB
 	db2          *sql.DB
-	lastTime     string
+	timeField    string
+	beginTime    string
+	endTime      string
+	splitField   string
 	dbName       string
 	chunkSize    int
 	sample       int
@@ -22,11 +25,14 @@ type Diff struct {
 }
 
 // NewDiff returns a Diff instance.
-func NewDiff(dbName string, db1, db2 *sql.DB, lastTime string, chunkSize int, sample int, checkThCount int) *Diff {
+func NewDiff(db1, db2 *sql.DB, dbName, timeField, beginTime, endTime, splitField string, chunkSize, sample, checkThCount int) *Diff {
 	return &Diff{
 		db1:          db1,
 		db2:          db2,
-		lastTime:     lastTime,
+		timeField:    timeField,
+		beginTime:    beginTime,
+		endTime:      endTime,
+		splitField:   splitField,
 		dbName:       dbName,
 		chunkSize:    chunkSize,
 		sample:       sample,
@@ -66,7 +72,7 @@ func (df *Diff) Equal() (equal bool, err error) {
 			equal = false
 		}
 
-		eq, err = df.EqualTable(tblName, df.lastTime, df.chunkSize)
+		eq, err = df.EqualTable(tblName)
 		if err != nil || !eq {
 			err = errors.Trace(err)
 			equal = false
@@ -78,7 +84,7 @@ func (df *Diff) Equal() (equal bool, err error) {
 }
 
 // EqualTable tests whether two database table have same data and schema.
-func (df *Diff) EqualTable(tblName string, lastTime string, chunkSize int) (bool, error) {
+func (df *Diff) EqualTable(tblName string) (bool, error) {
 	eq, err := df.equalCreateTable(tblName)
 	if err != nil {
 		return eq, errors.Trace(err)
@@ -138,7 +144,7 @@ func (df *Diff) equalCreateTable(tblName string) (bool, error) {
 }
 
 func (df *Diff) equalTableData(tblName string) (bool, error) {
-	dumpJobs, err := generateDumpJob(df.db1, df.dbName, tblName, df.lastTime, df.chunkSize, df.sample)
+	dumpJobs, err := generateDumpJob(df.db1, df.dbName, tblName, df.timeField, df.beginTime, df.endTime, df.splitField, df.chunkSize, df.sample)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
