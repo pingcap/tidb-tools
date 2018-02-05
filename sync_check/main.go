@@ -13,26 +13,6 @@ import (
 	"github.com/pingcap/tidb-tools/sync_check/util"
 )
 
-const (
-	// CREATEDATATUBE means create datatube for wormhole
-	CREATEDATATUBE = "createDataTube"
-
-	// LOADDATA means load data into mysql
-	LOADDATA = "loadData"
-
-	// INCREASEDATA means increase data into mysql, include ddl sql
-	INCREASEDATA = "increaseData"
-
-	// TRUNCATE means truncate data in mysql
-	TRUNCATE = "truncate"
-
-	// CLEAR means drop database in mysql
-	CLEAR = "clear"
-
-	// CHECK means check data between mysql and tidb
-	CHECK = "check"
-)
-
 func main() {
 	cfg := NewConfig()
 	err := cfg.Parse(os.Args[1:])
@@ -44,51 +24,6 @@ func main() {
 		log.Errorf("parse cmd flags err %s\n", err)
 		os.Exit(2)
 	}
-
-	TableSQLs := []string{`
-create table if not exists ptest(
-	a int primary key, 
-	b double NOT NULL DEFAULT 2.0, 
-	c varchar(10) NOT NULL, 
-	d time unique,
-	e datetime,
-	KEY(e)
-);
-`,
-		`
-create table if not exists itest(
-	a int, 
-	b double NOT NULL DEFAULT 2.0, 
-	c varchar(10) NOT NULL, 
-	d time unique,
-	e datetime, 
-	PRIMARY KEY(a, b),
-	KEY(e)
-);
-`,
-		`
-create table if not exists ntest(
-	a int, 
-	b double NOT NULL DEFAULT 2.0, 
-	c varchar(10) NOT NULL, 
-	d time unique,
-	e datetime, 
-	KEY(e)
-);
-`,
-		`
-create table if not exists mtest(
-	a varchar(10) NOT NULL,
-	b varchar(10) NOT NULL,
-	c varchar(10) NOT NULL,
-	d time unique,
-	e datetime,
-	PRIMARY KEY(d),
-	KEY(e)
-);
-`}
-
-	log.Infof("jobType: %s", cfg.JobType)
 
 	sourceDB, err := util.CreateDB(cfg.SourceDBCfg)
 	if err != nil {
@@ -102,27 +37,10 @@ create table if not exists mtest(
 	}
 	defer util.CloseDB(targetDB)
 
-	if cfg.JobType == LOADDATA {
-		// generate insert/update/delete sqls and execute
-		dailytest.RunDailyTest(cfg.SourceDBCfg, TableSQLs, cfg.WorkerCount, cfg.JobCount, cfg.Batch, false)
+	if !checkSyncState(sourceDB, targetDB, cfg) {
+		log.Fatal("sourceDB don't equal targetDB")
 	}
-
-	if cfg.JobType == TRUNCATE {
-		// truncate test data
-		dailytest.TruncateTestTable(cfg.SourceDBCfg, TableSQLs)
-	}
-
-	if cfg.JobType == CHECK {
-		// diff the test schema
-		if !checkSyncState(sourceDB, targetDB, cfg) {
-			log.Fatal("sourceDB don't equal targetDB")
-		}
-		log.Info("test pass!!!")
-	}
-
-	if cfg.JobType == CLEAR {
-		dailytest.DropTestTable(cfg.SourceDBCfg, TableSQLs)
-	}
+	log.Info("test pass!!!")
 }
 
 func checkSyncState(sourceDB, targetDB *sql.DB, cfg *Config) bool {

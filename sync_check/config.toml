@@ -2,15 +2,29 @@
 
 log-level = "info"
 
-worker-count = 10
-job-count = 5000
-batch = 10
+# time-field's type should be datetime
+time-field = "create_time"
 
-delay = 10
+# check data some second before, comment this parameter if use begin-time and end-time
+#delay = 10
+
+# check data between begin-time and end-time 
+begin-time = "2018-01-01 00:00:00"
+end-time = "2018-02-01 00:00:00"
+
+# for example, the whole data is [1...100]
+# we can split these data to [1...10], [11...20], ..., [91...100]
+# the [1...10] is a chunk, and it's chunk size is 10
+# splited chunk's size
 chunk-size = 1000
+
+# how many goroutine created to check data
 check-thcount = 4
 
-# sampling check, for example, 10 means 10%
+# use split-field to split data to several chunk
+split-field = "id"
+
+# sampling check percent, for example 10 means only check 10% data
 sample = 10
 
 [target-db]
