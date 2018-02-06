@@ -27,6 +27,9 @@ split-field = "id"
 # sampling check percent, for example 10 means only check 10% data
 sample = 10
 
+# tables need check, check all tables if comment this
+#tables = ["abc", "bcd"]
+
 [target-db]
 host = "127.0.0.1"
 user = "root"

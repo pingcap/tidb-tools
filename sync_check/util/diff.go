@@ -19,13 +19,15 @@ type Diff struct {
 	endTime      string
 	splitField   string
 	dbName       string
+	tables       []string
 	chunkSize    int
 	sample       int
 	checkThCount int
 }
 
 // NewDiff returns a Diff instance.
-func NewDiff(db1, db2 *sql.DB, dbName, timeField, beginTime, endTime, splitField string, chunkSize, sample, checkThCount int) *Diff {
+func NewDiff(db1, db2 *sql.DB, dbName, timeField, beginTime, endTime, 
+	splitField string, chunkSize, sample, checkThCount int, tables []string) *Diff {
 	return &Diff{
 		db1:          db1,
 		db2:          db2,
@@ -34,6 +36,7 @@ func NewDiff(db1, db2 *sql.DB, dbName, timeField, beginTime, endTime, splitField
 		endTime:      endTime,
 		splitField:   splitField,
 		dbName:       dbName,
+		tables:       tables,
 		chunkSize:    chunkSize,
 		sample:       sample,
 		checkThCount: checkThCount,
@@ -61,7 +64,14 @@ func (df *Diff) Equal() (equal bool, err error) {
 		equal = false
 	}
 
-	for _, tblName := range tbls1 {
+	checkTables := make([]string, 0, len(tbls1))
+	if len(df.tables) == 0 {
+		checkTables = tbls1
+	} else {
+		checkTables = df.tables
+	}
+
+	for _, tblName := range checkTables {
 		eq, err = df.EqualIndex(tblName)
 		if err != nil {
 			err = errors.Trace(err)

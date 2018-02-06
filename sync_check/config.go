@@ -57,6 +57,8 @@ type Config struct {
 	Sample int `toml:"sample" json:"sample"`
 
 	CheckThCount int `toml:"check-thcount" json:"check-thcount"`
+
+	Tables []string `toml:"tables" json:"tables"`
 }
 
 // Parse parses flag definitions from the argument list.
