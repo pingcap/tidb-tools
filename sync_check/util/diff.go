@@ -170,7 +170,11 @@ func (df *Diff) equalTableData(tblName string) (bool, error) {
 	defer close(checkResultCh)
 
 	for i := 0; i < df.checkThCount; i++ {
-		go df.checkChunkDataEqual(dumpJobs, checkNumArr[checkNums*i/df.checkThCount:checkNums*(i+1)/df.checkThCount], tblName, checkResultCh)
+		checkJobs := make([]*dumpJob, 0, checkNums)
+		for j := checkNums*i/df.checkThCount; j < checkNums*(i+1)/df.checkThCount; j++ {
+			checkJobs = append(checkJobs, dumpJobs[j])
+		}
+		go df.checkChunkDataEqual(checkJobs, tblName, checkResultCh)
 	}
 
 	num := 0
@@ -188,15 +192,13 @@ func (df *Diff) equalTableData(tblName string) (bool, error) {
 	}
 }
 
-func (df *Diff) checkChunkDataEqual(dumpJobs []*dumpJob, checkNumArr []int, tblName string, checkResultCh chan bool) {
-	log.Infof("check array: %+v", checkNumArr)
-	if len(checkNumArr) == 0 {
+func (df *Diff) checkChunkDataEqual(dumpJobs []*dumpJob, tblName string, checkResultCh chan bool) {
+	if len(dumpJobs) == 0 {
 		checkResultCh <- true
 		return
 	}
 
-	for _, num := range checkNumArr {
-		job := dumpJobs[num]
+	for _, job := range dumpJobs {
 		log.Infof("table: %s, where: %s", job.table, job.where)
 
 		rows1, err := getChunkRows(df.db1, df.dbName, tblName, job.where)
