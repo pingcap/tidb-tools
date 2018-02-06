@@ -33,22 +33,8 @@ func (c *DBConfig) String() string {
 
 // CreateDB create a mysql fd
 func CreateDB(cfg DBConfig) (*sql.DB, error) {
-	dbName := cfg.Name
-	createDBSql := fmt.Sprintf("create database if not exists %s", dbName)
-	// dont't have database
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/mysql?charset=utf8", cfg.User, cfg.Password, cfg.Host, cfg.Port)
+	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Name)
 	db, err := sql.Open("mysql", dbDSN)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	_, err = db.Exec(createDBSql)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Name)
-	db, err = sql.Open("mysql", dbDSN)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
