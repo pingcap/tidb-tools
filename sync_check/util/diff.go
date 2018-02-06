@@ -150,6 +150,9 @@ func (df *Diff) equalTableData(tblName string) (bool, error) {
 	}
 
 	checkNums := len(dumpJobs) * df.sample / 100
+	if checkNums == 0 {
+		checkNums = 1
+	}
 	checkNumArr := getRandomN(len(dumpJobs), checkNums)
 	log.Infof("total has %d check jobs, check %+v", len(dumpJobs), checkNumArr)
 

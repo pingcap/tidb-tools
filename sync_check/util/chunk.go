@@ -246,6 +246,8 @@ func generateDumpJob(db *sql.DB, dbname, tableName, timeField, beginTime, endTim
 		}
 	}
 
+	// set timeRange to "true" can make the code more simple, no need to judge the timeRange's value.
+	// for example: sql will looks like "select * from itest where a > 10 AND true" if don't set time range in config.
 	timeRange := "true"
 	if beginTime != "" && endTime != "" {
 		timeRange = fmt.Sprintf("`%s` <= \"%s\" AND `%s` >= \"%s\"", timeField, endTime, timeField, beginTime)

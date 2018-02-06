@@ -2,8 +2,6 @@ package util
 
 import (
 	"database/sql"
-	// make ci happy
-	_ "database/sql/driver"
 	"fmt"
 	"strconv"
 	"time"
@@ -37,7 +35,7 @@ func (c *DBConfig) String() string {
 func CreateDB(cfg DBConfig) (*sql.DB, error) {
 	dbName := cfg.Name
 	createDBSql := fmt.Sprintf("create database if not exists %s", dbName)
-	// dont't have test database
+	// dont't have database
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/mysql?charset=utf8", cfg.User, cfg.Password, cfg.Host, cfg.Port)
 	db, err := sql.Open("mysql", dbDSN)
 	if err != nil {
