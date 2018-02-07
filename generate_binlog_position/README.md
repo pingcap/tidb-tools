@@ -18,4 +18,3 @@ Usage of generate_binlog_position:
 >cat data.example/savePoint
 commitTS = 395986424387338242
 ```
-
