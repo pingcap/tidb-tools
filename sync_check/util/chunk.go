@@ -81,7 +81,7 @@ func getChunksForTable(db *sql.DB, dbname, tableName string, column *schema.Tabl
 
 	chunkCnt := cnt / int64(chunkSize)
 	if sample != 100 {
-		// create more chunk for sampling check
+		// use sampling check, can check more fragmented by split to more chunk
 		chunkCnt *= 10
 	}
 
