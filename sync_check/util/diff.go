@@ -187,7 +187,13 @@ func (df *Diff) equalTableData(tblName string) (bool, error) {
 		for j := checkNums * i / df.checkThCount; j < checkNums*(i+1)/df.checkThCount; j++ {
 			checkJobs = append(checkJobs, dumpJobs[j])
 		}
-		go df.checkChunkDataEqual(checkJobs, tblName, checkResultCh)
+		go func() {
+			eq, err := df.checkChunkDataEqual(checkJobs, tblName)
+			if err != nil {
+				log.Errorf("check chunk data equal failed, error %v", err)
+			}
+			checkResultCh <- eq
+		}()
 	}
 
 	num := 0
@@ -205,10 +211,9 @@ func (df *Diff) equalTableData(tblName string) (bool, error) {
 	}
 }
 
-func (df *Diff) checkChunkDataEqual(dumpJobs []*dumpJob, tblName string, checkResultCh chan bool) {
+func (df *Diff) checkChunkDataEqual(dumpJobs []*dumpJob, tblName string) (bool, error) {
 	if len(dumpJobs) == 0 {
-		checkResultCh <- true
-		return
+		return true, nil
 	}
 
 	for _, job := range dumpJobs {
@@ -216,54 +221,40 @@ func (df *Diff) checkChunkDataEqual(dumpJobs []*dumpJob, tblName string, checkRe
 
 		rows1, err := getChunkRows(df.db1, df.dbName, tblName, job.where)
 		if err != nil {
-			checkResultCh <- false
-			log.Errorf("checkChunkDataEqual error %+v", err)
-			return
+			return false, errors.Trace(err)
 		}
 		defer rows1.Close()
 
 		rows2, err := getChunkRows(df.db2, df.dbName, tblName, job.where)
 		if err != nil {
-			checkResultCh <- false
-			log.Errorf("checkChunkDataEqual error %+v", err)
-			return
+			return false, errors.Trace(err)
 		}
 		defer rows2.Close()
 
 		cols1, err := rows1.Columns()
 		if err != nil {
-			checkResultCh <- false
-			log.Errorf("checkChunkDataEqual error %+v", err)
-			return
+			return false, errors.Trace(err)
 		}
 		cols2, err := rows2.Columns()
 		if err != nil {
-			checkResultCh <- false
-			log.Errorf("checkChunkDataEqual error %+v", err)
-			return
+			return false, errors.Trace(err)
 		}
 		if len(cols1) != len(cols2) {
-			checkResultCh <- false
-			log.Errorf("checkChunkDataEqual error %+v", err)
-			return
+			return false, errors.Trace(err)
 		}
 
 		row1 := make(rawBytesRow, len(cols1))
 		row2 := make(rawBytesRow, len(cols2))
 		eq, err := equalRows(rows1, rows2, row1, row2)
 		if err != nil {
-			checkResultCh <- false
-			log.Errorf("checkChunkDataEqual error %+v", err)
-			return
+			return false, errors.Trace(err)
 		}
 		if !eq {
-			checkResultCh <- false
-			return
+			return false, nil
 		}
 	}
 
-	checkResultCh <- true
-	return
+	return true, nil
 }
 
 func equalRows(rows1, rows2 *sql.Rows, row1, row2 comparableSQLRow) (bool, error) {
