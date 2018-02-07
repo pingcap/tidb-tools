@@ -1,3 +1,16 @@
+// Copyright 2016 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package main
 
 import (
@@ -8,6 +21,11 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/sync_check/util"
+)
+
+const (
+	percent0   = 0
+	percent100 = 100
 )
 
 // NewConfig creates a new config.
@@ -104,7 +122,7 @@ func (c *Config) configFromFile(path string) error {
 }
 
 func (c *Config) checkConfig() bool {
-	if c.Sample > 100 || c.Sample < 0 {
+	if c.Sample > percent100 || c.Sample < percent0 {
 		log.Errorf("sample must be greater than 0 and less than or equal to 100!")
 		return false
 	}
