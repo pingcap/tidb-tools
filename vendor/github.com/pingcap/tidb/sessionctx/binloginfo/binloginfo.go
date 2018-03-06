@@ -14,28 +14,53 @@
 package binloginfo
 
 import (
+	"regexp"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
-	"github.com/pingcap/tidb/context"
 	"github.com/pingcap/tidb/kv"
+	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/terror"
-	"github.com/pingcap/tipb/go-binlog"
-	goctx "golang.org/x/net/context"
-	grpc "google.golang.org/grpc"
+	binlog "github.com/pingcap/tipb/go-binlog"
+	log "github.com/sirupsen/logrus"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 )
 
 func init() {
 	grpc.EnableTracing = false
 }
 
-// PumpClient is the gRPC client to write binlog, it is opened on server start and never close,
+// pumpClient is the gRPC client to write binlog, it is opened on server start and never close,
 // shared by all sessions.
-var PumpClient binlog.PumpClient
+var pumpClient binlog.PumpClient
+var pumpClientLock sync.RWMutex
+
+// BinlogInfo contains binlog data and binlog client.
+type BinlogInfo struct {
+	Data   *binlog.Binlog
+	Client binlog.PumpClient
+}
+
+// GetPumpClient gets the pump client instance.
+func GetPumpClient() binlog.PumpClient {
+	pumpClientLock.RLock()
+	client := pumpClient
+	pumpClientLock.RUnlock()
+	return client
+}
+
+// SetPumpClient sets the pump client instance.
+func SetPumpClient(client binlog.PumpClient) {
+	pumpClientLock.Lock()
+	pumpClient = client
+	pumpClientLock.Unlock()
+}
 
 // GetPrewriteValue gets binlog prewrite value in the context.
-func GetPrewriteValue(ctx context.Context, createIfNotExists bool) *binlog.PrewriteValue {
+func GetPrewriteValue(ctx sessionctx.Context, createIfNotExists bool) *binlog.PrewriteValue {
 	vars := ctx.GetSessionVars()
 	v, ok := vars.TxnCtx.Binlog.(*binlog.PrewriteValue)
 	if !ok && createIfNotExists {
@@ -47,15 +72,17 @@ func GetPrewriteValue(ctx context.Context, createIfNotExists bool) *binlog.Prewr
 }
 
 // WriteBinlog writes a binlog to Pump.
-func WriteBinlog(bin *binlog.Binlog, clusterID uint64) error {
-	commitData, _ := bin.Marshal()
+func (info *BinlogInfo) WriteBinlog(clusterID uint64) error {
+	commitData, err := info.Data.Marshal()
+	if err != nil {
+		return errors.Trace(err)
+	}
 	req := &binlog.WriteBinlogReq{ClusterID: clusterID, Payload: commitData}
 
 	// Retry many times because we may raise CRITICAL error here.
-	var err error
 	for i := 0; i < 20; i++ {
 		var resp *binlog.WriteBinlogResp
-		resp, err = PumpClient.WriteBinlog(goctx.Background(), req)
+		resp, err = info.Client.WriteBinlog(context.Background(), req)
 		if err == nil && resp.Errmsg != "" {
 			err = errors.New(resp.Errmsg)
 		}
@@ -69,11 +96,34 @@ func WriteBinlog(bin *binlog.Binlog, clusterID uint64) error {
 }
 
 // SetDDLBinlog sets DDL binlog in the kv.Transaction.
-func SetDDLBinlog(txn kv.Transaction, jobID int64, ddlQuery string) {
-	bin := &binlog.Binlog{
-		Tp:       binlog.BinlogType_Prewrite,
-		DdlJobId: jobID,
-		DdlQuery: []byte(ddlQuery),
+func SetDDLBinlog(client interface{}, txn kv.Transaction, jobID int64, ddlQuery string) {
+	if client == nil {
+		return
 	}
-	txn.SetOption(kv.BinlogData, bin)
+	ddlQuery = addSpecialComment(ddlQuery)
+	info := &BinlogInfo{
+		Data: &binlog.Binlog{
+			Tp:       binlog.BinlogType_Prewrite,
+			DdlJobId: jobID,
+			DdlQuery: []byte(ddlQuery),
+		},
+		Client: client.(binlog.PumpClient),
+	}
+	txn.SetOption(kv.BinlogInfo, info)
+}
+
+const specialPrefix = `/*!90000 `
+
+func addSpecialComment(ddlQuery string) string {
+	if strings.Contains(ddlQuery, specialPrefix) {
+		return ddlQuery
+	}
+	upperQuery := strings.ToUpper(ddlQuery)
+	reg, err := regexp.Compile(`SHARD_ROW_ID_BITS\s*=\s*\d+`)
+	terror.Log(err)
+	loc := reg.FindStringIndex(upperQuery)
+	if len(loc) < 2 {
+		return ddlQuery
+	}
+	return ddlQuery[:loc[0]] + specialPrefix + ddlQuery[loc[0]:loc[1]] + ` */` + ddlQuery[loc[1]:]
 }

@@ -18,6 +18,7 @@
 package tidb
 
 import (
+	"encoding/hex"
 	"fmt"
 	"runtime/debug"
 	"strconv"
@@ -25,19 +26,21 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
+	"github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/mysql"
 	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/terror"
-	"github.com/pingcap/tidb/util/types"
+	"github.com/pingcap/tidb/util/auth"
+	log "github.com/sirupsen/logrus"
+	"golang.org/x/net/context"
 )
 
 const (
 	// CreateUserTable is the SQL statement creates User table in system db.
 	CreateUserTable = `CREATE TABLE if not exists mysql.user (
 		Host				CHAR(64),
-		User				CHAR(16),
+		User				CHAR(32),
 		Password			CHAR(41),
 		Select_priv			ENUM('N','Y') NOT NULL DEFAULT 'N',
 		Insert_priv			ENUM('N','Y') NOT NULL DEFAULT 'N',
@@ -45,20 +48,28 @@ const (
 		Delete_priv			ENUM('N','Y') NOT NULL DEFAULT 'N',
 		Create_priv			ENUM('N','Y') NOT NULL DEFAULT 'N',
 		Drop_priv			ENUM('N','Y') NOT NULL DEFAULT 'N',
-		Process_priv		ENUM('N','Y') NOT NULL DEFAULT 'N',
+		Process_priv			ENUM('N','Y') NOT NULL DEFAULT 'N',
 		Grant_priv			ENUM('N','Y') NOT NULL DEFAULT 'N',
+		References_priv			ENUM('N','Y') NOT NULL DEFAULT 'N',
 		Alter_priv			ENUM('N','Y') NOT NULL DEFAULT 'N',
-		Show_db_priv		ENUM('N','Y') NOT NULL DEFAULT 'N',
+		Show_db_priv			ENUM('N','Y') NOT NULL DEFAULT 'N',
 		Super_priv			ENUM('N','Y') NOT NULL DEFAULT 'N',
-		Execute_priv		ENUM('N','Y') NOT NULL DEFAULT 'N',
+		Create_tmp_table_priv		ENUM('N','Y') NOT NULL DEFAULT 'N',
+		Lock_tables_priv		ENUM('N','Y') NOT NULL DEFAULT 'N',
+		Execute_priv			ENUM('N','Y') NOT NULL DEFAULT 'N',
+		Create_view_priv		ENUM('N','Y') NOT NULL DEFAULT 'N',
+		Show_view_priv			ENUM('N','Y') NOT NULL DEFAULT 'N',
+		Create_routine_priv		ENUM('N','Y') NOT NULL DEFAULT 'N',
+		Alter_routine_priv		ENUM('N','Y') NOT NULL DEFAULT 'N',
 		Index_priv			ENUM('N','Y') NOT NULL DEFAULT 'N',
-		Create_user_priv	ENUM('N','Y') NOT NULL DEFAULT 'N',
-		Trigger_priv		ENUM('N','Y') NOT NULL DEFAULT 'N',
+		Create_user_priv		ENUM('N','Y') NOT NULL DEFAULT 'N',
+		Event_priv			ENUM('N','Y') NOT NULL DEFAULT 'N',
+		Trigger_priv			ENUM('N','Y') NOT NULL DEFAULT 'N',
 		PRIMARY KEY (Host, User));`
 	// CreateDBPrivTable is the SQL statement creates DB scope privilege table in system db.
 	CreateDBPrivTable = `CREATE TABLE if not exists mysql.db (
 		Host			CHAR(60),
-		DB				CHAR(64),
+		DB			CHAR(64),
 		User			CHAR(16),
 		Select_priv		ENUM('N','Y') Not Null DEFAULT 'N',
 		Insert_priv		ENUM('N','Y') Not Null DEFAULT 'N',
@@ -67,9 +78,18 @@ const (
 		Create_priv		ENUM('N','Y') Not Null DEFAULT 'N',
 		Drop_priv		ENUM('N','Y') Not Null DEFAULT 'N',
 		Grant_priv		ENUM('N','Y') Not Null DEFAULT 'N',
+		References_priv 	ENUM('N','Y') Not Null DEFAULT 'N',
 		Index_priv		ENUM('N','Y') Not Null DEFAULT 'N',
 		Alter_priv		ENUM('N','Y') Not Null DEFAULT 'N',
-		Execute_priv	ENUM('N','Y') Not Null DEFAULT 'N',
+		Create_tmp_table_priv	ENUM('N','Y') NOT NULL DEFAULT 'N',
+		Lock_tables_priv	ENUM('N','Y') NOT NULL DEFAULT 'N',
+		Create_view_priv	ENUM('N','Y') NOT NULL DEFAULT 'N',
+		Show_view_priv		ENUM('N','Y') NOT NULL DEFAULT 'N',
+		Create_routine_priv	ENUM('N','Y') NOT NULL DEFAULT 'N',
+		Alter_routine_priv	ENUM('N','Y') NOT NULL DEFAULT 'N',
+		Execute_priv		ENUM('N','Y') Not Null DEFAULT 'N',
+		Event_priv		ENUM('N','Y') NOT NULL DEFAULT 'N',
+		Trigger_priv		ENUM('N','Y') NOT NULL DEFAULT 'N',
 		PRIMARY KEY (Host, DB, User));`
 	// CreateTablePrivTable is the SQL statement creates table scope privilege table in system db.
 	CreateTablePrivTable = `CREATE TABLE if not exists mysql.tables_priv (
@@ -136,10 +156,10 @@ const (
 		is_index tinyint(2) NOT NULL,
 		hist_id bigint(64) NOT NULL,
 		distinct_count bigint(64) NOT NULL,
-		distinct_ratio double(64) NOT NULL DEFAULT 0,
-		use_count_to_estimate tinyint(2) NOT NULL DEFAULT 0,
+		null_count bigint(64) NOT NULL DEFAULT 0,
 		modify_count bigint(64) NOT NULL DEFAULT 0,
 		version bigint(64) unsigned NOT NULL DEFAULT 0,
+		cm_sketch blob,
 		unique index tbl(table_id, is_index, hist_id)
 	);`
 
@@ -151,8 +171,20 @@ const (
 		bucket_id bigint(64) NOT NULL,
 		count bigint(64) NOT NULL,
 		repeats bigint(64) NOT NULL,
-		value blob NOT NULL,
+		upper_bound blob NOT NULL,
+		lower_bound blob ,
 		unique index tbl(table_id, is_index, hist_id, bucket_id)
+	);`
+
+	// CreateGCDeleteRangeTable stores schemas which can be deleted by DeleteRange.
+	CreateGCDeleteRangeTable = `CREATE TABLE IF NOT EXISTS mysql.gc_delete_range (
+		job_id BIGINT NOT NULL COMMENT "the DDL job ID",
+		element_id BIGINT NOT NULL COMMENT "the schema element ID",
+		start_key VARCHAR(255) NOT NULL COMMENT "encoded in hex",
+		end_key VARCHAR(255) NOT NULL COMMENT "encoded in hex",
+		ts BIGINT NOT NULL COMMENT "timestamp in int64",
+		UNIQUE KEY (element_id),
+		KEY (job_id, element_id)
 	);`
 )
 
@@ -164,6 +196,7 @@ func bootstrap(s Session) {
 	}
 	if b {
 		upgrade(s)
+		return
 	}
 	doDDLWorks(s)
 	doDMLWorks(s)
@@ -180,34 +213,42 @@ const (
 	// It is used for getting the version of the TiDB server which bootstrapped the store.
 	tidbServerVersionVar = "tidb_server_version" //
 	// Const for TiDB server version 2.
-	version2 = 2
-	version3 = 3
-	version4 = 4
-	version5 = 5
-	version6 = 6
-	version7 = 7
-	version8 = 8
-	version9 = 9
+	version2  = 2
+	version3  = 3
+	version4  = 4
+	version5  = 5
+	version6  = 6
+	version7  = 7
+	version8  = 8
+	version9  = 9
+	version10 = 10
+	version11 = 11
+	version12 = 12
+	version13 = 13
+	version14 = 14
+	version15 = 15
+	version16 = 16
+	version17 = 17
 )
 
 func checkBootstrapped(s Session) (bool, error) {
 	//  Check if system db exists.
-	_, err := s.Execute(fmt.Sprintf("USE %s;", mysql.SystemDB))
+	_, err := s.Execute(context.Background(), fmt.Sprintf("USE %s;", mysql.SystemDB))
 	if err != nil && infoschema.ErrDatabaseNotExists.NotEqual(err) {
 		log.Fatal(err)
 	}
 	// Check bootstrapped variable value in TiDB table.
-	d, err := getTiDBVar(s, bootstrappedVar)
+	sVal, _, err := getTiDBVar(s, bootstrappedVar)
 	if err != nil {
 		if infoschema.ErrTableNotExists.Equal(err) {
 			return false, nil
 		}
 		return false, errors.Trace(err)
 	}
-	isBootstrapped := d.GetString() == bootstrappedVarTrue
+	isBootstrapped := sVal == bootstrappedVarTrue
 	if isBootstrapped {
 		// Make sure that doesn't affect the following operations.
-		if err = s.CommitTxn(); err != nil {
+		if err = s.CommitTxn(context.Background()); err != nil {
 			return false, errors.Trace(err)
 		}
 	}
@@ -216,32 +257,34 @@ func checkBootstrapped(s Session) (bool, error) {
 
 // getTiDBVar gets variable value from mysql.tidb table.
 // Those variables are used by TiDB server.
-func getTiDBVar(s Session, name string) (types.Datum, error) {
+func getTiDBVar(s Session, name string) (sVal string, isNull bool, e error) {
 	sql := fmt.Sprintf(`SELECT VARIABLE_VALUE FROM %s.%s WHERE VARIABLE_NAME="%s"`,
 		mysql.SystemDB, mysql.TiDBTable, name)
-	rs, err := s.Execute(sql)
+	ctx := context.Background()
+	rs, err := s.Execute(ctx, sql)
 	if err != nil {
-		return types.Datum{}, errors.Trace(err)
+		return "", true, errors.Trace(err)
 	}
 	if len(rs) != 1 {
-		return types.Datum{}, errors.New("Wrong number of Recordset")
+		return "", true, errors.New("Wrong number of Recordset")
 	}
 	r := rs[0]
-	defer r.Close()
-	row, err := r.Next()
+	defer terror.Call(r.Close)
+	row, err := r.Next(ctx)
 	if err != nil || row == nil {
-		return types.Datum{}, errors.Trace(err)
+		return "", true, errors.Trace(err)
 	}
-	return row.Data[0], nil
+	if row.IsNull(0) {
+		return "", true, nil
+	}
+	return row.GetString(0), false, nil
 }
 
 // upgrade function  will do some upgrade works, when the system is boostrapped by low version TiDB server
 // For example, add new system variables into mysql.global_variables table.
 func upgrade(s Session) {
 	ver, err := getBootstrapVersion(s)
-	if err != nil {
-		log.Fatal(errors.Trace(err))
-	}
+	terror.MustNil(err)
 	if ver >= currentBootstrapVersion {
 		// It is already bootstrapped/upgraded by a higher version TiDB server.
 		return
@@ -278,8 +321,40 @@ func upgrade(s Session) {
 		upgradeToVer9(s)
 	}
 
+	if ver < version10 {
+		upgradeToVer10(s)
+	}
+
+	if ver < version11 {
+		upgradeToVer11(s)
+	}
+
+	if ver < version12 {
+		upgradeToVer12(s)
+	}
+
+	if ver < version13 {
+		upgradeToVer13(s)
+	}
+
+	if ver < version14 {
+		upgradeToVer14(s)
+	}
+
+	if ver < version15 {
+		upgradeToVer15(s)
+	}
+
+	if ver < version16 {
+		upgradeToVer16(s)
+	}
+
+	if ver < version17 {
+		upgradeToVer17(s)
+	}
+
 	updateBootstrapVer(s)
-	_, err = s.Execute("COMMIT")
+	_, err = s.Execute(context.Background(), "COMMIT")
 
 	if err != nil {
 		time.Sleep(1 * time.Second)
@@ -295,7 +370,6 @@ func upgrade(s Session) {
 		log.Errorf("[Upgrade] upgrade from %d to %d error", ver, currentBootstrapVersion)
 		log.Fatal(err)
 	}
-	return
 }
 
 // upgradeToVer2 updates to version 2.
@@ -333,50 +407,161 @@ func upgradeToVer5(s Session) {
 }
 
 func upgradeToVer6(s Session) {
-	_, err := s.Execute("ALTER TABLE mysql.user ADD COLUMN `Super_priv` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N' AFTER `Show_db_priv`")
-	if terror.ErrorEqual(err, infoschema.ErrColumnExists) {
-		return
-	}
-	if err != nil {
-		log.Fatal(err)
-	}
+	doReentrantDDL(s, "ALTER TABLE mysql.user ADD COLUMN `Super_priv` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N' AFTER `Show_db_priv`", infoschema.ErrColumnExists)
 	// For reasons of compatibility, set the non-exists privilege column value to 'Y', as TiDB doesn't check them in older versions.
 	mustExecute(s, "UPDATE mysql.user SET Super_priv='Y'")
 }
 
 func upgradeToVer7(s Session) {
-	_, err := s.Execute("ALTER TABLE mysql.user ADD COLUMN `Process_priv` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N' AFTER `Drop_priv`")
-	if terror.ErrorEqual(err, infoschema.ErrColumnExists) {
-		return
-	}
-	if err != nil {
-		log.Fatal(err)
-	}
+	doReentrantDDL(s, "ALTER TABLE mysql.user ADD COLUMN `Process_priv` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N' AFTER `Drop_priv`", infoschema.ErrColumnExists)
 	// For reasons of compatibility, set the non-exists privilege column value to 'Y', as TiDB doesn't check them in older versions.
 	mustExecute(s, "UPDATE mysql.user SET Process_priv='Y'")
 }
 
 func upgradeToVer8(s Session) {
 	// This is a dummy upgrade, it checks whether upgradeToVer7 success, if not, do it again.
-	if _, err := s.Execute("SELECT `Process_priv` from mysql.user limit 0"); err == nil {
+	if _, err := s.Execute(context.Background(), "SELECT `Process_priv` from mysql.user limit 0"); err == nil {
 		return
 	}
 	upgradeToVer7(s)
 }
 
 func upgradeToVer9(s Session) {
-	_, err := s.Execute("ALTER TABLE mysql.user ADD COLUMN `Trigger_priv` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N' AFTER `Create_user_priv`")
-	if terror.ErrorEqual(err, infoschema.ErrColumnExists) {
-		return
+	doReentrantDDL(s, "ALTER TABLE mysql.user ADD COLUMN `Trigger_priv` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N' AFTER `Create_user_priv`", infoschema.ErrColumnExists)
+	// For reasons of compatibility, set the non-exists privilege column value to 'Y', as TiDB doesn't check them in older versions.
+	mustExecute(s, "UPDATE mysql.user SET Trigger_priv='Y'")
+}
+
+func doReentrantDDL(s Session, sql string, ignorableErrs ...error) {
+	_, err := s.Execute(context.Background(), sql)
+	for _, ignorableErr := range ignorableErrs {
+		if terror.ErrorEqual(err, ignorableErr) {
+			return
+		}
 	}
 	if err != nil {
 		log.Fatal(err)
 	}
-	// For reasons of compatibility, set the non-exists privilege column value to 'Y', as TiDB doesn't check them in older versions.
-	s.Execute("UPDATE mysql.user SET Trigger_priv='Y'")
 }
 
-// updateBootstrapVer updates boostrap version variable in mysql.TiDB table.
+func upgradeToVer10(s Session) {
+	doReentrantDDL(s, "ALTER TABLE mysql.stats_buckets CHANGE COLUMN `value` `upper_bound` BLOB NOT NULL", infoschema.ErrColumnNotExists, infoschema.ErrColumnExists)
+	doReentrantDDL(s, "ALTER TABLE mysql.stats_buckets ADD COLUMN `lower_bound` BLOB", infoschema.ErrColumnExists)
+	doReentrantDDL(s, "ALTER TABLE mysql.stats_histograms ADD COLUMN `null_count` bigint(64) NOT NULL DEFAULT 0", infoschema.ErrColumnExists)
+	doReentrantDDL(s, "ALTER TABLE mysql.stats_histograms DROP COLUMN distinct_ratio", ddl.ErrCantDropFieldOrKey)
+	doReentrantDDL(s, "ALTER TABLE mysql.stats_histograms DROP COLUMN use_count_to_estimate", ddl.ErrCantDropFieldOrKey)
+}
+
+func upgradeToVer11(s Session) {
+	_, err := s.Execute(context.Background(), "ALTER TABLE mysql.user ADD COLUMN `References_priv` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N' AFTER `Grant_priv`")
+	if err != nil {
+		if terror.ErrorEqual(err, infoschema.ErrColumnExists) {
+			return
+		}
+		log.Fatal(err)
+	}
+	mustExecute(s, "UPDATE mysql.user SET References_priv='Y'")
+}
+
+func upgradeToVer12(s Session) {
+	ctx := context.Background()
+	_, err := s.Execute(ctx, "BEGIN")
+	terror.MustNil(err)
+	sql := "SELECT user, host, password FROM mysql.user WHERE password != ''"
+	rs, err := s.Execute(ctx, sql)
+	terror.MustNil(err)
+	r := rs[0]
+	sqls := make([]string, 0, 1)
+	defer terror.Call(r.Close)
+	row, err := r.Next(ctx)
+	for err == nil && row != nil {
+		user := row.GetString(0)
+		host := row.GetString(1)
+		pass := row.GetString(2)
+		var newPass string
+		newPass, err = oldPasswordUpgrade(pass)
+		terror.MustNil(err)
+		updateSQL := fmt.Sprintf(`UPDATE mysql.user set password = "%s" where user="%s" and host="%s"`, newPass, user, host)
+		sqls = append(sqls, updateSQL)
+		row, err = r.Next(ctx)
+	}
+	terror.MustNil(err)
+
+	for _, sql := range sqls {
+		mustExecute(s, sql)
+	}
+
+	sql = fmt.Sprintf(`INSERT INTO %s.%s VALUES ("%s", "%d", "TiDB bootstrap version.") ON DUPLICATE KEY UPDATE VARIABLE_VALUE="%d"`,
+		mysql.SystemDB, mysql.TiDBTable, tidbServerVersionVar, version12, version12)
+	mustExecute(s, sql)
+
+	mustExecute(s, "COMMIT")
+}
+
+func upgradeToVer13(s Session) {
+	sqls := []string{
+		"ALTER TABLE mysql.user ADD COLUMN `Create_tmp_table_priv` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N' AFTER `Super_priv`",
+		"ALTER TABLE mysql.user ADD COLUMN `Lock_tables_priv` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N' AFTER `Create_tmp_table_priv`",
+		"ALTER TABLE mysql.user ADD COLUMN `Create_view_priv` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N' AFTER `Execute_priv`",
+		"ALTER TABLE mysql.user ADD COLUMN `Show_view_priv` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N' AFTER `Create_view_priv`",
+		"ALTER TABLE mysql.user ADD COLUMN `Create_routine_priv` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N' AFTER `Show_view_priv`",
+		"ALTER TABLE mysql.user ADD COLUMN `Alter_routine_priv` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N' AFTER `Create_routine_priv`",
+		"ALTER TABLE mysql.user ADD COLUMN `Event_priv` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N' AFTER `Create_user_priv`",
+	}
+	ctx := context.Background()
+	for _, sql := range sqls {
+		_, err := s.Execute(ctx, sql)
+		if err != nil {
+			if terror.ErrorEqual(err, infoschema.ErrColumnExists) {
+				continue
+			}
+			log.Fatal(err)
+		}
+	}
+	mustExecute(s, "UPDATE mysql.user SET Create_tmp_table_priv='Y',Lock_tables_priv='Y',Create_view_priv='Y',Show_view_priv='Y',Create_routine_priv='Y',Alter_routine_priv='Y',Event_priv='Y'")
+}
+
+func upgradeToVer14(s Session) {
+	sqls := []string{
+		"ALTER TABLE mysql.db ADD COLUMN `References_priv` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N' AFTER `Grant_priv`",
+		"ALTER TABLE mysql.db ADD COLUMN `Create_tmp_table_priv` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N' AFTER `Alter_priv`",
+		"ALTER TABLE mysql.db ADD COLUMN `Lock_tables_priv` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N' AFTER `Create_tmp_table_priv`",
+		"ALTER TABLE mysql.db ADD COLUMN `Create_view_priv` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N' AFTER `Lock_tables_priv`",
+		"ALTER TABLE mysql.db ADD COLUMN `Show_view_priv` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N' AFTER `Create_view_priv`",
+		"ALTER TABLE mysql.db ADD COLUMN `Create_routine_priv` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N' AFTER `Show_view_priv`",
+		"ALTER TABLE mysql.db ADD COLUMN `Alter_routine_priv` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N' AFTER `Create_routine_priv`",
+		"ALTER TABLE mysql.db ADD COLUMN `Event_priv` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N' AFTER `Execute_priv`",
+		"ALTER TABLE mysql.db ADD COLUMN `Trigger_priv` enum('N','Y') CHARACTER SET utf8 NOT NULL DEFAULT 'N' AFTER `Event_priv`",
+	}
+	ctx := context.Background()
+	for _, sql := range sqls {
+		_, err := s.Execute(ctx, sql)
+		if err != nil {
+			if terror.ErrorEqual(err, infoschema.ErrColumnExists) {
+				continue
+			}
+			log.Fatal(err)
+		}
+	}
+}
+
+func upgradeToVer15(s Session) {
+	var err error
+	_, err = s.Execute(context.Background(), CreateGCDeleteRangeTable)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func upgradeToVer16(s Session) {
+	doReentrantDDL(s, "ALTER TABLE mysql.stats_histograms ADD COLUMN `cm_sketch` blob", infoschema.ErrColumnExists)
+}
+
+func upgradeToVer17(s Session) {
+	doReentrantDDL(s, "ALTER TABLE mysql.user MODIFY User CHAR(32)")
+}
+
+// updateBootstrapVer updates bootstrap version variable in mysql.TiDB table.
 func updateBootstrapVer(s Session) {
 	// Update bootstrap version.
 	sql := fmt.Sprintf(`INSERT INTO %s.%s VALUES ("%s", "%d", "TiDB bootstrap version.") ON DUPLICATE KEY UPDATE VARIABLE_VALUE="%d"`,
@@ -386,14 +571,14 @@ func updateBootstrapVer(s Session) {
 
 // getBootstrapVersion gets bootstrap version from mysql.tidb table;
 func getBootstrapVersion(s Session) (int64, error) {
-	d, err := getTiDBVar(s, tidbServerVersionVar)
+	sVal, isNull, err := getTiDBVar(s, tidbServerVersionVar)
 	if err != nil {
 		return 0, errors.Trace(err)
 	}
-	if d.IsNull() {
+	if isNull {
 		return 0, nil
 	}
-	return strconv.ParseInt(d.GetString(), 10, 64)
+	return strconv.ParseInt(sVal, 10, 64)
 }
 
 // doDDLWorks executes DDL statements in bootstrap stage.
@@ -420,6 +605,8 @@ func doDDLWorks(s Session) {
 	mustExecute(s, CreateStatsColsTable)
 	// Create stats_buckets table.
 	mustExecute(s, CreateStatsBucketsTable)
+	// Create gc_delete_range table.
+	mustExecute(s, CreateGCDeleteRangeTable)
 }
 
 // doDMLWorks executes DML statements in bootstrap stage.
@@ -429,7 +616,7 @@ func doDMLWorks(s Session) {
 
 	// Insert a default user with empty password.
 	mustExecute(s, `INSERT INTO mysql.user VALUES
-		("%", "root", "", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y")`)
+		("%", "root", "", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y")`)
 
 	// Init global system variables table.
 	values := make([]string, 0, len(variable.SysVars))
@@ -453,7 +640,7 @@ func doDMLWorks(s Session) {
 		mysql.SystemDB, mysql.TiDBTable, tidbServerVersionVar, currentBootstrapVersion)
 	mustExecute(s, sql)
 
-	_, err := s.Execute("COMMIT")
+	_, err := s.Execute(context.Background(), "COMMIT")
 	if err != nil {
 		time.Sleep(1 * time.Second)
 		// Check if TiDB is already bootstrapped.
@@ -469,9 +656,21 @@ func doDMLWorks(s Session) {
 }
 
 func mustExecute(s Session, sql string) {
-	_, err := s.Execute(sql)
+	_, err := s.Execute(context.Background(), sql)
 	if err != nil {
 		debug.PrintStack()
 		log.Fatal(err)
 	}
+}
+
+// oldPasswordUpgrade upgrade password to MySQL compatible format
+func oldPasswordUpgrade(pass string) (string, error) {
+	hash1, err := hex.DecodeString(pass)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+
+	hash2 := auth.Sha1Hash(hash1)
+	newpass := fmt.Sprintf("*%X", hash2)
+	return newpass, nil
 }

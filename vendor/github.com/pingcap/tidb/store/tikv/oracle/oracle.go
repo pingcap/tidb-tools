@@ -22,8 +22,14 @@ import (
 // Oracle is the interface that provides strictly ascending timestamps.
 type Oracle interface {
 	GetTimestamp(ctx context.Context) (uint64, error)
+	GetTimestampAsync(ctx context.Context) Future
 	IsExpired(lockTimestamp uint64, TTL uint64) bool
 	Close()
+}
+
+// Future is a future which promises to return a timestamp.
+type Future interface {
+	Wait() (uint64, error)
 }
 
 const physicalShiftBits = 18

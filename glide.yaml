@@ -11,7 +11,7 @@ import:
 - package: github.com/pingcap/check
   version: 9b266636177e249ec28b0aeffe8e86bc272bb481
 - package: github.com/pingcap/tidb
-  version: 2c07a47f229314ac2ccfb78607d218759a77a050
+  version: 9a3463fd8143e99bd5a331785707bb91686f6825
   subpackages:
   - ast
   - ddl
@@ -20,13 +20,13 @@ import:
   - parser
   - terror
   - util/charset
-  - util/types
+  - types
 - package: golang.org/x/net
   version: e90d6d0afc4c315a0d87a568ae68577cc15149a0
   subpackages:
   - context
 - package: google.golang.org/grpc
-  version: v1.0.4
+  version: 5b3c4e850e90a4cf6a20ebd46c8b32a0a3afcb9e
   subpackages:
   - codes
   - credentials
@@ -96,3 +96,19 @@ import:
   version: 723cc1e459b8eea2dea4583200fd60757d40097a
 - package: github.com/BurntSushi/toml
   version: 99064174e013895bbd9b025c31100bd1d9b590ca
+- package: github.com/google/btree
+  version: 316fb6d3f031ae8f4d457c6c5186b9e3ded70435
+- package: github.com/pingcap/tipb
+  version: 07ff5b094233a557a3ac11b1e4d8714d8c6ff406
+- package: github.com/pingcap/kvproto
+  version: 7b013aefd7210f4f4dbfca3330b462ddce5dd496
+- package: github.com/uber/jaeger-lib
+  version: 34d9cc24e47ab70783050b52f79c06eb3ac850ba
+- package: google.golang.org/genproto
+  version: b0a3dcfcd1a9bd48e63634bd8802960804cf8315
+- package: golang.org/x/crypto
+  version: 1351f936d976c60a0a48d728281922cf63eafb8d
+  subpackages:
+  - bcrypt
+  - blowfish
+  - ssh/terminal

@@ -45,11 +45,27 @@ func (l *localOracle) GetTimestamp(context.Context) (uint64, error) {
 	ts := oracle.ComposeTS(physical, 0)
 	if l.lastTimeStampTS == ts {
 		l.n++
-		return uint64(ts + l.n), nil
+		return ts + l.n, nil
 	}
 	l.lastTimeStampTS = ts
 	l.n = 0
-	return uint64(ts), nil
+	return ts, nil
+}
+
+func (l *localOracle) GetTimestampAsync(ctx context.Context) oracle.Future {
+	return &future{
+		ctx: ctx,
+		l:   l,
+	}
+}
+
+type future struct {
+	ctx context.Context
+	l   *localOracle
+}
+
+func (f *future) Wait() (uint64, error) {
+	return f.l.GetTimestamp(f.ctx)
 }
 
 func (l *localOracle) Close() {

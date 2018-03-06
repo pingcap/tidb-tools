@@ -18,9 +18,9 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
 	"github.com/pingcap/pd/pd-client"
 	"github.com/pingcap/tidb/store/tikv/oracle"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 
@@ -71,6 +71,29 @@ func (o *pdOracle) GetTimestamp(ctx context.Context) (uint64, error) {
 	}
 	o.setLastTS(ts)
 	return ts, nil
+}
+
+type tsFuture struct {
+	pd.TSFuture
+	o *pdOracle
+}
+
+// Wait implements the oracle.Future interface.
+func (f *tsFuture) Wait() (uint64, error) {
+	now := time.Now()
+	physical, logical, err := f.TSFuture.Wait()
+	tsFutureWaitDuration.Observe(time.Since(now).Seconds())
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+	ts := oracle.ComposeTS(physical, logical)
+	f.o.setLastTS(ts)
+	return ts, nil
+}
+
+func (o *pdOracle) GetTimestampAsync(ctx context.Context) oracle.Future {
+	ts := o.c.GetTSAsync(ctx)
+	return &tsFuture{ts, o}
 }
 
 func (o *pdOracle) getTimestamp(ctx context.Context) (uint64, error) {

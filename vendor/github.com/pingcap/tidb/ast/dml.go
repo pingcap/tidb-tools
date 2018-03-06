@@ -15,6 +15,8 @@ package ast
 
 import (
 	"github.com/pingcap/tidb/model"
+	"github.com/pingcap/tidb/mysql"
+	"github.com/pingcap/tidb/util/auth"
 )
 
 var (
@@ -68,6 +70,10 @@ type Join struct {
 	Tp JoinType
 	// On represents join on condition.
 	On *OnCondition
+	// Using represents join using clause.
+	Using []*ColumnName
+	// NaturalJoin represents join is natural join
+	NaturalJoin bool
 }
 
 // Accept implements Node Accept interface.
@@ -225,16 +231,6 @@ func (n *TableSource) Accept(v Visitor) (Node, bool) {
 	return v.Leave(n)
 }
 
-// SetResultFields implements ResultSetNode interface.
-func (n *TableSource) SetResultFields(rfs []*ResultField) {
-	n.Source.SetResultFields(rfs)
-}
-
-// GetResultFields implements ResultSetNode interface.
-func (n *TableSource) GetResultFields() []*ResultField {
-	return n.Source.GetResultFields()
-}
-
 // SelectLockType is the lock type for SelectStmt.
 type SelectLockType int
 
@@ -244,6 +240,19 @@ const (
 	SelectLockForUpdate
 	SelectLockInShareMode
 )
+
+// String implements fmt.Stringer.
+func (slt SelectLockType) String() string {
+	switch slt {
+	case SelectLockNone:
+		return "none"
+	case SelectLockForUpdate:
+		return "for update"
+	case SelectLockInShareMode:
+		return "in share mode"
+	}
+	return "unsupported select lock type"
+}
 
 // WildCardField is a special type of select field content.
 type WildCardField struct {
@@ -443,7 +452,9 @@ type SelectStmt struct {
 	dmlNode
 	resultSetNode
 
-	// Distinct represents if the select has distinct option.
+	// SelectStmtOpts wraps around select hints and switches.
+	*SelectStmtOpts
+	// Distinct represents whether the select has distinct option.
 	Distinct bool
 	// From is the from clause of the query.
 	From *TableRefsClause
@@ -640,15 +651,6 @@ func (n *Assignment) Accept(v Visitor) (Node, bool) {
 	return v.Leave(n)
 }
 
-// Priority const values.
-// See https://dev.mysql.com/doc/refman/5.7/en/insert.html
-const (
-	NoPriority = iota
-	LowPriority
-	HighPriority
-	DelayedPriority
-)
-
 // LoadDataStmt is a statement to load data from a specified file, then insert this rows into an existing table.
 // See https://dev.mysql.com/doc/refman/5.7/en/load-data.html
 type LoadDataStmt struct {
@@ -705,12 +707,12 @@ type InsertStmt struct {
 	dmlNode
 
 	IsReplace   bool
-	Ignore      bool
+	IgnoreErr   bool
 	Table       *TableRefsClause
 	Columns     []*ColumnName
 	Lists       [][]ExprNode
 	Setlist     []*Assignment
-	Priority    int
+	Priority    mysql.PriorityEnum
 	OnDuplicate []*Assignment
 	Select      ResultSetNode
 }
@@ -783,7 +785,7 @@ type DeleteStmt struct {
 	Order        *OrderByClause
 	Limit        *Limit
 	LowPriority  bool
-	Ignore       bool
+	IgnoreErr    bool
 	Quick        bool
 	IsMultiTable bool
 	BeforeFrom   bool
@@ -844,7 +846,7 @@ type UpdateStmt struct {
 	Order         *OrderByClause
 	Limit         *Limit
 	LowPriority   bool
-	Ignore        bool
+	IgnoreErr     bool
 	MultipleTable bool
 }
 
@@ -948,6 +950,12 @@ const (
 	ShowProcessList
 	ShowCreateDatabase
 	ShowEvents
+	ShowStatsMeta
+	ShowStatsHistograms
+	ShowStatsBuckets
+	ShowStatsHealthy
+	ShowPlugins
+	ShowProfiles
 )
 
 // ShowStmt is a statement to provide information about databases, tables, columns and so on.
@@ -962,7 +970,7 @@ type ShowStmt struct {
 	Column *ColumnName // Used for `desc table column`.
 	Flag   int         // Some flag parsed from sql, such as FULL.
 	Full   bool
-	User   string // Used for show grants.
+	User   *auth.UserIdentity // Used for show grants.
 
 	// GlobalScope is used by show variables
 	GlobalScope bool
