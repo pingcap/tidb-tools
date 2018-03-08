@@ -15,7 +15,6 @@
 package clientv3
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -24,6 +23,7 @@ import (
 	pb "github.com/coreos/etcd/etcdserver/etcdserverpb"
 	mvccpb "github.com/coreos/etcd/mvcc/mvccpb"
 
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -46,22 +46,6 @@ type Watcher interface {
 	// through the returned channel. If revisions waiting to be sent over the
 	// watch are compacted, then the watch will be canceled by the server, the
 	// client will post a compacted error watch response, and the channel will close.
-	// If the context "ctx" is canceled or timed out, returned "WatchChan" is closed,
-	// and "WatchResponse" from this closed channel has zero events and nil "Err()".
-	// The context "ctx" MUST be canceled, as soon as watcher is no longer being used,
-	// to release the associated resources.
-	// If the context is "context.Background/TODO", returned "WatchChan" will not be closed
-	// and wait until events happen, except when server returns a non-recoverable error.
-	// For example, when context passed with "WithRequireLeader" and the connected server
-	// has no leader, error "etcdserver: no leader" is returned, and then "WatchChan" is
-	// closed with non-nil "Err()".
-	// Otherwise, as long as the context has not been canceled or timed out, watch will
-	// retry on other recoverable errors forever until reconnected.
-	//
-	// TODO: explicitly set context error in the last "WatchResponse" message and close channel?
-	// Currently, client contexts are overwritten with "valCtx" that never closes.
-	// TODO(v3.4): configure watch retry policy, limit maximum retry number
-	// (see https://github.com/coreos/etcd/issues/8980)
 	Watch(ctx context.Context, key string, opts ...OpOption) WatchChan
 
 	// Close closes the watcher and cancels all watch requests.
@@ -369,8 +353,7 @@ func (w *watcher) closeStream(wgs *watchGrpcStream) {
 }
 
 func (w *watchGrpcStream) addSubstream(resp *pb.WatchResponse, ws *watcherStream) {
-	// check watch ID for backward compatibility (<= v3.3)
-	if resp.WatchId == -1 || (resp.Canceled && resp.CancelReason != "") {
+	if resp.WatchId == -1 {
 		// failed; no channel
 		close(ws.recvc)
 		return
@@ -456,7 +439,6 @@ func (w *watchGrpcStream) run() {
 		// Watch() requested
 		case wreq := <-w.reqc:
 			outc := make(chan WatchResponse, 1)
-			// TODO: pass custom watch ID?
 			ws := &watcherStream{
 				initReq: *wreq,
 				id:      -1,
@@ -488,7 +470,7 @@ func (w *watchGrpcStream) run() {
 				if ws := w.nextResume(); ws != nil {
 					wc.Send(ws.initReq.toPB())
 				}
-			case pbresp.Canceled && pbresp.CompactRevision == 0:
+			case pbresp.Canceled:
 				delete(cancelSet, pbresp.WatchId)
 				if ws, ok := w.substreams[pbresp.WatchId]; ok {
 					// signal to stream goroutine to update closingc
@@ -557,7 +539,6 @@ func (w *watchGrpcStream) dispatchEvent(pbresp *pb.WatchResponse) bool {
 	for i, ev := range pbresp.Events {
 		events[i] = (*Event)(ev)
 	}
-	// TODO: return watch ID?
 	wr := &WatchResponse{
 		Header:          *pbresp.Header,
 		Events:          events,

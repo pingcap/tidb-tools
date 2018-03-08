@@ -18,8 +18,8 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb/ast"
+	"github.com/pingcap/tidb/context"
 	"github.com/pingcap/tidb/expression"
-	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/util/codec"
 	"github.com/pingcap/tipb/go-tipb"
 )
@@ -37,7 +37,7 @@ type Plan interface {
 	// replaceExprColumns replace all the column reference in the plan's expression node.
 	replaceExprColumns(replace map[string]*expression.Column)
 
-	context() sessionctx.Context
+	context() context.Context
 }
 
 // taskType is the type of execution task.
@@ -88,7 +88,7 @@ func (p *requiredProp) isPrefix(prop *requiredProp) bool {
 		return false
 	}
 	for i := range p.cols {
-		if !p.cols[i].Equal(nil, prop.cols[i]) {
+		if !p.cols[i].Equal(prop.cols[i], nil) {
 			return false
 		}
 	}
@@ -99,7 +99,7 @@ func (p *requiredProp) isPrefix(prop *requiredProp) bool {
 func (p *requiredProp) matchItems(items []*ByItems) bool {
 	for i, col := range p.cols {
 		sortItem := items[i]
-		if sortItem.Desc != p.desc || !sortItem.Expr.Equal(nil, col) {
+		if sortItem.Desc != p.desc || !sortItem.Expr.Equal(col, nil) {
 			return false
 		}
 	}
@@ -125,7 +125,7 @@ func (p *requiredProp) hashCode() []byte {
 	p.hashcode = codec.EncodeInt(p.hashcode, int64(p.taskTp))
 	p.hashcode = codec.EncodeFloat(p.hashcode, p.expectedCnt)
 	for i, length := 0, len(p.cols); i < length; i++ {
-		p.hashcode = append(p.hashcode, p.cols[i].HashCode(nil)...)
+		p.hashcode = append(p.hashcode, p.cols[i].HashCode()...)
 	}
 	return p.hashcode
 }
@@ -195,7 +195,7 @@ type PhysicalPlan interface {
 	attach2Task(...task) task
 
 	// ToPB converts physical plan to tipb executor.
-	ToPB(ctx sessionctx.Context) (*tipb.Executor, error)
+	ToPB(ctx context.Context) (*tipb.Executor, error)
 
 	// ExplainInfo returns operator information to be explained.
 	ExplainInfo() string
@@ -268,7 +268,7 @@ func (p *baseLogicalPlan) buildKeyInfo() {
 	}
 }
 
-func newBasePlan(ctx sessionctx.Context, tp string) basePlan {
+func newBasePlan(tp string, ctx context.Context) basePlan {
 	ctx.GetSessionVars().PlanID++
 	id := ctx.GetSessionVars().PlanID
 	return basePlan{
@@ -278,17 +278,17 @@ func newBasePlan(ctx sessionctx.Context, tp string) basePlan {
 	}
 }
 
-func newBaseLogicalPlan(ctx sessionctx.Context, tp string, self LogicalPlan) baseLogicalPlan {
+func newBaseLogicalPlan(tp string, ctx context.Context, self LogicalPlan) baseLogicalPlan {
 	return baseLogicalPlan{
 		taskMap:  make(map[string]task),
-		basePlan: newBasePlan(ctx, tp),
+		basePlan: newBasePlan(tp, ctx),
 		self:     self,
 	}
 }
 
-func newBasePhysicalPlan(ctx sessionctx.Context, tp string, self PhysicalPlan) basePhysicalPlan {
+func newBasePhysicalPlan(tp string, ctx context.Context, self PhysicalPlan) basePhysicalPlan {
 	return basePhysicalPlan{
-		basePlan: newBasePlan(ctx, tp),
+		basePlan: newBasePlan(tp, ctx),
 		self:     self,
 	}
 }
@@ -314,7 +314,7 @@ func (p *baseLogicalPlan) PruneColumns(parentUsedCols []*expression.Column) {
 type basePlan struct {
 	tp    string
 	id    int
-	ctx   sessionctx.Context
+	ctx   context.Context
 	stats *statsInfo
 }
 
@@ -360,7 +360,7 @@ func (p *basePhysicalPlan) SetChildren(children ...PhysicalPlan) {
 	p.children = children
 }
 
-func (p *basePlan) context() sessionctx.Context {
+func (p *basePlan) context() context.Context {
 	return p.ctx
 }
 

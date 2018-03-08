@@ -20,8 +20,7 @@ var (
 	PanicCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "tidb",
-			Subsystem: "server",
-			Name:      "panic_total",
+			Name:      "panic",
 			Help:      "Counter of panic.",
 		}, []string{LblType})
 )
@@ -30,15 +29,14 @@ var (
 const (
 	LabelSession  = "session"
 	LabelDomain   = "domain"
-	LabelDDLOwner = "ddl-owner"
 	LabelDDL      = "ddl"
 	LabelGCWorker = "gcworker"
 
-	opSucc   = "ok"
-	opFailed = "err"
+	opSucc   = "op_succ"
+	opFailed = "op_failed"
 )
 
-// RetLabel returns "ok" when err == nil and "err" when err != nil.
+// RetLabel returns "op_succ" when err == nil and "op_failed" when err != nil.
 // This could be useful when you need to observe the operation result.
 func RetLabel(err error) string {
 	if err == nil {

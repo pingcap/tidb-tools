@@ -1235,8 +1235,7 @@ func (d *MyDecimal) FromBin(bin []byte, precision, frac int) (binSize int, err e
 		mask = 0
 	}
 	binSize = decimalBinSize(precision, frac)
-	dCopy := make([]byte, 40)
-	dCopy = dCopy[:binSize]
+	dCopy := make([]byte, binSize)
 	copy(dCopy, bin)
 	dCopy[0] ^= 0x80
 	bin = dCopy

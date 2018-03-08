@@ -15,7 +15,6 @@
 package clientv3
 
 import (
-	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -28,6 +27,7 @@ import (
 
 	"github.com/coreos/etcd/etcdserver/api/v3rpc/rpctypes"
 
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -166,7 +166,7 @@ func (c *Client) autoSync() {
 			err := c.Sync(ctx)
 			cancel()
 			if err != nil && err != c.ctx.Err() {
-				lg.Lvl(4).Infof("Auto sync endpoints failed: %v", err)
+				logger.Println("Auto sync endpoints failed:", err)
 			}
 		}
 	}
@@ -537,19 +537,18 @@ func toErr(ctx context.Context, err error) error {
 	if _, ok := err.(rpctypes.EtcdError); ok {
 		return err
 	}
-	if ev, ok := status.FromError(err); ok {
-		code := ev.Code()
-		switch code {
-		case codes.DeadlineExceeded:
-			fallthrough
-		case codes.Canceled:
-			if ctx.Err() != nil {
-				err = ctx.Err()
-			}
-		case codes.Unavailable:
-		case codes.FailedPrecondition:
-			err = grpc.ErrClientConnClosing
+	ev, _ := status.FromError(err)
+	code := ev.Code()
+	switch code {
+	case codes.DeadlineExceeded:
+		fallthrough
+	case codes.Canceled:
+		if ctx.Err() != nil {
+			err = ctx.Err()
 		}
+	case codes.Unavailable:
+	case codes.FailedPrecondition:
+		err = grpc.ErrClientConnClosing
 	}
 	return err
 }

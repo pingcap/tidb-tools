@@ -22,6 +22,7 @@ import (
 
 func main() {
 	cfg := NewConfig()
+
 	if err := cfg.Parse(os.Args[1:]); err != nil {
 		log.Infof("verifying flags error, See 'drainer --help'. %s", errors.ErrorStack(err))
 	}

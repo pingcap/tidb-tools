@@ -44,13 +44,12 @@ var (
 
 func init() {
 	tikvMySQLErrCodes := map[terror.ErrCode]uint16{
-		mysql.ErrTiKVServerTimeout:   mysql.ErrTiKVServerTimeout,
-		mysql.ErrResolveLockTimeout:  mysql.ErrResolveLockTimeout,
-		mysql.ErrPDServerTimeout:     mysql.ErrPDServerTimeout,
-		mysql.ErrRegionUnavailable:   mysql.ErrRegionUnavailable,
-		mysql.ErrTiKVServerBusy:      mysql.ErrTiKVServerBusy,
-		mysql.ErrGCTooEarly:          mysql.ErrGCTooEarly,
-		mysql.ErrTruncatedWrongValue: mysql.ErrTruncatedWrongValue,
+		mysql.ErrTiKVServerTimeout:  mysql.ErrTiKVServerTimeout,
+		mysql.ErrResolveLockTimeout: mysql.ErrResolveLockTimeout,
+		mysql.ErrPDServerTimeout:    mysql.ErrPDServerTimeout,
+		mysql.ErrRegionUnavailable:  mysql.ErrRegionUnavailable,
+		mysql.ErrTiKVServerBusy:     mysql.ErrTiKVServerBusy,
+		mysql.ErrGCTooEarly:         mysql.ErrGCTooEarly,
 	}
 	terror.ErrClassToMySQLCodes[terror.ClassTiKV] = tikvMySQLErrCodes
 }

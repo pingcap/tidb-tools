@@ -27,19 +27,17 @@ import (
 
 // Config contains configuration options.
 type Config struct {
-	Host            string `toml:"host" json:"host"`
-	Port            int    `toml:"port" json:"port"`
-	Store           string `toml:"store" json:"store"`
-	Path            string `toml:"path" json:"path"`
-	Socket          string `toml:"socket" json:"socket"`
-	BinlogSocket    string `toml:"binlog-socket" json:"binlog-socket"`
-	Lease           string `toml:"lease" json:"lease"`
-	RunDDL          bool   `toml:"run-ddl" json:"run-ddl"`
-	SplitTable      bool   `toml:"split-table" json:"split-table"`
-	TokenLimit      int    `toml:"token-limit" json:"token-limit"`
-	EnableChunk     bool   `toml:"enable-chunk" json:"enable-chunk"`
-	OOMAction       string `toml:"oom-action" json:"oom-action"`
-	EnableStreaming bool   `toml:"enable-streaming" json:"enable-streaming"`
+	Host         string `toml:"host" json:"host"`
+	Port         int    `toml:"port" json:"port"`
+	Store        string `toml:"store" json:"store"`
+	Path         string `toml:"path" json:"path"`
+	Socket       string `toml:"socket" json:"socket"`
+	BinlogSocket string `toml:"binlog-socket" json:"binlog-socket"`
+	Lease        string `toml:"lease" json:"lease"`
+	RunDDL       bool   `toml:"run-ddl" json:"run-ddl"`
+	SplitTable   bool   `toml:"split-table" json:"split-table"`
+	TokenLimit   int    `toml:"token-limit" json:"token-limit"`
+	EnableChunk  bool   `toml:"enable-chunk" json:"enable-chunk"`
 
 	Log               Log               `toml:"log" json:"log"`
 	Security          Security          `toml:"security" json:"security"`
@@ -64,10 +62,9 @@ type Log struct {
 	// File log config.
 	File logutil.FileLogConfig `toml:"file" json:"file"`
 
-	SlowQueryFile      string `toml:"slow-query-file" json:"slow-query-file"`
-	SlowThreshold      int    `toml:"slow-threshold" json:"slow-threshold"`
-	ExpensiveThreshold int    `toml:"expensive-threshold" json:"expensive-threshold"`
-	QueryLogMaxLen     int    `toml:"query-log-max-len" json:"query-log-max-len"`
+	SlowQueryFile  string `toml:"slow-query-file" json:"slow-query-file"`
+	SlowThreshold  int    `toml:"slow-threshold" json:"slow-threshold"`
+	QueryLogMaxLen int    `toml:"query-log-max-len" json:"query-log-max-len"`
 }
 
 // Security is the security section of the config.
@@ -199,31 +196,26 @@ type TiKVClient struct {
 	// GrpcConnectionCount is the max gRPC connections that will be established
 	// with each tikv-server.
 	GrpcConnectionCount int `toml:"grpc-connection-count" json:"grpc-connection-count"`
-	// CommitTimeout is the max time which command 'commit' will wait.
-	CommitTimeout string `toml:"commit-timeout" json:"commit-timeout"`
 }
 
 var defaultConf = Config{
-	Host:            "0.0.0.0",
-	Port:            4000,
-	Store:           "mocktikv",
-	Path:            "/tmp/tidb",
-	RunDDL:          true,
-	SplitTable:      true,
-	Lease:           "10s",
-	TokenLimit:      1000,
-	EnableChunk:     true,
-	OOMAction:       "log",
-	EnableStreaming: false,
+	Host:        "0.0.0.0",
+	Port:        4000,
+	Store:       "mocktikv",
+	Path:        "/tmp/tidb",
+	RunDDL:      true,
+	SplitTable:  true,
+	Lease:       "10s",
+	TokenLimit:  1000,
+	EnableChunk: true,
 	Log: Log{
 		Level:  "info",
 		Format: "text",
 		File: logutil.FileLogConfig{
 			LogRotate: true,
 		},
-		SlowThreshold:      300,
-		ExpensiveThreshold: 10000,
-		QueryLogMaxLen:     2048,
+		SlowThreshold:  300,
+		QueryLogMaxLen: 2048,
 	},
 	Status: Status{
 		ReportStatus:    true,
@@ -266,7 +258,6 @@ var defaultConf = Config{
 	},
 	TiKVClient: TiKVClient{
 		GrpcConnectionCount: 16,
-		CommitTimeout:       "41s",
 	},
 }
 
@@ -325,12 +316,3 @@ func (t *OpenTracing) ToTracingConfig() *tracing.Configuration {
 	ret.Sampler.SamplingRefreshInterval = t.Sampler.SamplingRefreshInterval
 	return ret
 }
-
-// The following constants represents the valid action configurations for OOMAction.
-// NOTE: Althrough the values is case insensitiv, we should use lower-case
-// strings because the configuration value will be transformed to lower-case
-// string and compared with these constants in the further usage.
-const (
-	OOMActionCancel = "cancel"
-	OOMActionLog    = "log"
-)

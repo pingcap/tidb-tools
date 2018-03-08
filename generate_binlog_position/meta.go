@@ -99,6 +99,7 @@ func (lm *localMeta) Save(ts int64) error {
 	}
 
 	lm.saveTime = time.Now()
+	log.Infof("ts: %d", ts)
 	return nil
 }
 

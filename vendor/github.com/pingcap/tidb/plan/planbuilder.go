@@ -19,16 +19,15 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb/ast"
+	"github.com/pingcap/tidb/context"
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/model"
 	"github.com/pingcap/tidb/mysql"
 	"github.com/pingcap/tidb/parser/opcode"
-	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/table"
 	"github.com/pingcap/tidb/terror"
 	"github.com/pingcap/tidb/types"
-	"github.com/pingcap/tidb/util/ranger"
 )
 
 // Error instances.
@@ -153,7 +152,7 @@ var clauseMsg = map[clauseCode]string{
 // It just builds the ast node straightforwardly.
 type planBuilder struct {
 	err          error
-	ctx          sessionctx.Context
+	ctx          context.Context
 	is           infoschema.InfoSchema
 	outerSchemas []*expression.Schema
 	inUpdateStmt bool
@@ -408,70 +407,6 @@ func (b *planBuilder) buildPrepare(x *ast.PrepareStmt) Plan {
 	return p
 }
 
-func (b *planBuilder) buildCheckIndex(dbName model.CIStr, as *ast.AdminStmt) Plan {
-	tblName := as.Tables[0]
-	tbl, err := b.is.TableByName(dbName, tblName.Name)
-	if err != nil {
-		b.err = errors.Trace(err)
-		return nil
-	}
-	tblInfo := tbl.Meta()
-
-	// get index information
-	var idx *model.IndexInfo
-	for _, index := range tblInfo.Indices {
-		if index.Name.L == as.Index {
-			idx = index
-			break
-		}
-	}
-	if idx == nil {
-		b.err = errors.Errorf("index %s do not exist", as.Index)
-		return nil
-	}
-	if idx.State != model.StatePublic {
-		b.err = errors.Errorf("index %s state %s isn't public", as.Index, idx.State)
-		return nil
-	}
-
-	id := 1
-	columns := make([]*model.ColumnInfo, 0, len(idx.Columns))
-	schema := expression.NewSchema(make([]*expression.Column, 0, len(idx.Columns))...)
-	for _, idxCol := range idx.Columns {
-		for _, col := range tblInfo.Columns {
-			if idxCol.Name.L == col.Name.L {
-				columns = append(columns, col)
-				schema.Append(&expression.Column{
-					FromID:   id,
-					Position: schema.Len() + 1,
-					RetType:  &col.FieldType,
-				})
-			}
-		}
-	}
-	is := PhysicalIndexScan{
-		Table:            tblInfo,
-		TableAsName:      &tblName.Name,
-		DBName:           dbName,
-		Columns:          columns,
-		Index:            idx,
-		dataSourceSchema: schema,
-		Ranges:           ranger.FullNewRange(),
-		KeepOrder:        false,
-	}.init(b.ctx)
-	is.stats = &statsInfo{}
-	cop := &copTask{indexPlan: is}
-	// It's double read case.
-	ts := PhysicalTableScan{Columns: columns, Table: is.Table}.init(b.ctx)
-	ts.SetSchema(is.dataSourceSchema)
-	cop.tablePlan = ts
-	is.initSchema(id, idx, true)
-	t := finishCopTask(b.ctx, cop)
-
-	rootT := t.(*rootTask)
-	return rootT.p
-}
-
 func (b *planBuilder) buildAdmin(as *ast.AdminStmt) Plan {
 	var ret Plan
 
@@ -479,17 +414,6 @@ func (b *planBuilder) buildAdmin(as *ast.AdminStmt) Plan {
 	case ast.AdminCheckTable:
 		p := &CheckTable{Tables: as.Tables}
 		ret = p
-	case ast.AdminCheckIndex:
-		dbName := model.NewCIStr(b.ctx.GetSessionVars().CurrentDB)
-		if as.Tables[0].DBInfo != nil {
-			dbName = as.Tables[0].DBInfo.Name
-		}
-		readerPlan := b.buildCheckIndex(dbName, as)
-		ret = &CheckIndex{
-			DBName:            dbName.L,
-			IdxName:           as.Index,
-			IndexLookUpReader: readerPlan.(*PhysicalIndexLookUpReader),
-		}
 	case ast.AdminShowDDL:
 		p := &ShowDDL{}
 		p.SetSchema(buildShowDDLFields())
@@ -1316,9 +1240,6 @@ func buildShowSchema(s *ast.ShowStmt) (schema *expression.Schema) {
 			"Repeats", "Lower_Bound", "Upper_Bound"}
 		ftypes = []byte{mysql.TypeVarchar, mysql.TypeVarchar, mysql.TypeVarchar, mysql.TypeTiny, mysql.TypeLonglong,
 			mysql.TypeLonglong, mysql.TypeLonglong, mysql.TypeVarchar, mysql.TypeVarchar}
-	case ast.ShowStatsHealthy:
-		names = []string{"Db_name", "Table_name", "Healthy"}
-		ftypes = []byte{mysql.TypeVarchar, mysql.TypeVarchar, mysql.TypeLonglong}
 	case ast.ShowProfiles: // ShowProfiles is deprecated.
 		names = []string{"Query_ID", "Duration", "Query"}
 		ftypes = []byte{mysql.TypeLong, mysql.TypeDouble, mysql.TypeVarchar}

@@ -147,13 +147,13 @@ func (p *LogicalJoin) buildKeyInfo() {
 			ln := expr.GetArgs()[0].(*expression.Column)
 			rn := expr.GetArgs()[1].(*expression.Column)
 			for _, key := range p.children[0].Schema().Keys {
-				if len(key) == 1 && key[0].Equal(p.ctx, ln) {
+				if len(key) == 1 && key[0].Equal(ln, p.ctx) {
 					lOk = true
 					break
 				}
 			}
 			for _, key := range p.children[1].Schema().Keys {
-				if len(key) == 1 && key[0].Equal(p.ctx, rn) {
+				if len(key) == 1 && key[0].Equal(rn, p.ctx) {
 					rOk = true
 					break
 				}

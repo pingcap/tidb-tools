@@ -20,9 +20,9 @@ import (
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/metrics"
-	binlog "github.com/pingcap/tipb/go-binlog"
+	"github.com/pingcap/tipb/go-binlog"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
+	goctx "golang.org/x/net/context"
 )
 
 var (
@@ -44,7 +44,7 @@ type tikvTxn struct {
 }
 
 func newTiKVTxn(store *tikvStore) (*tikvTxn, error) {
-	bo := NewBackoffer(context.Background(), tsoMaxBackoff)
+	bo := NewBackoffer(tsoMaxBackoff, goctx.Background())
 	startTS, err := store.getTimestampWithRetry(bo)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -153,7 +153,7 @@ func (txn *tikvTxn) DelOption(opt kv.Option) {
 	}
 }
 
-func (txn *tikvTxn) Commit(ctx context.Context) error {
+func (txn *tikvTxn) Commit(ctx goctx.Context) error {
 	if !txn.valid {
 		return kv.ErrInvalidTxn
 	}

@@ -32,7 +32,7 @@ var (
 		prometheus.HistogramOpts{
 			Namespace: "tidb",
 			Subsystem: "distsql",
-			Name:      "scan_keys_partial_num",
+			Name:      "scan_keys_partial",
 			Help:      "number of scanned keys for each partial result.",
 		},
 	)
@@ -40,7 +40,7 @@ var (
 		prometheus.HistogramOpts{
 			Namespace: "tidb",
 			Subsystem: "distsql",
-			Name:      "scan_keys_num",
+			Name:      "scan_keys",
 			Help:      "number of scanned keys for each query.",
 		},
 	)
@@ -48,7 +48,7 @@ var (
 		prometheus.HistogramOpts{
 			Namespace: "tidb",
 			Subsystem: "distsql",
-			Name:      "partial_num",
+			Name:      "partial_count",
 			Help:      "number of partial results for each query.",
 		},
 	)

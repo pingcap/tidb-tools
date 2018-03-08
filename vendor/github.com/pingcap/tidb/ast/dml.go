@@ -953,7 +953,6 @@ const (
 	ShowStatsMeta
 	ShowStatsHistograms
 	ShowStatsBuckets
-	ShowStatsHealthy
 	ShowPlugins
 	ShowProfiles
 )

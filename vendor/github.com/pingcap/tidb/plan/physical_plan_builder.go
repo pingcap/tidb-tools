@@ -153,7 +153,7 @@ func (ds *DataSource) tryToGetMemTask(prop *requiredProp) (task task, err error)
 func (ds *DataSource) tryToGetDualTask() (task, error) {
 	for _, cond := range ds.pushedDownConds {
 		if _, ok := cond.(*expression.Constant); ok {
-			result, err := expression.EvalBool(ds.ctx, []expression.Expression{cond}, nil)
+			result, err := expression.EvalBool([]expression.Expression{cond}, nil, ds.ctx)
 			if err != nil {
 				return nil, errors.Trace(err)
 			}
@@ -201,6 +201,7 @@ func (ds *DataSource) convert2PhysicalPlan(prop *requiredProp) (task, error) {
 		return t, nil
 	}
 
+	// TODO: We have not checked if this table has a predicate. If not, we can only consider table scan.
 	indices := ds.availableIndices.indices
 	includeTableScan := ds.availableIndices.includeTableScan
 	t = invalidTask
@@ -211,11 +212,7 @@ func (ds *DataSource) convert2PhysicalPlan(prop *requiredProp) (task, error) {
 		}
 	}
 	if !includeTableScan || len(ds.pushedDownConds) > 0 || len(prop.cols) > 0 {
-		for i, idx := range indices {
-			// TODO: We can also check if the prop matches the index columns.
-			if !ds.relevantIndices[i] && len(prop.cols) == 0 {
-				continue
-			}
+		for _, idx := range indices {
 			idxTask, err := ds.convertToIndexScan(prop, idx)
 			if err != nil {
 				return nil, errors.Trace(err)
@@ -276,7 +273,7 @@ func (ds *DataSource) forceToIndexScan(idx *model.IndexInfo, remainedConds []exp
 	}
 	is.initSchema(ds.id, idx, cop.tablePlan != nil)
 	is.addPushedDownSelection(cop, ds, math.MaxFloat64)
-	t := finishCopTask(ds.ctx, cop)
+	t := finishCopTask(cop, ds.ctx)
 	return t.plan()
 }
 
@@ -386,7 +383,7 @@ func (ds *DataSource) convertToIndexScan(prop *requiredProp, idx *model.IndexInf
 		is.addPushedDownSelection(cop, ds, expectedCnt)
 	}
 	if prop.taskTp == rootTaskType {
-		task = finishCopTask(ds.ctx, task)
+		task = finishCopTask(task, ds.ctx)
 	} else if _, ok := task.(*rootTask); ok {
 		return invalidTask, nil
 	}
@@ -432,7 +429,7 @@ func (is *PhysicalIndexScan) addPushedDownSelection(copTask *copTask, p *DataSou
 		}
 		if tableConds != nil {
 			copTask.finishIndexPlan()
-			tableSel := PhysicalSelection{Conditions: tableConds}.init(is.ctx, p.statsAfterSelect.scaleByExpectCnt(expectedCnt))
+			tableSel := PhysicalSelection{Conditions: tableConds}.init(is.ctx, p.stats.scaleByExpectCnt(expectedCnt))
 			tableSel.SetChildren(copTask.tablePlan)
 			copTask.tablePlan = tableSel
 			copTask.cst += copTask.count() * cpuFactor
@@ -515,7 +512,7 @@ func (ds *DataSource) forceToTableScan(pk *expression.Column) PhysicalPlan {
 		indexPlanFinished: true,
 	}
 	ts.addPushedDownSelection(copTask, ds.stats)
-	t := finishCopTask(ds.ctx, copTask)
+	t := finishCopTask(copTask, ds.ctx)
 	return t.plan()
 }
 
@@ -571,7 +568,7 @@ func (ds *DataSource) convertToTableScan(prop *requiredProp) (task task, err err
 		indexPlanFinished: true,
 	}
 	task = copTask
-	matchProperty := len(prop.cols) == 1 && pkCol != nil && prop.cols[0].Equal(nil, pkCol)
+	matchProperty := len(prop.cols) == 1 && pkCol != nil && prop.cols[0].Equal(pkCol, nil)
 	if matchProperty && prop.expectedCnt < math.MaxFloat64 {
 		selectivity, err := statsTbl.Selectivity(ds.ctx, ts.filterCondition)
 		if err != nil {
@@ -589,7 +586,7 @@ func (ds *DataSource) convertToTableScan(prop *requiredProp) (task task, err err
 		}
 		ts.KeepOrder = true
 		copTask.keepOrder = true
-		ts.addPushedDownSelection(copTask, ds.statsAfterSelect.scaleByExpectCnt(prop.expectedCnt))
+		ts.addPushedDownSelection(copTask, ds.stats.scaleByExpectCnt(prop.expectedCnt))
 	} else {
 		expectedCnt := math.MaxFloat64
 		if prop.isEmpty() {
@@ -597,10 +594,10 @@ func (ds *DataSource) convertToTableScan(prop *requiredProp) (task task, err err
 		} else {
 			return invalidTask, nil
 		}
-		ts.addPushedDownSelection(copTask, ds.statsAfterSelect.scaleByExpectCnt(expectedCnt))
+		ts.addPushedDownSelection(copTask, ds.stats.scaleByExpectCnt(expectedCnt))
 	}
 	if prop.taskTp == rootTaskType {
-		task = finishCopTask(ds.ctx, task)
+		task = finishCopTask(task, ds.ctx)
 	} else if _, ok := task.(*rootTask); ok {
 		return invalidTask, nil
 	}

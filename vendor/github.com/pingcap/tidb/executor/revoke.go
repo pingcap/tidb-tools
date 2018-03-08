@@ -18,14 +18,14 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb/ast"
+	"github.com/pingcap/tidb/context"
 	"github.com/pingcap/tidb/domain"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/mysql"
-	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/table"
 	"github.com/pingcap/tidb/util/chunk"
 	"github.com/pingcap/tidb/util/sqlexec"
-	"golang.org/x/net/context"
+	goctx "golang.org/x/net/context"
 )
 
 /***
@@ -45,30 +45,30 @@ type RevokeExec struct {
 	Level      *ast.GrantLevel
 	Users      []*ast.UserSpec
 
-	ctx  sessionctx.Context
+	ctx  context.Context
 	is   infoschema.InfoSchema
 	done bool
 }
 
 // Next implements Execution Next interface.
-func (e *RevokeExec) Next(ctx context.Context) (Row, error) {
+func (e *RevokeExec) Next(goCtx goctx.Context) (Row, error) {
 	if e.done {
 		return nil, nil
 	}
 	e.done = true
-	return nil, errors.Trace(e.run(ctx))
+	return nil, errors.Trace(e.run(goCtx))
 }
 
 // NextChunk implements the Executor NextChunk interface.
-func (e *RevokeExec) NextChunk(ctx context.Context, chk *chunk.Chunk) error {
+func (e *RevokeExec) NextChunk(goCtx goctx.Context, chk *chunk.Chunk) error {
 	if e.done {
 		return nil
 	}
 	e.done = true
-	return errors.Trace(e.run(ctx))
+	return errors.Trace(e.run(goCtx))
 }
 
-func (e *RevokeExec) run(ctx context.Context) error {
+func (e *RevokeExec) run(goCtx goctx.Context) error {
 	// Revoke for each user
 	for _, user := range e.Users {
 		// Check if user exists.

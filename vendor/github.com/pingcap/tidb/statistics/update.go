@@ -15,20 +15,18 @@ package statistics
 
 import (
 	"fmt"
-	"math"
 	"sync"
 	"time"
 
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb/infoschema"
-	"github.com/pingcap/tidb/metrics"
 	"github.com/pingcap/tidb/model"
 	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/store/tikv/oracle"
 	"github.com/pingcap/tidb/util/ranger"
 	"github.com/pingcap/tidb/util/sqlexec"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
+	goctx "golang.org/x/net/context"
 )
 
 type tableDeltaMap map[int64]variable.TableDelta
@@ -94,19 +92,6 @@ func (s *SessionStatsCollector) StoreQueryFeedback(feedback interface{}) {
 	if q.histVersion == 0 || q.actual < 0 || !q.valid {
 		return
 	}
-
-	var rate float64
-	if q.actual == 0 {
-		if q.expected == 0 {
-			rate = 0
-		} else {
-			rate = 1
-		}
-	} else {
-		rate = math.Abs(float64(q.expected-q.actual) / float64(q.actual))
-	}
-	metrics.StatsInaccuracyRate.Observe(rate)
-
 	s.Lock()
 	defer s.Unlock()
 	if len(s.feedback) >= maxQueryFeedBackCount {
@@ -171,8 +156,8 @@ func (h *Handle) dumpTableStatDeltaToKV(id int64, delta variable.TableDelta) (bo
 	if delta.Count == 0 {
 		return true, nil
 	}
-	ctx := context.TODO()
-	_, err := h.ctx.(sqlexec.SQLExecutor).Execute(ctx, "begin")
+	goCtx := goctx.TODO()
+	_, err := h.ctx.(sqlexec.SQLExecutor).Execute(goCtx, "begin")
 	if err != nil {
 		return false, errors.Trace(err)
 	}
@@ -182,12 +167,12 @@ func (h *Handle) dumpTableStatDeltaToKV(id int64, delta variable.TableDelta) (bo
 	} else {
 		sql = fmt.Sprintf("update mysql.stats_meta set version = %d, count = count + %d, modify_count = modify_count + %d where table_id = %d", h.ctx.Txn().StartTS(), delta.Delta, delta.Count, id)
 	}
-	_, err = h.ctx.(sqlexec.SQLExecutor).Execute(ctx, sql)
+	_, err = h.ctx.(sqlexec.SQLExecutor).Execute(goCtx, sql)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
 	updated := h.ctx.GetSessionVars().StmtCtx.AffectedRows() > 0
-	_, err = h.ctx.(sqlexec.SQLExecutor).Execute(ctx, "commit")
+	_, err = h.ctx.(sqlexec.SQLExecutor).Execute(goCtx, "commit")
 	return updated, errors.Trace(err)
 }
 
@@ -251,11 +236,8 @@ const (
 	StatsPrompt = "stats"
 )
 
-// AutoAnalyzeMinCnt means if the count of table is less than this value, we needn't do auto analyze.
-var AutoAnalyzeMinCnt int64 = 1000
-
 func needAnalyzeTable(tbl *Table, limit time.Duration) bool {
-	if tbl.ModifyCount == 0 || tbl.Count < AutoAnalyzeMinCnt {
+	if tbl.ModifyCount == 0 {
 		return false
 	}
 	t := time.Unix(0, oracle.ExtractPhysical(tbl.Version)*int64(time.Millisecond))
@@ -310,11 +292,11 @@ func (h *Handle) HandleAutoAnalyze(is infoschema.InfoSchema) error {
 func (h *Handle) execAutoAnalyze(sql string) error {
 	startTime := time.Now()
 	_, _, err := h.ctx.(sqlexec.RestrictedSQLExecutor).ExecRestrictedSQL(h.ctx, sql)
-	metrics.AutoAnalyzeHistogram.Observe(time.Since(startTime).Seconds())
+	autoAnalyzeHistgram.Observe(time.Since(startTime).Seconds())
 	if err != nil {
-		metrics.AutoAnalyzeCounter.WithLabelValues("failed").Inc()
+		autoAnalyzeCounter.WithLabelValues("failed").Inc()
 	} else {
-		metrics.AutoAnalyzeCounter.WithLabelValues("succ").Inc()
+		autoAnalyzeCounter.WithLabelValues("succ").Inc()
 	}
 	return errors.Trace(err)
 }

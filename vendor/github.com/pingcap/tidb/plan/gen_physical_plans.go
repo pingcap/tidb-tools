@@ -20,6 +20,7 @@ import (
 	"github.com/pingcap/tidb/ast"
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/expression/aggregation"
+	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/model"
 	"github.com/pingcap/tidb/mysql"
 	"github.com/pingcap/tidb/terror"
@@ -50,7 +51,7 @@ func findMaxPrefixLen(candidates [][]*expression.Column, keys []*expression.Colu
 	for _, candidateKeys := range candidates {
 		matchedLen := 0
 		for i := range keys {
-			if i < len(candidateKeys) && keys[i].Equal(nil, candidateKeys[i]) {
+			if i < len(candidateKeys) && keys[i].Equal(candidateKeys[i], nil) {
 				matchedLen++
 			} else {
 				break
@@ -260,7 +261,7 @@ func (p *LogicalJoin) getIndexJoinByOuterIdx(prop *requiredProp, outerIdx int) [
 	includeTableScan := x.availableIndices.includeTableScan
 	if includeTableScan && len(innerJoinKeys) == 1 {
 		pkCol := x.getPKIsHandleCol()
-		if pkCol != nil && innerJoinKeys[0].Equal(nil, pkCol) {
+		if pkCol != nil && innerJoinKeys[0].Equal(pkCol, nil) {
 			innerPlan := x.forceToTableScan(pkCol)
 			return p.constructIndexJoin(prop, innerJoinKeys, outerJoinKeys, outerIdx, innerPlan, nil, nil)
 		}
@@ -544,6 +545,14 @@ func (la *LogicalAggregation) getStreamAggs(prop *requiredProp) []PhysicalPlan {
 			// Second read in the double can't meet the stream aggregation's require prop.
 			if tp == copDoubleReadTaskType {
 				continue
+			}
+			// Now we only support pushing down stream aggregation on mocktikv.
+			// TODO: Remove it after TiKV supports stream aggregation.
+			if tp == copSingleReadTaskType {
+				client := la.ctx.GetClient()
+				if !client.IsRequestTypeSupported(kv.ReqTypeDAG, kv.ReqSubTypeStreamAgg) {
+					continue
+				}
 			}
 			childProp := &requiredProp{
 				taskTp:      tp,

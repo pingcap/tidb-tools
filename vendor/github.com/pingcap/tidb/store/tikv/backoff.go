@@ -24,7 +24,7 @@ import (
 	"github.com/pingcap/tidb/mysql"
 	"github.com/pingcap/tidb/terror"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
+	goctx "golang.org/x/net/context"
 )
 
 const (
@@ -41,10 +41,10 @@ const (
 // NewBackoffFn creates a backoff func which implements exponential backoff with
 // optional jitters.
 // See http://www.awsarchitectureblog.com/2015/03/backoff.html
-func NewBackoffFn(base, cap, jitter int) func(ctx context.Context) int {
+func NewBackoffFn(base, cap, jitter int) func(goCtx goctx.Context) int {
 	attempts := 0
 	lastSleep := base
-	return func(ctx context.Context) int {
+	return func(goCtx goctx.Context) int {
 		var sleep int
 		switch jitter {
 		case NoJitter:
@@ -61,7 +61,7 @@ func NewBackoffFn(base, cap, jitter int) func(ctx context.Context) int {
 
 		select {
 		case <-time.After(time.Duration(sleep) * time.Millisecond):
-		case <-ctx.Done():
+		case <-goCtx.Done():
 		}
 
 		attempts++
@@ -86,7 +86,7 @@ const (
 	boServerBusy
 )
 
-func (t backoffType) createFn() func(context.Context) int {
+func (t backoffType) createFn() func(goctx.Context) int {
 	switch t {
 	case boTiKVRPC:
 		return NewBackoffFn(100, 2000, EqualJitter)
@@ -148,21 +148,20 @@ const (
 	getMaxBackoff           = 20000
 	prewriteMaxBackoff      = 20000
 	cleanupMaxBackoff       = 20000
-	GcOneRegionMaxBackoff   = 20000
+	GcMaxBackoff            = 100000
 	GcResolveLockMaxBackoff = 100000
 	GcDeleteRangeMaxBackoff = 100000
 	rawkvMaxBackoff         = 20000
 	splitRegionBackoff      = 20000
 )
 
-// CommitMaxBackoff is max sleep time of the 'commit' command
-var CommitMaxBackoff = 41000
+var commitMaxBackoff = 20000
 
 // Backoffer is a utility for retrying queries.
 type Backoffer struct {
-	context.Context
+	goctx.Context
 
-	fn         map[backoffType]func(context.Context) int
+	fn         map[backoffType]func(goctx.Context) int
 	maxSleep   int
 	totalSleep int
 	errors     []error
@@ -170,7 +169,7 @@ type Backoffer struct {
 }
 
 // NewBackoffer creates a Backoffer with maximum sleep time(in ms).
-func NewBackoffer(ctx context.Context, maxSleep int) *Backoffer {
+func NewBackoffer(maxSleep int, ctx goctx.Context) *Backoffer {
 	return &Backoffer{
 		Context:  ctx,
 		maxSleep: maxSleep,
@@ -189,7 +188,7 @@ func (b *Backoffer) Backoff(typ backoffType, err error) error {
 	metrics.TiKVBackoffCounter.WithLabelValues(typ.String()).Inc()
 	// Lazy initialize.
 	if b.fn == nil {
-		b.fn = make(map[backoffType]func(context.Context) int)
+		b.fn = make(map[backoffType]func(goctx.Context) int)
 	}
 	f, ok := b.fn[typ]
 	if !ok {
@@ -237,8 +236,8 @@ func (b *Backoffer) Clone() *Backoffer {
 
 // Fork creates a new Backoffer which keeps current Backoffer's sleep time and errors, and holds
 // a child context of current Backoffer's context.
-func (b *Backoffer) Fork() (*Backoffer, context.CancelFunc) {
-	ctx, cancel := context.WithCancel(b.Context)
+func (b *Backoffer) Fork() (*Backoffer, goctx.CancelFunc) {
+	ctx, cancel := goctx.WithCancel(b.Context)
 	return &Backoffer{
 		Context:    ctx,
 		maxSleep:   b.maxSleep,

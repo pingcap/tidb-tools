@@ -28,7 +28,6 @@ import (
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/expression/aggregation"
 	"github.com/pingcap/tidb/infoschema"
-	"github.com/pingcap/tidb/metrics"
 	"github.com/pingcap/tidb/model"
 	"github.com/pingcap/tidb/mysql"
 	"github.com/pingcap/tidb/parser"
@@ -437,7 +436,7 @@ func (b *planBuilder) buildSelection(p LogicalPlan, where ast.ExprNode, AggMappe
 		cnfItems := expression.SplitCNFItems(expr)
 		for _, item := range cnfItems {
 			if con, ok := item.(*expression.Constant); ok {
-				ret, err := expression.EvalBool(b.ctx, expression.CNFExprs{con}, nil)
+				ret, err := expression.EvalBool(expression.CNFExprs{con}, nil, b.ctx)
 				if err != nil || ret {
 					continue
 				} else {
@@ -1575,10 +1574,6 @@ func (ds *DataSource) newExtraHandleSchemaCol() *expression.Column {
 	}
 }
 
-// RatioOfPseudoEstimate means if modifyCount / statsTblCount is greater than this ratio, we think the stats is invalid
-// and use pseudo estimation.
-var RatioOfPseudoEstimate = 0.7
-
 func (b *planBuilder) buildDataSource(tn *ast.TableName) LogicalPlan {
 	schemaName := tn.Schema
 	if schemaName.L == "" {
@@ -1591,24 +1586,12 @@ func (b *planBuilder) buildDataSource(tn *ast.TableName) LogicalPlan {
 	}
 	tableInfo := tbl.Meta()
 	handle := domain.GetDomain(b.ctx).StatsHandle()
-	var statsTbl *statistics.Table
+	var statisticTable *statistics.Table
 	if handle == nil {
 		// When the first session is created, the handle hasn't been initialized.
-		statsTbl = statistics.PseudoTable(tableInfo.ID)
+		statisticTable = statistics.PseudoTable(tableInfo.ID)
 	} else {
-		statsTbl = handle.GetTableStats(tableInfo.ID)
-		if statsTbl.Count == 0 || float64(statsTbl.ModifyCount)/float64(statsTbl.Count) > RatioOfPseudoEstimate {
-			originCnt := statsTbl.Count
-			statsTbl = statistics.PseudoTable(tableInfo.ID)
-			if originCnt > 0 {
-				// The count of stats table is always proper.
-				statsTbl.Count = originCnt
-			} else {
-				// Zero count always brings some strange problem.
-				statsTbl.Count = 100
-			}
-			metrics.PseudoEstimation.Inc()
-		}
+		statisticTable = handle.GetTableStats(tableInfo.ID)
 	}
 	indices, includeTableScan, err := availableIndices(tn.IndexHints, tableInfo)
 	if err != nil {
@@ -1626,7 +1609,7 @@ func (b *planBuilder) buildDataSource(tn *ast.TableName) LogicalPlan {
 	ds := DataSource{
 		indexHints:       tn.IndexHints,
 		tableInfo:        tableInfo,
-		statisticTable:   statsTbl,
+		statisticTable:   statisticTable,
 		DBName:           schemaName,
 		Columns:          make([]*model.ColumnInfo, 0, len(columns)),
 		availableIndices: &avalableIndices,

@@ -26,11 +26,9 @@ import (
 	"github.com/coreos/etcd/etcdserver/api/v3rpc/rpctypes"
 	"github.com/coreos/etcd/mvcc/mvccpb"
 	"github.com/juju/errors"
-	"github.com/pingcap/tidb/metrics"
 	"github.com/pingcap/tidb/terror"
-	"github.com/pingcap/tidb/util"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
+	goctx "golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
 
@@ -48,9 +46,9 @@ type Manager interface {
 	// SetOwner sets whether the ownerManager is the owner.
 	SetOwner(isOwner bool)
 	// GetOwnerID gets the owner ID.
-	GetOwnerID(ctx context.Context) (string, error)
+	GetOwnerID(ctx goctx.Context) (string, error)
 	// CampaignOwner campaigns the owner.
-	CampaignOwner(ctx context.Context) error
+	CampaignOwner(ctx goctx.Context) error
 	// Cancel cancels this etcd ownerManager campaign.
 	Cancel()
 }
@@ -69,11 +67,11 @@ type ownerManager struct {
 	key     string
 	prompt  string
 	etcdCli *clientv3.Client
-	cancel  context.CancelFunc
+	cancel  goctx.CancelFunc
 }
 
 // NewOwnerManager creates a new Manager.
-func NewOwnerManager(etcdCli *clientv3.Client, prompt, id, key string, cancel context.CancelFunc) Manager {
+func NewOwnerManager(etcdCli *clientv3.Client, prompt, id, key string, cancel goctx.CancelFunc) Manager {
 	return &ownerManager{
 		etcdCli: etcdCli,
 		id:      id,
@@ -125,9 +123,8 @@ func setManagerSessionTTL() error {
 }
 
 // NewSession creates a new etcd session.
-func NewSession(ctx context.Context, logPrefix string, etcdCli *clientv3.Client, retryCnt, ttl int) (*concurrency.Session, error) {
+func NewSession(ctx goctx.Context, logPrefix string, etcdCli *clientv3.Client, retryCnt, ttl int) (*concurrency.Session, error) {
 	var err error
-
 	var etcdSession *concurrency.Session
 	failedCnt := 0
 	for i := 0; i < retryCnt; i++ {
@@ -144,17 +141,14 @@ func NewSession(ctx context.Context, logPrefix string, etcdCli *clientv3.Client,
 		//	if closeGrpc {
 		//		etcdCli.ActiveConnection().Close()
 		//	}
-		startTime := time.Now()
 		etcdSession, err = concurrency.NewSession(etcdCli,
 			concurrency.WithTTL(ttl), concurrency.WithContext(ctx))
-		metrics.NewSessionHistogram.WithLabelValues(logPrefix, metrics.RetLabel(err)).Observe(time.Since(startTime).Seconds())
 		if err == nil {
 			break
 		}
 		if failedCnt%logIntervalCnt == 0 {
-			log.Warnf("%s failed to new session to etcd, err %v", logPrefix, err)
+			log.Warnf("%s failed to new session, err %v", logPrefix, err)
 		}
-
 		time.Sleep(newSessionRetryInterval)
 		failedCnt++
 	}
@@ -162,33 +156,21 @@ func NewSession(ctx context.Context, logPrefix string, etcdCli *clientv3.Client,
 }
 
 // CampaignOwner implements Manager.CampaignOwner interface.
-func (m *ownerManager) CampaignOwner(ctx context.Context) error {
+func (m *ownerManager) CampaignOwner(ctx goctx.Context) error {
 	logPrefix := fmt.Sprintf("[%s] %s", m.prompt, m.key)
 	session, err := NewSession(ctx, logPrefix, m.etcdCli, NewSessionDefaultRetryCnt, ManagerSessionTTL)
 	if err != nil {
 		return errors.Trace(err)
 	}
-	cancelCtx, _ := context.WithCancel(ctx)
+	cancelCtx, _ := goctx.WithCancel(ctx)
 	go m.campaignLoop(cancelCtx, session)
 	return nil
 }
 
-func (m *ownerManager) campaignLoop(ctx context.Context, etcdSession *concurrency.Session) {
-	defer func() {
-		if r := recover(); r != nil {
-			buf := util.GetStack()
-			log.Errorf("[%s] recover panic:%v, %s", m.prompt, r, buf)
-			metrics.PanicCounter.WithLabelValues(metrics.LabelDDLOwner).Inc()
-		}
-	}()
-
+func (m *ownerManager) campaignLoop(ctx goctx.Context, etcdSession *concurrency.Session) {
 	logPrefix := fmt.Sprintf("[%s] %s ownerManager %s", m.prompt, m.key, m.id)
 	var err error
 	for {
-		if err != nil {
-			metrics.CampaignOwnerCounter.WithLabelValues(m.prompt, err.Error()).Inc()
-		}
-
 		select {
 		case <-etcdSession.Done():
 			log.Infof("%s etcd session is done, creates a new one", logPrefix)
@@ -229,8 +211,6 @@ func (m *ownerManager) campaignLoop(ctx context.Context, etcdSession *concurrenc
 		m.SetOwner(true)
 		m.watchOwner(ctx, etcdSession, ownerKey)
 		m.SetOwner(false)
-
-		metrics.CampaignOwnerCounter.WithLabelValues(m.prompt, metrics.NoLongerOwner).Inc()
 		log.Warnf("%s isn't the owner", logPrefix)
 	}
 }
@@ -238,7 +218,7 @@ func (m *ownerManager) campaignLoop(ctx context.Context, etcdSession *concurrenc
 func (m *ownerManager) revokeSession(logPrefix string, leaseID clientv3.LeaseID) {
 	// Revoke the session lease.
 	// If revoke takes longer than the ttl, lease is expired anyway.
-	cancelCtx, cancel := context.WithTimeout(context.Background(),
+	cancelCtx, cancel := goctx.WithTimeout(goctx.Background(),
 		time.Duration(ManagerSessionTTL)*time.Second)
 	_, err := m.etcdCli.Revoke(cancelCtx, leaseID)
 	cancel()
@@ -246,7 +226,7 @@ func (m *ownerManager) revokeSession(logPrefix string, leaseID clientv3.LeaseID)
 }
 
 // GetOwnerID implements Manager.GetOwnerID interface.
-func (m *ownerManager) GetOwnerID(ctx context.Context) (string, error) {
+func (m *ownerManager) GetOwnerID(ctx goctx.Context) (string, error) {
 	resp, err := m.etcdCli.Get(ctx, m.key, clientv3.WithFirstCreate()...)
 	if err != nil {
 		return "", errors.Trace(err)
@@ -258,7 +238,7 @@ func (m *ownerManager) GetOwnerID(ctx context.Context) (string, error) {
 }
 
 // GetOwnerInfo gets the owner information.
-func GetOwnerInfo(ctx context.Context, elec *concurrency.Election, logPrefix, id string) (string, error) {
+func GetOwnerInfo(ctx goctx.Context, elec *concurrency.Election, logPrefix, id string) (string, error) {
 	resp, err := elec.Leader(ctx)
 	if err != nil {
 		// If no leader elected currently, it returns ErrElectionNoLeader.
@@ -275,7 +255,7 @@ func GetOwnerInfo(ctx context.Context, elec *concurrency.Election, logPrefix, id
 	return string(resp.Kvs[0].Key), nil
 }
 
-func (m *ownerManager) watchOwner(ctx context.Context, etcdSession *concurrency.Session, key string) {
+func (m *ownerManager) watchOwner(ctx goctx.Context, etcdSession *concurrency.Session, key string) {
 	logPrefix := fmt.Sprintf("[%s] ownerManager %s watch owner key %v", m.prompt, m.id, key)
 	log.Debugf("%s", logPrefix)
 	watchCh := m.etcdCli.Watch(ctx, key)
@@ -283,23 +263,19 @@ func (m *ownerManager) watchOwner(ctx context.Context, etcdSession *concurrency.
 		select {
 		case resp := <-watchCh:
 			if resp.Canceled {
-				metrics.WatchOwnerCounter.WithLabelValues(m.prompt, metrics.Cancelled).Inc()
 				log.Infof("%s failed, no owner", logPrefix)
 				return
 			}
 
 			for _, ev := range resp.Events {
 				if ev.Type == mvccpb.DELETE {
-					metrics.WatchOwnerCounter.WithLabelValues(m.prompt, metrics.Deleted).Inc()
 					log.Infof("%s failed, owner is deleted", logPrefix)
 					return
 				}
 			}
 		case <-etcdSession.Done():
-			metrics.WatchOwnerCounter.WithLabelValues(m.prompt, metrics.SessionDone).Inc()
 			return
 		case <-ctx.Done():
-			metrics.WatchOwnerCounter.WithLabelValues(m.prompt, metrics.CtxDone).Inc()
 			return
 		}
 	}
@@ -312,7 +288,7 @@ func init() {
 	}
 }
 
-func contextDone(ctx context.Context, err error) error {
+func contextDone(ctx goctx.Context, err error) error {
 	select {
 	case <-ctx.Done():
 		return errors.Trace(ctx.Err())
@@ -321,8 +297,8 @@ func contextDone(ctx context.Context, err error) error {
 	// Sometime the ctx isn't closed, but the etcd client is closed,
 	// we need to treat it as if context is done.
 	// TODO: Make sure ctx is closed with etcd client.
-	if terror.ErrorEqual(err, context.Canceled) ||
-		terror.ErrorEqual(err, context.DeadlineExceeded) ||
+	if terror.ErrorEqual(err, goctx.Canceled) ||
+		terror.ErrorEqual(err, goctx.DeadlineExceeded) ||
 		terror.ErrorEqual(err, grpc.ErrClientConnClosing) {
 		return errors.Trace(err)
 	}

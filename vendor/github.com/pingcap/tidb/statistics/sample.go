@@ -23,7 +23,7 @@ import (
 	"github.com/pingcap/tidb/terror"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tipb/go-tipb"
-	"golang.org/x/net/context"
+	goctx "golang.org/x/net/context"
 )
 
 // SampleCollector will collect Samples and calculate the count and ndv of an attribute.
@@ -145,9 +145,9 @@ func (s SampleBuilder) CollectColumnStats() ([]*SampleCollector, *SortedBuilder,
 			collectors[i].CMSketch = NewCMSketch(s.CMSketchDepth, s.CMSketchWidth)
 		}
 	}
-	ctx := context.TODO()
+	goCtx := goctx.TODO()
 	for {
-		row, err := s.RecordSet.Next(ctx)
+		row, err := s.RecordSet.Next(goCtx)
 		if err != nil {
 			return nil, nil, errors.Trace(err)
 		}

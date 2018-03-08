@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/pingcap/tidb/mysql"
-	"github.com/pingcap/tidb/util/memory"
 )
 
 // StatementContext contains variables for a statement.
@@ -53,7 +52,6 @@ type StatementContext struct {
 	TimeZone     *time.Location
 	Priority     mysql.PriorityEnum
 	NotFillCache bool
-	MemTracker   *memory.Tracker
 }
 
 // AddAffectedRows adds affected rows.

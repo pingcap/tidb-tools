@@ -70,7 +70,11 @@ func getTSO(cfg *Config) (int64, error) {
 		return 0, errors.Trace(err)
 	}
 
-	pdCli, err := pd.NewClient(urlv.StringSlice())
+	pdCli, err := pd.NewClient(urlv.StringSlice(), pd.SecurityOption{
+		CAPath:   cfg.SSLCA,
+		CertPath: cfg.SSLCert,
+		KeyPath:  cfg.SSLKey,
+	})
 	physical, logical, err := pdCli.GetTS(context.Background())
 	if err != nil {
 		return 0, errors.Trace(err)

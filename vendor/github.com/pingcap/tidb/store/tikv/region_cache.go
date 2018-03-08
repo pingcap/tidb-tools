@@ -26,7 +26,7 @@ import (
 	"github.com/pingcap/pd/pd-client"
 	"github.com/pingcap/tidb/metrics"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
+	goctx "golang.org/x/net/context"
 )
 
 const (
@@ -433,7 +433,7 @@ func (c *RegionCache) loadStoreAddr(bo *Backoffer, id uint64) (string, error) {
 		store, err := c.pdClient.GetStore(bo, id)
 		metrics.TiKVRegionCacheCounter.WithLabelValues("get_store", metrics.RetLabel(err)).Inc()
 		if err != nil {
-			if errors.Cause(err) == context.Canceled {
+			if errors.Cause(err) == goctx.Canceled {
 				return "", errors.Trace(err)
 			}
 			err = errors.Errorf("loadStore from PD failed, id: %d, err: %v", id, err)
@@ -546,11 +546,6 @@ type RegionVerID struct {
 	id      uint64
 	confVer uint64
 	ver     uint64
-}
-
-// GetID returns the id of the region
-func (r *RegionVerID) GetID() uint64 {
-	return r.id
 }
 
 // VerID returns the Region's RegionVerID.

@@ -15,12 +15,12 @@ package executor
 
 import (
 	"github.com/juju/errors"
+	"github.com/pingcap/tidb/context"
 	"github.com/pingcap/tidb/expression"
-	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/sessionctx/stmtctx"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/chunk"
-	"golang.org/x/net/context"
+	goctx "golang.org/x/net/context"
 )
 
 // MergeJoinExec implements the merge join algorithm.
@@ -62,13 +62,13 @@ const rowBufferSize = 4096
 // readerIterator represents a row block with the same join keys
 type readerIterator struct {
 	stmtCtx   *stmtctx.StatementContext
-	sctx      sessionctx.Context
+	ctx       context.Context
 	reader    Executor
 	filter    []expression.Expression
 	joinKeys  []*expression.Column
 	peekedRow types.Row
 	rowCache  []Row
-	ctx       context.Context
+	goCtx     goctx.Context
 
 	// for chunk executions
 	sameKeyRows    []chunk.Row
@@ -93,7 +93,7 @@ func (ri *readerIterator) init() error {
 	if ri.reader == nil || ri.joinKeys == nil || len(ri.joinKeys) == 0 || ri.ctx == nil {
 		return errors.Errorf("Invalid arguments: Empty arguments detected.")
 	}
-	ri.stmtCtx = ri.sctx.GetSessionVars().StmtCtx
+	ri.stmtCtx = ri.ctx.GetSessionVars().StmtCtx
 	var err error
 	ri.peekedRow, err = ri.nextRow()
 	if err != nil {
@@ -105,7 +105,7 @@ func (ri *readerIterator) init() error {
 
 func (ri *readerIterator) nextRow() (types.Row, error) {
 	for {
-		row, err := ri.reader.Next(ri.ctx)
+		row, err := ri.reader.Next(ri.goCtx)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -113,7 +113,7 @@ func (ri *readerIterator) nextRow() (types.Row, error) {
 			return nil, nil
 		}
 		if ri.filter != nil {
-			matched, err := expression.EvalBool(ri.sctx, ri.filter, row)
+			matched, err := expression.EvalBool(ri.filter, row, ri.ctx)
 			if err != nil {
 				return nil, errors.Trace(err)
 			}
@@ -157,11 +157,11 @@ func (ri *readerIterator) initForChunk(chk4Reader *chunk.Chunk) (err error) {
 	if ri.reader == nil || ri.joinKeys == nil || len(ri.joinKeys) == 0 || ri.ctx == nil {
 		return errors.Errorf("Invalid arguments: Empty arguments detected.")
 	}
-	ri.stmtCtx = ri.sctx.GetSessionVars().StmtCtx
+	ri.stmtCtx = ri.ctx.GetSessionVars().StmtCtx
 	ri.curResult = chk4Reader
 	ri.curIter = chunk.NewIterator4Chunk(ri.curResult)
 	ri.curRow = ri.curIter.End()
-	ri.curSelected = make([]bool, 0, ri.sctx.GetSessionVars().MaxChunkSize)
+	ri.curSelected = make([]bool, 0, ri.ctx.GetSessionVars().MaxChunkSize)
 	ri.curResultInUse = false
 	ri.resultQueue = append(ri.resultQueue, chk4Reader)
 	ri.firstRow4Key, err = ri.nextSelectedRow()
@@ -216,13 +216,13 @@ func (ri *readerIterator) nextSelectedRow() (chunk.Row, error) {
 			}
 		}
 		ri.reallocReaderResult()
-		err := ri.reader.NextChunk(ri.ctx, ri.curResult)
+		err := ri.reader.NextChunk(ri.goCtx, ri.curResult)
 		// error happens or no more data.
 		if err != nil || ri.curResult.NumRows() == 0 {
 			ri.curRow = ri.curIter.End()
 			return ri.curRow, errors.Trace(err)
 		}
-		ri.curSelected, err = expression.VectorizedFilter(ri.sctx, ri.filter, ri.curIter, ri.curSelected)
+		ri.curSelected, err = expression.VectorizedFilter(ri.ctx, ri.filter, ri.curIter, ri.curSelected)
 		if err != nil {
 			ri.curRow = ri.curIter.End()
 			return ri.curRow, errors.Trace(err)
@@ -265,8 +265,8 @@ func (e *MergeJoinExec) Close() error {
 }
 
 // Open implements the Executor Open interface.
-func (e *MergeJoinExec) Open(ctx context.Context) error {
-	if err := e.baseExecutor.Open(ctx); err != nil {
+func (e *MergeJoinExec) Open(goCtx goctx.Context) error {
+	if err := e.baseExecutor.Open(goCtx); err != nil {
 		return errors.Trace(err)
 	}
 	e.prepared = false
@@ -314,7 +314,7 @@ func compareKeys(stmtCtx *stmtctx.StatementContext,
 func (e *MergeJoinExec) doJoin() (err error) {
 	for _, outer := range e.outerRows {
 		if e.outerFilter != nil {
-			matched, err1 := expression.EvalBool(e.ctx, e.outerFilter, outer)
+			matched, err1 := expression.EvalBool(e.outerFilter, outer, e.ctx)
 			if err1 != nil {
 				return errors.Trace(err1)
 			}
@@ -389,9 +389,9 @@ func (e *MergeJoinExec) computeJoin() (bool, error) {
 	}
 }
 
-func (e *MergeJoinExec) prepare(ctx context.Context, chk *chunk.Chunk) error {
-	e.outerIter.ctx = ctx
-	e.innerIter.ctx = ctx
+func (e *MergeJoinExec) prepare(goCtx goctx.Context, chk *chunk.Chunk) error {
+	e.outerIter.goCtx = goCtx
+	e.innerIter.goCtx = goCtx
 	// prepare for chunk-oriented execution.
 	if chk != nil {
 		e.outerIter.filter = e.outerFilter
@@ -450,9 +450,9 @@ func (e *MergeJoinExec) prepare(ctx context.Context, chk *chunk.Chunk) error {
 }
 
 // Next implements the Executor Next interface.
-func (e *MergeJoinExec) Next(ctx context.Context) (Row, error) {
+func (e *MergeJoinExec) Next(goCtx goctx.Context) (Row, error) {
 	if !e.prepared {
-		if err := e.prepare(ctx, nil); err != nil {
+		if err := e.prepare(goCtx, nil); err != nil {
 			return nil, errors.Trace(err)
 		}
 	}
@@ -474,10 +474,10 @@ func (e *MergeJoinExec) Next(ctx context.Context) (Row, error) {
 }
 
 // NextChunk implements the Executor NextChunk interface.
-func (e *MergeJoinExec) NextChunk(ctx context.Context, chk *chunk.Chunk) error {
+func (e *MergeJoinExec) NextChunk(goCtx goctx.Context, chk *chunk.Chunk) error {
 	chk.Reset()
 	if !e.prepared {
-		if err := e.prepare(ctx, chk); err != nil {
+		if err := e.prepare(goCtx, chk); err != nil {
 			return errors.Trace(err)
 		}
 	}
@@ -508,13 +508,11 @@ func (e *MergeJoinExec) joinToChunk(chk *chunk.Chunk) (hasMore bool, err error) 
 			continue
 		}
 		if cmpResult < 0 {
-			for e.outerIter4Row.Current() != e.outerIter4Row.End() {
-				if err = e.resultGenerator.emitToChunk(e.outerIter4Row.Current(), nil, chk); err != nil {
-					return false, errors.Trace(err)
-				}
-				e.outerIter4Row.Next()
-				if chk.NumRows() == e.maxChunkSize {
-					return true, errors.Trace(err)
+			for ; e.outerIter4Row.Current() != e.outerIter4Row.End(); e.outerIter4Row.Next() {
+				err = e.resultGenerator.emitToChunk(e.outerIter4Row.Current(), nil, chk)
+				if err != nil || chk.NumRows() == e.maxChunkSize {
+					e.outerIter4Row.Next()
+					return err == nil, errors.Trace(err)
 				}
 			}
 			if err = e.fetchNextOuterRows(); err != nil {
@@ -522,17 +520,14 @@ func (e *MergeJoinExec) joinToChunk(chk *chunk.Chunk) (hasMore bool, err error) 
 			}
 			continue
 		}
-		for e.outerIter4Row.Current() != e.outerIter4Row.End() {
-			if err = e.resultGenerator.emitToChunk(e.outerIter4Row.Current(), e.innerIter4Row, chk); err != nil {
-				return false, errors.Trace(err)
-			}
-			if e.innerIter4Row.Current() == e.innerIter4Row.End() {
+		for ; e.outerIter4Row.Current() != e.outerIter4Row.End(); e.outerIter4Row.Next() {
+			err = e.resultGenerator.emitToChunk(e.outerIter4Row.Current(), e.innerIter4Row, chk)
+			if err != nil || chk.NumRows() == e.maxChunkSize {
 				e.outerIter4Row.Next()
-				e.innerIter4Row.Begin()
+				return err == nil, errors.Trace(err)
 			}
-			if chk.NumRows() == e.maxChunkSize {
-				return true, errors.Trace(err)
-			}
+			e.innerIter4Row = chunk.NewIterator4Slice(e.innerChunkRows)
+			e.innerIter4Row.Begin()
 		}
 		if err = e.fetchNextInnerRows(); err != nil {
 			return false, errors.Trace(err)
