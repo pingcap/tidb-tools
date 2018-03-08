@@ -23,8 +23,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/pd/pd-client"
-	"github.com/pingcap/tidb"
-	"github.com/pingcap/tidb/store/tikv"
 	"golang.org/x/net/context"
 )
 
@@ -36,18 +34,6 @@ func GenSavepointInfo(cfg *Config) error {
 	if err := os.MkdirAll(cfg.DataDir, 0700); err != nil {
 		return errors.Trace(err)
 	}
-
-	urlv, err := NewURLsValue(cfg.EtcdURLs)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	tidb.RegisterStore("tikv", tikv.Driver{})
-	tiPath := fmt.Sprintf("tikv://%s?disableGC=true", urlv.HostString())
-	tiStore, err := tidb.NewStore(tiPath)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	defer tiStore.Close()
 
 	// get newest ts from pd
 	commitTS, err := getTSO(cfg)
