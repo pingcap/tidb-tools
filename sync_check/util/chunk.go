@@ -1,3 +1,16 @@
+// Copyright 2016 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package util
 
 import (
@@ -10,13 +23,13 @@ import (
 	"github.com/siddontang/go-mysql/schema"
 )
 
-// Range represents chunk range
+// chunkRange represents chunk range
 type chunkRange struct {
 	begin interface{}
 	end   interface{}
 	// for example:
 	// containB and containE is true, means [begin, end]
-	// containB is true, containE is false is false, means [begin, end)
+	// containB is true, containE is false, means [begin, end)
 	containB bool
 	containE bool
 	notNil   bool
@@ -42,32 +55,33 @@ func newChunkRange(begin, end interface{}, containB, containE bool, notNil bool)
 	}
 }
 
-func getChunksForTable(db *sql.DB, dbname string, table string, column *schema.TableColumn, lastTime string, chunkSize int, sample int) ([]chunkRange, error) {
+func getChunksForTable(db *sql.DB, dbname, tableName string, column *schema.TableColumn, timeRange string, chunkSize, sample int) ([]chunkRange, error) {
 	noChunks := []chunkRange{{}}
 	if column == nil {
-		log.Warnf("No suitable index found for %s.%s", dbname, table)
+		log.Warnf("No suitable index found for %s.%s", dbname, tableName)
 		return noChunks, nil
 	}
 
 	field := column.Name
 
 	// fetch min, max
-	query := fmt.Sprintf("SELECT %s MIN(`%s`) as MIN, MAX(`%s`) as MAX FROM `%s`.`%s` where `e` <= \"%s\"",
-		"/*!40001 SQL_NO_CACHE */", field, field, dbname, table, lastTime)
+	query := fmt.Sprintf("SELECT %s MIN(`%s`) as MIN, MAX(`%s`) as MAX FROM `%s`.`%s` where %s",
+		"/*!40001 SQL_NO_CACHE */", field, field, dbname, tableName, timeRange)
 	log.Debugf("[dumper] get max min query sql: %s", query)
 
 	// get the chunk count
-	cnt, err := GetCount(db, dbname, table, field, lastTime)
+	cnt, err := GetCount(db, dbname, tableName, timeRange)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	if cnt == 0 {
-		log.Infof("no data found in %s.%s", dbname, table)
+		log.Infof("no data found in %s.%s", dbname, tableName)
 		return noChunks, nil
 	}
 
 	chunkCnt := cnt / int64(chunkSize)
 	if sample != 100 {
+		// use sampling check, can check more fragmented by split to more chunk
 		chunkCnt *= 10
 	}
 
@@ -106,10 +120,10 @@ func getChunksForTable(db *sql.DB, dbname string, table string, column *schema.T
 		}
 		chunk = newChunkRange(min, max, true, true, true)
 	}
-	return splitRange(db, &chunk, chunkCnt, dbname, table, column, lastTime)
+	return splitRange(db, &chunk, chunkCnt, dbname, tableName, column, timeRange)
 }
 
-func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbname string, table string, column *schema.TableColumn, lastTime string) ([]chunkRange, error) {
+func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbname string, table string, column *schema.TableColumn, timeRange string) ([]chunkRange, error) {
 	var chunks []chunkRange
 
 	if count <= 1 {
@@ -159,7 +173,7 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbname string, table
 		}
 
 		// get random value as split value
-		splitValues, err := GetRandomValues(db, dbname, table, column.Name, count-1, min, max, lastTime)
+		splitValues, err := GetRandomValues(db, dbname, table, column.Name, count-1, min, max, timeRange)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -188,7 +202,7 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbname string, table
 }
 
 func findSuitableField(db *sql.DB, dbname string, table string) (*schema.TableColumn, error) {
-	// first select the index with number type
+	// first select the index, and number type index first
 	column, err := FindSuitableIndex(db, dbname, table, true)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -220,17 +234,43 @@ func findSuitableField(db *sql.DB, dbname string, table string) (*schema.TableCo
 	return nil, errors.Errorf("no column find in table %s.%s", dbname, table)
 }
 
-func generateDumpJob(db *sql.DB, dbname string, table string, lastTime string, chunkSize int, sample int) ([]*dumpJob, error) {
+func generateDumpJob(db *sql.DB, dbname, tableName, timeField, beginTime, endTime, splitField string, chunkSize int, sample int) ([]*dumpJob, error) {
 	jobBucket := make([]*dumpJob, 0, 10)
 	var jobCnt int
+	var column *schema.TableColumn
+	var err error
 
-	// find a column for split data
-	column, err := findSuitableField(db, dbname, table)
-	if err != nil {
-		return nil, errors.Trace(err)
+	if splitField == "" {
+		// find a column for split data
+		column, err = findSuitableField(db, dbname, tableName)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+	} else {
+		var table *schema.Table
+		table, err = GetSchemaTable(db, dbname, tableName)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		exist := false
+		column, exist = GetColumnByName(table, splitField)
+		if !exist {
+			return nil, fmt.Errorf("can't find column %s in table %s", splitField, tableName)
+		}
 	}
 
-	chunks, err := getChunksForTable(db, dbname, table, column, lastTime, chunkSize, sample)
+	// set timeRange to "true" can make the code more simple, no need to judge the timeRange's value.
+	// for example: sql will looks like "select * from itest where a > 10 AND true" if don't set time range in config.
+	timeRange := "true"
+	if beginTime != "" && endTime != "" {
+		timeRange = fmt.Sprintf("`%s` <= \"%s\" AND `%s` >= \"%s\"", timeField, endTime, timeField, beginTime)
+	} else if beginTime != "" {
+		timeRange = fmt.Sprintf("`%s` >= \"%s\"", timeField, beginTime)
+	} else if endTime != "" {
+		timeRange = fmt.Sprintf("`%s` <= \"%s\"", timeField, endTime)
+	}
+
+	chunks, err := getChunksForTable(db, dbname, tableName, column, timeRange, chunkSize, sample)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -269,15 +309,15 @@ func generateDumpJob(db *sql.DB, dbname string, table string, lastTime string, c
 			} else {
 				where = fmt.Sprintf("(`%s` %s \"%v\" AND `%s` %s \"%v\")", column.Name, gt, chunk.begin, column.Name, lt, chunk.end)
 			}
-			where = fmt.Sprintf("%s AND e <= \"%s\"", where, lastTime)
+			where = fmt.Sprintf("%s AND %s", where, timeRange)
 		} else {
-			where = ""
+			where = timeRange
 		}
 
-		log.Debugf("%s.%s create dump job: where: %s", dbname, table, where)
+		log.Debugf("%s.%s create dump job: where: %s", dbname, tableName, where)
 		jobBucket = append(jobBucket, &dumpJob{
 			dbName: dbname,
-			table:  table,
+			table:  tableName,
 			column: column,
 			where:  where,
 			chunk:  chunk,

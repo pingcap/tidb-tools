@@ -1,3 +1,16 @@
+// Copyright 2016 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package util
 
 import (
@@ -14,20 +27,29 @@ import (
 type Diff struct {
 	db1          *sql.DB
 	db2          *sql.DB
-	lastTime     string
+	timeField    string
+	beginTime    string
+	endTime      string
+	splitField   string
 	dbName       string
+	tables       []string
 	chunkSize    int
 	sample       int
 	checkThCount int
 }
 
 // NewDiff returns a Diff instance.
-func NewDiff(dbName string, db1, db2 *sql.DB, lastTime string, chunkSize int, sample int, checkThCount int) *Diff {
+func NewDiff(db1, db2 *sql.DB, dbName, timeField, beginTime, endTime,
+	splitField string, chunkSize, sample, checkThCount int, tables []string) *Diff {
 	return &Diff{
 		db1:          db1,
 		db2:          db2,
-		lastTime:     lastTime,
+		timeField:    timeField,
+		beginTime:    beginTime,
+		endTime:      endTime,
+		splitField:   splitField,
 		dbName:       dbName,
+		tables:       tables,
 		chunkSize:    chunkSize,
 		sample:       sample,
 		checkThCount: checkThCount,
@@ -55,7 +77,14 @@ func (df *Diff) Equal() (equal bool, err error) {
 		equal = false
 	}
 
-	for _, tblName := range tbls1 {
+	checkTables := make([]string, 0, len(tbls1))
+	if len(df.tables) == 0 {
+		checkTables = tbls1
+	} else {
+		checkTables = df.tables
+	}
+
+	for _, tblName := range checkTables {
 		eq, err = df.EqualIndex(tblName)
 		if err != nil {
 			err = errors.Trace(err)
@@ -66,7 +95,7 @@ func (df *Diff) Equal() (equal bool, err error) {
 			equal = false
 		}
 
-		eq, err = df.EqualTable(tblName, df.lastTime, df.chunkSize)
+		eq, err = df.EqualTable(tblName)
 		if err != nil || !eq {
 			err = errors.Trace(err)
 			equal = false
@@ -78,7 +107,7 @@ func (df *Diff) Equal() (equal bool, err error) {
 }
 
 // EqualTable tests whether two database table have same data and schema.
-func (df *Diff) EqualTable(tblName string, lastTime string, chunkSize int) (bool, error) {
+func (df *Diff) EqualTable(tblName string) (bool, error) {
 	eq, err := df.equalCreateTable(tblName)
 	if err != nil {
 		return eq, errors.Trace(err)
@@ -138,12 +167,15 @@ func (df *Diff) equalCreateTable(tblName string) (bool, error) {
 }
 
 func (df *Diff) equalTableData(tblName string) (bool, error) {
-	dumpJobs, err := generateDumpJob(df.db1, df.dbName, tblName, df.lastTime, df.chunkSize, df.sample)
+	dumpJobs, err := generateDumpJob(df.db1, df.dbName, tblName, df.timeField, df.beginTime, df.endTime, df.splitField, df.chunkSize, df.sample)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
 
 	checkNums := len(dumpJobs) * df.sample / 100
+	if checkNums == 0 {
+		checkNums = 1
+	}
 	checkNumArr := getRandomN(len(dumpJobs), checkNums)
 	log.Infof("total has %d check jobs, check %+v", len(dumpJobs), checkNumArr)
 
@@ -151,7 +183,17 @@ func (df *Diff) equalTableData(tblName string) (bool, error) {
 	defer close(checkResultCh)
 
 	for i := 0; i < df.checkThCount; i++ {
-		go df.checkChunkDataEqual(dumpJobs, checkNumArr[checkNums*i/df.checkThCount:checkNums*(i+1)/df.checkThCount], tblName, checkResultCh)
+		checkJobs := make([]*dumpJob, 0, checkNums)
+		for j := checkNums * i / df.checkThCount; j < checkNums*(i+1)/df.checkThCount; j++ {
+			checkJobs = append(checkJobs, dumpJobs[j])
+		}
+		go func() {
+			eq, err := df.checkChunkDataEqual(checkJobs, tblName)
+			if err != nil {
+				log.Errorf("check chunk data equal failed, error %v", err)
+			}
+			checkResultCh <- eq
+		}()
 	}
 
 	num := 0
@@ -169,67 +211,50 @@ func (df *Diff) equalTableData(tblName string) (bool, error) {
 	}
 }
 
-func (df *Diff) checkChunkDataEqual(dumpJobs []*dumpJob, checkNumArr []int, tblName string, checkResultCh chan bool) {
-	log.Infof("check array: %+v", checkNumArr)
-	if len(checkNumArr) == 0 {
-		checkResultCh <- true
-		return
+func (df *Diff) checkChunkDataEqual(dumpJobs []*dumpJob, tblName string) (bool, error) {
+	if len(dumpJobs) == 0 {
+		return true, nil
 	}
 
-	for _, num := range checkNumArr {
-		job := dumpJobs[num]
+	for _, job := range dumpJobs {
 		log.Infof("table: %s, where: %s", job.table, job.where)
 
 		rows1, err := getChunkRows(df.db1, df.dbName, tblName, job.where)
 		if err != nil {
-			checkResultCh <- false
-			log.Errorf("checkChunkDataEqual error %+v", err)
-			return
+			return false, errors.Trace(err)
 		}
 		defer rows1.Close()
 
 		rows2, err := getChunkRows(df.db2, df.dbName, tblName, job.where)
 		if err != nil {
-			checkResultCh <- false
-			log.Errorf("checkChunkDataEqual error %+v", err)
-			return
+			return false, errors.Trace(err)
 		}
 		defer rows2.Close()
 
 		cols1, err := rows1.Columns()
 		if err != nil {
-			checkResultCh <- false
-			log.Errorf("checkChunkDataEqual error %+v", err)
-			return
+			return false, errors.Trace(err)
 		}
 		cols2, err := rows2.Columns()
 		if err != nil {
-			checkResultCh <- false
-			log.Errorf("checkChunkDataEqual error %+v", err)
-			return
+			return false, errors.Trace(err)
 		}
 		if len(cols1) != len(cols2) {
-			checkResultCh <- false
-			log.Errorf("checkChunkDataEqual error %+v", err)
-			return
+			return false, errors.Trace(err)
 		}
 
 		row1 := make(rawBytesRow, len(cols1))
 		row2 := make(rawBytesRow, len(cols2))
 		eq, err := equalRows(rows1, rows2, row1, row2)
 		if err != nil {
-			checkResultCh <- false
-			log.Errorf("checkChunkDataEqual error %+v", err)
-			return
+			return false, errors.Trace(err)
 		}
 		if !eq {
-			checkResultCh <- false
-			return
+			return false, nil
 		}
 	}
 
-	checkResultCh <- true
-	return
+	return true, nil
 }
 
 func equalRows(rows1, rows2 *sql.Rows, row1, row2 comparableSQLRow) (bool, error) {
