@@ -19,6 +19,7 @@ import (
 	"os"
 
 	"github.com/juju/errors"
+	"github.com/pingcap/tidb-tools/generate_binlog_position/pkg"
 )
 
 const (
@@ -73,7 +74,7 @@ func (cfg *Config) Parse(args []string) error {
 
 	var err error
 	// transfore tls config
-	cfg.tls, err = ToTLSConfig(cfg.SSLCA, cfg.SSLCert, cfg.SSLKey)
+	cfg.tls, err = pkg.ToTLSConfig(cfg.SSLCA, cfg.SSLCert, cfg.SSLKey)
 	if err != nil {
 		return errors.Errorf("tls config error %v", err)
 	}
@@ -90,7 +91,7 @@ func adjustString(v *string, defValue string) {
 // validate checks whether the configuration is valid
 func (cfg *Config) validate() error {
 	// check EtcdEndpoints
-	_, err := NewURLsValue(cfg.EtcdURLs)
+	_, err := pkg.NewURLsValue(cfg.EtcdURLs)
 	if err != nil {
 		return errors.Errorf("parse EtcdURLs error: %s, %v", cfg.EtcdURLs, err)
 	}

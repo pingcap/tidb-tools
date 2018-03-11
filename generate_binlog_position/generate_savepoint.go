@@ -24,6 +24,7 @@ import (
 	"github.com/ngaut/log"
 	"github.com/pingcap/pd/pd-client"
 	"golang.org/x/net/context"
+	"github.com/pingcap/tidb-tools/generate_binlog_position/pkg"
 )
 
 const physicalShiftBits = 18
@@ -51,7 +52,7 @@ func GenSavepointInfo(cfg *Config) error {
 func getTSO(cfg *Config) (int64, error) {
 	now := time.Now()
 
-	urlv, err := NewURLsValue(cfg.EtcdURLs)
+	urlv, err := pkg.NewURLsValue(cfg.EtcdURLs)
 	if err != nil {
 		return 0, errors.Trace(err)
 	}
