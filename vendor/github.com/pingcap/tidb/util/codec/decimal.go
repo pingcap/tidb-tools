@@ -14,24 +14,21 @@
 package codec
 
 import (
+	"fmt"
+
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
-	"github.com/pingcap/tidb/util/types"
+	"github.com/pingcap/tidb/types"
 )
 
-// EncodeDecimal encodes a decimal d into a byte slice which can be sorted lexicographically later.
-func EncodeDecimal(b []byte, d types.Datum) []byte {
-	dec := d.GetMysqlDecimal()
-	precision := d.Length()
-	frac := d.Frac()
+// EncodeDecimal encodes a decimal into a byte slice which can be sorted lexicographically later.
+func EncodeDecimal(b []byte, dec *types.MyDecimal, precision, frac int) []byte {
 	if precision == 0 {
 		precision, frac = dec.PrecisionAndFrac()
 	}
 	b = append(b, byte(precision), byte(frac))
 	bin, err := dec.ToBin(precision, frac)
 	if err != nil {
-		log.Errorf("should not happen, precision %d, frac %d %v", precision, frac, err)
-		return b
+		panic(fmt.Sprintf("should not happen, precision %d, frac %d %v", precision, frac, err))
 	}
 	b = append(b, bin...)
 	return b

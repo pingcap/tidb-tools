@@ -23,9 +23,8 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/pd/pd-client"
-	"github.com/pingcap/tidb"
-	"github.com/pingcap/tidb/store/tikv"
 	"golang.org/x/net/context"
+	"github.com/pingcap/tidb-tools/generate_binlog_position/pkg"
 )
 
 const physicalShiftBits = 18
@@ -36,18 +35,6 @@ func GenSavepointInfo(cfg *Config) error {
 	if err := os.MkdirAll(cfg.DataDir, 0700); err != nil {
 		return errors.Trace(err)
 	}
-
-	urlv, err := NewURLsValue(cfg.EtcdURLs)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	tidb.RegisterStore("tikv", tikv.Driver{})
-	tiPath := fmt.Sprintf("tikv://%s?disableGC=true", urlv.HostString())
-	tiStore, err := tidb.NewStore(tiPath)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	defer tiStore.Close()
 
 	// get newest ts from pd
 	commitTS, err := getTSO(cfg)
@@ -65,12 +52,16 @@ func GenSavepointInfo(cfg *Config) error {
 func getTSO(cfg *Config) (int64, error) {
 	now := time.Now()
 
-	urlv, err := NewURLsValue(cfg.EtcdURLs)
+	urlv, err := pkg.NewURLsValue(cfg.EtcdURLs)
 	if err != nil {
 		return 0, errors.Trace(err)
 	}
 
-	pdCli, err := pd.NewClient(urlv.StringSlice())
+	pdCli, err := pd.NewClient(urlv.StringSlice(), pd.SecurityOption{
+		CAPath:   cfg.SSLCA,
+		CertPath: cfg.SSLCert,
+		KeyPath:  cfg.SSLKey,
+	})
 	physical, logical, err := pdCli.GetTS(context.Background())
 	if err != nil {
 		return 0, errors.Trace(err)

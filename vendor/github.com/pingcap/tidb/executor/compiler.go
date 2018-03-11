@@ -15,40 +15,46 @@ package executor
 
 import (
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
+	"github.com/opentracing/opentracing-go"
 	"github.com/pingcap/tidb/ast"
 	"github.com/pingcap/tidb/context"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/plan"
+	log "github.com/sirupsen/logrus"
+	goctx "golang.org/x/net/context"
 )
 
-// Compiler compiles an ast.StmtNode to a stmt.Statement.
+// Compiler compiles an ast.StmtNode to a physical plan.
 type Compiler struct {
+	Ctx context.Context
 }
 
-// Compile compiles an ast.StmtNode to an ast.Statement.
-// After preprocessed and validated, it will be optimized to a plan,
-// then wrappped to an adapter *statement as stmt.Statement.
-func (c *Compiler) Compile(ctx context.Context, node ast.StmtNode) (ast.Statement, error) {
-	is := GetInfoSchema(ctx)
-	if err := plan.Preprocess(node, is, ctx); err != nil {
+// Compile compiles an ast.StmtNode to a physical plan.
+func (c *Compiler) Compile(goCtx goctx.Context, stmtNode ast.StmtNode) (*ExecStmt, error) {
+	if span := opentracing.SpanFromContext(goCtx); span != nil {
+		span1 := opentracing.StartSpan("executor.Compile", opentracing.ChildOf(span.Context()))
+		defer span1.Finish()
+	}
+
+	infoSchema := GetInfoSchema(c.Ctx)
+	if err := plan.Preprocess(c.Ctx, stmtNode, infoSchema, false); err != nil {
 		return nil, errors.Trace(err)
 	}
-	// Validate should be after NameResolve.
-	if err := plan.Validate(node, false); err != nil {
-		return nil, errors.Trace(err)
-	}
-	p, err := plan.Optimize(ctx, node, is)
+
+	finalPlan, err := plan.Optimize(c.Ctx, stmtNode, infoSchema)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	stmtCount(node, p)
-	sa := &statement{
-		is:   is,
-		plan: p,
-		text: node.Text(),
-	}
-	return sa, nil
+
+	return &ExecStmt{
+		InfoSchema: infoSchema,
+		Plan:       finalPlan,
+		Expensive:  stmtCount(stmtNode, finalPlan, c.Ctx.GetSessionVars().InRestrictedSQL),
+		Cacheable:  plan.Cacheable(stmtNode),
+		Text:       stmtNode.Text(),
+		StmtNode:   stmtNode,
+		Ctx:        c.Ctx,
+	}, nil
 }
 
 // GetInfoSchema gets TxnCtx InfoSchema if snapshot schema is not set,

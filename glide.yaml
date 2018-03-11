@@ -11,7 +11,7 @@ import:
 - package: github.com/pingcap/check
   version: 9b266636177e249ec28b0aeffe8e86bc272bb481
 - package: github.com/pingcap/tidb
-  version: 2c07a47f229314ac2ccfb78607d218759a77a050
+  version: fc699c9b0d29f038e0a55702c9fd2e18e89373c4
   subpackages:
   - ast
   - ddl
@@ -20,24 +20,37 @@ import:
   - parser
   - terror
   - util/charset
-  - util/types
+  - types
 - package: golang.org/x/net
-  version: e90d6d0afc4c315a0d87a568ae68577cc15149a0
+  version: d1e1b351919c6738fdeb9893d5c998b161464f0c
+  repo: https://github.com/golang/net.git
   subpackages:
   - context
+  - http2
 - package: google.golang.org/grpc
-  version: v1.0.4
+  version: 5b3c4e850e90a4cf6a20ebd46c8b32a0a3afcb9e
   subpackages:
   - codes
   - credentials
-  - grpclog
-  - internal
   - metadata
   - naming
-  - peer
   - transport
+  - balancer
+  - connectivity
+  - grpclb/grpc_lb_v1/messages
+  - grpclog
+  - health/grpc_health_v1
+  - internal
+  - keepalive
+  - metadata
+  - peer
+  - resolver
+  - stats
+  - status
+  - tap
 - package: golang.org/x/text
-  version: 723492b65e225eafcba054e76ba18bb9c5ac1ea2
+  version: 4ee4af566555f5fbe026368b75596286a312663a
+  repo: https://github.com/golang/text.git
   subpackages:
   - encoding
   - encoding/charmap
@@ -49,6 +62,8 @@ import:
   - encoding/traditionalchinese
   - encoding/unicode
   - transform
+  - secure
+  - secure/bidirule
 - package: github.com/prometheus/client_golang
   version: ^0.8.0
   subpackages:
@@ -75,12 +90,13 @@ import:
   - ioutil2
   - sync2
 - package: github.com/siddontang/go-mysql
-  version: e83b1664b8fc96202159841d0a1306160fc3f859
+  version: f77cd2a3cb46c6ceba6c3439cf5b937f6a314569
   subpackages:
   - client
   - mysql
   - packet
   - replication
+  - schema
 - package: github.com/petar/GoLLRB
   version: 53be0d36a84c2a886ca057d34b6aa4468df9ccb4
   subpackages:
@@ -88,7 +104,7 @@ import:
 - package: github.com/go-sql-driver/mysql
   version: 4ac31a97ccff97de60ba3c630bfb4733c1bb6d0e
 - package: github.com/golang/protobuf
-  version: 874264fbbb43f4d91e999fecb4b40143ed611400
+  version: 8ee79997227bf9b34611aee7946ae64735e6fd93
   subpackages:
   - jsonpb
   - proto
@@ -96,3 +112,38 @@ import:
   version: 723cc1e459b8eea2dea4583200fd60757d40097a
 - package: github.com/BurntSushi/toml
   version: 99064174e013895bbd9b025c31100bd1d9b590ca
+- package: github.com/google/btree
+  version: 316fb6d3f031ae8f4d457c6c5186b9e3ded70435
+- package: github.com/pingcap/tipb
+  version: 07ff5b094233a557a3ac11b1e4d8714d8c6ff406
+- package: github.com/pingcap/kvproto
+  version: 7b013aefd7210f4f4dbfca3330b462ddce5dd496
+- package: github.com/uber/jaeger-lib
+  version: 34d9cc24e47ab70783050b52f79c06eb3ac850ba
+- package: google.golang.org/genproto
+  version: b0a3dcfcd1a9bd48e63634bd8802960804cf8315
+- package: golang.org/x/crypto
+  version: 1351f936d976c60a0a48d728281922cf63eafb8d
+  subpackages:
+  - bcrypt
+  - blowfish
+  - ssh/terminal
+- package: golang.org/x/sys
+  version: 8d1157a435470616f975ff9bb013bea8d0962067
+  repo: https://github.com/golang/sys.git
+  vcs: git
+  subpackages:
+  - unix
+- package: github.com/cznic/mathutil
+  version: c90ba19bea8927552cef4560ab888231566f049d
+- package: github.com/coreos/etcd
+  version: fb5cd6f1c72c2b98e0c4453444cdfba306da867b
+  subpackages:
+  - auth/authpb
+  - clientv3
+  - clientv3/concurrency
+  - etcdserver/api/v3rpc/rpctypes
+  - etcdserver/etcdserverpb
+  - mvcc/mvccpb
+  - pkg/logutil
+  - pkg/types
