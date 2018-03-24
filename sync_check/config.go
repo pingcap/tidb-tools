@@ -44,7 +44,7 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.BeginTime, "begin-time", "", "check data's begin time")
 	fs.StringVar(&cfg.EndTime, "end-time", "", "check data's end time")
 	fs.StringVar(&cfg.SplitField, "split-field", "", "use this field split data to several chunk")
-
+	fs.BoolVar(&cfg.UseRowID, "use-rowid", false, "set true if target-db and source-db all support tidb implicit column _tidb_rowid")
 	return cfg
 }
 
@@ -77,6 +77,8 @@ type Config struct {
 	CheckThCount int `toml:"check-thcount" json:"check-thcount"`
 
 	Tables []string `toml:"tables" json:"tables"`
+
+	UseRowID bool `toml:"use-rowid" json:"use_rowid"`
 }
 
 // Parse parses flag definitions from the argument list.

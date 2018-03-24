@@ -79,7 +79,7 @@ func checkSyncState(sourceDB, targetDB *sql.DB, cfg *Config) bool {
 	}
 
 	d := util.NewDiff(sourceDB, targetDB, cfg.SourceDBCfg.Name, cfg.TimeField, beginTime, endTime,
-		cfg.SplitField, cfg.ChunkSize, cfg.Sample, cfg.CheckThCount, cfg.Tables)
+		cfg.SplitField, cfg.ChunkSize, cfg.Sample, cfg.CheckThCount, cfg.Tables, cfg.UseRowID)
 	ok, err := d.Equal()
 	if err != nil {
 		log.Fatal(err)

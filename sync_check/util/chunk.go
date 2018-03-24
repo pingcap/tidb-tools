@@ -109,13 +109,12 @@ func getChunksForTable(db *sql.DB, dbname, tableName string, column *schema.Tabl
 		}
 		chunk = newChunkRange(min.Float64-0.1, max.Float64+0.1, false, false, true)
 	} else {
-		var min, max string
+		var min, max sql.NullString
 		err := db.QueryRow(query).Scan(&min, &max)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		if min == "" || max == "" {
-			// min is NULL, means that no table data.
+		if !min.Valid || !max.Valid {
 			return []chunkRange{}, nil
 		}
 		chunk = newChunkRange(min, max, true, true, true)
@@ -201,9 +200,9 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbname string, table
 	return chunks, nil
 }
 
-func findSuitableField(db *sql.DB, dbname string, table string) (*schema.TableColumn, error) {
+func findSuitableField(db *sql.DB, dbname string, table string, useRowID bool) (*schema.TableColumn, error) {
 	// first select the index, and number type index first
-	column, err := FindSuitableIndex(db, dbname, table, true)
+	column, err := FindSuitableIndex(db, dbname, table, useRowID)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -234,7 +233,8 @@ func findSuitableField(db *sql.DB, dbname string, table string) (*schema.TableCo
 	return nil, errors.Errorf("no column find in table %s.%s", dbname, table)
 }
 
-func generateDumpJob(db *sql.DB, dbname, tableName, timeField, beginTime, endTime, splitField string, chunkSize int, sample int) ([]*dumpJob, error) {
+func generateDumpJob(db *sql.DB, dbname, tableName, timeField, beginTime, endTime,
+	splitField string, chunkSize int, sample int, useRowID bool) ([]*dumpJob, error) {
 	jobBucket := make([]*dumpJob, 0, 10)
 	var jobCnt int
 	var column *schema.TableColumn
@@ -242,7 +242,7 @@ func generateDumpJob(db *sql.DB, dbname, tableName, timeField, beginTime, endTim
 
 	if splitField == "" {
 		// find a column for split data
-		column, err = findSuitableField(db, dbname, tableName)
+		column, err = findSuitableField(db, dbname, tableName, useRowID)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}

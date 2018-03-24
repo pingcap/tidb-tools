@@ -36,11 +36,12 @@ type Diff struct {
 	chunkSize    int
 	sample       int
 	checkThCount int
+	useRowID     bool
 }
 
 // NewDiff returns a Diff instance.
-func NewDiff(db1, db2 *sql.DB, dbName, timeField, beginTime, endTime,
-	splitField string, chunkSize, sample, checkThCount int, tables []string) *Diff {
+func NewDiff(db1, db2 *sql.DB, dbName, timeField, beginTime, endTime, splitField string,
+	chunkSize, sample, checkThCount int, tables []string, useRowID bool) *Diff {
 	return &Diff{
 		db1:          db1,
 		db2:          db2,
@@ -53,6 +54,7 @@ func NewDiff(db1, db2 *sql.DB, dbName, timeField, beginTime, endTime,
 		chunkSize:    chunkSize,
 		sample:       sample,
 		checkThCount: checkThCount,
+		useRowID:     useRowID,
 	}
 }
 
@@ -167,7 +169,8 @@ func (df *Diff) equalCreateTable(tblName string) (bool, error) {
 }
 
 func (df *Diff) equalTableData(tblName string) (bool, error) {
-	dumpJobs, err := generateDumpJob(df.db1, df.dbName, tblName, df.timeField, df.beginTime, df.endTime, df.splitField, df.chunkSize, df.sample)
+	dumpJobs, err := generateDumpJob(df.db1, df.dbName, tblName, df.timeField, df.beginTime,
+		df.endTime, df.splitField, df.chunkSize, df.sample, df.useRowID)
 	if err != nil {
 		return false, errors.Trace(err)
 	}

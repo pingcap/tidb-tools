@@ -30,6 +30,9 @@ sample = 10
 # tables need check, check all tables if comment this
 #tables = ["abc", "bcd"]
 
+＃ set true if target-db and source-db all support tidb implicit column "_tidb_rowid"
+use-rowid = false
+
 [target-db]
 host = "127.0.0.1"
 user = "root"
