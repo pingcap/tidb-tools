@@ -78,7 +78,7 @@ type Config struct {
 
 	Tables []string `toml:"tables" json:"tables"`
 
-	UseRowID bool `toml:"use-rowid" json:"use_rowid"`
+	UseRowID bool `toml:"use-rowid" json:"use-rowid"`
 }
 
 // Parse parses flag definitions from the argument list.
