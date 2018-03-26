@@ -24,6 +24,8 @@ import (
 	"github.com/siddontang/go-mysql/schema"
 )
 
+const implicitColName = "_tidb_rowid"
+
 // DBConfig is the DB configuration.
 type DBConfig struct {
 	Host string `toml:"host" json:"host"`
@@ -131,7 +133,7 @@ func ShowIndex(db *sql.DB, dbname string, table string) ([]map[string][]byte, er
 }
 
 // FindSuitableIndex find a suitable field for split data
-func FindSuitableIndex(db *sql.DB, dbName string, table string, numberFirst bool) (*schema.TableColumn, error) {
+func FindSuitableIndex(db *sql.DB, dbName string, table string, useRowID bool) (*schema.TableColumn, error) {
 	rowsData, err := ShowIndex(db, dbName, table)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -142,7 +144,6 @@ func FindSuitableIndex(db *sql.DB, dbName string, table string, numberFirst bool
 		return nil, errors.Trace(err)
 	}
 
-	var indexColumn *schema.TableColumn
 	// seek pk
 	for _, fields := range rowsData {
 		if string(fields["Key_name"]) == "PRIMARY" && string(fields["Seq_in_index"]) == "1" {
@@ -150,10 +151,8 @@ func FindSuitableIndex(db *sql.DB, dbName string, table string, numberFirst bool
 			if !valid {
 				return nil, fmt.Errorf("can't find column %s in %s.%s", string(fields["Column_name"]), dbName, table)
 			}
-			if !numberFirst || column.Type == schema.TYPE_NUMBER {
-				return column, nil
-			}
-			indexColumn = column
+
+			return column, nil
 		}
 	}
 
@@ -164,13 +163,16 @@ func FindSuitableIndex(db *sql.DB, dbName string, table string, numberFirst bool
 			if !valid {
 				return nil, fmt.Errorf("can't find column %s in %s.%s", string(fields["Column_name"]), dbName, table)
 			}
-			if !numberFirst || column.Type == schema.TYPE_NUMBER {
-				return column, nil
-			}
-			if indexColumn == nil {
-				indexColumn = column
-			}
+
+			return column, nil
 		}
+	}
+
+	if useRowID {
+		return &schema.TableColumn{
+			Name: implicitColName,
+			Type: schema.TYPE_NUMBER,
+		}, nil
 	}
 
 	// no unique index found, seek index with max cardinality
@@ -187,17 +189,11 @@ func FindSuitableIndex(db *sql.DB, dbName string, table string, numberFirst bool
 				if !valid {
 					return nil, fmt.Errorf("can't find column %s in %s.%s", string(fields["Column_name"]), dbName, table)
 				}
-				if !numberFirst || column.Type == schema.TYPE_NUMBER {
-					maxCardinality = cardinality
-					c = column
-				}
+
+				maxCardinality = cardinality
+				c = column
 			}
 		}
-	}
-
-	if c == nil {
-		// if can't find number index, return the first index
-		return indexColumn, nil
 	}
 
 	return c, nil
