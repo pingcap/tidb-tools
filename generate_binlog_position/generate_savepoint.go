@@ -23,8 +23,8 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/pd/pd-client"
-	"golang.org/x/net/context"
 	"github.com/pingcap/tidb-tools/generate_binlog_position/pkg"
+	"golang.org/x/net/context"
 )
 
 const physicalShiftBits = 18
@@ -45,7 +45,7 @@ func GenSavepointInfo(cfg *Config) error {
 
 	// generate meta infomation
 	meta := NewLocalMeta(path.Join(cfg.DataDir, "savePoint"))
-	err = meta.Save(commitTS)
+	err = meta.Save(commitTS, cfg.AddTime)
 	return errors.Trace(err)
 }
 

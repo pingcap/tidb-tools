@@ -31,6 +31,7 @@ const (
 type Config struct {
 	*flag.FlagSet
 	DataDir  string `toml:"data-dir" json:"data-dir"`
+	AddTime  bool   `toml:"add-time" json:"add-time"`
 	EtcdURLs string `toml:"pd-urls" json:"pd-urls"`
 	SSLCA    string `toml:"ssl-ca" json:"ssl-ca"`
 	SSLCert  string `toml:"ssl-cert" json:"ssl-cert"`
@@ -48,6 +49,7 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.SSLCA, "ssl-ca", "", "Path of file that contains list of trusted SSL CAs for connection with cluster components.")
 	fs.StringVar(&cfg.SSLCert, "ssl-cert", "", "Path of file that contains X509 certificate in PEM format for connection with cluster components.")
 	fs.StringVar(&cfg.SSLKey, "ssl-key", "", "Path of file that contains X509 key in PEM format for connection with cluster components.")
+	fs.BoolVar(&cfg.AddTime, "add-time", false, "add time info in file or not")
 
 	return cfg
 }
