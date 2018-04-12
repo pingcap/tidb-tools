@@ -49,7 +49,7 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.SSLCA, "ssl-ca", "", "Path of file that contains list of trusted SSL CAs for connection with cluster components.")
 	fs.StringVar(&cfg.SSLCert, "ssl-cert", "", "Path of file that contains X509 certificate in PEM format for connection with cluster components.")
 	fs.StringVar(&cfg.SSLKey, "ssl-key", "", "Path of file that contains X509 key in PEM format for connection with cluster components.")
-	fs.BoolVar(&cfg.AddTime, "add-time", false, "add time info in file or not")
+	fs.BoolVar(&cfg.AddTime, "add-time", false, "add time info in savepoint meta file or not")
 
 	return cfg
 }
