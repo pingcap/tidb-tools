@@ -45,7 +45,7 @@ func GenSavepointInfo(cfg *Config) error {
 
 	// generate meta infomation
 	meta := NewLocalMeta(path.Join(cfg.DataDir, "savePoint"))
-	err = meta.Save(commitTS, cfg.AddTime)
+	err = meta.Save(commitTS, cfg.TimeZone)
 	return errors.Trace(err)
 }
 

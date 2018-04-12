@@ -15,7 +15,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"sync"
 	"time"
@@ -37,7 +36,7 @@ type Meta interface {
 	Load() error
 
 	// Save saves meta information.
-	Save(int64, bool) error
+	Save(int64, string) error
 
 	// Check checks whether we should save meta.
 	Check() bool
@@ -79,7 +78,7 @@ func (lm *localMeta) Load() error {
 }
 
 // Save implements Meta.Save interface.
-func (lm *localMeta) Save(ts int64, addTime bool) error {
+func (lm *localMeta) Save(ts int64, timeZone string) error {
 	log.Infof("local meta save")
 	lm.Lock()
 	defer lm.Unlock()
@@ -94,13 +93,15 @@ func (lm *localMeta) Save(ts int64, addTime bool) error {
 		return errors.Trace(err)
 	}
 
-	if addTime {
+	if timeZone != "" {
 		t := pkg.TsToTime(ts)
-		location, err := time.LoadLocation("Asia/Shanghai")
+		location, err := time.LoadLocation(timeZone)
 		if err != nil {
 			return errors.Trace(err)
 		}
-		buf.WriteString(fmt.Sprintf("%s\n", t.UTC().String()))
+
+		buf.WriteString(t.UTC().String())
+		buf.WriteByte('\n')
 		buf.WriteString(t.In(location).String())
 	}
 
