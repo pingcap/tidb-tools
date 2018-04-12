@@ -31,7 +31,7 @@ const (
 type Config struct {
 	*flag.FlagSet
 	DataDir  string `toml:"data-dir" json:"data-dir"`
-	TimeZone string `toml:"add-time" json:"add-time"`
+	TimeZone string `toml:"time-zone" json:"time-zone"`
 	EtcdURLs string `toml:"pd-urls" json:"pd-urls"`
 	SSLCA    string `toml:"ssl-ca" json:"ssl-ca"`
 	SSLCert  string `toml:"ssl-cert" json:"ssl-cert"`
