@@ -37,7 +37,7 @@ func GenSavepointInfo(cfg *Config) error {
 	}
 
 	// get newest ts from pd
-	commitTS, err := getTSO(cfg)
+	commitTS, err := GetTSO(cfg)
 	if err != nil {
 		log.Errorf("get tso failed: %s", err)
 		return errors.Trace(err)
@@ -49,7 +49,7 @@ func GenSavepointInfo(cfg *Config) error {
 	return errors.Trace(err)
 }
 
-func getTSO(cfg *Config) (int64, error) {
+func GetTSO(cfg *Config) (int64, error) {
 	now := time.Now()
 
 	urlv, err := pkg.NewURLsValue(cfg.EtcdURLs)
