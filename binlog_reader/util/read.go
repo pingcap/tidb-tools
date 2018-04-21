@@ -5,9 +5,15 @@ import (
 	"io"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/juju/errors"
+	"github.com/ngaut/log"
+	"github.com/pingcap/tidb/model"
 	"github.com/pingcap/tipb/go-binlog"
+	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/tidb/util/codec"
+	"github.com/pingcap/tidb/tablecodec"
 )
 
 var (
@@ -46,7 +52,7 @@ var binlogBufferPool = sync.Pool{
 }
 
 // Walk reads binlog from the "from" position and sends binlogs in the streaming way
-func Walk(filename string) error {
+func Walk(filename string, tbInfo *model.TableInfo) error {
 	var ent = &binlog.Entity{}
 	var decoder Decoder
 
@@ -69,6 +75,36 @@ func Walk(filename string) error {
 			break
 		}
 
+		b := new(binlog.Binlog)
+		err = b.Unmarshal(ent.Payload)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		preWriteValue := b.GetPrewriteValue()
+		preWrite := &binlog.PrewriteValue{}
+		err = preWrite.Unmarshal(preWriteValue)
+		if err != nil {
+			return errors.Errorf("prewrite %s unmarshal error %v", preWriteValue, err)
+		}
+
+		colsTypeMap := toColumnTypeMap(tbInfo.Columns)
+		for _, mutation := range preWrite.Mutations {
+			for _, row := range mutation.InsertedRows {
+				remain, pk, err := codec.DecodeOne(row)
+				if err != nil {
+					log.Error("decode error")
+					continue
+				}
+				columnValues, err := tablecodec.DecodeRow(remain, colsTypeMap, time.Local)
+				if err != nil {
+					log.Error("DecodeRow error")
+					continue
+				}
+				columnValues[1] = pk
+
+				log.Infof("[binlog] startTs: %d, commitTs: %d, id: %+v", b.StartTs, b.CommitTs, columnValues[1])
+			}
+		}
 		/*
 			newEnt := binlog.Entity{
 				Pos:     ent.Pos,
@@ -91,4 +127,13 @@ func Walk(filename string) error {
 	}
 
 	return nil
+}
+
+func toColumnTypeMap(columns []*model.ColumnInfo) map[int64]*types.FieldType {
+	colTypeMap := make(map[int64]*types.FieldType)
+	for _, col := range columns {
+		colTypeMap[col.ID] = &col.FieldType
+	}
+
+	return colTypeMap
 }

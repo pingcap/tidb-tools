@@ -34,6 +34,7 @@ func main() {
 		os.Exit(2)
 	}
 
+	/*
 	sql := "CREATE TABLE `ptest` (`a` int(11) NOT NULL,`b` double NOT NULL DEFAULT '2',`c` varchar(10) NOT NULL,`d` time DEFAULT NULL,PRIMARY KEY (`a`),UNIQUE KEY `d` (`d`))"
 	tableInfo, err := util.GetSchemaTable(sql, "test", "ptest")
 	if err != nil {
@@ -42,4 +43,15 @@ func main() {
 	log.Infof("table info: %v", tableInfo)
 	log.Infof("columns[0]: %+v", tableInfo.Columns[0])
 	log.Infof("columns[1]: %+v", tableInfo.Columns[1])
+	*/
+	tableInfo, err := util.GetSchemaTable(cfg.CreateTable, "test", "ptest")
+	if err != nil {
+		log.Errorf("get table info failed %v", err)
+		return
+	}
+	err = util.Walk(cfg.Filename, tableInfo)
+	if err != nil {
+		log.Errorf("read binlog file failed %v", err)
+		return
+	}
 }

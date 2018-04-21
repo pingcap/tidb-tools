@@ -30,7 +30,9 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.ConfigFile, "config", "", "Config file")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.CreateTable, "create-table", "", "create table sql string")
+	fs.StringVar(&cfg.Filename, "filename", "plain", "binlog file name")
 	fs.StringVar(&cfg.Format, "format", "plain", "binlog output format")
+
 
 	return cfg
 }
@@ -44,6 +46,8 @@ type Config struct {
 	CreateTable string `toml:"create-table" json:"create-table"`
 
 	Format string `toml:"format" json:"format"`
+
+	Filename string `toml:"filename" json:"filename"`
 
 	ConfigFile string
 }
