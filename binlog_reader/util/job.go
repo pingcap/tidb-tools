@@ -3,17 +3,16 @@ package util
 import (
 	"fmt"
 
-
 	"github.com/juju/errors"
-	"github.com/pingcap/tidb/model"
-	"github.com/pingcap/tidb/meta"
 	"github.com/pingcap/tidb"
-	"github.com/pingcap/tidb/kv"
-	"github.com/pingcap/tidb/store/tikv"
 	"github.com/pingcap/tidb-tools/generate_binlog_position/pkg"
+	"github.com/pingcap/tidb/kv"
+	"github.com/pingcap/tidb/meta"
+	"github.com/pingcap/tidb/model"
+	"github.com/pingcap/tidb/store/tikv"
 )
 
-func LoadHistoryDDLJobs(etcdUrls string, initCommitTS int64, security *SecurityConfig) ([]*model.Job, error) {
+func LoadHistoryDDLJobs(etcdUrls string, initCommitTS int64) ([]*model.Job, error) {
 	var version kv.Version
 	var err error
 
@@ -22,12 +21,6 @@ func LoadHistoryDDLJobs(etcdUrls string, initCommitTS int64, security *SecurityC
 		return nil, errors.Trace(err)
 	}
 
-	/*
-	tiClient, err := tikv.NewLockResolver(urlv.StringSlice(), security.ToTiDBSecurityConfig())
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	*/
 	tidb.RegisterStore("tikv", tikv.Driver{})
 	tiPath := fmt.Sprintf("tikv://%s?disableGC=true", urlv.HostString())
 	tiStore, err := tidb.NewStore(tiPath)

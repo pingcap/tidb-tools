@@ -4,18 +4,18 @@ import (
 	"bufio"
 	"encoding/binary"
 	"hash/crc32"
-	"sync"
 	"io"
+	"sync"
 
 	"github.com/juju/errors"
 	"github.com/pingcap/tipb/go-binlog"
 )
 
 var (
-	mib = 1024 * 1024
-	magic uint32 = 471532804
-	ErrCRCMismatch = errors.New("binlogger: crc mismatch")
-	crcTable       = crc32.MakeTable(crc32.Castagnoli)
+	mib                   = 1024 * 1024
+	magic          uint32 = 471532804
+	ErrCRCMismatch        = errors.New("binlogger: crc mismatch")
+	crcTable              = crc32.MakeTable(crc32.Castagnoli)
 )
 
 type BinlogBuffer struct {

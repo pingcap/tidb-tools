@@ -4,17 +4,13 @@ import (
 	"hash/crc32"
 	"io"
 	"os"
-	"time"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb/model"
-	"github.com/pingcap/tipb/go-binlog"
-	"github.com/pingcap/tidb/types"
-	"github.com/pingcap/tidb/util/codec"
-	"github.com/pingcap/tidb/tablecodec"
-	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb-tools/binlog_reader/util"
+	"github.com/pingcap/tidb/model"
+	"github.com/pingcap/tidb/types"
+	pb "github.com/pingcap/tipb/go-binlog"
 )
 
 var (
@@ -37,34 +33,46 @@ var (
 	PrivateFileMode os.FileMode = 0600
 )
 
-
-
 type BinlogReader struct {
 	FileName string
-	StartTs  uint64
 	Schema   *util.Schema
-	tiStore  kv.Storage
 }
 
 // NewBinlogReader returns a BinlogReader
-func NewBinlogReader(filename string) *BinlogReader {
-	return &BinlogReader{
+func NewBinlogReader(filename string, etcdURLS string) (*BinlogReader, error) {
+	b := &BinlogReader{
 		FileName: filename,
 	}
+	startTs, err := b.GetStartTs()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	jobs, err := util.LoadHistoryDDLJobs(etcdURLS, startTs)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	b.Schema, err = util.NewSchema(jobs, true)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return b, nil
 }
 
 // Walk reads binlog from the "from" position and sends binlogs in the streaming way
-func (b *BinlogReader)Walk(filename string, tbInfo *model.TableInfo) error {
-	var ent = &binlog.Entity{}
+func (b *BinlogReader) Walk() error {
+	var ent = &pb.Entity{}
 	var decoder util.Decoder
 
-	f, err := os.OpenFile(filename, os.O_RDONLY, PrivateFileMode)
+	f, err := os.OpenFile(b.FileName, os.O_RDONLY, PrivateFileMode)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	defer f.Close()
 
-	from := binlog.Pos{
+	from := pb.Pos{
 		Suffix: 0,
 		Offset: 0,
 	}
@@ -77,49 +85,24 @@ func (b *BinlogReader)Walk(filename string, tbInfo *model.TableInfo) error {
 			break
 		}
 
-		b := new(binlog.Binlog)
-		err = b.Unmarshal(ent.Payload)
+		binlog := new(pb.Binlog)
+		err = binlog.Unmarshal(ent.Payload)
 		if err != nil {
 			return errors.Trace(err)
 		}
-		preWriteValue := b.GetPrewriteValue()
-		preWrite := &binlog.PrewriteValue{}
-		err = preWrite.Unmarshal(preWriteValue)
-		if err != nil {
-			return errors.Errorf("prewrite %s unmarshal error %v", preWriteValue, err)
-		}
-
-		colsTypeMap := toColumnTypeMap(tbInfo.Columns)
-		for _, mutation := range preWrite.Mutations {
-			for _, row := range mutation.InsertedRows {
-				remain, pk, err := codec.DecodeOne(row)
-				if err != nil {
-					log.Error("decode error")
-					continue
-				}
-				columnValues, err := tablecodec.DecodeRow(remain, colsTypeMap, time.Local)
-				if err != nil {
-					log.Error("DecodeRow error")
-					continue
-				}
-				columnValues[1] = pk
-
-				log.Infof("[binlog] startTs: %d, commitTs: %d, id: %+v", b.StartTs, b.CommitTs, columnValues[1])
-			}
-		}
-		/*
-			newEnt := binlog.Entity{
-				Pos:     ent.Pos,
-				Payload: ent.Payload,
-			}
-		*/
-
-		/*
-			err := sendBinlog(newEnt)
+		jobID := binlog.GetDdlJobId()
+		if jobID == 0 {
+			preWriteValue := binlog.GetPrewriteValue()
+			preWrite := &pb.PrewriteValue{}
+			err = preWrite.Unmarshal(preWriteValue)
 			if err != nil {
-				return errors.Trace(err)
+				return errors.Errorf("prewrite %s unmarshal error %v", preWriteValue, err)
 			}
-		*/
+			err = b.translateSqls(preWrite.GetMutations(), binlog.GetCommitTs())
+		} else if jobID > 0 {
+			// TODO: handle ddl
+			log.Infof("sql: %s", string(binlog.GetDdlQuery()))
+		}
 
 		util.BinlogBufferPool.Put(buf)
 	}
@@ -132,17 +115,17 @@ func (b *BinlogReader)Walk(filename string, tbInfo *model.TableInfo) error {
 }
 
 // GetStartTs get the first start ts in binlog file
-func (b *BinlogReader)GetStartTs(filename string) (int64, error) {
-	var ent = &binlog.Entity{}
+func (b *BinlogReader) GetStartTs() (int64, error) {
+	var ent = &pb.Entity{}
 	var decoder util.Decoder
 
-	f, err := os.OpenFile(filename, os.O_RDONLY, PrivateFileMode)
+	f, err := os.OpenFile(b.FileName, os.O_RDONLY, PrivateFileMode)
 	if err != nil {
 		return 0, errors.Trace(err)
 	}
 	defer f.Close()
 
-	from := binlog.Pos{
+	from := pb.Pos{
 		Suffix: 0,
 		Offset: 0,
 	}
@@ -154,13 +137,210 @@ func (b *BinlogReader)GetStartTs(filename string) (int64, error) {
 		return 0, errors.Trace(err)
 	}
 
-	binlog := new(binlog.Binlog)
+	binlog := new(pb.Binlog)
 	err = binlog.Unmarshal(ent.Payload)
 	if err != nil {
 		return 0, errors.Trace(err)
 	}
 
 	return binlog.StartTs, nil
+}
+
+func (b *BinlogReader) translateSqls(mutations []pb.TableMutation, commitTS int64) error {
+	for _, mutation := range mutations {
+		var (
+			err  error
+			sqls = make(map[pb.MutationType][]string)
+
+			// the restored sqls's args, ditto
+			args = make(map[pb.MutationType][][]interface{})
+
+			// the offset of specified type sql
+			offsets = make(map[pb.MutationType]int)
+
+			// the binlog dml sort
+			sequences = mutation.GetSequence()
+		)
+		tableInfo, ok := b.Schema.TableByID(mutation.GetTableId())
+		if !ok {
+			log.Errorf("can't find table id %d", mutation.GetTableId())
+			continue
+		}
+		schemaName, tableName, ok := b.Schema.SchemaAndTableName(mutation.GetTableId())
+		if !ok {
+			continue
+		}
+
+		if len(mutation.GetInsertedRows()) > 0 {
+			sqls[pb.MutationType_Insert], args[pb.MutationType_Insert], err = util.GenInsertSQLs(schemaName, tableInfo, mutation.GetInsertedRows())
+			if err != nil {
+				return errors.Errorf("gen insert sqls failed: %v, schema: %s, table: %s", err, schemaName, tableName)
+			}
+			offsets[pb.MutationType_Insert] = 0
+		}
+
+		if len(mutation.GetUpdatedRows()) > 0 {
+			sqls[pb.MutationType_Update], args[pb.MutationType_Update], err = util.GenUpdateSQLs(schemaName, tableInfo, mutation.GetUpdatedRows())
+			if err != nil {
+				return errors.Errorf("gen update sqls failed: %v, schema: %s, table: %s", err, schemaName, tableName)
+			}
+			offsets[pb.MutationType_Update] = 0
+		}
+
+		if len(mutation.GetDeletedRows()) > 0 {
+			sqls[pb.MutationType_DeleteRow], args[pb.MutationType_DeleteRow], err = util.GenDeleteSQLs(schemaName, tableInfo, mutation.GetDeletedRows())
+			if err != nil {
+				return errors.Errorf("gen delete sqls failed: %v, schema: %s, table: %s", err, schemaName, tableName)
+			}
+			offsets[pb.MutationType_DeleteRow] = 0
+		}
+
+		for _, dmlType := range sequences {
+			if offsets[dmlType] >= len(sqls[dmlType]) {
+				return errors.Errorf("gen sqls failed: sequence %v execution %s sqls %v", sequences, dmlType, sqls[dmlType])
+			}
+
+			log.Infof("commitTS: %d, sql: %s, args: %v", commitTS, sqls[dmlType][offsets[dmlType]], args[dmlType][offsets[dmlType]])
+			offsets[dmlType] = offsets[dmlType] + 1
+		}
+	}
+	return nil
+}
+
+func (b *BinlogReader) handleDDL(job *model.Job) (string, string, string, error) {
+	if job.State == model.JobStateCancelled {
+		return "", "", "", nil
+	}
+
+	log.Infof("ddl query %s", job.Query)
+	sql := job.Query
+	if sql == "" {
+		return "", "", "", errors.Errorf("[ddl job sql miss]%+v", job)
+	}
+
+	switch job.Type {
+	case model.ActionCreateSchema:
+		// get the DBInfo from job rawArgs
+		schema := job.BinlogInfo.DBInfo
+
+		err := b.Schema.CreateSchema(schema)
+		if err != nil {
+			return "", "", "", errors.Trace(err)
+		}
+
+		return schema.Name.O, "", sql, nil
+
+	case model.ActionDropSchema:
+		schemaName, err := b.Schema.DropSchema(job.SchemaID)
+		if err != nil {
+			return "", "", "", errors.Trace(err)
+		}
+
+		return schemaName, "", sql, nil
+
+	case model.ActionRenameTable:
+		// ignore schema doesn't support reanme ddl
+		_, ok := b.Schema.SchemaByTableID(job.TableID)
+		if !ok {
+			return "", "", "", errors.NotFoundf("table(%d) or it's schema", job.TableID)
+		}
+
+		// first drop the table
+		_, err := b.Schema.DropTable(job.TableID)
+		if err != nil {
+			return "", "", "", errors.Trace(err)
+		}
+		// create table
+		table := job.BinlogInfo.TableInfo
+		schema, ok := b.Schema.SchemaByID(job.SchemaID)
+		if !ok {
+			return "", "", "", errors.NotFoundf("schema %d", job.SchemaID)
+		}
+
+		err = b.Schema.CreateTable(schema, table)
+		if err != nil {
+			return "", "", "", errors.Trace(err)
+		}
+
+		return schema.Name.O, table.Name.O, sql, nil
+
+	case model.ActionCreateTable:
+		table := job.BinlogInfo.TableInfo
+		if table == nil {
+			return "", "", "", errors.NotFoundf("table %d", job.TableID)
+		}
+
+		schema, ok := b.Schema.SchemaByID(job.SchemaID)
+		if !ok {
+			return "", "", "", errors.NotFoundf("schema %d", job.SchemaID)
+		}
+
+		err := b.Schema.CreateTable(schema, table)
+		if err != nil {
+			return "", "", "", errors.Trace(err)
+		}
+
+		return schema.Name.O, table.Name.O, sql, nil
+
+	case model.ActionDropTable:
+		schema, ok := b.Schema.SchemaByID(job.SchemaID)
+		if !ok {
+			return "", "", "", errors.NotFoundf("schema %d", job.SchemaID)
+		}
+
+		tableName, err := b.Schema.DropTable(job.TableID)
+		if err != nil {
+			return "", "", "", errors.Trace(err)
+		}
+
+		return schema.Name.O, tableName, sql, nil
+
+	case model.ActionTruncateTable:
+		schema, ok := b.Schema.SchemaByID(job.SchemaID)
+		if !ok {
+			return "", "", "", errors.NotFoundf("schema %d", job.SchemaID)
+		}
+
+		_, err := b.Schema.DropTable(job.TableID)
+		if err != nil {
+			return "", "", "", errors.Trace(err)
+		}
+
+		table := job.BinlogInfo.TableInfo
+		if table == nil {
+			return "", "", "", errors.NotFoundf("table %d", job.TableID)
+		}
+
+		err = b.Schema.CreateTable(schema, table)
+		if err != nil {
+			return "", "", "", errors.Trace(err)
+		}
+
+		return schema.Name.O, table.Name.O, sql, nil
+
+	default:
+
+		binlogInfo := job.BinlogInfo
+		if binlogInfo == nil {
+			return "", "", "", errors.NotFoundf("table %d", job.TableID)
+		}
+		tableInfo := binlogInfo.TableInfo
+		if tableInfo == nil {
+			return "", "", "", errors.NotFoundf("table %d", job.TableID)
+		}
+
+		schema, ok := b.Schema.SchemaByID(job.SchemaID)
+		if !ok {
+			return "", "", "", errors.NotFoundf("schema %d", job.SchemaID)
+		}
+
+		err := b.Schema.ReplaceTable(tableInfo)
+		if err != nil {
+			return "", "", "", errors.Trace(err)
+		}
+
+		return schema.Name.O, tableInfo.Name.O, sql, nil
+	}
 }
 
 func toColumnTypeMap(columns []*model.ColumnInfo) map[int64]*types.FieldType {
