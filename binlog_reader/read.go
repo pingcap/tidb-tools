@@ -1,10 +1,9 @@
-package util
+package main
 
 import (
 	"hash/crc32"
 	"io"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/juju/errors"
@@ -14,6 +13,8 @@ import (
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/codec"
 	"github.com/pingcap/tidb/tablecodec"
+	"github.com/pingcap/tidb/kv"
+	"github.com/pingcap/tidb-tools/binlog_reader/util"
 )
 
 var (
@@ -36,25 +37,26 @@ var (
 	PrivateFileMode os.FileMode = 0600
 )
 
-type binlogBuffer struct {
-	cache []byte
+
+
+type BinlogReader struct {
+	FileName string
+	StartTs  uint64
+	Schema   *util.Schema
+	tiStore  kv.Storage
 }
 
-var binlogBufferPool = sync.Pool{
-	New: func() interface{} {
-		// The Pool's New function should generally only return pointer
-		// types, since a pointer can be put into the return interface
-		// value without an allocation:
-		return &binlogBuffer{
-			cache: make([]byte, mib),
-		}
-	},
+// NewBinlogReader returns a BinlogReader
+func NewBinlogReader(filename string) *BinlogReader {
+	return &BinlogReader{
+		FileName: filename,
+	}
 }
 
 // Walk reads binlog from the "from" position and sends binlogs in the streaming way
-func Walk(filename string, tbInfo *model.TableInfo) error {
+func (b *BinlogReader)Walk(filename string, tbInfo *model.TableInfo) error {
 	var ent = &binlog.Entity{}
-	var decoder Decoder
+	var decoder util.Decoder
 
 	f, err := os.OpenFile(filename, os.O_RDONLY, PrivateFileMode)
 	if err != nil {
@@ -66,10 +68,10 @@ func Walk(filename string, tbInfo *model.TableInfo) error {
 		Suffix: 0,
 		Offset: 0,
 	}
-	decoder = NewDecoder(from, io.Reader(f))
+	decoder = util.NewDecoder(from, io.Reader(f))
 
 	for {
-		buf := binlogBufferPool.Get().(*binlogBuffer)
+		buf := util.BinlogBufferPool.Get().(*util.BinlogBuffer)
 		err = decoder.Decode(ent, buf)
 		if err != nil {
 			break
@@ -119,7 +121,7 @@ func Walk(filename string, tbInfo *model.TableInfo) error {
 			}
 		*/
 
-		binlogBufferPool.Put(buf)
+		util.BinlogBufferPool.Put(buf)
 	}
 
 	if err != nil && err != io.EOF {
@@ -127,6 +129,38 @@ func Walk(filename string, tbInfo *model.TableInfo) error {
 	}
 
 	return nil
+}
+
+// GetStartTs get the first start ts in binlog file
+func (b *BinlogReader)GetStartTs(filename string) (int64, error) {
+	var ent = &binlog.Entity{}
+	var decoder util.Decoder
+
+	f, err := os.OpenFile(filename, os.O_RDONLY, PrivateFileMode)
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+	defer f.Close()
+
+	from := binlog.Pos{
+		Suffix: 0,
+		Offset: 0,
+	}
+	decoder = util.NewDecoder(from, io.Reader(f))
+
+	buf := util.BinlogBufferPool.Get().(*util.BinlogBuffer)
+	err = decoder.Decode(ent, buf)
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+
+	binlog := new(binlog.Binlog)
+	err = binlog.Unmarshal(ent.Payload)
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+
+	return binlog.StartTs, nil
 }
 
 func toColumnTypeMap(columns []*model.ColumnInfo) map[int64]*types.FieldType {

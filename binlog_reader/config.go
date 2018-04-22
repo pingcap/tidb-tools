@@ -21,6 +21,10 @@ import (
 	"github.com/juju/errors"
 )
 
+var (
+	defaultEtcdURLs = "http://127.0.0.1:2379"
+)
+
 // NewConfig creates a new config.
 func NewConfig() *Config {
 	cfg := &Config{}
@@ -32,7 +36,7 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.CreateTable, "create-table", "", "create table sql string")
 	fs.StringVar(&cfg.Filename, "filename", "plain", "binlog file name")
 	fs.StringVar(&cfg.Format, "format", "plain", "binlog output format")
-
+	fs.StringVar(&cfg.EtcdURLs, "pd-urls", defaultEtcdURLs, "pd urls")
 
 	return cfg
 }
@@ -48,6 +52,8 @@ type Config struct {
 	Format string `toml:"format" json:"format"`
 
 	Filename string `toml:"filename" json:"filename"`
+
+	EtcdURLs string `toml:"pd-urls" json:"pd-urls"`
 
 	ConfigFile string
 }

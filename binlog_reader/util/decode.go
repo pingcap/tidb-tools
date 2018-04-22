@@ -4,14 +4,38 @@ import (
 	"bufio"
 	"encoding/binary"
 	"hash/crc32"
+	"sync"
 	"io"
 
+	"github.com/juju/errors"
 	"github.com/pingcap/tipb/go-binlog"
 )
 
+var (
+	mib = 1024 * 1024
+	magic uint32 = 471532804
+	ErrCRCMismatch = errors.New("binlogger: crc mismatch")
+	crcTable       = crc32.MakeTable(crc32.Castagnoli)
+)
+
+type BinlogBuffer struct {
+	Cache []byte
+}
+
+var BinlogBufferPool = sync.Pool{
+	New: func() interface{} {
+		// The Pool's New function should generally only return pointer
+		// types, since a pointer can be put into the return interface
+		// value without an allocation:
+		return &BinlogBuffer{
+			Cache: make([]byte, mib),
+		}
+	},
+}
+
 // Decoder is an interface wraps basic Decode method which decode binlog.Entity into binlogBuffer.
 type Decoder interface {
-	Decode(ent *binlog.Entity, buf *binlogBuffer) error
+	Decode(ent *binlog.Entity, buf *BinlogBuffer) error
 }
 
 type decoder struct {
@@ -30,7 +54,7 @@ func NewDecoder(pos binlog.Pos, r io.Reader) Decoder {
 }
 
 // Decode implements the Decoder interface.
-func (d *decoder) Decode(ent *binlog.Entity, buf *binlogBuffer) error {
+func (d *decoder) Decode(ent *binlog.Entity, buf *BinlogBuffer) error {
 	if d.br == nil {
 		return io.EOF
 	}
@@ -56,10 +80,10 @@ func (d *decoder) Decode(ent *binlog.Entity, buf *binlogBuffer) error {
 		return err
 	}
 
-	if len(buf.cache) < int(size+4) {
-		buf.cache = make([]byte, size+4)
+	if len(buf.Cache) < int(size+4) {
+		buf.Cache = make([]byte, size+4)
 	}
-	data := buf.cache[0 : size+4]
+	data := buf.Cache[0 : size+4]
 
 	// read payload+crc
 	if _, err = io.ReadFull(d.br, data); err != nil {

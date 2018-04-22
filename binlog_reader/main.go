@@ -49,7 +49,9 @@ func main() {
 		log.Errorf("get table info failed %v", err)
 		return
 	}
-	err = util.Walk(cfg.Filename, tableInfo)
+
+	reader := NewBinlogReader(cfg.Filename)
+	err = reader.Walk(cfg.Filename, tableInfo)
 	if err != nil {
 		log.Errorf("read binlog file failed %v", err)
 		return
