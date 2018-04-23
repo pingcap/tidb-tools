@@ -47,11 +47,15 @@ func NewBinlogReader(filename string, etcdURLS string) (*BinlogReader, error) {
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+	log.Infof("binlog %s's start ts: %d", filename, startTs)
 
-	jobs, err := util.LoadHistoryDDLJobs(etcdURLS, startTs)
+	// TODO: use startTs load history ddl jobs when handle ddl is ok
+	// jobs, err := util.LoadHistoryDDLJobs(etcdURLS, startTs)
+	jobs, err := util.LoadHistoryDDLJobs(etcdURLS, 0)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+	log.Infof("get %d history jobs", len(jobs))
 
 	b.Schema, err = util.NewSchema(jobs, true)
 	if err != nil {
@@ -79,6 +83,7 @@ func (b *BinlogReader) Walk() error {
 	decoder = util.NewDecoder(from, io.Reader(f))
 
 	for {
+		log.Info("read binlog file")
 		buf := util.BinlogBufferPool.Get().(*util.BinlogBuffer)
 		err = decoder.Decode(ent, buf)
 		if err != nil {
@@ -91,18 +96,24 @@ func (b *BinlogReader) Walk() error {
 			return errors.Trace(err)
 		}
 		jobID := binlog.GetDdlJobId()
-		if jobID == 0 {
-			preWriteValue := binlog.GetPrewriteValue()
+		startTs := binlog.GetStartTs()
+		commitTs := binlog.GetCommitTs()
+		tp := binlog.GetTp()
+		preWriteValue := binlog.GetPrewriteValue()
+		log.Infof("start ts: %d, commit ts: %d, tp: %v, preWriteValue: %s, ddl job id: %d", startTs, commitTs, tp, preWriteValue , jobID)
+		//if jobID == 0 {
+			preWriteValue = binlog.GetPrewriteValue()
 			preWrite := &pb.PrewriteValue{}
 			err = preWrite.Unmarshal(preWriteValue)
 			if err != nil {
 				return errors.Errorf("prewrite %s unmarshal error %v", preWriteValue, err)
 			}
+			log.Infof("commit ts: %d, had %d mutation", binlog.GetCommitTs(), len(preWrite.GetMutations()))
 			err = b.translateSqls(preWrite.GetMutations(), binlog.GetCommitTs())
-		} else if jobID > 0 {
+		//} else if jobID > 0 {
 			// TODO: handle ddl
 			log.Infof("sql: %s", string(binlog.GetDdlQuery()))
-		}
+		//}
 
 		util.BinlogBufferPool.Put(buf)
 	}
@@ -168,6 +179,7 @@ func (b *BinlogReader) translateSqls(mutations []pb.TableMutation, commitTS int6
 		}
 		schemaName, tableName, ok := b.Schema.SchemaAndTableName(mutation.GetTableId())
 		if !ok {
+			log.Infof("can't find schema name and table name of table id %d", schemaName, tableName)
 			continue
 		}
 
