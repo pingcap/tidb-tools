@@ -17,12 +17,10 @@ import (
 	"github.com/pingcap/tidb/util/codec"
 )
 
-//const implicitColID = -1
-
-func GenInsertSQLs(schema string, table *model.TableInfo, rows [][]byte) ([]string, [][]interface{}, error) {
+func GenInsertSQLs(schema string, table *model.TableInfo, rows [][]byte) ([]string, [][]string, error) {
 	columns := table.Columns
 	sqls := make([]string, 0, len(rows))
-	values := make([][]interface{}, 0, len(rows))
+	values := make([][]string, 0, len(rows))
 
 	colsTypeMap := toColumnTypeMap(columns)
 	columnList := genColumnList(columns)
@@ -45,24 +43,24 @@ func GenInsertSQLs(schema string, table *model.TableInfo, rows [][]byte) ([]stri
 			columnValues = make(map[int64]types.Datum)
 		}
 
-		var vals []interface{}
+		var vals []string
 		for _, col := range columns {
 			if isPKHandleColumn(table, col) {
 				columnValues[col.ID] = pk
-				vals = append(vals, pk.GetValue())
+				vals = append(vals, fmt.Sprintf("%s", pk.GetValue()))
 				continue
 			}
 
 			val, ok := columnValues[col.ID]
 			if !ok {
-				vals = append(vals, col.DefaultValue)
+				vals = append(vals, fmt.Sprintf("%s", col.DefaultValue))
 			} else {
 				value, err := formatData(val, col.FieldType)
 				if err != nil {
 					return nil, nil, errors.Trace(err)
 				}
 
-				vals = append(vals, value.GetValue())
+				vals = append(vals, value)
 			}
 		}
 
@@ -78,16 +76,16 @@ func GenInsertSQLs(schema string, table *model.TableInfo, rows [][]byte) ([]stri
 	return sqls, values, nil
 }
 
-func GenUpdateSQLs(schema string, table *model.TableInfo, rows [][]byte) ([]string, [][]interface{}, error) {
+func GenUpdateSQLs(schema string, table *model.TableInfo, rows [][]byte) ([]string, [][]string, error) {
 	columns := table.Columns
 	sqls := make([]string, 0, len(rows))
-	values := make([][]interface{}, 0, len(rows))
+	values := make([][]string, 0, len(rows))
 	colsTypeMap := toColumnTypeMap(columns)
 
 	for _, row := range rows {
 		var updateColumns []*model.ColumnInfo
-		var oldValues []interface{}
-		var newValues []interface{}
+		var oldValues []string
+		var newValues []string
 
 		oldColumnValues, newColumnValues, err := decodeOldAndNewRow(row, colsTypeMap, time.Local)
 		if err != nil {
@@ -109,7 +107,7 @@ func GenUpdateSQLs(schema string, table *model.TableInfo, rows [][]byte) ([]stri
 			return nil, nil, errors.Trace(err)
 		}
 
-		var value []interface{}
+		var value []string
 		kvs := genKVs(updateColumns)
 		value = append(value, newValues...)
 
@@ -127,10 +125,10 @@ func GenUpdateSQLs(schema string, table *model.TableInfo, rows [][]byte) ([]stri
 	return sqls, values, nil
 }
 
-func GenDeleteSQLs(schema string, table *model.TableInfo, rows [][]byte) ([]string, [][]interface{}, error) {
+func GenDeleteSQLs(schema string, table *model.TableInfo, rows [][]byte) ([]string, [][]string, error) {
 	columns := table.Columns
 	sqls := make([]string, 0, len(rows))
-	values := make([][]interface{}, 0, len(rows))
+	values := make([][]string, 0, len(rows))
 	colsTypeMap := toColumnTypeMap(columns)
 
 	for _, row := range rows {
@@ -153,7 +151,7 @@ func GenDeleteSQLs(schema string, table *model.TableInfo, rows [][]byte) ([]stri
 	return sqls, values, nil
 }
 
-func genDeleteSQL(schema string, table *model.TableInfo, columnValues map[int64]types.Datum) (string, []interface{}, error) {
+func genDeleteSQL(schema string, table *model.TableInfo, columnValues map[int64]types.Datum) (string, []string, error) {
 	columns := table.Columns
 
 	whereColumns, value, err := generateColumnAndValue(columns, columnValues)
@@ -186,7 +184,7 @@ func GenDDLSQL(sql string, schema string) (string, error) {
 	return fmt.Sprintf("use `%s`; %s;", schema, sql), nil
 }
 
-func genWhere(table *model.TableInfo, columns []*model.ColumnInfo, data []interface{}) (string, []interface{}, error) {
+func genWhere(table *model.TableInfo, columns []*model.ColumnInfo, data []string) (string, []string, error) {
 	var kvs bytes.Buffer
 	// if has primary key, use it to construct where condition
 	pcs, err := pkIndexColumns(table)
@@ -200,7 +198,7 @@ func genWhere(table *model.TableInfo, columns []*model.ColumnInfo, data []interf
 		pcsMap[col.ID] = col
 	}
 
-	var conditionValues []interface{}
+	var conditionValues []string
 	first := true
 	for i, col := range columns {
 		_, ok := pcsMap[col.ID]
@@ -210,10 +208,10 @@ func genWhere(table *model.TableInfo, columns []*model.ColumnInfo, data []interf
 		}
 
 		valueClause := "= ?"
-		if data[i] == nil {
+		if data[i] == "" {
 			valueClause = "is NULL"
 		} else {
-			conditionValues = append(conditionValues, data[i])
+			conditionValues = append(conditionValues, fmt.Sprintf("%s", data[i]))
 		}
 
 		if first {
@@ -300,9 +298,9 @@ func isPKHandleColumn(table *model.TableInfo, column *model.ColumnInfo) bool {
 	return (mysql.HasPriKeyFlag(column.Flag) && table.PKIsHandle) || column.ID == implicitColID
 }
 
-func generateColumnAndValue(columns []*model.ColumnInfo, columnValues map[int64]types.Datum) ([]*model.ColumnInfo, []interface{}, error) {
+func generateColumnAndValue(columns []*model.ColumnInfo, columnValues map[int64]types.Datum) ([]*model.ColumnInfo, []string, error) {
 	var newColumn []*model.ColumnInfo
-	var newColumnsValues []interface{}
+	var newColumnsValues []string
 
 	for _, col := range columns {
 		val, ok := columnValues[col.ID]
@@ -313,37 +311,16 @@ func generateColumnAndValue(columns []*model.ColumnInfo, columnValues map[int64]
 				return nil, nil, errors.Trace(err)
 			}
 
-			newColumnsValues = append(newColumnsValues, value.GetValue())
+			newColumnsValues = append(newColumnsValues, value)
 		}
 	}
 
 	return newColumn, newColumnsValues, nil
 }
 
-func generateDispatchKey(table *model.TableInfo, columnValues map[int64]types.Datum) ([]string, error) {
-	var columnsValues []string
-	columns, err := pkIndexColumns(table)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	for _, col := range columns {
-		val, ok := columnValues[col.ID]
-		if ok {
-			value, err := formatData(val, col.FieldType)
-			if err != nil {
-				return nil, errors.Trace(err)
-			}
-			columnsValues = append(columnsValues, fmt.Sprintf("%s", value.GetValue()))
-		} else {
-			columnsValues = append(columnsValues, fmt.Sprintf("%s", col.DefaultValue))
-		}
-	}
-	return columnsValues, nil
-}
-
-func formatData(data types.Datum, ft types.FieldType) (types.Datum, error) {
+func formatData(data types.Datum, ft types.FieldType) (string, error) {
 	if data.GetValue() == nil {
-		return data, nil
+		return "", nil
 	}
 
 	switch ft.Tp {
@@ -357,7 +334,7 @@ func formatData(data types.Datum, ft types.FieldType) (types.Datum, error) {
 		data = types.NewDatum(data.GetMysqlBit())
 	}
 
-	return data, nil
+	return fmt.Sprintf("%s", data.GetValue()), nil
 }
 
 func toColumnTypeMap(columns []*model.ColumnInfo) map[int64]*types.FieldType {

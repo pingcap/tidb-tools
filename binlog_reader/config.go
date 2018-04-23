@@ -28,12 +28,11 @@ var (
 // NewConfig creates a new config.
 func NewConfig() *Config {
 	cfg := &Config{}
-	cfg.FlagSet = flag.NewFlagSet("sync-check", flag.ContinueOnError)
+	cfg.FlagSet = flag.NewFlagSet("binlog-reader", flag.ContinueOnError)
 	fs := cfg.FlagSet
 
 	fs.StringVar(&cfg.ConfigFile, "config", "", "Config file")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
-	fs.StringVar(&cfg.CreateTable, "create-table", "", "create table sql string")
 	fs.StringVar(&cfg.Filename, "filename", "plain", "binlog file name")
 	fs.StringVar(&cfg.Format, "format", "plain", "binlog output format")
 	fs.StringVar(&cfg.EtcdURLs, "pd-urls", defaultEtcdURLs, "pd urls")
@@ -46,8 +45,6 @@ type Config struct {
 	*flag.FlagSet `json:"-"`
 
 	LogLevel string `toml:"log-level" json:"log-level"`
-
-	CreateTable string `toml:"create-table" json:"create-table"`
 
 	Format string `toml:"format" json:"format"`
 

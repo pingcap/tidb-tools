@@ -14,21 +14,6 @@ import (
 )
 
 var (
-	mib = 1024 * 1024
-
-	// SegmentSizeBytes is the max threshold of binlog segment file size
-	// as an exported variable, you can define a different size
-	SegmentSizeBytes int64 = 512 * 1024 * 1024
-
-	magic uint32 = 471532804
-
-	// ErrFileContentCorruption represents file or directory's content is curruption for some season
-	ErrFileContentCorruption = errors.New("binlogger: content is corruption")
-
-	// ErrCRCMismatch is the error represents crc don't match
-	ErrCRCMismatch = errors.New("binlogger: crc mismatch")
-	crcTable       = crc32.MakeTable(crc32.Castagnoli)
-
 	// PrivateFileMode is the permission for service file
 	PrivateFileMode os.FileMode = 0600
 )
@@ -57,7 +42,7 @@ func NewBinlogReader(filename string, etcdURLS string) (*BinlogReader, error) {
 	}
 	log.Infof("get %d history jobs", len(jobs))
 
-	b.Schema, err = util.NewSchema(jobs, true)
+	b.Schema, err = util.NewSchema(jobs, false)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -83,7 +68,6 @@ func (b *BinlogReader) Walk() error {
 	decoder = util.NewDecoder(from, io.Reader(f))
 
 	for {
-		log.Info("read binlog file")
 		buf := util.BinlogBufferPool.Get().(*util.BinlogBuffer)
 		err = decoder.Decode(ent, buf)
 		if err != nil {
@@ -95,25 +79,24 @@ func (b *BinlogReader) Walk() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		jobID := binlog.GetDdlJobId()
+
 		startTs := binlog.GetStartTs()
 		commitTs := binlog.GetCommitTs()
 		tp := binlog.GetTp()
 		preWriteValue := binlog.GetPrewriteValue()
-		log.Infof("start ts: %d, commit ts: %d, tp: %v, preWriteValue: %s, ddl job id: %d", startTs, commitTs, tp, preWriteValue , jobID)
-		//if jobID == 0 {
-			preWriteValue = binlog.GetPrewriteValue()
-			preWrite := &pb.PrewriteValue{}
-			err = preWrite.Unmarshal(preWriteValue)
-			if err != nil {
-				return errors.Errorf("prewrite %s unmarshal error %v", preWriteValue, err)
-			}
-			log.Infof("commit ts: %d, had %d mutation", binlog.GetCommitTs(), len(preWrite.GetMutations()))
-			err = b.translateSqls(preWrite.GetMutations(), binlog.GetCommitTs())
-		//} else if jobID > 0 {
-			// TODO: handle ddl
-			log.Infof("sql: %s", string(binlog.GetDdlQuery()))
-		//}
+		log.Infof("start ts: %d, commit ts: %d, tp: %v", startTs, commitTs, tp)
+
+		preWriteValue = binlog.GetPrewriteValue()
+		preWrite := &pb.PrewriteValue{}
+		err = preWrite.Unmarshal(preWriteValue)
+		if err != nil {
+			return errors.Errorf("prewrite %s unmarshal error %v", preWriteValue, err)
+		}
+		err = b.translateSqls(preWrite.GetMutations())
+
+		if binlog.GetDdlQuery() != nil {
+			log.Infof("ddl sql: %s", string(binlog.GetDdlQuery()))
+		}
 
 		util.BinlogBufferPool.Put(buf)
 	}
@@ -157,14 +140,14 @@ func (b *BinlogReader) GetStartTs() (int64, error) {
 	return binlog.StartTs, nil
 }
 
-func (b *BinlogReader) translateSqls(mutations []pb.TableMutation, commitTS int64) error {
+func (b *BinlogReader) translateSqls(mutations []pb.TableMutation) error {
 	for _, mutation := range mutations {
 		var (
 			err  error
 			sqls = make(map[pb.MutationType][]string)
 
 			// the restored sqls's args, ditto
-			args = make(map[pb.MutationType][][]interface{})
+			args = make(map[pb.MutationType][][]string)
 
 			// the offset of specified type sql
 			offsets = make(map[pb.MutationType]int)
@@ -212,7 +195,7 @@ func (b *BinlogReader) translateSqls(mutations []pb.TableMutation, commitTS int6
 				return errors.Errorf("gen sqls failed: sequence %v execution %s sqls %v", sequences, dmlType, sqls[dmlType])
 			}
 
-			log.Infof("commitTS: %d, sql: %s, args: %v", commitTS, sqls[dmlType][offsets[dmlType]], args[dmlType][offsets[dmlType]])
+			log.Infof("dml sql: %s, args: %s", sqls[dmlType][offsets[dmlType]], args[dmlType][offsets[dmlType]])
 			offsets[dmlType] = offsets[dmlType] + 1
 		}
 	}
