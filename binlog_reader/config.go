@@ -34,7 +34,7 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.ConfigFile, "config", "", "Config file")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.Filename, "filename", "plain", "binlog file name")
-	fs.StringVar(&cfg.Format, "format", "plain", "binlog output format")
+	fs.StringVar(&cfg.Format, "format", "plain", "binlog output format, now just support plain, maybe support json later")
 	fs.StringVar(&cfg.EtcdURLs, "pd-urls", defaultEtcdURLs, "pd urls")
 
 	return cfg
