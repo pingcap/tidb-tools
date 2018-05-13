@@ -17,7 +17,6 @@ import (
 	"database/sql"
 	"flag"
 	"os"
-	//"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
@@ -64,22 +63,6 @@ func main() {
 }
 
 func checkSyncState(sourceDB, targetDB *sql.DB, cfg *Config) bool {
-	/*
-		beginTime := ""
-		endTime := ""
-
-		if cfg.Delay != 0 {
-			endTime = time.Now().Add(time.Duration(-cfg.Delay) * time.Second).Format(dateTimeFormat)
-		} else {
-			if cfg.EndTime != "" {
-				endTime = cfg.EndTime
-			}
-			if cfg.BeginTime != "" {
-				beginTime = cfg.BeginTime
-			}
-		}
-	*/
-
 	d := NewDiff(sourceDB, targetDB, cfg.SourceDBCfg.Name, cfg.ChunkSize, cfg.Sample, cfg.CheckThCount, cfg.UseRowID, cfg.Tables)
 	ok, err := d.Equal()
 	if err != nil {
