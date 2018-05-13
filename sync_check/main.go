@@ -17,7 +17,7 @@ import (
 	"database/sql"
 	"flag"
 	"os"
-	"time"
+	//"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
@@ -64,6 +64,7 @@ func main() {
 }
 
 func checkSyncState(sourceDB, targetDB *sql.DB, cfg *Config) bool {
+	/*
 	beginTime := ""
 	endTime := ""
 
@@ -77,9 +78,9 @@ func checkSyncState(sourceDB, targetDB *sql.DB, cfg *Config) bool {
 			beginTime = cfg.BeginTime
 		}
 	}
+	*/
 
-	d := util.NewDiff(sourceDB, targetDB, cfg.SourceDBCfg.Name, cfg.TimeField, beginTime, endTime,
-		cfg.SplitField, cfg.ChunkSize, cfg.Sample, cfg.CheckThCount, cfg.Tables, cfg.UseRowID)
+	d := NewDiff(sourceDB, targetDB, cfg.SourceDBCfg.Name, cfg.ChunkSize, cfg.Sample, cfg.CheckThCount, cfg.UseRowID, cfg.Tables)
 	ok, err := d.Equal()
 	if err != nil {
 		log.Fatal(err)

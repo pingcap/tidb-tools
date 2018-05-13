@@ -77,8 +77,8 @@ func GetSchemaTables(db *sql.DB, schemaName string, tableNames []string) (tables
 }
 
 // GetCount get count rows of the table for specific field.
-func GetCount(db *sql.DB, dbname string, table string, timeRange string) (int64, error) {
-	query := fmt.Sprintf("SELECT count(1) cnt from `%s`.`%s` where %s", dbname, table, timeRange)
+func GetCount(db *sql.DB, dbname string, table string, where string) (int64, error) {
+	query := fmt.Sprintf("SELECT count(1) cnt from `%s`.`%s` where %s", dbname, table, where)
 	rows, err := db.Query(query)
 	if err != nil {
 		return 0, errors.Trace(err)

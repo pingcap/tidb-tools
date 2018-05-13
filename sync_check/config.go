@@ -28,24 +28,10 @@ const (
 	percent100 = 100
 )
 
-// NewConfig creates a new config.
-func NewConfig() *Config {
-	cfg := &Config{}
-	cfg.FlagSet = flag.NewFlagSet("sync-check", flag.ContinueOnError)
-	fs := cfg.FlagSet
-
-	fs.StringVar(&cfg.ConfigFile, "config", "", "Config file")
-	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
-	fs.IntVar(&cfg.Delay, "delay", 0, "check data 5 second before")
-	fs.IntVar(&cfg.ChunkSize, "chunk-size", 1000, "diff check chunk size")
-	fs.IntVar(&cfg.Sample, "sample", 100, "the percent of sampling check")
-	fs.IntVar(&cfg.CheckThCount, "check-thcount", 1, "the count of check thread count")
-	fs.StringVar(&cfg.TimeField, "time-field", "", "a field with datetime type")
-	fs.StringVar(&cfg.BeginTime, "begin-time", "", "check data's begin time")
-	fs.StringVar(&cfg.EndTime, "end-time", "", "check data's end time")
-	fs.StringVar(&cfg.SplitField, "split-field", "", "use this field split data to several chunk")
-	fs.BoolVar(&cfg.UseRowID, "use-rowid", false, "set true if target-db and source-db all support tidb implicit column _tidb_rowid")
-	return cfg
+type TableCheckCfg struct {
+	Name  string `toml:"name"`
+	Field string `toml:"field"`
+	Range string `toml:"range"`
 }
 
 // Config is the configuration.
@@ -54,21 +40,9 @@ type Config struct {
 
 	LogLevel string `toml:"log-level" json:"log-level"`
 
-	TimeField string `toml:"time-field" json:"time-field"`
-
-	BeginTime string `toml:"begin-time" json:"begin-time"`
-
-	EndTime string `toml:"end-time" json:"end-time"`
-
-	SplitField string `toml:"split-field" json:"split-field"`
-
 	SourceDBCfg util.DBConfig `toml:"source-db" json:"source-db"`
 
 	TargetDBCfg util.DBConfig `toml:"target-db" json:"target-db"`
-
-	ConfigFile string
-
-	Delay int `toml:"delay" json:"delay"`
 
 	ChunkSize int `toml:"chunk-size" json:"chunk-size"`
 
@@ -76,9 +50,31 @@ type Config struct {
 
 	CheckThCount int `toml:"check-thcount" json:"check-thcount"`
 
-	Tables []string `toml:"tables" json:"tables"`
-
 	UseRowID bool `toml:"use-rowid" json:"use-rowid"`
+
+	FixData bool `toml:"fix-data" json"fix-data"`
+
+	Tables []*TableCheckCfg `toml:"table-check" json:"table-check"`
+
+	ConfigFile string
+}
+
+
+// NewConfig creates a new config.
+func NewConfig() *Config {
+	cfg := &Config{}
+	cfg.FlagSet = flag.NewFlagSet("sync-check", flag.ContinueOnError)
+	fs := cfg.FlagSet
+
+	fs.StringVar(&cfg.ConfigFile, "config", "", "Config file")
+	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
+	fs.IntVar(&cfg.ChunkSize, "chunk-size", 1000, "diff check chunk size")
+	fs.IntVar(&cfg.Sample, "sample", 100, "the percent of sampling check")
+	fs.IntVar(&cfg.CheckThCount, "check-thcount", 1, "the count of check thread count")
+	fs.BoolVar(&cfg.UseRowID, "use-rowid", false, "set true if target-db and source-db all support tidb implicit column _tidb_rowid")
+	fs.BoolVar(&cfg.FixData, "fix-data", false, "fix different data in target-db if fix_data is true")
+	
+	return cfg
 }
 
 // Parse parses flag definitions from the argument list.

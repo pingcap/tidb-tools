@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package util
+package main
 
 import (
 	"bytes"
@@ -21,40 +21,33 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	"github.com/pingcap/tidb-tools/sync_check/util"
 )
 
 // Diff contains two sql DB, used for comparing.
 type Diff struct {
 	db1          *sql.DB
 	db2          *sql.DB
-	timeField    string
-	beginTime    string
-	endTime      string
-	splitField   string
 	dbName       string
-	tables       []string
 	chunkSize    int
 	sample       int
 	checkThCount int
 	useRowID     bool
+	tables       []*TableCheckCfg
 }
 
 // NewDiff returns a Diff instance.
-func NewDiff(db1, db2 *sql.DB, dbName, timeField, beginTime, endTime, splitField string,
-	chunkSize, sample, checkThCount int, tables []string, useRowID bool) *Diff {
-	return &Diff{
+func NewDiff(db1, db2 *sql.DB, dbName string, chunkSize, sample, checkThCount int, 
+	useRowID bool, tables []*TableCheckCfg) *Diff {
+	return &Diff {
 		db1:          db1,
 		db2:          db2,
-		timeField:    timeField,
-		beginTime:    beginTime,
-		endTime:      endTime,
-		splitField:   splitField,
 		dbName:       dbName,
-		tables:       tables,
 		chunkSize:    chunkSize,
 		sample:       sample,
 		checkThCount: checkThCount,
 		useRowID:     useRowID,
+		tables:       tables,
 	}
 }
 
@@ -72,32 +65,33 @@ func (df *Diff) Equal() (equal bool, err error) {
 		err = errors.Trace(err)
 		return
 	}
-
+	
 	eq := equalStrings(tbls1, tbls2)
-	if !eq {
+	// len(df.tables) == 0 means check all tables
+	if !eq && len(df.tables) == 0 {
 		log.Infof("show tables get different table. [source db tables] %v [target db tables] %v", tbls1, tbls2)
 		equal = false
 	}
 
-	checkTables := make([]string, 0, len(tbls1))
 	if len(df.tables) == 0 {
-		checkTables = tbls1
-	} else {
-		checkTables = df.tables
+		df.tables = make([]*TableCheckCfg, 0, len(tbls1))
+		for _, name := range tbls1 {
+			df.tables = append(df.tables, &TableCheckCfg{Name: name,})
+		}
 	}
 
-	for _, tblName := range checkTables {
-		eq, err = df.EqualIndex(tblName)
+	for _, table := range df.tables {
+		eq, err = df.EqualIndex(table.Name)
 		if err != nil {
 			err = errors.Trace(err)
 			return
 		}
 		if !eq {
-			log.Infof("table have different index: %s\n", tblName)
+			log.Infof("table have different index: %s\n", table.Name)
 			equal = false
 		}
 
-		eq, err = df.EqualTable(tblName)
+		eq, err = df.EqualTable(table)
 		if err != nil || !eq {
 			err = errors.Trace(err)
 			equal = false
@@ -109,22 +103,22 @@ func (df *Diff) Equal() (equal bool, err error) {
 }
 
 // EqualTable tests whether two database table have same data and schema.
-func (df *Diff) EqualTable(tblName string) (bool, error) {
-	eq, err := df.equalCreateTable(tblName)
+func (df *Diff) EqualTable(table *TableCheckCfg) (bool, error) {
+	eq, err := df.equalCreateTable(table.Name)
 	if err != nil {
 		return eq, errors.Trace(err)
 	}
 	if !eq {
-		log.Infof("table have different schema: %s\n", tblName)
+		log.Infof("table have different schema: %s\n", table.Name)
 		return eq, err
 	}
 
-	eq, err = df.equalTableData(tblName)
+	eq, err = df.equalTableData(table)
 	if err != nil {
 		return eq, errors.Trace(err)
 	}
 	if !eq {
-		log.Infof("table data different: %s\n", tblName)
+		log.Infof("table data different: %s\n", table.Name)
 	}
 	return eq, err
 }
@@ -168,9 +162,8 @@ func (df *Diff) equalCreateTable(tblName string) (bool, error) {
 	return true, nil
 }
 
-func (df *Diff) equalTableData(tblName string) (bool, error) {
-	dumpJobs, err := generateDumpJob(df.db1, df.dbName, tblName, df.timeField, df.beginTime,
-		df.endTime, df.splitField, df.chunkSize, df.sample, df.useRowID)
+func (df *Diff) equalTableData(table *TableCheckCfg) (bool, error) {
+	dumpJobs, err := util.GenerateDumpJob(df.db1, df.dbName, table.Name, table.Field, table.Range, df.chunkSize, df.sample, df.useRowID)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
@@ -186,12 +179,12 @@ func (df *Diff) equalTableData(tblName string) (bool, error) {
 	defer close(checkResultCh)
 
 	for i := 0; i < df.checkThCount; i++ {
-		checkJobs := make([]*dumpJob, 0, checkNums)
+		checkJobs := make([]*util.DumpJob, 0, checkNums)
 		for j := checkNums * i / df.checkThCount; j < checkNums*(i+1)/df.checkThCount; j++ {
 			checkJobs = append(checkJobs, dumpJobs[j])
 		}
 		go func() {
-			eq, err := df.checkChunkDataEqual(checkJobs, tblName)
+			eq, err := df.checkChunkDataEqual(checkJobs, table.Name)
 			if err != nil {
 				log.Errorf("check chunk data equal failed, error %v", err)
 			}
@@ -214,21 +207,21 @@ func (df *Diff) equalTableData(tblName string) (bool, error) {
 	}
 }
 
-func (df *Diff) checkChunkDataEqual(dumpJobs []*dumpJob, tblName string) (bool, error) {
+func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, tblName string) (bool, error) {
 	if len(dumpJobs) == 0 {
 		return true, nil
 	}
 
 	for _, job := range dumpJobs {
-		log.Infof("table: %s, where: %s", job.table, job.where)
+		log.Infof("table: %s, where: %s", job.Table, job.Where)
 
-		rows1, err := getChunkRows(df.db1, df.dbName, tblName, job.where)
+		rows1, err := getChunkRows(df.db1, df.dbName, tblName, job.Where)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
 		defer rows1.Close()
 
-		rows2, err := getChunkRows(df.db2, df.dbName, tblName, job.where)
+		rows2, err := getChunkRows(df.db2, df.dbName, tblName, job.Where)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
