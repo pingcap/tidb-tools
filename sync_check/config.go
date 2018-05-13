@@ -59,7 +59,6 @@ type Config struct {
 	ConfigFile string
 }
 
-
 // NewConfig creates a new config.
 func NewConfig() *Config {
 	cfg := &Config{}
@@ -73,7 +72,7 @@ func NewConfig() *Config {
 	fs.IntVar(&cfg.CheckThCount, "check-thcount", 1, "the count of check thread count")
 	fs.BoolVar(&cfg.UseRowID, "use-rowid", false, "set true if target-db and source-db all support tidb implicit column _tidb_rowid")
 	fs.BoolVar(&cfg.FixData, "fix-data", false, "fix different data in target-db if fix_data is true")
-	
+
 	return cfg
 }
 

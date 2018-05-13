@@ -14,11 +14,11 @@
 package main
 
 import (
-	"strings"
 	"bytes"
 	"database/sql"
 	"fmt"
 	"math/rand"
+	"strings"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
@@ -38,9 +38,9 @@ type Diff struct {
 }
 
 // NewDiff returns a Diff instance.
-func NewDiff(db1, db2 *sql.DB, dbName string, chunkSize, sample, checkThCount int, 
+func NewDiff(db1, db2 *sql.DB, dbName string, chunkSize, sample, checkThCount int,
 	useRowID bool, tables []*TableCheckCfg) *Diff {
-	return &Diff {
+	return &Diff{
 		db1:          db1,
 		db2:          db2,
 		dbName:       dbName,
@@ -66,7 +66,7 @@ func (df *Diff) Equal() (equal bool, err error) {
 		err = errors.Trace(err)
 		return
 	}
-	
+
 	eq := equalStrings(tbls1, tbls2)
 	// len(df.tables) == 0 means check all tables
 	if !eq && len(df.tables) == 0 {
@@ -77,7 +77,7 @@ func (df *Diff) Equal() (equal bool, err error) {
 	if len(df.tables) == 0 {
 		df.tables = make([]*TableCheckCfg, 0, len(tbls1))
 		for _, name := range tbls1 {
-			df.tables = append(df.tables, &TableCheckCfg{Name: name,})
+			df.tables = append(df.tables, &TableCheckCfg{Name: name})
 		}
 	}
 
@@ -185,7 +185,6 @@ func (df *Diff) equalTableData(table *TableCheckCfg) (bool, error) {
 			checkJobs = append(checkJobs, dumpJobs[j])
 		}
 		go func() {
-			//eq, err := df.checkChunkDataEqual(checkJobs, table.Name, uniqueKeys)
 			eq, err := df.checkChunkDataEqual(checkJobs, table.Name)
 			if err != nil {
 				log.Errorf("check chunk data equal failed, error %v", err)
@@ -195,18 +194,22 @@ func (df *Diff) equalTableData(table *TableCheckCfg) (bool, error) {
 	}
 
 	num := 0
+	equal := true
+
+CheckResult:
 	for {
 		select {
 		case eq := <-checkResultCh:
 			num++
 			if !eq {
-				return false, nil
+				equal = false
 			}
 			if num == df.checkThCount {
-				return true, nil
+				break CheckResult
 			}
 		}
 	}
+	return equal, nil
 }
 
 func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, tblName string) (bool, error) {
@@ -292,7 +295,7 @@ func compareRows(rows1, rows2 *sql.Rows, pks []string) (bool, error) {
 		case 1:
 			log.Infof("delete %v", rowsData2[index2])
 			index2++
-			// delete 
+			// delete
 		case -1:
 			log.Infof("insert %v", rowsData1[index1])
 			index1++
@@ -309,19 +312,19 @@ func compareRows(rows1, rows2 *sql.Rows, pks []string) (bool, error) {
 
 func compareData(map1 map[string][]byte, map2 map[string][]byte, pks []string) (bool, int32, error) {
 	var (
-		equal = true
-		data1, data2 []byte
+		equal               = true
+		data1, data2        []byte
 		key, pkStr1, pkStr2 string
-		ok bool
+		ok                  bool
 	)
-	
+
 	for key, data1 = range map1 {
 		if data2, ok = map2[key]; !ok {
 			return false, 0, errors.Errorf("don't have key %s", key)
 		}
 		if string(data1) == string(data2) {
 			continue
-		} 
+		}
 		equal = false
 		break
 	}
@@ -340,7 +343,7 @@ func compareData(map1 map[string][]byte, map2 map[string][]byte, pks []string) (
 		pkStr2 += string(data2)
 	}
 	if pkStr1 > pkStr2 {
-		return false, 1, nil 
+		return false, 1, nil
 	} else if pkStr1 < pkStr2 {
 		return false, -1, nil
 	} else {
