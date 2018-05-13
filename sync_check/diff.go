@@ -14,6 +14,7 @@
 package main
 
 import (
+	"strings"
 	"bytes"
 	"database/sql"
 	"fmt"
@@ -136,7 +137,7 @@ func (df *Diff) EqualIndex(tblName string) (bool, error) {
 	}
 	defer index2.Close()
 
-	eq, err := equalRows(index1, index2, &showIndex{}, &showIndex{})
+	eq, err := equalRows(index1, index2, &showIndex{}, &showIndex{}, nil)
 	if err != nil || !eq {
 		return eq, errors.Trace(err)
 	}
@@ -184,6 +185,7 @@ func (df *Diff) equalTableData(table *TableCheckCfg) (bool, error) {
 			checkJobs = append(checkJobs, dumpJobs[j])
 		}
 		go func() {
+			//eq, err := df.checkChunkDataEqual(checkJobs, table.Name, uniqueKeys)
 			eq, err := df.checkChunkDataEqual(checkJobs, table.Name)
 			if err != nil {
 				log.Errorf("check chunk data equal failed, error %v", err)
@@ -215,13 +217,13 @@ func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, tblName string) (b
 	for _, job := range dumpJobs {
 		log.Infof("table: %s, where: %s", job.Table, job.Where)
 
-		rows1, err := getChunkRows(df.db1, df.dbName, tblName, job.Where)
+		rows1, pks, err := getChunkRows(df.db1, df.dbName, tblName, job.Where)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
 		defer rows1.Close()
 
-		rows2, err := getChunkRows(df.db2, df.dbName, tblName, job.Where)
+		rows2, _, err := getChunkRows(df.db2, df.dbName, tblName, job.Where)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -239,9 +241,7 @@ func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, tblName string) (b
 			return false, errors.Trace(err)
 		}
 
-		row1 := make(rawBytesRow, len(cols1))
-		row2 := make(rawBytesRow, len(cols2))
-		eq, err := equalRows(rows1, rows2, row1, row2)
+		eq, err := compareRows(rows1, rows2, pks)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -253,7 +253,102 @@ func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, tblName string) (b
 	return true, nil
 }
 
-func equalRows(rows1, rows2 *sql.Rows, row1, row2 comparableSQLRow) (bool, error) {
+func compareRows(rows1, rows2 *sql.Rows, pks []string) (bool, error) {
+	equal := true
+	rowsData1 := make([]map[string][]byte, 0, 100)
+	rowsData2 := make([]map[string][]byte, 0, 100)
+
+	for rows1.Next() {
+		data1, err := util.ScanRow(rows1)
+		if err != nil {
+			return false, errors.Trace(err)
+		}
+		rowsData1 = append(rowsData1, data1)
+	}
+	for rows2.Next() {
+		data2, err := util.ScanRow(rows2)
+		if err != nil {
+			return false, errors.Trace(err)
+		}
+		rowsData2 = append(rowsData2, data2)
+	}
+	index1 := 0
+	index2 := 0
+	for {
+		if index1 == len(rowsData1) || index2 == len(rowsData2) {
+			break
+		}
+		eq, cmp, err := compareData(rowsData1[index1], rowsData2[index2], pks)
+		if err != nil {
+			return false, errors.Trace(err)
+		}
+		if eq {
+			index1++
+			index2++
+			continue
+		}
+		equal = false
+		switch cmp {
+		case 1:
+			log.Infof("delete %v", rowsData2[index2])
+			index2++
+			// delete 
+		case -1:
+			log.Infof("insert %v", rowsData1[index1])
+			index1++
+			// insert
+		case 0:
+			log.Infof("replace %v", rowsData1[index1])
+			index1++
+			index2++
+			// replace into
+		}
+	}
+	return equal, nil
+}
+
+func compareData(map1 map[string][]byte, map2 map[string][]byte, pks []string) (bool, int32, error) {
+	var (
+		equal = true
+		data1, data2 []byte
+		key, pkStr1, pkStr2 string
+		ok bool
+	)
+	
+	for key, data1 = range map1 {
+		if data2, ok = map2[key]; !ok {
+			return false, 0, errors.Errorf("don't have key %s", key)
+		}
+		if string(data1) == string(data2) {
+			continue
+		} 
+		equal = false
+		break
+	}
+	if equal {
+		return true, 0, nil
+	}
+
+	for _, pk := range pks {
+		if data1, ok = map1[pk]; !ok {
+			return false, 0, errors.Errorf("don't have key %s", pk)
+		}
+		if data2, ok = map2[pk]; !ok {
+			return false, 0, errors.Errorf("don't have key %s", pk)
+		}
+		pkStr1 += string(data1)
+		pkStr2 += string(data2)
+	}
+	if pkStr1 > pkStr2 {
+		return false, 1, nil 
+	} else if pkStr1 < pkStr2 {
+		return false, -1, nil
+	} else {
+		return false, 0, nil
+	}
+}
+
+func equalRows(rows1, rows2 *sql.Rows, row1, row2 comparableSQLRow, pks []string) (bool, error) {
 	dataEqual := true
 	for rows1.Next() {
 		if !rows2.Next() {
@@ -300,21 +395,21 @@ func equalOneRow(rows1, rows2 *sql.Rows, row1, row2 comparableSQLRow) (bool, err
 	return false, nil
 }
 
-func getChunkRows(db *sql.DB, dbName, tblName string, where string) (*sql.Rows, error) {
+func getChunkRows(db *sql.DB, dbName, tblName string, where string) (*sql.Rows, []string, error) {
 	descs, err := getTableSchema(db, tblName)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
-	pk1 := orderbyKey(descs)
+	pks := orderbyKey(descs)
 
 	query := fmt.Sprintf("SELECT %s * FROM `%s`.`%s` WHERE %s ORDER BY %s",
-		"/*!40001 SQL_NO_CACHE */", dbName, tblName, where, pk1)
+		"/*!40001 SQL_NO_CACHE */", dbName, tblName, where, strings.Join(pks, ","))
 
 	rows, err := querySQL(db, query)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
-	return rows, nil
+	return rows, pks, nil
 }
 
 func getTableIndex(db *sql.DB, tblName string) (*sql.Rows, error) {
@@ -492,32 +587,21 @@ func getTableSchema(db *sql.DB, tblName string) ([]describeTable, error) {
 	return descs, err
 }
 
-func orderbyKey(descs []describeTable) string {
+func orderbyKey(descs []describeTable) []string {
 	// TODO can't get the real primary key
-	var buf bytes.Buffer
-	firstTime := true
+	keys := make([]string, 0, 2)
 	for _, desc := range descs {
 		if desc.Key == "PRI" {
-			if firstTime {
-				fmt.Fprintf(&buf, "%s", desc.Field)
-				firstTime = false
-			} else {
-				fmt.Fprintf(&buf, ",%s", desc.Field)
-			}
+			keys = append(keys, desc.Field)
 		}
 	}
-	if buf.Len() == 0 {
+	if len(keys) == 0 {
 		// if no primary key found, use all fields as order by key
 		for _, desc := range descs {
-			if firstTime {
-				fmt.Fprintf(&buf, "%s", desc.Field)
-				firstTime = false
-			} else {
-				fmt.Fprintf(&buf, ",%s", desc.Field)
-			}
+			keys = append(keys, desc.Field)
 		}
 	}
-	return buf.String()
+	return keys
 }
 
 func querySQL(db *sql.DB, query string) (*sql.Rows, error) {

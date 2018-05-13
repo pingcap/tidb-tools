@@ -54,7 +54,7 @@ type Config struct {
 
 	FixData bool `toml:"fix-data" json"fix-data"`
 
-	Tables []*TableCheckCfg `toml:"table-check" json:"table-check"`
+	Tables []*TableCheckCfg `toml:"check-table" json:"check-table"`
 
 	ConfigFile string
 }
