@@ -260,7 +260,8 @@ func compareRows(rows1, rows2 *sql.Rows, pks []string) (bool, error) {
 	equal := true
 	rowsData1 := make([]map[string][]byte, 0, 100)
 	rowsData2 := make([]map[string][]byte, 0, 100)
-
+	types, _ := rows1.ColumnTypes()
+	log.Infof("types: %+v", types[0].ScanType())
 	for rows1.Next() {
 		data1, err := util.ScanRow(rows1)
 		if err != nil {
@@ -278,7 +279,16 @@ func compareRows(rows1, rows2 *sql.Rows, pks []string) (bool, error) {
 	index1 := 0
 	index2 := 0
 	for {
-		if index1 == len(rowsData1) || index2 == len(rowsData2) {
+		if index1 == len(rowsData1) {
+			for ; index2 < len(rowsData2); index2++ {
+				log.Infof("delete id: %s, name: %s", string(rowsData2[index2]["id"]), string(rowsData2[index2]["name"]))
+			}
+			break
+		}
+		if index2 == len(rowsData2) {
+			for ; index1 < len(rowsData1); index1++ {
+				log.Infof("insert id: %s, name: %s", string(rowsData1[index1]["id"]), string(rowsData1[index1]["name"]))
+			}
 			break
 		}
 		eq, cmp, err := compareData(rowsData1[index1], rowsData2[index2], pks)
@@ -293,20 +303,23 @@ func compareRows(rows1, rows2 *sql.Rows, pks []string) (bool, error) {
 		equal = false
 		switch cmp {
 		case 1:
-			log.Infof("delete %v", rowsData2[index2])
+			log.Infof("delete id: %s, name: %s", string(rowsData2[index2]["id"]), string(rowsData2[index2]["name"]))
 			index2++
 			// delete
 		case -1:
-			log.Infof("insert %v", rowsData1[index1])
+			log.Infof("insert id: %s, name: %s", string(rowsData1[index1]["id"]), string(rowsData1[index1]["name"]))
+			//log.Infof("insert %+v", rowsData1[index1])
 			index1++
 			// insert
 		case 0:
-			log.Infof("replace %v", rowsData1[index1])
+			//log.Infof("replace %v", rowsData1[index1])
+			log.Infof("replace id: %s, name: %s", string(rowsData1[index1]["id"]), string(rowsData1[index1]["name"]))
 			index1++
 			index2++
 			// replace into
 		}
 	}
+
 	return equal, nil
 }
 
