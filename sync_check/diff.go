@@ -24,6 +24,9 @@ import (
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/sync_check/util"
 	"github.com/pingcap/tidb-tools/pkg/db"
+	"github.com/pingcap/tidb/mysql"
+	"github.com/pingcap/tidb/model"
+	"github.com/pingcap/tidb/types"
 )
 
 // Diff contains two sql DB, used for comparing.
@@ -36,6 +39,7 @@ type Diff struct {
 	checkThCount int
 	useRowID     bool
 	tables       []*TableCheckCfg
+	//fixSqlFile
 }
 
 // NewDiff returns a Diff instance.
@@ -109,12 +113,14 @@ func (df *Diff) Equal() (equal bool, err error) {
 	return
 }
 
+// InitTableInfo initial table's info.
 func (df *Diff) InitTableInfo() (err error) {
 	for _, table := range df.tables {
 		table.Info, err = pkgdb.GetSchemaTable(df.db1, df.dbName, table.Name)
 		if err != nil {
 			return errors.Trace(err)
 		}
+		table.Schema = df.dbName
 	}
 
 	return nil
@@ -202,7 +208,7 @@ func (df *Diff) equalTableData(table *TableCheckCfg) (bool, error) {
 			checkJobs = append(checkJobs, dumpJobs[j])
 		}
 		go func() {
-			eq, err := df.checkChunkDataEqual(checkJobs, table.Name)
+			eq, err := df.checkChunkDataEqual(checkJobs, table)
 			if err != nil {
 				log.Errorf("check chunk data equal failed, error %v", err)
 			}
@@ -229,7 +235,7 @@ CheckResult:
 	return equal, nil
 }
 
-func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, tblName string) (bool, error) {
+func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, table *TableCheckCfg) (bool, error) {
 	if len(dumpJobs) == 0 {
 		return true, nil
 	}
@@ -237,13 +243,13 @@ func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, tblName string) (b
 	for _, job := range dumpJobs {
 		log.Infof("table: %s, where: %s", job.Table, job.Where)
 
-		rows1, pks, err := getChunkRows(df.db1, df.dbName, tblName, job.Where)
+		rows1, pks, err := getChunkRows(df.db1, df.dbName, table.Name, job.Where)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
 		defer rows1.Close()
 
-		rows2, _, err := getChunkRows(df.db2, df.dbName, tblName, job.Where)
+		rows2, _, err := getChunkRows(df.db2, df.dbName, table.Name, job.Where)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -261,7 +267,7 @@ func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, tblName string) (b
 			return false, errors.Trace(err)
 		}
 
-		eq, err := compareRows(rows1, rows2, pks)
+		eq, err := compareRows(rows1, rows2, pks, table)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -273,12 +279,11 @@ func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, tblName string) (b
 	return true, nil
 }
 
-func compareRows(rows1, rows2 *sql.Rows, pks []string) (bool, error) {
+func compareRows(rows1, rows2 *sql.Rows, pks []string, table *TableCheckCfg) (bool, error) {
 	equal := true
 	rowsData1 := make([]map[string][]byte, 0, 100)
 	rowsData2 := make([]map[string][]byte, 0, 100)
-	types, _ := rows1.ColumnTypes()
-	log.Infof("types: %+v", types[0].ScanType())
+
 	for rows1.Next() {
 		data1, err := util.ScanRow(rows1)
 		if err != nil {
@@ -298,13 +303,13 @@ func compareRows(rows1, rows2 *sql.Rows, pks []string) (bool, error) {
 	for {
 		if index1 == len(rowsData1) {
 			for ; index2 < len(rowsData2); index2++ {
-				log.Infof("delete id: %s, name: %s", string(rowsData2[index2]["id"]), string(rowsData2[index2]["name"]))
+				log.Infof("[delete id: %s, name: %s]", string(rowsData2[index2]["id"]), string(rowsData2[index2]["name"]))
 			}
 			break
 		}
 		if index2 == len(rowsData2) {
 			for ; index1 < len(rowsData1); index1++ {
-				log.Infof("insert id: %s, name: %s", string(rowsData1[index1]["id"]), string(rowsData1[index1]["name"]))
+				log.Infof("[insert id: %s, name: %s]", string(rowsData1[index1]["id"]), string(rowsData1[index1]["name"]))
 			}
 			break
 		}
@@ -320,17 +325,24 @@ func compareRows(rows1, rows2 *sql.Rows, pks []string) (bool, error) {
 		equal = false
 		switch cmp {
 		case 1:
-			log.Infof("delete id: %s, name: %s", string(rowsData2[index2]["id"]), string(rowsData2[index2]["name"]))
+			//log.Infof("[delete id: %s, name: %s]", string(rowsData2[index2]["id"]), string(rowsData2[index2]["name"]))
+			sql := generateDML("delete", rowsData2[index2], pks, table.Info, table.Schema)
+			log.Infof("[delete] sql: %v", sql)
 			index2++
 			// delete
 		case -1:
-			log.Infof("insert id: %s, name: %s", string(rowsData1[index1]["id"]), string(rowsData1[index1]["name"]))
+			//log.Infof("[insert id: %s, name: %s]", string(rowsData1[index1]["id"]), string(rowsData1[index1]["name"]))
 			//log.Infof("insert %+v", rowsData1[index1])
+			sql := generateDML("replace", rowsData1[index1], pks, table.Info, table.Schema)
+			log.Infof("[insert] sql: %v", sql)
 			index1++
 			// insert
 		case 0:
 			//log.Infof("replace %v", rowsData1[index1])
-			log.Infof("replace id: %s, name: %s", string(rowsData1[index1]["id"]), string(rowsData1[index1]["name"]))
+			//log.Infof("[replace id: %s, name: %s]", string(rowsData1[index1]["id"]), string(rowsData1[index1]["name"]))
+			deleteSql := generateDML("delete", rowsData2[index2], pks, table.Info, table.Schema)
+			replaceSql := generateDML("replace", rowsData1[index1], pks, table.Info, table.Schema)
+			log.Infof("[update] delete: %s,\n replace: %s", deleteSql, replaceSql)
 			index1++
 			index2++
 			// replace into
@@ -338,6 +350,51 @@ func compareRows(rows1, rows2 *sql.Rows, pks []string) (bool, error) {
 	}
 
 	return equal, nil
+}
+
+func generateDML(tp string, data map[string][]byte, pks []string, table *model.TableInfo, dbName string) (sql string) {
+	switch tp {
+	case "replace":
+		colNames := make([]string, 0, len(table.Columns))
+		values := make([]string, 0, len(table.Columns))
+		for _, col := range table.Columns {
+			colNames = append(colNames, col.Name.O)
+			if needQuotes(col.FieldType) {
+				values = append(values, fmt.Sprintf("\"%s\"", string(data[col.Name.O])))
+			} else {
+				values = append(values, string(data[col.Name.O]))
+			}
+		}
+		
+		sql = fmt.Sprintf("REPLACE INTO `%s`.`%s`(%s) VALUES (%s);", dbName, table.Name, strings.Join(colNames, ","), strings.Join(values, ","))
+	case "delete":
+		kvs := make([]string, 0, len(pks))
+		for _, col := range table.Columns {
+			for _, key := range pks {
+				if col.Name.O == key {
+					if needQuotes(col.FieldType) {
+						kvs = append(kvs, fmt.Sprintf("%s = \"%s\"", key, string(data[col.Name.O])))
+					} else {
+						kvs = append(kvs, fmt.Sprintf("%s = %s", key, string(data[col.Name.O])))
+					}
+				}
+			}
+		}
+		sql = fmt.Sprintf("DELETE FROM `%s`.`%s` where %s;", dbName, table.Name, strings.Join(kvs, " AND "))
+	}
+	return sql
+}
+
+func needQuotes(ft types.FieldType) bool {
+	switch ft.Tp {
+	case mysql.TypeTimestamp, mysql.TypeTiny, mysql.TypeShort, mysql.TypeInt24, 
+		mysql.TypeLong, mysql.TypeLonglong, mysql.TypeFloat, mysql.TypeDouble:
+		return false
+	default:
+		return true
+	}
+
+	return false
 }
 
 func compareData(map1 map[string][]byte, map2 map[string][]byte, pks []string) (bool, int32, error) {

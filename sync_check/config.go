@@ -31,10 +31,11 @@ const (
 
 // TableCheckCfg is the config of table to be checked.
 type TableCheckCfg struct {
-	Name  string `toml:"name"`
-	Field string `toml:"field"`
-	Range string `toml:"range"`
-	Info  *model.TableInfo
+	Name   string `toml:"name"`
+	Schema string
+	Field  string `toml:"field"`
+	Range  string `toml:"range"`
+	Info   *model.TableInfo
 }
 
 // Config is the configuration.
