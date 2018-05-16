@@ -21,6 +21,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/sync_check/util"
+	"github.com/pingcap/tidb/model"
 )
 
 const (
@@ -28,10 +29,12 @@ const (
 	percent100 = 100
 )
 
+// TableCheckCfg is the config of table to be checked.
 type TableCheckCfg struct {
 	Name  string `toml:"name"`
 	Field string `toml:"field"`
 	Range string `toml:"range"`
+	Info  *model.TableInfo
 }
 
 // Config is the configuration.
@@ -52,7 +55,7 @@ type Config struct {
 
 	UseRowID bool `toml:"use-rowid" json:"use-rowid"`
 
-	FixData bool `toml:"fix-data" json"fix-data"`
+	FixData bool `toml:"fix-data" json:"fix-data"`
 
 	Tables []*TableCheckCfg `toml:"check-table" json:"check-table"`
 

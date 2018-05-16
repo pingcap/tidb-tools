@@ -35,7 +35,7 @@ type chunkRange struct {
 	notNil   bool
 }
 
-// dumpJob is the struct for job of dump
+// DumpJob is the struct for job of dump
 type DumpJob struct {
 	DbName string
 	Table  string
@@ -233,6 +233,7 @@ func findSuitableField(db *sql.DB, dbname string, table string, useRowID bool) (
 	return nil, errors.Errorf("no column find in table %s.%s", dbname, table)
 }
 
+// GenerateDumpJob generates some DumpJobs.
 func GenerateDumpJob(db *sql.DB, dbname, tableName, splitField string, 
 	limitRange string, chunkSize int, sample int, useRowID bool) ([]*DumpJob, error) {
 	jobBucket := make([]*DumpJob, 0, 10)

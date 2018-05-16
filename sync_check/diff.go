@@ -23,6 +23,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/sync_check/util"
+	"github.com/pingcap/tidb-tools/pkg/db"
 )
 
 // Diff contains two sql DB, used for comparing.
@@ -54,6 +55,11 @@ func NewDiff(db1, db2 *sql.DB, dbName string, chunkSize, sample, checkThCount in
 
 // Equal tests whether two database have same data and schema.
 func (df *Diff) Equal() (equal bool, err error) {
+	err = df.InitTableInfo()
+	if err != nil {
+		return false, errors.Trace(err)
+	}
+
 	equal = true
 	tbls1, err := getTables(df.db1)
 	if err != nil {
@@ -101,6 +107,17 @@ func (df *Diff) Equal() (equal bool, err error) {
 	}
 
 	return
+}
+
+func (df *Diff) InitTableInfo() (err error) {
+	for _, table := range df.tables {
+		table.Info, err = pkgdb.GetSchemaTable(df.db1, df.dbName, table.Name)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+
+	return nil
 }
 
 // EqualTable tests whether two database table have same data and schema.
