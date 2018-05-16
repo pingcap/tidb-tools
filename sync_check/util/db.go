@@ -333,3 +333,14 @@ func GetSchemaTable(db *sql.DB, schemaName, tableName string) (table *schema.Tab
 
 	return nil, errors.Errorf("get table reached max retry %d and failed", maxRetry)
 }
+
+func SetSnapshot(db *sql.DB, snapshot string) error {
+	sql := fmt.Sprintf("set @@tidb_snapshot=\"%s\"", snapshot)
+	log.Infof("Set Snapshot: %s", sql)
+	_, err := db.Query(sql)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
+}

@@ -14,11 +14,15 @@
 package main
 
 import (
+	"time"
+	"sync"
+	"os"
 	"bytes"
 	"database/sql"
 	"fmt"
 	"math/rand"
 	"strings"
+	"strconv"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
@@ -39,13 +43,15 @@ type Diff struct {
 	checkThCount int
 	useRowID     bool
 	tables       []*TableCheckCfg
-	//fixSqlFile
+	fixSqlFile   *os.File       
+	sqlCh        chan string
+	wg           sync.WaitGroup
 }
 
 // NewDiff returns a Diff instance.
 func NewDiff(db1, db2 *sql.DB, dbName string, chunkSize, sample, checkThCount int,
-	useRowID bool, tables []*TableCheckCfg) *Diff {
-	return &Diff{
+	useRowID bool, tables []*TableCheckCfg, filename, snapshot string) (diff *Diff, err error) {
+	diff = &Diff{
 		db1:          db1,
 		db2:          db2,
 		dbName:       dbName,
@@ -54,15 +60,40 @@ func NewDiff(db1, db2 *sql.DB, dbName string, chunkSize, sample, checkThCount in
 		checkThCount: checkThCount,
 		useRowID:     useRowID,
 		tables:       tables,
+		sqlCh:        make(chan string),
 	}
+	for _, table := range diff.tables {
+		table.Info, err = pkgdb.GetSchemaTable(diff.db1, diff.dbName, table.Name)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		table.Schema = diff.dbName
+	}
+	diff.fixSqlFile, err = os.Create(filename)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	if snapshot != "" {
+		err = util.SetSnapshot(db1, snapshot)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+	}
+
+	return diff, nil
 }
 
 // Equal tests whether two database have same data and schema.
 func (df *Diff) Equal() (equal bool, err error) {
-	err = df.InitTableInfo()
-	if err != nil {
-		return false, errors.Trace(err)
-	}
+	defer func() {
+		df.fixSqlFile.Close()
+		df.db1.Close()
+		df.db2.Close()
+	}()
+
+	df.wg.Add(1)
+	go df.WriteSqls()
 
 	equal = true
 	tbls1, err := getTables(df.db1)
@@ -110,20 +141,16 @@ func (df *Diff) Equal() (equal bool, err error) {
 		}
 	}
 
-	return
-}
-
-// InitTableInfo initial table's info.
-func (df *Diff) InitTableInfo() (err error) {
-	for _, table := range df.tables {
-		table.Info, err = pkgdb.GetSchemaTable(df.db1, df.dbName, table.Name)
-		if err != nil {
-			return errors.Trace(err)
+	for {
+		if len(df.sqlCh) == 0 {
+			close(df.sqlCh)
+			break
 		}
-		table.Schema = df.dbName
+		time.Sleep(time.Second)
 	}
-
-	return nil
+	
+	df.wg.Wait()
+	return
 }
 
 // EqualTable tests whether two database table have same data and schema.
@@ -243,13 +270,13 @@ func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, table *TableCheckC
 	for _, job := range dumpJobs {
 		log.Infof("table: %s, where: %s", job.Table, job.Where)
 
-		rows1, pks, err := getChunkRows(df.db1, df.dbName, table.Name, job.Where)
+		rows1, orderKeyCols, err := getChunkRows(df.db1, df.dbName, table, job.Where)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
 		defer rows1.Close()
 
-		rows2, _, err := getChunkRows(df.db2, df.dbName, table.Name, job.Where)
+		rows2, _, err := getChunkRows(df.db2, df.dbName, table, job.Where)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -267,7 +294,7 @@ func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, table *TableCheckC
 			return false, errors.Trace(err)
 		}
 
-		eq, err := compareRows(rows1, rows2, pks, table)
+		eq, err := df.compareRows(rows1, rows2, orderKeyCols, table)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -279,7 +306,7 @@ func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, table *TableCheckC
 	return true, nil
 }
 
-func compareRows(rows1, rows2 *sql.Rows, pks []string, table *TableCheckCfg) (bool, error) {
+func (df *Diff)compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.ColumnInfo, table *TableCheckCfg) (bool, error) {
 	equal := true
 	rowsData1 := make([]map[string][]byte, 0, 100)
 	rowsData2 := make([]map[string][]byte, 0, 100)
@@ -298,22 +325,25 @@ func compareRows(rows1, rows2 *sql.Rows, pks []string, table *TableCheckCfg) (bo
 		}
 		rowsData2 = append(rowsData2, data2)
 	}
-	index1 := 0
-	index2 := 0
+
+	var index1, index2 int
 	for {
 		if index1 == len(rowsData1) {
 			for ; index2 < len(rowsData2); index2++ {
-				log.Infof("[delete id: %s, name: %s]", string(rowsData2[index2]["id"]), string(rowsData2[index2]["name"]))
+				sql := generateDML("delete", rowsData2[index2], orderKeyCols, table.Info, table.Schema)
+				log.Infof("[delete] sql: %v", sql)
+				df.sqlCh<- sql
 			}
 			break
 		}
 		if index2 == len(rowsData2) {
 			for ; index1 < len(rowsData1); index1++ {
-				log.Infof("[insert id: %s, name: %s]", string(rowsData1[index1]["id"]), string(rowsData1[index1]["name"]))
+				sql := generateDML("replace", rowsData1[index1], orderKeyCols, table.Info, table.Schema)
+				log.Infof("[insert] sql: %v", sql)
 			}
 			break
 		}
-		eq, cmp, err := compareData(rowsData1[index1], rowsData2[index2], pks)
+		eq, cmp, err := compareData(rowsData1[index1], rowsData2[index2], orderKeyCols)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -325,34 +355,51 @@ func compareRows(rows1, rows2 *sql.Rows, pks []string, table *TableCheckCfg) (bo
 		equal = false
 		switch cmp {
 		case 1:
-			//log.Infof("[delete id: %s, name: %s]", string(rowsData2[index2]["id"]), string(rowsData2[index2]["name"]))
-			sql := generateDML("delete", rowsData2[index2], pks, table.Info, table.Schema)
-			log.Infof("[delete] sql: %v", sql)
-			index2++
 			// delete
+			sql := generateDML("delete", rowsData2[index2], orderKeyCols, table.Info, table.Schema)
+			log.Infof("[delete] sql: %v", sql)
+			df.sqlCh<- sql
+			index2++
 		case -1:
-			//log.Infof("[insert id: %s, name: %s]", string(rowsData1[index1]["id"]), string(rowsData1[index1]["name"]))
-			//log.Infof("insert %+v", rowsData1[index1])
-			sql := generateDML("replace", rowsData1[index1], pks, table.Info, table.Schema)
-			log.Infof("[insert] sql: %v", sql)
-			index1++
 			// insert
+			sql := generateDML("replace", rowsData1[index1], orderKeyCols, table.Info, table.Schema)
+			log.Infof("[insert] sql: %v", sql)
+			df.sqlCh<- sql
+			index1++
 		case 0:
-			//log.Infof("replace %v", rowsData1[index1])
-			//log.Infof("[replace id: %s, name: %s]", string(rowsData1[index1]["id"]), string(rowsData1[index1]["name"]))
-			deleteSql := generateDML("delete", rowsData2[index2], pks, table.Info, table.Schema)
-			replaceSql := generateDML("replace", rowsData1[index1], pks, table.Info, table.Schema)
+			// update
+			deleteSql := generateDML("delete", rowsData2[index2], orderKeyCols, table.Info, table.Schema)
+			replaceSql := generateDML("replace", rowsData1[index1], orderKeyCols, table.Info, table.Schema)
 			log.Infof("[update] delete: %s,\n replace: %s", deleteSql, replaceSql)
+			df.sqlCh<- deleteSql
+			df.sqlCh<- replaceSql
 			index1++
 			index2++
-			// replace into
 		}
 	}
 
 	return equal, nil
 }
 
-func generateDML(tp string, data map[string][]byte, pks []string, table *model.TableInfo, dbName string) (sql string) {
+func (df *Diff) WriteSqls() {
+	for {
+		select {
+		case dml, ok := <- df.sqlCh:
+			if !ok {
+				df.wg.Done()
+				return
+			}
+			_, err := df.fixSqlFile.WriteString(fmt.Sprintf("%s\n", dml))
+			if err != nil {
+				log.Errorf("write sql: %s failed, error: %v", dml, err)
+			}
+		default:
+		}
+	}
+}
+
+func generateDML(tp string, data map[string][]byte, keys []*model.ColumnInfo, table *model.TableInfo, dbName string) (sql string) {
+	// TODO: can't distinction NULL with ""
 	switch tp {
 	case "replace":
 		colNames := make([]string, 0, len(table.Columns))
@@ -368,21 +415,20 @@ func generateDML(tp string, data map[string][]byte, pks []string, table *model.T
 		
 		sql = fmt.Sprintf("REPLACE INTO `%s`.`%s`(%s) VALUES (%s);", dbName, table.Name, strings.Join(colNames, ","), strings.Join(values, ","))
 	case "delete":
-		kvs := make([]string, 0, len(pks))
-		for _, col := range table.Columns {
-			for _, key := range pks {
-				if col.Name.O == key {
-					if needQuotes(col.FieldType) {
-						kvs = append(kvs, fmt.Sprintf("%s = \"%s\"", key, string(data[col.Name.O])))
-					} else {
-						kvs = append(kvs, fmt.Sprintf("%s = %s", key, string(data[col.Name.O])))
-					}
-				}
+		kvs := make([]string, 0, len(keys))
+		for _, col := range keys {
+			if needQuotes(col.FieldType) {
+				kvs = append(kvs, fmt.Sprintf("%s = \"%s\"", col.Name.O, string(data[col.Name.O])))
+			} else {
+				kvs = append(kvs, fmt.Sprintf("%s = %s", col.Name.O, string(data[col.Name.O])))
 			}
 		}
 		sql = fmt.Sprintf("DELETE FROM `%s`.`%s` where %s;", dbName, table.Name, strings.Join(kvs, " AND "))
+	default:
+		log.Errorf("unknow sql type %s", tp)
 	}
-	return sql
+
+	return
 }
 
 func needQuotes(ft types.FieldType) bool {
@@ -397,12 +443,13 @@ func needQuotes(ft types.FieldType) bool {
 	return false
 }
 
-func compareData(map1 map[string][]byte, map2 map[string][]byte, pks []string) (bool, int32, error) {
+func compareData(map1 map[string][]byte, map2 map[string][]byte, orderKeyCols []*model.ColumnInfo) (bool, int32, error) {
 	var (
 		equal               = true
 		data1, data2        []byte
-		key, pkStr1, pkStr2 string
+		key                 string
 		ok                  bool
+		cmp                 int32
 	)
 
 	for key, data1 = range map1 {
@@ -419,19 +466,45 @@ func compareData(map1 map[string][]byte, map2 map[string][]byte, pks []string) (
 		return true, 0, nil
 	}
 
-	for _, pk := range pks {
-		if data1, ok = map1[pk]; !ok {
-			return false, 0, errors.Errorf("don't have key %s", pk)
+	
+	for _, col := range orderKeyCols {
+		if data1, ok = map1[col.Name.O]; !ok {
+			return false, 0, errors.Errorf("don't have key %s", col.Name.O)
 		}
-		if data2, ok = map2[pk]; !ok {
-			return false, 0, errors.Errorf("don't have key %s", pk)
+		if data2, ok = map2[col.Name.O]; !ok {
+			return false, 0, errors.Errorf("don't have key %s", col.Name.O)
 		}
-		pkStr1 += string(data1)
-		pkStr2 += string(data2)
+		if needQuotes(col.FieldType) {
+			if string(data1) > string(data2) {
+				cmp = 1
+				break
+			} else if string(data1) < string(data2) {
+				cmp = -1
+				break
+			} else {
+				continue
+			}
+		} else {
+			num1, err1 := strconv.ParseFloat(string(data1), 64)
+			num2, err2 := strconv.ParseFloat(string(data2), 64)
+			if err1 != nil || err2 != nil {
+				return false, 0, errors.Errorf("convert %s, %s to float failed, err1: %v, err2: %v", string(data1), string(data2), err1, err2)
+			}
+			if num1 > num2 {
+				cmp = 1
+				break
+			} else if num1 < num2 {
+				cmp = -1
+				break
+			} else {
+				continue
+			}
+		}
+		
 	}
-	if pkStr1 > pkStr2 {
+	if cmp == 1 {
 		return false, 1, nil
-	} else if pkStr1 < pkStr2 {
+	} else if cmp == -1 {
 		return false, -1, nil
 	} else {
 		return false, 0, nil
@@ -485,21 +558,17 @@ func equalOneRow(rows1, rows2 *sql.Rows, row1, row2 comparableSQLRow) (bool, err
 	return false, nil
 }
 
-func getChunkRows(db *sql.DB, dbName, tblName string, where string) (*sql.Rows, []string, error) {
-	descs, err := getTableSchema(db, tblName)
-	if err != nil {
-		return nil, nil, errors.Trace(err)
-	}
-	pks := orderbyKey(descs)
+func getChunkRows(db *sql.DB, dbName string, table *TableCheckCfg, where string) (*sql.Rows, []*model.ColumnInfo, error) {
+	orderKeys, orderKeyCols := orderbyKey(table.Info)
 
 	query := fmt.Sprintf("SELECT %s * FROM `%s`.`%s` WHERE %s ORDER BY %s",
-		"/*!40001 SQL_NO_CACHE */", dbName, tblName, where, strings.Join(pks, ","))
+		"/*!40001 SQL_NO_CACHE */", dbName, table.Name, where, strings.Join(orderKeys, ","))
 
 	rows, err := querySQL(db, query)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
-	return rows, pks, nil
+	return rows, orderKeyCols, nil
 }
 
 func getTableIndex(db *sql.DB, tblName string) (*sql.Rows, error) {
@@ -677,21 +746,34 @@ func getTableSchema(db *sql.DB, tblName string) ([]describeTable, error) {
 	return descs, err
 }
 
-func orderbyKey(descs []describeTable) []string {
+func orderbyKey(tbInfo *model.TableInfo) ([]string, []*model.ColumnInfo) {
 	// TODO can't get the real primary key
 	keys := make([]string, 0, 2)
-	for _, desc := range descs {
-		if desc.Key == "PRI" {
-			keys = append(keys, desc.Field)
+	keyCols := make([]*model.ColumnInfo, 0, 2)
+	for _, index := range tbInfo.Indices {
+		if index.Primary {
+			for _, indexCol := range index.Columns {
+				keys = append(keys, indexCol.Name.O)
+			}
 		}
 	}
+
 	if len(keys) == 0 {
 		// if no primary key found, use all fields as order by key
-		for _, desc := range descs {
-			keys = append(keys, desc.Field)
+		for _, col := range tbInfo.Columns {
+			keys = append(keys, col.Name.O)
+			keyCols = append(keyCols, col)
+		}
+	} else {
+		for _, col := range tbInfo.Columns {
+			for _, key := range keys {
+				if col.Name.O == key {
+					keyCols = append(keyCols, col)
+				}
+			}
 		}
 	}
-	return keys
+	return keys, keyCols
 }
 
 func querySQL(db *sql.DB, query string) (*sql.Rows, error) {

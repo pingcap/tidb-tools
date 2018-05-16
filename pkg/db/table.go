@@ -191,8 +191,6 @@ func BuildTableInfo(tableName model.CIStr, columns []*model.ColumnInfo, constrai
 				case mysql.TypeLong, mysql.TypeLonglong,
 					mysql.TypeTiny, mysql.TypeShort, mysql.TypeInt24:
 					tbInfo.PKIsHandle = true
-					// Avoid creating index for PK handle column.
-					continue
 				}
 			}
 		}

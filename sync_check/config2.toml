@@ -23,6 +23,8 @@ use-rowid = false
 # fix different data in target-db if fix_data is true, must have primary key or unique key
 fix-data = false
 
+snapshot = "2018-05-17 00:30:00"
+
 # if check-table is nil, will check all tables in the schema. 
 [[check-table]]
 # table name.
