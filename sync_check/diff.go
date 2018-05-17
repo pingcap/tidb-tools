@@ -75,7 +75,7 @@ func NewDiff(db1, db2 *sql.DB, dbName string, chunkSize, sample, checkThCount in
 	}
 
 	if snapshot != "" {
-		err = util.SetSnapshot(db1, snapshot)
+		err = util.SetSnapshot(db2, snapshot)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}

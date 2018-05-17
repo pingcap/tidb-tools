@@ -336,11 +336,12 @@ func GetSchemaTable(db *sql.DB, schemaName, tableName string) (table *schema.Tab
 
 func SetSnapshot(db *sql.DB, snapshot string) error {
 	sql := fmt.Sprintf("set @@tidb_snapshot=\"%s\"", snapshot)
-	log.Infof("Set Snapshot: %s", sql)
-	_, err := db.Query(sql)
+	log.Infof("set snapshot: %s", sql)
+	result, err := db.Exec(sql)
 	if err != nil {
 		return errors.Trace(err)
 	}
+	log.Infof("set snapshot result: %v", result)
 
 	return nil
 }
