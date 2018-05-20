@@ -118,7 +118,13 @@ func (df *Diff) Equal() (equal bool, err error) {
 	if len(df.tables) == 0 {
 		df.tables = make([]*TableCheckCfg, 0, len(tbls1))
 		for _, name := range tbls1 {
-			df.tables = append(df.tables, &TableCheckCfg{Name: name})
+			table := &TableCheckCfg{Name: name, Schema: df.dbName}
+			table.Info, err = pkgdb.GetSchemaTable(df.db1, df.dbName, name)
+			if err != nil {
+				return false, errors.Trace(err)
+			}
+
+			df.tables = append(df.tables, table)
 		}
 	}
 
