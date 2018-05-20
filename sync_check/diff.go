@@ -329,6 +329,7 @@ func (df *Diff) compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.Column
 	var index1, index2 int
 	for {
 		if index1 == len(rowsData1) {
+			// the all rowsData2's data should be deleted
 			for ; index2 < len(rowsData2); index2++ {
 				sql := generateDML("delete", rowsData2[index2], orderKeyCols, table.Info, table.Schema)
 				log.Infof("[delete] sql: %v", sql)
@@ -337,6 +338,7 @@ func (df *Diff) compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.Column
 			break
 		}
 		if index2 == len(rowsData2) {
+			// rosData2 lack some data, should insert them
 			for ; index1 < len(rowsData1); index1++ {
 				sql := generateDML("replace", rowsData1[index1], orderKeyCols, table.Info, table.Schema)
 				log.Infof("[insert] sql: %v", sql)
@@ -399,7 +401,7 @@ func (df *Diff) WriteSqls() {
 }
 
 func generateDML(tp string, data map[string][]byte, keys []*model.ColumnInfo, table *model.TableInfo, dbName string) (sql string) {
-	// TODO: can't distinction NULL with ""
+	// TODO: can't distinguish NULL between ""
 	switch tp {
 	case "replace":
 		colNames := make([]string, 0, len(table.Columns))
