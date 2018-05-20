@@ -1,0 +1,6 @@
+5 * * * *  flock -n /tmp/xx.lock -c '(killall drainer || true) && cd /home/tidb/tidb-binlog/ && sh ./run.sh'
+15 * * * *  flock -n /tmp/xx.lock -c '(killall -9 drainer || true) && cd /home/tidb/tidb-binlog/ && sh ./run.sh'
+25 * * * *  flock -n /tmp/xx.lock -c '(killall drainer || true) && cd /home/tidb/tidb-binlog/ && sh ./run.sh'
+35 * * * *  flock -n /tmp/xx.lock -c '(killall -9 drainer || true) && cd /home/tidb/tidb-binlog/ && sh ./run.sh'
+45 * * * *  flock -n /tmp/xx.lock -c '(killall drainer || true) && cd /home/tidb/tidb-binlog/ && sh ./run.sh'
+55 * * * *  flock -n /tmp/xx.lock -c '(killall -9 drainer || true) && cd /home/tidb/tidb-binlog/ && sh ./run.sh'

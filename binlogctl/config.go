@@ -25,9 +25,20 @@ const (
 	defaultDataDir  = "binlog_position"
 )
 
+const (
+	generateSavepoint = "generate_savepoint"
+	queryPumps        = "pumps"
+	queryDrainer      = "drainers"
+	unregisterPumps   = "delete-pump"
+	unregisterDrainer = "delete-drainer"
+)
+
 // Config holds the configuration of drainer
 type Config struct {
 	*flag.FlagSet
+
+	Command  string `toml:"cmd" json:"cmd"`
+	NodeID   string `toml:"node-id" json:"node-id"`
 	DataDir  string `toml:"data-dir" json:"data-dir"`
 	EtcdURLs string `toml:"pd-urls" json:"pd-urls"`
 }
@@ -37,6 +48,9 @@ func NewConfig() *Config {
 	cfg := &Config{}
 	cfg.FlagSet = flag.NewFlagSet("generate_binlog_position", flag.ContinueOnError)
 	fs := cfg.FlagSet
+
+	fs.StringVar(&cfg.Command, "cmd", "pumps", "operator: \"generate_savepoint\", \"pumps\", \"drainers\", \"delete-pump\", \"delete-drainer\"")
+	fs.StringVar(&cfg.NodeID, "node-id", "", "name of service, use to delete some service with operation delete-pump and delete-drainer")
 	fs.StringVar(&cfg.DataDir, "data-dir", defaultDataDir, "binlog position data directory path (default data.drainer)")
 	fs.StringVar(&cfg.EtcdURLs, "pd-urls", defaultEtcdURLs, "a comma separated list of PD endpoints")
 	return cfg

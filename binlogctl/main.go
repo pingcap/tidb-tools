@@ -26,8 +26,21 @@ func main() {
 		log.Infof("verifying flags error, See 'drainer --help'. %s", errors.ErrorStack(err))
 	}
 
-	if err := GenSavepointInfo(cfg); err != nil {
-		log.Infof("fail to generate savepoint error %v", err)
+	var err error
+	switch cfg.Command {
+	case generateSavepoint:
+		err = GenSavepointInfo(cfg)
+	case queryPumps:
+		err = queryService(cfg.EtcdURLs, pumpService)
+	case queryDrainer:
+		err = queryService(cfg.EtcdURLs, drainerService)
+	case unregisterPumps:
+		err = unregisterService(cfg.EtcdURLs, pumpService, cfg.NodeID)
+	case unregisterDrainer:
+		err = unregisterService(cfg.EtcdURLs, drainerService, cfg.NodeID)
 	}
-	os.Exit(0)
+
+	if err != nil {
+		log.Fatalf("fail to execute %s error %v", cfg.Command, err)
+	}
 }

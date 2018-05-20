@@ -16,11 +16,15 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"io"
+	"os"
 	"time"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 )
+
+var wirter io.Writer
 
 func addJobs(jobCount int, jobChan chan struct{}) {
 	for i := 0; i < jobCount; i++ {
@@ -30,42 +34,35 @@ func addJobs(jobCount int, jobChan chan struct{}) {
 	close(jobChan)
 }
 
-func doInsert(table *table, db *sql.DB, count int) {
-	sqls, err := genRowDatas(table, count)
+func doInsert(table *table, writer io.Writer, count int) {
+	sql, err := genRowDatas(table, count)
 	if err != nil {
 		log.Fatalf(errors.ErrorStack(err))
 	}
 
-	txn, err := db.Begin()
+	_, err = writer.Write([]byte(sql))
 	if err != nil {
-		log.Fatalf(errors.ErrorStack(err))
-	}
-
-	for _, sql := range sqls {
-		_, err = txn.Exec(sql)
-		if err != nil {
-			log.Fatalf(errors.ErrorStack(err))
-		}
-	}
-
-	err = txn.Commit()
-	if err != nil {
-		log.Fatalf(errors.ErrorStack(err))
+		log.Errorf("fail to write %v", err)
 	}
 }
 
-func doJob(table *table, db *sql.DB, batch int, jobChan chan struct{}, doneChan chan struct{}) {
+func doJob(id int, table *table, db *sql.DB, batch int, jobChan chan struct{}, doneChan chan struct{}) {
+	writer, err := os.OpenFile(fmt.Sprintf("test.sbtest.%04d", id), os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	count := 0
 	for range jobChan {
 		count++
 		if count == batch {
-			doInsert(table, db, count)
+			doInsert(table, writer, count)
 			count = 0
 		}
 	}
 
 	if count > 0 {
-		doInsert(table, db, count)
+		doInsert(table, writer, count)
 		count = 0
 	}
 
@@ -98,7 +95,7 @@ func doProcess(table *table, dbs []*sql.DB, jobCount int, workerCount int, batch
 	go addJobs(jobCount, jobChan)
 
 	for i := 0; i < workerCount; i++ {
-		go doJob(table, dbs[i], batch, jobChan, doneChan)
+		go doJob(i, table, dbs[i], batch, jobChan, doneChan)
 	}
 
 	doWait(doneChan, start, jobCount, workerCount)
