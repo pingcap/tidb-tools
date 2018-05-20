@@ -11,9 +11,6 @@ chunk-size = 1000
 # how many goroutine created to check data
 check-thcount = 4
 
-# use split-field to split data to several chunk
-#split-field = "id"
-
 # sampling check percent, for example 10 means only check 10% data
 sample = 10
 
@@ -38,14 +35,6 @@ field = "id"
 # check data's range
 # range = "age > 10 AND age < 20"
 
-[target-db]
-host = "127.0.0.1"
-user = "root"
-password = ""
-# schema name
-name = "test"
-port = 4000
-
 [source-db]
 host = "127.0.0.1"
 user = "root"
@@ -53,3 +42,11 @@ password = ""
 # schema name
 name = "test"
 port = 3306
+
+[target-db]
+host = "127.0.0.1"
+user = "root"
+password = ""
+# schema name
+name = "test"
+port = 4000

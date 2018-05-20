@@ -38,6 +38,8 @@ func main() {
 		os.Exit(2)
 	}
 
+	log.SetLevelByString(cfg.LogLevel)
+
 	ok := cfg.checkConfig()
 	if !ok {
 		log.Error("there is something wrong with your config, please check it!")

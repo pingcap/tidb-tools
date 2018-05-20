@@ -234,7 +234,7 @@ func findSuitableField(db *sql.DB, dbname string, table string, useRowID bool) (
 }
 
 // GenerateDumpJob generates some DumpJobs.
-func GenerateDumpJob(db *sql.DB, dbname, tableName, splitField string, 
+func GenerateDumpJob(db *sql.DB, dbname, tableName, splitField string,
 	limitRange string, chunkSize int, sample int, useRowID bool) ([]*DumpJob, error) {
 	jobBucket := make([]*DumpJob, 0, 10)
 	var jobCnt int

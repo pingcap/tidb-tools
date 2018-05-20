@@ -14,22 +14,22 @@
 package main
 
 import (
-	"time"
-	"sync"
-	"os"
 	"bytes"
 	"database/sql"
 	"fmt"
 	"math/rand"
-	"strings"
+	"os"
 	"strconv"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-tools/sync_check/util"
 	"github.com/pingcap/tidb-tools/pkg/db"
-	"github.com/pingcap/tidb/mysql"
+	"github.com/pingcap/tidb-tools/sync_check/util"
 	"github.com/pingcap/tidb/model"
+	"github.com/pingcap/tidb/mysql"
 	"github.com/pingcap/tidb/types"
 )
 
@@ -43,7 +43,7 @@ type Diff struct {
 	checkThCount int
 	useRowID     bool
 	tables       []*TableCheckCfg
-	fixSqlFile   *os.File       
+	fixSqlFile   *os.File
 	sqlCh        chan string
 	wg           sync.WaitGroup
 }
@@ -75,7 +75,7 @@ func NewDiff(db1, db2 *sql.DB, dbName string, chunkSize, sample, checkThCount in
 	}
 
 	if snapshot != "" {
-		err = util.SetSnapshot(db2, snapshot)
+		err = util.SetSnapshot(db1, snapshot)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -148,7 +148,7 @@ func (df *Diff) Equal() (equal bool, err error) {
 		}
 		time.Sleep(time.Second)
 	}
-	
+
 	df.wg.Wait()
 	return
 }
@@ -268,7 +268,7 @@ func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, table *TableCheckC
 	}
 
 	for _, job := range dumpJobs {
-		log.Infof("table: %s, where: %s", job.Table, job.Where)
+		log.Infof("check table: %s, range: %s", job.Table, job.Where)
 
 		rows1, orderKeyCols, err := getChunkRows(df.db1, df.dbName, table, job.Where)
 		if err != nil {
@@ -306,7 +306,7 @@ func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, table *TableCheckC
 	return true, nil
 }
 
-func (df *Diff)compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.ColumnInfo, table *TableCheckCfg) (bool, error) {
+func (df *Diff) compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.ColumnInfo, table *TableCheckCfg) (bool, error) {
 	equal := true
 	rowsData1 := make([]map[string][]byte, 0, 100)
 	rowsData2 := make([]map[string][]byte, 0, 100)
@@ -332,7 +332,7 @@ func (df *Diff)compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.ColumnI
 			for ; index2 < len(rowsData2); index2++ {
 				sql := generateDML("delete", rowsData2[index2], orderKeyCols, table.Info, table.Schema)
 				log.Infof("[delete] sql: %v", sql)
-				df.sqlCh<- sql
+				df.sqlCh <- sql
 			}
 			break
 		}
@@ -358,21 +358,21 @@ func (df *Diff)compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.ColumnI
 			// delete
 			sql := generateDML("delete", rowsData2[index2], orderKeyCols, table.Info, table.Schema)
 			log.Infof("[delete] sql: %v", sql)
-			df.sqlCh<- sql
+			df.sqlCh <- sql
 			index2++
 		case -1:
 			// insert
 			sql := generateDML("replace", rowsData1[index1], orderKeyCols, table.Info, table.Schema)
 			log.Infof("[insert] sql: %v", sql)
-			df.sqlCh<- sql
+			df.sqlCh <- sql
 			index1++
 		case 0:
 			// update
 			deleteSql := generateDML("delete", rowsData2[index2], orderKeyCols, table.Info, table.Schema)
 			replaceSql := generateDML("replace", rowsData1[index1], orderKeyCols, table.Info, table.Schema)
 			log.Infof("[update] delete: %s,\n replace: %s", deleteSql, replaceSql)
-			df.sqlCh<- deleteSql
-			df.sqlCh<- replaceSql
+			df.sqlCh <- deleteSql
+			df.sqlCh <- replaceSql
 			index1++
 			index2++
 		}
@@ -384,7 +384,7 @@ func (df *Diff)compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.ColumnI
 func (df *Diff) WriteSqls() {
 	for {
 		select {
-		case dml, ok := <- df.sqlCh:
+		case dml, ok := <-df.sqlCh:
 			if !ok {
 				df.wg.Done()
 				return
@@ -412,7 +412,7 @@ func generateDML(tp string, data map[string][]byte, keys []*model.ColumnInfo, ta
 				values = append(values, string(data[col.Name.O]))
 			}
 		}
-		
+
 		sql = fmt.Sprintf("REPLACE INTO `%s`.`%s`(%s) VALUES (%s);", dbName, table.Name, strings.Join(colNames, ","), strings.Join(values, ","))
 	case "delete":
 		kvs := make([]string, 0, len(keys))
@@ -433,7 +433,7 @@ func generateDML(tp string, data map[string][]byte, keys []*model.ColumnInfo, ta
 
 func needQuotes(ft types.FieldType) bool {
 	switch ft.Tp {
-	case mysql.TypeTimestamp, mysql.TypeTiny, mysql.TypeShort, mysql.TypeInt24, 
+	case mysql.TypeTimestamp, mysql.TypeTiny, mysql.TypeShort, mysql.TypeInt24,
 		mysql.TypeLong, mysql.TypeLonglong, mysql.TypeFloat, mysql.TypeDouble:
 		return false
 	default:
@@ -445,11 +445,11 @@ func needQuotes(ft types.FieldType) bool {
 
 func compareData(map1 map[string][]byte, map2 map[string][]byte, orderKeyCols []*model.ColumnInfo) (bool, int32, error) {
 	var (
-		equal               = true
-		data1, data2        []byte
-		key                 string
-		ok                  bool
-		cmp                 int32
+		equal        = true
+		data1, data2 []byte
+		key          string
+		ok           bool
+		cmp          int32
 	)
 
 	for key, data1 = range map1 {
@@ -460,13 +460,13 @@ func compareData(map1 map[string][]byte, map2 map[string][]byte, orderKeyCols []
 			continue
 		}
 		equal = false
+		log.Errorf("find difference data, data1: %s, data2: %s", map1, map2)
 		break
 	}
 	if equal {
 		return true, 0, nil
 	}
 
-	
 	for _, col := range orderKeyCols {
 		if data1, ok = map1[col.Name.O]; !ok {
 			return false, 0, errors.Errorf("don't have key %s", col.Name.O)
@@ -500,7 +500,7 @@ func compareData(map1 map[string][]byte, map2 map[string][]byte, orderKeyCols []
 				continue
 			}
 		}
-		
+
 	}
 	if cmp == 1 {
 		return false, 1, nil
