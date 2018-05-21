@@ -7,13 +7,13 @@ const base int64 = 62
 func Encode(m int64, length int) string {
 	bits := make([]int64, length)
 	strs := make([]byte, length)
-	
+
 	for i := 0; m != 0 && i < length; i++ {
 		res := m % base
 		bits[i] = res
 		m /= base
 	}
-	
+
 	for i, v := range bits {
 		if v < 10 {
 			strs[i] = byte(v) + '0'
@@ -34,13 +34,13 @@ func Decode(str string) int64 {
 
 	for _, v := range str {
 		if v <= '9' {
-			origin += int64(v - '0')*magnitude
+			origin += int64(v-'0') * magnitude
 		} else if v <= 'Z' {
-			origin += int64(v - 'A' + 10)*magnitude
+			origin += int64(v-'A'+10) * magnitude
 		} else {
-			origin += int64(v - 'a' + 36)*magnitude
+			origin += int64(v-'a'+36) * magnitude
 		}
-		magnitude = magnitude*base
+		magnitude = magnitude * base
 	}
 
 	return origin

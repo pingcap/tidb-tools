@@ -14,10 +14,12 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"os"
 
 	"github.com/juju/errors"
+	"github.com/pingcap/tidb-tools/generate_binlog_position/pkg"
 )
 
 const (
@@ -40,7 +42,12 @@ type Config struct {
 	Command  string `toml:"cmd" json:"cmd"`
 	NodeID   string `toml:"node-id" json:"node-id"`
 	DataDir  string `toml:"data-dir" json:"data-dir"`
+	TimeZone string `toml:"time-zone" json:"time-zone"`
 	EtcdURLs string `toml:"pd-urls" json:"pd-urls"`
+	SSLCA    string `toml:"ssl-ca" json:"ssl-ca"`
+	SSLCert  string `toml:"ssl-cert" json:"ssl-cert"`
+	SSLKey   string `toml:"ssl-key" json:"ssl-key"`
+	tls      *tls.Config
 }
 
 // NewConfig return an instance of configuration
@@ -53,6 +60,11 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.NodeID, "node-id", "", "name of service, use to delete some service with operation delete-pump and delete-drainer")
 	fs.StringVar(&cfg.DataDir, "data-dir", defaultDataDir, "binlog position data directory path (default data.drainer)")
 	fs.StringVar(&cfg.EtcdURLs, "pd-urls", defaultEtcdURLs, "a comma separated list of PD endpoints")
+	fs.StringVar(&cfg.SSLCA, "ssl-ca", "", "Path of file that contains list of trusted SSL CAs for connection with cluster components.")
+	fs.StringVar(&cfg.SSLCert, "ssl-cert", "", "Path of file that contains X509 certificate in PEM format for connection with cluster components.")
+	fs.StringVar(&cfg.SSLKey, "ssl-key", "", "Path of file that contains X509 key in PEM format for connection with cluster components.")
+	fs.StringVar(&cfg.TimeZone, "time-zone", "", "set time zone if you want save time info in savepoint file, for example `Asia/Shanghai` for CST time, `Local` for local time")
+
 	return cfg
 }
 
@@ -75,6 +87,14 @@ func (cfg *Config) Parse(args []string) error {
 	}
 	// adjust configuration
 	adjustString(&cfg.DataDir, defaultDataDir)
+
+	var err error
+	// transfore tls config
+	cfg.tls, err = pkg.ToTLSConfig(cfg.SSLCA, cfg.SSLCert, cfg.SSLKey)
+	if err != nil {
+		return errors.Errorf("tls config error %v", err)
+	}
+
 	return cfg.validate()
 }
 
@@ -87,7 +107,7 @@ func adjustString(v *string, defValue string) {
 // validate checks whether the configuration is valid
 func (cfg *Config) validate() error {
 	// check EtcdEndpoints
-	_, err := NewURLsValue(cfg.EtcdURLs)
+	_, err := pkg.NewURLsValue(cfg.EtcdURLs)
 	if err != nil {
 		return errors.Errorf("parse EtcdURLs error: %s, %v", cfg.EtcdURLs, err)
 	}

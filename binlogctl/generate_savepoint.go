@@ -23,8 +23,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/pd/pd-client"
-	"github.com/pingcap/tidb"
-	"github.com/pingcap/tidb/store/tikv"
+	"github.com/pingcap/tidb-tools/generate_binlog_position/pkg"
 	"golang.org/x/net/context"
 )
 
@@ -37,40 +36,32 @@ func GenSavepointInfo(cfg *Config) error {
 		return errors.Trace(err)
 	}
 
-	urlv, err := NewURLsValue(cfg.EtcdURLs)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	tidb.RegisterStore("tikv", tikv.Driver{})
-	tiPath := fmt.Sprintf("tikv://%s?disableGC=true", urlv.HostString())
-	tiStore, err := tidb.NewStore(tiPath)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	defer tiStore.Close()
-
 	// get newest ts from pd
-	commitTS, err := getTSO(cfg)
+	commitTS, err := GetTSO(cfg)
 	if err != nil {
 		log.Errorf("get tso failed: %s", err)
 		return errors.Trace(err)
 	}
 
 	// generate meta infomation
-	meta := NewLocalMeta(path.Join(cfg.DataDir, "savePoint"))
-	err = meta.Save(commitTS)
+	meta := NewLocalMeta(path.Join(cfg.DataDir, "savepoint"))
+	err = meta.Save(commitTS, cfg.TimeZone)
 	return errors.Trace(err)
 }
 
-func getTSO(cfg *Config) (int64, error) {
+func GetTSO(cfg *Config) (int64, error) {
 	now := time.Now()
 
-	urlv, err := NewURLsValue(cfg.EtcdURLs)
+	urlv, err := pkg.NewURLsValue(cfg.EtcdURLs)
 	if err != nil {
 		return 0, errors.Trace(err)
 	}
 
-	pdCli, err := pd.NewClient(urlv.StringSlice())
+	pdCli, err := pd.NewClient(urlv.StringSlice(), pd.SecurityOption{
+		CAPath:   cfg.SSLCA,
+		CertPath: cfg.SSLCert,
+		KeyPath:  cfg.SSLKey,
+	})
 	physical, logical, err := pdCli.GetTS(context.Background())
 	if err != nil {
 		return 0, errors.Trace(err)

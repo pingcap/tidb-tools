@@ -22,6 +22,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	"github.com/pingcap/tidb-tools/generate_binlog_position/pkg"
 	"github.com/siddontang/go/ioutil2"
 )
 
@@ -35,7 +36,7 @@ type Meta interface {
 	Load() error
 
 	// Save saves meta information.
-	Save(int64) error
+	Save(int64, string) error
 
 	// Check checks whether we should save meta.
 	Check() bool
@@ -77,7 +78,7 @@ func (lm *localMeta) Load() error {
 }
 
 // Save implements Meta.Save interface.
-func (lm *localMeta) Save(ts int64) error {
+func (lm *localMeta) Save(ts int64, timeZone string) error {
 	log.Infof("local meta save")
 	lm.Lock()
 	defer lm.Unlock()
@@ -92,6 +93,18 @@ func (lm *localMeta) Save(ts int64) error {
 		return errors.Trace(err)
 	}
 
+	if timeZone != "" {
+		t := pkg.TsToTime(ts)
+		location, err := time.LoadLocation(timeZone)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		buf.WriteString(t.UTC().String())
+		buf.WriteByte('\n')
+		buf.WriteString(t.In(location).String())
+	}
+
 	err = ioutil2.WriteFileAtomic(lm.name, buf.Bytes(), 0644)
 	if err != nil {
 		log.Errorf("syncer save meta info to file %s err %v", lm.name, errors.ErrorStack(err))
@@ -99,6 +112,7 @@ func (lm *localMeta) Save(ts int64) error {
 	}
 
 	lm.saveTime = time.Now()
+	log.Infof("ts: %d", ts)
 	return nil
 }
 

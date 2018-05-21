@@ -14,18 +14,22 @@
 package pd
 
 import (
-	"net"
+	"crypto/tls"
+	"crypto/x509"
+	"io/ioutil"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
+	"github.com/opentracing/opentracing-go"
 	"github.com/pingcap/kvproto/pkg/metapb"
 	"github.com/pingcap/kvproto/pkg/pdpb"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 // Client is a PD (Placement Driver) client.
@@ -35,6 +39,8 @@ type Client interface {
 	GetClusterID(ctx context.Context) uint64
 	// GetTS gets a timestamp from PD.
 	GetTS(ctx context.Context) (int64, int64, error)
+	// GetTSAsync gets a timestamp from PD, without block the caller.
+	GetTSAsync(ctx context.Context) TSFuture
 	// GetRegion gets a region and its leader Peer from PD by key.
 	// The region may expire after split. Caller is responsible for caching and
 	// taking care of region change.
@@ -52,6 +58,8 @@ type Client interface {
 }
 
 type tsoRequest struct {
+	start    time.Time
+	ctx      context.Context
 	done     chan error
 	physical int64
 	logical  int64
@@ -59,6 +67,7 @@ type tsoRequest struct {
 
 const (
 	pdTimeout             = 3 * time.Second
+	updateLeaderTimeout   = time.Second // Use a shorter timeout to recover faster from network isolation.
 	maxMergeTSORequests   = 10000
 	maxInitClusterRetries = 100
 )
@@ -89,10 +98,19 @@ type client struct {
 	wg     sync.WaitGroup
 	ctx    context.Context
 	cancel context.CancelFunc
+
+	security SecurityOption
+}
+
+// SecurityOption records options about tls
+type SecurityOption struct {
+	CAPath   string
+	CertPath string
+	KeyPath  string
 }
 
 // NewClient creates a PD client.
-func NewClient(pdAddrs []string) (Client, error) {
+func NewClient(pdAddrs []string, security SecurityOption) (Client, error) {
 	log.Infof("[pd] create pd client with endpoints %v", pdAddrs)
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &client{
@@ -102,6 +120,7 @@ func NewClient(pdAddrs []string) (Client, error) {
 		checkLeaderCh: make(chan struct{}, 1),
 		ctx:           ctx,
 		cancel:        cancel,
+		security:      security,
 	}
 	c.connMu.clientConns = make(map[string]*grpc.ClientConn)
 
@@ -118,9 +137,15 @@ func NewClient(pdAddrs []string) (Client, error) {
 	go c.tsCancelLoop()
 	go c.leaderLoop()
 
-	// TODO: Update addrs from server continuously by using GetMember.
-
 	return c, nil
+}
+
+func (c *client) updateURLs(members []*pdpb.Member) {
+	urls := make([]string, 0, len(members))
+	for _, m := range members {
+		urls = append(urls, m.GetClientUrls()...)
+	}
+	c.urls = urls
 }
 
 func (c *client) initClusterID() error {
@@ -144,13 +169,14 @@ func (c *client) initClusterID() error {
 }
 
 func (c *client) updateLeader() error {
-	ctx, cancel := context.WithCancel(c.ctx)
-	defer cancel()
 	for _, u := range c.urls {
+		ctx, cancel := context.WithTimeout(c.ctx, updateLeaderTimeout)
 		members, err := c.getMembers(ctx, u)
+		cancel()
 		if err != nil || members.GetLeader() == nil || len(members.GetLeader().GetClientUrls()) == 0 {
 			continue
 		}
+		c.updateURLs(members.GetMembers())
 		if err = c.switchLeader(members.GetLeader().GetClientUrls()); err != nil {
 			return errors.Trace(err)
 		}
@@ -202,21 +228,46 @@ func (c *client) getOrCreateGRPCConn(addr string) (*grpc.ClientConn, error) {
 		return conn, nil
 	}
 
-	cc, err := grpc.Dial(addr, grpc.WithDialer(func(addr string, d time.Duration) (net.Conn, error) {
-		u, err := url.Parse(addr)
+	opt := grpc.WithInsecure()
+	if len(c.security.CAPath) != 0 {
+
+		certificates := []tls.Certificate{}
+		if len(c.security.CertPath) != 0 && len(c.security.KeyPath) != 0 {
+			// Load the client certificates from disk
+			certificate, err := tls.LoadX509KeyPair(c.security.CertPath, c.security.KeyPath)
+			if err != nil {
+				return nil, errors.Errorf("could not load client key pair: %s", err)
+			}
+			certificates = append(certificates, certificate)
+		}
+
+		// Create a certificate pool from the certificate authority
+		certPool := x509.NewCertPool()
+		ca, err := ioutil.ReadFile(c.security.CAPath)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.Errorf("could not read ca certificate: %s", err)
 		}
-		// For tests.
-		if u.Scheme == "unix" || u.Scheme == "unixs" {
-			return net.DialTimeout(u.Scheme, u.Host, d)
+
+		// Append the certificates from the CA
+		if !certPool.AppendCertsFromPEM(ca) {
+			return nil, errors.New("failed to append ca certs")
 		}
-		return net.DialTimeout("tcp", u.Host, d)
-	}), grpc.WithInsecure()) // TODO: Support HTTPS.
+
+		creds := credentials.NewTLS(&tls.Config{
+			Certificates: certificates,
+			RootCAs:      certPool,
+		})
+
+		opt = grpc.WithTransportCredentials(creds)
+	}
+	u, err := url.Parse(addr)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-
+	cc, err := grpc.Dial(u.Host, opt)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
 	c.connMu.Lock()
 	defer c.connMu.Unlock()
 	if old, ok := c.connMu.clientConns[addr]; ok {
@@ -284,6 +335,7 @@ func (c *client) tsLoop() {
 	defer loopCancel()
 
 	var requests []*tsoRequest
+	var opts []opentracing.StartSpanOption
 	var stream pdpb.PD_TsoClient
 	var cancel context.CancelFunc
 
@@ -296,7 +348,9 @@ func (c *client) tsLoop() {
 			stream, err = c.leaderClient().Tso(ctx)
 			if err != nil {
 				log.Errorf("[pd] create tso stream error: %v", err)
+				c.scheduleCheckLeader()
 				cancel()
+				c.revokeTSORequest(err)
 				select {
 				case <-time.After(time.Second):
 				case <-loopCtx.Done():
@@ -324,37 +378,52 @@ func (c *client) tsLoop() {
 			case <-loopCtx.Done():
 				return
 			}
-			err = c.processTSORequests(stream, requests)
+			opts = extractSpanReference(requests, opts[:0])
+			err = c.processTSORequests(stream, requests, opts)
 			close(done)
 			requests = requests[:0]
 		case <-loopCtx.Done():
+			cancel()
 			return
 		}
 
 		if err != nil {
 			log.Errorf("[pd] getTS error: %v", err)
+			c.scheduleCheckLeader()
 			cancel()
 			stream, cancel = nil, nil
 		}
 	}
 }
 
-func (c *client) processTSORequests(stream pdpb.PD_TsoClient, requests []*tsoRequest) error {
+func extractSpanReference(requests []*tsoRequest, opts []opentracing.StartSpanOption) []opentracing.StartSpanOption {
+	for _, req := range requests {
+		if span := opentracing.SpanFromContext(req.ctx); span != nil {
+			opts = append(opts, opentracing.ChildOf(span.Context()))
+		}
+	}
+	return opts
+}
+
+func (c *client) processTSORequests(stream pdpb.PD_TsoClient, requests []*tsoRequest, opts []opentracing.StartSpanOption) error {
+	if len(opts) > 0 {
+		span := opentracing.StartSpan("pdclient.processTSORequests", opts...)
+		defer span.Finish()
+	}
+
 	start := time.Now()
-	//	ctx, cancel := context.WithTimeout(c.ctx, pdTimeout)
 	req := &pdpb.TsoRequest{
 		Header: c.requestHeader(),
 		Count:  uint32(len(requests)),
 	}
+
 	if err := stream.Send(req); err != nil {
 		c.finishTSORequest(requests, 0, 0, err)
-		c.scheduleCheckLeader()
 		return errors.Trace(err)
 	}
 	resp, err := stream.Recv()
 	if err != nil {
 		c.finishTSORequest(requests, 0, 0, errors.Trace(err))
-		c.scheduleCheckLeader()
 		return errors.Trace(err)
 	}
 	requestDuration.WithLabelValues("tso").Observe(time.Since(start).Seconds())
@@ -375,8 +444,19 @@ func (c *client) processTSORequests(stream pdpb.PD_TsoClient, requests []*tsoReq
 
 func (c *client) finishTSORequest(requests []*tsoRequest, physical, firstLogical int64, err error) {
 	for i := 0; i < len(requests); i++ {
+		if span := opentracing.SpanFromContext(requests[i].ctx); span != nil {
+			span.Finish()
+		}
 		requests[i].physical, requests[i].logical = physical, firstLogical+int64(i)
 		requests[i].done <- err
+	}
+}
+
+func (c *client) revokeTSORequest(err error) {
+	n := len(c.tsoRequests)
+	for i := 0; i < n; i++ {
+		req := <-c.tsoRequests
+		req.done <- errors.Trace(err)
 	}
 }
 
@@ -384,11 +464,7 @@ func (c *client) Close() {
 	c.cancel()
 	c.wg.Wait()
 
-	n := len(c.tsoRequests)
-	for i := 0; i < n; i++ {
-		req := <-c.tsoRequests
-		req.done <- errors.Trace(errClosing)
-	}
+	c.revokeTSORequest(errClosing)
 
 	c.connMu.Lock()
 	defer c.connMu.Unlock()
@@ -425,30 +501,56 @@ var tsoReqPool = sync.Pool{
 	},
 }
 
-func (c *client) GetTS(ctx context.Context) (int64, int64, error) {
-	start := time.Now()
-	defer func() { cmdDuration.WithLabelValues("tso").Observe(time.Since(start).Seconds()) }()
-
+func (c *client) GetTSAsync(ctx context.Context) TSFuture {
+	if span := opentracing.SpanFromContext(ctx); span != nil {
+		span = opentracing.StartSpan("GetTSAsync", opentracing.ChildOf(span.Context()))
+		ctx = opentracing.ContextWithSpan(ctx, span)
+	}
 	req := tsoReqPool.Get().(*tsoRequest)
+	req.start = time.Now()
+	req.ctx = ctx
+	req.physical = 0
+	req.logical = 0
 	c.tsoRequests <- req
 
+	return req
+}
+
+// TSFuture is a future which promises to return a TSO.
+type TSFuture interface {
+	// Wait gets the physical and logical time, it would block caller if data is not available yet.
+	Wait() (int64, int64, error)
+}
+
+func (req *tsoRequest) Wait() (int64, int64, error) {
 	select {
 	case err := <-req.done:
+		defer tsoReqPool.Put(req)
 		if err != nil {
-			cmdFailedDuration.WithLabelValues("tso").Observe(time.Since(start).Seconds())
+			cmdFailedDuration.WithLabelValues("tso").Observe(time.Since(req.start).Seconds())
 			return 0, 0, errors.Trace(err)
 		}
 		physical, logical := req.physical, req.logical
-		tsoReqPool.Put(req)
+		cmdDuration.WithLabelValues("tso").Observe(time.Since(req.start).Seconds())
 		return physical, logical, err
-	case <-ctx.Done():
-		return 0, 0, errors.Trace(ctx.Err())
+	case <-req.ctx.Done():
+		return 0, 0, errors.Trace(req.ctx.Err())
 	}
 }
 
+func (c *client) GetTS(ctx context.Context) (int64, int64, error) {
+	resp := c.GetTSAsync(ctx)
+	return resp.Wait()
+}
+
 func (c *client) GetRegion(ctx context.Context, key []byte) (*metapb.Region, *metapb.Peer, error) {
+	if span := opentracing.SpanFromContext(ctx); span != nil {
+		span = opentracing.StartSpan("pdclient.GetRegion", opentracing.ChildOf(span.Context()))
+		defer span.Finish()
+	}
 	start := time.Now()
 	defer func() { cmdDuration.WithLabelValues("get_region").Observe(time.Since(start).Seconds()) }()
+
 	ctx, cancel := context.WithTimeout(ctx, pdTimeout)
 	resp, err := c.leaderClient().GetRegion(ctx, &pdpb.GetRegionRequest{
 		Header:    c.requestHeader(),
@@ -466,8 +568,13 @@ func (c *client) GetRegion(ctx context.Context, key []byte) (*metapb.Region, *me
 }
 
 func (c *client) GetRegionByID(ctx context.Context, regionID uint64) (*metapb.Region, *metapb.Peer, error) {
+	if span := opentracing.SpanFromContext(ctx); span != nil {
+		span = opentracing.StartSpan("pdclient.GetRegionByID", opentracing.ChildOf(span.Context()))
+		defer span.Finish()
+	}
 	start := time.Now()
 	defer func() { cmdDuration.WithLabelValues("get_region_byid").Observe(time.Since(start).Seconds()) }()
+
 	ctx, cancel := context.WithTimeout(ctx, pdTimeout)
 	resp, err := c.leaderClient().GetRegionByID(ctx, &pdpb.GetRegionByIDRequest{
 		Header:   c.requestHeader(),
@@ -485,8 +592,13 @@ func (c *client) GetRegionByID(ctx context.Context, regionID uint64) (*metapb.Re
 }
 
 func (c *client) GetStore(ctx context.Context, storeID uint64) (*metapb.Store, error) {
+	if span := opentracing.SpanFromContext(ctx); span != nil {
+		span = opentracing.StartSpan("pdclient.GetStore", opentracing.ChildOf(span.Context()))
+		defer span.Finish()
+	}
 	start := time.Now()
 	defer func() { cmdDuration.WithLabelValues("get_store").Observe(time.Since(start).Seconds()) }()
+
 	ctx, cancel := context.WithTimeout(ctx, pdTimeout)
 	resp, err := c.leaderClient().GetStore(ctx, &pdpb.GetStoreRequest{
 		Header:  c.requestHeader(),

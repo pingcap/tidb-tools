@@ -64,7 +64,12 @@ func main() {
 		exitWithErr(fmt.Errorf("need table ID"))
 	}
 
-	client, err := pd.NewClient([]string{*pdAddr})
+	// TODO: support tsl
+	client, err := pd.NewClient([]string{*pdAddr}, pd.SecurityOption{
+		CAPath:   "",
+		CertPath: "",
+		KeyPath:  "",
+	})
 	exitWithErr(err)
 
 	defer client.Close()
