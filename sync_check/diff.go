@@ -75,7 +75,7 @@ func NewDiff(db1, db2 *sql.DB, dbName string, chunkSize, sample, checkThCount in
 	}
 
 	if snapshot != "" {
-		err = util.SetSnapshot(db1, snapshot)
+		err = pkgdb.SetSnapshot(db1, snapshot)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -318,14 +318,14 @@ func (df *Diff) compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.Column
 	rowsData2 := make([]map[string][]byte, 0, 100)
 
 	for rows1.Next() {
-		data1, err := util.ScanRow(rows1)
+		data1, err := pkgdb.ScanRow(rows1)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
 		rowsData1 = append(rowsData1, data1)
 	}
 	for rows2.Next() {
-		data2, err := util.ScanRow(rows2)
+		data2, err := pkgdb.ScanRow(rows2)
 		if err != nil {
 			return false, errors.Trace(err)
 		}

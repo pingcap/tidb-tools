@@ -14,9 +14,9 @@
 package pkgdb
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
-	"database/sql"
 
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb/ast"

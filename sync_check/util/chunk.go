@@ -20,7 +20,8 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/siddontang/go-mysql/schema"
+	"github.com/pingcap/tidb-tools/pkg/db"
+	"github.com/pingcap/tidb/model"
 )
 
 // chunkRange represents chunk range
@@ -39,7 +40,7 @@ type chunkRange struct {
 type DumpJob struct {
 	DbName string
 	Table  string
-	Column *schema.TableColumn
+	Column *model.ColumnInfo
 	Where  string
 	Chunk  chunkRange
 }
@@ -55,14 +56,14 @@ func newChunkRange(begin, end interface{}, containB, containE bool, notNil bool)
 	}
 }
 
-func getChunksForTable(db *sql.DB, dbname, tableName string, column *schema.TableColumn, where string, chunkSize, sample int) ([]chunkRange, error) {
+func getChunksForTable(db *sql.DB, dbname, tableName string, column *model.ColumnInfo, where string, chunkSize, sample int) ([]chunkRange, error) {
 	noChunks := []chunkRange{{}}
 	if column == nil {
 		log.Warnf("No suitable index found for %s.%s", dbname, tableName)
 		return noChunks, nil
 	}
 
-	field := column.Name
+	field := column.Name.O
 
 	// fetch min, max
 	query := fmt.Sprintf("SELECT %s MIN(`%s`) as MIN, MAX(`%s`) as MAX FROM `%s`.`%s` where %s",
@@ -70,7 +71,7 @@ func getChunksForTable(db *sql.DB, dbname, tableName string, column *schema.Tabl
 	log.Debugf("[dumper] get max min query sql: %s", query)
 
 	// get the chunk count
-	cnt, err := GetCount(db, dbname, tableName, where)
+	cnt, err := pkgdb.GetCount(db, dbname, tableName, where)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -86,7 +87,7 @@ func getChunksForTable(db *sql.DB, dbname, tableName string, column *schema.Tabl
 	}
 
 	var chunk chunkRange
-	if column.Type == schema.TYPE_NUMBER {
+	if pkgdb.IsNumberType(column.Tp) {
 		var min, max sql.NullInt64
 		err := db.QueryRow(query).Scan(&min, &max)
 		if err != nil {
@@ -97,7 +98,7 @@ func getChunksForTable(db *sql.DB, dbname, tableName string, column *schema.Tabl
 			return []chunkRange{}, nil
 		}
 		chunk = newChunkRange(min.Int64, max.Int64+1, true, false, true)
-	} else if column.Type == schema.TYPE_FLOAT {
+	} else if pkgdb.IsFloatType(column.Tp) {
 		var min, max sql.NullFloat64
 		err := db.QueryRow(query).Scan(&min, &max)
 		if err != nil {
@@ -122,7 +123,7 @@ func getChunksForTable(db *sql.DB, dbname, tableName string, column *schema.Tabl
 	return splitRange(db, &chunk, chunkCnt, dbname, tableName, column, where)
 }
 
-func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbname string, table string, column *schema.TableColumn, timeRange string) ([]chunkRange, error) {
+func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbname string, table string, column *model.ColumnInfo, timeRange string) ([]chunkRange, error) {
 	var chunks []chunkRange
 
 	if count <= 1 {
@@ -172,7 +173,7 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbname string, table
 		}
 
 		// get random value as split value
-		splitValues, err := GetRandomValues(db, dbname, table, column.Name, count-1, min, max, timeRange)
+		splitValues, err := pkgdb.GetRandomValues(db, dbname, table, column.Name.O, count-1, min, max, timeRange)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -200,9 +201,9 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbname string, table
 	return chunks, nil
 }
 
-func findSuitableField(db *sql.DB, dbname string, table string, useRowID bool) (*schema.TableColumn, error) {
+func findSuitableField(db *sql.DB, dbname string, table string, useRowID bool) (*model.ColumnInfo, error) {
 	// first select the index, and number type index first
-	column, err := FindSuitableIndex(db, dbname, table, useRowID)
+	column, err := pkgdb.FindSuitableIndex(db, dbname, table, useRowID)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -211,18 +212,8 @@ func findSuitableField(db *sql.DB, dbname string, table string, useRowID bool) (
 	}
 	log.Infof("%s.%s don't have index, will use a number column as split field", dbname, table)
 
-	// select a number column
-	column, err = FindNumberColumn(db, dbname, table)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	if column != nil {
-		return column, nil
-	}
-	log.Infof("%s.%s don't have number columns, will use the first column as split field", dbname, table)
-
 	// use the first column
-	column, err = GetFirstColumn(db, dbname, table)
+	column, err = pkgdb.GetFirstColumn(db, dbname, table)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -238,7 +229,7 @@ func GenerateDumpJob(db *sql.DB, dbname, tableName, splitField string,
 	limitRange string, chunkSize int, sample int, useRowID bool) ([]*DumpJob, error) {
 	jobBucket := make([]*DumpJob, 0, 10)
 	var jobCnt int
-	var column *schema.TableColumn
+	var column *model.ColumnInfo
 	var err error
 
 	if splitField == "" {
@@ -248,13 +239,13 @@ func GenerateDumpJob(db *sql.DB, dbname, tableName, splitField string,
 			return nil, errors.Trace(err)
 		}
 	} else {
-		var table *schema.Table
-		table, err = GetSchemaTable(db, dbname, tableName)
+		var table *model.TableInfo
+		table, err = pkgdb.GetSchemaTable(db, dbname, tableName)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 		exist := false
-		column, exist = GetColumnByName(table, splitField)
+		column, exist = pkgdb.GetColumnByName(table, splitField)
 		if !exist {
 			return nil, fmt.Errorf("can't find column %s in table %s", splitField, tableName)
 		}

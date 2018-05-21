@@ -21,6 +21,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	"github.com/pingcap/tidb-tools/pkg/db"
 	"github.com/pingcap/tidb-tools/sync_check/util"
 )
 
@@ -50,13 +51,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer util.CloseDB(sourceDB)
+	defer pkgdb.CloseDB(sourceDB)
 
 	targetDB, err := util.CreateDB(cfg.TargetDBCfg)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer util.CloseDB(targetDB)
+	defer pkgdb.CloseDB(targetDB)
 
 	if !checkSyncState(sourceDB, targetDB, cfg) {
 		log.Fatal("sourceDB don't equal targetDB")
