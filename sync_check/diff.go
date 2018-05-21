@@ -111,7 +111,7 @@ func (df *Diff) Equal() (equal bool, err error) {
 	eq := equalStrings(tbls1, tbls2)
 	// len(df.tables) == 0 means check all tables
 	if !eq && len(df.tables) == 0 {
-		log.Infof("show tables get different table. [source db tables] %v [target db tables] %v", tbls1, tbls2)
+		log.Errorf("show tables get different table. [source db tables] %v [target db tables] %v", tbls1, tbls2)
 		equal = false
 	}
 
@@ -135,7 +135,7 @@ func (df *Diff) Equal() (equal bool, err error) {
 			return
 		}
 		if !eq {
-			log.Infof("table have different index: %s\n", table.Name)
+			log.Errorf("table have different index: %s\n", table.Name)
 			equal = false
 		}
 
@@ -166,7 +166,7 @@ func (df *Diff) EqualTable(table *TableCheckCfg) (bool, error) {
 		return eq, errors.Trace(err)
 	}
 	if !eq {
-		log.Infof("table have different schema: %s\n", table.Name)
+		log.Errorf("table have different structure: %s\n", table.Name)
 		return eq, err
 	}
 
@@ -175,7 +175,7 @@ func (df *Diff) EqualTable(table *TableCheckCfg) (bool, error) {
 		return eq, errors.Trace(err)
 	}
 	if !eq {
-		log.Infof("table data different: %s\n", table.Name)
+		log.Errorf("table data different: %s\n", table.Name)
 	}
 	return eq, err
 }
@@ -339,7 +339,9 @@ func (df *Diff) compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.Column
 			for ; index2 < len(rowsData2); index2++ {
 				sql := generateDML("delete", rowsData2[index2], orderKeyCols, table.Info, table.Schema)
 				log.Infof("[delete] sql: %v", sql)
+				df.wg.Add(1)
 				df.sqlCh <- sql
+				equal = false
 			}
 			break
 		}
@@ -348,6 +350,9 @@ func (df *Diff) compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.Column
 			for ; index1 < len(rowsData1); index1++ {
 				sql := generateDML("replace", rowsData1[index1], orderKeyCols, table.Info, table.Schema)
 				log.Infof("[insert] sql: %v", sql)
+				df.wg.Add(1)
+				df.sqlCh <- sql
+				equal = false
 			}
 			break
 		}
@@ -366,12 +371,14 @@ func (df *Diff) compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.Column
 			// delete
 			sql := generateDML("delete", rowsData2[index2], orderKeyCols, table.Info, table.Schema)
 			log.Infof("[delete] sql: %v", sql)
+			df.wg.Add(1)
 			df.sqlCh <- sql
 			index2++
 		case -1:
 			// insert
 			sql := generateDML("replace", rowsData1[index1], orderKeyCols, table.Info, table.Schema)
 			log.Infof("[insert] sql: %v", sql)
+			df.wg.Add(1)
 			df.sqlCh <- sql
 			index1++
 		case 0:
@@ -379,6 +386,7 @@ func (df *Diff) compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.Column
 			deleteSql := generateDML("delete", rowsData2[index2], orderKeyCols, table.Info, table.Schema)
 			replaceSql := generateDML("replace", rowsData1[index1], orderKeyCols, table.Info, table.Schema)
 			log.Infof("[update] delete: %s,\n replace: %s", deleteSql, replaceSql)
+			df.wg.Add(2)
 			df.sqlCh <- deleteSql
 			df.sqlCh <- replaceSql
 			index1++
@@ -401,6 +409,7 @@ func (df *Diff) WriteSqls() {
 			if err != nil {
 				log.Errorf("write sql: %s failed, error: %v", dml, err)
 			}
+			df.wg.Done()
 		default:
 		}
 	}
