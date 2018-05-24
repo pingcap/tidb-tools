@@ -25,6 +25,7 @@ import (
 )
 
 const implicitColName = "_tidb_rowid"
+const implicitColID = -1
 
 // CloseDB close the mysql fd
 func CloseDB(db *sql.DB) error {
@@ -151,6 +152,48 @@ func FindSuitableIndex(db *sql.DB, dbName string, table string, useRowID bool) (
 	return c, nil
 }
 
+// GetOrderKey return some columns for order
+func GetOrderKey(tbInfo *model.TableInfo, useRowID bool) ([]string, []*model.ColumnInfo) {
+	keys := make([]string, 0, 2)
+	keyCols := make([]*model.ColumnInfo, 0, 2)
+	for _, index := range tbInfo.Indices {
+		if index.Primary {
+			for _, indexCol := range index.Columns {
+				keys = append(keys, indexCol.Name.O)
+			}
+		}
+	}
+
+	if len(keys) == 0 {
+		// no primary key found
+		if useRowID {
+			// use _row_id as order by key
+			newColumn := &model.ColumnInfo{
+				ID:   implicitColID,
+				Name: model.NewCIStr(implicitColName),
+			}
+			newColumn.Tp = mysql.TypeInt24
+			keys = append(keys, implicitColName)
+			keyCols = append(keyCols, newColumn)
+		} else {
+			// use all fields as order by key
+			for _, col := range tbInfo.Columns {
+				keys = append(keys, col.Name.O)
+				keyCols = append(keyCols, col)
+			}
+		}
+	} else {
+		for _, col := range tbInfo.Columns {
+			for _, key := range keys {
+				if col.Name.O == key {
+					keyCols = append(keyCols, col)
+				}
+			}
+		}
+	}
+	return keys, keyCols
+}
+
 // GetFirstColumn returns the first column in the table
 func GetFirstColumn(db *sql.DB, dbname string, table string) (*model.ColumnInfo, error) {
 	tableInfo, err := GetSchemaTable(db, dbname, table)
@@ -165,7 +208,7 @@ func GetRandomValues(db *sql.DB, dbname string, table string, field string, num 
 	randomValue := make([]string, 0, num)
 	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` > \"%v\" AND `%s` < \"%v\" AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
 		field, field, dbname, table, field, min, field, max, timeRange, num, field)
-	log.Infof("GetRandomValues sql: %s", query)
+	log.Infof("get random values sql: %s", query)
 	rows, err := db.Query(query)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -198,6 +241,97 @@ func GetColumnByName(table *model.TableInfo, name string) (*model.ColumnInfo, bo
 	}
 
 	return nil, false
+}
+
+// ShowDatabases returns a database lists.
+func ShowDatabases(db *sql.DB) ([]string, error) {
+	var ret []string
+	rows, err := QuerySQL(db, "show databases;")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var dbName string
+		err := rows.Scan(&dbName)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		ret = append(ret, dbName)
+	}
+	return ret, nil
+}
+
+// GetTables gets all table in the schema
+func GetTables(db *sql.DB, dbName string) ([]string, error) {
+	rs, err := QuerySQL(db, fmt.Sprintf("show tables in `%s`;", dbName))
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	defer rs.Close()
+
+	var tbls []string
+	for rs.Next() {
+		var name string
+		err := rs.Scan(&name)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		tbls = append(tbls, name)
+	}
+	return tbls, nil
+}
+
+type DescribeTable struct {
+	Field   string
+	Type    string
+	Null    string
+	Key     string
+	Default interface{}
+	Extra   interface{}
+}
+
+func (desc *DescribeTable) Scan(rows *sql.Rows) error {
+	err := rows.Scan(&desc.Field, &desc.Type, &desc.Null, &desc.Key, &desc.Default, &desc.Extra)
+	return errors.Trace(err)
+}
+
+func GetTableSchema(db *sql.DB, tblName string) ([]DescribeTable, error) {
+	stmt := fmt.Sprintf("describe %s;", tblName)
+	rows, err := QuerySQL(db, stmt)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	defer rows.Close()
+
+	var descs []DescribeTable
+	for rows.Next() {
+		var desc DescribeTable
+		err1 := desc.Scan(rows)
+		if err1 != nil {
+			return nil, errors.Trace(err1)
+		}
+		descs = append(descs, desc)
+	}
+	return descs, err
+}
+
+func QuerySQL(db *sql.DB, query string) (*sql.Rows, error) {
+	var (
+		err  error
+		rows *sql.Rows
+	)
+
+	log.Debugf("[query][sql]%s", query)
+
+	rows, err = db.Query(query)
+
+	if err != nil {
+		log.Errorf("query sql[%s] failed %v", query, errors.ErrorStack(err))
+		return nil, errors.Trace(err)
+	}
+	return rows, nil
 }
 
 // ScanRowsToInterfaces scans rows to interfaces.

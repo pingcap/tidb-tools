@@ -96,13 +96,13 @@ func (df *Diff) Equal() (equal bool, err error) {
 	go df.WriteSqls()
 
 	equal = true
-	tbls1, err := getTables(df.db1)
+	tbls1, err := pkgdb.GetTables(df.db1, df.dbName)
 	if err != nil {
 		err = errors.Trace(err)
 		return
 	}
 
-	tbls2, err := getTables(df.db2)
+	tbls2, err := pkgdb.GetTables(df.db2, df.dbName)
 	if err != nil {
 		err = errors.Trace(err)
 		return
@@ -182,27 +182,42 @@ func (df *Diff) EqualTable(table *TableCheckCfg) (bool, error) {
 
 // EqualIndex tests whether two database index are same.
 func (df *Diff) EqualIndex(tblName string) (bool, error) {
-	index1, err := getTableIndex(df.db1, tblName)
+	index1, err := pkgdb.ShowIndex(df.db1, df.dbName, tblName)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
-	defer index1.Close()
-	index2, err := getTableIndex(df.db2, tblName)
-	if err != nil {
-		return false, errors.Trace(err)
-	}
-	defer index2.Close()
 
-	eq, err := equalRows(index1, index2, &showIndex{}, &showIndex{}, nil)
-	if err != nil || !eq {
-		return eq, errors.Trace(err)
+	index2, err := pkgdb.ShowIndex(df.db2, df.dbName, tblName)
+	if err != nil {
+		return false, errors.Trace(err)
 	}
+
+	eq := true
+compareIndex:
+	for i, index := range index1 {
+		for field1, value1 := range index {
+			if len(index2) < i {
+				eq = false
+				break compareIndex
+			}
+			value2, ok := index2[i][field1]
+			if !ok {
+				eq = false
+				break compareIndex
+			}
+			if string(value1) != string(value2) {
+				eq = false
+				break compareIndex
+			}
+		}
+	}
+
 	return eq, nil
 }
 
 func (df *Diff) equalCreateTable(tblName string) (bool, error) {
-	_, err1 := getCreateTable(df.db1, tblName)
-	_, err2 := getCreateTable(df.db2, tblName)
+	_, err1 := pkgdb.GetCreateTable(df.db1, df.dbName, tblName)
+	_, err2 := pkgdb.GetCreateTable(df.db2, df.dbName, tblName)
 
 	if errors.IsNotFound(err1) && errors.IsNotFound(err2) {
 		return true, nil
@@ -276,13 +291,13 @@ func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, table *TableCheckC
 	for _, job := range dumpJobs {
 		log.Infof("check table: %s, range: %s", job.Table, job.Where)
 
-		rows1, orderKeyCols, err := getChunkRows(df.db1, df.dbName, table, job.Where)
+		rows1, orderKeyCols, err := getChunkRows(df.db1, df.dbName, table, job.Where, df.useRowID)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
 		defer rows1.Close()
 
-		rows2, _, err := getChunkRows(df.db2, df.dbName, table, job.Where)
+		rows2, _, err := getChunkRows(df.db2, df.dbName, table, job.Where, df.useRowID)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -575,63 +590,17 @@ func equalOneRow(rows1, rows2 *sql.Rows, row1, row2 comparableSQLRow) (bool, err
 	return false, nil
 }
 
-func getChunkRows(db *sql.DB, dbName string, table *TableCheckCfg, where string) (*sql.Rows, []*model.ColumnInfo, error) {
-	orderKeys, orderKeyCols := orderbyKey(table.Info)
+func getChunkRows(db *sql.DB, dbName string, table *TableCheckCfg, where string, useRowID bool) (*sql.Rows, []*model.ColumnInfo, error) {
+	orderKeys, orderKeyCols := pkgdb.GetOrderKey(table.Info, useRowID)
 
 	query := fmt.Sprintf("SELECT %s * FROM `%s`.`%s` WHERE %s ORDER BY %s",
 		"/*!40001 SQL_NO_CACHE */", dbName, table.Name, where, strings.Join(orderKeys, ","))
 
-	rows, err := querySQL(db, query)
+	rows, err := pkgdb.QuerySQL(db, query)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
 	return rows, orderKeyCols, nil
-}
-
-func getTableIndex(db *sql.DB, tblName string) (*sql.Rows, error) {
-	rows, err := querySQL(db, fmt.Sprintf("show index from %s;", tblName))
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	return rows, nil
-}
-
-func getTables(db *sql.DB) ([]string, error) {
-	rs, err := querySQL(db, "show tables;")
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	defer rs.Close()
-
-	var tbls []string
-	for rs.Next() {
-		var name string
-		err := rs.Scan(&name)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		tbls = append(tbls, name)
-	}
-	return tbls, nil
-}
-
-func getCreateTable(db *sql.DB, tn string) (string, error) {
-	stmt := fmt.Sprintf("show create table %s;", tn)
-	rs, err := querySQL(db, stmt)
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-	defer rs.Close()
-
-	if rs.Next() {
-		var (
-			name string
-			cs   string
-		)
-		err := rs.Scan(&name, &cs)
-		return cs, errors.Trace(err)
-	}
-	return "", errors.NewNotFound(nil, "table not exist")
 }
 
 type comparableSQLRow interface {
@@ -682,135 +651,6 @@ func (r rawBytesRow) Equal(data comparable) bool {
 	return true
 }
 
-type showIndex struct {
-	Table        sql.RawBytes
-	NonUnique    sql.RawBytes
-	KeyName      sql.RawBytes
-	SeqInIndex   sql.RawBytes
-	ColumnName   sql.RawBytes
-	Collation    sql.RawBytes
-	Cardinality  sql.RawBytes
-	SubPart      sql.RawBytes
-	Packed       sql.RawBytes
-	Null         sql.RawBytes
-	IndexType    sql.RawBytes
-	Comment      sql.RawBytes
-	IndexComment sql.RawBytes
-}
-
-func (si *showIndex) Scan(rows *sql.Rows) error {
-	err := rows.Scan(&si.Table,
-		&si.NonUnique,
-		&si.KeyName,
-		&si.SeqInIndex,
-		&si.ColumnName,
-		&si.Collation,
-		&si.Cardinality,
-		&si.SubPart,
-		&si.Packed,
-		&si.Null,
-		&si.IndexType,
-		&si.Comment,
-		&si.IndexComment)
-	return errors.Trace(err)
-}
-
-func (si *showIndex) Equal(data comparable) bool {
-	si1, ok := data.(*showIndex)
-	if !ok {
-		return false
-	}
-	return bytes.Compare(si.Table, si1.Table) == 0 &&
-		bytes.Compare(si.NonUnique, si1.NonUnique) == 0 &&
-		bytes.Compare(si.KeyName, si1.KeyName) == 0 &&
-		bytes.Compare(si.SeqInIndex, si1.SeqInIndex) == 0 &&
-		bytes.Compare(si.ColumnName, si1.ColumnName) == 0 &&
-		bytes.Compare(si.SubPart, si1.SubPart) == 0 &&
-		bytes.Compare(si.Packed, si1.Packed) == 0
-}
-
-type describeTable struct {
-	Field   string
-	Type    string
-	Null    string
-	Key     string
-	Default interface{}
-	Extra   interface{}
-}
-
-func (desc *describeTable) Scan(rows *sql.Rows) error {
-	err := rows.Scan(&desc.Field, &desc.Type, &desc.Null, &desc.Key, &desc.Default, &desc.Extra)
-	return errors.Trace(err)
-}
-
-func getTableSchema(db *sql.DB, tblName string) ([]describeTable, error) {
-	stmt := fmt.Sprintf("describe %s;", tblName)
-	rows, err := querySQL(db, stmt)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	defer rows.Close()
-
-	var descs []describeTable
-	for rows.Next() {
-		var desc describeTable
-		err1 := desc.Scan(rows)
-		if err1 != nil {
-			return nil, errors.Trace(err1)
-		}
-		descs = append(descs, desc)
-	}
-	return descs, err
-}
-
-func orderbyKey(tbInfo *model.TableInfo) ([]string, []*model.ColumnInfo) {
-	// TODO can't get the real primary key
-	keys := make([]string, 0, 2)
-	keyCols := make([]*model.ColumnInfo, 0, 2)
-	for _, index := range tbInfo.Indices {
-		if index.Primary {
-			for _, indexCol := range index.Columns {
-				keys = append(keys, indexCol.Name.O)
-			}
-		}
-	}
-
-	if len(keys) == 0 {
-		// if no primary key found, use all fields as order by key
-		for _, col := range tbInfo.Columns {
-			keys = append(keys, col.Name.O)
-			keyCols = append(keyCols, col)
-		}
-	} else {
-		for _, col := range tbInfo.Columns {
-			for _, key := range keys {
-				if col.Name.O == key {
-					keyCols = append(keyCols, col)
-				}
-			}
-		}
-	}
-	return keys, keyCols
-}
-
-func querySQL(db *sql.DB, query string) (*sql.Rows, error) {
-	var (
-		err  error
-		rows *sql.Rows
-	)
-
-	log.Debugf("[query][sql]%s", query)
-
-	rows, err = db.Query(query)
-
-	if err != nil {
-		log.Errorf("query sql[%s] failed %v", query, errors.ErrorStack(err))
-		return nil, errors.Trace(err)
-	}
-	return rows, nil
-
-}
-
 func equalStrings(str1, str2 []string) bool {
 	if len(str1) != len(str2) {
 		return false
@@ -821,26 +661,6 @@ func equalStrings(str1, str2 []string) bool {
 		}
 	}
 	return true
-}
-
-// ShowDatabases returns a database lists.
-func ShowDatabases(db *sql.DB) ([]string, error) {
-	var ret []string
-	rows, err := querySQL(db, "show databases;")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var dbName string
-		err := rows.Scan(&dbName)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		ret = append(ret, dbName)
-	}
-	return ret, nil
 }
 
 func getRandomN(total, num int) []int {
