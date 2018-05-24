@@ -118,7 +118,7 @@ func getChunksForTable(db *sql.DB, dbname, tableName string, column *model.Colum
 		if !min.Valid || !max.Valid {
 			return []chunkRange{}, nil
 		}
-		chunk = newChunkRange(min, max, true, true, true)
+		chunk = newChunkRange(min.String, max.String, true, true, true)
 	}
 	return splitRange(db, &chunk, chunkCnt, dbname, tableName, column, where)
 }

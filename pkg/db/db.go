@@ -32,6 +32,22 @@ func CloseDB(db *sql.DB) error {
 	return errors.Trace(db.Close())
 }
 
+// GetCreateTable gets the create table sql.
+func GetCreateTable(db *sql.DB, schemaName string, tableName string) (string, error) {
+	query := fmt.Sprintf("SHOW CREATE TABLE `%s`.`%s`", schemaName, tableName)
+	row := db.QueryRow(query)
+
+	var tbl, createTable sql.NullString
+	err := row.Scan(&tbl, &createTable)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	if !tbl.Valid || !createTable.Valid {
+		return "", errors.NewNotFound(nil, fmt.Sprintf("table %s not exist", tableName))
+	}
+	return createTable.String, nil
+}
+
 // GetCount get count rows of the table for specific field.
 func GetCount(db *sql.DB, dbname string, table string, where string) (int64, error) {
 	query := fmt.Sprintf("SELECT count(1) cnt from `%s`.`%s` where %s", dbname, table, where)

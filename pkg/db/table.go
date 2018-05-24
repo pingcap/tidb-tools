@@ -15,7 +15,6 @@ package pkgdb
 
 import (
 	"database/sql"
-	"fmt"
 	"strings"
 
 	"github.com/juju/errors"
@@ -27,19 +26,6 @@ import (
 	"github.com/pingcap/tidb/table"
 	"github.com/pingcap/tidb/types"
 )
-
-func GetCreateTable(db *sql.DB, schemaName string, tableName string) (string, error) {
-	query := fmt.Sprintf("SHOW CREATE TABLE `%s`.`%s`", schemaName, tableName)
-	row := db.QueryRow(query)
-
-	var tbl, createTable string
-	err := row.Scan(&tbl, &createTable)
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-	return createTable, nil
-	//return "", errors.NewNotFound(nil, "table not exist")
-}
 
 // GetSchemaTable returns table information.
 func GetSchemaTable(db *sql.DB, schemaName string, tableName string) (table *model.TableInfo, err error) {

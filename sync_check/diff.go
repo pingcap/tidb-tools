@@ -193,22 +193,14 @@ func (df *Diff) EqualIndex(tblName string) (bool, error) {
 	}
 
 	eq := true
-compareIndex:
 	for i, index := range index1 {
-		for field1, value1 := range index {
-			if len(index2) < i {
-				eq = false
-				break compareIndex
-			}
-			value2, ok := index2[i][field1]
-			if !ok {
-				eq = false
-				break compareIndex
-			}
-			if string(value1) != string(value2) {
-				eq = false
-				break compareIndex
-			}
+		keyName1 := string(index["Key_name"])
+		keyName2 := string(index2[i]["Key_name"])
+		columnName1 := string(index["Column_name"])
+		columnName2 := string(index2[i]["Column_name"])
+		if keyName1 != keyName2 || columnName1 != columnName2 {
+			eq = false
+			break
 		}
 	}
 
