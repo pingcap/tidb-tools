@@ -2,16 +2,6 @@
 
 log-level = "info"
 
-# time-field's type should be datetime
-time-field = "create_time"
-
-# check data some second before, comment this parameter if use begin-time and end-time
-#delay = 10
-
-# check data between begin-time and end-time 
-begin-time = "2018-01-01 00:00:00"
-end-time = "2018-02-01 00:00:00"
-
 # for example, the whole data is [1...100]
 # we can split these data to [1...10], [11...20], ..., [91...100]
 # the [1...10] is a chunk, and it's chunk size is 10
@@ -21,28 +11,42 @@ chunk-size = 1000
 # how many goroutine created to check data
 check-thcount = 4
 
-# use split-field to split data to several chunk
-split-field = "id"
-
 # sampling check percent, for example 10 means only check 10% data
 sample = 10
 
-# tables need check, check all tables if comment this
-#tables = ["abc", "bcd"]
-
-＃ set true if target-db and source-db all support tidb implicit column "_tidb_rowid"
+# set true if target-db and source-db all support tidb implicit column "_tidb_rowid"
 use-rowid = false
 
-[target-db]
-host = "127.0.0.1"
-user = "root"
-password = ""
+# fix different data in target-db if fix_data is true, must have primary key or unique key
+fix-data = false
+
+# use source tidb's snapshot data, sql looks like set @@tidb_snapshot="2016-10-08 16:45:26";
+#snapshot = "2016-10-08 16:45:26"
+
+# if check-table is nil, will check all tables in the schema. 
+[[check-table]]
+# table name.
 name = "test"
-port = 4000
+
+# field should be the primary key, unique key or field with index. 
+# if comment this, sync_check will find a suitable field.
+field = "id"
+
+# check data's range
+# range = "age > 10 AND age < 20"
 
 [source-db]
 host = "127.0.0.1"
 user = "root"
 password = ""
+# schema name
 name = "test"
 port = 3306
+
+[target-db]
+host = "127.0.0.1"
+user = "root"
+password = ""
+# schema name
+name = "test"
+port = 4000

@@ -20,7 +20,8 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/siddontang/go-mysql/schema"
+	"github.com/pingcap/tidb-tools/pkg/db"
+	"github.com/pingcap/tidb/model"
 )
 
 // chunkRange represents chunk range
@@ -35,13 +36,13 @@ type chunkRange struct {
 	notNil   bool
 }
 
-// dumpJob is the struct for job of dump
-type dumpJob struct {
-	dbName string
-	table  string
-	column *schema.TableColumn
-	where  string
-	chunk  chunkRange
+// DumpJob is the struct for job of dump
+type DumpJob struct {
+	DbName string
+	Table  string
+	Column *model.ColumnInfo
+	Where  string
+	Chunk  chunkRange
 }
 
 // newChunkRange return a range struct
@@ -55,22 +56,22 @@ func newChunkRange(begin, end interface{}, containB, containE bool, notNil bool)
 	}
 }
 
-func getChunksForTable(db *sql.DB, dbname, tableName string, column *schema.TableColumn, timeRange string, chunkSize, sample int) ([]chunkRange, error) {
+func getChunksForTable(db *sql.DB, dbname, tableName string, column *model.ColumnInfo, where string, chunkSize, sample int) ([]chunkRange, error) {
 	noChunks := []chunkRange{{}}
 	if column == nil {
 		log.Warnf("No suitable index found for %s.%s", dbname, tableName)
 		return noChunks, nil
 	}
 
-	field := column.Name
+	field := column.Name.O
 
 	// fetch min, max
 	query := fmt.Sprintf("SELECT %s MIN(`%s`) as MIN, MAX(`%s`) as MAX FROM `%s`.`%s` where %s",
-		"/*!40001 SQL_NO_CACHE */", field, field, dbname, tableName, timeRange)
+		"/*!40001 SQL_NO_CACHE */", field, field, dbname, tableName, where)
 	log.Debugf("[dumper] get max min query sql: %s", query)
 
 	// get the chunk count
-	cnt, err := GetCount(db, dbname, tableName, timeRange)
+	cnt, err := pkgdb.GetCount(db, dbname, tableName, where)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -86,7 +87,7 @@ func getChunksForTable(db *sql.DB, dbname, tableName string, column *schema.Tabl
 	}
 
 	var chunk chunkRange
-	if column.Type == schema.TYPE_NUMBER {
+	if pkgdb.IsNumberType(column.Tp) {
 		var min, max sql.NullInt64
 		err := db.QueryRow(query).Scan(&min, &max)
 		if err != nil {
@@ -97,7 +98,7 @@ func getChunksForTable(db *sql.DB, dbname, tableName string, column *schema.Tabl
 			return []chunkRange{}, nil
 		}
 		chunk = newChunkRange(min.Int64, max.Int64+1, true, false, true)
-	} else if column.Type == schema.TYPE_FLOAT {
+	} else if pkgdb.IsFloatType(column.Tp) {
 		var min, max sql.NullFloat64
 		err := db.QueryRow(query).Scan(&min, &max)
 		if err != nil {
@@ -117,12 +118,12 @@ func getChunksForTable(db *sql.DB, dbname, tableName string, column *schema.Tabl
 		if !min.Valid || !max.Valid {
 			return []chunkRange{}, nil
 		}
-		chunk = newChunkRange(min, max, true, true, true)
+		chunk = newChunkRange(min.String, max.String, true, true, true)
 	}
-	return splitRange(db, &chunk, chunkCnt, dbname, tableName, column, timeRange)
+	return splitRange(db, &chunk, chunkCnt, dbname, tableName, column, where)
 }
 
-func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbname string, table string, column *schema.TableColumn, timeRange string) ([]chunkRange, error) {
+func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbname string, table string, column *model.ColumnInfo, limitRange string) ([]chunkRange, error) {
 	var chunks []chunkRange
 
 	if count <= 1 {
@@ -172,7 +173,7 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbname string, table
 		}
 
 		// get random value as split value
-		splitValues, err := GetRandomValues(db, dbname, table, column.Name, count-1, min, max, timeRange)
+		splitValues, err := pkgdb.GetRandomValues(db, dbname, table, column.Name.O, count-1, min, max, limitRange)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -200,9 +201,9 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbname string, table
 	return chunks, nil
 }
 
-func findSuitableField(db *sql.DB, dbname string, table string, useRowID bool) (*schema.TableColumn, error) {
+func findSuitableField(db *sql.DB, dbname string, table string) (*model.ColumnInfo, error) {
 	// first select the index, and number type index first
-	column, err := FindSuitableIndex(db, dbname, table, useRowID)
+	column, err := pkgdb.FindSuitableIndex(db, dbname, table)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -211,18 +212,8 @@ func findSuitableField(db *sql.DB, dbname string, table string, useRowID bool) (
 	}
 	log.Infof("%s.%s don't have index, will use a number column as split field", dbname, table)
 
-	// select a number column
-	column, err = FindNumberColumn(db, dbname, table)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	if column != nil {
-		return column, nil
-	}
-	log.Infof("%s.%s don't have number columns, will use the first column as split field", dbname, table)
-
 	// use the first column
-	column, err = GetFirstColumn(db, dbname, table)
+	column, err = pkgdb.GetFirstColumn(db, dbname, table)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -233,44 +224,40 @@ func findSuitableField(db *sql.DB, dbname string, table string, useRowID bool) (
 	return nil, errors.Errorf("no column find in table %s.%s", dbname, table)
 }
 
-func generateDumpJob(db *sql.DB, dbname, tableName, timeField, beginTime, endTime,
-	splitField string, chunkSize int, sample int, useRowID bool) ([]*dumpJob, error) {
-	jobBucket := make([]*dumpJob, 0, 10)
+// GenerateDumpJob generates some DumpJobs.
+func GenerateDumpJob(db *sql.DB, dbname, tableName, splitField string,
+	limitRange string, chunkSize int, sample int, useRowID bool) ([]*DumpJob, error) {
+	jobBucket := make([]*DumpJob, 0, 10)
 	var jobCnt int
-	var column *schema.TableColumn
+	var column *model.ColumnInfo
 	var err error
 
 	if splitField == "" {
 		// find a column for split data
-		column, err = findSuitableField(db, dbname, tableName, useRowID)
+		column, err = findSuitableField(db, dbname, tableName)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 	} else {
-		var table *schema.Table
-		table, err = GetSchemaTable(db, dbname, tableName)
+		var table *model.TableInfo
+		table, err = pkgdb.GetSchemaTableWithRowID(db, dbname, tableName, useRowID)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 		exist := false
-		column, exist = GetColumnByName(table, splitField)
+		column, exist = pkgdb.GetColumnByName(table, splitField)
 		if !exist {
 			return nil, fmt.Errorf("can't find column %s in table %s", splitField, tableName)
 		}
 	}
 
-	// set timeRange to "true" can make the code more simple, no need to judge the timeRange's value.
-	// for example: sql will looks like "select * from itest where a > 10 AND true" if don't set time range in config.
-	timeRange := "true"
-	if beginTime != "" && endTime != "" {
-		timeRange = fmt.Sprintf("`%s` <= \"%s\" AND `%s` >= \"%s\"", timeField, endTime, timeField, beginTime)
-	} else if beginTime != "" {
-		timeRange = fmt.Sprintf("`%s` >= \"%s\"", timeField, beginTime)
-	} else if endTime != "" {
-		timeRange = fmt.Sprintf("`%s` <= \"%s\"", timeField, endTime)
+	// set limitRange to "true" can make the code more simple, no need to judge the limitRange's value.
+	// for example: sql will looks like "select * from itest where a > 10 AND true" if don't set range in config.
+	if limitRange == "" {
+		limitRange = "true"
 	}
 
-	chunks, err := getChunksForTable(db, dbname, tableName, column, timeRange, chunkSize, sample)
+	chunks, err := getChunksForTable(db, dbname, tableName, column, limitRange, chunkSize, sample)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -309,18 +296,18 @@ func generateDumpJob(db *sql.DB, dbname, tableName, timeField, beginTime, endTim
 			} else {
 				where = fmt.Sprintf("(`%s` %s \"%v\" AND `%s` %s \"%v\")", column.Name, gt, chunk.begin, column.Name, lt, chunk.end)
 			}
-			where = fmt.Sprintf("%s AND %s", where, timeRange)
+			where = fmt.Sprintf("%s AND %s", where, limitRange)
 		} else {
-			where = timeRange
+			where = limitRange
 		}
 
 		log.Debugf("%s.%s create dump job: where: %s", dbname, tableName, where)
-		jobBucket = append(jobBucket, &dumpJob{
-			dbName: dbname,
-			table:  tableName,
-			column: column,
-			where:  where,
-			chunk:  chunk,
+		jobBucket = append(jobBucket, &DumpJob{
+			DbName: dbname,
+			Table:  tableName,
+			Column: column,
+			Where:  where,
+			Chunk:  chunk,
 		})
 	}
 

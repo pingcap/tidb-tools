@@ -17,11 +17,11 @@ import (
 	"database/sql"
 	"flag"
 	"os"
-	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	"github.com/pingcap/tidb-tools/pkg/db"
 	"github.com/pingcap/tidb-tools/sync_check/util"
 )
 
@@ -35,9 +35,11 @@ func main() {
 	case flag.ErrHelp:
 		os.Exit(0)
 	default:
-		log.Errorf("parse cmd flags err %s\n", err)
+		log.Errorf("parse cmd flags err %s\n", errors.Trace(err))
 		os.Exit(2)
 	}
+
+	log.SetLevelByString(cfg.LogLevel)
 
 	ok := cfg.checkConfig()
 	if !ok {
@@ -49,13 +51,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer util.CloseDB(sourceDB)
+	defer pkgdb.CloseDB(sourceDB)
 
 	targetDB, err := util.CreateDB(cfg.TargetDBCfg)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer util.CloseDB(targetDB)
+	defer pkgdb.CloseDB(targetDB)
 
 	if !checkSyncState(sourceDB, targetDB, cfg) {
 		log.Fatal("sourceDB don't equal targetDB")
@@ -64,25 +66,14 @@ func main() {
 }
 
 func checkSyncState(sourceDB, targetDB *sql.DB, cfg *Config) bool {
-	beginTime := ""
-	endTime := ""
-
-	if cfg.Delay != 0 {
-		endTime = time.Now().Add(time.Duration(-cfg.Delay) * time.Second).Format(dateTimeFormat)
-	} else {
-		if cfg.EndTime != "" {
-			endTime = cfg.EndTime
-		}
-		if cfg.BeginTime != "" {
-			beginTime = cfg.BeginTime
-		}
+	d, err := NewDiff(sourceDB, targetDB, cfg.SourceDBCfg.Name, cfg.ChunkSize, cfg.Sample, cfg.CheckThCount, cfg.UseRowID, cfg.Tables, cfg.FixSqlFile, cfg.Snapshot)
+	if err != nil {
+		log.Fatal(errors.Trace(err))
 	}
 
-	d := util.NewDiff(sourceDB, targetDB, cfg.SourceDBCfg.Name, cfg.TimeField, beginTime, endTime,
-		cfg.SplitField, cfg.ChunkSize, cfg.Sample, cfg.CheckThCount, cfg.Tables, cfg.UseRowID)
 	ok, err := d.Equal()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(errors.Trace(err))
 	}
 
 	return ok

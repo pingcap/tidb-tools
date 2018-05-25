@@ -21,12 +21,49 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/sync_check/util"
+	"github.com/pingcap/tidb/model"
 )
 
 const (
 	percent0   = 0
 	percent100 = 100
 )
+
+// TableCheckCfg is the config of table to be checked.
+type TableCheckCfg struct {
+	Name   string `toml:"name"`
+	Schema string
+	Field  string `toml:"field"`
+	Range  string `toml:"range"`
+	Info   *model.TableInfo
+}
+
+// Config is the configuration.
+type Config struct {
+	*flag.FlagSet `json:"-"`
+
+	LogLevel string `toml:"log-level" json:"log-level"`
+
+	SourceDBCfg util.DBConfig `toml:"source-db" json:"source-db"`
+
+	TargetDBCfg util.DBConfig `toml:"target-db" json:"target-db"`
+
+	ChunkSize int `toml:"chunk-size" json:"chunk-size"`
+
+	Sample int `toml:"sample" json:"sample"`
+
+	CheckThCount int `toml:"check-thcount" json:"check-thcount"`
+
+	UseRowID bool `toml:"use-rowid" json:"use-rowid"`
+
+	FixSqlFile string `toml:"fix-sql-file" json:"fix-sql-file"`
+
+	Tables []*TableCheckCfg `toml:"check-table" json:"check-table"`
+
+	Snapshot string `toml:"snapshot" json:"snapshot"`
+
+	ConfigFile string
+}
 
 // NewConfig creates a new config.
 func NewConfig() *Config {
@@ -36,49 +73,14 @@ func NewConfig() *Config {
 
 	fs.StringVar(&cfg.ConfigFile, "config", "", "Config file")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
-	fs.IntVar(&cfg.Delay, "delay", 0, "check data 5 second before")
 	fs.IntVar(&cfg.ChunkSize, "chunk-size", 1000, "diff check chunk size")
 	fs.IntVar(&cfg.Sample, "sample", 100, "the percent of sampling check")
 	fs.IntVar(&cfg.CheckThCount, "check-thcount", 1, "the count of check thread count")
-	fs.StringVar(&cfg.TimeField, "time-field", "", "a field with datetime type")
-	fs.StringVar(&cfg.BeginTime, "begin-time", "", "check data's begin time")
-	fs.StringVar(&cfg.EndTime, "end-time", "", "check data's end time")
-	fs.StringVar(&cfg.SplitField, "split-field", "", "use this field split data to several chunk")
 	fs.BoolVar(&cfg.UseRowID, "use-rowid", false, "set true if target-db and source-db all support tidb implicit column _tidb_rowid")
+	fs.StringVar(&cfg.FixSqlFile, "fix-sql-file", "fix.sql", "the name of file which saves sqls used to fix different data")
+	fs.StringVar(&cfg.Snapshot, "snapshot", "", "use source tidb's snapshot data to check different")
+
 	return cfg
-}
-
-// Config is the configuration.
-type Config struct {
-	*flag.FlagSet `json:"-"`
-
-	LogLevel string `toml:"log-level" json:"log-level"`
-
-	TimeField string `toml:"time-field" json:"time-field"`
-
-	BeginTime string `toml:"begin-time" json:"begin-time"`
-
-	EndTime string `toml:"end-time" json:"end-time"`
-
-	SplitField string `toml:"split-field" json:"split-field"`
-
-	SourceDBCfg util.DBConfig `toml:"source-db" json:"source-db"`
-
-	TargetDBCfg util.DBConfig `toml:"target-db" json:"target-db"`
-
-	ConfigFile string
-
-	Delay int `toml:"delay" json:"delay"`
-
-	ChunkSize int `toml:"chunk-size" json:"chunk-size"`
-
-	Sample int `toml:"sample" json:"sample"`
-
-	CheckThCount int `toml:"check-thcount" json:"check-thcount"`
-
-	Tables []string `toml:"tables" json:"tables"`
-
-	UseRowID bool `toml:"use-rowid" json:"use-rowid"`
 }
 
 // Parse parses flag definitions from the argument list.
