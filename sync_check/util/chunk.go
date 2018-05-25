@@ -123,7 +123,7 @@ func getChunksForTable(db *sql.DB, dbname, tableName string, column *model.Colum
 	return splitRange(db, &chunk, chunkCnt, dbname, tableName, column, where)
 }
 
-func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbname string, table string, column *model.ColumnInfo, timeRange string) ([]chunkRange, error) {
+func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbname string, table string, column *model.ColumnInfo, limitRange string) ([]chunkRange, error) {
 	var chunks []chunkRange
 
 	if count <= 1 {
@@ -173,7 +173,7 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbname string, table
 		}
 
 		// get random value as split value
-		splitValues, err := pkgdb.GetRandomValues(db, dbname, table, column.Name.O, count-1, min, max, timeRange)
+		splitValues, err := pkgdb.GetRandomValues(db, dbname, table, column.Name.O, count-1, min, max, limitRange)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -201,9 +201,9 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbname string, table
 	return chunks, nil
 }
 
-func findSuitableField(db *sql.DB, dbname string, table string, useRowID bool) (*model.ColumnInfo, error) {
+func findSuitableField(db *sql.DB, dbname string, table string) (*model.ColumnInfo, error) {
 	// first select the index, and number type index first
-	column, err := pkgdb.FindSuitableIndex(db, dbname, table, useRowID)
+	column, err := pkgdb.FindSuitableIndex(db, dbname, table)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -234,13 +234,13 @@ func GenerateDumpJob(db *sql.DB, dbname, tableName, splitField string,
 
 	if splitField == "" {
 		// find a column for split data
-		column, err = findSuitableField(db, dbname, tableName, useRowID)
+		column, err = findSuitableField(db, dbname, tableName)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 	} else {
 		var table *model.TableInfo
-		table, err = pkgdb.GetSchemaTable(db, dbname, tableName)
+		table, err = pkgdb.GetSchemaTableWithRowID(db, dbname, tableName, useRowID)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}

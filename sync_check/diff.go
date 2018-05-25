@@ -63,7 +63,7 @@ func NewDiff(db1, db2 *sql.DB, dbName string, chunkSize, sample, checkThCount in
 		sqlCh:        make(chan string),
 	}
 	for _, table := range diff.tables {
-		table.Info, err = pkgdb.GetSchemaTable(diff.db1, diff.dbName, table.Name)
+		table.Info, err = pkgdb.GetSchemaTableWithRowID(diff.db1, diff.dbName, table.Name, useRowID)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -119,7 +119,7 @@ func (df *Diff) Equal() (equal bool, err error) {
 		df.tables = make([]*TableCheckCfg, 0, len(tbls1))
 		for _, name := range tbls1 {
 			table := &TableCheckCfg{Name: name, Schema: df.dbName}
-			table.Info, err = pkgdb.GetSchemaTable(df.db1, df.dbName, name)
+			table.Info, err = pkgdb.GetSchemaTableWithRowID(df.db1, df.dbName, name, df.useRowID)
 			if err != nil {
 				return false, errors.Trace(err)
 			}
@@ -583,10 +583,13 @@ func equalOneRow(rows1, rows2 *sql.Rows, row1, row2 comparableSQLRow) (bool, err
 }
 
 func getChunkRows(db *sql.DB, dbName string, table *TableCheckCfg, where string, useRowID bool) (*sql.Rows, []*model.ColumnInfo, error) {
-	orderKeys, orderKeyCols := pkgdb.GetOrderKey(table.Info, useRowID)
-
-	query := fmt.Sprintf("SELECT %s * FROM `%s`.`%s` WHERE %s ORDER BY %s",
-		"/*!40001 SQL_NO_CACHE */", dbName, table.Name, where, strings.Join(orderKeys, ","))
+	orderKeys, orderKeyCols := pkgdb.GetOrderKey(table.Info)
+	columns := "*"
+	if orderKeys[0] == pkgdb.ImplicitColName {
+		columns = fmt.Sprintf("*, %s", pkgdb.ImplicitColName)
+	}
+	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ %s FROM `%s`.`%s` WHERE %s ORDER BY %s",
+		columns, dbName, table.Name, where, strings.Join(orderKeys, ","))
 
 	rows, err := pkgdb.QuerySQL(db, query)
 	if err != nil {

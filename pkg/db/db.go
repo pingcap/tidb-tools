@@ -24,8 +24,8 @@ import (
 	"github.com/pingcap/tidb/mysql"
 )
 
-const implicitColName = "_tidb_rowid"
-const implicitColID = -1
+const ImplicitColName = "_tidb_rowid"
+const ImplicitColID = -1
 
 // CloseDB close the mysql fd
 func CloseDB(db *sql.DB) error {
@@ -104,7 +104,7 @@ func ShowIndex(db *sql.DB, dbname string, table string) ([]map[string][]byte, er
 	return rowsData, nil
 }
 
-func FindSuitableIndex(db *sql.DB, dbName string, table string, useRowID bool) (*model.ColumnInfo, error) {
+func FindSuitableIndex(db *sql.DB, dbName string, table string) (*model.ColumnInfo, error) {
 	rowsData, err := ShowIndex(db, dbName, table)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -137,14 +137,6 @@ func FindSuitableIndex(db *sql.DB, dbName string, table string, useRowID bool) (
 		}
 	}
 
-	if useRowID {
-		newColumn := &model.ColumnInfo{
-			Name: model.NewCIStr(implicitColName),
-		}
-		newColumn.Tp = mysql.TypeInt24
-		return newColumn, nil
-	}
-
 	// no unique index found, seek index with max cardinality
 	var c *model.ColumnInfo
 	var maxCardinality int
@@ -169,9 +161,10 @@ func FindSuitableIndex(db *sql.DB, dbName string, table string, useRowID bool) (
 }
 
 // GetOrderKey return some columns for order
-func GetOrderKey(tbInfo *model.TableInfo, useRowID bool) ([]string, []*model.ColumnInfo) {
+func GetOrderKey(tbInfo *model.TableInfo) ([]string, []*model.ColumnInfo) {
 	keys := make([]string, 0, 2)
 	keyCols := make([]*model.ColumnInfo, 0, 2)
+
 	for _, index := range tbInfo.Indices {
 		if index.Primary {
 			for _, indexCol := range index.Columns {
@@ -181,22 +174,10 @@ func GetOrderKey(tbInfo *model.TableInfo, useRowID bool) ([]string, []*model.Col
 	}
 
 	if len(keys) == 0 {
-		// no primary key found
-		if useRowID {
-			// use _row_id as order by key
-			newColumn := &model.ColumnInfo{
-				ID:   implicitColID,
-				Name: model.NewCIStr(implicitColName),
-			}
-			newColumn.Tp = mysql.TypeInt24
-			keys = append(keys, implicitColName)
-			keyCols = append(keyCols, newColumn)
-		} else {
-			// use all fields as order by key
-			for _, col := range tbInfo.Columns {
-				keys = append(keys, col.Name.O)
-				keyCols = append(keyCols, col)
-			}
+		// no primary key found, use all fields as order by key
+		for _, col := range tbInfo.Columns {
+			keys = append(keys, col.Name.O)
+			keyCols = append(keyCols, col)
 		}
 	} else {
 		for _, col := range tbInfo.Columns {

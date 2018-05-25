@@ -27,8 +27,22 @@ import (
 	"github.com/pingcap/tidb/types"
 )
 
+// GetSchemaTableWithRowID returns table information with _tidb_rowid column if useRowID is true
+func GetSchemaTableWithRowID(db *sql.DB, schemaName string, tableName string, useRowID bool) (*model.TableInfo, error) {
+	table, err := GetSchemaTable(db, schemaName, tableName)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	if useRowID && !table.PKIsHandle {
+		addImplicitColumn(table)
+	}
+
+	return table, nil
+}
+
 // GetSchemaTable returns table information.
-func GetSchemaTable(db *sql.DB, schemaName string, tableName string) (table *model.TableInfo, err error) {
+func GetSchemaTable(db *sql.DB, schemaName string, tableName string) (*model.TableInfo, error) {
 	createTable, err := GetCreateTable(db, schemaName, tableName)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -256,4 +270,19 @@ func findCol(cols []*model.ColumnInfo, name string) *model.ColumnInfo {
 	}
 
 	return nil
+}
+
+func addImplicitColumn(table *model.TableInfo) {
+	newColumn := &model.ColumnInfo{
+		ID:   ImplicitColID,
+		Name: model.NewCIStr(ImplicitColName),
+	}
+	newColumn.Tp = mysql.TypeInt24
+	table.Columns = append(table.Columns, newColumn)
+
+	newIndex := &model.IndexInfo{
+		Primary: true,
+		Columns: []*model.IndexColumn{{Name: model.NewCIStr(ImplicitColName)}},
+	}
+	table.Indices = []*model.IndexInfo{newIndex}
 }
