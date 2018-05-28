@@ -60,8 +60,6 @@ type Config struct {
 
 	Tables []*TableCheckCfg `toml:"check-table" json:"check-table"`
 
-	Snapshot string `toml:"snapshot" json:"snapshot"`
-
 	ConfigFile string
 }
 
@@ -78,7 +76,6 @@ func NewConfig() *Config {
 	fs.IntVar(&cfg.CheckThCount, "check-thcount", 1, "the count of check thread count")
 	fs.BoolVar(&cfg.UseRowID, "use-rowid", false, "set true if target-db and source-db all support tidb implicit column _tidb_rowid")
 	fs.StringVar(&cfg.FixSqlFile, "fix-sql-file", "fix.sql", "the name of file which saves sqls used to fix different data")
-	fs.StringVar(&cfg.Snapshot, "snapshot", "", "use source tidb's snapshot data to check different")
 
 	return cfg
 }

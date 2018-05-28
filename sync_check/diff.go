@@ -50,7 +50,7 @@ type Diff struct {
 
 // NewDiff returns a Diff instance.
 func NewDiff(db1, db2 *sql.DB, dbName string, chunkSize, sample, checkThCount int,
-	useRowID bool, tables []*TableCheckCfg, filename, snapshot string) (diff *Diff, err error) {
+	useRowID bool, tables []*TableCheckCfg, filename string) (diff *Diff, err error) {
 	diff = &Diff{
 		db1:          db1,
 		db2:          db2,
@@ -72,13 +72,6 @@ func NewDiff(db1, db2 *sql.DB, dbName string, chunkSize, sample, checkThCount in
 	diff.fixSqlFile, err = os.Create(filename)
 	if err != nil {
 		return nil, errors.Trace(err)
-	}
-
-	if snapshot != "" {
-		err = pkgdb.SetSnapshot(db1, snapshot)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
 	}
 
 	return diff, nil

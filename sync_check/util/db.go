@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	"github.com/juju/errors"
+	"github.com/pingcap/tidb-tools/pkg/db"
 )
 
 // DBConfig is the DB configuration.
@@ -31,6 +32,8 @@ type DBConfig struct {
 	Name string `toml:"name" json:"name"`
 
 	Port int `toml:"port" json:"port"`
+
+	Snapshot string `toml:"snapshot" json:"snapshot"`
 }
 
 func (c *DBConfig) String() string {
@@ -46,6 +49,13 @@ func CreateDB(cfg DBConfig) (*sql.DB, error) {
 	db, err := sql.Open("mysql", dbDSN)
 	if err != nil {
 		return nil, errors.Trace(err)
+	}
+
+	if cfg.Snapshot != "" {
+		err = pkgdb.SetSnapshot(db, cfg.Snapshot)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
 	}
 
 	return db, nil

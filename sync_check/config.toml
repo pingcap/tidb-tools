@@ -20,9 +20,6 @@ use-rowid = false
 # fix different data in target-db if fix_data is true, must have primary key or unique key
 fix-data = false
 
-# use source tidb's snapshot data, sql looks like set @@tidb_snapshot="2016-10-08 16:45:26";
-#snapshot = "2016-10-08 16:45:26"
-
 # if check-table is nil, will check all tables in the schema. 
 [[check-table]]
 # table name.
@@ -42,6 +39,8 @@ password = ""
 # schema name
 name = "test"
 port = 3306
+# use tidb's snapshot data, sql looks like set @@tidb_snapshot="2016-10-08 16:45:26"
+#snapshot = "2016-10-08 16:45:26" 
 
 [target-db]
 host = "127.0.0.1"
@@ -50,3 +49,5 @@ password = ""
 # schema name
 name = "test"
 port = 4000
+# use tidb's snapshot data, sql looks like set @@tidb_snapshot="2016-10-08 16:45:26"
+#snapshot = "2016-10-08 16:45:26" 
