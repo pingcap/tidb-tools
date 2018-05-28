@@ -14,10 +14,10 @@
 package pkgdb
 
 import (
-	"strings"
 	"database/sql"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
@@ -25,7 +25,10 @@ import (
 	"github.com/pingcap/tidb/mysql"
 )
 
+// ImplicitColName is tidb's implicit column's name
 const ImplicitColName = "_tidb_rowid"
+
+// ImplicitColID is tidb's implicit column's id
 const ImplicitColID = -1
 
 // CloseDB close the mysql fd
@@ -105,6 +108,7 @@ func ShowIndex(db *sql.DB, dbname string, table string) ([]map[string][]byte, er
 	return rowsData, nil
 }
 
+// FindSuitableIndex returns a suitableIndex
 func FindSuitableIndex(db *sql.DB, dbName string, table string) (*model.ColumnInfo, error) {
 	rowsData, err := ShowIndex(db, dbName, table)
 	if err != nil {
@@ -121,7 +125,7 @@ func FindSuitableIndex(db *sql.DB, dbName string, table string) (*model.ColumnIn
 		if string(fields["Key_name"]) == "PRIMARY" && string(fields["Seq_in_index"]) == "1" {
 			column, valid := GetColumnByName(tableInfo, string(fields["Column_name"]))
 			if !valid {
-				return nil, errors.New(fmt.Sprintf("can't find column %s in %s.%s", string(fields["Column_name"]), dbName, table))
+				return nil, errors.Errorf("can't find column %s in %s.%s", string(fields["Column_name"]), dbName, table)
 			}
 			return column, nil
 		}
@@ -132,7 +136,7 @@ func FindSuitableIndex(db *sql.DB, dbName string, table string) (*model.ColumnIn
 		if string(fields["Non_unique"]) == "0" && string(fields["Seq_in_index"]) == "1" {
 			column, valid := GetColumnByName(tableInfo, string(fields["Column_name"]))
 			if !valid {
-				return nil, errors.New(fmt.Sprintf("can't find column %s in %s.%s", string(fields["Column_name"]), dbName, table))
+				return nil, errors.Errorf("can't find column %s in %s.%s", string(fields["Column_name"]), dbName, table)
 			}
 			return column, nil
 		}
@@ -150,7 +154,7 @@ func FindSuitableIndex(db *sql.DB, dbName string, table string) (*model.ColumnIn
 			if cardinality > maxCardinality {
 				column, valid := GetColumnByName(tableInfo, string(fields["Column_name"]))
 				if !valid {
-					return nil, errors.New(fmt.Sprintf("can't find column %s in %s.%s", string(fields["Column_name"]), dbName, table))
+					return nil, errors.Errorf("can't find column %s in %s.%s", string(fields["Column_name"]), dbName, table)
 				}
 				maxCardinality = cardinality
 				c = column
@@ -225,6 +229,7 @@ func GetRandomValues(db *sql.DB, dbname string, table string, field string, num 
 	return randomValue, nil
 }
 
+// GetColumnByName returns a column by column name
 func GetColumnByName(table *model.TableInfo, name string) (*model.ColumnInfo, bool) {
 	var c *model.ColumnInfo
 	for _, column := range table.Columns {
@@ -281,6 +286,7 @@ func GetTables(db *sql.DB, dbName string) ([]string, error) {
 	return tbls, nil
 }
 
+// DescribeTable is the struct for describe table
 type DescribeTable struct {
 	Field   string
 	Type    string
@@ -290,11 +296,13 @@ type DescribeTable struct {
 	Extra   interface{}
 }
 
+// Scan scan rows for desctibe table
 func (desc *DescribeTable) Scan(rows *sql.Rows) error {
 	err := rows.Scan(&desc.Field, &desc.Type, &desc.Null, &desc.Key, &desc.Default, &desc.Extra)
 	return errors.Trace(err)
 }
 
+// GetTableSchema returns DescribeTable
 func GetTableSchema(db *sql.DB, tblName string) ([]DescribeTable, error) {
 	stmt := fmt.Sprintf("describe %s;", tblName)
 	rows, err := QuerySQL(db, stmt)
@@ -315,6 +323,7 @@ func GetTableSchema(db *sql.DB, tblName string) ([]DescribeTable, error) {
 	return descs, err
 }
 
+// GetCRC32Checksum returns the checksum of some data
 func GetCRC32Checksum(db *sql.DB, schemaName string, tbInfo *model.TableInfo, limitRange string) (string, error) {
 	columnNames := make([]string, 0, len(tbInfo.Columns))
 	for _, col := range tbInfo.Columns {
@@ -327,7 +336,7 @@ func GetCRC32Checksum(db *sql.DB, schemaName string, tbInfo *model.TableInfo, li
 		return "", errors.Trace(err)
 	}
 	defer rows.Close()
-	
+
 	for rows.Next() {
 		var checksum sql.NullString
 		err = rows.Scan(&checksum)
@@ -340,6 +349,7 @@ func GetCRC32Checksum(db *sql.DB, schemaName string, tbInfo *model.TableInfo, li
 	return "", nil
 }
 
+// QuerySQL querys sql, and returns some row
 func QuerySQL(db *sql.DB, query string) (*sql.Rows, error) {
 	var (
 		err  error
@@ -408,6 +418,7 @@ func ScanRow(rows *sql.Rows) (map[string][]byte, error) {
 	return result, nil
 }
 
+// SetSnapshot set the snapshot variable for tidb
 func SetSnapshot(db *sql.DB, snapshot string) error {
 	sql := fmt.Sprintf("set @@tidb_snapshot=\"%s\"", snapshot)
 	log.Infof("set snapshot: %s", sql)
@@ -420,6 +431,7 @@ func SetSnapshot(db *sql.DB, snapshot string) error {
 	return nil
 }
 
+// IsNumberType returns true if is number type
 func IsNumberType(tp byte) bool {
 	switch tp {
 	case mysql.TypeTiny, mysql.TypeShort, mysql.TypeLong, mysql.TypeLonglong, mysql.TypeInt24:
@@ -429,6 +441,7 @@ func IsNumberType(tp byte) bool {
 	return false
 }
 
+// IsFloatType returns true if is float type
 func IsFloatType(tp byte) bool {
 	switch tp {
 	case mysql.TypeFloat, mysql.TypeDouble, mysql.TypeNewDecimal:

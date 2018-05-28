@@ -46,17 +46,17 @@ func (c *DBConfig) String() string {
 // CreateDB create a mysql fd
 func CreateDB(cfg DBConfig) (*sql.DB, error) {
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Name)
-	db, err := sql.Open("mysql", dbDSN)
+	dbConn, err := sql.Open("mysql", dbDSN)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
 	if cfg.Snapshot != "" {
-		err = pkgdb.SetSnapshot(db, cfg.Snapshot)
+		err = pkgdb.SetSnapshot(dbConn, cfg.Snapshot)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 	}
 
-	return db, nil
+	return dbConn, nil
 }

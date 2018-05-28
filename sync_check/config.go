@@ -56,7 +56,7 @@ type Config struct {
 
 	UseRowID bool `toml:"use-rowid" json:"use-rowid"`
 
-	FixSqlFile string `toml:"fix-sql-file" json:"fix-sql-file"`
+	FixSQLFile string `toml:"fix-sql-file" json:"fix-sql-file"`
 
 	Tables []*TableCheckCfg `toml:"check-table" json:"check-table"`
 
@@ -75,7 +75,7 @@ func NewConfig() *Config {
 	fs.IntVar(&cfg.Sample, "sample", 100, "the percent of sampling check")
 	fs.IntVar(&cfg.CheckThCount, "check-thcount", 1, "the count of check thread count")
 	fs.BoolVar(&cfg.UseRowID, "use-rowid", false, "set true if target-db and source-db all support tidb implicit column _tidb_rowid")
-	fs.StringVar(&cfg.FixSqlFile, "fix-sql-file", "fix.sql", "the name of file which saves sqls used to fix different data")
+	fs.StringVar(&cfg.FixSQLFile, "fix-sql-file", "fix.sql", "the name of file which saves sqls used to fix different data")
 
 	return cfg
 }

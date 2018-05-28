@@ -43,7 +43,7 @@ type Diff struct {
 	checkThCount int
 	useRowID     bool
 	tables       []*TableCheckCfg
-	fixSqlFile   *os.File
+	FixSQLFile   *os.File
 	sqlCh        chan string
 	wg           sync.WaitGroup
 }
@@ -69,7 +69,7 @@ func NewDiff(db1, db2 *sql.DB, dbName string, chunkSize, sample, checkThCount in
 		}
 		table.Schema = diff.dbName
 	}
-	diff.fixSqlFile, err = os.Create(filename)
+	diff.FixSQLFile, err = os.Create(filename)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -80,7 +80,7 @@ func NewDiff(db1, db2 *sql.DB, dbName string, chunkSize, sample, checkThCount in
 // Equal tests whether two database have same data and schema.
 func (df *Diff) Equal() (equal bool, err error) {
 	defer func() {
-		df.fixSqlFile.Close()
+		df.FixSQLFile.Close()
 		df.db1.Close()
 		df.db2.Close()
 	}()
@@ -399,12 +399,12 @@ func (df *Diff) compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.Column
 			index1++
 		case 0:
 			// update
-			deleteSql := generateDML("delete", rowsData2[index2], orderKeyCols, table.Info, table.Schema)
-			replaceSql := generateDML("replace", rowsData1[index1], orderKeyCols, table.Info, table.Schema)
-			log.Infof("[update] delete: %s,\n replace: %s", deleteSql, replaceSql)
+			deleteSQL := generateDML("delete", rowsData2[index2], orderKeyCols, table.Info, table.Schema)
+			replaceSQL := generateDML("replace", rowsData1[index1], orderKeyCols, table.Info, table.Schema)
+			log.Infof("[update] delete: %s,\n replace: %s", deleteSQL, replaceSQL)
 			df.wg.Add(2)
-			df.sqlCh <- deleteSql
-			df.sqlCh <- replaceSql
+			df.sqlCh <- deleteSQL
+			df.sqlCh <- replaceSQL
 			index1++
 			index2++
 		}
@@ -413,6 +413,7 @@ func (df *Diff) compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.Column
 	return equal, nil
 }
 
+// WriteSqls write sqls to file
 func (df *Diff) WriteSqls() {
 	for {
 		select {
@@ -421,7 +422,7 @@ func (df *Diff) WriteSqls() {
 				df.wg.Done()
 				return
 			}
-			_, err := df.fixSqlFile.WriteString(fmt.Sprintf("%s\n", dml))
+			_, err := df.FixSQLFile.WriteString(fmt.Sprintf("%s\n", dml))
 			if err != nil {
 				log.Errorf("write sql: %s failed, error: %v", dml, err)
 			}
@@ -472,8 +473,6 @@ func needQuotes(ft types.FieldType) bool {
 	default:
 		return true
 	}
-
-	return false
 }
 
 func compareData(map1 map[string][]byte, map2 map[string][]byte, orderKeyCols []*model.ColumnInfo) (bool, int32, error) {
