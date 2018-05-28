@@ -283,6 +283,22 @@ func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, table *TableCheckC
 	for _, job := range dumpJobs {
 		log.Infof("check table: %s, range: %s", job.Table, job.Where)
 
+		// first check the checksum is equal or not
+		checksum1, err := pkgdb.GetCRC32Checksum(df.db1, df.dbName, table.Info, job.Where)
+		if err != nil {
+			return false, errors.Trace(err)
+		}
+
+		checksum2, err := pkgdb.GetCRC32Checksum(df.db2, df.dbName, table.Info, job.Where)
+		if err != nil {
+			return false, errors.Trace(err)
+		}
+		if checksum1 == checksum2 {
+			log.Infof("check table: %s, range: %s checksum is equal, checksum: %s", job.Table, job.Where, checksum1)
+			return true, nil
+		}
+
+		// if checksum is not equal, compare the data
 		rows1, orderKeyCols, err := getChunkRows(df.db1, df.dbName, table, job.Where, df.useRowID)
 		if err != nil {
 			return false, errors.Trace(err)

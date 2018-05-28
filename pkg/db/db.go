@@ -14,6 +14,7 @@
 package pkgdb
 
 import (
+	"strings"
 	"database/sql"
 	"fmt"
 	"strconv"
@@ -312,6 +313,31 @@ func GetTableSchema(db *sql.DB, tblName string) ([]DescribeTable, error) {
 		descs = append(descs, desc)
 	}
 	return descs, err
+}
+
+func GetCRC32Checksum(db *sql.DB, schemaName string, tbInfo *model.TableInfo, limitRange string) (string, error) {
+	columnNames := make([]string, 0, len(tbInfo.Columns))
+	for _, col := range tbInfo.Columns {
+		columnNames = append(columnNames, col.Name.O)
+	}
+
+	query := fmt.Sprintf("SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', %s) SEPARATOR  ' + ')) AS checksum FROM `%s`.`%s` WHERE %s;", strings.Join(columnNames, ", "), schemaName, tbInfo.Name.O, limitRange)
+	rows, err := db.Query(query)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	defer rows.Close()
+	
+	for rows.Next() {
+		var checksum sql.NullString
+		err = rows.Scan(&checksum)
+		if err != nil {
+			return "", errors.Trace(err)
+		}
+		return checksum.String, nil
+	}
+
+	return "", nil
 }
 
 func QuerySQL(db *sql.DB, query string) (*sql.Rows, error) {
