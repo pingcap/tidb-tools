@@ -14,7 +14,7 @@ Usage of generate_binlog_position:
 
 ## Example
 ```
-./bin/generate_binlog_position --pd-urls="http://127.0.0.1:2375" --data-dir="data.example"
+./bin/generate_binlog_position --pd-urls="http://127.0.0.1:2379" --data-dir="data.example"
 >cat data.example/savePoint
 commitTS = 395986424387338242
 ```
