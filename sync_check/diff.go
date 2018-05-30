@@ -1,4 +1,4 @@
-// Copyright 2016 PingCAP, Inc.
+// Copyright 2018 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,42 +43,34 @@ type Diff struct {
 	checkThCount int
 	useRowID     bool
 	tables       []*TableCheckCfg
-	fixSqlFile   *os.File
+	FixSQLFile   *os.File
 	sqlCh        chan string
 	wg           sync.WaitGroup
 }
 
 // NewDiff returns a Diff instance.
-func NewDiff(db1, db2 *sql.DB, dbName string, chunkSize, sample, checkThCount int,
-	useRowID bool, tables []*TableCheckCfg, filename, snapshot string) (diff *Diff, err error) {
+func NewDiff(db1, db2 *sql.DB, cfg *Config) (diff *Diff, err error) {
 	diff = &Diff{
 		db1:          db1,
 		db2:          db2,
-		dbName:       dbName,
-		chunkSize:    chunkSize,
-		sample:       sample,
-		checkThCount: checkThCount,
-		useRowID:     useRowID,
-		tables:       tables,
+		dbName:       cfg.SourceDBCfg.Name,
+		chunkSize:    cfg.ChunkSize,
+		sample:       cfg.Sample,
+		checkThCount: cfg.CheckThCount,
+		useRowID:     cfg.UseRowID,
+		tables:       cfg.Tables,
 		sqlCh:        make(chan string),
 	}
 	for _, table := range diff.tables {
-		table.Info, err = pkgdb.GetSchemaTableWithRowID(diff.db1, diff.dbName, table.Name, useRowID)
+		table.Info, err = pkgdb.GetTableInfoWithRowID(diff.db1, diff.dbName, table.Name, cfg.UseRowID)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 		table.Schema = diff.dbName
 	}
-	diff.fixSqlFile, err = os.Create(filename)
+	diff.FixSQLFile, err = os.Create(cfg.FixSQLFile)
 	if err != nil {
 		return nil, errors.Trace(err)
-	}
-
-	if snapshot != "" {
-		err = pkgdb.SetSnapshot(db1, snapshot)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
 	}
 
 	return diff, nil
@@ -87,7 +79,7 @@ func NewDiff(db1, db2 *sql.DB, dbName string, chunkSize, sample, checkThCount in
 // Equal tests whether two database have same data and schema.
 func (df *Diff) Equal() (equal bool, err error) {
 	defer func() {
-		df.fixSqlFile.Close()
+		df.FixSQLFile.Close()
 		df.db1.Close()
 		df.db2.Close()
 	}()
@@ -119,7 +111,7 @@ func (df *Diff) Equal() (equal bool, err error) {
 		df.tables = make([]*TableCheckCfg, 0, len(tbls1))
 		for _, name := range tbls1 {
 			table := &TableCheckCfg{Name: name, Schema: df.dbName}
-			table.Info, err = pkgdb.GetSchemaTableWithRowID(df.db1, df.dbName, name, df.useRowID)
+			table.Info, err = pkgdb.GetTableInfoWithRowID(df.db1, df.dbName, name, df.useRowID)
 			if err != nil {
 				return false, errors.Trace(err)
 			}
@@ -208,8 +200,8 @@ func (df *Diff) EqualIndex(tblName string) (bool, error) {
 }
 
 func (df *Diff) equalCreateTable(tblName string) (bool, error) {
-	_, err1 := pkgdb.GetCreateTable(df.db1, df.dbName, tblName)
-	_, err2 := pkgdb.GetCreateTable(df.db2, df.dbName, tblName)
+	_, err1 := pkgdb.GetCreateTableSQL(df.db1, df.dbName, tblName)
+	_, err2 := pkgdb.GetCreateTableSQL(df.db2, df.dbName, tblName)
 
 	if errors.IsNotFound(err1) && errors.IsNotFound(err2) {
 		return true, nil
@@ -283,6 +275,22 @@ func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, table *TableCheckC
 	for _, job := range dumpJobs {
 		log.Infof("check table: %s, range: %s", job.Table, job.Where)
 
+		// first check the checksum is equal or not
+		checksum1, err := pkgdb.GetCRC32Checksum(df.db1, df.dbName, table.Info, job.Where)
+		if err != nil {
+			return false, errors.Trace(err)
+		}
+
+		checksum2, err := pkgdb.GetCRC32Checksum(df.db2, df.dbName, table.Info, job.Where)
+		if err != nil {
+			return false, errors.Trace(err)
+		}
+		if checksum1 == checksum2 {
+			log.Infof("check table: %s, range: %s checksum is equal, checksum: %s", job.Table, job.Where, checksum1)
+			return true, nil
+		}
+
+		// if checksum is not equal, compare the data
 		rows1, orderKeyCols, err := getChunkRows(df.db1, df.dbName, table, job.Where, df.useRowID)
 		if err != nil {
 			return false, errors.Trace(err)
@@ -390,12 +398,12 @@ func (df *Diff) compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.Column
 			index1++
 		case 0:
 			// update
-			deleteSql := generateDML("delete", rowsData2[index2], orderKeyCols, table.Info, table.Schema)
-			replaceSql := generateDML("replace", rowsData1[index1], orderKeyCols, table.Info, table.Schema)
-			log.Infof("[update] delete: %s,\n replace: %s", deleteSql, replaceSql)
+			deleteSQL := generateDML("delete", rowsData2[index2], orderKeyCols, table.Info, table.Schema)
+			replaceSQL := generateDML("replace", rowsData1[index1], orderKeyCols, table.Info, table.Schema)
+			log.Infof("[update] delete: %s,\n replace: %s", deleteSQL, replaceSQL)
 			df.wg.Add(2)
-			df.sqlCh <- deleteSql
-			df.sqlCh <- replaceSql
+			df.sqlCh <- deleteSQL
+			df.sqlCh <- replaceSQL
 			index1++
 			index2++
 		}
@@ -404,6 +412,7 @@ func (df *Diff) compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.Column
 	return equal, nil
 }
 
+// WriteSqls write sqls to file
 func (df *Diff) WriteSqls() {
 	for {
 		select {
@@ -412,7 +421,7 @@ func (df *Diff) WriteSqls() {
 				df.wg.Done()
 				return
 			}
-			_, err := df.fixSqlFile.WriteString(fmt.Sprintf("%s\n", dml))
+			_, err := df.FixSQLFile.WriteString(fmt.Sprintf("%s\n", dml))
 			if err != nil {
 				log.Errorf("write sql: %s failed, error: %v", dml, err)
 			}
@@ -463,8 +472,6 @@ func needQuotes(ft types.FieldType) bool {
 	default:
 		return true
 	}
-
-	return false
 }
 
 func compareData(map1 map[string][]byte, map2 map[string][]byte, orderKeyCols []*model.ColumnInfo) (bool, int32, error) {

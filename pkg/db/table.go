@@ -1,4 +1,4 @@
-// Copyright 2016 PingCAP, Inc.
+// Copyright 2018 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,9 +27,9 @@ import (
 	"github.com/pingcap/tidb/types"
 )
 
-// GetSchemaTableWithRowID returns table information with _tidb_rowid column if useRowID is true
-func GetSchemaTableWithRowID(db *sql.DB, schemaName string, tableName string, useRowID bool) (*model.TableInfo, error) {
-	table, err := GetSchemaTable(db, schemaName, tableName)
+// GetTableInfoWithRowID returns table information with _tidb_rowid column if useRowID is true
+func GetTableInfoWithRowID(db *sql.DB, schemaName string, tableName string, useRowID bool) (*model.TableInfo, error) {
+	table, err := GetTableInfo(db, schemaName, tableName)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -41,18 +41,18 @@ func GetSchemaTableWithRowID(db *sql.DB, schemaName string, tableName string, us
 	return table, nil
 }
 
-// GetSchemaTable returns table information.
-func GetSchemaTable(db *sql.DB, schemaName string, tableName string) (*model.TableInfo, error) {
-	createTable, err := GetCreateTable(db, schemaName, tableName)
+// GetTableInfo returns table information.
+func GetTableInfo(db *sql.DB, schemaName string, tableName string) (*model.TableInfo, error) {
+	createTableSQL, err := GetCreateTableSQL(db, schemaName, tableName)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	return GetSchemaTableBySQL(createTable, schemaName, tableName)
+	return GetTableInfoBySQL(createTableSQL, schemaName, tableName)
 }
 
-// GetSchemaTableBySQL returns table information by create table sql.
-func GetSchemaTableBySQL(createTableSQL string, schemaName string, tableName string) (table *model.TableInfo, err error) {
+// GetTableInfoBySQL returns table information by create table sql.
+func GetTableInfoBySQL(createTableSQL string, schemaName string, tableName string) (table *model.TableInfo, err error) {
 	stmt, err := parser.New().ParseOneStmt(createTableSQL, "", "")
 	if err != nil {
 		return nil, errors.Trace(err)
