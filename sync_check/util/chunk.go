@@ -244,9 +244,9 @@ func GenerateDumpJob(db *sql.DB, dbname, tableName, splitField string,
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		exist := false
-		column, exist = pkgdb.GetColumnByName(table, splitField)
-		if !exist {
+
+		column = pkgdb.GetColumnByName(table, splitField)
+		if column == nil {
 			return nil, fmt.Errorf("can't find column %s in table %s", splitField, tableName)
 		}
 	}

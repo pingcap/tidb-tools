@@ -58,8 +58,8 @@ func GetTableInfoBySQL(createTableSQL string, schemaName string, tableName strin
 		return nil, errors.Trace(err)
 	}
 
-	switch s := stmt.(type) {
-	case *ast.CreateTableStmt:
+	s, ok := stmt.(*ast.CreateTableStmt)
+	if ok {
 		cols, newConstraints := BuildColumnsAndConstraints(s.Cols, s.Constraints)
 		table, err := BuildTableInfo(s.Table.Name, cols, newConstraints)
 		if err != nil {
@@ -164,15 +164,12 @@ func BuildTableInfo(tableName model.CIStr, columns []*model.ColumnInfo, constrai
 			var fk model.FKInfo
 			fk.Name = model.NewCIStr(constr.Name)
 			fk.RefTable = constr.Refer.Table.Name
-			fk.State = model.StatePublic
 			for _, key := range constr.Keys {
 				fk.Cols = append(fk.Cols, key.Column.Name)
 			}
 			for _, key := range constr.Refer.IndexColNames {
 				fk.RefCols = append(fk.RefCols, key.Column.Name)
 			}
-			fk.OnDelete = int(constr.Refer.OnDelete.ReferOpt)
-			fk.OnUpdate = int(constr.Refer.OnUpdate.ReferOpt)
 			if len(fk.Cols) != len(fk.RefCols) {
 				return nil, infoschema.ErrForeignKeyNotMatch.GenByArgs(tbInfo.Name.O)
 			}

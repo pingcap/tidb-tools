@@ -25,11 +25,13 @@ import (
 	"github.com/pingcap/tidb/mysql"
 )
 
-// ImplicitColName is tidb's implicit column's name
-const ImplicitColName = "_tidb_rowid"
+const (
+	// ImplicitColName is tidb's implicit column's name
+	ImplicitColName = "_tidb_rowid"
 
-// ImplicitColID is tidb's implicit column's id
-const ImplicitColID = -1
+	// ImplicitColID is tidb's implicit column's id
+	ImplicitColID = -1
+)
 
 // CloseDB closes the mysql fd
 func CloseDB(db *sql.DB) error {
@@ -47,7 +49,7 @@ func GetCreateTableSQL(db *sql.DB, schemaName string, tableName string) (string,
 		return "", errors.Trace(err)
 	}
 	if !tbl.Valid || !createTable.Valid {
-		return "", errors.NewNotFound(nil, fmt.Sprintf("table %s not exist", tableName))
+		return "", errors.NotFoundf("table %s not exist", tableName)
 	}
 	return createTable.String, nil
 }
@@ -134,8 +136,8 @@ func FindSuitableIndex(db *sql.DB, dbName string, table string) (*model.ColumnIn
 	// seek pk
 	for _, fields := range rowsData {
 		if string(fields["Key_name"]) == "PRIMARY" && string(fields["Seq_in_index"]) == "1" {
-			column, valid := GetColumnByName(tableInfo, string(fields["Column_name"]))
-			if !valid {
+			column := GetColumnByName(tableInfo, string(fields["Column_name"]))
+			if column == nil {
 				return nil, errors.Errorf("can't find column %s in %s.%s", string(fields["Column_name"]), dbName, table)
 			}
 			return column, nil
@@ -145,8 +147,8 @@ func FindSuitableIndex(db *sql.DB, dbName string, table string) (*model.ColumnIn
 	// no pk found, seek unique index
 	for _, fields := range rowsData {
 		if string(fields["Non_unique"]) == "0" && string(fields["Seq_in_index"]) == "1" {
-			column, valid := GetColumnByName(tableInfo, string(fields["Column_name"]))
-			if !valid {
+			column := GetColumnByName(tableInfo, string(fields["Column_name"]))
+			if column == nil {
 				return nil, errors.Errorf("can't find column %s in %s.%s", string(fields["Column_name"]), dbName, table)
 			}
 			return column, nil
@@ -163,8 +165,8 @@ func FindSuitableIndex(db *sql.DB, dbName string, table string) (*model.ColumnIn
 				return nil, errors.Trace(err)
 			}
 			if cardinality > maxCardinality {
-				column, valid := GetColumnByName(tableInfo, string(fields["Column_name"]))
-				if !valid {
+				column := GetColumnByName(tableInfo, string(fields["Column_name"]))
+				if column == nil {
 					return nil, errors.Errorf("can't find column %s in %s.%s", string(fields["Column_name"]), dbName, table)
 				}
 				maxCardinality = cardinality
@@ -216,11 +218,11 @@ func GetFirstColumn(db *sql.DB, dbname string, table string) (*model.ColumnInfo,
 	return tableInfo.Columns[0], nil
 }
 
-// GetRandomValues returns some random value of a table
-func GetRandomValues(db *sql.DB, dbname string, table string, field string, num int64, min, max interface{}, timeRange string) ([]string, error) {
+// GetRandomValues returns some random value of a column, not used for number type column.
+func GetRandomValues(db *sql.DB, dbname string, table string, column string, num int64, min, max interface{}, limitRange string) ([]string, error) {
 	randomValue := make([]string, 0, num)
 	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` > \"%v\" AND `%s` < \"%v\" AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
-		field, field, dbname, table, field, min, field, max, timeRange, num, field)
+		column, column, dbname, table, column, min, column, max, limitRange, num, column)
 	log.Infof("get random values sql: %s", query)
 	rows, err := db.Query(query)
 	if err != nil {
@@ -241,7 +243,7 @@ func GetRandomValues(db *sql.DB, dbname string, table string, field string, num 
 }
 
 // GetColumnByName returns a column by column name
-func GetColumnByName(table *model.TableInfo, name string) (*model.ColumnInfo, bool) {
+func GetColumnByName(table *model.TableInfo, name string) *model.ColumnInfo {
 	var c *model.ColumnInfo
 	for _, column := range table.Columns {
 		if column.Name.O == name {
@@ -250,11 +252,7 @@ func GetColumnByName(table *model.TableInfo, name string) (*model.ColumnInfo, bo
 		}
 	}
 
-	if c != nil {
-		return c, true
-	}
-
-	return nil, false
+	return c
 }
 
 // GetTables gets all table in the schema
@@ -350,7 +348,6 @@ func QuerySQL(db *sql.DB, query string) (*sql.Rows, error) {
 	log.Debugf("[query][sql]%s", query)
 
 	rows, err = db.Query(query)
-
 	if err != nil {
 		log.Errorf("query sql[%s] failed %v", query, errors.ErrorStack(err))
 		return nil, errors.Trace(err)
