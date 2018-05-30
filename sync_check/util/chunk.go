@@ -1,4 +1,4 @@
-// Copyright 2016 PingCAP, Inc.
+// Copyright 2018 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -71,7 +71,7 @@ func getChunksForTable(db *sql.DB, dbname, tableName string, column *model.Colum
 	log.Debugf("[dumper] get max min query sql: %s", query)
 
 	// get the chunk count
-	cnt, err := pkgdb.GetCount(db, dbname, tableName, where)
+	cnt, err := pkgdb.GetRowCount(db, dbname, tableName, where)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -240,7 +240,7 @@ func GenerateDumpJob(db *sql.DB, dbname, tableName, splitField string,
 		}
 	} else {
 		var table *model.TableInfo
-		table, err = pkgdb.GetSchemaTableWithRowID(db, dbname, tableName, useRowID)
+		table, err = pkgdb.GetTableInfoWithRowID(db, dbname, tableName, useRowID)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}

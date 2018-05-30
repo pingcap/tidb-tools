@@ -1,4 +1,4 @@
-// Copyright 2016 PingCAP, Inc.
+// Copyright 2018 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,27 +49,26 @@ type Diff struct {
 }
 
 // NewDiff returns a Diff instance.
-func NewDiff(db1, db2 *sql.DB, dbName string, chunkSize, sample, checkThCount int,
-	useRowID bool, tables []*TableCheckCfg, filename string) (diff *Diff, err error) {
+func NewDiff(db1, db2 *sql.DB, cfg *Config) (diff *Diff, err error) {
 	diff = &Diff{
 		db1:          db1,
 		db2:          db2,
-		dbName:       dbName,
-		chunkSize:    chunkSize,
-		sample:       sample,
-		checkThCount: checkThCount,
-		useRowID:     useRowID,
-		tables:       tables,
+		dbName:       cfg.SourceDBCfg.Name,
+		chunkSize:    cfg.ChunkSize,
+		sample:       cfg.Sample,
+		checkThCount: cfg.CheckThCount,
+		useRowID:     cfg.UseRowID,
+		tables:       cfg.Tables,
 		sqlCh:        make(chan string),
 	}
 	for _, table := range diff.tables {
-		table.Info, err = pkgdb.GetSchemaTableWithRowID(diff.db1, diff.dbName, table.Name, useRowID)
+		table.Info, err = pkgdb.GetTableInfoWithRowID(diff.db1, diff.dbName, table.Name, cfg.UseRowID)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 		table.Schema = diff.dbName
 	}
-	diff.FixSQLFile, err = os.Create(filename)
+	diff.FixSQLFile, err = os.Create(cfg.FixSQLFile)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -112,7 +111,7 @@ func (df *Diff) Equal() (equal bool, err error) {
 		df.tables = make([]*TableCheckCfg, 0, len(tbls1))
 		for _, name := range tbls1 {
 			table := &TableCheckCfg{Name: name, Schema: df.dbName}
-			table.Info, err = pkgdb.GetSchemaTableWithRowID(df.db1, df.dbName, name, df.useRowID)
+			table.Info, err = pkgdb.GetTableInfoWithRowID(df.db1, df.dbName, name, df.useRowID)
 			if err != nil {
 				return false, errors.Trace(err)
 			}
@@ -201,8 +200,8 @@ func (df *Diff) EqualIndex(tblName string) (bool, error) {
 }
 
 func (df *Diff) equalCreateTable(tblName string) (bool, error) {
-	_, err1 := pkgdb.GetCreateTable(df.db1, df.dbName, tblName)
-	_, err2 := pkgdb.GetCreateTable(df.db2, df.dbName, tblName)
+	_, err1 := pkgdb.GetCreateTableSQL(df.db1, df.dbName, tblName)
+	_, err2 := pkgdb.GetCreateTableSQL(df.db2, df.dbName, tblName)
 
 	if errors.IsNotFound(err1) && errors.IsNotFound(err2) {
 		return true, nil

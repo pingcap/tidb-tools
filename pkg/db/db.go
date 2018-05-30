@@ -1,4 +1,4 @@
-// Copyright 2016 PingCAP, Inc.
+// Copyright 2018 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,13 +31,13 @@ const ImplicitColName = "_tidb_rowid"
 // ImplicitColID is tidb's implicit column's id
 const ImplicitColID = -1
 
-// CloseDB close the mysql fd
+// CloseDB closes the mysql fd
 func CloseDB(db *sql.DB) error {
 	return errors.Trace(db.Close())
 }
 
-// GetCreateTable gets the create table sql.
-func GetCreateTable(db *sql.DB, schemaName string, tableName string) (string, error) {
+// GetCreateTableSQL gets the create table sql.
+func GetCreateTableSQL(db *sql.DB, schemaName string, tableName string) (string, error) {
 	query := fmt.Sprintf("SHOW CREATE TABLE `%s`.`%s`", schemaName, tableName)
 	row := db.QueryRow(query)
 
@@ -52,8 +52,18 @@ func GetCreateTable(db *sql.DB, schemaName string, tableName string) (string, er
 	return createTable.String, nil
 }
 
-// GetCount get count rows of the table for specific field.
-func GetCount(db *sql.DB, dbname string, table string, where string) (int64, error) {
+// GetRowCount returns row count of the table by given where condition.
+func GetRowCount(db *sql.DB, dbname string, table string, where string) (int64, error) {
+	/*
+		select count example result:
+		mysql> SELECT count(1) cnt from `test`.`itest` where id > 0;
+		+------+
+		| cnt  |
+		+------+
+		|  100 |
+		+------+
+	*/
+
 	query := fmt.Sprintf("SELECT count(1) cnt from `%s`.`%s` where %s", dbname, table, where)
 	rows, err := db.Query(query)
 	if err != nil {
@@ -64,10 +74,11 @@ func GetCount(db *sql.DB, dbname string, table string, where string) (int64, err
 	var fields map[string][]byte
 	if rows.Next() {
 		fields, err = ScanRow(rows)
+		if err != nil {
+			return 0, errors.Trace(err)
+		}
 	}
-	if err != nil {
-		return 0, errors.Trace(err)
-	}
+
 	cntStr, ok := fields["cnt"]
 	if !ok {
 		return 0, errors.New("[dumper] `cnt` field not found in select count sql result")
@@ -115,7 +126,7 @@ func FindSuitableIndex(db *sql.DB, dbName string, table string) (*model.ColumnIn
 		return nil, errors.Trace(err)
 	}
 
-	tableInfo, err := GetSchemaTable(db, dbName, table)
+	tableInfo, err := GetTableInfo(db, dbName, table)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -198,7 +209,7 @@ func GetOrderKey(tbInfo *model.TableInfo) ([]string, []*model.ColumnInfo) {
 
 // GetFirstColumn returns the first column in the table
 func GetFirstColumn(db *sql.DB, dbname string, table string) (*model.ColumnInfo, error) {
-	tableInfo, err := GetSchemaTable(db, dbname, table)
+	tableInfo, err := GetTableInfo(db, dbname, table)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -244,26 +255,6 @@ func GetColumnByName(table *model.TableInfo, name string) (*model.ColumnInfo, bo
 	}
 
 	return nil, false
-}
-
-// ShowDatabases returns a database lists.
-func ShowDatabases(db *sql.DB) ([]string, error) {
-	var ret []string
-	rows, err := QuerySQL(db, "show databases;")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var dbName string
-		err := rows.Scan(&dbName)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		ret = append(ret, dbName)
-	}
-	return ret, nil
 }
 
 // GetTables gets all table in the schema
