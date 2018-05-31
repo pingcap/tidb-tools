@@ -41,16 +41,16 @@ func CloseDB(db *sql.DB) error {
 // GetCreateTableSQL gets the create table sql.
 func GetCreateTableSQL(db *sql.DB, schemaName string, tableName string) (string, error) {
 	/*
-			show create table example result:
-			mysql> SHOW CREATE TABLE `test`.`itest`;
-			+-------+--------------------------------------------------------------------+
-			| Table | Create Table                                                                                                                              |
-			+-------+--------------------------------------------------------------------+
-			| itest | CREATE TABLE `itest` (
-	  			`id` int(11) DEFAULT NULL,
-	  			`name` varchar(24) DEFAULT NULL
-				) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin |
-			+-------+--------------------------------------------------------------------+
+				show create table example result:
+				mysql> SHOW CREATE TABLE `test`.`itest`;
+				+-------+--------------------------------------------------------------------+
+				| Table | Create Table                                                                                                                              |
+				+-------+--------------------------------------------------------------------+
+				| itest | CREATE TABLE `itest` (
+		  			`id` int(11) DEFAULT NULL,
+		  			`name` varchar(24) DEFAULT NULL
+					) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin |
+				+-------+--------------------------------------------------------------------+
 	*/
 	query := fmt.Sprintf("SHOW CREATE TABLE `%s`.`%s`", schemaName, tableName)
 	row := db.QueryRow(query)
@@ -78,7 +78,7 @@ func GetRowCount(db *sql.DB, dbname string, table string, where string) (int64, 
 		+------+
 	*/
 
-	query := fmt.Sprintf("SELECT count(1) cnt from `%s`.`%s` where %s", dbname, table, where)
+	query := fmt.Sprintf("SELECT COUNT(1) cnt FROM `%s`.`%s` WHERE %s", dbname, table, where)
 	rows, err := db.Query(query)
 	if err != nil {
 		return 0, errors.Trace(err)
@@ -134,39 +134,25 @@ func ShowIndex(db *sql.DB, dbname string, table string) ([]map[string][]byte, er
 }
 
 // FindSuitableIndex returns a suitableIndex
-func FindSuitableIndex(db *sql.DB, dbName string, table string) (*model.ColumnInfo, error) {
-	rowsData, err := ShowIndex(db, dbName, table)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	tableInfo, err := GetTableInfo(db, dbName, table)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	// seek pk
-	for _, fields := range rowsData {
-		if string(fields["Key_name"]) == "PRIMARY" && string(fields["Seq_in_index"]) == "1" {
-			column := GetColumnByName(tableInfo, string(fields["Column_name"]))
-			if column == nil {
-				return nil, errors.Errorf("can't find column %s in %s.%s", string(fields["Column_name"]), dbName, table)
-			}
-			return column, nil
+func FindSuitableIndex(db *sql.DB, dbName string, tableInfo *model.TableInfo) (*model.ColumnInfo, error) {
+	// find primary key
+	for _, index := range tableInfo.Indices {
+		if index.Primary {
+			return GetColumnByName(tableInfo, index.Columns[0].Name.O), nil
 		}
 	}
 
-	// no pk found, seek unique index
-	for _, fields := range rowsData {
-		if string(fields["Non_unique"]) == "0" && string(fields["Seq_in_index"]) == "1" {
-			column := GetColumnByName(tableInfo, string(fields["Column_name"]))
-			if column == nil {
-				return nil, errors.Errorf("can't find column %s in %s.%s", string(fields["Column_name"]), dbName, table)
-			}
-			return column, nil
+	// no primary key found, seek unique index
+	for _, index := range tableInfo.Indices {
+		if index.Unique {
+			return GetColumnByName(tableInfo, index.Columns[0].Name.O), nil
 		}
 	}
 
+	rowsData, err := ShowIndex(db, dbName, tableInfo.Name.O)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
 	// no unique index found, seek index with max cardinality
 	var c *model.ColumnInfo
 	var maxCardinality int
@@ -179,7 +165,7 @@ func FindSuitableIndex(db *sql.DB, dbName string, table string) (*model.ColumnIn
 			if cardinality > maxCardinality {
 				column := GetColumnByName(tableInfo, string(fields["Column_name"]))
 				if column == nil {
-					return nil, errors.Errorf("can't find column %s in %s.%s", string(fields["Column_name"]), dbName, table)
+					return nil, errors.Errorf("can't find column %s in %s.%s", string(fields["Column_name"]), dbName, tableInfo.Name.O)
 				}
 				maxCardinality = cardinality
 				c = column
@@ -221,21 +207,12 @@ func GetOrderKey(tbInfo *model.TableInfo) ([]string, []*model.ColumnInfo) {
 	return keys, keyCols
 }
 
-// GetFirstColumn returns the first column in the table
-func GetFirstColumn(db *sql.DB, dbname string, table string) (*model.ColumnInfo, error) {
-	tableInfo, err := GetTableInfo(db, dbname, table)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	return tableInfo.Columns[0], nil
-}
-
 // GetRandomValues returns some random value of a column, not used for number type column.
 func GetRandomValues(db *sql.DB, dbname string, table string, column string, num int64, min, max interface{}, limitRange string) ([]string, error) {
 	randomValue := make([]string, 0, num)
 	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` > \"%v\" AND `%s` < \"%v\" AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
 		column, column, dbname, table, column, min, column, max, limitRange, num, column)
-	log.Infof("get random values sql: %s", query)
+	log.Debugf("get random values sql: %s", query)
 	rows, err := db.Query(query)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -269,7 +246,7 @@ func GetColumnByName(table *model.TableInfo, name string) *model.ColumnInfo {
 
 // GetTables gets all table in the schema
 func GetTables(db *sql.DB, dbName string) ([]string, error) {
-	rs, err := QuerySQL(db, fmt.Sprintf("show tables in `%s`;", dbName))
+	rs, err := QuerySQL(db, fmt.Sprintf("SHOW TABLES IN `%s`;", dbName))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -289,12 +266,24 @@ func GetTables(db *sql.DB, dbName string) ([]string, error) {
 
 // GetCRC32Checksum returns the checksum of some data
 func GetCRC32Checksum(db *sql.DB, schemaName string, tbInfo *model.TableInfo, limitRange string) (string, error) {
+	/*
+		calculate CRC32 checksum example:
+		mysql> SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', id, name, _tidb_rowid) SEPARATOR  ' + ')) AS checksum
+			 > FROM `test`.`abc` WHERE (`id` >= 1 AND `id` < 6) AND true;
+		+------------+
+		| checksum   |
+		+------------+
+		| 1171947116 |
+		+------------+
+	*/
 	columnNames := make([]string, 0, len(tbInfo.Columns))
 	for _, col := range tbInfo.Columns {
 		columnNames = append(columnNames, col.Name.O)
 	}
 
-	query := fmt.Sprintf("SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', %s) SEPARATOR  ' + ')) AS checksum FROM `%s`.`%s` WHERE %s;", strings.Join(columnNames, ", "), schemaName, tbInfo.Name.O, limitRange)
+	query := fmt.Sprintf("SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', %s) SEPARATOR  ' + ')) AS checksum FROM `%s`.`%s` WHERE %s;",
+		strings.Join(columnNames, ", "), schemaName, tbInfo.Name.O, limitRange)
+	log.Debugf("checksum sql: %s", query)
 	rows, err := db.Query(query)
 	if err != nil {
 		return "", errors.Trace(err)
@@ -379,7 +368,7 @@ func ScanRow(rows *sql.Rows) (map[string][]byte, error) {
 
 // SetSnapshot set the snapshot variable for tidb
 func SetSnapshot(db *sql.DB, snapshot string) error {
-	sql := fmt.Sprintf("set @@tidb_snapshot='%s'", snapshot)
+	sql := fmt.Sprintf("SET @@tidb_snapshot='%s'", snapshot)
 	log.Infof("set snapshot: %s", sql)
 	_, err := db.Exec(sql)
 	if err != nil {

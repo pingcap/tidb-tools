@@ -120,20 +120,27 @@ func (df *Diff) Equal() (equal bool, err error) {
 	}
 
 	for _, table := range df.tables {
-		eq, err = df.EqualIndex(table.Name)
+		tableInfo1 := table.Info
+		tableInfo2, err := pkgdb.GetTableInfoWithRowID(df.db2, df.dbName, table.Name, df.useRowID)
 		if err != nil {
-			err = errors.Trace(err)
-			return
+			return false, errors.Trace(err)
+		}
+		eq, err = df.EqualTableStruct(tableInfo1, tableInfo2)
+		if err != nil {
+			return equal, errors.Trace(err)
 		}
 		if !eq {
 			log.Errorf("table have different index: %s\n", table.Name)
 			equal = false
 		}
 
-		eq, err = df.EqualTable(table)
-		if err != nil || !eq {
-			err = errors.Trace(err)
+		eq, err = df.EqualTableData(table)
+		if err != nil {
+			log.Errorf("equal table error %v", err)
+		}
+		if !eq {
 			equal = false
+			log.Errorf("table %s's data is not equal", table.Name)
 		}
 	}
 
@@ -142,83 +149,52 @@ func (df *Diff) Equal() (equal bool, err error) {
 	return
 }
 
-// EqualTable tests whether two database table have same data and schema.
-func (df *Diff) EqualTable(table *TableCheckCfg) (bool, error) {
-	eq, err := df.equalCreateTable(table.Name)
-	if err != nil {
-		return eq, errors.Trace(err)
-	}
-	if !eq {
-		log.Errorf("table have different structure: %s\n", table.Name)
-		return eq, err
+// EqualTableStruct tests whether two table's struct are same.
+func (df *Diff) EqualTableStruct(tableInfo1, tableInfo2 *model.TableInfo) (bool, error) {
+	// check columns
+	if len(tableInfo1.Columns) != len(tableInfo2.Columns) {
+		return false, nil
 	}
 
-	eq, err = df.equalTableData(table)
-	if err != nil {
-		return eq, errors.Trace(err)
-	}
-	if !eq {
-		log.Errorf("table data different: %s\n", table.Name)
-	}
-	return eq, err
-}
-
-// EqualIndex tests whether two database index are same.
-func (df *Diff) EqualIndex(tblName string) (bool, error) {
-	index1, err := pkgdb.ShowIndex(df.db1, df.dbName, tblName)
-	if err != nil {
-		return false, errors.Trace(err)
-	}
-
-	index2, err := pkgdb.ShowIndex(df.db2, df.dbName, tblName)
-	if err != nil {
-		return false, errors.Trace(err)
-	}
-
-	eq := true
-	for i, index := range index1 {
-		keyName1 := string(index["Key_name"])
-		keyName2 := string(index2[i]["Key_name"])
-		columnName1 := string(index["Column_name"])
-		columnName2 := string(index2[i]["Column_name"])
-		if keyName1 != keyName2 || columnName1 != columnName2 {
-			eq = false
-			break
+	for j, col := range tableInfo1.Columns {
+		if col.Name.O != tableInfo2.Columns[j].Name.O {
+			return false, nil
+		}
+		if col.Tp != tableInfo2.Columns[j].Tp {
+			return false, nil
 		}
 	}
 
-	return eq, nil
-}
-
-func (df *Diff) equalCreateTable(tblName string) (bool, error) {
-	_, err1 := pkgdb.GetCreateTableSQL(df.db1, df.dbName, tblName)
-	_, err2 := pkgdb.GetCreateTableSQL(df.db2, df.dbName, tblName)
-
-	if errors.IsNotFound(err1) && errors.IsNotFound(err2) {
-		return true, nil
-	}
-	if err1 != nil {
-		return false, errors.Trace(err1)
-	}
-	if err2 != nil {
-		return false, errors.Trace(err2)
+	// check index
+	if len(tableInfo1.Indices) != len(tableInfo2.Indices) {
+		return false, nil
 	}
 
-	// TODO ignore table schema currently
-	// return table1 == table2, nil
+	for i, index := range tableInfo1.Indices {
+		index2 := tableInfo2.Indices[i]
+		if index.Name.O != index2.Name.O {
+			return false, nil
+		}
+		if len(index.Columns) != len(index2.Columns) {
+			return false, nil
+		}
+		for j, col := range index.Columns {
+			if col.Name.O != index2.Columns[j].Name.O {
+				return false, nil
+			}
+		}
+	}
+
 	return true, nil
 }
 
-func (df *Diff) equalTableData(table *TableCheckCfg) (bool, error) {
-	dumpJobs, err := util.GenerateDumpJob(df.db1, df.dbName, table.Name, table.Field, table.Range, df.chunkSize, df.sample, df.useRowID)
+func (df *Diff) EqualTableData(table *TableCheckCfg) (bool, error) {
+	dumpJobs, err := util.GenerateDumpJob(df.db1, df.dbName, table.Info, table.Field, table.Range, df.chunkSize, df.sample, df.useRowID)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
 
-	checkNums := len(dumpJobs) * df.sample / 100
-	if checkNums == 0 {
-		checkNums = 1
-	}
+	checkNums := len(dumpJobs)*df.sample/100 + 1
 	checkNumArr := getRandomN(len(dumpJobs), checkNums)
 	log.Infof("total has %d check jobs, check %+v", len(dumpJobs), checkNumArr)
 
@@ -227,7 +203,8 @@ func (df *Diff) equalTableData(table *TableCheckCfg) (bool, error) {
 
 	for i := 0; i < df.checkThCount; i++ {
 		checkJobs := make([]*util.DumpJob, 0, checkNums)
-		for j := checkNums * i / df.checkThCount; j < checkNums*(i+1)/df.checkThCount; j++ {
+		for j := checkNums * i / df.checkThCount; j < checkNums*(i+1)/df.checkThCount && j < len(dumpJobs); j++ {
+			log.Infof("thread %d add dumpjob %d", i, j)
 			checkJobs = append(checkJobs, dumpJobs[j])
 		}
 		go func() {
@@ -259,6 +236,7 @@ CheckResult:
 }
 
 func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, table *TableCheckCfg) (bool, error) {
+	equal := true
 	if len(dumpJobs) == 0 {
 		return true, nil
 	}
@@ -278,7 +256,7 @@ func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, table *TableCheckC
 		}
 		if checksum1 == checksum2 {
 			log.Infof("check table: %s, range: %s checksum is equal, checksum: %s", job.Table, job.Where, checksum1)
-			return true, nil
+			continue
 		}
 
 		// if checksum is not equal, compare the data
@@ -311,11 +289,11 @@ func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, table *TableCheckC
 			return false, errors.Trace(err)
 		}
 		if !eq {
-			return false, nil
+			equal = false
 		}
 	}
 
-	return true, nil
+	return equal, nil
 }
 
 func (df *Diff) compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.ColumnInfo, table *TableCheckCfg) (bool, error) {
@@ -659,7 +637,7 @@ func equalStrings(str1, str2 []string) bool {
 
 func getRandomN(total, num int) []int {
 	if num > total {
-		return nil
+		num = total
 	}
 
 	totalArray := make([]int, 0, total)
