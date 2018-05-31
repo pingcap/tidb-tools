@@ -25,8 +25,6 @@ import (
 	"github.com/pingcap/tidb-tools/sync_check/util"
 )
 
-const dateTimeFormat = "2006-01-02 15:04:05"
-
 func main() {
 	cfg := NewConfig()
 	err := cfg.Parse(os.Args[1:])
@@ -69,11 +67,13 @@ func checkSyncState(sourceDB, targetDB *sql.DB, cfg *Config) bool {
 	//d, err := NewDiff(sourceDB, targetDB, cfg.SourceDBCfg.Name, cfg.ChunkSize, cfg.Sample, cfg.CheckThCount, cfg.UseRowID, cfg.Tables, cfg.FixSQLFile)
 	d, err := NewDiff(sourceDB, targetDB, cfg)
 	if err != nil {
+		log.Errorf("create diff error %v", err)
 		log.Fatal(errors.Trace(err))
 	}
 
 	ok, err := d.Equal()
 	if err != nil {
+		log.Errorf("check data difference error %v", err)
 		log.Fatal(errors.Trace(err))
 	}
 

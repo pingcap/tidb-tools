@@ -22,7 +22,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
@@ -135,18 +134,10 @@ func (df *Diff) Equal() (equal bool, err error) {
 		if err != nil || !eq {
 			err = errors.Trace(err)
 			equal = false
-			return
 		}
 	}
 
-	for {
-		if len(df.sqlCh) == 0 {
-			close(df.sqlCh)
-			break
-		}
-		time.Sleep(time.Second)
-	}
-
+	df.sqlCh <- "end"
 	df.wg.Wait()
 	return
 }
@@ -414,13 +405,14 @@ func (df *Diff) compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.Column
 
 // WriteSqls write sqls to file
 func (df *Diff) WriteSqls() {
+	defer df.wg.Done()
 	for {
 		select {
 		case dml, ok := <-df.sqlCh:
-			if !ok {
-				df.wg.Done()
+			if !ok || dml == "end" {
 				return
 			}
+
 			_, err := df.FixSQLFile.WriteString(fmt.Sprintf("%s\n", dml))
 			if err != nil {
 				log.Errorf("write sql: %s failed, error: %v", dml, err)

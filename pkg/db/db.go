@@ -40,6 +40,18 @@ func CloseDB(db *sql.DB) error {
 
 // GetCreateTableSQL gets the create table sql.
 func GetCreateTableSQL(db *sql.DB, schemaName string, tableName string) (string, error) {
+	/*
+			show create table example result:
+			mysql> SHOW CREATE TABLE `test`.`itest`;
+			+-------+--------------------------------------------------------------------+
+			| Table | Create Table                                                                                                                              |
+			+-------+--------------------------------------------------------------------+
+			| itest | CREATE TABLE `itest` (
+	  			`id` int(11) DEFAULT NULL,
+	  			`name` varchar(24) DEFAULT NULL
+				) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin |
+			+-------+--------------------------------------------------------------------+
+	*/
 	query := fmt.Sprintf("SHOW CREATE TABLE `%s`.`%s`", schemaName, tableName)
 	row := db.QueryRow(query)
 
@@ -275,43 +287,6 @@ func GetTables(db *sql.DB, dbName string) ([]string, error) {
 	return tbls, nil
 }
 
-// DescribeTable is the struct for describe table
-type DescribeTable struct {
-	Field   string
-	Type    string
-	Null    string
-	Key     string
-	Default interface{}
-	Extra   interface{}
-}
-
-// Scan scan rows for desctibe table
-func (desc *DescribeTable) Scan(rows *sql.Rows) error {
-	err := rows.Scan(&desc.Field, &desc.Type, &desc.Null, &desc.Key, &desc.Default, &desc.Extra)
-	return errors.Trace(err)
-}
-
-// GetTableSchema returns DescribeTable
-func GetTableSchema(db *sql.DB, tblName string) ([]DescribeTable, error) {
-	stmt := fmt.Sprintf("describe %s;", tblName)
-	rows, err := QuerySQL(db, stmt)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	defer rows.Close()
-
-	var descs []DescribeTable
-	for rows.Next() {
-		var desc DescribeTable
-		err1 := desc.Scan(rows)
-		if err1 != nil {
-			return nil, errors.Trace(err1)
-		}
-		descs = append(descs, desc)
-	}
-	return descs, err
-}
-
 // GetCRC32Checksum returns the checksum of some data
 func GetCRC32Checksum(db *sql.DB, schemaName string, tbInfo *model.TableInfo, limitRange string) (string, error) {
 	columnNames := make([]string, 0, len(tbInfo.Columns))
@@ -365,12 +340,8 @@ func ScanRowsToInterfaces(rows *sql.Rows) ([][]interface{}, error) {
 
 	for rows.Next() {
 		colVals := make([]interface{}, len(cols))
-		colValsPtr := make([]interface{}, len(cols))
-		for i := range colVals {
-			colValsPtr[i] = &colVals[i]
-		}
 
-		err = rows.Scan(colValsPtr...)
+		err = rows.Scan(colVals...)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -408,13 +379,12 @@ func ScanRow(rows *sql.Rows) (map[string][]byte, error) {
 
 // SetSnapshot set the snapshot variable for tidb
 func SetSnapshot(db *sql.DB, snapshot string) error {
-	sql := fmt.Sprintf("set @@tidb_snapshot=\"%s\"", snapshot)
+	sql := fmt.Sprintf("set @@tidb_snapshot='%s'", snapshot)
 	log.Infof("set snapshot: %s", sql)
-	result, err := db.Exec(sql)
+	_, err := db.Exec(sql)
 	if err != nil {
 		return errors.Trace(err)
 	}
-	log.Infof("set snapshot result: %v", result)
 
 	return nil
 }
