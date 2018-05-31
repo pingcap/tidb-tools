@@ -14,7 +14,6 @@
 package main
 
 import (
-	"bytes"
 	"database/sql"
 	"fmt"
 	"math/rand"
@@ -202,8 +201,8 @@ func (df *Diff) EqualTableData(table *TableCheckCfg) (bool, error) {
 	defer close(checkResultCh)
 
 	for i := 0; i < df.checkThCount; i++ {
-		checkJobs := make([]*util.DumpJob, 0, checkNums)
-		for j := checkNums * i / df.checkThCount; j < checkNums*(i+1)/df.checkThCount && j < len(dumpJobs); j++ {
+		checkJobs := make([]*util.DumpJob, 0, len(checkNumArr))
+		for j := len(checkNumArr) * i / df.checkThCount; j < len(checkNumArr)*(i+1)/df.checkThCount && j < len(dumpJobs); j++ {
 			log.Infof("thread %d add dumpjob %d", i, j)
 			checkJobs = append(checkJobs, dumpJobs[j])
 		}
@@ -512,53 +511,6 @@ func compareData(map1 map[string][]byte, map2 map[string][]byte, orderKeyCols []
 	}
 }
 
-func equalRows(rows1, rows2 *sql.Rows, row1, row2 comparableSQLRow, pks []string) (bool, error) {
-	dataEqual := true
-	for rows1.Next() {
-		if !rows2.Next() {
-			// rows2 count less than rows1
-			log.Error("rows count different")
-			return false, nil
-		}
-
-		eq, err := equalOneRow(rows1, rows2, row1, row2)
-		if err != nil {
-			return false, errors.Trace(err)
-		}
-		if !eq {
-			dataEqual = false
-		}
-	}
-	if rows2.Next() {
-		// rows1 count less than rows2
-		log.Error("rows count different")
-		return false, nil
-	}
-	if !dataEqual {
-		log.Error("rows count equal, but not every row equal!")
-		return false, nil
-	}
-	return true, nil
-}
-
-func equalOneRow(rows1, rows2 *sql.Rows, row1, row2 comparableSQLRow) (bool, error) {
-	err := row1.Scan(rows1)
-	if err != nil {
-		return false, errors.Trace(err)
-	}
-
-	row2.Scan(rows2)
-	if err != nil {
-		return false, errors.Trace(err)
-	}
-	if row1.Equal(row2) {
-		return true, nil
-	}
-
-	log.Errorf("row1 %s not equal row2 %s!", row1, row2)
-	return false, nil
-}
-
 func getChunkRows(db *sql.DB, dbName string, table *TableCheckCfg, where string, useRowID bool) (*sql.Rows, []*model.ColumnInfo, error) {
 	orderKeys, orderKeyCols := pkgdb.GetOrderKey(table.Info)
 	columns := "*"
@@ -573,54 +525,6 @@ func getChunkRows(db *sql.DB, dbName string, table *TableCheckCfg, where string,
 		return nil, nil, errors.Trace(err)
 	}
 	return rows, orderKeyCols, nil
-}
-
-type comparableSQLRow interface {
-	sqlRow
-	comparable
-}
-
-type sqlRow interface {
-	Scan(*sql.Rows) error
-}
-
-type comparable interface {
-	Equal(comparable) bool
-}
-
-type rawBytesRow []sql.RawBytes
-
-func (r rawBytesRow) Len() int {
-	return len([]sql.RawBytes(r))
-}
-
-func (r rawBytesRow) Scan(rows *sql.Rows) error {
-	args := make([]interface{}, len(r))
-	for i := 0; i < len(args); i++ {
-		args[i] = &r[i]
-	}
-
-	err := rows.Scan(args...)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	return nil
-}
-
-func (r rawBytesRow) Equal(data comparable) bool {
-	r2, ok := data.(rawBytesRow)
-	if !ok {
-		return false
-	}
-	if r.Len() != r2.Len() {
-		return false
-	}
-	for i := 0; i < r.Len(); i++ {
-		if bytes.Compare(r[i], r2[i]) != 0 {
-			return false
-		}
-	}
-	return true
 }
 
 func equalStrings(str1, str2 []string) bool {
