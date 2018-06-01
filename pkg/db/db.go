@@ -209,6 +209,8 @@ func GetOrderKey(tbInfo *model.TableInfo) ([]string, []*model.ColumnInfo) {
 		if index.Primary {
 			for _, indexCol := range index.Columns {
 				keys = append(keys, indexCol.Name.O)
+				log.Infof("index offset: %d, index column: %s", indexCol.Offset, tbInfo.Columns[indexCol.Offset].Name.O)
+				keyCols = append(keyCols, tbInfo.Columns[indexCol.Offset])
 			}
 		}
 	}
@@ -219,15 +221,8 @@ func GetOrderKey(tbInfo *model.TableInfo) ([]string, []*model.ColumnInfo) {
 			keys = append(keys, col.Name.O)
 			keyCols = append(keyCols, col)
 		}
-	} else {
-		for _, col := range tbInfo.Columns {
-			for _, key := range keys {
-				if col.Name.O == key {
-					keyCols = append(keyCols, col)
-				}
-			}
-		}
 	}
+
 	return keys, keyCols
 }
 
