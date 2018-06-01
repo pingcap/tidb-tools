@@ -1,0 +1,83 @@
+syntax = "proto2";
+package obinlog;
+import "gogoproto/gogo.proto";
+
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+
+// for date and time type, string is set
+
+// for int type int64 or uint64 is set
+// for float, double, double is set
+// for decimal, string is set in human-readable now
+// for bit, bytes is set
+
+// for text and char type, string is set
+// for blob and binary type, bytes is set
+// for enum, set, uint64 is set
+// for json, bytes is set
+message Column {
+	optional bool is_null = 1 [default = false];
+
+    optional int64 int64_value = 2;
+	optional uint64 uint64_value = 3;
+    optional double double_value = 4;
+    optional bytes bytes_value = 6;
+    optional string string_value = 7;
+}
+
+message ColumnInfo {
+    optional string  name       = 1 [(gogoproto.nullable) = false];
+    // column field type in mysql
+    optional string  mysql_type = 3 [(gogoproto.nullable) = false];
+	optional bool is_primary_key = 4 [(gogoproto.nullable) = false];
+}
+
+message Row {
+	repeated Column columns = 1;
+}
+
+enum MutationType {
+	Insert = 0;
+	Update = 1;
+	Delete = 4;
+}
+
+//  Table contains mutations in a table.
+message Table {
+    optional string schema_name     = 1;
+    optional string table_name      = 2;
+	repeated ColumnInfo column_info = 3;
+
+	required MutationType type = 4;
+
+	repeated Row rows = 5;
+	// for Update MutationType only
+	repeated Row changed_rows = 6;
+}
+
+message DMLData {
+    // tables contains all the table changes.
+    repeated Table tables      = 1;
+}
+message DDLData {
+	// the current database use
+	optional string schema_name = 1;
+    // ddl_query is the original ddl statement query.
+    optional bytes  ddl_query  = 2;
+}
+
+enum BinlogType {
+    DML = 0; // has commit_ts, dml_data
+    DDL = 1; // has commit_ts, ddl_query
+}
+
+// Binlog contains all the changes in a transaction.
+message Binlog {
+    optional BinlogType    type           = 1 [(gogoproto.nullable) = false];
+    optional int64         commit_ts      = 2 [(gogoproto.nullable) = false];
+    // dml_data is marshalled from DML type,
+    optional DMLData       dml_data = 3;
+    optional DDLData       ddl_data = 4;
+}
