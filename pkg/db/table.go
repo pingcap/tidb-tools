@@ -35,7 +35,7 @@ func GetTableInfoWithRowID(db *sql.DB, schemaName string, tableName string, useR
 	}
 
 	if useRowID && !table.PKIsHandle {
-		addImplicitColumn(table)
+		setImplicitColumn(table)
 	}
 
 	return table, nil
@@ -269,7 +269,7 @@ func findCol(cols []*model.ColumnInfo, name string) *model.ColumnInfo {
 	return nil
 }
 
-func addImplicitColumn(table *model.TableInfo) {
+func setImplicitColumn(table *model.TableInfo) {
 	newColumn := &model.ColumnInfo{
 		ID:   ImplicitColID,
 		Name: model.NewCIStr(ImplicitColName),

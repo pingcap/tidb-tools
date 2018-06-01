@@ -67,7 +67,7 @@ func GetCreateTableSQL(db *sql.DB, schemaName string, tableName string) (string,
 }
 
 // GetRowCount returns row count of the table by given where condition.
-func GetRowCount(db *sql.DB, dbname string, table string, where string) (int64, error) {
+func GetRowCount(db *sql.DB, dbName string, table string, where string) (int64, error) {
 	/*
 		select count example result:
 		mysql> SELECT count(1) cnt from `test`.`itest` where id > 0;
@@ -78,7 +78,7 @@ func GetRowCount(db *sql.DB, dbname string, table string, where string) (int64, 
 		+------+
 	*/
 
-	query := fmt.Sprintf("SELECT COUNT(1) cnt FROM `%s`.`%s` WHERE %s", dbname, table, where)
+	query := fmt.Sprintf("SELECT COUNT(1) cnt FROM `%s`.`%s` WHERE %s", dbName, table, where)
 	rows, err := db.Query(query)
 	if err != nil {
 		return 0, errors.Trace(err)
@@ -95,14 +95,14 @@ func GetRowCount(db *sql.DB, dbname string, table string, where string) (int64, 
 
 	cntStr, ok := fields["cnt"]
 	if !ok {
-		return 0, errors.New("[dumper] `cnt` field not found in select count sql result")
+		return 0, errors.Errorf("`cnt` field not found in `%s`.`%s`'s count result", dbName, table)
 	}
 	cnt, err := strconv.ParseInt(string(cntStr), 10, 64)
 	return cnt, errors.Trace(err)
 }
 
 // ShowIndex returns result of execute `show index`
-func ShowIndex(db *sql.DB, dbname string, table string) ([]map[string][]byte, error) {
+func ShowIndex(db *sql.DB, dbName string, table string) ([]map[string][]byte, error) {
 	/*
 		show index example result:
 		mysql> show index from test;
@@ -114,7 +114,7 @@ func ShowIndex(db *sql.DB, dbname string, table string) ([]map[string][]byte, er
 		+-------+------------+----------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
 	*/
 
-	query := fmt.Sprintf("SHOW INDEX FROM `%s`.`%s`", dbname, table)
+	query := fmt.Sprintf("SHOW INDEX FROM `%s`.`%s`", dbName, table)
 	rows, err := db.Query(query)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -176,7 +176,7 @@ func FindSuitableIndex(db *sql.DB, dbName string, tableInfo *model.TableInfo) (*
 	return c, nil
 }
 
-// GetOrderKey return some columns for order
+// GetOrderKey return some columns for order.
 func GetOrderKey(tbInfo *model.TableInfo) ([]string, []*model.ColumnInfo) {
 	keys := make([]string, 0, 2)
 	keyCols := make([]*model.ColumnInfo, 0, 2)
@@ -208,10 +208,10 @@ func GetOrderKey(tbInfo *model.TableInfo) ([]string, []*model.ColumnInfo) {
 }
 
 // GetRandomValues returns some random value of a column, not used for number type column.
-func GetRandomValues(db *sql.DB, dbname string, table string, column string, num int64, min, max interface{}, limitRange string) ([]string, error) {
+func GetRandomValues(db *sql.DB, dbName string, table string, column string, num int64, min, max interface{}, limitRange string) ([]string, error) {
 	randomValue := make([]string, 0, num)
 	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` > \"%v\" AND `%s` < \"%v\" AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
-		column, column, dbname, table, column, min, column, max, limitRange, num, column)
+		column, column, dbName, table, column, min, column, max, limitRange, num, column)
 	log.Debugf("get random values sql: %s", query)
 	rows, err := db.Query(query)
 	if err != nil {
@@ -381,7 +381,7 @@ func SetSnapshot(db *sql.DB, snapshot string) error {
 // IsNumberType returns true if is number type
 func IsNumberType(tp byte) bool {
 	switch tp {
-	case mysql.TypeTiny, mysql.TypeShort, mysql.TypeLong, mysql.TypeLonglong, mysql.TypeInt24:
+	case mysql.TypeTiny, mysql.TypeShort, mysql.TypeLong, mysql.TypeLonglong, mysql.TypeInt24, mysql.TypeYear:
 		return true
 	}
 
