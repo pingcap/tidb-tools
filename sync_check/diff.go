@@ -27,7 +27,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/db"
 	"github.com/pingcap/tidb-tools/sync_check/util"
 	"github.com/pingcap/tidb/model"
-	"github.com/pingcap/tidb/mysql"
 	"github.com/pingcap/tidb/types"
 )
 
@@ -189,6 +188,7 @@ func (df *Diff) EqualTableStruct(tableInfo1, tableInfo2 *model.TableInfo) (bool,
 
 // EqualTableData checks data is equal or not.
 func (df *Diff) EqualTableData(table *TableCheckCfg) (bool, error) {
+	// TODO: now only check data between source data's min and max, need check data less than min and greater than max.
 	dumpJobs, err := util.GenerateDumpJob(df.db1, df.dbName, table.Info, table.Field, table.Range, df.chunkSize, df.sample, df.useRowID)
 	if err != nil {
 		return false, errors.Trace(err)
@@ -204,7 +204,6 @@ func (df *Diff) EqualTableData(table *TableCheckCfg) (bool, error) {
 	for i := 0; i < df.checkThCount; i++ {
 		checkJobs := make([]*util.DumpJob, 0, len(checkNumArr))
 		for j := len(checkNumArr) * i / df.checkThCount; j < len(checkNumArr)*(i+1)/df.checkThCount && j < len(dumpJobs); j++ {
-			log.Infof("thread %d add dumpjob %d", i, j)
 			checkJobs = append(checkJobs, dumpJobs[j])
 		}
 		go func() {
@@ -242,8 +241,6 @@ func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, table *TableCheckC
 	}
 
 	for _, job := range dumpJobs {
-		log.Infof("check table: %s, range: %s", job.Table, job.Where)
-
 		// first check the checksum is equal or not
 		checksum1, err := pkgdb.GetCRC32Checksum(df.db1, df.dbName, table.Info, job.Where)
 		if err != nil {
@@ -255,11 +252,12 @@ func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, table *TableCheckC
 			return false, errors.Trace(err)
 		}
 		if checksum1 == checksum2 {
-			log.Infof("check table: %s, range: %s checksum is equal, checksum: %s", job.Table, job.Where, checksum1)
+			log.Infof("table: %s, range: %s checksum is equal, checksum: %s", job.Table, job.Where, checksum1)
 			continue
 		}
 
 		// if checksum is not equal, compare the data
+		log.Errorf("table: %s, range: %s checksum is not equal", job.Table, job.Where)
 		rows1, orderKeyCols, err := getChunkRows(df.db1, df.dbName, table, job.Where, df.useRowID)
 		if err != nil {
 			return false, errors.Trace(err)
@@ -271,18 +269,6 @@ func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, table *TableCheckC
 			return false, errors.Trace(err)
 		}
 		defer rows2.Close()
-
-		cols1, err := rows1.Columns()
-		if err != nil {
-			return false, errors.Trace(err)
-		}
-		cols2, err := rows2.Columns()
-		if err != nil {
-			return false, errors.Trace(err)
-		}
-		if len(cols1) != len(cols2) {
-			return false, errors.Trace(err)
-		}
 
 		eq, err := df.compareRows(rows1, rows2, orderKeyCols, table)
 		if err != nil {
@@ -319,7 +305,7 @@ func (df *Diff) compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.Column
 	var index1, index2 int
 	for {
 		if index1 == len(rowsData1) {
-			// the all rowsData2's data should be deleted
+			// all the rowsData2's data should be deleted
 			for ; index2 < len(rowsData2); index2++ {
 				sql := generateDML("delete", rowsData2[index2], orderKeyCols, table.Info, table.Schema)
 				log.Infof("[delete] sql: %v", sql)
@@ -435,13 +421,11 @@ func generateDML(tp string, data map[string][]byte, keys []*model.ColumnInfo, ta
 }
 
 func needQuotes(ft types.FieldType) bool {
-	switch ft.Tp {
-	case mysql.TypeTimestamp, mysql.TypeTiny, mysql.TypeShort, mysql.TypeInt24,
-		mysql.TypeLong, mysql.TypeLonglong, mysql.TypeFloat, mysql.TypeDouble:
+	if pkgdb.IsNumberType(ft.Tp) || pkgdb.IsFloatType(ft.Tp) {
 		return false
-	default:
-		return true
 	}
+
+	return true
 }
 
 func compareData(map1 map[string][]byte, map2 map[string][]byte, orderKeyCols []*model.ColumnInfo) (bool, int32, error) {
@@ -501,15 +485,9 @@ func compareData(map1 map[string][]byte, map2 map[string][]byte, orderKeyCols []
 				continue
 			}
 		}
+	}
 
-	}
-	if cmp == 1 {
-		return false, 1, nil
-	} else if cmp == -1 {
-		return false, -1, nil
-	} else {
-		return false, 0, nil
-	}
+	return false, cmp, nil
 }
 
 func getChunkRows(db *sql.DB, dbName string, table *TableCheckCfg, where string, useRowID bool) (*sql.Rows, []*model.ColumnInfo, error) {

@@ -33,7 +33,6 @@ type chunkRange struct {
 	// containB is true, containE is false, means [begin, end)
 	containB bool
 	containE bool
-	notNil   bool
 }
 
 // DumpJob is the struct for job of dump
@@ -46,20 +45,19 @@ type DumpJob struct {
 }
 
 // newChunkRange return a range struct
-func newChunkRange(begin, end interface{}, containB, containE bool, notNil bool) chunkRange {
+func newChunkRange(begin, end interface{}, containB, containE bool) chunkRange {
 	return chunkRange{
 		begin:    begin,
 		end:      end,
 		containE: containE,
 		containB: containB,
-		notNil:   notNil,
 	}
 }
 
 func getChunksForTable(db *sql.DB, dbName, tableName string, column *model.ColumnInfo, where string, chunkSize, sample int) ([]chunkRange, error) {
 	noChunks := []chunkRange{{}}
 	if column == nil {
-		log.Warnf("No suitable index found for %s.%s", dbName, tableName)
+		log.Warnf("no suitable index found for %s.%s", dbName, tableName)
 		return noChunks, nil
 	}
 
@@ -68,7 +66,7 @@ func getChunksForTable(db *sql.DB, dbName, tableName string, column *model.Colum
 	// fetch min, max
 	query := fmt.Sprintf("SELECT %s MIN(`%s`) as MIN, MAX(`%s`) as MAX FROM `%s`.`%s` where %s",
 		"/*!40001 SQL_NO_CACHE */", field, field, dbName, tableName, where)
-	log.Debugf("[dumper] get max min query sql: %s", query)
+	log.Debugf("get max min query sql: %s", query)
 
 	// get the chunk count
 	cnt, err := pkgdb.GetRowCount(db, dbName, tableName, where)
@@ -97,7 +95,7 @@ func getChunksForTable(db *sql.DB, dbName, tableName string, column *model.Colum
 			// min is NULL, means that no table data.
 			return []chunkRange{}, nil
 		}
-		chunk = newChunkRange(min.Int64, max.Int64+1, true, false, true)
+		chunk = newChunkRange(min.Int64, max.Int64+1, true, false)
 	} else if pkgdb.IsFloatType(column.Tp) {
 		var min, max sql.NullFloat64
 		err := db.QueryRow(query).Scan(&min, &max)
@@ -108,7 +106,7 @@ func getChunksForTable(db *sql.DB, dbName, tableName string, column *model.Colum
 			// min is NULL, means that no table data.
 			return []chunkRange{}, nil
 		}
-		chunk = newChunkRange(min.Float64-0.1, max.Float64+0.1, false, false, true)
+		chunk = newChunkRange(min.Float64-0.1, max.Float64+0.1, false, false)
 	} else {
 		var min, max sql.NullString
 		err := db.QueryRow(query).Scan(&min, &max)
@@ -118,7 +116,7 @@ func getChunksForTable(db *sql.DB, dbName, tableName string, column *model.Colum
 		if !min.Valid || !max.Valid {
 			return []chunkRange{}, nil
 		}
-		chunk = newChunkRange(min.String, max.String, true, true, true)
+		chunk = newChunkRange(min.String, max.String, true, true)
 	}
 	return splitRange(db, &chunk, chunkCnt, dbName, tableName, column, where)
 }
@@ -131,10 +129,6 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbName string, table
 		return chunks, nil
 	}
 
-	if !chunk.notNil {
-		return nil, errors.Errorf("the chunk is empty: %v", chunk)
-	}
-
 	if reflect.TypeOf(chunk.begin).String() == "int64" {
 		min, ok1 := chunk.begin.(int64)
 		max, ok2 := chunk.end.(int64)
@@ -144,12 +138,11 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbName string, table
 		step := (max-min)/count + 1
 		cutoff := min
 		for cutoff <= max {
-			r := newChunkRange(cutoff, cutoff+step, true, false, true)
+			r := newChunkRange(cutoff, cutoff+step, true, false)
 			chunks = append(chunks, r)
 			cutoff += step
 		}
-		log.Debugf("getChunksForTable cut table: cnt=%d min=%v max=%v step=%v chunk=%d",
-			count, min, max, step, len(chunks))
+		log.Debugf("getChunksForTable cut table: cnt=%d min=%v max=%v step=%v chunk=%d", count, min, max, step, len(chunks))
 	} else if reflect.TypeOf(chunk.begin).String() == "float64" {
 		min, ok1 := chunk.begin.(float64)
 		max, ok2 := chunk.end.(float64)
@@ -159,7 +152,7 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbName string, table
 		step := (max-min)/float64(count) + 1
 		cutoff := min
 		for cutoff <= max {
-			r := newChunkRange(cutoff, cutoff+step, true, false, true)
+			r := newChunkRange(cutoff, cutoff+step, true, false)
 			chunks = append(chunks, r)
 			cutoff += step
 		}
@@ -190,11 +183,10 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbName string, table
 				minTmp = splitValues[i-1]
 				maxTmp = splitValues[i]
 			}
-			r := newChunkRange(minTmp, maxTmp, true, false, true)
+			r := newChunkRange(minTmp, maxTmp, true, false)
 			chunks = append(chunks, r)
 		}
-		log.Debugf("[dumper] getChunksForTable cut table: cnt=%d min=%s max=%s chunk=%d",
-			count, min, max, len(chunks))
+		log.Debugf("getChunksForTable cut table: cnt=%d min=%s max=%s chunk=%d", count, min, max, len(chunks))
 	}
 	chunks[0].containB = chunk.containB
 	chunks[len(chunks)-1].containE = chunk.containE
@@ -210,12 +202,10 @@ func findSuitableField(db *sql.DB, dbName string, table *model.TableInfo) (*mode
 	if column != nil {
 		return column, nil
 	}
-	log.Infof("%s.%s don't have index, will use the first column as split field", dbName, table.Name.O)
 
 	// use the first column
-	column = table.Columns[0]
-
-	return column, nil
+	log.Infof("%s.%s don't have index, will use the first column as split field", dbName, table.Name.O)
+	return table.Columns[0], nil
 }
 
 // GenerateDumpJob generates some DumpJobs.
@@ -268,26 +258,23 @@ func GenerateDumpJob(db *sql.DB, dbName string, table *model.TableInfo, splitFie
 			chunk = chunks[length-1]
 			chunks = chunks[:length-1]
 		}
-		if chunk.notNil {
-			gt := ">"
-			lt := "<"
-			if chunk.containB {
-				gt = ">="
-			}
-			if chunk.containE {
-				lt = "<="
-			}
-			if reflect.TypeOf(chunk.begin).String() == "int64" {
-				where = fmt.Sprintf("(`%s` %s %d AND `%s` %s %d)", column.Name, gt, chunk.begin, column.Name, lt, chunk.end)
-			} else if reflect.TypeOf(chunk.begin).String() == "float64" {
-				where = fmt.Sprintf("(`%s` %s %f AND `%s` %s %f)", column.Name, gt, chunk.begin, column.Name, lt, chunk.end)
-			} else {
-				where = fmt.Sprintf("(`%s` %s \"%v\" AND `%s` %s \"%v\")", column.Name, gt, chunk.begin, column.Name, lt, chunk.end)
-			}
-			where = fmt.Sprintf("%s AND %s", where, limitRange)
-		} else {
-			where = limitRange
+
+		gt := ">"
+		lt := "<"
+		if chunk.containB {
+			gt = ">="
 		}
+		if chunk.containE {
+			lt = "<="
+		}
+		if reflect.TypeOf(chunk.begin).String() == "int64" {
+			where = fmt.Sprintf("(`%s` %s %d AND `%s` %s %d)", column.Name, gt, chunk.begin, column.Name, lt, chunk.end)
+		} else if reflect.TypeOf(chunk.begin).String() == "float64" {
+			where = fmt.Sprintf("(`%s` %s %f AND `%s` %s %f)", column.Name, gt, chunk.begin, column.Name, lt, chunk.end)
+		} else {
+			where = fmt.Sprintf("(`%s` %s \"%v\" AND `%s` %s \"%v\")", column.Name, gt, chunk.begin, column.Name, lt, chunk.end)
+		}
+		where = fmt.Sprintf("%s AND %s", where, limitRange)
 
 		log.Debugf("%s.%s create dump job: where: %s", dbName, table.Name.O, where)
 		jobBucket = append(jobBucket, &DumpJob{
