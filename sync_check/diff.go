@@ -187,6 +187,7 @@ func (df *Diff) EqualTableStruct(tableInfo1, tableInfo2 *model.TableInfo) (bool,
 	return true, nil
 }
 
+// EqualTableData checks data is equal or not.
 func (df *Diff) EqualTableData(table *TableCheckCfg) (bool, error) {
 	dumpJobs, err := util.GenerateDumpJob(df.db1, df.dbName, table.Info, table.Field, table.Range, df.chunkSize, df.sample, df.useRowID)
 	if err != nil {

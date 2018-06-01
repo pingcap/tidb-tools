@@ -79,7 +79,7 @@ func GetRowCount(db *sql.DB, dbName string, table string, where string) (int64, 
 	*/
 
 	query := fmt.Sprintf("SELECT COUNT(1) cnt FROM `%s`.`%s` WHERE %s", dbName, table, where)
-	rows, err := db.Query(query)
+	rows, err := QuerySQL(db, query)
 	if err != nil {
 		return 0, errors.Trace(err)
 	}
@@ -101,8 +101,18 @@ func GetRowCount(db *sql.DB, dbName string, table string, where string) (int64, 
 	return cnt, errors.Trace(err)
 }
 
+// IndexInfo saves index's information.
+type IndexInfo struct {
+	Table       string
+	NoneUnique  bool
+	KeyName     string
+	SeqInIndex  int
+	ColumnName  string
+	Cardinality int
+}
+
 // ShowIndex returns result of execute `show index`
-func ShowIndex(db *sql.DB, dbName string, table string) ([]map[string][]byte, error) {
+func ShowIndex(db *sql.DB, dbName string, table string) ([]*IndexInfo, error) {
 	/*
 		show index example result:
 		mysql> show index from test;
@@ -113,24 +123,39 @@ func ShowIndex(db *sql.DB, dbName string, table string) ([]map[string][]byte, er
 		| test  | 0          | aid      | 1            | aid         | A         | 0           | NULL     | NULL   | YES  | BTREE      |         |               |
 		+-------+------------+----------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
 	*/
-
+	indices := make([]*IndexInfo, 0, 3)
 	query := fmt.Sprintf("SHOW INDEX FROM `%s`.`%s`", dbName, table)
-	rows, err := db.Query(query)
+	rows, err := QuerySQL(db, query)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	defer rows.Close()
 
-	var rowsData []map[string][]byte
 	for rows.Next() {
 		fields, err1 := ScanRow(rows)
 		if err1 != nil {
 			return nil, errors.Trace(err1)
 		}
-		rowsData = append(rowsData, fields)
+		seqInINdex, err1 := strconv.Atoi(string(fields["Seq_in_index"]))
+		if err != nil {
+			return nil, errors.Trace(err1)
+		}
+		cardinality, err1 := strconv.Atoi(string(fields["Cardinality"]))
+		if err != nil {
+			return nil, errors.Trace(err1)
+		}
+		index := &IndexInfo{
+			Table:       string(fields["Table"]),
+			NoneUnique:  string(fields["Non_unique"]) == "1",
+			KeyName:     string(fields["Key_name"]),
+			ColumnName:  string(fields["Column_name"]),
+			SeqInIndex:  seqInINdex,
+			Cardinality: cardinality,
+		}
+		indices = append(indices, index)
 	}
 
-	return rowsData, nil
+	return indices, nil
 }
 
 // FindSuitableIndex returns a suitableIndex
@@ -149,27 +174,26 @@ func FindSuitableIndex(db *sql.DB, dbName string, tableInfo *model.TableInfo) (*
 		}
 	}
 
-	rowsData, err := ShowIndex(db, dbName, tableInfo.Name.O)
+	// no unique index found, seek index with max cardinality
+	indices, err := ShowIndex(db, dbName, tableInfo.Name.O)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	// no unique index found, seek index with max cardinality
 	var c *model.ColumnInfo
 	var maxCardinality int
-	for _, fields := range rowsData {
-		if string(fields["Seq_in_index"]) == "1" {
-			cardinality, err := strconv.Atoi(string(fields["Cardinality"]))
-			if err != nil {
-				return nil, errors.Trace(err)
+	for _, indexInfo := range indices {
+		// just use the first column in the index, otherwise can't hit the index when select
+		if indexInfo.SeqInIndex != 1 {
+			continue
+		}
+
+		if indexInfo.Cardinality > maxCardinality {
+			column := GetColumnByName(tableInfo, indexInfo.ColumnName)
+			if column == nil {
+				return nil, errors.Errorf("can't find column %s in %s.%s", indexInfo.ColumnName, dbName, tableInfo.Name.O)
 			}
-			if cardinality > maxCardinality {
-				column := GetColumnByName(tableInfo, string(fields["Column_name"]))
-				if column == nil {
-					return nil, errors.Errorf("can't find column %s in %s.%s", string(fields["Column_name"]), dbName, tableInfo.Name.O)
-				}
-				maxCardinality = cardinality
-				c = column
-			}
+			maxCardinality = indexInfo.Cardinality
+			c = column
 		}
 	}
 
@@ -213,7 +237,7 @@ func GetRandomValues(db *sql.DB, dbName string, table string, column string, num
 	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` > \"%v\" AND `%s` < \"%v\" AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
 		column, column, dbName, table, column, min, column, max, limitRange, num, column)
 	log.Debugf("get random values sql: %s", query)
-	rows, err := db.Query(query)
+	rows, err := QuerySQL(db, query)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -284,7 +308,7 @@ func GetCRC32Checksum(db *sql.DB, schemaName string, tbInfo *model.TableInfo, li
 	query := fmt.Sprintf("SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', %s) SEPARATOR  ' + ')) AS checksum FROM `%s`.`%s` WHERE %s;",
 		strings.Join(columnNames, ", "), schemaName, tbInfo.Name.O, limitRange)
 	log.Debugf("checksum sql: %s", query)
-	rows, err := db.Query(query)
+	rows, err := QuerySQL(db, query)
 	if err != nil {
 		return "", errors.Trace(err)
 	}
@@ -304,14 +328,8 @@ func GetCRC32Checksum(db *sql.DB, schemaName string, tbInfo *model.TableInfo, li
 
 // QuerySQL querys sql, and returns some row
 func QuerySQL(db *sql.DB, query string) (*sql.Rows, error) {
-	var (
-		err  error
-		rows *sql.Rows
-	)
-
 	log.Debugf("[query][sql]%s", query)
-
-	rows, err = db.Query(query)
+	rows, err := db.Query(query)
 	if err != nil {
 		log.Errorf("query sql[%s] failed %v", query, errors.ErrorStack(err))
 		return nil, errors.Trace(err)
