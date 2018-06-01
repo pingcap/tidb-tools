@@ -421,11 +421,7 @@ func generateDML(tp string, data map[string][]byte, keys []*model.ColumnInfo, ta
 }
 
 func needQuotes(ft types.FieldType) bool {
-	if pkgdb.IsNumberType(ft.Tp) || pkgdb.IsFloatType(ft.Tp) {
-		return false
-	}
-
-	return true
+	return !(pkgdb.IsNumberType(ft.Tp) || pkgdb.IsFloatType(ft.Tp))
 }
 
 func compareData(map1 map[string][]byte, map2 map[string][]byte, orderKeyCols []*model.ColumnInfo) (bool, int32, error) {
@@ -520,6 +516,7 @@ func equalStrings(str1, str2 []string) bool {
 
 func getRandomN(total, num int) []int {
 	if num > total {
+		log.Warnf("the num %d is greater than total %d", num, total)
 		num = total
 	}
 

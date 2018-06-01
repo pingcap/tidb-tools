@@ -55,10 +55,9 @@ func newChunkRange(begin, end interface{}, containB, containE bool) chunkRange {
 }
 
 func getChunksForTable(db *sql.DB, dbName, tableName string, column *model.ColumnInfo, where string, chunkSize, sample int) ([]chunkRange, error) {
-	noChunks := []chunkRange{{}}
 	if column == nil {
 		log.Warnf("no suitable index found for %s.%s", dbName, tableName)
-		return noChunks, nil
+		return nil, nil
 	}
 
 	field := column.Name.O
@@ -66,7 +65,6 @@ func getChunksForTable(db *sql.DB, dbName, tableName string, column *model.Colum
 	// fetch min, max
 	query := fmt.Sprintf("SELECT %s MIN(`%s`) as MIN, MAX(`%s`) as MAX FROM `%s`.`%s` where %s",
 		"/*!40001 SQL_NO_CACHE */", field, field, dbName, tableName, where)
-	log.Debugf("get max min query sql: %s", query)
 
 	// get the chunk count
 	cnt, err := pkgdb.GetRowCount(db, dbName, tableName, where)
@@ -75,7 +73,7 @@ func getChunksForTable(db *sql.DB, dbName, tableName string, column *model.Colum
 	}
 	if cnt == 0 {
 		log.Infof("no data found in %s.%s", dbName, tableName)
-		return noChunks, nil
+		return nil, nil
 	}
 
 	chunkCnt := cnt / int64(chunkSize)
@@ -93,7 +91,7 @@ func getChunksForTable(db *sql.DB, dbName, tableName string, column *model.Colum
 		}
 		if !min.Valid {
 			// min is NULL, means that no table data.
-			return []chunkRange{}, nil
+			return nil, nil
 		}
 		chunk = newChunkRange(min.Int64, max.Int64+1, true, false)
 	} else if pkgdb.IsFloatType(column.Tp) {
@@ -104,7 +102,7 @@ func getChunksForTable(db *sql.DB, dbName, tableName string, column *model.Colum
 		}
 		if !min.Valid {
 			// min is NULL, means that no table data.
-			return []chunkRange{}, nil
+			return nil, nil
 		}
 		chunk = newChunkRange(min.Float64-0.1, max.Float64+0.1, false, false)
 	} else {
@@ -114,7 +112,7 @@ func getChunksForTable(db *sql.DB, dbName, tableName string, column *model.Colum
 			return nil, errors.Trace(err)
 		}
 		if !min.Valid || !max.Valid {
-			return []chunkRange{}, nil
+			return nil, nil
 		}
 		chunk = newChunkRange(min.String, max.String, true, true)
 	}
@@ -238,6 +236,9 @@ func GenerateDumpJob(db *sql.DB, dbName string, table *model.TableInfo, splitFie
 	chunks, err := getChunksForTable(db, dbName, table.Name.O, column, limitRange, chunkSize, sample)
 	if err != nil {
 		return nil, errors.Trace(err)
+	}
+	if chunks == nil {
+		return nil, nil
 	}
 	log.Debugf("chunks: %+v", chunks)
 
