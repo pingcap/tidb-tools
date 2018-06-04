@@ -129,10 +129,9 @@ func (ks *KafkaSeeker) seekOffset(topic string, partition int32, start int64, en
 
 	if endTS <= ts {
 		return sarama.OffsetNewest, nil
-	} else {
-		return end, nil
 	}
 
+	return end, nil
 }
 
 func (ks *KafkaSeeker) getTSAtOffset(topic string, partition int32, offset int64) (ts int64, err error) {

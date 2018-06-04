@@ -24,14 +24,14 @@ func main() {
 		ClusterID:  *clusterID,
 	}
 
-	reader, err := reader.NewReader(cfg)
+	breader, err := reader.NewReader(cfg)
 	if err != nil {
 		panic(err)
 	}
 
 	for {
 		select {
-		case msg := <-reader.Messages():
+		case msg := <-breader.Messages():
 			log.Debug("recv: ", msg.Binlog.String())
 		}
 	}

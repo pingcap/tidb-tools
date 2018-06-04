@@ -48,7 +48,7 @@ func main() {
 		ClusterID:  *clusterID,
 	}
 
-	reader, err := reader.NewReader(cfg)
+	breader, err := reader.NewReader(cfg)
 	if err != nil {
 		panic(err)
 	}
@@ -60,10 +60,10 @@ func main() {
 
 	for {
 		select {
-		case msg := <-reader.Messages():
+		case msg := <-breader.Messages():
 			log.Debug("recv: ", msg.Binlog.String())
 			binlog := msg.Binlog
-			sqls, args := toSql(binlog)
+			sqls, args := toSQL(binlog)
 
 			tx, err := db.Begin()
 			if err != nil {
@@ -72,7 +72,7 @@ func main() {
 
 			for i := 0; i < len(sqls); i++ {
 				log.Debug("exec: args: ", sqls[i], args[i])
-				_, err := tx.Exec(sqls[i], args[i]...)
+				_, err = tx.Exec(sqls[i], args[i]...)
 				if err != nil {
 					log.Error(err)
 				}
@@ -185,7 +185,7 @@ func tableToSQL(table *obinlog.Table) (sqls []string, sqlArgs [][]interface{}) {
 		sql += where
 
 		for rowIdx, row := range table.Rows {
-			changed_row := table.ChangedRows[rowIdx]
+			changedRow := table.ChangedRows[rowIdx]
 
 			var args []interface{}
 			// for set
@@ -194,7 +194,7 @@ func tableToSQL(table *obinlog.Table) (sqls []string, sqlArgs [][]interface{}) {
 			}
 
 			// for where
-			for i, col := range changed_row.GetColumns() {
+			for i, col := range changedRow.GetColumns() {
 				if !usePK || columnInfo[i].GetIsPrimaryKey() {
 					args = append(args, columnToArg(col))
 				}
@@ -227,7 +227,7 @@ func tableToSQL(table *obinlog.Table) (sqls []string, sqlArgs [][]interface{}) {
 	return
 }
 
-func toSql(binlog *obinlog.Binlog) ([]string, [][]interface{}) {
+func toSQL(binlog *obinlog.Binlog) ([]string, [][]interface{}) {
 	var allSQL []string
 	var allArgs [][]interface{}
 

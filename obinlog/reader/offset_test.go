@@ -41,7 +41,7 @@ func (to *testOffsetSuite) TestOffset(c *C) {
 		20: 0,
 		30: 0,
 	}
-	for ts, _ := range testPoss {
+	for ts := range testPoss {
 		testPoss[ts], err = to.procudeMessage(ts, topic)
 		c.Assert(err, IsNil)
 	}

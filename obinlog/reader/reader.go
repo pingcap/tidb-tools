@@ -136,5 +136,4 @@ func (r *Reader) run() {
 		}
 
 	}
-	return
 }
