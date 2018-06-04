@@ -18,10 +18,10 @@ option (gogoproto.unmarshaler_all) = true;
 // for enum, set, uint64 is set
 // for json, bytes is set
 message Column {
-	optional bool is_null = 1 [default = false];
+    optional bool is_null = 1 [default = false];
 
     optional int64 int64_value = 2;
-	optional uint64 uint64_value = 3;
+    optional uint64 uint64_value = 3;
     optional double double_value = 4;
     optional bytes bytes_value = 6;
     optional string string_value = 7;
@@ -31,30 +31,31 @@ message ColumnInfo {
     optional string  name       = 1 [(gogoproto.nullable) = false];
     // column field type in mysql
     optional string  mysql_type = 3 [(gogoproto.nullable) = false];
-	optional bool is_primary_key = 4 [(gogoproto.nullable) = false];
+
+    optional bool is_primary_key = 4 [(gogoproto.nullable) = false];
 }
 
 message Row {
-	repeated Column columns = 1;
+    repeated Column columns = 1;
 }
 
 enum MutationType {
-	Insert = 0;
-	Update = 1;
-	Delete = 4;
+    Insert = 0;
+    Update = 1;
+    Delete = 2;
 }
 
 //  Table contains mutations in a table.
 message Table {
     optional string schema_name     = 1;
     optional string table_name      = 2;
-	repeated ColumnInfo column_info = 3;
+    repeated ColumnInfo column_info = 3;
 
-	required MutationType type = 4;
+    required MutationType type = 4;
 
-	repeated Row rows = 5;
-	// for Update MutationType only
-	repeated Row changed_rows = 6;
+    repeated Row rows = 5;
+    // for Update MutationType only
+    repeated Row changed_rows = 6;
 }
 
 message DMLData {
@@ -62,8 +63,8 @@ message DMLData {
     repeated Table tables      = 1;
 }
 message DDLData {
-	// the current database use
-	optional string schema_name = 1;
+    // the current database use
+    optional string schema_name = 1;
     // ddl_query is the original ddl statement query.
     optional bytes  ddl_query  = 2;
 }
