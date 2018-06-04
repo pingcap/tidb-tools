@@ -95,7 +95,7 @@ func GetRowCount(db *sql.DB, dbName string, table string, where string) (int64, 
 
 	cntStr, ok := fields["cnt"]
 	if !ok {
-		return 0, errors.Errorf("`cnt` field not found in `%s`.`%s`'s count result", dbName, table)
+		return 0, errors.NotFoundf("`cnt` field in `%s`.`%s`'s count result", dbName, table)
 	}
 	cnt, err := strconv.ParseInt(string(cntStr), 10, 64)
 	return cnt, errors.Trace(err)

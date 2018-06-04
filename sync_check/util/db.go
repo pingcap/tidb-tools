@@ -32,8 +32,6 @@ type DBConfig struct {
 	Name string `toml:"name" json:"name"`
 
 	Port int `toml:"port" json:"port"`
-
-	Snapshot string `toml:"snapshot" json:"snapshot"`
 }
 
 func (c *DBConfig) String() string {
@@ -44,15 +42,15 @@ func (c *DBConfig) String() string {
 }
 
 // CreateDB create a mysql fd
-func CreateDB(cfg DBConfig) (*sql.DB, error) {
+func CreateDB(cfg DBConfig, snapshot string) (*sql.DB, error) {
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Name)
 	dbConn, err := sql.Open("mysql", dbDSN)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	if cfg.Snapshot != "" {
-		err = pkgdb.SetSnapshot(dbConn, cfg.Snapshot)
+	if snapshot != "" {
+		err = pkgdb.SetSnapshot(dbConn, snapshot)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}

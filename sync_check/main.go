@@ -45,13 +45,13 @@ func main() {
 		return
 	}
 
-	sourceDB, err := util.CreateDB(cfg.SourceDBCfg)
+	sourceDB, err := util.CreateDB(cfg.SourceDBCfg, cfg.SourceSnapshot)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer pkgdb.CloseDB(sourceDB)
 
-	targetDB, err := util.CreateDB(cfg.TargetDBCfg)
+	targetDB, err := util.CreateDB(cfg.TargetDBCfg, cfg.TargetSnapshot)
 	if err != nil {
 		log.Fatal(err)
 	}
