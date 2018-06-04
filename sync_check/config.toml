@@ -9,7 +9,7 @@ log-level = "info"
 chunk-size = 1000
 
 # how many goroutine created to check data
-check-thcount = 4
+check-thread-count = 4
 
 # sampling check percent, for example 10 means only check 10% data
 sample = 100
@@ -17,11 +17,14 @@ sample = 100
 # set true if target-db and source-db all support tidb implicit column "_tidb_rowid"
 use-rowid = false
 
+# the name of file which saves sqls used to fix different data
+fix-sql-file = "fix.sql"
+
 # use tidb's snapshot data, sql looks like set @@tidb_snapshot="2016-10-08 16:45:26"
 source-snapshot = "2016-10-08 16:45:26"
 target-snapshot = "2016-10-08 16:45:26"
 
-# if check-table is nil, will check all tables in the schema. 
+# if check-table is nil, will check all tables in the schema.
 [[check-table]]
 # table name.
 name = "test"

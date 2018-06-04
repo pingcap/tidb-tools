@@ -31,9 +31,13 @@ const (
 
 // TableCheckCfg is the config of table to be checked.
 type TableCheckCfg struct {
+	// table name
 	Name   string `toml:"name"`
+	// Schema is seted in SourceDBCfg
 	Schema string
+	// field should be the primary key, unique key or field with index
 	Field  string `toml:"field"`
+	// select range, for example: "age > 10 AND age < 20"
 	Range  string `toml:"range"`
 	Info   *model.TableInfo
 }
@@ -42,28 +46,43 @@ type TableCheckCfg struct {
 type Config struct {
 	*flag.FlagSet `json:"-"`
 
+	// log level
 	LogLevel string `toml:"log-level" json:"log-level"`
 
+	// source database's config
 	SourceDBCfg util.DBConfig `toml:"source-db" json:"source-db"`
 
+	// target database's config
 	TargetDBCfg util.DBConfig `toml:"target-db" json:"target-db"`
 
+	// for example, the whole data is [1...100]
+	// we can split these data to [1...10], [11...20], ..., [91...100]
+	// the [1...10] is a chunk, and it's chunk size is 10
+	// splited chunk's size
 	ChunkSize int `toml:"chunk-size" json:"chunk-size"`
 
+	// sampling check percent, for example 10 means only check 10% data
 	Sample int `toml:"sample" json:"sample"`
 
-	CheckThCount int `toml:"check-thcount" json:"check-thcount"`
+	// how many goroutine created to check data
+	CheckThreadCount int `toml:"check-thread-count" json:"check-thread-count"`
 
+	// set true if target-db and source-db all support tidb implicit column "_tidb_rowid"
 	UseRowID bool `toml:"use-rowid" json:"use-rowid"`
 
+	// the name of file which saves sqls used to fix different data
 	FixSQLFile string `toml:"fix-sql-file" json:"fix-sql-file"`
 
+	// the config of table to be checked
 	Tables []*TableCheckCfg `toml:"check-table" json:"check-table"`
 
+	// the snapshot config of source database
 	SourceSnapshot string `toml:"source-snapshot" json:"source-snapshot"`
 
+	// the snapshot config of target database
 	TargetSnapshot string `toml:"target-snapshot" json:"target-snapshot"`
 
+	// config file
 	ConfigFile string
 }
 
@@ -77,7 +96,7 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.IntVar(&cfg.ChunkSize, "chunk-size", 1000, "diff check chunk size")
 	fs.IntVar(&cfg.Sample, "sample", 100, "the percent of sampling check")
-	fs.IntVar(&cfg.CheckThCount, "check-thcount", 1, "the count of check thread count")
+	fs.IntVar(&cfg.CheckThreadCount, "check-thread-count", 1, "the count of check thread count")
 	fs.BoolVar(&cfg.UseRowID, "use-rowid", false, "set true if target-db and source-db all support tidb implicit column _tidb_rowid")
 	fs.StringVar(&cfg.FixSQLFile, "fix-sql-file", "fix.sql", "the name of file which saves sqls used to fix different data")
 	fs.StringVar(&cfg.SourceSnapshot, "source-snapshot", "", "source database's snapshot config")
