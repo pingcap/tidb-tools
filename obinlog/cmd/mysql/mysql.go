@@ -115,7 +115,7 @@ func columnToArg(c *obinlog.Column) (arg interface{}) {
 func tableToSQL(table *obinlog.Table) (sqls []string, sqlArgs [][]interface{}) {
 
 	replace := func() {
-		sql := fmt.Sprintf("replace into %s.%s", table.GetSchemaName(), table.GetTableName())
+		sql := fmt.Sprintf("replace into `%s`.`%s`", table.GetSchemaName(), table.GetTableName())
 
 		var names []string
 		var holder []string
@@ -172,7 +172,7 @@ func tableToSQL(table *obinlog.Table) (sqls []string, sqlArgs [][]interface{}) {
 		replace()
 	case obinlog.MutationType_Update:
 		columnInfo := table.GetColumnInfo()
-		sql := fmt.Sprintf("update %s.%s set ", table.GetSchemaName(), table.GetTableName())
+		sql := fmt.Sprintf("update `%s`.`%s` set ", table.GetSchemaName(), table.GetTableName())
 		// construct c1 = ?, c2 = ?...
 		for i, col := range columnInfo {
 			if i != 0 {
@@ -206,7 +206,7 @@ func tableToSQL(table *obinlog.Table) (sqls []string, sqlArgs [][]interface{}) {
 
 	case obinlog.MutationType_Delete:
 		columnInfo := table.GetColumnInfo()
-		sql := fmt.Sprintf("delete from %s.%s ", table.GetSchemaName(), table.GetTableName())
+		sql := fmt.Sprintf("delete from `%s`.`%s` ", table.GetSchemaName(), table.GetTableName())
 
 		where, usePK := constructWhere()
 		sql += where
