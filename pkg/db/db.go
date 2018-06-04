@@ -111,7 +111,7 @@ type IndexInfo struct {
 	Cardinality int
 }
 
-// ShowIndex returns result of execute `show index`
+// ShowIndex returns result of executing `show index`
 func ShowIndex(db *sql.DB, dbName string, table string) ([]*IndexInfo, error) {
 	/*
 		show index example result:
@@ -158,7 +158,7 @@ func ShowIndex(db *sql.DB, dbName string, table string) ([]*IndexInfo, error) {
 	return indices, nil
 }
 
-// FindSuitableIndex returns a suitableIndex
+// FindSuitableIndex returns a suitable index.
 func FindSuitableIndex(db *sql.DB, dbName string, tableInfo *model.TableInfo) (*model.ColumnInfo, error) {
 	// find primary key
 	for _, index := range tableInfo.Indices {
@@ -190,7 +190,7 @@ func FindSuitableIndex(db *sql.DB, dbName string, tableInfo *model.TableInfo) (*
 		if indexInfo.Cardinality > maxCardinality {
 			column := GetColumnByName(tableInfo, indexInfo.ColumnName)
 			if column == nil {
-				return nil, errors.Errorf("can't find column %s in %s.%s", indexInfo.ColumnName, dbName, tableInfo.Name.O)
+				return nil, errors.NotFoundf("column %s in %s.%s", indexInfo.ColumnName, dbName, tableInfo.Name.O)
 			}
 			maxCardinality = indexInfo.Cardinality
 			c = column

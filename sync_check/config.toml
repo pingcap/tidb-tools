@@ -40,7 +40,7 @@ password = ""
 name = "test"
 port = 3306
 # use tidb's snapshot data, sql looks like set @@tidb_snapshot="2016-10-08 16:45:26"
-#snapshot = "2016-10-08 16:45:26" 
+#snapshot = "2016-10-08 16:45:26"
 
 [target-db]
 host = "127.0.0.1"
@@ -50,4 +50,4 @@ password = ""
 name = "test"
 port = 4000
 # use tidb's snapshot data, sql looks like set @@tidb_snapshot="2016-10-08 16:45:26"
-#snapshot = "2016-10-08 16:45:26" 
+#snapshot = "2016-10-08 16:45:26"

@@ -223,7 +223,7 @@ func GenerateDumpJob(db *sql.DB, dbName string, table *model.TableInfo, splitFie
 	} else {
 		column = pkgdb.GetColumnByName(table, splitField)
 		if column == nil {
-			return nil, fmt.Errorf("can't find column %s in table %s", splitField, table.Name.O)
+			return nil, errors.NotFoundf("column %s in table %s", splitField, table.Name.O)
 		}
 	}
 
