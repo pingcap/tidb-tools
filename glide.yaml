@@ -147,3 +147,5 @@ import:
   - mvcc/mvccpb
   - pkg/logutil
   - pkg/types
+- package: github.com/Shopify/sarama
+  version: v1.16.0

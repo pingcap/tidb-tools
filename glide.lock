@@ -1,18 +1,12 @@
-hash: 003cd1c0aa395e7773d55baf1708899e2cb41e135b4326fb44c3efdbbc72ece6
-updated: 2018-03-08T13:41:12.78028108+08:00
+hash: d53cc6e6f33b10dfd1e164a1f161ac7f91aa99f1a6982e6b82ef1f5b24ee8f18
+updated: 2018-06-04T17:30:39.873859588+08:00
 imports:
-- name: github.com/apache/thrift
-  version: b2a4d4ae21c789b689dd162deb819665567f481c
-  subpackages:
-  - lib/go/thrift
 - name: github.com/beorn7/perks
-  version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
+  version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
   subpackages:
   - quantile
 - name: github.com/BurntSushi/toml
   version: 99064174e013895bbd9b025c31100bd1d9b590ca
-- name: github.com/codahale/hdrhistogram
-  version: 3a0bb77429bd3a61596f5e8a3172445844342120
 - name: github.com/coreos/etcd
   version: fb5cd6f1c72c2b98e0c4453444cdfba306da867b
   subpackages:
@@ -26,8 +20,18 @@ imports:
   - pkg/types
 - name: github.com/cznic/mathutil
   version: c90ba19bea8927552cef4560ab888231566f049d
-- name: github.com/cznic/sortutil
-  version: 4c7342852e65c2088c981288f2c5610d10b9f7f4
+- name: github.com/davecgh/go-spew
+  version: 8991bc29aa16c548c550c7ff78260e27b9ab7c73
+  subpackages:
+  - spew
+- name: github.com/eapache/go-resiliency
+  version: ea41b0fad31007accc7f806884dcdf3da98b79ce
+  subpackages:
+  - breaker
+- name: github.com/eapache/go-xerial-snappy
+  version: bb955e01b9346ac19dc29eb16586c90ded99a98c
+- name: github.com/eapache/queue
+  version: 093482f3f8ce946c05bcba64badd2c82369e084d
 - name: github.com/go-sql-driver/mysql
   version: 4ac31a97ccff97de60ba3c630bfb4733c1bb6d0e
 - name: github.com/golang/protobuf
@@ -35,7 +39,6 @@ imports:
   subpackages:
   - jsonpb
   - proto
-  - protoc-gen-go/descriptor
   - ptypes
   - ptypes/any
   - ptypes/duration
@@ -44,14 +47,6 @@ imports:
   version: 723cc1e459b8eea2dea4583200fd60757d40097a
 - name: github.com/google/btree
   version: 316fb6d3f031ae8f4d457c6c5186b9e3ded70435
-- name: github.com/grpc-ecosystem/go-grpc-middleware
-  version: eb23b08d08bbe930113a6512a7a829050341448c
-  subpackages:
-  - tags
-  - tracing/opentracing
-  - util/metautils
-- name: github.com/grpc-ecosystem/go-grpc-prometheus
-  version: ce0256b0cfa9b64c16caf5b91dec256ad649b7d1
 - name: github.com/juju/errors
   version: 6f54ff6318409d31ff16261533ce2c8381a4fd5d
 - name: github.com/matttproud/golang_protobuf_extensions
@@ -60,12 +55,8 @@ imports:
   - pbutil
 - name: github.com/ngaut/log
   version: cec23d3e10b016363780d894a0eb732a12c06e02
-- name: github.com/ngaut/pools
-  version: 6352e005618615ffaf1cb1c6622b8e91435751fe
-- name: github.com/ngaut/sync2
-  version: 7a24ed77b2efb460c1468b7dc917821c66e80e55
 - name: github.com/opentracing/opentracing-go
-  version: 3999fca714c888484b78cb78d68cd49afc9eca7d
+  version: 1949ddbfd147afd4d964a9f00b24eb291e0e7c38
   subpackages:
   - ext
   - log
@@ -73,10 +64,16 @@ imports:
   version: 53be0d36a84c2a886ca057d34b6aa4468df9ccb4
   subpackages:
   - llrb
+- name: github.com/pierrec/lz4
+  version: ed8d4cc3b461464e69798080a0092bd028910298
+- name: github.com/pierrec/xxHash
+  version: a0006b13c722f7f12368c00a3d3c2ae8a999a0c6
+  subpackages:
+  - xxHash32
 - name: github.com/pingcap/check
   version: 9b266636177e249ec28b0aeffe8e86bc272bb481
 - name: github.com/pingcap/goleveldb
-  version: b9ff6c35079e0b7925a4028005fc2dbc37aec69a
+  version: 158edde5a354460121af007d02a00b01c8d03443
   subpackages:
   - leveldb
   - leveldb/cache
@@ -93,31 +90,19 @@ imports:
 - name: github.com/pingcap/kvproto
   version: 7b013aefd7210f4f4dbfca3330b462ddce5dd496
   subpackages:
-  - pkg/coprocessor
   - pkg/eraftpb
-  - pkg/errorpb
-  - pkg/kvrpcpb
   - pkg/metapb
   - pkg/pdpb
-  - pkg/raft_serverpb
-  - pkg/tikvpb
 - name: github.com/pingcap/pd
-  version: eaa8160379e2a92cbf1144bcdac68a5f956882ef
+  version: eed819b6999186a4bf2d25255f8d61b371a450d6
   subpackages:
   - pd-client
 - name: github.com/pingcap/tidb
   version: fc699c9b0d29f038e0a55702c9fd2e18e89373c4
   subpackages:
   - ast
-  - config
   - context
   - ddl
-  - ddl/util
-  - distsql
-  - domain
-  - executor
-  - expression
-  - expression/aggregation
   - infoschema
   - kv
   - meta
@@ -125,55 +110,30 @@ imports:
   - metrics
   - model
   - mysql
-  - owner
   - parser
   - parser/opcode
-  - perfschema
-  - plan
-  - privilege
-  - privilege/privileges
-  - sessionctx/binloginfo
   - sessionctx/stmtctx
   - sessionctx/variable
-  - statistics
-  - store/tikv
-  - store/tikv/mocktikv
   - store/tikv/oracle
-  - store/tikv/oracle/oracles
-  - store/tikv/tikvrpc
   - structure
-  - table
-  - table/tables
   - tablecodec
   - terror
   - types
   - types/json
   - util
-  - util/admin
   - util/auth
   - util/charset
   - util/chunk
   - util/codec
-  - util/encrypt
   - util/format
-  - util/goroutine_pool
   - util/hack
   - util/kvcache
-  - util/logutil
-  - util/mock
-  - util/mvmap
-  - util/printer
-  - util/ranger
-  - util/sqlexec
-  - util/stringutil
 - name: github.com/pingcap/tipb
   version: 07ff5b094233a557a3ac11b1e4d8714d8c6ff406
   subpackages:
   - go-binlog
-  - go-tipb
-  - sharedbytes
 - name: github.com/prometheus/client_golang
-  version: 967789050ba94deca04a5e84cce8ad472ce313c1
+  version: c5b7fccd204277076155f10851dad72b76a49317
   subpackages:
   - prometheus
   - prometheus/push
@@ -189,8 +149,12 @@ imports:
   - model
 - name: github.com/prometheus/procfs
   version: abf152e5f3e97f2fafac028d2cc06c1feb87ffa5
+- name: github.com/rcrowley/go-metrics
+  version: e2704e165165ec55d062f5919b4b29494e9fa790
 - name: github.com/satori/go.uuid
   version: f58768cc1a7a7e77a3bd49e98cdd21419399b6a3
+- name: github.com/Shopify/sarama
+  version: f7be6aa2bc7b2e38edf816b08b582782194a1c02
 - name: github.com/siddontang/go
   version: cb568a3e5cc06256f91a2da5a87455f717eb33f4
   subpackages:
@@ -206,31 +170,11 @@ imports:
   - replication
   - schema
 - name: github.com/sirupsen/logrus
-  version: f4ee69125072b22721efbe639bd0da9c9d19b8cc
+  version: ea8897e79973357ba785ac2533559a6297e83c44
 - name: github.com/spaolacci/murmur3
   version: f09979ecbc725b9e6d41a297405f65e7e8804acc
-- name: github.com/twinj/uuid
-  version: 7bbe408d339787c56ec15568c947c0959db1b275
-- name: github.com/uber/jaeger-client-go
-  version: 1cd3bc17483efc374c8882c4eb54657b8f31eb90
-  subpackages:
-  - config
-  - internal/baggage
-  - internal/baggage/remote
-  - internal/spanlog
-  - internal/throttler
-  - log
-  - rpcmetrics
-  - thrift-gen/agent
-  - thrift-gen/baggage
-  - thrift-gen/jaeger
-  - thrift-gen/sampling
-  - thrift-gen/zipkincore
-  - utils
 - name: github.com/uber/jaeger-lib
   version: 34d9cc24e47ab70783050b52f79c06eb3ac850ba
-  subpackages:
-  - metrics
 - name: golang.org/x/crypto
   version: 1351f936d976c60a0a48d728281922cf63eafb8d
   subpackages:
@@ -277,7 +221,6 @@ imports:
 - name: google.golang.org/genproto
   version: b0a3dcfcd1a9bd48e63634bd8802960804cf8315
   subpackages:
-  - googleapis/api/annotations
   - googleapis/rpc/status
 - name: google.golang.org/grpc
   version: 5b3c4e850e90a4cf6a20ebd46c8b32a0a3afcb9e
@@ -300,6 +243,4 @@ imports:
   - status
   - tap
   - transport
-- name: gopkg.in/natefinch/lumberjack.v2
-  version: a96e63847dc3c67d17befa69c303767e2f84e54f
 testImports: []
