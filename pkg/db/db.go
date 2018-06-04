@@ -320,7 +320,7 @@ func GetCRC32Checksum(db *sql.DB, schemaName string, tbInfo *model.TableInfo, li
 	return "", nil
 }
 
-// QuerySQL querys sql, and returns some row
+// QuerySQL queries sql, and returns some row
 func QuerySQL(db *sql.DB, query string) (*sql.Rows, error) {
 	log.Debugf("[query][sql]%s", query)
 	rows, err := db.Query(query)

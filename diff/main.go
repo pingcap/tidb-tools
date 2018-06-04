@@ -22,7 +22,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/db"
-	"github.com/pingcap/tidb-tools/sync_check/util"
+	"github.com/pingcap/tidb-tools/diff/util"
 )
 
 func main() {
@@ -64,7 +64,6 @@ func main() {
 }
 
 func checkSyncState(sourceDB, targetDB *sql.DB, cfg *Config) bool {
-	//d, err := NewDiff(sourceDB, targetDB, cfg.SourceDBCfg.Name, cfg.ChunkSize, cfg.Sample, cfg.CheckThCount, cfg.UseRowID, cfg.Tables, cfg.FixSQLFile)
 	d, err := NewDiff(sourceDB, targetDB, cfg)
 	if err != nil {
 		log.Errorf("create diff error %v", err)

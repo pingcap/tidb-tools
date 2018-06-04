@@ -1,4 +1,4 @@
-# sync_check Configuration.
+# diff Configuration.
 
 log-level = "info"
 
@@ -30,7 +30,7 @@ target-snapshot = "2016-10-08 16:45:26"
 name = "test"
 
 # field should be the primary key, unique key or field with index. 
-# if comment this, sync_check will find a suitable field.
+# if comment this, diff will find a suitable field.
 field = "id"
 
 # check data's range

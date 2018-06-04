@@ -25,38 +25,38 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/db"
-	"github.com/pingcap/tidb-tools/sync_check/util"
+	"github.com/pingcap/tidb-tools/diff/util"
 	"github.com/pingcap/tidb/model"
 	"github.com/pingcap/tidb/types"
 )
 
 // Diff contains two sql DB, used for comparing.
 type Diff struct {
-	db1          *sql.DB
-	db2          *sql.DB
-	dbName       string
-	chunkSize    int
-	sample       int
-	checkThCount int
-	useRowID     bool
-	tables       []*TableCheckCfg
-	FixSQLFile   *os.File
-	sqlCh        chan string
-	wg           sync.WaitGroup
+	db1              *sql.DB
+	db2              *sql.DB
+	dbName           string
+	chunkSize        int
+	sample           int
+	checkThreadCount int
+	useRowID         bool
+	tables           []*TableCheckCfg
+	fixSQLFile       *os.File
+	sqlCh            chan string
+	wg               sync.WaitGroup
 }
 
 // NewDiff returns a Diff instance.
 func NewDiff(db1, db2 *sql.DB, cfg *Config) (diff *Diff, err error) {
 	diff = &Diff{
-		db1:          db1,
-		db2:          db2,
-		dbName:       cfg.SourceDBCfg.Name,
-		chunkSize:    cfg.ChunkSize,
-		sample:       cfg.Sample,
-		checkThCount: cfg.CheckThCount,
-		useRowID:     cfg.UseRowID,
-		tables:       cfg.Tables,
-		sqlCh:        make(chan string),
+		db1:              db1,
+		db2:              db2,
+		dbName:           cfg.SourceDBCfg.Name,
+		chunkSize:        cfg.ChunkSize,
+		sample:           cfg.Sample,
+		checkThreadCount: cfg.CheckThreadCount,
+		useRowID:         cfg.UseRowID,
+		tables:           cfg.Tables,
+		sqlCh:            make(chan string),
 	}
 	for _, table := range diff.tables {
 		table.Info, err = pkgdb.GetTableInfoWithRowID(diff.db1, diff.dbName, table.Name, cfg.UseRowID)
@@ -65,7 +65,7 @@ func NewDiff(db1, db2 *sql.DB, cfg *Config) (diff *Diff, err error) {
 		}
 		table.Schema = diff.dbName
 	}
-	diff.FixSQLFile, err = os.Create(cfg.FixSQLFile)
+	diff.fixSQLFile, err = os.Create(cfg.FixSQLFile)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -76,7 +76,7 @@ func NewDiff(db1, db2 *sql.DB, cfg *Config) (diff *Diff, err error) {
 // Equal tests whether two database have same data and schema.
 func (df *Diff) Equal() (equal bool, err error) {
 	defer func() {
-		df.FixSQLFile.Close()
+		df.fixSQLFile.Close()
 		df.db1.Close()
 		df.db2.Close()
 	}()
@@ -198,12 +198,12 @@ func (df *Diff) EqualTableData(table *TableCheckCfg) (bool, error) {
 	checkNumArr := getRandomN(len(dumpJobs), checkNums)
 	log.Infof("total has %d check jobs, check %+v", len(dumpJobs), checkNumArr)
 
-	checkResultCh := make(chan bool, df.checkThCount)
+	checkResultCh := make(chan bool, df.checkThreadCount)
 	defer close(checkResultCh)
 
-	for i := 0; i < df.checkThCount; i++ {
+	for i := 0; i < df.checkThreadCount; i++ {
 		checkJobs := make([]*util.DumpJob, 0, len(checkNumArr))
-		for j := len(checkNumArr) * i / df.checkThCount; j < len(checkNumArr)*(i+1)/df.checkThCount && j < len(dumpJobs); j++ {
+		for j := len(checkNumArr) * i / df.checkThreadCount; j < len(checkNumArr)*(i+1)/df.checkThreadCount && j < len(dumpJobs); j++ {
 			checkJobs = append(checkJobs, dumpJobs[j])
 		}
 		go func() {
@@ -226,7 +226,7 @@ CheckResult:
 			if !eq {
 				equal = false
 			}
-			if num == df.checkThCount {
+			if num == df.checkThreadCount {
 				break CheckResult
 			}
 		}
@@ -377,7 +377,7 @@ func (df *Diff) WriteSqls() {
 				return
 			}
 
-			_, err := df.FixSQLFile.WriteString(fmt.Sprintf("%s\n", dml))
+			_, err := df.fixSQLFile.WriteString(fmt.Sprintf("%s\n", dml))
 			if err != nil {
 				log.Errorf("write sql: %s failed, error: %v", dml, err)
 			}

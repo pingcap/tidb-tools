@@ -20,7 +20,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-tools/sync_check/util"
+	"github.com/pingcap/tidb-tools/diff/util"
 	"github.com/pingcap/tidb/model"
 )
 
@@ -89,7 +89,7 @@ type Config struct {
 // NewConfig creates a new config.
 func NewConfig() *Config {
 	cfg := &Config{}
-	cfg.FlagSet = flag.NewFlagSet("sync-check", flag.ContinueOnError)
+	cfg.FlagSet = flag.NewFlagSet("diff", flag.ContinueOnError)
 	fs := cfg.FlagSet
 
 	fs.StringVar(&cfg.ConfigFile, "config", "", "Config file")
@@ -153,7 +153,7 @@ func (c *Config) checkConfig() bool {
 		return false
 	}
 
-	if c.CheckThCount <= 0 {
+	if c.CheckThreadCount <= 0 {
 		log.Errorf("check-thcount must greater than 0!")
 		return false
 	}
