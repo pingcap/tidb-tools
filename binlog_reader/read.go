@@ -14,7 +14,6 @@
 package main
 
 import (
-	"hash/crc32"
 	"io"
 	"os"
 
