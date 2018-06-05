@@ -204,8 +204,8 @@ func (df *Diff) EqualTableData(table *TableCheckCfg) (bool, error) {
 
 	for i := 0; i < df.checkThreadCount; i++ {
 		checkJobs := make([]*CheckJob, 0, len(checkNumArr))
-		for j := len(checkNumArr) * i / df.checkThreadCount; j < len(checkNumArr)*(i+1)/df.checkThreadCount && j < len(checkJobs); j++ {
-			checkJobs = append(checkJobs, checkJobs[j])
+		for j := len(checkNumArr) * i / df.checkThreadCount; j < len(checkNumArr)*(i+1)/df.checkThreadCount && j < len(checkNumArr); j++ {
+			checkJobs = append(checkJobs, checkJobs[checkNumArr[j]])
 		}
 		go func() {
 			eq, err := df.checkChunkDataEqual(checkJobs, table)
@@ -319,7 +319,7 @@ func (df *Diff) compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.Column
 			break
 		}
 		if index2 == len(rowsData2) {
-			// rosData2 lack some data, should insert them
+			// rowsData2 lack some data, should insert them
 			for ; index1 < len(rowsData1); index1++ {
 				sql := generateDML("replace", rowsData1[index1], orderKeyCols, table.Info, table.Schema)
 				log.Infof("[insert] sql: %v", sql)

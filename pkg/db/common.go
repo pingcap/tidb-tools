@@ -33,6 +33,45 @@ const (
 	ImplicitColID = -1
 )
 
+// DBConfig is the DB configuration.
+type DBConfig struct {
+	Host string `toml:"host" json:"host"`
+
+	Port int `toml:"port" json:"port"`
+
+	User string `toml:"user" json:"user"`
+
+	Password string `toml:"password" json:"password"`
+
+	Schema string `toml:"schema" json:"schema"`
+}
+
+// String returns string of database config
+func (c *DBConfig) String() string {
+	if c == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("DBConfig(%+v)", *c)
+}
+
+// CreateDB create a mysql fd
+func CreateDB(cfg DBConfig, snapshot string) (*sql.DB, error) {
+	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Schema)
+	dbConn, err := sql.Open("mysql", dbDSN)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	if snapshot != "" {
+		err = SetSnapshot(dbConn, snapshot)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+	}
+
+	return dbConn, nil
+}
+
 // CloseDB closes the mysql fd
 func CloseDB(db *sql.DB) error {
 	return errors.Trace(db.Close())

@@ -22,7 +22,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/db"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/util"
 )
 
 func main() {
@@ -45,13 +44,13 @@ func main() {
 		return
 	}
 
-	sourceDB, err := util.CreateDB(cfg.SourceDBCfg, cfg.SourceSnapshot)
+	sourceDB, err := pkgdb.CreateDB(cfg.SourceDBCfg, cfg.SourceSnapshot)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer pkgdb.CloseDB(sourceDB)
 
-	targetDB, err := util.CreateDB(cfg.TargetDBCfg, cfg.TargetSnapshot)
+	targetDB, err := pkgdb.CreateDB(cfg.TargetDBCfg, cfg.TargetSnapshot)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -20,7 +20,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/util"
+	"github.com/pingcap/tidb-tools/pkg/db"
 	"github.com/pingcap/tidb/model"
 )
 
@@ -36,7 +36,7 @@ type TableCheckCfg struct {
 	// Schema is seted in SourceDBCfg
 	Schema string
 	// field should be the primary key, unique key or field with index
-	Field string `toml:"field"`
+	Field string `toml:"index-field"`
 	// select range, for example: "age > 10 AND age < 20"
 	Range string `toml:"range"`
 	Info  *model.TableInfo
@@ -50,10 +50,10 @@ type Config struct {
 	LogLevel string `toml:"log-level" json:"log-level"`
 
 	// source database's config
-	SourceDBCfg util.DBConfig `toml:"source-db" json:"source-db"`
+	SourceDBCfg pkgdb.DBConfig `toml:"source-db" json:"source-db"`
 
 	// target database's config
-	TargetDBCfg util.DBConfig `toml:"target-db" json:"target-db"`
+	TargetDBCfg pkgdb.DBConfig `toml:"target-db" json:"target-db"`
 
 	// for example, the whole data is [1...100]
 	// we can split these data to [1...10], [11...20], ..., [91...100]
@@ -62,7 +62,7 @@ type Config struct {
 	ChunkSize int `toml:"chunk-size" json:"chunk-size"`
 
 	// sampling check percent, for example 10 means only check 10% data
-	Sample int `toml:"sample" json:"sample"`
+	Sample int `toml:"sample-percent" json:"sample-percent"`
 
 	// how many goroutines are created to check data
 	CheckThreadCount int `toml:"check-thread-count" json:"check-thread-count"`
