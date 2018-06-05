@@ -25,25 +25,25 @@ import (
 type DBConfig struct {
 	Host string `toml:"host" json:"host"`
 
+	Port int `toml:"port" json:"port"`
+
 	User string `toml:"user" json:"user"`
 
 	Password string `toml:"password" json:"password"`
 
-	Name string `toml:"name" json:"name"`
-
-	Port int `toml:"port" json:"port"`
+	Schema string `toml:"schema" json:"schema"`
 }
 
 func (c *DBConfig) String() string {
 	if c == nil {
 		return "<nil>"
 	}
-	return fmt.Sprintf("DBConfig(%+v)", *c)
+	return fmt.Sprintf("DBConfig(%+v)", c)
 }
 
 // CreateDB create a mysql fd
 func CreateDB(cfg DBConfig, snapshot string) (*sql.DB, error) {
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Name)
+	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Schema)
 	dbConn, err := sql.Open("mysql", dbDSN)
 	if err != nil {
 		return nil, errors.Trace(err)

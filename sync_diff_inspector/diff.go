@@ -25,7 +25,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/db"
-	"github.com/pingcap/tidb-tools/diff/util"
 	"github.com/pingcap/tidb/model"
 	"github.com/pingcap/tidb/types"
 )
@@ -34,7 +33,7 @@ import (
 type Diff struct {
 	db1              *sql.DB
 	db2              *sql.DB
-	dbName           string
+	schema           string
 	chunkSize        int
 	sample           int
 	checkThreadCount int
@@ -50,7 +49,7 @@ func NewDiff(db1, db2 *sql.DB, cfg *Config) (diff *Diff, err error) {
 	diff = &Diff{
 		db1:              db1,
 		db2:              db2,
-		dbName:           cfg.SourceDBCfg.Name,
+		schema:           cfg.SourceDBCfg.Schema,
 		chunkSize:        cfg.ChunkSize,
 		sample:           cfg.Sample,
 		checkThreadCount: cfg.CheckThreadCount,
@@ -59,11 +58,10 @@ func NewDiff(db1, db2 *sql.DB, cfg *Config) (diff *Diff, err error) {
 		sqlCh:            make(chan string),
 	}
 	for _, table := range diff.tables {
-		table.Info, err = pkgdb.GetTableInfoWithRowID(diff.db1, diff.dbName, table.Name, cfg.UseRowID)
+		table.Info, err = pkgdb.GetTableInfoWithRowID(diff.db1, diff.schema, table.Name, cfg.UseRowID)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		table.Schema = diff.dbName
 	}
 	diff.fixSQLFile, err = os.Create(cfg.FixSQLFile)
 	if err != nil {
@@ -82,16 +80,19 @@ func (df *Diff) Equal() (equal bool, err error) {
 	}()
 
 	df.wg.Add(1)
-	go df.WriteSqls()
+	go func() {
+		df.WriteSqls()
+		df.wg.Done()
+	}()
 
 	equal = true
-	tbls1, err := pkgdb.GetTables(df.db1, df.dbName)
+	tbls1, err := pkgdb.GetTables(df.db1, df.schema)
 	if err != nil {
 		err = errors.Trace(err)
 		return
 	}
 
-	tbls2, err := pkgdb.GetTables(df.db2, df.dbName)
+	tbls2, err := pkgdb.GetTables(df.db2, df.schema)
 	if err != nil {
 		err = errors.Trace(err)
 		return
@@ -107,19 +108,19 @@ func (df *Diff) Equal() (equal bool, err error) {
 	if len(df.tables) == 0 {
 		df.tables = make([]*TableCheckCfg, 0, len(tbls1))
 		for _, name := range tbls1 {
-			table := &TableCheckCfg{Name: name, Schema: df.dbName}
-			table.Info, err = pkgdb.GetTableInfoWithRowID(df.db1, df.dbName, name, df.useRowID)
+			table := &TableCheckCfg{Name: name, Schema: df.schema}
+			table.Info, err = pkgdb.GetTableInfoWithRowID(df.db1, df.schema, name, df.useRowID)
 			if err != nil {
 				return false, errors.Trace(err)
 			}
-
+			table.Schema = df.schema
 			df.tables = append(df.tables, table)
 		}
 	}
 
 	for _, table := range df.tables {
 		tableInfo1 := table.Info
-		tableInfo2, err := pkgdb.GetTableInfoWithRowID(df.db2, df.dbName, table.Name, df.useRowID)
+		tableInfo2, err := pkgdb.GetTableInfoWithRowID(df.db2, df.schema, table.Name, df.useRowID)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -189,22 +190,22 @@ func (df *Diff) EqualTableStruct(tableInfo1, tableInfo2 *model.TableInfo) (bool,
 // EqualTableData checks data is equal or not.
 func (df *Diff) EqualTableData(table *TableCheckCfg) (bool, error) {
 	// TODO: now only check data between source data's min and max, need check data less than min and greater than max.
-	dumpJobs, err := util.GenerateDumpJob(df.db1, df.dbName, table.Info, table.Field, table.Range, df.chunkSize, df.sample, df.useRowID)
+	checkJobs, err := GenerateCheckJob(df.db1, df.schema, table.Info, table.Field, table.Range, df.chunkSize, df.sample, df.useRowID)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
 
-	checkNums := len(dumpJobs)*df.sample/100 + 1
-	checkNumArr := getRandomN(len(dumpJobs), checkNums)
-	log.Infof("total has %d check jobs, check %+v", len(dumpJobs), checkNumArr)
+	checkNums := len(checkJobs)*df.sample/100 + 1
+	checkNumArr := getRandomN(len(checkJobs), checkNums)
+	log.Infof("total has %d check jobs, check %+v", len(checkJobs), checkNumArr)
 
 	checkResultCh := make(chan bool, df.checkThreadCount)
 	defer close(checkResultCh)
 
 	for i := 0; i < df.checkThreadCount; i++ {
-		checkJobs := make([]*util.DumpJob, 0, len(checkNumArr))
-		for j := len(checkNumArr) * i / df.checkThreadCount; j < len(checkNumArr)*(i+1)/df.checkThreadCount && j < len(dumpJobs); j++ {
-			checkJobs = append(checkJobs, dumpJobs[j])
+		checkJobs := make([]*CheckJob, 0, len(checkNumArr))
+		for j := len(checkNumArr) * i / df.checkThreadCount; j < len(checkNumArr)*(i+1)/df.checkThreadCount && j < len(checkJobs); j++ {
+			checkJobs = append(checkJobs, checkJobs[j])
 		}
 		go func() {
 			eq, err := df.checkChunkDataEqual(checkJobs, table)
@@ -234,20 +235,20 @@ CheckResult:
 	return equal, nil
 }
 
-func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, table *TableCheckCfg) (bool, error) {
+func (df *Diff) checkChunkDataEqual(checkJobs []*CheckJob, table *TableCheckCfg) (bool, error) {
 	equal := true
-	if len(dumpJobs) == 0 {
+	if len(checkJobs) == 0 {
 		return true, nil
 	}
 
-	for _, job := range dumpJobs {
+	for _, job := range checkJobs {
 		// first check the checksum is equal or not
-		checksum1, err := pkgdb.GetCRC32Checksum(df.db1, df.dbName, table.Info, job.Where)
+		checksum1, err := pkgdb.GetCRC32Checksum(df.db1, df.schema, table.Info, job.Where)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
 
-		checksum2, err := pkgdb.GetCRC32Checksum(df.db2, df.dbName, table.Info, job.Where)
+		checksum2, err := pkgdb.GetCRC32Checksum(df.db2, df.schema, table.Info, job.Where)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -258,13 +259,13 @@ func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, table *TableCheckC
 
 		// if checksum is not equal, compare the data
 		log.Errorf("table: %s, range: %s checksum is not equal", job.Table, job.Where)
-		rows1, orderKeyCols, err := getChunkRows(df.db1, df.dbName, table, job.Where, df.useRowID)
+		rows1, orderKeyCols, err := getChunkRows(df.db1, df.schema, table, job.Where, df.useRowID)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
 		defer rows1.Close()
 
-		rows2, _, err := getChunkRows(df.db2, df.dbName, table, job.Where, df.useRowID)
+		rows2, _, err := getChunkRows(df.db2, df.schema, table, job.Where, df.useRowID)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -274,6 +275,8 @@ func (df *Diff) checkChunkDataEqual(dumpJobs []*util.DumpJob, table *TableCheckC
 		if err != nil {
 			return false, errors.Trace(err)
 		}
+
+		// if equal is false, we continue check data, we should find all the different data just run once
 		if !eq {
 			equal = false
 		}
@@ -340,25 +343,23 @@ func (df *Diff) compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.Column
 		case 1:
 			// delete
 			sql := generateDML("delete", rowsData2[index2], orderKeyCols, table.Info, table.Schema)
-			log.Infof("[delete] sql: %v", sql)
+			log.Infof("[delete] sql: %s", sql)
 			df.wg.Add(1)
 			df.sqlCh <- sql
 			index2++
 		case -1:
 			// insert
 			sql := generateDML("replace", rowsData1[index1], orderKeyCols, table.Info, table.Schema)
-			log.Infof("[insert] sql: %v", sql)
+			log.Infof("[insert] sql: %s", sql)
 			df.wg.Add(1)
 			df.sqlCh <- sql
 			index1++
 		case 0:
 			// update
-			deleteSQL := generateDML("delete", rowsData2[index2], orderKeyCols, table.Info, table.Schema)
-			replaceSQL := generateDML("replace", rowsData1[index1], orderKeyCols, table.Info, table.Schema)
-			log.Infof("[update] delete: %s,\n replace: %s", deleteSQL, replaceSQL)
-			df.wg.Add(2)
-			df.sqlCh <- deleteSQL
-			df.sqlCh <- replaceSQL
+			sql := generateDML("replace", rowsData1[index1], orderKeyCols, table.Info, table.Schema)
+			log.Infof("[update] sql: %s", sql)
+			df.wg.Add(1)
+			df.sqlCh <- sql
 			index1++
 			index2++
 		}
@@ -369,7 +370,6 @@ func (df *Diff) compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.Column
 
 // WriteSqls write sqls to file
 func (df *Diff) WriteSqls() {
-	defer df.wg.Done()
 	for {
 		select {
 		case dml, ok := <-df.sqlCh:
@@ -381,13 +381,12 @@ func (df *Diff) WriteSqls() {
 			if err != nil {
 				log.Errorf("write sql: %s failed, error: %v", dml, err)
 			}
-			df.wg.Done()
 		default:
 		}
 	}
 }
 
-func generateDML(tp string, data map[string][]byte, keys []*model.ColumnInfo, table *model.TableInfo, dbName string) (sql string) {
+func generateDML(tp string, data map[string][]byte, keys []*model.ColumnInfo, table *model.TableInfo, schema string) (sql string) {
 	// TODO: can't distinguish NULL between ""
 	switch tp {
 	case "replace":
@@ -402,7 +401,7 @@ func generateDML(tp string, data map[string][]byte, keys []*model.ColumnInfo, ta
 			}
 		}
 
-		sql = fmt.Sprintf("REPLACE INTO `%s`.`%s`(%s) VALUES (%s);", dbName, table.Name, strings.Join(colNames, ","), strings.Join(values, ","))
+		sql = fmt.Sprintf("REPLACE INTO `%s`.`%s`(%s) VALUES (%s);", schema, table.Name, strings.Join(colNames, ","), strings.Join(values, ","))
 	case "delete":
 		kvs := make([]string, 0, len(keys))
 		for _, col := range keys {
@@ -412,7 +411,7 @@ func generateDML(tp string, data map[string][]byte, keys []*model.ColumnInfo, ta
 				kvs = append(kvs, fmt.Sprintf("%s = %s", col.Name.O, string(data[col.Name.O])))
 			}
 		}
-		sql = fmt.Sprintf("DELETE FROM `%s`.`%s` where %s;", dbName, table.Name, strings.Join(kvs, " AND "))
+		sql = fmt.Sprintf("DELETE FROM `%s`.`%s` where %s;", schema, table.Name, strings.Join(kvs, " AND "))
 	default:
 		log.Errorf("unknow sql type %s", tp)
 	}
@@ -486,14 +485,14 @@ func compareData(map1 map[string][]byte, map2 map[string][]byte, orderKeyCols []
 	return false, cmp, nil
 }
 
-func getChunkRows(db *sql.DB, dbName string, table *TableCheckCfg, where string, useRowID bool) (*sql.Rows, []*model.ColumnInfo, error) {
+func getChunkRows(db *sql.DB, schema string, table *TableCheckCfg, where string, useRowID bool) (*sql.Rows, []*model.ColumnInfo, error) {
 	orderKeys, orderKeyCols := pkgdb.GetOrderKey(table.Info)
 	columns := "*"
 	if orderKeys[0] == pkgdb.ImplicitColName {
 		columns = fmt.Sprintf("*, %s", pkgdb.ImplicitColName)
 	}
 	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ %s FROM `%s`.`%s` WHERE %s ORDER BY %s",
-		columns, dbName, table.Name, where, strings.Join(orderKeys, ","))
+		columns, schema, table.Name, where, strings.Join(orderKeys, ","))
 
 	rows, err := pkgdb.QuerySQL(db, query)
 	if err != nil {

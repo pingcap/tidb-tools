@@ -20,7 +20,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-tools/diff/util"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/util"
 	"github.com/pingcap/tidb/model"
 )
 
@@ -32,14 +32,14 @@ const (
 // TableCheckCfg is the config of table to be checked.
 type TableCheckCfg struct {
 	// table name
-	Name   string `toml:"name"`
+	Name string `toml:"name"`
 	// Schema is seted in SourceDBCfg
 	Schema string
 	// field should be the primary key, unique key or field with index
-	Field  string `toml:"field"`
+	Field string `toml:"field"`
 	// select range, for example: "age > 10 AND age < 20"
-	Range  string `toml:"range"`
-	Info   *model.TableInfo
+	Range string `toml:"range"`
+	Info  *model.TableInfo
 }
 
 // Config is the configuration.
@@ -58,19 +58,19 @@ type Config struct {
 	// for example, the whole data is [1...100]
 	// we can split these data to [1...10], [11...20], ..., [91...100]
 	// the [1...10] is a chunk, and it's chunk size is 10
-	// splited chunk's size
+	// size of the split chunk
 	ChunkSize int `toml:"chunk-size" json:"chunk-size"`
 
 	// sampling check percent, for example 10 means only check 10% data
 	Sample int `toml:"sample" json:"sample"`
 
-	// how many goroutine created to check data
+	// how many goroutines are created to check data
 	CheckThreadCount int `toml:"check-thread-count" json:"check-thread-count"`
 
 	// set true if target-db and source-db all support tidb implicit column "_tidb_rowid"
 	UseRowID bool `toml:"use-rowid" json:"use-rowid"`
 
-	// the name of file which saves sqls used to fix different data
+	// the name of the file which saves sqls used to fix different data
 	FixSQLFile string `toml:"fix-sql-file" json:"fix-sql-file"`
 
 	// the config of table to be checked
@@ -96,9 +96,9 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.IntVar(&cfg.ChunkSize, "chunk-size", 1000, "diff check chunk size")
 	fs.IntVar(&cfg.Sample, "sample", 100, "the percent of sampling check")
-	fs.IntVar(&cfg.CheckThreadCount, "check-thread-count", 1, "the count of check thread count")
+	fs.IntVar(&cfg.CheckThreadCount, "check-thread-count", 1, "how many goroutines are created to check data")
 	fs.BoolVar(&cfg.UseRowID, "use-rowid", false, "set true if target-db and source-db all support tidb implicit column _tidb_rowid")
-	fs.StringVar(&cfg.FixSQLFile, "fix-sql-file", "fix.sql", "the name of file which saves sqls used to fix different data")
+	fs.StringVar(&cfg.FixSQLFile, "fix-sql-file", "fix.sql", "the name of the file which saves sqls used to fix different data")
 	fs.StringVar(&cfg.SourceSnapshot, "source-snapshot", "", "source database's snapshot config")
 	fs.StringVar(&cfg.TargetSnapshot, "target-snapshot", "", "target database's snapshot config")
 

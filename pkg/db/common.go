@@ -227,6 +227,10 @@ func GetOrderKey(tbInfo *model.TableInfo) ([]string, []*model.ColumnInfo) {
 
 // GetRandomValues returns some random value of a column, not used for number type column.
 func GetRandomValues(db *sql.DB, dbName string, table string, column string, num int64, min, max interface{}, limitRange string) ([]string, error) {
+	if limitRange != "" {
+		limitRange = "true"
+	}
+
 	randomValue := make([]string, 0, num)
 	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` > \"%v\" AND `%s` < \"%v\" AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
 		column, column, dbName, table, column, min, column, max, limitRange, num, column)

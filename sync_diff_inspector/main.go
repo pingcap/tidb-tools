@@ -22,7 +22,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/db"
-	"github.com/pingcap/tidb-tools/diff/util"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/util"
 )
 
 func main() {
@@ -33,7 +33,7 @@ func main() {
 	case flag.ErrHelp:
 		os.Exit(0)
 	default:
-		log.Errorf("parse cmd flags err %s\n", errors.Trace(err))
+		log.Errorf("parse cmd flags err %s\n", errors.ErrorStack(err))
 		os.Exit(2)
 	}
 
@@ -66,14 +66,12 @@ func main() {
 func checkSyncState(sourceDB, targetDB *sql.DB, cfg *Config) bool {
 	d, err := NewDiff(sourceDB, targetDB, cfg)
 	if err != nil {
-		log.Errorf("create diff error %v", err)
-		log.Fatal(errors.Trace(err))
+		log.Fatalf("fail to initialize diff process %v", errors.ErrorStack(err))
 	}
 
 	ok, err := d.Equal()
 	if err != nil {
-		log.Errorf("check data difference error %v", err)
-		log.Fatal(errors.Trace(err))
+		log.Fatalf("check data difference error %v", errors.ErrorStack(err))
 	}
 
 	return ok

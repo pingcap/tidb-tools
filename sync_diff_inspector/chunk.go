@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package util
+package main
 
 import (
 	"database/sql"
@@ -29,15 +29,15 @@ type chunkRange struct {
 	begin interface{}
 	end   interface{}
 	// for example:
-	// containB and containE is true, means [begin, end]
-	// containB is true, containE is false, means [begin, end)
-	containB bool
-	containE bool
+	// containBegin and containEnd is true, means [begin, end]
+	// containBegin is true, containEnd is false, means [begin, end)
+	containBegin bool
+	containEnd   bool
 }
 
-// DumpJob is the struct for job of dump
-type DumpJob struct {
-	DbName string
+// CheckJob is the struct of job for check
+type CheckJob struct {
+	Schema string
 	Table  string
 	Column *model.ColumnInfo
 	Where  string
@@ -45,18 +45,18 @@ type DumpJob struct {
 }
 
 // newChunkRange return a range struct
-func newChunkRange(begin, end interface{}, containB, containE bool) chunkRange {
+func newChunkRange(begin, end interface{}, containBegin, containEnd bool) chunkRange {
 	return chunkRange{
-		begin:    begin,
-		end:      end,
-		containE: containE,
-		containB: containB,
+		begin:        begin,
+		end:          end,
+		containEnd:   containEnd,
+		containBegin: containBegin,
 	}
 }
 
-func getChunksForTable(db *sql.DB, dbName, tableName string, column *model.ColumnInfo, where string, chunkSize, sample int) ([]chunkRange, error) {
+func getChunksForTable(db *sql.DB, Schema, tableName string, column *model.ColumnInfo, where string, chunkSize, sample int) ([]chunkRange, error) {
 	if column == nil {
-		log.Warnf("no suitable index found for %s.%s", dbName, tableName)
+		log.Warnf("no suitable index found for %s.%s", Schema, tableName)
 		return nil, nil
 	}
 
@@ -64,15 +64,15 @@ func getChunksForTable(db *sql.DB, dbName, tableName string, column *model.Colum
 
 	// fetch min, max
 	query := fmt.Sprintf("SELECT %s MIN(`%s`) as MIN, MAX(`%s`) as MAX FROM `%s`.`%s` where %s",
-		"/*!40001 SQL_NO_CACHE */", field, field, dbName, tableName, where)
+		"/*!40001 SQL_NO_CACHE */", field, field, Schema, tableName, where)
 
 	// get the chunk count
-	cnt, err := pkgdb.GetRowCount(db, dbName, tableName, where)
+	cnt, err := pkgdb.GetRowCount(db, Schema, tableName, where)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	if cnt == 0 {
-		log.Infof("no data found in %s.%s", dbName, tableName)
+		log.Infof("no data found in %s.%s", Schema, tableName)
 		return nil, nil
 	}
 
@@ -93,7 +93,7 @@ func getChunksForTable(db *sql.DB, dbName, tableName string, column *model.Colum
 			// min is NULL, means that no table data.
 			return nil, nil
 		}
-		chunk = newChunkRange(min.Int64, max.Int64+1, true, false)
+		chunk = newChunkRange(min.Int64, max.Int64, true, true)
 	} else if pkgdb.IsFloatType(column.Tp) {
 		var min, max sql.NullFloat64
 		err := db.QueryRow(query).Scan(&min, &max)
@@ -104,7 +104,7 @@ func getChunksForTable(db *sql.DB, dbName, tableName string, column *model.Colum
 			// min is NULL, means that no table data.
 			return nil, nil
 		}
-		chunk = newChunkRange(min.Float64-0.1, max.Float64+0.1, false, false)
+		chunk = newChunkRange(min.Float64, max.Float64, true, true)
 	} else {
 		var min, max sql.NullString
 		err := db.QueryRow(query).Scan(&min, &max)
@@ -116,10 +116,10 @@ func getChunksForTable(db *sql.DB, dbName, tableName string, column *model.Colum
 		}
 		chunk = newChunkRange(min.String, max.String, true, true)
 	}
-	return splitRange(db, &chunk, chunkCnt, dbName, tableName, column, where)
+	return splitRange(db, &chunk, chunkCnt, Schema, tableName, column, where)
 }
 
-func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbName string, table string, column *model.ColumnInfo, limitRange string) ([]chunkRange, error) {
+func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table string, column *model.ColumnInfo, limitRange string) ([]chunkRange, error) {
 	var chunks []chunkRange
 
 	if count <= 1 {
@@ -127,13 +127,13 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbName string, table
 		return chunks, nil
 	}
 
-	if reflect.TypeOf(chunk.begin).String() == "int64" {
+	if reflect.TypeOf(chunk.begin).Kind() == reflect.Int64 {
 		min, ok1 := chunk.begin.(int64)
 		max, ok2 := chunk.end.(int64)
 		if !ok1 || !ok2 {
 			return nil, errors.Errorf("can't parse chunk's begin: %v, end: %v", chunk.begin, chunk.end)
 		}
-		step := (max-min)/count + 1
+		step := (max - min + count - 1) / count
 		cutoff := min
 		for cutoff <= max {
 			r := newChunkRange(cutoff, cutoff+step, true, false)
@@ -141,13 +141,13 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbName string, table
 			cutoff += step
 		}
 		log.Debugf("getChunksForTable cut table: cnt=%d min=%v max=%v step=%v chunk=%d", count, min, max, step, len(chunks))
-	} else if reflect.TypeOf(chunk.begin).String() == "float64" {
+	} else if reflect.TypeOf(chunk.begin).Kind() == reflect.Float64 {
 		min, ok1 := chunk.begin.(float64)
 		max, ok2 := chunk.end.(float64)
 		if !ok1 || !ok2 {
 			return nil, errors.Errorf("can't parse chunk's begin: %v, end: %v", chunk.begin, chunk.end)
 		}
-		step := (max-min)/float64(count) + 1
+		step := (max - min + float64(count-1)) / float64(count)
 		cutoff := min
 		for cutoff <= max {
 			r := newChunkRange(cutoff, cutoff+step, true, false)
@@ -164,7 +164,7 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbName string, table
 		}
 
 		// get random value as split value
-		splitValues, err := pkgdb.GetRandomValues(db, dbName, table, column.Name.O, count-1, min, max, limitRange)
+		splitValues, err := pkgdb.GetRandomValues(db, Schema, table, column.Name.O, count-1, min, max, limitRange)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -186,14 +186,14 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, dbName string, table
 		}
 		log.Debugf("getChunksForTable cut table: cnt=%d min=%s max=%s chunk=%d", count, min, max, len(chunks))
 	}
-	chunks[0].containB = chunk.containB
-	chunks[len(chunks)-1].containE = chunk.containE
+	chunks[0].containBegin = chunk.containBegin
+	chunks[len(chunks)-1].containEnd = chunk.containEnd
 	return chunks, nil
 }
 
-func findSuitableField(db *sql.DB, dbName string, table *model.TableInfo) (*model.ColumnInfo, error) {
+func findSuitableField(db *sql.DB, Schema string, table *model.TableInfo) (*model.ColumnInfo, error) {
 	// first select the index, and number type index first
-	column, err := pkgdb.FindSuitableIndex(db, dbName, table)
+	column, err := pkgdb.FindSuitableIndex(db, Schema, table)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -202,21 +202,21 @@ func findSuitableField(db *sql.DB, dbName string, table *model.TableInfo) (*mode
 	}
 
 	// use the first column
-	log.Infof("%s.%s don't have index, will use the first column as split field", dbName, table.Name.O)
+	log.Infof("%s.%s don't have index, will use the first column as split field", Schema, table.Name.O)
 	return table.Columns[0], nil
 }
 
-// GenerateDumpJob generates some DumpJobs.
-func GenerateDumpJob(db *sql.DB, dbName string, table *model.TableInfo, splitField string,
-	limitRange string, chunkSize int, sample int, useRowID bool) ([]*DumpJob, error) {
-	jobBucket := make([]*DumpJob, 0, 10)
+// GenerateCheckJob generates some CheckJobs.
+func GenerateCheckJob(db *sql.DB, Schema string, table *model.TableInfo, splitField string,
+	limitRange string, chunkSize int, sample int, useRowID bool) ([]*CheckJob, error) {
+	jobBucket := make([]*CheckJob, 0, 10)
 	var jobCnt int
 	var column *model.ColumnInfo
 	var err error
 
 	if splitField == "" {
 		// find a column for split data
-		column, err = findSuitableField(db, dbName, table)
+		column, err = findSuitableField(db, Schema, table)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -227,13 +227,13 @@ func GenerateDumpJob(db *sql.DB, dbName string, table *model.TableInfo, splitFie
 		}
 	}
 
-	// set limitRange to "true" can make the code more simple, no need to judge the limitRange's value.
+	// setting limitRange to "true" can make the code more simple, no need to judge the limitRange's value.
 	// for example: sql will looks like "select * from itest where a > 10 AND true" if don't set range in config.
 	if limitRange == "" {
 		limitRange = "true"
 	}
 
-	chunks, err := getChunksForTable(db, dbName, table.Name.O, column, limitRange, chunkSize, sample)
+	chunks, err := getChunksForTable(db, Schema, table.Name.O, column, limitRange, chunkSize, sample)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -262,24 +262,24 @@ func GenerateDumpJob(db *sql.DB, dbName string, table *model.TableInfo, splitFie
 
 		gt := ">"
 		lt := "<"
-		if chunk.containB {
+		if chunk.containBegin {
 			gt = ">="
 		}
-		if chunk.containE {
+		if chunk.containEnd {
 			lt = "<="
 		}
-		if reflect.TypeOf(chunk.begin).String() == "int64" {
+		if reflect.TypeOf(chunk.begin).Kind() == reflect.Int64 {
 			where = fmt.Sprintf("(`%s` %s %d AND `%s` %s %d)", column.Name, gt, chunk.begin, column.Name, lt, chunk.end)
-		} else if reflect.TypeOf(chunk.begin).String() == "float64" {
+		} else if reflect.TypeOf(chunk.begin).Kind() == reflect.Float64 {
 			where = fmt.Sprintf("(`%s` %s %f AND `%s` %s %f)", column.Name, gt, chunk.begin, column.Name, lt, chunk.end)
 		} else {
 			where = fmt.Sprintf("(`%s` %s \"%v\" AND `%s` %s \"%v\")", column.Name, gt, chunk.begin, column.Name, lt, chunk.end)
 		}
 		where = fmt.Sprintf("%s AND %s", where, limitRange)
 
-		log.Debugf("%s.%s create dump job: where: %s", dbName, table.Name.O, where)
-		jobBucket = append(jobBucket, &DumpJob{
-			DbName: dbName,
+		log.Debugf("%s.%s create dump job: where: %s", Schema, table.Name.O, where)
+		jobBucket = append(jobBucket, &CheckJob{
+			Schema: Schema,
 			Table:  table.Name.O,
 			Column: column,
 			Where:  where,

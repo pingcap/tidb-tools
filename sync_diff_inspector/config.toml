@@ -5,10 +5,10 @@ log-level = "info"
 # for example, the whole data is [1...100]
 # we can split these data to [1...10], [11...20], ..., [91...100]
 # the [1...10] is a chunk, and it's chunk size is 10
-# splited chunk's size
+# size of the split chunk
 chunk-size = 1000
 
-# how many goroutine created to check data
+# how many goroutines are created to check data
 check-thread-count = 4
 
 # sampling check percent, for example 10 means only check 10% data
@@ -17,14 +17,14 @@ sample = 100
 # set true if target-db and source-db all support tidb implicit column "_tidb_rowid"
 use-rowid = false
 
-# the name of file which saves sqls used to fix different data
+# the name of the file which saves sqls used to fix different data
 fix-sql-file = "fix.sql"
 
 # use tidb's snapshot data, sql looks like set @@tidb_snapshot="2016-10-08 16:45:26"
 source-snapshot = "2016-10-08 16:45:26"
 target-snapshot = "2016-10-08 16:45:26"
 
-# if check-table is nil, will check all tables in the schema.
+# if check-table is nil, all tables in the schema will be checked.
 [[check-table]]
 # table name.
 name = "test"
@@ -38,16 +38,16 @@ field = "id"
 
 [source-db]
 host = "127.0.0.1"
+port = 3306
 user = "root"
 password = ""
 # schema name
-name = "test"
-port = 3306
+schema = "test"
 
 [target-db]
 host = "127.0.0.1"
+port = 4000
 user = "root"
 password = ""
 # schema name
-name = "test"
-port = 4000
+schema = "test"
