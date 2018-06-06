@@ -16,23 +16,38 @@ func TestClient(t *testing.T) {
 var _ = Suite(&testOffsetSuite{})
 
 type testOffsetSuite struct {
-	producer sarama.SyncProducer
+	producer  sarama.SyncProducer
+	config    *sarama.Config
+	addr      string
+	available bool
+}
+
+func (to *testOffsetSuite) SetUpSuite(c *C) {
+	to.addr = "127.0.0.1"
+	if os.Getenv("HOSTIP") != "" {
+		to.addr = os.Getenv("HOSTIP")
+	}
+	to.config = sarama.NewConfig()
+	to.config.Producer.Partitioner = sarama.NewManualPartitioner
+	to.config.Producer.Return.Successes = true
+	var err error
+	to.producer, err = sarama.NewSyncProducer([]string{to.addr + ":9092"}, to.config)
+	if err == nil {
+		to.available = true
+	}
 }
 
 func (to *testOffsetSuite) TestOffset(c *C) {
-	kafkaAddr := "127.0.0.1"
-	if os.Getenv("HOSTIP") != "" {
-		kafkaAddr = os.Getenv("HOSTIP")
+	if !to.available {
+		c.Skip("no kafka available")
 	}
-	topic := "test"
-	config := sarama.NewConfig()
-	config.Producer.Partitioner = sarama.NewManualPartitioner
-	config.Producer.Return.Successes = true
 
-	sk, err := NewKafkaSeeker([]string{kafkaAddr + ":9092"}, config)
+	topic := "test"
+
+	sk, err := NewKafkaSeeker([]string{to.addr + ":9092"}, to.config)
 	c.Assert(err, IsNil)
 
-	to.producer, err = sarama.NewSyncProducer([]string{kafkaAddr + ":9092"}, config)
+	to.producer, err = sarama.NewSyncProducer([]string{to.addr + ":9092"}, to.config)
 	c.Assert(err, IsNil)
 	defer to.producer.Close()
 
