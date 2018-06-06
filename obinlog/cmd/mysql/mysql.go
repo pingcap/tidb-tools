@@ -18,7 +18,7 @@ import (
 var (
 	port     = flag.Int("P", 3306, "port")
 	user     = flag.String("u", "root", "user")
-	password = flag.String("p", "hello", "password")
+	password = flag.String("p", "", "password")
 	host     = flag.String("h", "localhost", "host")
 
 	clusterID = flag.String("clusterID", "6561373978432450126", "clusterID")
