@@ -3,7 +3,7 @@ package reader
 import (
 	"github.com/Shopify/sarama"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-tools/obinlog/go-binlog"
+	pb "github.com/pingcap/tidb-tools/binlog_proto/go-binlog"
 )
 
 func init() {
@@ -21,7 +21,7 @@ type Config struct {
 
 // Message read from reader
 type Message struct {
-	Binlog *obinlog.Binlog
+	Binlog *pb.Binlog
 	Offset int64 // kafka offset
 }
 
@@ -119,7 +119,7 @@ func (r *Reader) run() {
 			return
 		case kmsg := <-partitionConsumer.Messages():
 			log.Debug("get kmsg offset: ", kmsg.Offset)
-			binlog := new(obinlog.Binlog)
+			binlog := new(pb.Binlog)
 			err := binlog.Unmarshal(kmsg.Value)
 			if err != nil {
 				log.Warn(err)

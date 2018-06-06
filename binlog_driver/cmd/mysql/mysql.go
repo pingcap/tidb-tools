@@ -9,8 +9,8 @@ import (
 	"github.com/Shopify/sarama"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/ngaut/log"
-	obinlog "github.com/pingcap/tidb-tools/obinlog/go-binlog"
-	"github.com/pingcap/tidb-tools/obinlog/reader"
+	"github.com/pingcap/tidb-tools/binlog_driver/reader"
+	pb "github.com/pingcap/tidb-tools/binlog_proto/go-binlog"
 )
 
 // a simple example to sync data to mysql
@@ -88,7 +88,7 @@ func main() {
 
 }
 
-func columnToArg(c *obinlog.Column) (arg interface{}) {
+func columnToArg(c *pb.Column) (arg interface{}) {
 	if c.GetIsNull() {
 		return nil
 	}
@@ -112,7 +112,7 @@ func columnToArg(c *obinlog.Column) (arg interface{}) {
 	return c.GetStringValue()
 }
 
-func tableToSQL(table *obinlog.Table) (sqls []string, sqlArgs [][]interface{}) {
+func tableToSQL(table *pb.Table) (sqls []string, sqlArgs [][]interface{}) {
 
 	replace := func() {
 		sql := fmt.Sprintf("replace into `%s`.`%s`", table.GetSchemaName(), table.GetTableName())
@@ -168,9 +168,9 @@ func tableToSQL(table *obinlog.Table) (sqls []string, sqlArgs [][]interface{}) {
 	}
 
 	switch table.GetType() {
-	case obinlog.MutationType_Insert:
+	case pb.MutationType_Insert:
 		replace()
-	case obinlog.MutationType_Update:
+	case pb.MutationType_Update:
 		columnInfo := table.GetColumnInfo()
 		sql := fmt.Sprintf("update `%s`.`%s` set ", table.GetSchemaName(), table.GetTableName())
 		// construct c1 = ?, c2 = ?...
@@ -204,7 +204,7 @@ func tableToSQL(table *obinlog.Table) (sqls []string, sqlArgs [][]interface{}) {
 			sqlArgs = append(sqlArgs, args)
 		}
 
-	case obinlog.MutationType_Delete:
+	case pb.MutationType_Delete:
 		columnInfo := table.GetColumnInfo()
 		sql := fmt.Sprintf("delete from `%s`.`%s` ", table.GetSchemaName(), table.GetTableName())
 
@@ -227,12 +227,12 @@ func tableToSQL(table *obinlog.Table) (sqls []string, sqlArgs [][]interface{}) {
 	return
 }
 
-func toSQL(binlog *obinlog.Binlog) ([]string, [][]interface{}) {
+func toSQL(binlog *pb.Binlog) ([]string, [][]interface{}) {
 	var allSQL []string
 	var allArgs [][]interface{}
 
 	switch binlog.GetType() {
-	case obinlog.BinlogType_DDL:
+	case pb.BinlogType_DDL:
 		ddl := binlog.DdlData
 		sql := fmt.Sprintf("use %s", ddl.GetSchemaName())
 		allSQL = append(allSQL, sql)
@@ -241,7 +241,7 @@ func toSQL(binlog *obinlog.Binlog) ([]string, [][]interface{}) {
 		allSQL = append(allSQL, sql)
 		allArgs = append(allArgs, nil)
 
-	case obinlog.BinlogType_DML:
+	case pb.BinlogType_DML:
 		dml := binlog.DmlData
 		for _, table := range dml.GetTables() {
 			sqls, sqlArgs := tableToSQL(table)

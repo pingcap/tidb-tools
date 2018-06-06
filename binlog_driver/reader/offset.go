@@ -3,7 +3,7 @@ package reader
 import (
 	"github.com/Shopify/sarama"
 	"github.com/ngaut/log"
-	obinlog "github.com/pingcap/tidb-tools/obinlog/go-binlog"
+	pb "github.com/pingcap/tidb-tools/binlog_proto/go-binlog"
 )
 
 // KafkaSeeker implements Kafka Seeker
@@ -57,7 +57,7 @@ func (ks *KafkaSeeker) Seek(topic string, ts int64, partitions []int32) (offsets
 }
 
 func (ks *KafkaSeeker) getTSFromMSG(msg *sarama.ConsumerMessage) (ts int64, err error) {
-	binlog := new(obinlog.Binlog)
+	binlog := new(pb.Binlog)
 	err = binlog.Unmarshal(msg.Value)
 	if err != nil {
 		return
