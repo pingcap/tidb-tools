@@ -1,5 +1,5 @@
 syntax = "proto2";
-package obinlog;
+package binlog;
 import "gogoproto/gogo.proto";
 
 option (gogoproto.marshaler_all) = true;
@@ -23,15 +23,15 @@ message Column {
     optional int64 int64_value = 2;
     optional uint64 uint64_value = 3;
     optional double double_value = 4;
-    optional bytes bytes_value = 6;
-    optional string string_value = 7;
+    optional bytes bytes_value = 5;
+    optional string string_value = 6;
 }
 
 message ColumnInfo {
     optional string  name       = 1 [(gogoproto.nullable) = false];
     // column field type in mysql
-    optional string  mysql_type = 3 [(gogoproto.nullable) = false];
-    optional bool is_primary_key = 4 [(gogoproto.nullable) = false];
+    optional string  mysql_type = 2 [(gogoproto.nullable) = false];
+    optional bool is_primary_key = 3 [(gogoproto.nullable) = false];
 }
 
 message Row {
