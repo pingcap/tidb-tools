@@ -381,6 +381,7 @@ func (df *Diff) WriteSqls() {
 			if err != nil {
 				log.Errorf("write sql: %s failed, error: %v", dml, err)
 			}
+			df.wg.Done()
 		}
 	}
 }
