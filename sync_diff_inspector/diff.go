@@ -190,14 +190,14 @@ func (df *Diff) EqualTableStruct(tableInfo1, tableInfo2 *model.TableInfo) (bool,
 // EqualTableData checks data is equal or not.
 func (df *Diff) EqualTableData(table *TableCheckCfg) (bool, error) {
 	// TODO: now only check data between source data's min and max, need check data less than min and greater than max.
-	checkJobs, err := GenerateCheckJob(df.db1, df.schema, table.Info, table.Field, table.Range, df.chunkSize, df.sample, df.useRowID)
+	allJobs, err := GenerateCheckJob(df.db1, df.schema, table.Info, table.Field, table.Range, df.chunkSize, df.sample, df.useRowID)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
 
-	checkNums := len(checkJobs)*df.sample/100 + 1
-	checkNumArr := getRandomN(len(checkJobs), checkNums)
-	log.Infof("total has %d check jobs, check %+v", len(checkJobs), checkNumArr)
+	checkNums := len(allJobs)*df.sample/100 + 1
+	checkNumArr := getRandomN(len(allJobs), checkNums)
+	log.Infof("total has %d check jobs, check %+v", len(allJobs), checkNumArr)
 
 	checkResultCh := make(chan bool, df.checkThreadCount)
 	defer close(checkResultCh)
@@ -205,7 +205,7 @@ func (df *Diff) EqualTableData(table *TableCheckCfg) (bool, error) {
 	for i := 0; i < df.checkThreadCount; i++ {
 		checkJobs := make([]*CheckJob, 0, len(checkNumArr))
 		for j := len(checkNumArr) * i / df.checkThreadCount; j < len(checkNumArr)*(i+1)/df.checkThreadCount && j < len(checkNumArr); j++ {
-			checkJobs = append(checkJobs, checkJobs[checkNumArr[j]])
+			checkJobs = append(checkJobs, allJobs[checkNumArr[j]])
 		}
 		go func() {
 			eq, err := df.checkChunkDataEqual(checkJobs, table)
@@ -381,7 +381,6 @@ func (df *Diff) WriteSqls() {
 			if err != nil {
 				log.Errorf("write sql: %s failed, error: %v", dml, err)
 			}
-		default:
 		}
 	}
 }
