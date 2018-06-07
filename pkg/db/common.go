@@ -80,16 +80,16 @@ func CloseDB(db *sql.DB) error {
 // GetCreateTableSQL gets the create table sql.
 func GetCreateTableSQL(db *sql.DB, schemaName string, tableName string) (string, error) {
 	/*
-				show create table example result:
-				mysql> SHOW CREATE TABLE `test`.`itest`;
-				+-------+--------------------------------------------------------------------+
-				| Table | Create Table                                                                                                                              |
-				+-------+--------------------------------------------------------------------+
-				| itest | CREATE TABLE `itest` (
-		  			`id` int(11) DEFAULT NULL,
-		  			`name` varchar(24) DEFAULT NULL
-					) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin |
-				+-------+--------------------------------------------------------------------+
+		show create table example result:
+		mysql> SHOW CREATE TABLE `test`.`itest`;
+		+-------+--------------------------------------------------------------------+
+		| Table | Create Table                                                                                                                              |
+		+-------+--------------------------------------------------------------------+
+		| itest | CREATE TABLE `itest` (
+			`id` int(11) DEFAULT NULL,
+		  	`name` varchar(24) DEFAULT NULL
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin |
+		+-------+--------------------------------------------------------------------+
 	*/
 	query := fmt.Sprintf("SHOW CREATE TABLE `%s`.`%s`", schemaName, tableName)
 	row := db.QueryRow(query)
