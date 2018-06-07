@@ -18,9 +18,9 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-binlog/pkg/etcd"
-	"github.com/pingcap/tidb-binlog/pkg/flags"
-	"github.com/pingcap/tidb-binlog/pump"
+	"github.com/pingcap/tidb-tools/pkg/etcd"
+	"github.com/pingcap/tidb-tools/pkg/flags"
+	"github.com/pingcap/tidb-tools/tidb_binlog/node"
 	"golang.org/x/net/context"
 )
 
@@ -72,7 +72,7 @@ func unregisterService(urls, kind, id string) error {
 
 			switch kind {
 			case pumpService:
-				return registry.MarkOfflineNode(context.Background(), nodePrefix[kind], s.NodeID, s.Host)
+				return registry.MarkOfflineNode(context.Background(), nodePrefix[kind], s.NodeID, s.Host, s.LatestKafkaPos, s.LatestFilePos, s.OfflineTS)
 			case drainerService:
 				return registry.UnregisterNode(context.Background(), nodePrefix[kind], s.NodeID)
 			default:
@@ -84,7 +84,7 @@ func unregisterService(urls, kind, id string) error {
 	return errors.NotFoundf("service %s, id %s from etcd %s", kind, id, urls)
 }
 
-func createRegistry(urls string) (*pump.EtcdRegistry, error) {
+func createRegistry(urls string) (*node.EtcdRegistry, error) {
 	urlv, err := flags.NewURLsValue(urls)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -94,5 +94,5 @@ func createRegistry(urls string) (*pump.EtcdRegistry, error) {
 		return nil, errors.Trace(err)
 	}
 
-	return pump.NewEtcdRegistry(cli, etcdDialTimeout), nil
+	return node.NewEtcdRegistry(cli, etcdDialTimeout), nil
 }

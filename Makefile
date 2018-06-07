@@ -25,7 +25,7 @@ dump_region:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/dump_region ./dump_region
 
 binlogctl:
-	$(GO) build -ldflags '$(LDFLAGS)' -o bin/binlogctl ./binlogctl
+	$(GO) build -ldflags '$(LDFLAGS)' -o bin/binlogctl ./tidb_binlog/binlogctl
 
 sync_check:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/sync_check ./sync_check

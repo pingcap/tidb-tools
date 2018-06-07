@@ -1,17 +1,4 @@
-// Copyright 2016 PingCAP, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-package main
+package types
 
 import (
 	"net"
@@ -81,32 +68,4 @@ func (us URLs) StringSlice() []string {
 	}
 
 	return out
-}
-
-// NewURLsValue return a URLsValue from a string of URLs list
-func NewURLsValue(init string) (*URLs, error) {
-	v := &URLs{}
-	err := v.Set(init)
-	return v, err
-}
-
-// Set set URLs use string
-func (us *URLs) Set(s string) error {
-	strs := strings.Split(s, ",")
-	nus, err := NewURLs(strs)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	*us = URLs(nus)
-	return nil
-}
-
-// HostString return a string of host:port format list separated by comma
-func (us *URLs) HostString() string {
-	all := make([]string, len(*us))
-	for i, u := range *us {
-		all[i] = u.Host
-	}
-	return strings.Join(all, ",")
 }

@@ -1,4 +1,4 @@
-// Copyright 2016 PingCAP, Inc.
+// Copyright 2018 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-tools/generate_binlog_position/pkg"
+	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/siddontang/go/ioutil2"
 )
 
@@ -94,7 +94,7 @@ func (lm *localMeta) Save(ts int64, timeZone string) error {
 	}
 
 	if timeZone != "" {
-		t := pkg.TsToTime(ts)
+		t := utils.TSOToTime(ts)
 		location, err := time.LoadLocation(timeZone)
 		if err != nil {
 			return errors.Trace(err)

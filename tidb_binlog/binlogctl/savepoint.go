@@ -1,4 +1,4 @@
-// Copyright 2016 PingCAP, Inc.
+// Copyright 2018 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/pd/pd-client"
-	"github.com/pingcap/tidb-tools/generate_binlog_position/pkg"
+	"github.com/pingcap/tidb-tools/pkg/flags"
 	"golang.org/x/net/context"
 )
 
@@ -49,10 +49,11 @@ func GenSavepointInfo(cfg *Config) error {
 	return errors.Trace(err)
 }
 
+// GetTSO returns tso
 func GetTSO(cfg *Config) (int64, error) {
 	now := time.Now()
 
-	urlv, err := pkg.NewURLsValue(cfg.EtcdURLs)
+	urlv, err := flags.NewURLsValue(cfg.EtcdURLs)
 	if err != nil {
 		return 0, errors.Trace(err)
 	}

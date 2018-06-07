@@ -1,4 +1,4 @@
-// Copyright 2016 PingCAP, Inc.
+// Copyright 2018 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,8 @@ import (
 	"os"
 
 	"github.com/juju/errors"
-	"github.com/pingcap/tidb-tools/generate_binlog_position/pkg"
+	"github.com/pingcap/tidb-tools/pkg/flags"
+	"github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 const (
@@ -90,7 +91,7 @@ func (cfg *Config) Parse(args []string) error {
 
 	var err error
 	// transfore tls config
-	cfg.tls, err = pkg.ToTLSConfig(cfg.SSLCA, cfg.SSLCert, cfg.SSLKey)
+	cfg.tls, err = utils.ToTLSConfig(cfg.SSLCA, cfg.SSLCert, cfg.SSLKey)
 	if err != nil {
 		return errors.Errorf("tls config error %v", err)
 	}
@@ -107,7 +108,7 @@ func adjustString(v *string, defValue string) {
 // validate checks whether the configuration is valid
 func (cfg *Config) validate() error {
 	// check EtcdEndpoints
-	_, err := pkg.NewURLsValue(cfg.EtcdURLs)
+	_, err := flags.NewURLsValue(cfg.EtcdURLs)
 	if err != nil {
 		return errors.Errorf("parse EtcdURLs error: %s, %v", cfg.EtcdURLs, err)
 	}
