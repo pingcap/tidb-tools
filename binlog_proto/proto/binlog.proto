@@ -6,17 +6,17 @@ option (gogoproto.marshaler_all) = true;
 option (gogoproto.sizer_all) = true;
 option (gogoproto.unmarshaler_all) = true;
 
-// for date and time type, string is set
+// for date and time type, string_value is set
 
-// for int type int64 or uint64 is set
-// for float, double, double is set
-// for decimal, string is set in human-readable now
-// for bit, bytes is set
+// for int type int64 or uint64_value is set
+// for float, double, double_value is set
+// for decimal, string_value is set in human-readable now
+// for bit, bytes_value is set
 
-// for text and char type, string is set
-// for blob and binary type, bytes is set
-// for enum, set, uint64 is set
-// for json, bytes is set
+// for text and char type, string_value is set
+// for blob and binary type, bytes_value is set
+// for enum, set, uint64_value is set
+// for json, bytes_value is set
 message Column {
     optional bool is_null = 1 [default = false];
 
@@ -29,7 +29,12 @@ message Column {
 
 message ColumnInfo {
     optional string  name       = 1 [(gogoproto.nullable) = false];
-    // column field type in mysql
+    // lower case column field type in mysql https://dev.mysql.com/doc/refman/8.0/en/data-types.html
+    // for numeric type: int bigint smallint tinyint float double decimal bit
+    // for string type: text longtext mediumtext char tinytext varchar 
+    // blob longblog mediumblog binary tinyblob varbinary
+    // enum set
+    // for json type: json
     optional string  mysql_type = 2 [(gogoproto.nullable) = false];
     optional bool is_primary_key = 3 [(gogoproto.nullable) = false];
 }
@@ -69,15 +74,15 @@ message DDLData {
 }
 
 enum BinlogType {
-    DML = 0; // has commit_ts, dml_data
-    DDL = 1; // has commit_ts, ddl_query
+    DML = 0; //  has dml_data
+    DDL = 1; //  has ddl_query
 }
 
 // Binlog contains all the changes in a transaction.
 message Binlog {
     optional BinlogType    type           = 1 [(gogoproto.nullable) = false];
     optional int64         commit_ts      = 2 [(gogoproto.nullable) = false];
-    // dml_data is marshalled from DML type,
+    // dml_data is marshalled from DML type
     optional DMLData       dml_data = 3;
     optional DDLData       ddl_data = 4;
 }

@@ -112,10 +112,10 @@ func (x *BinlogType) UnmarshalJSON(data []byte) error {
 }
 func (BinlogType) EnumDescriptor() ([]byte, []int) { return fileDescriptorBinlog, []int{1} }
 
-// for text and char type, string is set
-// for blob and binary type, bytes is set
-// for enum, set, uint64 is set
-// for json, bytes is set
+// for text and char type, string_value is set
+// for blob and binary type, bytes_value is set
+// for enum, set, uint64_value is set
+// for json, bytes_value is set
 type Column struct {
 	IsNull           *bool    `protobuf:"varint,1,opt,name=is_null,json=isNull,def=0" json:"is_null,omitempty"`
 	Int64Value       *int64   `protobuf:"varint,2,opt,name=int64_value,json=int64Value" json:"int64_value,omitempty"`
@@ -177,7 +177,12 @@ func (m *Column) GetStringValue() string {
 
 type ColumnInfo struct {
 	Name string `protobuf:"bytes,1,opt,name=name" json:"name"`
-	// column field type in mysql
+	// lower case column field type in mysql https://dev.mysql.com/doc/refman/8.0/en/data-types.html
+	// for numeric type: int bigint smallint tinyint float double decimal bit
+	// for string type: text longtext mediumtext char tinytext varchar
+	// blob longblog mediumblog binary tinyblob varbinary
+	// enum set
+	// for json type: json
 	MysqlType        string `protobuf:"bytes,2,opt,name=mysql_type,json=mysqlType" json:"mysql_type"`
 	IsPrimaryKey     bool   `protobuf:"varint,3,opt,name=is_primary_key,json=isPrimaryKey" json:"is_primary_key"`
 	XXX_unrecognized []byte `json:"-"`
@@ -334,7 +339,7 @@ func (m *DDLData) GetDdlQuery() []byte {
 type Binlog struct {
 	Type     BinlogType `protobuf:"varint,1,opt,name=type,enum=binlog.BinlogType" json:"type"`
 	CommitTs int64      `protobuf:"varint,2,opt,name=commit_ts,json=commitTs" json:"commit_ts"`
-	// dml_data is marshalled from DML type,
+	// dml_data is marshalled from DML type
 	DmlData          *DMLData `protobuf:"bytes,3,opt,name=dml_data,json=dmlData" json:"dml_data,omitempty"`
 	DdlData          *DDLData `protobuf:"bytes,4,opt,name=ddl_data,json=ddlData" json:"ddl_data,omitempty"`
 	XXX_unrecognized []byte   `json:"-"`
