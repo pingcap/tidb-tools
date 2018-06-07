@@ -6,7 +6,7 @@ import (
 
 	"github.com/Shopify/sarama"
 	. "github.com/pingcap/check"
-	binlog "github.com/pingcap/tidb-tools/binlog_proto/go-binlog"
+	pb "github.com/pingcap/tidb-tools/binlog_proto/go-binlog"
 )
 
 func TestClient(t *testing.T) {
@@ -78,7 +78,7 @@ func (to *testOffsetSuite) TestOffset(c *C) {
 }
 
 func (to *testOffsetSuite) procudeMessage(ts int64, topic string) (offset int64, err error) {
-	binlog := new(binlog.Binlog)
+	binlog := new(pb.Binlog)
 	binlog.CommitTs = ts
 	var data []byte
 	data, err = binlog.Marshal()
