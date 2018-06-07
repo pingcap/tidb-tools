@@ -8,6 +8,7 @@ import (
 
 func init() {
 	// log.SetLevel(log.LOG_LEVEL_NONE)
+	sarama.MaxResponseSize = 1 << 30
 }
 
 // Config for Reader
