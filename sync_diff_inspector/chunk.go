@@ -186,6 +186,8 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 		}
 		log.Debugf("getChunksForTable cut table: cnt=%d min=%s max=%s chunk=%d", count, min, max, len(chunks))
 	}
+
+	chunks[len(chunks)-1].end = chunk.end
 	chunks[0].containBegin = chunk.containBegin
 	chunks[len(chunks)-1].containEnd = chunk.containEnd
 	return chunks, nil
