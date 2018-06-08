@@ -14,14 +14,8 @@
 package main
 
 import (
-	"testing"
-
 	. "github.com/pingcap/check"
 )
-
-func TestClient(t *testing.T) {
-	TestingT(t)
-}
 
 var _ = Suite(&testChunkSuite{})
 
@@ -108,5 +102,4 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 			c.Assert(chunk.containEnd, Equals, testCase.expectChunks[i].containEnd)
 		}
 	}
-
 }
