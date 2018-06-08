@@ -1,5 +1,5 @@
-hash: 1335279fe5a543947c0144249a5082b9fba4f228118ff5e3ff0c87c717c3d688
-updated: 2018-06-07T19:35:13.237318+08:00
+hash: 14a7472474edc1f5a4270303af36e76ff4a442900b2e1977248a22b37d8e1303
+updated: 2018-06-08T18:32:28.012074+08:00
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
@@ -288,6 +288,8 @@ imports:
   version: abf152e5f3e97f2fafac028d2cc06c1feb87ffa5
 - name: github.com/satori/go.uuid
   version: f58768cc1a7a7e77a3bd49e98cdd21419399b6a3
+- name: github.com/Shopify/sarama
+  version: f7be6aa2bc7b2e38edf816b08b582782194a1c02
 - name: github.com/siddontang/go
   version: cb568a3e5cc06256f91a2da5a87455f717eb33f4
   subpackages:
