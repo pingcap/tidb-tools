@@ -48,11 +48,11 @@ func GetTableInfo(db *sql.DB, schemaName string, tableName string) (*model.Table
 		return nil, errors.Trace(err)
 	}
 
-	return GetTableInfoBySQL(createTableSQL, schemaName, tableName)
+	return GetTableInfoBySQL(createTableSQL)
 }
 
 // GetTableInfoBySQL returns table information by create table sql.
-func GetTableInfoBySQL(createTableSQL string, schemaName string, tableName string) (table *model.TableInfo, err error) {
+func GetTableInfoBySQL(createTableSQL string) (table *model.TableInfo, err error) {
 	stmt, err := parser.New().ParseOneStmt(createTableSQL, "", "")
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -69,7 +69,7 @@ func GetTableInfoBySQL(createTableSQL string, schemaName string, tableName strin
 		return table, nil
 	}
 
-	return nil, errors.Errorf("get %s.%s table info failed!", schemaName, tableName)
+	return nil, errors.Errorf("get table info from sql %s failed!", createTableSQL)
 }
 
 // BuildColumnsAndConstraints reference https://github.com/pingcap/tidb/blob/12c87929b8444571b9e84d2c0d5b85303d27da64/ddl/ddl_api.go#L168

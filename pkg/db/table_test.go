@@ -78,7 +78,7 @@ func (*testTableSuite) TestTable(c *C) {
 	}
 
 	for _, testCase := range testCases {
-		tableInfo, err := GetTableInfoBySQL(testCase.sql, "test", "test")
+		tableInfo, err := GetTableInfoBySQL(testCase.sql)
 		c.Assert(err, IsNil)
 		for i, column := range tableInfo.Columns {
 			c.Assert(testCase.columns[i], Equals, column.Name.O)

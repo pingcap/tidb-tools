@@ -30,7 +30,7 @@ type testDiffSuite struct{}
 
 func (*testDiffSuite) TestGenerateSQLs(c *C) {
 	createTableSQL := "CREATE TABLE `test`.`atest` (`id` int(24), `name` varchar(24), `birthday` datetime, `update_time` time, `money` decimal(20,2), primary key(`id`))"
-	tableInfo, err := pkgdb.GetTableInfoBySQL(createTableSQL, "test", "atest")
+	tableInfo, err := pkgdb.GetTableInfoBySQL(createTableSQL)
 	c.Assert(err, IsNil)
 
 	rowsData := map[string][]byte{
@@ -51,15 +51,15 @@ func (*testDiffSuite) TestTableStructEqual(c *C) {
 	df := &Diff{}
 
 	createTableSQL1 := "CREATE TABLE `test`.`atest` (`id` int(24), `name` varchar(24), `birthday` datetime, `update_time` time, `money` decimal(20,2), primary key(`id`))"
-	tableInfo1, err := pkgdb.GetTableInfoBySQL(createTableSQL1, "test", "atest")
+	tableInfo1, err := pkgdb.GetTableInfoBySQL(createTableSQL1)
 	c.Assert(err, IsNil)
 
 	createTableSQL2 := "CREATE TABLE `test`.`atest` (`id` int(24) NOT NULL, `name` varchar(24), `birthday` datetime, `update_time` time, `money` decimal(20,2), primary key(`id`))"
-	tableInfo2, err := pkgdb.GetTableInfoBySQL(createTableSQL2, "test", "atest")
+	tableInfo2, err := pkgdb.GetTableInfoBySQL(createTableSQL2)
 	c.Assert(err, IsNil)
 
 	createTableSQL3 := "CREATE TABLE `test`.`atest` (`id` int(24), `name` varchar(24), `birthday` datetime, `update_time` time, `money` decimal(20,2), unique key(`id`))"
-	tableInfo3, err := pkgdb.GetTableInfoBySQL(createTableSQL3, "test", "atest")
+	tableInfo3, err := pkgdb.GetTableInfoBySQL(createTableSQL3)
 	c.Assert(err, IsNil)
 
 	equal, err := df.EqualTableStruct(tableInfo1, tableInfo2)
