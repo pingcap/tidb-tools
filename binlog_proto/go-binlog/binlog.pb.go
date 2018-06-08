@@ -177,7 +177,8 @@ func (m *Column) GetStringValue() string {
 
 type ColumnInfo struct {
 	Name string `protobuf:"bytes,1,opt,name=name" json:"name"`
-	// lower case column field type in mysql https://dev.mysql.com/doc/refman/8.0/en/data-types.html
+	// lower case column field type in mysql
+	// https://dev.mysql.com/doc/refman/8.0/en/data-types.html
 	// for numeric type: int bigint smallint tinyint float double decimal bit
 	// for string type: text longtext mediumtext char tinytext varchar
 	// blob longblog mediumblog binary tinyblob varbinary
