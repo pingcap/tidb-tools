@@ -70,8 +70,10 @@ message DMLData {
 message DDLData {
   // the current database use
   optional string schema_name = 1;
+  // the relate table
+  optional string table_name = 2;
   // ddl_query is the original ddl statement query.
-  optional bytes ddl_query = 2;
+  optional bytes ddl_query = 3;
 }
 
 enum BinlogType {
