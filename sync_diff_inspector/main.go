@@ -1,4 +1,4 @@
-// Copyright 2016 PingCAP, Inc.
+// Copyright 2018 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,15 +17,12 @@ import (
 	"database/sql"
 	"flag"
 	"os"
-	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-tools/sync_check/util"
+	"github.com/pingcap/tidb-tools/pkg/db"
 )
-
-const dateTimeFormat = "2006-01-02 15:04:05"
 
 func main() {
 	cfg := NewConfig()
@@ -35,9 +32,11 @@ func main() {
 	case flag.ErrHelp:
 		os.Exit(0)
 	default:
-		log.Errorf("parse cmd flags err %s\n", err)
+		log.Errorf("parse cmd flags err %s\n", errors.ErrorStack(err))
 		os.Exit(2)
 	}
+
+	log.SetLevelByString(cfg.LogLevel)
 
 	ok := cfg.checkConfig()
 	if !ok {
@@ -45,17 +44,17 @@ func main() {
 		return
 	}
 
-	sourceDB, err := util.CreateDB(cfg.SourceDBCfg)
+	sourceDB, err := pkgdb.CreateDB(cfg.SourceDBCfg, cfg.SourceSnapshot)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer util.CloseDB(sourceDB)
+	defer pkgdb.CloseDB(sourceDB)
 
-	targetDB, err := util.CreateDB(cfg.TargetDBCfg)
+	targetDB, err := pkgdb.CreateDB(cfg.TargetDBCfg, cfg.TargetSnapshot)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer util.CloseDB(targetDB)
+	defer pkgdb.CloseDB(targetDB)
 
 	if !checkSyncState(sourceDB, targetDB, cfg) {
 		log.Fatal("sourceDB don't equal targetDB")
@@ -64,25 +63,14 @@ func main() {
 }
 
 func checkSyncState(sourceDB, targetDB *sql.DB, cfg *Config) bool {
-	beginTime := ""
-	endTime := ""
-
-	if cfg.Delay != 0 {
-		endTime = time.Now().Add(time.Duration(-cfg.Delay) * time.Second).Format(dateTimeFormat)
-	} else {
-		if cfg.EndTime != "" {
-			endTime = cfg.EndTime
-		}
-		if cfg.BeginTime != "" {
-			beginTime = cfg.BeginTime
-		}
+	d, err := NewDiff(sourceDB, targetDB, cfg)
+	if err != nil {
+		log.Fatalf("fail to initialize diff process %v", errors.ErrorStack(err))
 	}
 
-	d := util.NewDiff(sourceDB, targetDB, cfg.SourceDBCfg.Name, cfg.TimeField, beginTime, endTime,
-		cfg.SplitField, cfg.ChunkSize, cfg.Sample, cfg.CheckThCount, cfg.Tables, cfg.UseRowID)
 	ok, err := d.Equal()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("check data difference error %v", errors.ErrorStack(err))
 	}
 
 	return ok
