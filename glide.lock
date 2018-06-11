@@ -1,5 +1,5 @@
-hash: 51db59a0f8d1a48b256b829738a77f51a8ce16197f2974c1056d5efa57b354a1
-updated: 2018-06-11T11:40:22.909367+08:00
+hash: 9febf27ef1bb7523f8610d1ea8c0fadbf195f994657059d4969c199552ed31d5
+updated: 2018-06-11T13:48:52.305992+08:00
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
@@ -9,6 +9,8 @@ imports:
   version: 99064174e013895bbd9b025c31100bd1d9b590ca
 - name: github.com/cockroachdb/cmux
   version: 112f0506e7743d64a6eb8fedbcff13d9979bbf92
+- name: github.com/codahale/hdrhistogram
+  version: 3a0bb77429bd3a61596f5e8a3172445844342120
 - name: github.com/coreos/bbolt
   version: 32c383e75ce054674c53b5a07e55de85332aee14
 - name: github.com/coreos/etcd
@@ -202,6 +204,7 @@ imports:
 - name: github.com/opentracing/opentracing-go
   version: 1949ddbfd147afd4d964a9f00b24eb291e0e7c38
   subpackages:
+  - ext
   - log
 - name: github.com/petar/GoLLRB
   version: 53be0d36a84c2a886ca057d34b6aa4468df9ccb4
@@ -235,10 +238,10 @@ imports:
   subpackages:
   - pd-client
 - name: github.com/pingcap/tidb
-  version: fc699c9b0d29f038e0a55702c9fd2e18e89373c4
+  version: e4878329f0c69d7b810b8b40fb3b8071c69b5e02
   subpackages:
   - ast
-  - context
+  - config
   - expression
   - infoschema
   - kv
@@ -251,6 +254,7 @@ imports:
   - parser/opcode
   - perfschema
   - privilege
+  - sessionctx
   - sessionctx/stmtctx
   - sessionctx/variable
   - store/tikv/oracle
@@ -270,8 +274,11 @@ imports:
   - util/format
   - util/hack
   - util/kvcache
+  - util/logutil
+  - util/memory
   - util/mock
   - util/printer
+  - util/sqlexec
   - util/stringutil
 - name: github.com/pingcap/tipb
   version: 07ff5b094233a557a3ac11b1e4d8714d8c6ff406
@@ -279,6 +286,8 @@ imports:
   - go-binlog
   - go-tipb
   - sharedbytes
+- name: github.com/pkg/errors
+  version: 645ef00459ed84a119197bfb8d8205042c6df63d
 - name: github.com/prometheus/client_golang
   version: c5b7fccd204277076155f10851dad72b76a49317
   subpackages:
@@ -320,8 +329,28 @@ imports:
   version: 0d12bf811670bf6a1a63828dfbd003eded177fce
 - name: github.com/twinj/uuid
   version: 70cac2bcd273ef6a371bb96cde363d28b68734c3
+- name: github.com/uber/jaeger-client-go
+  version: f7e0d4744fa6d5287c53b8ac8d4f83089ce07ce8
+  subpackages:
+  - config
+  - internal/baggage
+  - internal/baggage/remote
+  - internal/spanlog
+  - internal/throttler
+  - internal/throttler/remote
+  - log
+  - rpcmetrics
+  - thrift
+  - thrift-gen/agent
+  - thrift-gen/baggage
+  - thrift-gen/jaeger
+  - thrift-gen/sampling
+  - thrift-gen/zipkincore
+  - utils
 - name: github.com/uber/jaeger-lib
   version: 34d9cc24e47ab70783050b52f79c06eb3ac850ba
+  subpackages:
+  - metrics
 - name: github.com/ugorji/go
   version: ded73eae5db7e7a0ef6f55aace87a2873c5d2b74
   subpackages:
@@ -401,6 +430,8 @@ imports:
   - status
   - tap
   - transport
+- name: gopkg.in/natefinch/lumberjack.v2
+  version: a96e63847dc3c67d17befa69c303767e2f84e54f
 - name: gopkg.in/yaml.v2
   version: cd8b52f8269e0feb286dfeef29f8fe4d5b397e0b
 testImports: []

@@ -17,10 +17,10 @@ import (
 	"regexp"
 
 	"github.com/juju/errors"
-	"github.com/pingcap/tidb/context"
+	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/stringutil"
-	"github.com/pingcap/tipb/go-tipb"
+	tipb "github.com/pingcap/tipb/go-tipb"
 )
 
 var (
@@ -38,7 +38,7 @@ type likeFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *likeFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *likeFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := c.verifyArgs(args); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -52,6 +52,12 @@ func (c *likeFunctionClass) getFunction(ctx context.Context, args []Expression) 
 
 type builtinLikeSig struct {
 	baseBuiltinFunc
+}
+
+func (b *builtinLikeSig) Clone() builtinFunc {
+	newSig := &builtinLikeSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
 }
 
 // evalInt evals a builtinLikeSig.
@@ -82,7 +88,7 @@ type regexpFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *regexpFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *regexpFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := c.verifyArgs(args); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -99,6 +105,12 @@ func (c *regexpFunctionClass) getFunction(ctx context.Context, args []Expression
 
 type builtinRegexpBinarySig struct {
 	baseBuiltinFunc
+}
+
+func (b *builtinRegexpBinarySig) Clone() builtinFunc {
+	newSig := &builtinRegexpBinarySig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
 }
 
 func (b *builtinRegexpBinarySig) evalInt(row types.Row) (int64, bool, error) {
@@ -122,6 +134,12 @@ func (b *builtinRegexpBinarySig) evalInt(row types.Row) (int64, bool, error) {
 
 type builtinRegexpSig struct {
 	baseBuiltinFunc
+}
+
+func (b *builtinRegexpSig) Clone() builtinFunc {
+	newSig := &builtinRegexpSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
 }
 
 // evalInt evals `expr REGEXP pat`, or `expr RLIKE pat`.

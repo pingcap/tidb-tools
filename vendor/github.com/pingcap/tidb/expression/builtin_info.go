@@ -19,8 +19,8 @@ package expression
 
 import (
 	"github.com/juju/errors"
-	"github.com/pingcap/tidb/context"
 	"github.com/pingcap/tidb/mysql"
+	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/printer"
 )
@@ -58,7 +58,7 @@ type databaseFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *databaseFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *databaseFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := errors.Trace(c.verifyArgs(args)); err != nil {
 		return nil, err
 	}
@@ -72,6 +72,12 @@ type builtinDatabaseSig struct {
 	baseBuiltinFunc
 }
 
+func (b *builtinDatabaseSig) Clone() builtinFunc {
+	newSig := &builtinDatabaseSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
 // evalString evals a builtinDatabaseSig.
 // See https://dev.mysql.com/doc/refman/5.7/en/information-functions.html
 func (b *builtinDatabaseSig) evalString(row types.Row) (string, bool, error) {
@@ -83,7 +89,7 @@ type foundRowsFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *foundRowsFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *foundRowsFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := errors.Trace(c.verifyArgs(args)); err != nil {
 		return nil, err
 	}
@@ -95,6 +101,12 @@ func (c *foundRowsFunctionClass) getFunction(ctx context.Context, args []Express
 
 type builtinFoundRowsSig struct {
 	baseBuiltinFunc
+}
+
+func (b *builtinFoundRowsSig) Clone() builtinFunc {
+	newSig := &builtinFoundRowsSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
 }
 
 // evalInt evals a builtinFoundRowsSig.
@@ -112,7 +124,7 @@ type currentUserFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *currentUserFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *currentUserFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := errors.Trace(c.verifyArgs(args)); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -124,6 +136,12 @@ func (c *currentUserFunctionClass) getFunction(ctx context.Context, args []Expre
 
 type builtinCurrentUserSig struct {
 	baseBuiltinFunc
+}
+
+func (b *builtinCurrentUserSig) Clone() builtinFunc {
+	newSig := &builtinCurrentUserSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
 }
 
 // evalString evals a builtinCurrentUserSig.
@@ -142,7 +160,7 @@ type userFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *userFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *userFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := errors.Trace(c.verifyArgs(args)); err != nil {
 		return nil, err
 	}
@@ -154,6 +172,12 @@ func (c *userFunctionClass) getFunction(ctx context.Context, args []Expression) 
 
 type builtinUserSig struct {
 	baseBuiltinFunc
+}
+
+func (b *builtinUserSig) Clone() builtinFunc {
+	newSig := &builtinUserSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
 }
 
 // eval evals a builtinUserSig.
@@ -171,7 +195,7 @@ type connectionIDFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *connectionIDFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *connectionIDFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := errors.Trace(c.verifyArgs(args)); err != nil {
 		return nil, err
 	}
@@ -183,6 +207,12 @@ func (c *connectionIDFunctionClass) getFunction(ctx context.Context, args []Expr
 
 type builtinConnectionIDSig struct {
 	baseBuiltinFunc
+}
+
+func (b *builtinConnectionIDSig) Clone() builtinFunc {
+	newSig := &builtinConnectionIDSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
 }
 
 func (b *builtinConnectionIDSig) evalInt(_ types.Row) (int64, bool, error) {
@@ -197,7 +227,7 @@ type lastInsertIDFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *lastInsertIDFunctionClass) getFunction(ctx context.Context, args []Expression) (sig builtinFunc, err error) {
+func (c *lastInsertIDFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (sig builtinFunc, err error) {
 	if err = c.verifyArgs(args); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -221,6 +251,12 @@ type builtinLastInsertIDSig struct {
 	baseBuiltinFunc
 }
 
+func (b *builtinLastInsertIDSig) Clone() builtinFunc {
+	newSig := &builtinLastInsertIDSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
 // evalInt evals LAST_INSERT_ID().
 // See https://dev.mysql.com/doc/refman/5.7/en/information-functions.html#function_last-insert-id.
 func (b *builtinLastInsertIDSig) evalInt(row types.Row) (res int64, isNull bool, err error) {
@@ -230,6 +266,12 @@ func (b *builtinLastInsertIDSig) evalInt(row types.Row) (res int64, isNull bool,
 
 type builtinLastInsertIDWithIDSig struct {
 	baseBuiltinFunc
+}
+
+func (b *builtinLastInsertIDWithIDSig) Clone() builtinFunc {
+	newSig := &builtinLastInsertIDWithIDSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
 }
 
 // evalInt evals LAST_INSERT_ID(expr).
@@ -248,7 +290,7 @@ type versionFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *versionFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *versionFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := errors.Trace(c.verifyArgs(args)); err != nil {
 		return nil, err
 	}
@@ -262,6 +304,12 @@ type builtinVersionSig struct {
 	baseBuiltinFunc
 }
 
+func (b *builtinVersionSig) Clone() builtinFunc {
+	newSig := &builtinVersionSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
 // evalString evals a builtinVersionSig.
 // See https://dev.mysql.com/doc/refman/5.7/en/information-functions.html#function_version
 func (b *builtinVersionSig) evalString(row types.Row) (string, bool, error) {
@@ -272,7 +320,7 @@ type tidbVersionFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *tidbVersionFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *tidbVersionFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := c.verifyArgs(args); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -286,6 +334,12 @@ type builtinTiDBVersionSig struct {
 	baseBuiltinFunc
 }
 
+func (b *builtinTiDBVersionSig) Clone() builtinFunc {
+	newSig := &builtinTiDBVersionSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
 // evalString evals a builtinTiDBVersionSig.
 // This will show git hash and build time for tidb-server.
 func (b *builtinTiDBVersionSig) evalString(_ types.Row) (string, bool, error) {
@@ -296,7 +350,7 @@ type benchmarkFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *benchmarkFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *benchmarkFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	return nil, errFunctionNotExists.GenByArgs("FUNCTION", "BENCHMARK")
 }
 
@@ -304,7 +358,7 @@ type charsetFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *charsetFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *charsetFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	return nil, errFunctionNotExists.GenByArgs("FUNCTION", "CHARSET")
 }
 
@@ -312,7 +366,7 @@ type coercibilityFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *coercibilityFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *coercibilityFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	return nil, errFunctionNotExists.GenByArgs("FUNCTION", "COERCIBILITY")
 }
 
@@ -320,7 +374,7 @@ type collationFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *collationFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *collationFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	return nil, errFunctionNotExists.GenByArgs("FUNCTION", "COLLATION")
 }
 
@@ -328,7 +382,7 @@ type rowCountFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *rowCountFunctionClass) getFunction(ctx context.Context, args []Expression) (sig builtinFunc, err error) {
+func (c *rowCountFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (sig builtinFunc, err error) {
 	if err = c.verifyArgs(args); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -339,6 +393,12 @@ func (c *rowCountFunctionClass) getFunction(ctx context.Context, args []Expressi
 
 type builtinRowCountSig struct {
 	baseBuiltinFunc
+}
+
+func (b *builtinRowCountSig) Clone() builtinFunc {
+	newSig := &builtinRowCountSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
 }
 
 // evalInt evals ROW_COUNT().
