@@ -138,12 +138,5 @@ import:
   version: c90ba19bea8927552cef4560ab888231566f049d
 - package: github.com/coreos/etcd
   version: fb5cd6f1c72c2b98e0c4453444cdfba306da867b
-  subpackages:
-  - auth/authpb
-  - clientv3
-  - clientv3/concurrency
-  - etcdserver/api/v3rpc/rpctypes
-  - etcdserver/etcdserverpb
-  - mvcc/mvccpb
-  - pkg/logutil
-  - pkg/types
+- package: github.com/Shopify/sarama
+  version: v1.16.0
