@@ -84,12 +84,24 @@ func (c *ColumnInfo) IsGenerated() bool {
 	return len(c.GeneratedExprString) != 0
 }
 
+// FindColumnInfo finds ColumnInfo in cols by name.
+func FindColumnInfo(cols []*ColumnInfo, name string) *ColumnInfo {
+	name = strings.ToLower(name)
+	for _, col := range cols {
+		if col.Name.L == name {
+			return col
+		}
+	}
+
+	return nil
+}
+
 // ExtraHandleID is the column ID of column which we need to append to schema to occupy the handle's position
 // for use of execution phase.
 const ExtraHandleID = -1
 
 // ExtraHandleName is the name of ExtraHandle Column.
-var ExtraHandleName = NewCIStr("_rowid")
+var ExtraHandleName = NewCIStr("_tidb_rowid")
 
 // TableInfo provides meta data describing a DB table.
 type TableInfo struct {
@@ -120,6 +132,8 @@ type TableInfo struct {
 
 	// ShardRowIDBits specify if the implicit row ID is sharded.
 	ShardRowIDBits uint64
+
+	Partition *PartitionInfo
 }
 
 // GetUpdateTime gets the table's updating time.
@@ -181,6 +195,22 @@ func (t *TableInfo) GetPkColInfo() *ColumnInfo {
 	return nil
 }
 
+// Cols returns the columns of the table in public state.
+func (t *TableInfo) Cols() []*ColumnInfo {
+	publicColumns := make([]*ColumnInfo, len(t.Columns))
+	maxOffset := -1
+	for _, col := range t.Columns {
+		if col.State != StatePublic {
+			continue
+		}
+		publicColumns[col.Offset] = col
+		if maxOffset < col.Offset {
+			maxOffset = col.Offset
+		}
+	}
+	return publicColumns[0 : maxOffset+1]
+}
+
 // NewExtraHandleColInfo mocks a column info for extra handle column.
 func NewExtraHandleColInfo() *ColumnInfo {
 	colInfo := &ColumnInfo{
@@ -188,6 +218,8 @@ func NewExtraHandleColInfo() *ColumnInfo {
 		Name: ExtraHandleName,
 	}
 	colInfo.Flag = mysql.PriKeyFlag
+	colInfo.Tp = mysql.TypeLonglong
+	colInfo.Flen, colInfo.Decimal = mysql.GetDefaultFieldLengthAndDecimal(mysql.TypeLonglong)
 	return colInfo
 }
 
@@ -201,6 +233,48 @@ func (t *TableInfo) ColumnIsInIndex(c *ColumnInfo) bool {
 		}
 	}
 	return false
+}
+
+// PartitionType is the type for PartitionInfo
+type PartitionType int
+
+// Partition types.
+const (
+	PartitionTypeRange PartitionType = 1
+	PartitionTypeHash  PartitionType = 2
+	PartitionTypeList  PartitionType = 3
+)
+
+func (p PartitionType) String() string {
+	switch p {
+	case PartitionTypeRange:
+		return "RANGE"
+	case PartitionTypeHash:
+		return "HASH"
+	case PartitionTypeList:
+		return "LIST"
+	default:
+		return ""
+	}
+
+}
+
+// PartitionInfo provides table partition info.
+type PartitionInfo struct {
+	Type    PartitionType
+	Expr    string
+	Columns []CIStr
+
+	Definitions []PartitionDefinition
+}
+
+// PartitionDefinition defines a single partition.
+type PartitionDefinition struct {
+	ID       int64
+	Name     string
+	LessThan []string
+	Comment  string `json:"omit_empty"`
+	MaxValue bool
 }
 
 // IndexColumn provides index column info.
