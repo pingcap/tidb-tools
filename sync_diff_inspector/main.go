@@ -22,9 +22,13 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/db"
+	"github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 func main() {
+	// print version information
+	log.Infof("version: \n%s", utils.GetRawInfo("sync_diff_inspector"))
+
 	cfg := NewConfig()
 	err := cfg.Parse(os.Args[1:])
 	switch errors.Cause(err) {
