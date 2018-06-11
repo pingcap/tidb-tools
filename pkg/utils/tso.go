@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-// TSOToTime translates tso to timestamp
+// TSOToTime translates tso to time
 func TSOToTime(ts int64) time.Time {
 	t := time.Unix(ts>>18/1000, 0)
 	return t
