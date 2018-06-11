@@ -1,44 +1,178 @@
-hash: d53cc6e6f33b10dfd1e164a1f161ac7f91aa99f1a6982e6b82ef1f5b24ee8f18
-updated: 2018-06-04T17:30:39.873859588+08:00
+hash: 14a7472474edc1f5a4270303af36e76ff4a442900b2e1977248a22b37d8e1303
+updated: 2018-06-08T18:32:28.012074+08:00
 imports:
 - name: github.com/beorn7/perks
-  version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
+  version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
   subpackages:
   - quantile
 - name: github.com/BurntSushi/toml
   version: 99064174e013895bbd9b025c31100bd1d9b590ca
+- name: github.com/cockroachdb/cmux
+  version: 112f0506e7743d64a6eb8fedbcff13d9979bbf92
+- name: github.com/coreos/bbolt
+  version: 32c383e75ce054674c53b5a07e55de85332aee14
 - name: github.com/coreos/etcd
   version: fb5cd6f1c72c2b98e0c4453444cdfba306da867b
   subpackages:
+  - alarm
+  - auth
   - auth/authpb
+  - client
   - clientv3
   - clientv3/concurrency
+  - clientv3/namespace
+  - clientv3/naming
+  - compactor
+  - discovery
+  - embed
+  - error
+  - etcdserver
+  - etcdserver/api
+  - etcdserver/api/etcdhttp
+  - etcdserver/api/v2http
+  - etcdserver/api/v2http/httptypes
+  - etcdserver/api/v3client
+  - etcdserver/api/v3election
+  - etcdserver/api/v3election/v3electionpb
+  - etcdserver/api/v3election/v3electionpb/gw
+  - etcdserver/api/v3lock
+  - etcdserver/api/v3lock/v3lockpb
+  - etcdserver/api/v3lock/v3lockpb/gw
+  - etcdserver/api/v3rpc
   - etcdserver/api/v3rpc/rpctypes
+  - etcdserver/auth
   - etcdserver/etcdserverpb
+  - etcdserver/etcdserverpb/gw
+  - etcdserver/membership
+  - etcdserver/stats
+  - integration
+  - lease
+  - lease/leasehttp
+  - lease/leasepb
+  - mvcc
+  - mvcc/backend
   - mvcc/mvccpb
+  - pkg/adt
+  - pkg/contention
+  - pkg/cors
+  - pkg/cpuutil
+  - pkg/crc
+  - pkg/debugutil
+  - pkg/fileutil
+  - pkg/httputil
+  - pkg/idutil
+  - pkg/ioutil
   - pkg/logutil
+  - pkg/monotime
+  - pkg/netutil
+  - pkg/pathutil
+  - pkg/pbutil
+  - pkg/runtime
+  - pkg/schedule
+  - pkg/srv
+  - pkg/testutil
+  - pkg/tlsutil
+  - pkg/transport
   - pkg/types
+  - pkg/wait
+  - proxy/grpcproxy
+  - proxy/grpcproxy/adapter
+  - proxy/grpcproxy/cache
+  - raft
+  - raft/raftpb
+  - rafthttp
+  - snap
+  - snap/snappb
+  - store
+  - version
+  - wal
+  - wal/walpb
+- name: github.com/coreos/go-semver
+  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
+  subpackages:
+  - semver
+- name: github.com/coreos/go-systemd
+  version: 48702e0da86bd25e76cfef347e2adeb434a0d0a6
+  subpackages:
+  - daemon
+  - journal
+  - util
+- name: github.com/coreos/pkg
+  version: 3ac0863d7acf3bc44daf49afef8919af12f704ef
+  subpackages:
+  - capnslog
 - name: github.com/cznic/mathutil
   version: c90ba19bea8927552cef4560ab888231566f049d
-- name: github.com/davecgh/go-spew
-  version: 8991bc29aa16c548c550c7ff78260e27b9ab7c73
-  subpackages:
-  - spew
-- name: github.com/eapache/go-resiliency
-  version: ea41b0fad31007accc7f806884dcdf3da98b79ce
-  subpackages:
-  - breaker
-- name: github.com/eapache/go-xerial-snappy
-  version: bb955e01b9346ac19dc29eb16586c90ded99a98c
-- name: github.com/eapache/queue
-  version: 093482f3f8ce946c05bcba64badd2c82369e084d
+- name: github.com/dgrijalva/jwt-go
+  version: d2709f9f1f31ebcda9651b03077758c1f3a0018c
+- name: github.com/ghodss/yaml
+  version: 0ca9ea5df5451ffdf184b4428c902747c2c11cd7
 - name: github.com/go-sql-driver/mysql
   version: 4ac31a97ccff97de60ba3c630bfb4733c1bb6d0e
+- name: github.com/gogo/protobuf
+  version: 06ec6c31ff1bac6ed4e205a547a3d72934813ef3
+  subpackages:
+  - _conformance
+  - _conformance/conformance_proto
+  - codec
+  - gogoproto
+  - gogoreplace
+  - io
+  - jsonpb
+  - plugin/compare
+  - plugin/defaultcheck
+  - plugin/description
+  - plugin/embedcheck
+  - plugin/enumstringer
+  - plugin/equal
+  - plugin/face
+  - plugin/gostring
+  - plugin/grpc
+  - plugin/marshalto
+  - plugin/oneofcheck
+  - plugin/populate
+  - plugin/size
+  - plugin/stringer
+  - plugin/testgen
+  - plugin/union
+  - plugin/unmarshal
+  - proto
+  - proto/proto3_proto
+  - protobuf/google/protobuf
+  - protobuf/google/protobuf/compiler
+  - protobuf/protobuf
+  - protoc-gen-combo
+  - protoc-gen-gofast
+  - protoc-gen-gogo
+  - protoc-gen-gogo/descriptor
+  - protoc-gen-gogo/generator
+  - protoc-gen-gogo/grpc
+  - protoc-gen-gogo/plugin
+  - protoc-gen-gogofast
+  - protoc-gen-gogofaster
+  - protoc-gen-gogoslick
+  - protoc-gen-gogotypes
+  - protoc-gen-gostring
+  - protoc-min-version
+  - sortkeys
+  - types
+  - vanity
+  - vanity/command
+  - vanity/test
+  - vanity/test/fast
+  - vanity/test/faster
+  - vanity/test/slick
+  - version
+- name: github.com/golang/groupcache
+  version: 02826c3e79038b59d737d3b1c0a1d937f71a4433
+  subpackages:
+  - lru
 - name: github.com/golang/protobuf
   version: 8ee79997227bf9b34611aee7946ae64735e6fd93
   subpackages:
   - jsonpb
   - proto
+  - protoc-gen-go/descriptor
   - ptypes
   - ptypes/any
   - ptypes/duration
@@ -47,6 +181,16 @@ imports:
   version: 723cc1e459b8eea2dea4583200fd60757d40097a
 - name: github.com/google/btree
   version: 316fb6d3f031ae8f4d457c6c5186b9e3ded70435
+- name: github.com/grpc-ecosystem/go-grpc-prometheus
+  version: 6b7015e65d366bf3f19b2b2a000a831940f0f7e0
+- name: github.com/grpc-ecosystem/grpc-gateway
+  version: 8cc3a55af3bcf171a1c23a90c4df9cf591706104
+  subpackages:
+  - runtime
+  - runtime/internal
+  - utilities
+- name: github.com/jonboulle/clockwork
+  version: 2eee05ed794112d45db504eb05aa693efd2b8b09
 - name: github.com/juju/errors
   version: 6f54ff6318409d31ff16261533ce2c8381a4fd5d
 - name: github.com/matttproud/golang_protobuf_extensions
@@ -58,22 +202,15 @@ imports:
 - name: github.com/opentracing/opentracing-go
   version: 1949ddbfd147afd4d964a9f00b24eb291e0e7c38
   subpackages:
-  - ext
   - log
 - name: github.com/petar/GoLLRB
   version: 53be0d36a84c2a886ca057d34b6aa4468df9ccb4
   subpackages:
   - llrb
-- name: github.com/pierrec/lz4
-  version: ed8d4cc3b461464e69798080a0092bd028910298
-- name: github.com/pierrec/xxHash
-  version: a0006b13c722f7f12368c00a3d3c2ae8a999a0c6
-  subpackages:
-  - xxHash32
 - name: github.com/pingcap/check
   version: 9b266636177e249ec28b0aeffe8e86bc272bb481
 - name: github.com/pingcap/goleveldb
-  version: 158edde5a354460121af007d02a00b01c8d03443
+  version: 8d44bfdf1030639ae7130922c95df12d6d4da3b6
   subpackages:
   - leveldb
   - leveldb/cache
@@ -94,7 +231,7 @@ imports:
   - pkg/metapb
   - pkg/pdpb
 - name: github.com/pingcap/pd
-  version: eed819b6999186a4bf2d25255f8d61b371a450d6
+  version: 07b143687ecdf43634dfa10af554914737366986
   subpackages:
   - pd-client
 - name: github.com/pingcap/tidb
@@ -149,8 +286,6 @@ imports:
   - model
 - name: github.com/prometheus/procfs
   version: abf152e5f3e97f2fafac028d2cc06c1feb87ffa5
-- name: github.com/rcrowley/go-metrics
-  version: e2704e165165ec55d062f5919b4b29494e9fa790
 - name: github.com/satori/go.uuid
   version: f58768cc1a7a7e77a3bd49e98cdd21419399b6a3
 - name: github.com/Shopify/sarama
@@ -170,11 +305,17 @@ imports:
   - replication
   - schema
 - name: github.com/sirupsen/logrus
-  version: ea8897e79973357ba785ac2533559a6297e83c44
+  version: f006c2ac4710855cf0f916dd6b77acf6b048dc6e
 - name: github.com/spaolacci/murmur3
-  version: f09979ecbc725b9e6d41a297405f65e7e8804acc
+  version: 0d12bf811670bf6a1a63828dfbd003eded177fce
 - name: github.com/uber/jaeger-lib
   version: 34d9cc24e47ab70783050b52f79c06eb3ac850ba
+- name: github.com/ugorji/go
+  version: ded73eae5db7e7a0ef6f55aace87a2873c5d2b74
+  subpackages:
+  - codec
+- name: github.com/xiang90/probing
+  version: 07dd2e8dfe18522e9c447ba95f2fe95262f63bb2
 - name: golang.org/x/crypto
   version: 1351f936d976c60a0a48d728281922cf63eafb8d
   subpackages:
@@ -218,9 +359,14 @@ imports:
   - transform
   - unicode/bidi
   - unicode/norm
+- name: golang.org/x/time
+  version: c06e80d9300e4443158a03817b8a8cb37d230320
+  subpackages:
+  - rate
 - name: google.golang.org/genproto
   version: b0a3dcfcd1a9bd48e63634bd8802960804cf8315
   subpackages:
+  - googleapis/api/annotations
   - googleapis/rpc/status
 - name: google.golang.org/grpc
   version: 5b3c4e850e90a4cf6a20ebd46c8b32a0a3afcb9e
@@ -243,4 +389,6 @@ imports:
   - status
   - tap
   - transport
+- name: gopkg.in/yaml.v2
+  version: cd8b52f8269e0feb286dfeef29f8fe4d5b397e0b
 testImports: []

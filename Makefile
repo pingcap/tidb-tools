@@ -8,7 +8,7 @@ GO       := GO15VENDOREXPERIMENT="1" go
 GOTEST   := GOPATH=$(CURDIR)/_vendor:$(GOPATH) CGO_ENABLED=1 $(GO) test
 PACKAGES := $$(go list ./... | grep -vE 'vendor')
 
-.PHONY: build importer checker dump_region generate_binlog_position sync_check test check deps
+.PHONY: build importer checker dump_region generate_binlog_position sync_diff_inspector test check deps
 
 build: importer checker check test
 
@@ -24,8 +24,8 @@ dump_region:
 generate_binlog_position:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/generate_binlog_position ./generate_binlog_position
 
-sync_check:
-	$(GO) build -ldflags '$(LDFLAGS)' -o bin/sync_check ./sync_check
+sync_diff_inspector:
+	$(GO) build -ldflags '$(LDFLAGS)' -o bin/sync_diff_inspector ./sync_diff_inspector
 
 test:
 	@export log_level=error; \

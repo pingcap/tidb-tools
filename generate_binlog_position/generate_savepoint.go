@@ -49,7 +49,7 @@ func GenSavepointInfo(cfg *Config) error {
 	return errors.Trace(err)
 }
 
-// GetTSO get the tso from the config pd
+// GetTSO gets ts from pd
 func GetTSO(cfg *Config) (int64, error) {
 	now := time.Now()
 
