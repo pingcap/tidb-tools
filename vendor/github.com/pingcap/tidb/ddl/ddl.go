@@ -26,7 +26,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/pools"
 	"github.com/pingcap/tidb/ast"
-	"github.com/pingcap/tidb/context"
 	"github.com/pingcap/tidb/ddl/util"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/kv"
@@ -35,12 +34,13 @@ import (
 	"github.com/pingcap/tidb/model"
 	"github.com/pingcap/tidb/mysql"
 	"github.com/pingcap/tidb/owner"
+	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/sessionctx/binloginfo"
 	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/terror"
 	log "github.com/sirupsen/logrus"
 	"github.com/twinj/uuid"
-	goctx "golang.org/x/net/context"
+	"golang.org/x/net/context"
 )
 
 const (
@@ -83,20 +83,23 @@ var (
 		"unsupported drop integer primary key")
 	errUnsupportedCharset = terror.ClassDDL.New(codeUnsupportedCharset, "unsupported charset %s collate %s")
 
+	errUnsupportedShardRowIDBits = terror.ClassDDL.New(codeUnsupportedShardRowIDBits, "unsupported shard_row_id_bits for table with auto_increment column.")
+
 	errBlobKeyWithoutLength = terror.ClassDDL.New(codeBlobKeyWithoutLength, "index for BLOB/TEXT column must specify a key length")
 	errIncorrectPrefixKey   = terror.ClassDDL.New(codeIncorrectPrefixKey, "Incorrect prefix key; the used key part isn't a string, the used length is longer than the key part, or the storage engine doesn't support unique prefix keys")
 	errTooLongKey           = terror.ClassDDL.New(codeTooLongKey,
 		fmt.Sprintf("Specified key was too long; max key length is %d bytes", maxPrefixLength))
-	errKeyColumnDoesNotExits = terror.ClassDDL.New(codeKeyColumnDoesNotExits, "this key column doesn't exist in table")
-	errDupKeyName            = terror.ClassDDL.New(codeDupKeyName, "duplicate key name")
-	errUnknownTypeLength     = terror.ClassDDL.New(codeUnknownTypeLength, "Unknown length for type tp %d")
-	errUnknownFractionLength = terror.ClassDDL.New(codeUnknownFractionLength, "Unknown Length for type tp %d and fraction %d")
-	errInvalidJobVersion     = terror.ClassDDL.New(codeInvalidJobVersion, "DDL job with version %d greater than current %d")
-	errFileNotFound          = terror.ClassDDL.New(codeFileNotFound, "Can't find file: './%s/%s.frm'")
-	errErrorOnRename         = terror.ClassDDL.New(codeErrorOnRename, "Error on rename of './%s/%s' to './%s/%s'")
-	errBadField              = terror.ClassDDL.New(codeBadField, "Unknown column '%s' in '%s'")
-	errInvalidUseOfNull      = terror.ClassDDL.New(codeInvalidUseOfNull, "Invalid use of NULL value")
-	errTooManyFields         = terror.ClassDDL.New(codeTooManyFields, "Too many columns")
+	errKeyColumnDoesNotExits    = terror.ClassDDL.New(codeKeyColumnDoesNotExits, "this key column doesn't exist in table")
+	errUnknownTypeLength        = terror.ClassDDL.New(codeUnknownTypeLength, "Unknown length for type tp %d")
+	errUnknownFractionLength    = terror.ClassDDL.New(codeUnknownFractionLength, "Unknown Length for type tp %d and fraction %d")
+	errInvalidJobVersion        = terror.ClassDDL.New(codeInvalidJobVersion, "DDL job with version %d greater than current %d")
+	errFileNotFound             = terror.ClassDDL.New(codeFileNotFound, "Can't find file: './%s/%s.frm'")
+	errErrorOnRename            = terror.ClassDDL.New(codeErrorOnRename, "Error on rename of './%s/%s' to './%s/%s'")
+	errBadField                 = terror.ClassDDL.New(codeBadField, "Unknown column '%s' in '%s'")
+	errInvalidUseOfNull         = terror.ClassDDL.New(codeInvalidUseOfNull, "Invalid use of NULL value")
+	errTooManyFields            = terror.ClassDDL.New(codeTooManyFields, "Too many columns")
+	errInvalidSplitRegionRanges = terror.ClassDDL.New(codeInvalidRanges, "Failed to split region ranges")
+	errReorgPanic               = terror.ClassDDL.New(codeReorgWorkerPanic, "reorg worker panic.")
 
 	// errWrongKeyColumn is for table column cannot be indexed.
 	errWrongKeyColumn = terror.ClassDDL.New(codeWrongKeyColumn, mysql.MySQLErrName[mysql.ErrWrongKeyColumn])
@@ -112,6 +115,8 @@ var (
 	errBlobCantHaveDefault = terror.ClassDDL.New(codeBlobCantHaveDefault, mysql.MySQLErrName[mysql.ErrBlobCantHaveDefault])
 	errTooLongIndexComment = terror.ClassDDL.New(codeErrTooLongIndexComment, mysql.MySQLErrName[mysql.ErrTooLongIndexComment])
 
+	// ErrDupKeyName returns for duplicated key name
+	ErrDupKeyName = terror.ClassDDL.New(codeDupKeyName, "duplicate key name")
 	// ErrInvalidDBState returns for invalid database state.
 	ErrInvalidDBState = terror.ClassDDL.New(codeInvalidDBState, "invalid database state")
 	// ErrInvalidTableState returns for invalid Table state.
@@ -144,26 +149,27 @@ var (
 	ErrWrongColumnName = terror.ClassDDL.New(codeWrongColumnName, mysql.MySQLErrName[mysql.ErrWrongColumnName])
 	// ErrWrongNameForIndex returns for wrong index name.
 	ErrWrongNameForIndex = terror.ClassDDL.New(codeWrongNameForIndex, mysql.MySQLErrName[mysql.ErrWrongNameForIndex])
+	// ErrUnknownCharacterSet returns unknown character set.
+	ErrUnknownCharacterSet = terror.ClassDDL.New(codeUnknownCharacterSet, "Unknown character set: '%s'")
 )
 
 // DDL is responsible for updating schema in data store and maintaining in-memory InfoSchema cache.
 type DDL interface {
-	CreateSchema(ctx context.Context, name model.CIStr, charsetInfo *ast.CharsetOpt) error
-	DropSchema(ctx context.Context, schema model.CIStr) error
-	CreateTable(ctx context.Context, ident ast.Ident, cols []*ast.ColumnDef,
-		constrs []*ast.Constraint, options []*ast.TableOption) error
-	CreateTableWithLike(ctx context.Context, ident, referIdent ast.Ident) error
-	DropTable(ctx context.Context, tableIdent ast.Ident) (err error)
-	CreateIndex(ctx context.Context, tableIdent ast.Ident, unique bool, indexName model.CIStr,
+	CreateSchema(ctx sessionctx.Context, name model.CIStr, charsetInfo *ast.CharsetOpt) error
+	DropSchema(ctx sessionctx.Context, schema model.CIStr) error
+	CreateTable(ctx sessionctx.Context, stmt *ast.CreateTableStmt) error
+	CreateTableWithLike(ctx sessionctx.Context, ident, referIdent ast.Ident) error
+	DropTable(ctx sessionctx.Context, tableIdent ast.Ident) (err error)
+	CreateIndex(ctx sessionctx.Context, tableIdent ast.Ident, unique bool, indexName model.CIStr,
 		columnNames []*ast.IndexColName, indexOption *ast.IndexOption) error
-	DropIndex(ctx context.Context, tableIdent ast.Ident, indexName model.CIStr) error
+	DropIndex(ctx sessionctx.Context, tableIdent ast.Ident, indexName model.CIStr) error
 	GetInformationSchema() infoschema.InfoSchema
-	AlterTable(ctx context.Context, tableIdent ast.Ident, spec []*ast.AlterTableSpec) error
-	TruncateTable(ctx context.Context, tableIdent ast.Ident) error
-	RenameTable(ctx context.Context, oldTableIdent, newTableIdent ast.Ident) error
+	AlterTable(ctx sessionctx.Context, tableIdent ast.Ident, spec []*ast.AlterTableSpec) error
+	TruncateTable(ctx sessionctx.Context, tableIdent ast.Ident) error
+	RenameTable(ctx sessionctx.Context, oldTableIdent, newTableIdent ast.Ident) error
 	// SetLease will reset the lease time for online DDL change,
 	// it's a very dangerous function and you must guarantee that all servers have the same lease time.
-	SetLease(ctx goctx.Context, lease time.Duration)
+	SetLease(ctx context.Context, lease time.Duration)
 	// GetLease returns current schema lease time.
 	GetLease() time.Duration
 	// Stats returns the DDL statistics.
@@ -242,19 +248,18 @@ func (d *ddl) asyncNotifyEvent(e *util.Event) {
 }
 
 // NewDDL creates a new DDL.
-func NewDDL(ctx goctx.Context, etcdCli *clientv3.Client, store kv.Storage,
+func NewDDL(ctx context.Context, etcdCli *clientv3.Client, store kv.Storage,
 	infoHandle *infoschema.Handle, hook Callback, lease time.Duration, ctxPool *pools.ResourcePool) DDL {
 	return newDDL(ctx, etcdCli, store, infoHandle, hook, lease, ctxPool)
 }
 
-func newDDL(ctx goctx.Context, etcdCli *clientv3.Client, store kv.Storage,
+func newDDL(ctx context.Context, etcdCli *clientv3.Client, store kv.Storage,
 	infoHandle *infoschema.Handle, hook Callback, lease time.Duration, ctxPool *pools.ResourcePool) *ddl {
 	if hook == nil {
 		hook = &BaseCallback{}
 	}
-
 	id := uuid.NewV4().String()
-	ctx, cancelFunc := goctx.WithCancel(ctx)
+	ctx, cancelFunc := context.WithCancel(ctx)
 	var manager owner.Manager
 	var syncer SchemaSyncer
 	if etcdCli == nil {
@@ -274,7 +279,7 @@ func newDDL(ctx goctx.Context, etcdCli *clientv3.Client, store kv.Storage,
 		lease:        lease,
 		ddlJobCh:     make(chan struct{}, 1),
 		ddlJobDoneCh: make(chan struct{}, 1),
-		reorgCtx:     &reorgCtx{notifyCancelReorgJob: make(chan struct{}, 1)},
+		reorgCtx:     &reorgCtx{notifyCancelReorgJob: 0},
 		ownerManager: manager,
 		schemaSyncer: syncer,
 		workerVars:   variable.NewSessionVars(),
@@ -291,7 +296,9 @@ func newDDL(ctx goctx.Context, etcdCli *clientv3.Client, store kv.Storage,
 
 	d.start(ctx)
 	variable.RegisterStatistics(d)
+
 	log.Infof("[ddl] start DDL:%s", d.uuid)
+	metrics.DDLCounter.WithLabelValues(metrics.CreateDDL).Inc()
 	return d
 }
 
@@ -300,12 +307,12 @@ func (d *ddl) Stop() error {
 	defer d.m.Unlock()
 
 	d.close()
-	log.Infof("stop DDL:%s", d.uuid)
+	log.Infof("[ddl] stop DDL:%s", d.uuid)
 
 	return nil
 }
 
-func (d *ddl) start(ctx goctx.Context) {
+func (d *ddl) start(ctx context.Context) {
 	d.quitCh = make(chan struct{})
 
 	// If RunWorker is true, we need campaign owner and do DDL job.
@@ -315,6 +322,7 @@ func (d *ddl) start(ctx goctx.Context) {
 		terror.Log(errors.Trace(err))
 		d.wait.Add(1)
 		go d.onDDLWorker()
+		metrics.DDLCounter.WithLabelValues(metrics.CreateDDLWorker).Inc()
 	}
 
 	// For every start, we will send a fake job to let worker
@@ -336,7 +344,7 @@ func (d *ddl) close() {
 	}
 	d.wait.Wait()
 	d.delRangeManager.clear()
-	log.Infof("close DDL:%s", d.uuid)
+	log.Infof("[ddl] close DDL:%s", d.uuid)
 }
 
 func (d *ddl) isClosed() bool {
@@ -348,7 +356,7 @@ func (d *ddl) isClosed() bool {
 	}
 }
 
-func (d *ddl) SetLease(ctx goctx.Context, lease time.Duration) {
+func (d *ddl) SetLease(ctx context.Context, lease time.Duration) {
 	d.m.Lock()
 	defer d.m.Unlock()
 
@@ -411,7 +419,7 @@ func checkJobMaxInterval(job *model.Job) time.Duration {
 	return 1 * time.Second
 }
 
-func (d *ddl) doDDLJob(ctx context.Context, job *model.Job) error {
+func (d *ddl) doDDLJob(ctx sessionctx.Context, job *model.Job) error {
 	// For every DDL, we must commit current transaction.
 	if err := ctx.NewTxn(); err != nil {
 		return errors.Trace(err)
@@ -509,6 +517,8 @@ const (
 	codeUnknownFractionLength                = 10
 	codeInvalidJobVersion                    = 11
 	codeCancelledDDLJob                      = 12
+	codeInvalidRanges                        = 13
+	codeReorgWorkerPanic                     = 14
 
 	codeInvalidDBState         = 100
 	codeInvalidTableState      = 101
@@ -522,6 +532,7 @@ const (
 	codeUnsupportedDropPKHandle     = 204
 	codeUnsupportedCharset          = 205
 	codeUnsupportedModifyPrimaryKey = 206
+	codeUnsupportedShardRowIDBits   = 207
 
 	codeFileNotFound                 = 1017
 	codeErrorOnRename                = 1025
@@ -549,6 +560,7 @@ const (
 	codeJSONUsedAsKey                = 3152
 	codeWrongNameForIndex            = terror.ErrCode(mysql.ErrWrongNameForIndex)
 	codeErrTooLongIndexComment       = terror.ErrCode(mysql.ErrTooLongIndexComment)
+	codeUnknownCharacterSet          = terror.ErrCode(mysql.ErrUnknownCharacterSet)
 )
 
 func init() {
@@ -579,6 +591,7 @@ func init() {
 		codeWrongNameForIndex:            mysql.ErrWrongNameForIndex,
 		codeTooManyFields:                mysql.ErrTooManyFields,
 		codeErrTooLongIndexComment:       mysql.ErrTooLongIndexComment,
+		codeUnknownCharacterSet:          mysql.ErrUnknownCharacterSet,
 	}
 	terror.ErrClassToMySQLCodes[terror.ClassDDL] = ddlMySQLErrCodes
 }
