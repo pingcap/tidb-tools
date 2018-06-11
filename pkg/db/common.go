@@ -363,6 +363,38 @@ func GetCRC32Checksum(db *sql.DB, schemaName string, tbInfo *model.TableInfo, li
 	return "", nil
 }
 
+// GetTidbPosition gets tidb's position.
+func GetTidbPosition(db *sql.DB) (int64, error) {
+	/*
+		example in tidb:
+		mysql> SHOW MASTER STATUS;
+		+-------------+--------------------+--------------+------------------+-------------------+
+		| File        | Position           | Binlog_Do_DB | Binlog_Ignore_DB | Executed_Gtid_Set |
+		+-------------+--------------------+--------------+------------------+-------------------+
+		| tidb-binlog | 400718757701615617 |              |                  |                   |
+		+-------------+--------------------+--------------+------------------+-------------------+
+	*/
+	rows, err := db.Query("SHOW MASTER STATUS")
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		fields, err1 := ScanRow(rows)
+		if err1 != nil {
+			return 0, errors.Trace(err1)
+		}
+
+		ts, err1 := strconv.ParseInt(string(fields["Position"]), 10, 64)
+		if err1 != nil {
+			return 0, errors.Trace(err1)
+		}
+		return ts, nil
+	}
+	return 0, errors.New("get slave cluster's ts failed")
+}
+
 // QuerySQL queries sql, and returns some row
 func QuerySQL(db *sql.DB, query string) (*sql.Rows, error) {
 	log.Debugf("[query][sql]%s", query)
