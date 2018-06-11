@@ -11,7 +11,6 @@ import (
 var (
 	_ hash.Hash   = new(digest32)
 	_ hash.Hash32 = new(digest32)
-	_ bmixer      = new(digest32)
 )
 
 const (
@@ -25,13 +24,8 @@ type digest32 struct {
 	h1 uint32 // Unfinalized running hash.
 }
 
-// New32 returns new 32-bit hasher
-func New32() hash.Hash32 { return New32WithSeed(0) }
-
-// New32WithSeed returns new 32-bit hasher set with explicit seed value
-func New32WithSeed(seed uint32) hash.Hash32 {
+func New32() hash.Hash32 {
 	d := new(digest32)
-	d.seed = seed
 	d.bmixer = d
 	d.Reset()
 	return d
@@ -39,7 +33,7 @@ func New32WithSeed(seed uint32) hash.Hash32 {
 
 func (d *digest32) Size() int { return 4 }
 
-func (d *digest32) reset() { d.h1 = d.seed }
+func (d *digest32) reset() { d.h1 = 0 }
 
 func (d *digest32) Sum(b []byte) []byte {
 	h := d.Sum32()
@@ -60,7 +54,7 @@ func (d *digest32) bmix(p []byte) (tail []byte) {
 
 		h1 ^= k1
 		h1 = (h1 << 13) | (h1 >> 19) // rotl32(h1, 13)
-		h1 = h1*4 + h1 + 0xe6546b64
+		h1 = h1*5 + 0xe6546b64
 	}
 	d.h1 = h1
 	return p[nblocks*d.Size():]
@@ -108,16 +102,9 @@ func rotl32(x uint32, r byte) uint32 {
 //     hasher := New32()
 //     hasher.Write(data)
 //     return hasher.Sum32()
-func Sum32(data []byte) uint32 { return Sum32WithSeed(data, 0) }
+func Sum32(data []byte) uint32 {
 
-// Sum32WithSeed returns the MurmurHash3 sum of data. It is equivalent to the
-// following sequence (without the extra burden and the extra allocation):
-//     hasher := New32WithSeed(seed)
-//     hasher.Write(data)
-//     return hasher.Sum32()
-func Sum32WithSeed(data []byte, seed uint32) uint32 {
-
-	h1 := seed
+	var h1 uint32 = 0
 
 	nblocks := len(data) / 4
 	var p uintptr
@@ -134,7 +121,7 @@ func Sum32WithSeed(data []byte, seed uint32) uint32 {
 
 		h1 ^= k1
 		h1 = (h1 << 13) | (h1 >> 19) // rotl32(h1, 13)
-		h1 = h1*4 + h1 + 0xe6546b64
+		h1 = h1*5 + 0xe6546b64
 	}
 
 	tail := data[nblocks*4:]

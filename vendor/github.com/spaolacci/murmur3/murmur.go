@@ -3,6 +3,8 @@
 // license that can be found in the LICENSE file.
 
 /*
+Native (and fast) implementation of Austin Appleby's MurmurHash3.
+
 Package murmur3 implements Austin Appleby's non-cryptographic MurmurHash3.
 
  Reference implementation:
@@ -24,7 +26,6 @@ type digest struct {
 	clen int      // Digested input cumulative length.
 	tail []byte   // 0 to Size()-1 bytes view of `buf'.
 	buf  [16]byte // Expected (but not required) to be Size() large.
-	seed uint32   // Seed for initializing the hash.
 	bmixer
 }
 
