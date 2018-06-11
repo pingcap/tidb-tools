@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
+	_ "github.com/coreos/etcd/integration"
 	"github.com/juju/errors"
 	"golang.org/x/net/context"
 )
