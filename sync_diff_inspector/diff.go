@@ -62,6 +62,7 @@ func NewDiff(db1, db2 *sql.DB, cfg *Config) (diff *Diff, err error) {
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
+		table.Schema = diff.schema
 	}
 	diff.fixSQLFile, err = os.Create(cfg.FixSQLFile)
 	if err != nil {
