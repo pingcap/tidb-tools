@@ -84,6 +84,9 @@ type Config struct {
 
 	// config file
 	ConfigFile string
+
+	// print version if set true
+	PrintVersion bool
 }
 
 // NewConfig creates a new config.
@@ -101,6 +104,7 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.FixSQLFile, "fix-sql-file", "fix.sql", "the name of the file which saves sqls used to fix different data")
 	fs.StringVar(&cfg.SourceSnapshot, "source-snapshot", "", "source database's snapshot config")
 	fs.StringVar(&cfg.TargetSnapshot, "target-snapshot", "", "target database's snapshot config")
+	fs.BoolVar(&cfg.PrintVersion, "V", false, "print version of sync_diff_inspector")
 
 	return cfg
 }

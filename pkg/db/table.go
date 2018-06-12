@@ -270,11 +270,7 @@ func findCol(cols []*model.ColumnInfo, name string) *model.ColumnInfo {
 }
 
 func setImplicitColumn(table *model.TableInfo) {
-	newColumn := &model.ColumnInfo{
-		ID:   ImplicitColID,
-		Name: model.NewCIStr(ImplicitColName),
-	}
-	newColumn.Tp = mysql.TypeLonglong
+	newColumn := model.NewExtraHandleColInfo()
 	table.Columns = append(table.Columns, newColumn)
 
 	newIndex := &model.IndexInfo{

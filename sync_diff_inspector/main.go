@@ -26,9 +26,6 @@ import (
 )
 
 func main() {
-	// print version information
-	log.Infof("version: \n%s", utils.GetRawInfo("sync_diff_inspector"))
-
 	cfg := NewConfig()
 	err := cfg.Parse(os.Args[1:])
 	switch errors.Cause(err) {
@@ -38,6 +35,11 @@ func main() {
 	default:
 		log.Errorf("parse cmd flags err %s\n", errors.ErrorStack(err))
 		os.Exit(2)
+	}
+
+	if cfg.PrintVersion {
+		log.Infof("version: \n%s", utils.GetRawInfo("sync_diff_inspector"))
+		return
 	}
 
 	log.SetLevelByString(cfg.LogLevel)
