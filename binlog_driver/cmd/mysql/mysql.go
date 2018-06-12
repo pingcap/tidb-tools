@@ -34,6 +34,7 @@ var (
 	password = flag.String("p", "", "password")
 	host     = flag.String("h", "localhost", "host")
 
+	kafkaAddr = flag.String("kafakaAddr", "127.0.0.1:9092", "kafkaAddr like 127.0.0.1:9092,127.0.0.1:9093")
 	clusterID = flag.String("clusterID", "6561373978432450126", "clusterID")
 	offset    = flag.Int64("offset", sarama.OffsetNewest, "offset")
 	commitTS  = flag.Int64("commitTS", 0, "commitTS")
@@ -55,7 +56,7 @@ func main() {
 	flag.Parse()
 
 	cfg := &reader.Config{
-		KafakaAddr: []string{"127.0.0.1:9092"},
+		KafakaAddr: strings.Split(*kafkaAddr, ","),
 		Offset:     *offset,
 		CommitTS:   *commitTS,
 		ClusterID:  *clusterID,
@@ -215,10 +216,9 @@ func tableToSQL(table *pb.Table) (sqls []string, sqlArgs [][]interface{}) {
 
 		case pb.MutationType_Delete:
 			columnInfo := table.GetColumnInfo()
-			sql := fmt.Sprintf("delete from `%s`.`%s` ", table.GetSchemaName(), table.GetTableName())
-
 			where, usePK := constructWhere()
-			sql += where
+
+			sql := fmt.Sprintf("delete from `%s`.`%s` %s", table.GetSchemaName(), table.GetTableName(), where)
 
 			row := mutation.Row
 			var args []interface{}
