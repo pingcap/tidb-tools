@@ -271,7 +271,7 @@ func GetRandomValues(db *sql.DB, dbName string, table string, column string, num
 	}
 
 	randomValue := make([]string, 0, num)
-	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` > \"%v\" AND `%s` < \"%v\" AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
+	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` >= \"%v\" AND `%s` <= \"%v\" AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
 		column, column, dbName, table, column, min, column, max, limitRange, num, column)
 	log.Debugf("get random values sql: %s", query)
 	rows, err := QuerySQL(db, query)
