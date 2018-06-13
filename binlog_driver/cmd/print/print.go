@@ -45,7 +45,7 @@ func main() {
 	for {
 		select {
 		case msg := <-breader.Messages():
-			log.Debug("recv: ", msg.Binlog.String())
+			log.Info("recv: ", msg.Binlog.String())
 		}
 	}
 }
