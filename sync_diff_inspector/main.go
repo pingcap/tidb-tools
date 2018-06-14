@@ -17,6 +17,7 @@ import (
 	"database/sql"
 	"flag"
 	"os"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
@@ -69,6 +70,11 @@ func main() {
 }
 
 func checkSyncState(sourceDB, targetDB *sql.DB, cfg *Config) bool {
+	beginTime := time.Now()
+	defer func() {
+		log.Infof("check data finished, all cost %v", time.Since(beginTime))
+	}()
+
 	d, err := NewDiff(sourceDB, targetDB, cfg)
 	if err != nil {
 		log.Fatalf("fail to initialize diff process %v", errors.ErrorStack(err))

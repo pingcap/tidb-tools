@@ -326,11 +326,11 @@ func GetTables(db *sql.DB, dbName string) ([]string, error) {
 }
 
 // GetCRC32Checksum returns the checksum of some data
-func GetCRC32Checksum(db *sql.DB, schemaName string, tbInfo *model.TableInfo, limitRange string) (string, error) {
+func GetCRC32Checksum(db *sql.DB, schemaName string, tbInfo *model.TableInfo, orderKeys []string, limitRange string) (string, error) {
 	/*
 		calculate CRC32 checksum example:
-		mysql> SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', id, name, _tidb_rowid) SEPARATOR  ' + ')) AS checksum
-			 > FROM `test`.`abc` WHERE (`id` >= 1 AND `id` < 6) AND true;
+		mysql> SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', a, b, c, d) SEPARATOR  ' + ')) AS checksum
+			> FROM (SELECT * FROM `test`.`test2` WHERE `a` >= 29100000 AND `a` < 29200000 AND true order by a) AS tmp;
 		+------------+
 		| checksum   |
 		+------------+
@@ -342,8 +342,8 @@ func GetCRC32Checksum(db *sql.DB, schemaName string, tbInfo *model.TableInfo, li
 		columnNames = append(columnNames, col.Name.O)
 	}
 
-	query := fmt.Sprintf("SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', %s) SEPARATOR  ' + ')) AS checksum FROM `%s`.`%s` WHERE %s;",
-		strings.Join(columnNames, ", "), schemaName, tbInfo.Name.O, limitRange)
+	query := fmt.Sprintf("SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', %s) SEPARATOR  ' + ')) AS checksum FROM (SELECT * FROM `%s`.`%s` WHERE %s ORDER BY %s) AS tmp;",
+		strings.Join(columnNames, ", "), schemaName, tbInfo.Name.O, limitRange, strings.Join(orderKeys, ","))
 	log.Debugf("checksum sql: %s", query)
 	rows, err := QuerySQL(db, query)
 	if err != nil {

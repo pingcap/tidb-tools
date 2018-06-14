@@ -50,7 +50,7 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 				begin:        int64(1),
 				end:          int64(1000),
 				containBegin: true,
-				containEnd:   true,
+				containEnd:   false,
 			},
 			2,
 			[]*chunkRange{
@@ -64,29 +64,29 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 					begin:        int64(501),
 					end:          int64(1000),
 					containBegin: true,
-					containEnd:   true,
+					containEnd:   false,
 				},
 			},
 		}, {
 			&chunkRange{
 				begin:        float64(1.1),
 				end:          float64(1000.1),
-				containBegin: true,
-				containEnd:   true,
+				containBegin: false,
+				containEnd:   false,
 			},
 			2,
 			[]*chunkRange{
 				{
 					begin:        float64(1.1),
 					end:          float64(501.1),
-					containBegin: true,
+					containBegin: false,
 					containEnd:   false,
 				},
 				{
 					begin:        float64(501.1),
 					end:          float64(1000.1),
 					containBegin: true,
-					containEnd:   true,
+					containEnd:   false,
 				},
 			},
 		},
