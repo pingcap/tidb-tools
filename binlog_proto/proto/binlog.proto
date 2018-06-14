@@ -1,5 +1,5 @@
 syntax = "proto2";
-package binlog;
+package tools.binlog;
 import "gogoproto/gogo.proto";
 
 option (gogoproto.marshaler_all) = true;

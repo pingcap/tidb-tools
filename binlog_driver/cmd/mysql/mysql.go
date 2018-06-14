@@ -24,6 +24,8 @@ import (
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/binlog_driver/reader"
 	pb "github.com/pingcap/tidb-tools/binlog_proto/go-binlog"
+	"github.com/pingcap/tidb/ast"
+	"github.com/pingcap/tidb/parser"
 )
 
 // a simple example to sync data to mysql
@@ -45,9 +47,6 @@ func getDB() (db *sql.DB, err error) {
 	log.Debug(dsn)
 
 	db, err = sql.Open("mysql", dsn)
-	if err != nil {
-		return
-	}
 
 	return
 }
@@ -88,18 +87,16 @@ func main() {
 				log.Debug("exec: args: ", sqls[i], args[i])
 				_, err = tx.Exec(sqls[i], args[i]...)
 				if err != nil {
-					log.Error(err)
+					tx.Rollback()
+					log.Fatal(err)
 				}
-
 			}
 			err = tx.Commit()
 			if err != nil {
 				log.Fatal(err)
 			}
-
 		}
 	}
-
 }
 
 func columnToArg(c *pb.Column) (arg interface{}) {
@@ -131,13 +128,13 @@ func tableToSQL(table *pb.Table) (sqls []string, sqlArgs [][]interface{}) {
 		sql := fmt.Sprintf("replace into `%s`.`%s`", table.GetSchemaName(), table.GetTableName())
 
 		var names []string
-		var holder []string
+		var placeHolders []string
 		for _, c := range table.GetColumnInfo() {
 			names = append(names, c.GetName())
-			holder = append(holder, "?")
+			placeHolders = append(placeHolders, "?")
 		}
 		sql += "(" + strings.Join(names, ",") + ")"
-		sql += "values(" + strings.Join(holder, ",") + ")"
+		sql += "values(" + strings.Join(placeHolders, ",") + ")"
 
 		var args []interface{}
 		for _, col := range row.GetColumns() {
@@ -177,6 +174,8 @@ func tableToSQL(table *pb.Table) (sqls []string, sqlArgs [][]interface{}) {
 		return
 	}
 
+	where, usePK := constructWhere()
+
 	for _, mutation := range table.Mutations {
 		switch mutation.GetType() {
 		case pb.MutationType_Insert:
@@ -192,7 +191,6 @@ func tableToSQL(table *pb.Table) (sqls []string, sqlArgs [][]interface{}) {
 				sql += fmt.Sprintf("%s = ? ", col.Name)
 			}
 
-			where, usePK := constructWhere()
 			sql += where
 
 			row := mutation.Row
@@ -236,6 +234,17 @@ func tableToSQL(table *pb.Table) (sqls []string, sqlArgs [][]interface{}) {
 	return
 }
 
+func isCreateDatabase(sql string) (isCreateDatabase bool, err error) {
+	stmt, err := parser.New().ParseOneStmt(sql, "", "")
+	if err != nil {
+		return false, err
+	}
+
+	_, isCreateDatabase = stmt.(*ast.CreateDatabaseStmt)
+
+	return
+}
+
 func toSQL(binlog *pb.Binlog) ([]string, [][]interface{}) {
 	var allSQL []string
 	var allArgs [][]interface{}
@@ -243,11 +252,16 @@ func toSQL(binlog *pb.Binlog) ([]string, [][]interface{}) {
 	switch binlog.GetType() {
 	case pb.BinlogType_DDL:
 		ddl := binlog.DdlData
-		sql := fmt.Sprintf("use %s", ddl.GetSchemaName())
-		allSQL = append(allSQL, sql)
-		allArgs = append(allArgs, nil)
-		sql = string(ddl.DdlQuery)
-		allSQL = append(allSQL, sql)
+		isCreateDatabase, err := isCreateDatabase(string(ddl.DdlQuery))
+		if err != nil {
+			log.Fatal(err)
+		}
+		if !isCreateDatabase {
+			sql := fmt.Sprintf("use %s", ddl.GetSchemaName())
+			allSQL = append(allSQL, sql)
+			allArgs = append(allArgs, nil)
+		}
+		allSQL = append(allSQL, string(ddl.DdlQuery))
 		allArgs = append(allArgs, nil)
 
 	case pb.BinlogType_DML:
@@ -259,7 +273,7 @@ func toSQL(binlog *pb.Binlog) ([]string, [][]interface{}) {
 		}
 
 	default:
-		log.Warn("unknow type: ", binlog.GetType())
+		log.Fatal("unknow type: ", binlog.GetType())
 	}
 
 	return allSQL, allArgs

@@ -15,6 +15,7 @@ package reader
 
 import (
 	"github.com/Shopify/sarama"
+	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	pb "github.com/pingcap/tidb-tools/binlog_proto/go-binlog"
 )
@@ -27,7 +28,7 @@ func init() {
 // Config for Reader
 type Config struct {
 	KafakaAddr []string
-	// if ConmmitTs is specified, reader will start return the binlog which the ts bigger than the config ts
+	// the CommitTs of binlog return by reader will bigger than the config CommitTs
 	CommitTS  int64
 	Offset    int64 // start at kafka offset
 	ClusterID string
@@ -49,8 +50,8 @@ type Reader struct {
 	clusterID string
 }
 
-func (r *Reader) getTopic() string {
-	return r.cfg.ClusterID + "_obinlog"
+func (r *Reader) getTopic() (string, int32) {
+	return r.cfg.ClusterID + "_obinlog", 0
 }
 
 // NewReader return a instance of Reader
@@ -64,6 +65,7 @@ func NewReader(cfg *Config) (r *Reader, err error) {
 
 	r.client, err = sarama.NewClient(r.cfg.KafakaAddr, nil)
 	if err != nil {
+		err = errors.Trace(err)
 		r = nil
 		return
 	}
@@ -71,6 +73,7 @@ func NewReader(cfg *Config) (r *Reader, err error) {
 	if r.cfg.CommitTS > 0 {
 		r.cfg.Offset, err = r.getOffsetByTS(r.cfg.CommitTS)
 		if err != nil {
+			err = errors.Trace(err)
 			r = nil
 			return
 		}
@@ -97,11 +100,14 @@ func (r *Reader) Messages() (msgs <-chan *Message) {
 func (r *Reader) getOffsetByTS(ts int64) (offset int64, err error) {
 	seeker, err := NewKafkaSeeker(r.cfg.KafakaAddr, nil)
 	if err != nil {
+		err = errors.Trace(err)
 		return
 	}
 
-	offsets, err := seeker.Seek(r.getTopic(), ts, []int32{0})
+	topic, partition := r.getTopic()
+	offsets, err := seeker.Seek(topic, ts, []int32{partition})
 	if err != nil {
+		err = errors.Trace(err)
 		return
 	}
 
@@ -119,7 +125,8 @@ func (r *Reader) run() {
 		log.Fatal(err)
 	}
 	defer consumer.Close()
-	partitionConsumer, err := consumer.ConsumePartition(r.getTopic(), 0, offset)
+	topic, partition := r.getTopic()
+	partitionConsumer, err := consumer.ConsumePartition(topic, partition, offset)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -129,7 +136,8 @@ func (r *Reader) run() {
 		select {
 		case <-r.stop:
 			partitionConsumer.Close()
-			log.Debug("reader stop to run")
+			close(r.msgs)
+			log.Info("reader stop to run")
 			return
 		case kmsg := <-partitionConsumer.Messages():
 			log.Debug("get kmsg offset: ", kmsg.Offset)
@@ -140,6 +148,7 @@ func (r *Reader) run() {
 				continue
 			}
 			if r.cfg.CommitTS > 0 && binlog.CommitTs <= r.cfg.CommitTS {
+				log.Warn("skip binlog CommitTs: ", binlog.CommitTs)
 				continue
 			}
 

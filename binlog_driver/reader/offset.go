@@ -15,6 +15,7 @@ package reader
 
 import (
 	"github.com/Shopify/sarama"
+	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	pb "github.com/pingcap/tidb-tools/binlog_proto/go-binlog"
 )
@@ -29,12 +30,12 @@ type KafkaSeeker struct {
 func NewKafkaSeeker(addr []string, config *sarama.Config) (*KafkaSeeker, error) {
 	client, err := sarama.NewClient(addr, config)
 	if err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	consumer, err := sarama.NewConsumerFromClient(client)
 	if err != nil {
-		return nil, err
+		return nil, errors.Trace(err)
 	}
 
 	s := &KafkaSeeker{
@@ -57,14 +58,14 @@ func (ks *KafkaSeeker) Seek(topic string, ts int64, partitions []int32) (offsets
 		partitions, err = ks.consumer.Partitions(topic)
 		if err != nil {
 			log.Errorf("get partitions from topic %s error %v", topic, err)
-			return nil, err
+			return nil, errors.Trace(err)
 		}
 	}
 
 	offsets, err = ks.seekOffsets(topic, partitions, ts)
 	if err != nil {
+		err = errors.Trace(err)
 		log.Errorf("seek offsets error %v", err)
-		return
 	}
 	return
 }
@@ -73,6 +74,7 @@ func (ks *KafkaSeeker) getTSFromMSG(msg *sarama.ConsumerMessage) (ts int64, err 
 	binlog := new(pb.Binlog)
 	err = binlog.Unmarshal(msg.Value)
 	if err != nil {
+		err = errors.Trace(err)
 		return
 	}
 
@@ -85,16 +87,19 @@ func (ks *KafkaSeeker) seekOffsets(topic string, partitions []int32, pos int64) 
 	for _, partition := range partitions {
 		start, err := ks.client.GetOffset(topic, partition, sarama.OffsetOldest)
 		if err != nil {
+			err = errors.Trace(err)
 			return nil, err
 		}
 
 		end, err := ks.client.GetOffset(topic, partition, sarama.OffsetNewest)
 		if err != nil {
+			err = errors.Trace(err)
 			return nil, err
 		}
 
 		offset, err := ks.seekOffset(topic, partition, start, end-1, pos)
 		if err != nil {
+			err = errors.Trace(err)
 			return nil, err
 		}
 		offsets[partition] = offset
@@ -104,18 +109,18 @@ func (ks *KafkaSeeker) seekOffsets(topic string, partitions []int32, pos int64) 
 }
 
 func (ks *KafkaSeeker) seekOffset(topic string, partition int32, start int64, end int64, ts int64) (offset int64, err error) {
-
 	startTS, err := ks.getTSAtOffset(topic, partition, start)
 	if err != nil {
+		err = errors.Trace(err)
 		return
 	}
 
 	if ts < startTS {
 		log.Warnf("given ts %v is smaller than oldest message's ts %v, some binlogs may lose", ts, startTS)
-	}
-
-	if ts < startTS {
 		offset = start
+		return
+	} else if ts == startTS {
+		offset = start + 1
 		return
 	}
 
@@ -124,6 +129,7 @@ func (ks *KafkaSeeker) seekOffset(topic string, partition int32, start int64, en
 		var midTS int64
 		midTS, err = ks.getTSAtOffset(topic, partition, mid)
 		if err != nil {
+			err = errors.Trace(err)
 			return
 		}
 
@@ -137,6 +143,7 @@ func (ks *KafkaSeeker) seekOffset(topic string, partition int32, start int64, en
 	var endTS int64
 	endTS, err = ks.getTSAtOffset(topic, partition, end)
 	if err != nil {
+		err = errors.Trace(err)
 		return
 	}
 
@@ -150,16 +157,14 @@ func (ks *KafkaSeeker) seekOffset(topic string, partition int32, start int64, en
 func (ks *KafkaSeeker) getTSAtOffset(topic string, partition int32, offset int64) (ts int64, err error) {
 	pc, err := ks.consumer.ConsumePartition(topic, partition, offset)
 	if err != nil {
+		err = errors.Trace(err)
 		return
 	}
 	defer pc.Close()
 
 	for msg := range pc.Messages() {
 		ts, err = ks.getTSFromMSG(msg)
-		if err != nil {
-			return
-		}
-
+		err = errors.Trace(err)
 		return
 	}
 
