@@ -271,7 +271,7 @@ func GetRandomValues(db *sql.DB, dbName string, table string, column string, num
 	}
 
 	randomValue := make([]string, 0, num)
-	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` > \"%v\" AND `%s` < \"%v\" AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
+	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` >= \"%v\" AND `%s` <= \"%v\" AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
 		column, column, dbName, table, column, min, column, max, limitRange, num, column)
 	log.Debugf("get random values sql: %s", query)
 	rows, err := QuerySQL(db, query)
@@ -326,11 +326,11 @@ func GetTables(db *sql.DB, dbName string) ([]string, error) {
 }
 
 // GetCRC32Checksum returns the checksum of some data
-func GetCRC32Checksum(db *sql.DB, schemaName string, tbInfo *model.TableInfo, limitRange string) (string, error) {
+func GetCRC32Checksum(db *sql.DB, schemaName string, tbInfo *model.TableInfo, orderKeys []string, limitRange string) (string, error) {
 	/*
 		calculate CRC32 checksum example:
-		mysql> SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', id, name, _tidb_rowid) SEPARATOR  ' + ')) AS checksum
-			 > FROM `test`.`abc` WHERE (`id` >= 1 AND `id` < 6) AND true;
+		mysql> SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', a, b, c, d) SEPARATOR  ' + ')) AS checksum
+			> FROM (SELECT * FROM `test`.`test2` WHERE `a` >= 29100000 AND `a` < 29200000 AND true order by a) AS tmp;
 		+------------+
 		| checksum   |
 		+------------+
@@ -342,8 +342,8 @@ func GetCRC32Checksum(db *sql.DB, schemaName string, tbInfo *model.TableInfo, li
 		columnNames = append(columnNames, col.Name.O)
 	}
 
-	query := fmt.Sprintf("SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', %s) SEPARATOR  ' + ')) AS checksum FROM `%s`.`%s` WHERE %s;",
-		strings.Join(columnNames, ", "), schemaName, tbInfo.Name.O, limitRange)
+	query := fmt.Sprintf("SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', %s) SEPARATOR  ' + ')) AS checksum FROM (SELECT * FROM `%s`.`%s` WHERE %s ORDER BY %s) AS tmp;",
+		strings.Join(columnNames, ", "), schemaName, tbInfo.Name.O, limitRange, strings.Join(orderKeys, ","))
 	log.Debugf("checksum sql: %s", query)
 	rows, err := QuerySQL(db, query)
 	if err != nil {
@@ -361,6 +361,38 @@ func GetCRC32Checksum(db *sql.DB, schemaName string, tbInfo *model.TableInfo, li
 	}
 
 	return "", nil
+}
+
+// GetTidbPosition gets tidb's position.
+func GetTidbPosition(db *sql.DB) (int64, error) {
+	/*
+		example in tidb:
+		mysql> SHOW MASTER STATUS;
+		+-------------+--------------------+--------------+------------------+-------------------+
+		| File        | Position           | Binlog_Do_DB | Binlog_Ignore_DB | Executed_Gtid_Set |
+		+-------------+--------------------+--------------+------------------+-------------------+
+		| tidb-binlog | 400718757701615617 |              |                  |                   |
+		+-------------+--------------------+--------------+------------------+-------------------+
+	*/
+	rows, err := db.Query("SHOW MASTER STATUS")
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		fields, err1 := ScanRow(rows)
+		if err1 != nil {
+			return 0, errors.Trace(err1)
+		}
+
+		ts, err1 := strconv.ParseInt(string(fields["Position"]), 10, 64)
+		if err1 != nil {
+			return 0, errors.Trace(err1)
+		}
+		return ts, nil
+	}
+	return 0, errors.New("get slave cluster's ts failed")
 }
 
 // QuerySQL queries sql, and returns some row

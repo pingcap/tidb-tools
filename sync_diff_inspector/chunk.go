@@ -168,9 +168,10 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
+
 		var minTmp, maxTmp string
 		var i int64
-		for i = 0; i < count; i++ {
+		for i = 0; i < int64(len(splitValues)+1); i++ {
 			if i == 0 {
 				minTmp = min
 				maxTmp = splitValues[i]
@@ -186,6 +187,8 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 		}
 		log.Debugf("getChunksForTable cut table: cnt=%d min=%s max=%s chunk=%d", count, min, max, len(chunks))
 	}
+
+	chunks[len(chunks)-1].end = chunk.end
 	chunks[0].containBegin = chunk.containBegin
 	chunks[len(chunks)-1].containEnd = chunk.containEnd
 	return chunks, nil

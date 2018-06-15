@@ -62,6 +62,7 @@ func NewDiff(db1, db2 *sql.DB, cfg *Config) (diff *Diff, err error) {
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
+		table.Schema = diff.schema
 	}
 	diff.fixSQLFile, err = os.Create(cfg.FixSQLFile)
 	if err != nil {
@@ -243,12 +244,13 @@ func (df *Diff) checkChunkDataEqual(checkJobs []*CheckJob, table *TableCheckCfg)
 
 	for _, job := range checkJobs {
 		// first check the checksum is equal or not
-		checksum1, err := pkgdb.GetCRC32Checksum(df.db1, df.schema, table.Info, job.Where)
+		orderKeys, _ := pkgdb.GetOrderKey(table.Info)
+		checksum1, err := pkgdb.GetCRC32Checksum(df.db1, df.schema, table.Info, orderKeys, job.Where)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
 
-		checksum2, err := pkgdb.GetCRC32Checksum(df.db2, df.schema, table.Info, job.Where)
+		checksum2, err := pkgdb.GetCRC32Checksum(df.db2, df.schema, table.Info, orderKeys, job.Where)
 		if err != nil {
 			return false, errors.Trace(err)
 		}

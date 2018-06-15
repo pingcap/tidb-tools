@@ -17,11 +17,13 @@ import (
 	"database/sql"
 	"flag"
 	"os"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/db"
+	"github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 func main() {
@@ -34,6 +36,11 @@ func main() {
 	default:
 		log.Errorf("parse cmd flags err %s\n", errors.ErrorStack(err))
 		os.Exit(2)
+	}
+
+	if cfg.PrintVersion {
+		log.Infof("version: \n%s", utils.GetRawInfo("sync_diff_inspector"))
+		return
 	}
 
 	log.SetLevelByString(cfg.LogLevel)
@@ -63,6 +70,11 @@ func main() {
 }
 
 func checkSyncState(sourceDB, targetDB *sql.DB, cfg *Config) bool {
+	beginTime := time.Now()
+	defer func() {
+		log.Infof("check data finished, all cost %v", time.Since(beginTime))
+	}()
+
 	d, err := NewDiff(sourceDB, targetDB, cfg)
 	if err != nil {
 		log.Fatalf("fail to initialize diff process %v", errors.ErrorStack(err))
