@@ -1,16 +1,22 @@
 // Copyright (c) 2017 Uber Technologies, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// http://www.apache.org/licenses/LICENSE-2.0
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 package jaeger
 
@@ -25,8 +31,6 @@ import (
 
 // BuildJaegerThrift builds jaeger span based on internal span.
 func BuildJaegerThrift(span *Span) *j.Span {
-	span.Lock()
-	defer span.Unlock()
 	startTime := utils.TimeToMicrosecondsSinceEpochInt64(span.startTime)
 	duration := span.duration.Nanoseconds() / int64(time.Microsecond)
 	jaegerSpan := &j.Span{
@@ -38,7 +42,7 @@ func BuildJaegerThrift(span *Span) *j.Span {
 		Flags:         int32(span.context.flags),
 		StartTime:     startTime,
 		Duration:      duration,
-		Tags:          buildTags(span.tags, span.tracer.options.maxTagValueLength),
+		Tags:          buildTags(span.tags),
 		Logs:          buildLogs(span.logs),
 		References:    buildReferences(span.references),
 	}
@@ -47,26 +51,21 @@ func BuildJaegerThrift(span *Span) *j.Span {
 
 // BuildJaegerProcessThrift creates a thrift Process type.
 func BuildJaegerProcessThrift(span *Span) *j.Process {
-	span.Lock()
-	defer span.Unlock()
 	return buildJaegerProcessThrift(span.tracer)
 }
 
 func buildJaegerProcessThrift(tracer *Tracer) *j.Process {
 	process := &j.Process{
 		ServiceName: tracer.serviceName,
-		Tags:        buildTags(tracer.tags, tracer.options.maxTagValueLength),
-	}
-	if tracer.process.UUID != "" {
-		process.Tags = append(process.Tags, &j.Tag{Key: TracerUUIDTagKey, VStr: &tracer.process.UUID, VType: j.TagType_STRING})
+		Tags:        buildTags(tracer.tags),
 	}
 	return process
 }
 
-func buildTags(tags []Tag, maxTagValueLength int) []*j.Tag {
+func buildTags(tags []Tag) []*j.Tag {
 	jTags := make([]*j.Tag, 0, len(tags))
 	for _, tag := range tags {
-		jTag := buildTag(&tag, maxTagValueLength)
+		jTag := buildTag(&tag)
 		jTags = append(jTags, jTag)
 	}
 	return jTags
@@ -84,16 +83,16 @@ func buildLogs(logs []opentracing.LogRecord) []*j.Log {
 	return jLogs
 }
 
-func buildTag(tag *Tag, maxTagValueLength int) *j.Tag {
+func buildTag(tag *Tag) *j.Tag {
 	jTag := &j.Tag{Key: tag.key}
 	switch value := tag.value.(type) {
 	case string:
-		vStr := truncateString(value, maxTagValueLength)
+		vStr := truncateString(value)
 		jTag.VStr = &vStr
 		jTag.VType = j.TagType_STRING
 	case []byte:
-		if len(value) > maxTagValueLength {
-			value = value[:maxTagValueLength]
+		if len(value) > maxAnnotationLength {
+			value = value[:maxAnnotationLength]
 		}
 		jTag.VBinary = value
 		jTag.VType = j.TagType_BINARY
@@ -150,7 +149,7 @@ func buildTag(tag *Tag, maxTagValueLength int) *j.Tag {
 		jTag.VBool = &vBool
 		jTag.VType = j.TagType_BOOL
 	default:
-		vStr := truncateString(stringify(value), maxTagValueLength)
+		vStr := truncateString(stringify(value))
 		jTag.VStr = &vStr
 		jTag.VType = j.TagType_STRING
 	}

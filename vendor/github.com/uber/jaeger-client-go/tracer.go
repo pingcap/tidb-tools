@@ -1,16 +1,22 @@
-// Copyright (c) 2017-2018 Uber Technologies, Inc.
+// Copyright (c) 2016 Uber Technologies, Inc.
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
 //
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 
 package jaeger
 
@@ -19,15 +25,12 @@ import (
 	"io"
 	"os"
 	"reflect"
-	"strconv"
 	"sync"
 	"time"
 
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 
-	"github.com/uber/jaeger-client-go/internal/baggage"
-	"github.com/uber/jaeger-client-go/internal/throttler"
 	"github.com/uber/jaeger-client-go/log"
 	"github.com/uber/jaeger-client-go/utils"
 )
@@ -46,11 +49,9 @@ type Tracer struct {
 	randomNumber func() uint64
 
 	options struct {
-		poolSpans            bool
-		gen128Bit            bool // whether to generate 128bit trace IDs
-		zipkinSharedRPCSpan  bool
-		highTraceIDGenerator func() uint64 // custom high trace ID generator
-		maxTagValueLength    int
+		poolSpans           bool
+		gen128Bit           bool // whether to generate 128bit trace IDs
+		zipkinSharedRPCSpan bool
 		// more options to come
 	}
 	// pool for Span objects
@@ -59,15 +60,9 @@ type Tracer struct {
 	injectors  map[interface{}]Injector
 	extractors map[interface{}]Extractor
 
-	observer compositeObserver
+	observer observer
 
-	tags    []Tag
-	process Process
-
-	baggageRestrictionManager baggage.RestrictionManager
-	baggageSetter             *baggageSetter
-
-	debugThrottler throttler.Throttler
+	tags []Tag
 }
 
 // NewTracer creates Tracer implementation that reports tracing to Jaeger.
@@ -91,34 +86,30 @@ func NewTracer(
 		}},
 	}
 
-	for _, option := range options {
-		option(t)
-	}
+	// register default injectors/extractors
+	textPropagator := newTextMapPropagator(t)
+	t.injectors[opentracing.TextMap] = textPropagator
+	t.extractors[opentracing.TextMap] = textPropagator
 
-	// register default injectors/extractors unless they are already provided via options
-	textPropagator := newTextMapPropagator(getDefaultHeadersConfig(), t.metrics)
-	t.addCodec(opentracing.TextMap, textPropagator, textPropagator)
-
-	httpHeaderPropagator := newHTTPHeaderPropagator(getDefaultHeadersConfig(), t.metrics)
-	t.addCodec(opentracing.HTTPHeaders, httpHeaderPropagator, httpHeaderPropagator)
+	httpHeaderPropagator := newHTTPHeaderPropagator(t)
+	t.injectors[opentracing.HTTPHeaders] = httpHeaderPropagator
+	t.extractors[opentracing.HTTPHeaders] = httpHeaderPropagator
 
 	binaryPropagator := newBinaryPropagator(t)
-	t.addCodec(opentracing.Binary, binaryPropagator, binaryPropagator)
+	t.injectors[opentracing.Binary] = binaryPropagator
+	t.extractors[opentracing.Binary] = binaryPropagator
 
 	// TODO remove after TChannel supports OpenTracing
 	interopPropagator := &jaegerTraceContextPropagator{tracer: t}
-	t.addCodec(SpanContextFormat, interopPropagator, interopPropagator)
+	t.injectors[SpanContextFormat] = interopPropagator
+	t.extractors[SpanContextFormat] = interopPropagator
 
 	zipkinPropagator := &zipkinPropagator{tracer: t}
-	t.addCodec(ZipkinSpanFormat, zipkinPropagator, zipkinPropagator)
+	t.injectors[ZipkinSpanFormat] = zipkinPropagator
+	t.extractors[ZipkinSpanFormat] = zipkinPropagator
 
-	if t.baggageRestrictionManager != nil {
-		t.baggageSetter = newBaggageSetter(t.baggageRestrictionManager, &t.metrics)
-	} else {
-		t.baggageSetter = newBaggageSetter(baggage.NewDefaultRestrictionManager(0), &t.metrics)
-	}
-	if t.debugThrottler == nil {
-		t.debugThrottler = throttler.DefaultThrottler{}
+	for _, option := range options {
+		option(t)
 	}
 
 	if t.randomNumber == nil {
@@ -145,37 +136,7 @@ func NewTracer(
 		t.logger.Error("Unable to determine this host's IP address: " + err.Error())
 	}
 
-	if t.options.gen128Bit {
-		if t.options.highTraceIDGenerator == nil {
-			t.options.highTraceIDGenerator = t.randomNumber
-		}
-	} else if t.options.highTraceIDGenerator != nil {
-		t.logger.Error("Overriding high trace ID generator but not generating " +
-			"128 bit trace IDs, consider enabling the \"Gen128Bit\" option")
-	}
-	if t.options.maxTagValueLength == 0 {
-		t.options.maxTagValueLength = DefaultMaxTagValueLength
-	}
-	t.process = Process{
-		Service: serviceName,
-		UUID:    strconv.FormatUint(t.randomNumber(), 16),
-		Tags:    t.tags,
-	}
-	if throttler, ok := t.debugThrottler.(ProcessSetter); ok {
-		throttler.SetProcess(t.process)
-	}
-
 	return t, t
-}
-
-// addCodec adds registers injector and extractor for given propagation format if not already defined.
-func (t *Tracer) addCodec(format interface{}, injector Injector, extractor Extractor) {
-	if _, ok := t.injectors[format]; !ok {
-		t.injectors[format] = injector
-	}
-	if _, ok := t.extractors[format]; !ok {
-		t.extractors[format] = extractor
-	}
 }
 
 // StartSpan implements StartSpan() method of opentracing.Tracer.
@@ -198,12 +159,6 @@ func (t *Tracer) startSpanWithOptions(
 		options.StartTime = t.timeNow()
 	}
 
-	// Predicate whether the given span context is a valid reference
-	// which may be used as parent / debug ID / baggage items source
-	isValidReference := func(ctx SpanContext) bool {
-		return ctx.IsValid() || ctx.isDebugIDContainerOnly() || len(ctx.baggage) != 0
-	}
-
 	var references []Reference
 	var parent SpanContext
 	var hasParent bool // need this because `parent` is a value, not reference
@@ -215,7 +170,7 @@ func (t *Tracer) startSpanWithOptions(
 				reflect.ValueOf(ref.ReferencedContext)))
 			continue
 		}
-		if !isValidReference(ctx) {
+		if !(ctx.IsValid() || ctx.isDebugIDContainerOnly() || len(ctx.baggage) != 0) {
 			continue
 		}
 		references = append(references, Reference{Type: ref.Type, Context: ctx})
@@ -224,7 +179,7 @@ func (t *Tracer) startSpanWithOptions(
 			hasParent = ref.Type == opentracing.ChildOfRef
 		}
 	}
-	if !hasParent && isValidReference(parent) {
+	if !hasParent && parent.IsValid() {
 		// If ChildOfRef wasn't found but a FollowFromRef exists, use the context from
 		// the FollowFromRef as the parent
 		hasParent = true
@@ -242,12 +197,12 @@ func (t *Tracer) startSpanWithOptions(
 		newTrace = true
 		ctx.traceID.Low = t.randomID()
 		if t.options.gen128Bit {
-			ctx.traceID.High = t.options.highTraceIDGenerator()
+			ctx.traceID.High = t.randomID()
 		}
 		ctx.spanID = SpanID(ctx.traceID.Low)
 		ctx.parentID = 0
 		ctx.flags = byte(0)
-		if hasParent && parent.isDebugIDContainerOnly() && t.isDebugAllowed(operationName) {
+		if hasParent && parent.isDebugIDContainerOnly() {
 			ctx.flags |= (flagSampled | flagDebug)
 			samplerTags = []Tag{{key: JaegerDebugHeader, value: parent.debugID}}
 		} else if sampled, tags := t.sampler.IsSampled(ctx.traceID, operationName); sampled {
@@ -278,7 +233,7 @@ func (t *Tracer) startSpanWithOptions(
 
 	sp := t.newSpan()
 	sp.context = ctx
-	sp.observer = t.observer.OnStartSpan(sp, operationName, options)
+	sp.observer = t.observer.OnStartSpan(operationName, options)
 	return t.startSpanInternal(
 		sp,
 		operationName,
@@ -318,12 +273,6 @@ func (t *Tracer) Extract(
 func (t *Tracer) Close() error {
 	t.reporter.Close()
 	t.sampler.Close()
-	if mgr, ok := t.baggageRestrictionManager.(io.Closer); ok {
-		mgr.Close()
-	}
-	if throttler, ok := t.debugThrottler.(io.Closer); ok {
-		throttler.Close()
-	}
 	return nil
 }
 
@@ -371,15 +320,16 @@ func (t *Tracer) startSpanInternal(
 		copy(sp.tags, internalTags)
 		for k, v := range tags {
 			sp.observer.OnSetTag(k, v)
-			if k == string(ext.SamplingPriority) && !setSamplingPriority(sp, v) {
+			if k == string(ext.SamplingPriority) && setSamplingPriority(sp, v) {
 				continue
 			}
 			sp.setTagNoLocking(k, v)
 		}
 	}
 	// emit metrics
+	t.metrics.SpansStarted.Inc(1)
 	if sp.context.IsSampled() {
-		t.metrics.SpansStartedSampled.Inc(1)
+		t.metrics.SpansSampled.Inc(1)
 		if newTrace {
 			// We cannot simply check for parentID==0 because in Zipkin model the
 			// server-side RPC span has the exact same trace/span/parent IDs as the
@@ -390,7 +340,7 @@ func (t *Tracer) startSpanInternal(
 			t.metrics.TracesJoinedSampled.Inc(1)
 		}
 	} else {
-		t.metrics.SpansStartedNotSampled.Inc(1)
+		t.metrics.SpansNotSampled.Inc(1)
 		if newTrace {
 			t.metrics.TracesStartedNotSampled.Inc(1)
 		} else if sp.firstInProcess {
@@ -418,14 +368,4 @@ func (t *Tracer) randomID() uint64 {
 		val = t.randomNumber()
 	}
 	return val
-}
-
-// (NB) span must hold the lock before making this call
-func (t *Tracer) setBaggage(sp *Span, key, value string) {
-	t.baggageSetter.setBaggage(sp, key, value)
-}
-
-// (NB) span must hold the lock before making this call
-func (t *Tracer) isDebugAllowed(operation string) bool {
-	return t.debugThrottler.IsAllowed(operation)
 }

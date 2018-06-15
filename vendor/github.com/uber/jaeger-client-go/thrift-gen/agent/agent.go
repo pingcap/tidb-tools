@@ -6,7 +6,7 @@ package agent
 import (
 	"bytes"
 	"fmt"
-	"github.com/uber/jaeger-client-go/thrift"
+	"github.com/apache/thrift/lib/go/thrift"
 	"github.com/uber/jaeger-client-go/thrift-gen/jaeger"
 	"github.com/uber/jaeger-client-go/thrift-gen/zipkincore"
 )
@@ -16,7 +16,6 @@ var _ = thrift.ZERO
 var _ = fmt.Printf
 var _ = bytes.Equal
 
-var _ = jaeger.GoUnusedProtection__
 var _ = zipkincore.GoUnusedProtection__
 
 type Agent interface {
