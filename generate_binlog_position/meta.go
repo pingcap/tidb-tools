@@ -94,7 +94,7 @@ func (lm *localMeta) Save(ts int64, timeZone string) error {
 	}
 
 	if timeZone != "" {
-		t := pkg.TsToTime(ts)
+		t := pkg.TsToRoughTime(ts)
 		location, err := time.LoadLocation(timeZone)
 		if err != nil {
 			return errors.Trace(err)

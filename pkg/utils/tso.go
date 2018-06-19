@@ -17,8 +17,8 @@ import (
 	"time"
 )
 
-// TSOToTime translates tso to time
-func TSOToTime(ts int64) time.Time {
+// TSOToTime translates tso to rough time that used to display
+func TSOToRoughTime(ts int64) time.Time {
 	t := time.Unix(ts>>18/1000, 0)
 	return t
 }
