@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
@@ -62,24 +61,17 @@ func uniqInt64Value(column *column, min int64, max int64) int64 {
 	return column.data.uniqInt64()
 }
 
-func uniqStringVlaue(column *column, min int64, max int64, length int) []byte {
-	min, max = intRangeValue(column, min, max)
-	column.data.setInitInt64Value(column.step, min, max)
-	return []byte(column.data.uniqString(length))
-}
-
-func genRowDatas(table *table, count int) (string, error) {
-	sql := fmt.Sprintf("insert into %s (%s) values ", table.name, table.columnList)
+func genRowDatas(table *table, count int) ([]string, error) {
 	datas := make([]string, 0, count)
 	for i := 0; i < count; i++ {
 		data, err := genRowData(table)
 		if err != nil {
-			return "", errors.Trace(err)
+			return nil, errors.Trace(err)
 		}
 		datas = append(datas, data)
 	}
 
-	return fmt.Sprintf("%s %s;", sql, strings.Join(datas, "\n, ")), nil
+	return datas, nil
 }
 
 func genRowData(table *table) (string, error) {
@@ -94,7 +86,7 @@ func genRowData(table *table) (string, error) {
 	}
 
 	values = values[:len(values)-1]
-	sql := fmt.Sprintf("(%s),", string(values))
+	sql := fmt.Sprintf("insert into %s (%s) values (%s);", table.name, table.columnList, string(values))
 	return sql, nil
 }
 
@@ -155,7 +147,7 @@ func genColumnData(table *table, column *column) (string, error) {
 	case mysql.TypeVarchar, mysql.TypeString, mysql.TypeTinyBlob, mysql.TypeBlob, mysql.TypeMediumBlob, mysql.TypeLongBlob:
 		data := []byte{'\''}
 		if isUnique {
-			data = append(data, uniqStringVlaue(column, 0, math.MaxInt64, tp.Flen)...)
+			data = append(data, []byte(column.data.uniqString(tp.Flen))...)
 		} else {
 			data = append(data, []byte(randString(randInt(1, tp.Flen)))...)
 		}
