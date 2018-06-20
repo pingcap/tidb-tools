@@ -19,7 +19,6 @@ import (
 	"os"
 
 	"github.com/juju/errors"
-	"github.com/pingcap/tidb-tools/pkg/flags"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 )
 
@@ -29,7 +28,7 @@ const (
 )
 
 const (
-	generateSavepoint = "generate_savepoint"
+	generateMeta      = "generate_meta"
 	queryPumps        = "pumps"
 	queryDrainer      = "drainers"
 	unregisterPumps   = "delete-pump"
@@ -51,20 +50,19 @@ type Config struct {
 	tls      *tls.Config
 }
 
-// NewConfig return an instance of configuration
+// NewConfig returns an instance of configuration
 func NewConfig() *Config {
 	cfg := &Config{}
-	cfg.FlagSet = flag.NewFlagSet("generate_binlog_position", flag.ContinueOnError)
-	fs := cfg.FlagSet
+	cfg.FlagSet = flag.NewFlagSet("binlogctl", flag.ContinueOnError)
 
-	fs.StringVar(&cfg.Command, "cmd", "pumps", "operator: \"generate_savepoint\", \"pumps\", \"drainers\", \"delete-pump\", \"delete-drainer\"")
-	fs.StringVar(&cfg.NodeID, "node-id", "", "name of service, use to delete some service with operation delete-pump and delete-drainer")
-	fs.StringVar(&cfg.DataDir, "data-dir", defaultDataDir, "binlog position data directory path (default data.drainer)")
-	fs.StringVar(&cfg.EtcdURLs, "pd-urls", defaultEtcdURLs, "a comma separated list of PD endpoints")
-	fs.StringVar(&cfg.SSLCA, "ssl-ca", "", "Path of file that contains list of trusted SSL CAs for connection with cluster components.")
-	fs.StringVar(&cfg.SSLCert, "ssl-cert", "", "Path of file that contains X509 certificate in PEM format for connection with cluster components.")
-	fs.StringVar(&cfg.SSLKey, "ssl-key", "", "Path of file that contains X509 key in PEM format for connection with cluster components.")
-	fs.StringVar(&cfg.TimeZone, "time-zone", "", "set time zone if you want save time info in savepoint file, for example `Asia/Shanghai` for CST time, `Local` for local time")
+	cfg.FlagSet.StringVar(&cfg.Command, "cmd", "pumps", "operator: \"generate_meta\", \"pumps\", \"drainers\", \"delete-pump\", \"delete-drainer\"")
+	cfg.FlagSet.StringVar(&cfg.NodeID, "node-id", "", "id of node, use to delete some node with operation delete-pump and delete-drainer")
+	cfg.FlagSet.StringVar(&cfg.DataDir, "data-dir", defaultDataDir, "meta directory path")
+	cfg.FlagSet.StringVar(&cfg.EtcdURLs, "pd-urls", defaultEtcdURLs, "a comma separated list of PD endpoints")
+	cfg.FlagSet.StringVar(&cfg.SSLCA, "ssl-ca", "", "Path of file that contains list of trusted SSL CAs for connection with cluster components.")
+	cfg.FlagSet.StringVar(&cfg.SSLCert, "ssl-cert", "", "Path of file that contains X509 certificate in PEM format for connection with cluster components.")
+	cfg.FlagSet.StringVar(&cfg.SSLKey, "ssl-key", "", "Path of file that contains X509 key in PEM format for connection with cluster components.")
+	cfg.FlagSet.StringVar(&cfg.TimeZone, "time-zone", "", "set time zone if you want save time info in savepoint file, for example `Asia/Shanghai` for CST time, `Local` for local time")
 
 	return cfg
 }
@@ -108,7 +106,7 @@ func adjustString(v *string, defValue string) {
 // validate checks whether the configuration is valid
 func (cfg *Config) validate() error {
 	// check EtcdEndpoints
-	_, err := flags.NewURLsValue(cfg.EtcdURLs)
+	_, err := utils.ParseHostPortAddr(cfg.EtcdURLs)
 	if err != nil {
 		return errors.Errorf("parse EtcdURLs error: %s, %v", cfg.EtcdURLs, err)
 	}

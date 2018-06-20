@@ -16,122 +16,104 @@ package main
 import (
 	"bytes"
 	"os"
-	"sync"
+	"path"
 	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	pd "github.com/pingcap/pd/pd-client"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/siddontang/go/ioutil2"
+	"golang.org/x/net/context"
 )
 
-var (
-	maxSaveTime = 30 * time.Second
-)
+const physicalShiftBits = 18
+const slowDist = 30 * time.Millisecond
 
-// Meta is savepoint meta interface
-type Meta interface {
-	// Load loads meta information.
-	Load() error
-
-	// Save saves meta information.
-	Save(int64, string) error
-
-	// Check checks whether we should save meta.
-	Check() bool
-
-	// Pos gets position information.
-	Pos() int64
-}
-
-// LocalMeta is local meta struct.
-type localMeta struct {
-	sync.RWMutex
-
-	name     string
-	saveTime time.Time
-
-	CommitTS int64 `toml:"commitTS" json:"commitTS"`
-	// drainer only stores the binlog file suffix
-	//Suffixs map[string]uint64 `toml:"suffixs" json:"suffixs"`
-}
-
-// NewLocalMeta creates a new LocalMeta.
-func NewLocalMeta(name string) Meta {
-	return &localMeta{name: name}
-}
-
-// Load implements Meta.Load interface.
-func (lm *localMeta) Load() error {
-	file, err := os.Open(lm.name)
-	if err != nil && !os.IsNotExist(errors.Cause(err)) {
+// generateMeta generates Meta from pd
+func generateMeta(cfg *Config) error {
+	if err := os.MkdirAll(cfg.DataDir, 0700); err != nil {
 		return errors.Trace(err)
 	}
-	if os.IsNotExist(errors.Cause(err)) {
-		return nil
-	}
-	defer file.Close()
 
-	_, err = toml.DecodeReader(file, lm)
+	// get newest ts from pd
+	commitTS, err := GetTSO(cfg)
+	if err != nil {
+		log.Errorf("get tso failed: %s", err)
+		return errors.Trace(err)
+	}
+
+	// generate meta file
+	metaFileName := path.Join(cfg.DataDir, "savepoint")
+	err = saveMeta(metaFileName, commitTS, cfg.TimeZone)
 	return errors.Trace(err)
 }
 
-// Save implements Meta.Save interface.
-func (lm *localMeta) Save(ts int64, timeZone string) error {
-	log.Infof("local meta save")
-	lm.Lock()
-	defer lm.Unlock()
+// GetTSO gets ts from pd
+func GetTSO(cfg *Config) (int64, error) {
+	now := time.Now()
 
-	lm.CommitTS = ts
+	ectdEndpoints, err := utils.ParseHostPortAddr(cfg.EtcdURLs)
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+
+	pdCli, err := pd.NewClient(ectdEndpoints, pd.SecurityOption{
+		CAPath:   cfg.SSLCA,
+		CertPath: cfg.SSLCert,
+		KeyPath:  cfg.SSLKey,
+	})
+	physical, logical, err := pdCli.GetTS(context.Background())
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+	dist := time.Since(now)
+	if dist > slowDist {
+		log.Warnf("get timestamp too slow: %s", dist)
+	}
+
+	return int64(composeTS(physical, logical)), nil
+}
+
+func composeTS(physical, logical int64) uint64 {
+	return uint64((physical << physicalShiftBits) + logical)
+}
+
+// Meta contains commit TS that can be used to specifies the location of the synchronized data
+// TODO: improve meta later, like adding offset of kafka topic that corresponds to each pump node
+type Meta struct {
+	CommitTS int64 `toml:"commitTS" json:"commitTS"`
+}
+
+// saveMeta saves current tso in meta file.
+func saveMeta(metaFileName string, ts int64, timeZone string) error {
+	meta := &Meta{CommitTS: ts}
 
 	var buf bytes.Buffer
 	e := toml.NewEncoder(&buf)
-	err := e.Encode(lm)
+	err := e.Encode(meta)
 	if err != nil {
-		log.Errorf("syncer save meta info to file %s err %v", lm.name, errors.ErrorStack(err))
-		return errors.Trace(err)
+		return errors.Annotatef(err, "save meta %s into %s", meta, metaFileName)
 	}
 
 	if timeZone != "" {
 		t := utils.TSOToRoughTime(ts)
 		location, err := time.LoadLocation(timeZone)
 		if err != nil {
-			return errors.Trace(err)
+			log.Warningf("fail to load location %s", timeZone)
+		} else {
+			buf.WriteString(t.UTC().String())
+			buf.WriteByte('\n')
+			buf.WriteString(t.In(location).String())
 		}
-
-		buf.WriteString(t.UTC().String())
-		buf.WriteByte('\n')
-		buf.WriteString(t.In(location).String())
 	}
 
-	err = ioutil2.WriteFileAtomic(lm.name, buf.Bytes(), 0644)
+	err = ioutil2.WriteFileAtomic(metaFileName, buf.Bytes(), 0644)
 	if err != nil {
-		log.Errorf("syncer save meta info to file %s err %v", lm.name, errors.ErrorStack(err))
-		return errors.Trace(err)
+		return errors.Annotatef(err, "save meta %s into %s", meta, metaFileName)
 	}
 
-	lm.saveTime = time.Now()
-	log.Infof("ts: %d", ts)
+	log.Infof("meta: %+v", meta)
 	return nil
-}
-
-// Check implements Meta.Check interface.
-func (lm *localMeta) Check() bool {
-	lm.RLock()
-	defer lm.RUnlock()
-
-	if time.Since(lm.saveTime) >= maxSaveTime {
-		return true
-	}
-
-	return false
-}
-
-// Pos implements Meta.Pos interface.
-func (lm *localMeta) Pos() int64 {
-	lm.RLock()
-	defer lm.RUnlock()
-
-	return lm.CommitTS
 }

@@ -24,24 +24,24 @@ func main() {
 	cfg := NewConfig()
 
 	if err := cfg.Parse(os.Args[1:]); err != nil {
-		log.Infof("verifying flags error, See 'drainer --help'. %s", errors.ErrorStack(err))
+		log.Infof("verifying flags error, See 'binlogctl --help'. %s", errors.ErrorStack(err))
 	}
 
 	var err error
 	switch cfg.Command {
-	case generateSavepoint:
-		err = GenSavepointInfo(cfg)
+	case generateMeta:
+		err = generateMeta(cfg)
 	case queryPumps:
-		err = queryService(cfg.EtcdURLs, pumpService)
+		err = queryNodesByKind(cfg.EtcdURLs, pumpNode)
 	case queryDrainer:
-		err = queryService(cfg.EtcdURLs, drainerService)
+		err = queryNodesByKind(cfg.EtcdURLs, drainerNode)
 	case unregisterPumps:
-		err = unregisterService(cfg.EtcdURLs, pumpService, cfg.NodeID)
+		err = unregisterNode(cfg.EtcdURLs, pumpNode, cfg.NodeID)
 	case unregisterDrainer:
-		err = unregisterService(cfg.EtcdURLs, drainerService, cfg.NodeID)
+		err = unregisterNode(cfg.EtcdURLs, drainerNode, cfg.NodeID)
 	}
 
 	if err != nil {
-		log.Fatalf("fail to execute %s error %v", cfg.Command, err)
+		log.Fatalf("fail to execute %s error %v", cfg.Command, errors.ErrorStack(err))
 	}
 }
