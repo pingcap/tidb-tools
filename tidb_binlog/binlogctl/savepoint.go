@@ -22,7 +22,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/pd/pd-client"
+	pd "github.com/pingcap/pd/pd-client"
 	"github.com/pingcap/tidb-tools/pkg/flags"
 	"golang.org/x/net/context"
 )
@@ -49,7 +49,7 @@ func GenSavepointInfo(cfg *Config) error {
 	return errors.Trace(err)
 }
 
-// GetTSO returns tso
+// GetTSO gets ts from pd
 func GetTSO(cfg *Config) (int64, error) {
 	now := time.Now()
 

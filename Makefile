@@ -8,7 +8,7 @@ GO       := GO15VENDOREXPERIMENT="1" go
 GOTEST   := CGO_ENABLED=1 $(GO) test -p 3
 PACKAGES := $$(go list ./... | grep -vE 'vendor')
 
-.PHONY: build importer checker dump_region binlogctl test check deps pb_reader
+.PHONY: build importer checker dump_region binlogctl sync_diff_inspector test check deps
 
 build: importer checker check test
 
@@ -18,17 +18,14 @@ importer:
 checker:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/checker ./checker
 
-pb_reader:
-	$(GO) build -ldflags '$(LDFLAGS)' -o bin/pb_reader ./pb_reader
-
 dump_region:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/dump_region ./dump_region
 
 binlogctl:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/binlogctl ./tidb_binlog/binlogctl
 
-sync_check:
-	$(GO) build -ldflags '$(LDFLAGS)' -o bin/sync_check ./sync_check
+sync_diff_inspector:
+	$(GO) build -ldflags '$(LDFLAGS)' -o bin/sync_diff_inspector ./sync_diff_inspector
 
 test:
 	@export log_level=error; \
@@ -40,7 +37,7 @@ check:
 	$(GO) tool vet . 2>&1 | grep -vE 'vendor' | awk '{print} END{if(NR>0) {exit 1}}'
 	$(GO) tool vet --shadow . 2>&1 | grep -vE 'vendor' | awk '{print} END{if(NR>0) {exit 1}}'
 	golint ./... 2>&1 | grep -vE 'vendor' | awk '{print} END{if(NR>0) {exit 1}}'
-	gofmt -s -l . 2>&1 | grep -vE 'vendor' | awk '{print} END{if(NR>0) {exit 1}}'
+	gofmt -w -s -l . 2>&1 | grep -vE 'vendor' | awk '{print} END{if(NR>0) {exit 1}}'
 
 update:
 	which glide >/dev/null || curl https://glide.sh/get | sh

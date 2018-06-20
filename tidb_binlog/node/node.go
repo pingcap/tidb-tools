@@ -6,7 +6,7 @@ import (
 	pb "github.com/pingcap/tipb/go-binlog"
 )
 
-// Node desribe a service node for tidb-binlog
+// Node desribes a service node for tidb-binlog
 type Node struct {
 	*EtcdRegistry
 	id                string
