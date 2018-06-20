@@ -1,4 +1,4 @@
-// Copyright 2016 PingCAP, Inc.
+// Copyright 2018 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,14 +11,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package pkg
+package utils
 
 import (
 	"time"
 )
 
-// TsToTime translate ts to rough time used to display
-func TsToRoughTime(ts int64) time.Time {
+// TSOToTime translates tso to rough time that used to display
+func TSOToRoughTime(ts int64) time.Time {
 	t := time.Unix(ts>>18/1000, 0)
 	return t
 }
