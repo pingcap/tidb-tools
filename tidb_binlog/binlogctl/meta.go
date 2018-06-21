@@ -32,7 +32,7 @@ const physicalShiftBits = 18
 const slowDist = 30 * time.Millisecond
 
 // generateMeta generates Meta from pd
-func generateMeta(cfg *Config) error {
+func generateMetaInfo(cfg *Config) error {
 	if err := os.MkdirAll(cfg.DataDir, 0700); err != nil {
 		return errors.Trace(err)
 	}

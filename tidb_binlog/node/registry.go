@@ -43,7 +43,7 @@ func (r *EtcdRegistry) prefixed(p ...string) string {
 }
 
 // Node returns the nodeStatus that matchs nodeID in the etcd
-func (r *EtcdRegistry) Node(pctx context.Context, prefix, nodeID string) (*Status, error) {
+func (r *EtcdRegistry) Node(pctx context.Context, prefix, nodeID string) (*NodeStatus, error) {
 	ctx, cancel := context.WithTimeout(pctx, r.reqTimeout)
 	defer cancel()
 
@@ -59,7 +59,7 @@ func (r *EtcdRegistry) Node(pctx context.Context, prefix, nodeID string) (*Statu
 }
 
 // Nodes retruns all the nodeStatuses in the etcd
-func (r *EtcdRegistry) Nodes(pctx context.Context, prefix string) ([]*Status, error) {
+func (r *EtcdRegistry) Nodes(pctx context.Context, prefix string) ([]*NodeStatus, error) {
 	ctx, cancel := context.WithTimeout(pctx, r.reqTimeout)
 	defer cancel()
 
@@ -95,7 +95,7 @@ func (r *EtcdRegistry) MarkOfflineNode(pctx context.Context, prefix, nodeID, hos
 	ctx, cancel := context.WithTimeout(pctx, r.reqTimeout)
 	defer cancel()
 
-	obj := &Status{
+	obj := &NodeStatus{
 		NodeID:         nodeID,
 		Host:           host,
 		IsOffline:      true,
@@ -145,7 +145,7 @@ func (r *EtcdRegistry) UpdateNode(pctx context.Context, prefix, nodeID, host str
 }
 
 func (r *EtcdRegistry) updateNode(ctx context.Context, prefix, nodeID, host string) error {
-	obj := &Status{
+	obj := &NodeStatus{
 		NodeID: nodeID,
 		Host:   host,
 	}
@@ -159,7 +159,7 @@ func (r *EtcdRegistry) updateNode(ctx context.Context, prefix, nodeID, host stri
 }
 
 func (r *EtcdRegistry) createNode(ctx context.Context, prefix, nodeID, host string) error {
-	obj := &Status{
+	obj := &NodeStatus{
 		NodeID: nodeID,
 		Host:   host,
 	}
@@ -193,10 +193,10 @@ func (r *EtcdRegistry) RefreshNode(pctx context.Context, prefix, nodeID string, 
 	return errors.Trace(err)
 }
 
-func nodeStatusFromEtcdNode(id string, node *etcd.Node) (*Status, error) {
+func nodeStatusFromEtcdNode(id string, node *etcd.Node) (*NodeStatus, error) {
 	var (
 		isAlive       bool
-		status        = &Status{}
+		status        = &NodeStatus{}
 		latestPos     = &LatestPos{}
 		isObjectExist bool
 	)
@@ -228,8 +228,8 @@ func nodeStatusFromEtcdNode(id string, node *etcd.Node) (*Status, error) {
 	return status, nil
 }
 
-func nodesStatusFromEtcdNode(root *etcd.Node) ([]*Status, error) {
-	var statuses []*Status
+func nodesStatusFromEtcdNode(root *etcd.Node) ([]*NodeStatus, error) {
+	var statuses []*NodeStatus
 	for id, n := range root.Childs {
 		status, err := nodeStatusFromEtcdNode(id, n)
 		if err != nil {

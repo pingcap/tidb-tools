@@ -30,7 +30,7 @@ func main() {
 	var err error
 	switch cfg.Command {
 	case generateMeta:
-		err = generateMeta(cfg)
+		err = generateMetaInfo(cfg)
 	case queryPumps:
 		err = queryNodesByKind(cfg.EtcdURLs, pumpNode)
 	case queryDrainer:
