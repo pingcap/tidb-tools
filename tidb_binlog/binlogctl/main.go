@@ -14,6 +14,7 @@
 package main
 
 import (
+	"flag"
 	"os"
 
 	"github.com/juju/errors"
@@ -22,12 +23,16 @@ import (
 
 func main() {
 	cfg := NewConfig()
-
-	if err := cfg.Parse(os.Args[1:]); err != nil {
-		log.Infof("verifying flags error, See 'binlogctl --help'. %s", errors.ErrorStack(err))
+	err := cfg.Parse(os.Args[1:])
+	switch err {
+	case nil:
+	case flag.ErrHelp:
+		os.Exit(0)
+	default:
+		log.Errorf("parse cmd flags err %v", err)
+		os.Exit(2)
 	}
 
-	var err error
 	switch cfg.Command {
 	case generateMeta:
 		err = generateMetaInfo(cfg)

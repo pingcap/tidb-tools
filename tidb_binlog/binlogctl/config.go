@@ -16,7 +16,7 @@ package main
 import (
 	"crypto/tls"
 	"flag"
-	"os"
+	"fmt"
 
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb-tools/pkg/utils"
@@ -39,15 +39,16 @@ const (
 type Config struct {
 	*flag.FlagSet
 
-	Command  string `toml:"cmd" json:"cmd"`
-	NodeID   string `toml:"node-id" json:"node-id"`
-	DataDir  string `toml:"data-dir" json:"data-dir"`
-	TimeZone string `toml:"time-zone" json:"time-zone"`
-	EtcdURLs string `toml:"pd-urls" json:"pd-urls"`
-	SSLCA    string `toml:"ssl-ca" json:"ssl-ca"`
-	SSLCert  string `toml:"ssl-cert" json:"ssl-cert"`
-	SSLKey   string `toml:"ssl-key" json:"ssl-key"`
-	tls      *tls.Config
+	Command      string `toml:"cmd" json:"cmd"`
+	NodeID       string `toml:"node-id" json:"node-id"`
+	DataDir      string `toml:"data-dir" json:"data-dir"`
+	TimeZone     string `toml:"time-zone" json:"time-zone"`
+	EtcdURLs     string `toml:"pd-urls" json:"pd-urls"`
+	SSLCA        string `toml:"ssl-ca" json:"ssl-ca"`
+	SSLCert      string `toml:"ssl-cert" json:"ssl-cert"`
+	SSLKey       string `toml:"ssl-key" json:"ssl-key"`
+	tls          *tls.Config
+	printVersion bool
 }
 
 // NewConfig returns an instance of configuration
@@ -63,6 +64,7 @@ func NewConfig() *Config {
 	cfg.FlagSet.StringVar(&cfg.SSLCert, "ssl-cert", "", "Path of file that contains X509 certificate in PEM format for connection with cluster components.")
 	cfg.FlagSet.StringVar(&cfg.SSLKey, "ssl-key", "", "Path of file that contains X509 key in PEM format for connection with cluster components.")
 	cfg.FlagSet.StringVar(&cfg.TimeZone, "time-zone", "", "set time zone if you want save time info in savepoint file, for example `Asia/Shanghai` for CST time, `Local` for local time")
+	cfg.FlagSet.BoolVar(&cfg.printVersion, "V", false, "prints version and exit")
 
 	return cfg
 }
@@ -70,24 +72,23 @@ func NewConfig() *Config {
 // Parse parses all config from command-line flags, environment vars or the configuration file
 func (cfg *Config) Parse(args []string) error {
 	// parse first to get config file
-	perr := cfg.FlagSet.Parse(args)
-	switch perr {
-	case nil:
-	case flag.ErrHelp:
-		os.Exit(0)
-	default:
-		os.Exit(2)
+	err := cfg.FlagSet.Parse(args)
+	if err != nil {
+		return errors.Trace(err)
 	}
-
 	// parse command line options
-	cfg.FlagSet.Parse(args)
 	if len(cfg.FlagSet.Args()) > 0 {
 		return errors.Errorf("'%s' is not a valid flag", cfg.FlagSet.Arg(0))
 	}
+
+	if cfg.printVersion {
+		fmt.Printf(utils.GetRawInfo("importer"))
+		return flag.ErrHelp
+	}
+
 	// adjust configuration
 	adjustString(&cfg.DataDir, defaultDataDir)
 
-	var err error
 	// transfore tls config
 	cfg.tls, err = utils.ToTLSConfig(cfg.SSLCA, cfg.SSLCert, cfg.SSLKey)
 	if err != nil {
