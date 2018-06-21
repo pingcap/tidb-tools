@@ -15,22 +15,34 @@ package utils
 
 import (
 	"net"
+	"net/url"
 	"strings"
 
 	"github.com/juju/errors"
 )
 
-// ParseHostPortAddr returns a host:port list
+// ParseHostPortAddr returns a scheme://host:port list
 func ParseHostPortAddr(s string) ([]string, error) {
 	strs := strings.Split(s, ",")
 	addrs := make([]string, 0, len(strs))
+
 	for _, str := range strs {
 		str = strings.TrimSpace(str)
-		_, _, err := net.SplitHostPort(str)
+		u, err := url.Parse(str)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		addrs = append(addrs, str)
+		if u.Scheme != "http" && u.Scheme != "https" && u.Scheme != "unix" && u.Scheme != "unixs" {
+			return nil, errors.Errorf("URL scheme must be http, https, unix, or unixs: %s", str)
+		}
+		if _, _, err := net.SplitHostPort(u.Host); err != nil {
+			return nil, errors.Errorf(`URL address does not have the form "host:port": %s`, str)
+		}
+		if u.Path != "" {
+			return nil, errors.Errorf("URL must not contain a path: %s", str)
+		}
+		addrs = append(addrs, u.String())
 	}
+
 	return addrs, nil
 }
