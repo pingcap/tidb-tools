@@ -55,21 +55,15 @@ func (c *DBConfig) String() string {
 }
 
 // CreateDB create a mysql fd
-func CreateDB(cfg DBConfig, snapshot string) (*sql.DB, error) {
+func CreateDB(cfg DBConfig) (*sql.DB, error) {
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Schema)
 	dbConn, err := sql.Open("mysql", dbDSN)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	if snapshot != "" {
-		err = SetSnapshot(dbConn, snapshot)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-	}
-
-	return dbConn, nil
+	err = dbConn.Ping()
+	return dbConn, errors.Trace(err)
 }
 
 // CloseDB closes the mysql fd
@@ -77,7 +71,7 @@ func CloseDB(db *sql.DB) error {
 	return errors.Trace(db.Close())
 }
 
-// GetCreateTableSQL gets the create table sql.
+// GetCreateTableSQL gets the create table statements.
 func GetCreateTableSQL(db *sql.DB, schemaName string, tableName string) (string, error) {
 	/*
 		show create table example result:
@@ -100,12 +94,13 @@ func GetCreateTableSQL(db *sql.DB, schemaName string, tableName string) (string,
 		return "", errors.Trace(err)
 	}
 	if !tbl.Valid || !createTable.Valid {
-		return "", errors.NotFoundf("table %s not exist", tableName)
+		return "", errors.NotFoundf("table %s", tableName)
 	}
 	return createTable.String, nil
 }
 
-// GetRowCount returns row count of the table by given where condition.
+// GetRowCount returns row count of the table.
+// if not specify where condition, return total row count of the table.
 func GetRowCount(db *sql.DB, dbName string, table string, where string) (int64, error) {
 	/*
 		select count example result:
@@ -117,7 +112,11 @@ func GetRowCount(db *sql.DB, dbName string, table string, where string) (int64, 
 		+------+
 	*/
 
-	query := fmt.Sprintf("SELECT COUNT(1) cnt FROM `%s`.`%s` WHERE %s", dbName, table, where)
+	query := fmt.Sprintf("SELECT COUNT(1) cnt FROM `%s`.`%s`", dbName, table, where)
+	if len(where) > 0 {
+		query += fmt.Sprintf(" WHERE %s", where)
+	}
+
 	rows, err := QuerySQL(db, query)
 	if err != nil {
 		return 0, errors.Trace(err)
@@ -138,130 +137,6 @@ func GetRowCount(db *sql.DB, dbName string, table string, where string) (int64, 
 	}
 	cnt, err := strconv.ParseInt(string(cntStr), 10, 64)
 	return cnt, errors.Trace(err)
-}
-
-// IndexInfo saves index's information.
-type IndexInfo struct {
-	Table       string
-	NoneUnique  bool
-	KeyName     string
-	SeqInIndex  int
-	ColumnName  string
-	Cardinality int
-}
-
-// ShowIndex returns result of executing `show index`
-func ShowIndex(db *sql.DB, dbName string, table string) ([]*IndexInfo, error) {
-	/*
-		show index example result:
-		mysql> show index from test;
-		+-------+------------+----------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
-		| Table | Non_unique | Key_name | Seq_in_index | Column_name | Collation | Cardinality | Sub_part | Packed | Null | Index_type | Comment | Index_comment |
-		+-------+------------+----------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
-		| test  | 0          | PRIMARY  | 1            | id          | A         | 0           | NULL     | NULL   |      | BTREE      |         |               |
-		| test  | 0          | aid      | 1            | aid         | A         | 0           | NULL     | NULL   | YES  | BTREE      |         |               |
-		+-------+------------+----------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
-	*/
-	indices := make([]*IndexInfo, 0, 3)
-	query := fmt.Sprintf("SHOW INDEX FROM `%s`.`%s`", dbName, table)
-	rows, err := QuerySQL(db, query)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		fields, err1 := ScanRow(rows)
-		if err1 != nil {
-			return nil, errors.Trace(err1)
-		}
-		seqInINdex, err1 := strconv.Atoi(string(fields["Seq_in_index"]))
-		if err != nil {
-			return nil, errors.Trace(err1)
-		}
-		cardinality, err1 := strconv.Atoi(string(fields["Cardinality"]))
-		if err != nil {
-			return nil, errors.Trace(err1)
-		}
-		index := &IndexInfo{
-			Table:       string(fields["Table"]),
-			NoneUnique:  string(fields["Non_unique"]) == "1",
-			KeyName:     string(fields["Key_name"]),
-			ColumnName:  string(fields["Column_name"]),
-			SeqInIndex:  seqInINdex,
-			Cardinality: cardinality,
-		}
-		indices = append(indices, index)
-	}
-
-	return indices, nil
-}
-
-// FindSuitableIndex returns a suitable index.
-func FindSuitableIndex(db *sql.DB, dbName string, tableInfo *model.TableInfo) (*model.ColumnInfo, error) {
-	// find primary key
-	for _, index := range tableInfo.Indices {
-		if index.Primary {
-			return GetColumnByName(tableInfo, index.Columns[0].Name.O), nil
-		}
-	}
-
-	// no primary key found, seek unique index
-	for _, index := range tableInfo.Indices {
-		if index.Unique {
-			return GetColumnByName(tableInfo, index.Columns[0].Name.O), nil
-		}
-	}
-
-	// no unique index found, seek index with max cardinality
-	indices, err := ShowIndex(db, dbName, tableInfo.Name.O)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	var c *model.ColumnInfo
-	var maxCardinality int
-	for _, indexInfo := range indices {
-		// just use the first column in the index, otherwise can't hit the index when select
-		if indexInfo.SeqInIndex != 1 {
-			continue
-		}
-
-		if indexInfo.Cardinality > maxCardinality {
-			column := GetColumnByName(tableInfo, indexInfo.ColumnName)
-			if column == nil {
-				return nil, errors.NotFoundf("column %s in %s.%s", indexInfo.ColumnName, dbName, tableInfo.Name.O)
-			}
-			maxCardinality = indexInfo.Cardinality
-			c = column
-		}
-	}
-
-	return c, nil
-}
-
-// GetOrderKey return some columns for order.
-func GetOrderKey(tbInfo *model.TableInfo) ([]string, []*model.ColumnInfo) {
-	keys := make([]string, 0, 2)
-	keyCols := make([]*model.ColumnInfo, 0, 2)
-
-	for _, index := range tbInfo.Indices {
-		if index.Primary {
-			for _, indexCol := range index.Columns {
-				keys = append(keys, indexCol.Name.O)
-				keyCols = append(keyCols, tbInfo.Columns[indexCol.Offset])
-			}
-		}
-	}
-
-	if len(keys) == 0 {
-		// no primary key found, use all fields as order by key
-		for _, col := range tbInfo.Columns {
-			keys = append(keys, col.Name.O)
-			keyCols = append(keyCols, col)
-		}
-	}
-
-	return keys, keyCols
 }
 
 // GetRandomValues returns some random value of a column, not used for number type column.
@@ -397,7 +272,7 @@ func GetTidbPosition(db *sql.DB) (int64, error) {
 
 // QuerySQL queries sql, and returns some row
 func QuerySQL(db *sql.DB, query string) (*sql.Rows, error) {
-	log.Debugf("[query][sql]%s", query)
+	log.Debugf("[query][sql] %s", query)
 	rows, err := db.Query(query)
 	if err != nil {
 		log.Errorf("query sql[%s] failed %v", query, errors.ErrorStack(err))
@@ -456,13 +331,9 @@ func ScanRow(rows *sql.Rows) (map[string][]byte, error) {
 // SetSnapshot set the snapshot variable for tidb
 func SetSnapshot(db *sql.DB, snapshot string) error {
 	sql := fmt.Sprintf("SET @@tidb_snapshot='%s'", snapshot)
-	log.Infof("set snapshot: %s", sql)
+	log.Infof("set history snapshot: %s", sql)
 	_, err := db.Exec(sql)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	return nil
+	return errors.Trace(err)
 }
 
 // IsNumberType returns true if is number type
