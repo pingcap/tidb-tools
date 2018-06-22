@@ -1,9 +1,12 @@
-package db
+package dbutil
 
 import (
 	"database/sql"
 	"fmt"
 	"strconv"
+
+	"github.com/juju/errors"
+	"github.com/pingcap/tidb/model"
 )
 
 // IndexInfo saves index's information.
@@ -68,14 +71,14 @@ func FindSuitableIndex(db *sql.DB, dbName string, tableInfo *model.TableInfo) (*
 	// find primary key
 	for _, index := range tableInfo.Indices {
 		if index.Primary {
-			return GetColumnByName(tableInfo, index.Columns[0].Name.O), nil
+			return findCol(tableInfo.Columns, index.Columns[0].Name.O), nil
 		}
 	}
 
 	// no primary key found, seek unique index
 	for _, index := range tableInfo.Indices {
 		if index.Unique {
-			return GetColumnByName(tableInfo, index.Columns[0].Name.O), nil
+			return findCol(tableInfo.Columns, index.Columns[0].Name.O), nil
 		}
 	}
 
@@ -93,7 +96,7 @@ func FindSuitableIndex(db *sql.DB, dbName string, tableInfo *model.TableInfo) (*
 		}
 
 		if indexInfo.Cardinality > maxCardinality {
-			column := GetColumnByName(tableInfo, indexInfo.ColumnName)
+			column := findCol(tableInfo.Columns, indexInfo.ColumnName)
 			if column == nil {
 				return nil, errors.NotFoundf("column %s in %s.%s", indexInfo.ColumnName, dbName, tableInfo.Name.O)
 			}
@@ -105,8 +108,8 @@ func FindSuitableIndex(db *sql.DB, dbName string, tableInfo *model.TableInfo) (*
 	return c, nil
 }
 
-// GetOrderKey return some columns for order.
-func GetOrderKey(tbInfo *model.TableInfo) ([]string, []*model.ColumnInfo) {
+// SelectUniqueOrderKey returns some columns for orderby condition.
+func SelectUniqueOrderKey(tbInfo *model.TableInfo) ([]string, []*model.ColumnInfo) {
 	keys := make([]string, 0, 2)
 	keyCols := make([]*model.ColumnInfo, 0, 2)
 

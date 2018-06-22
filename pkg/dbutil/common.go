@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package pkgdb
+package dbutil
 
 import (
 	"database/sql"
@@ -22,7 +22,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb/model"
-	"github.com/pingcap/tidb/mysql"
 )
 
 const (
@@ -167,19 +166,6 @@ func GetRandomValues(db *sql.DB, dbName string, table string, column string, num
 	return randomValue, nil
 }
 
-// GetColumnByName returns a column by column name
-func GetColumnByName(table *model.TableInfo, name string) *model.ColumnInfo {
-	var c *model.ColumnInfo
-	for _, column := range table.Columns {
-		if column.Name.O == name {
-			c = column
-			break
-		}
-	}
-
-	return c
-}
-
 // GetTables gets all table in the schema
 func GetTables(db *sql.DB, dbName string) ([]string, error) {
 	rs, err := QuerySQL(db, fmt.Sprintf("SHOW TABLES IN `%s`;", dbName))
@@ -238,8 +224,8 @@ func GetCRC32Checksum(db *sql.DB, schemaName string, tbInfo *model.TableInfo, or
 	return "", nil
 }
 
-// GetTidbPosition gets tidb's position.
-func GetTidbPosition(db *sql.DB) (int64, error) {
+// GetTidbLatestTSO returns tidb's latest TSO.
+func GetTidbLatestTSO(db *sql.DB) (int64, error) {
 	/*
 		example in tidb:
 		mysql> SHOW MASTER STATUS;
@@ -270,88 +256,10 @@ func GetTidbPosition(db *sql.DB) (int64, error) {
 	return 0, errors.New("get slave cluster's ts failed")
 }
 
-// QuerySQL queries sql, and returns some row
-func QuerySQL(db *sql.DB, query string) (*sql.Rows, error) {
-	log.Debugf("[query][sql] %s", query)
-	rows, err := db.Query(query)
-	if err != nil {
-		log.Errorf("query sql[%s] failed %v", query, errors.ErrorStack(err))
-		return nil, errors.Trace(err)
-	}
-	return rows, nil
-}
-
-// ScanRowsToInterfaces scans rows to interfaces.
-func ScanRowsToInterfaces(rows *sql.Rows) ([][]interface{}, error) {
-	var rowsData [][]interface{}
-	cols, err := rows.Columns()
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	for rows.Next() {
-		colVals := make([]interface{}, len(cols))
-
-		err = rows.Scan(colVals...)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		rowsData = append(rowsData, colVals)
-	}
-
-	return rowsData, nil
-}
-
-// ScanRow scans rows into a map.
-func ScanRow(rows *sql.Rows) (map[string][]byte, error) {
-	cols, err := rows.Columns()
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	colVals := make([][]byte, len(cols))
-	colValsI := make([]interface{}, len(colVals))
-	for i := range colValsI {
-		colValsI[i] = &colVals[i]
-	}
-
-	err = rows.Scan(colValsI...)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	result := make(map[string][]byte)
-	for i := range colVals {
-		result[cols[i]] = colVals[i]
-	}
-
-	return result, nil
-}
-
 // SetSnapshot set the snapshot variable for tidb
 func SetSnapshot(db *sql.DB, snapshot string) error {
 	sql := fmt.Sprintf("SET @@tidb_snapshot='%s'", snapshot)
 	log.Infof("set history snapshot: %s", sql)
 	_, err := db.Exec(sql)
 	return errors.Trace(err)
-}
-
-// IsNumberType returns true if is number type
-func IsNumberType(tp byte) bool {
-	switch tp {
-	case mysql.TypeTiny, mysql.TypeShort, mysql.TypeLong, mysql.TypeLonglong, mysql.TypeInt24, mysql.TypeYear:
-		return true
-	}
-
-	return false
-}
-
-// IsFloatType returns true if is float type
-func IsFloatType(tp byte) bool {
-	switch tp {
-	case mysql.TypeFloat, mysql.TypeDouble, mysql.TypeNewDecimal:
-		return true
-	}
-
-	return false
 }
