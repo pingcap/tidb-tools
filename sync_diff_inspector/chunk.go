@@ -20,7 +20,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-tools/pkg/db"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/model"
 )
 
@@ -67,7 +67,7 @@ func getChunksForTable(db *sql.DB, Schema, tableName string, column *model.Colum
 		"/*!40001 SQL_NO_CACHE */", field, field, Schema, tableName, where)
 
 	// get the chunk count
-	cnt, err := pkgdb.GetRowCount(db, Schema, tableName, where)
+	cnt, err := dbutil.GetRowCount(db, Schema, tableName, where)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -83,7 +83,7 @@ func getChunksForTable(db *sql.DB, Schema, tableName string, column *model.Colum
 	}
 
 	var chunk chunkRange
-	if pkgdb.IsNumberType(column.Tp) {
+	if dbutil.IsNumberType(column.Tp) {
 		var min, max sql.NullInt64
 		err := db.QueryRow(query).Scan(&min, &max)
 		if err != nil {
@@ -94,7 +94,7 @@ func getChunksForTable(db *sql.DB, Schema, tableName string, column *model.Colum
 			return nil, nil
 		}
 		chunk = newChunkRange(min.Int64, max.Int64, true, true)
-	} else if pkgdb.IsFloatType(column.Tp) {
+	} else if dbutil.IsFloatType(column.Tp) {
 		var min, max sql.NullFloat64
 		err := db.QueryRow(query).Scan(&min, &max)
 		if err != nil {
@@ -164,7 +164,7 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 		}
 
 		// get random value as split value
-		splitValues, err := pkgdb.GetRandomValues(db, Schema, table, column.Name.O, count-1, min, max, limitRange)
+		splitValues, err := dbutil.GetRandomValues(db, Schema, table, column.Name.O, count-1, min, max, limitRange)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -196,7 +196,7 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 
 func findSuitableField(db *sql.DB, Schema string, table *model.TableInfo) (*model.ColumnInfo, error) {
 	// first select the index, and number type index first
-	column, err := pkgdb.FindSuitableIndex(db, Schema, table)
+	column, err := dbutil.FindSuitableIndex(db, Schema, table)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -224,7 +224,7 @@ func GenerateCheckJob(db *sql.DB, Schema string, table *model.TableInfo, splitFi
 			return nil, errors.Trace(err)
 		}
 	} else {
-		column = pkgdb.GetColumnByName(table, splitField)
+		column = dbutil.FindColumnByName(table.Columns, splitField)
 		if column == nil {
 			return nil, errors.NotFoundf("column %s in table %s", splitField, table.Name.O)
 		}

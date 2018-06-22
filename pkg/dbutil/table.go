@@ -239,7 +239,7 @@ func buildIndexColumns(columns []*model.ColumnInfo, idxColNames []*ast.IndexColN
 	idxColumns := make([]*model.IndexColumn, 0, len(idxColNames))
 
 	for _, ic := range idxColNames {
-		col := findCol(columns, ic.Column.Name.O)
+		col := FindColumnByName(columns, ic.Column.Name.O)
 
 		idxColumns = append(idxColumns, &model.IndexColumn{
 			Name:   col.Name,
@@ -256,8 +256,8 @@ func allocateColumnID(tblInfo *model.TableInfo) int64 {
 	return tblInfo.MaxColumnID
 }
 
-// findCol finds column in cols by name.
-func findCol(cols []*model.ColumnInfo, name string) *model.ColumnInfo {
+// FindColumnByName finds column by name.
+func FindColumnByName(cols []*model.ColumnInfo, name string) *model.ColumnInfo {
 	// column name don't distinguish capital and small letter
 	name = strings.ToLower(name)
 	for _, col := range cols {

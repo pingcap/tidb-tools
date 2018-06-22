@@ -24,7 +24,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-tools/pkg/db"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/model"
 	"github.com/pingcap/tidb/types"
 )
@@ -58,7 +58,7 @@ func NewDiff(db1, db2 *sql.DB, cfg *Config) (diff *Diff, err error) {
 		sqlCh:            make(chan string),
 	}
 	for _, table := range diff.tables {
-		table.Info, err = pkgdb.GetTableInfoWithRowID(diff.db1, diff.schema, table.Name, cfg.UseRowID)
+		table.Info, err = dbutil.GetTableInfoWithRowID(diff.db1, diff.schema, table.Name, cfg.UseRowID)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -87,13 +87,13 @@ func (df *Diff) Equal() (equal bool, err error) {
 	}()
 
 	equal = true
-	tbls1, err := pkgdb.GetTables(df.db1, df.schema)
+	tbls1, err := dbutil.GetTables(df.db1, df.schema)
 	if err != nil {
 		err = errors.Trace(err)
 		return
 	}
 
-	tbls2, err := pkgdb.GetTables(df.db2, df.schema)
+	tbls2, err := dbutil.GetTables(df.db2, df.schema)
 	if err != nil {
 		err = errors.Trace(err)
 		return
@@ -110,7 +110,7 @@ func (df *Diff) Equal() (equal bool, err error) {
 		df.tables = make([]*TableCheckCfg, 0, len(tbls1))
 		for _, name := range tbls1 {
 			table := &TableCheckCfg{Name: name, Schema: df.schema}
-			table.Info, err = pkgdb.GetTableInfoWithRowID(df.db1, df.schema, name, df.useRowID)
+			table.Info, err = dbutil.GetTableInfoWithRowID(df.db1, df.schema, name, df.useRowID)
 			if err != nil {
 				return false, errors.Trace(err)
 			}
@@ -121,7 +121,7 @@ func (df *Diff) Equal() (equal bool, err error) {
 
 	for _, table := range df.tables {
 		tableInfo1 := table.Info
-		tableInfo2, err := pkgdb.GetTableInfoWithRowID(df.db2, df.schema, table.Name, df.useRowID)
+		tableInfo2, err := dbutil.GetTableInfoWithRowID(df.db2, df.schema, table.Name, df.useRowID)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -244,13 +244,13 @@ func (df *Diff) checkChunkDataEqual(checkJobs []*CheckJob, table *TableCheckCfg)
 
 	for _, job := range checkJobs {
 		// first check the checksum is equal or not
-		orderKeys, _ := pkgdb.GetOrderKey(table.Info)
-		checksum1, err := pkgdb.GetCRC32Checksum(df.db1, df.schema, table.Info, orderKeys, job.Where)
+		orderKeys, _ := dbutil.SelectUniqueOrderKey(table.Info)
+		checksum1, err := dbutil.GetCRC32Checksum(df.db1, df.schema, table.Info, orderKeys, job.Where)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
 
-		checksum2, err := pkgdb.GetCRC32Checksum(df.db2, df.schema, table.Info, orderKeys, job.Where)
+		checksum2, err := dbutil.GetCRC32Checksum(df.db2, df.schema, table.Info, orderKeys, job.Where)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -293,14 +293,14 @@ func (df *Diff) compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.Column
 	rowsData2 := make([]map[string][]byte, 0, 100)
 
 	for rows1.Next() {
-		data1, err := pkgdb.ScanRow(rows1)
+		data1, err := dbutil.ScanRow(rows1)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
 		rowsData1 = append(rowsData1, data1)
 	}
 	for rows2.Next() {
-		data2, err := pkgdb.ScanRow(rows2)
+		data2, err := dbutil.ScanRow(rows2)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -422,7 +422,7 @@ func generateDML(tp string, data map[string][]byte, keys []*model.ColumnInfo, ta
 }
 
 func needQuotes(ft types.FieldType) bool {
-	return !(pkgdb.IsNumberType(ft.Tp) || pkgdb.IsFloatType(ft.Tp))
+	return !(dbutil.IsNumberType(ft.Tp) || dbutil.IsFloatType(ft.Tp))
 }
 
 func compareData(map1 map[string][]byte, map2 map[string][]byte, orderKeyCols []*model.ColumnInfo) (bool, int32, error) {
@@ -488,15 +488,15 @@ func compareData(map1 map[string][]byte, map2 map[string][]byte, orderKeyCols []
 }
 
 func getChunkRows(db *sql.DB, schema string, table *TableCheckCfg, where string, useRowID bool) (*sql.Rows, []*model.ColumnInfo, error) {
-	orderKeys, orderKeyCols := pkgdb.GetOrderKey(table.Info)
+	orderKeys, orderKeyCols := dbutil.SelectUniqueOrderKey(table.Info)
 	columns := "*"
-	if orderKeys[0] == pkgdb.ImplicitColName {
-		columns = fmt.Sprintf("*, %s", pkgdb.ImplicitColName)
+	if orderKeys[0] == dbutil.ImplicitColName {
+		columns = fmt.Sprintf("*, %s", dbutil.ImplicitColName)
 	}
 	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ %s FROM `%s`.`%s` WHERE %s ORDER BY %s",
 		columns, schema, table.Name, where, strings.Join(orderKeys, ","))
 
-	rows, err := pkgdb.QuerySQL(db, query)
+	rows, err := dbutil.QuerySQL(db, query)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
