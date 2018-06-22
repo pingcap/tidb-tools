@@ -104,7 +104,7 @@ func (r *EtcdRegistry) MarkOfflineNode(pctx context.Context, prefix, nodeID, hos
 		OfflineTS:      latestTS,
 	}
 
-	log.Infof("[pump] %s mark offline information %+v", nodeID, obj)
+	log.Infof("%s mark offline information %+v", nodeID, obj)
 	objstr, err := json.Marshal(obj)
 	if err != nil {
 		return errors.Annotatef(err, "error marshal NodeStatus(%v)", obj)
