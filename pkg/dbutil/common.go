@@ -53,7 +53,7 @@ func (c *DBConfig) String() string {
 	return fmt.Sprintf("DBConfig(%+v)", *c)
 }
 
-// CreateDB create a mysql fd
+// CreateDB creates a mysql connection FD
 func CreateDB(cfg DBConfig) (*sql.DB, error) {
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Schema)
 	dbConn, err := sql.Open("mysql", dbDSN)
@@ -111,7 +111,7 @@ func GetRowCount(db *sql.DB, dbName string, table string, where string) (int64, 
 		+------+
 	*/
 
-	query := fmt.Sprintf("SELECT COUNT(1) cnt FROM `%s`.`%s`", dbName, table, where)
+	query := fmt.Sprintf("SELECT COUNT(1) cnt FROM `%s`.`%s`", dbName, table)
 	if len(where) > 0 {
 		query += fmt.Sprintf(" WHERE %s", where)
 	}

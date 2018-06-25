@@ -40,7 +40,7 @@ func (*testDiffSuite) TestGenerateSQLs(c *C) {
 		"update_time": []byte("10:10:10"),
 		"money":       []byte("11.1111"),
 	}
-	_, orderKeyCols := dbutil.GetOrderKey(tableInfo)
+	_, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
 	replaceSQL := generateDML("replace", rowsData, orderKeyCols, tableInfo, "test")
 	deleteSQL := generateDML("delete", rowsData, orderKeyCols, tableInfo, "test")
 	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(id,name,birthday,update_time,money) VALUES (1,\"xxx\",\"2018-01-01 00:00:00\",\"10:10:10\",11.1111);")

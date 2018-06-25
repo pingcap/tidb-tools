@@ -88,7 +88,7 @@ func (*testTableSuite) TestTable(c *C) {
 			c.Assert(testCase.indexs[j], Equals, index.Name.O)
 		}
 
-		col := findCol(tableInfo.Columns, testCase.colName)
+		col := FindColumnByName(tableInfo.Columns, testCase.colName)
 		c.Assert(testCase.fineCol, Equals, col != nil)
 	}
 }
