@@ -88,7 +88,7 @@ func unregisterNode(urls, kind, nodeID string) error {
 	return errors.NotFoundf("node %s, id %s from etcd %s", kind, nodeID, urls)
 }
 
-// createRegistry returns am ectd registry
+// createRegistry returns an ectd registry
 func createRegistry(urls string) (*node.EtcdRegistry, error) {
 	ectdEndpoints, err := utils.ParseHostPortAddr(urls)
 	if err != nil {

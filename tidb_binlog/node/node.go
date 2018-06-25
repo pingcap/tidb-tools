@@ -4,8 +4,8 @@ import (
 	pb "github.com/pingcap/tipb/go-binlog"
 )
 
-// NodeStatus describes the status information of a tidb-binlog node in etcd
-type NodeStatus struct {
+// Status describes the status information of a tidb-binlog node in etcd
+type Status struct {
 	NodeID string
 	Host   string
 	// send hearbeats to keep alive

@@ -82,7 +82,7 @@ func (cfg *Config) Parse(args []string) error {
 	}
 
 	if cfg.printVersion {
-		fmt.Printf(utils.GetRawInfo("importer"))
+		fmt.Printf(utils.GetRawInfo("binlogctl"))
 		return flag.ErrHelp
 	}
 
