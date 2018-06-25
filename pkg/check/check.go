@@ -1,16 +1,18 @@
 package check
 
 import (
+	"context"
 	"sync"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 )
 
-// Checker is interface that defines checker.
+// Checker is interface that defines checker to check configurations of system.
+// It is mainly used for configuration checking of data synchronization between database systems.
 type Checker interface {
 	Name() string
-	Check() *Result
+	Check(ctx context.Context) *Result
 }
 
 // State is state of check
@@ -42,7 +44,7 @@ type ResultSummary struct {
 	Total      int64 `json:"total"`
 	Successful int64 `json:"successful"`
 	Failed     int64 `json:"failed"`
-	Warning    int64 `son:"warning"`
+	Warning    int64 `json:"warning"`
 }
 
 // Results contains all check results and summary
@@ -52,7 +54,7 @@ type Results struct {
 }
 
 // Do executes several checkers.
-func Do(checkers []Checker) (*Results, error) {
+func Do(ctx context.Context, checkers []Checker) (*Results, error) {
 	results := &Results{
 		Results: make([]*Result, 0, len(checkers)),
 	}
@@ -105,7 +107,7 @@ func Do(checkers []Checker) (*Results, error) {
 		wg.Add(1)
 		go func(i int, checker Checker) {
 			defer wg.Done()
-			result := checker.Check()
+			result := checker.Check(ctx)
 			result.ID = uint64(i)
 			resultCh <- result
 		}(i, checker)

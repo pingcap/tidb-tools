@@ -1,6 +1,7 @@
 package check
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -29,7 +30,7 @@ func NewSourcePrivilegePreChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker {
 // We only check REPLICATION SLAVE, REPLICATION CLIENT, RELOAD privileges.
 // REPLICATION SLAVE and REPLICATION CLIENT are required.
 // RELOAD is strongly suggested to have.
-func (pc *SourcePrivilegePreChecker) Check() *Result {
+func (pc *SourcePrivilegePreChecker) Check(ctx context.Context) *Result {
 	result := &Result{
 		Name:  pc.Name(),
 		Desc:  "checks data source privileges",
@@ -37,9 +38,9 @@ func (pc *SourcePrivilegePreChecker) Check() *Result {
 		Extra: fmt.Sprintf("%s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
 	}
 
-	grants, err := dbutil.ShowGrants(pc.db, "", "")
+	grants, err := dbutil.ShowGrants(ctx, pc.db, "", "")
 	if err != nil {
-		result.ErrorMsg = errors.ErrorStack(err)
+		markCheckError(result, err)
 		return result
 	}
 	if len(grants) == 0 {

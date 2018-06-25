@@ -14,6 +14,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"reflect"
@@ -67,7 +68,7 @@ func getChunksForTable(db *sql.DB, Schema, tableName string, column *model.Colum
 		"/*!40001 SQL_NO_CACHE */", field, field, Schema, tableName, where)
 
 	// get the chunk count
-	cnt, err := dbutil.GetRowCount(db, Schema, tableName, where)
+	cnt, err := dbutil.GetRowCount(context.Background(), db, Schema, tableName, where)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -164,7 +165,7 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 		}
 
 		// get random value as split value
-		splitValues, err := dbutil.GetRandomValues(db, Schema, table, column.Name.O, count-1, min, max, limitRange)
+		splitValues, err := dbutil.GetRandomValues(context.Background(), db, Schema, table, column.Name.O, count-1, min, max, limitRange)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -196,7 +197,7 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 
 func findSuitableField(db *sql.DB, Schema string, table *model.TableInfo) (*model.ColumnInfo, error) {
 	// first select the index, and number type index first
-	column, err := dbutil.FindSuitableIndex(db, Schema, table)
+	column, err := dbutil.FindSuitableIndex(context.Background(), db, Schema, table)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

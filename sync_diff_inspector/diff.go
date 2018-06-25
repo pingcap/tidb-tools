@@ -14,6 +14,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"math/rand"
@@ -58,7 +59,7 @@ func NewDiff(db1, db2 *sql.DB, cfg *Config) (diff *Diff, err error) {
 		sqlCh:            make(chan string),
 	}
 	for _, table := range diff.tables {
-		table.Info, err = dbutil.GetTableInfoWithRowID(diff.db1, diff.schema, table.Name, cfg.UseRowID)
+		table.Info, err = dbutil.GetTableInfoWithRowID(context.Background(), diff.db1, diff.schema, table.Name, cfg.UseRowID)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -87,13 +88,13 @@ func (df *Diff) Equal() (equal bool, err error) {
 	}()
 
 	equal = true
-	tbls1, err := dbutil.GetTables(df.db1, df.schema)
+	tbls1, err := dbutil.GetTables(context.Background(), df.db1, df.schema)
 	if err != nil {
 		err = errors.Trace(err)
 		return
 	}
 
-	tbls2, err := dbutil.GetTables(df.db2, df.schema)
+	tbls2, err := dbutil.GetTables(context.Background(), df.db2, df.schema)
 	if err != nil {
 		err = errors.Trace(err)
 		return
@@ -110,7 +111,7 @@ func (df *Diff) Equal() (equal bool, err error) {
 		df.tables = make([]*TableCheckCfg, 0, len(tbls1))
 		for _, name := range tbls1 {
 			table := &TableCheckCfg{Name: name, Schema: df.schema}
-			table.Info, err = dbutil.GetTableInfoWithRowID(df.db1, df.schema, name, df.useRowID)
+			table.Info, err = dbutil.GetTableInfoWithRowID(context.Background(), df.db1, df.schema, name, df.useRowID)
 			if err != nil {
 				return false, errors.Trace(err)
 			}
@@ -121,7 +122,7 @@ func (df *Diff) Equal() (equal bool, err error) {
 
 	for _, table := range df.tables {
 		tableInfo1 := table.Info
-		tableInfo2, err := dbutil.GetTableInfoWithRowID(df.db2, df.schema, table.Name, df.useRowID)
+		tableInfo2, err := dbutil.GetTableInfoWithRowID(context.Background(), df.db2, df.schema, table.Name, df.useRowID)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -245,12 +246,12 @@ func (df *Diff) checkChunkDataEqual(checkJobs []*CheckJob, table *TableCheckCfg)
 	for _, job := range checkJobs {
 		// first check the checksum is equal or not
 		orderKeys, _ := dbutil.SelectUniqueOrderKey(table.Info)
-		checksum1, err := dbutil.GetCRC32Checksum(df.db1, df.schema, table.Info, orderKeys, job.Where)
+		checksum1, err := dbutil.GetCRC32Checksum(context.Background(), df.db1, df.schema, table.Info, orderKeys, job.Where)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
 
-		checksum2, err := dbutil.GetCRC32Checksum(df.db2, df.schema, table.Info, orderKeys, job.Where)
+		checksum2, err := dbutil.GetCRC32Checksum(context.Background(), df.db2, df.schema, table.Info, orderKeys, job.Where)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -496,7 +497,7 @@ func getChunkRows(db *sql.DB, schema string, table *TableCheckCfg, where string,
 	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ %s FROM `%s`.`%s` WHERE %s ORDER BY %s",
 		columns, schema, table.Name, where, strings.Join(orderKeys, ","))
 
-	rows, err := dbutil.QuerySQL(db, query)
+	rows, err := dbutil.QuerySQL(context.Background(), db, query)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}

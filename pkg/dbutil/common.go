@@ -14,6 +14,7 @@
 package dbutil
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strconv"
@@ -71,7 +72,7 @@ func CloseDB(db *sql.DB) error {
 }
 
 // GetCreateTableSQL gets the create table statements.
-func GetCreateTableSQL(db *sql.DB, schemaName string, tableName string) (string, error) {
+func GetCreateTableSQL(ctx context.Context, db *sql.DB, schemaName string, tableName string) (string, error) {
 	/*
 		show create table example result:
 		mysql> SHOW CREATE TABLE `test`.`itest`;
@@ -85,7 +86,7 @@ func GetCreateTableSQL(db *sql.DB, schemaName string, tableName string) (string,
 		+-------+--------------------------------------------------------------------+
 	*/
 	query := fmt.Sprintf("SHOW CREATE TABLE `%s`.`%s`", schemaName, tableName)
-	row := db.QueryRow(query)
+	row := db.QueryRowContext(ctx, query)
 
 	var tbl, createTable sql.NullString
 	err := row.Scan(&tbl, &createTable)
@@ -100,7 +101,7 @@ func GetCreateTableSQL(db *sql.DB, schemaName string, tableName string) (string,
 
 // GetRowCount returns row count of the table.
 // if not specify where condition, return total row count of the table.
-func GetRowCount(db *sql.DB, dbName string, table string, where string) (int64, error) {
+func GetRowCount(ctx context.Context, db *sql.DB, dbName string, table string, where string) (int64, error) {
 	/*
 		select count example result:
 		mysql> SELECT count(1) cnt from `test`.`itest` where id > 0;
@@ -116,7 +117,7 @@ func GetRowCount(db *sql.DB, dbName string, table string, where string) (int64, 
 		query += fmt.Sprintf(" WHERE %s", where)
 	}
 
-	rows, err := QuerySQL(db, query)
+	rows, err := QuerySQL(ctx, db, query)
 	if err != nil {
 		return 0, errors.Trace(err)
 	}
@@ -139,7 +140,7 @@ func GetRowCount(db *sql.DB, dbName string, table string, where string) (int64, 
 }
 
 // GetRandomValues returns some random value of a column, not used for number type column.
-func GetRandomValues(db *sql.DB, dbName string, table string, column string, num int64, min, max interface{}, limitRange string) ([]string, error) {
+func GetRandomValues(ctx context.Context, db *sql.DB, dbName string, table string, column string, num int64, min, max interface{}, limitRange string) ([]string, error) {
 	if limitRange != "" {
 		limitRange = "true"
 	}
@@ -148,7 +149,7 @@ func GetRandomValues(db *sql.DB, dbName string, table string, column string, num
 	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` >= \"%v\" AND `%s` <= \"%v\" AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
 		column, column, dbName, table, column, min, column, max, limitRange, num, column)
 	log.Debugf("get random values sql: %s", query)
-	rows, err := QuerySQL(db, query)
+	rows, err := QuerySQL(ctx, db, query)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -167,8 +168,8 @@ func GetRandomValues(db *sql.DB, dbName string, table string, column string, num
 }
 
 // GetTables gets all table in the schema
-func GetTables(db *sql.DB, dbName string) ([]string, error) {
-	rs, err := QuerySQL(db, fmt.Sprintf("SHOW TABLES IN `%s`;", dbName))
+func GetTables(ctx context.Context, db *sql.DB, dbName string) ([]string, error) {
+	rs, err := QuerySQL(ctx, db, fmt.Sprintf("SHOW TABLES IN `%s`;", dbName))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -187,7 +188,7 @@ func GetTables(db *sql.DB, dbName string) ([]string, error) {
 }
 
 // GetCRC32Checksum returns the checksum of some data
-func GetCRC32Checksum(db *sql.DB, schemaName string, tbInfo *model.TableInfo, orderKeys []string, limitRange string) (string, error) {
+func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName string, tbInfo *model.TableInfo, orderKeys []string, limitRange string) (string, error) {
 	/*
 		calculate CRC32 checksum example:
 		mysql> SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', a, b, c, d) SEPARATOR  ' + ')) AS checksum
@@ -206,7 +207,7 @@ func GetCRC32Checksum(db *sql.DB, schemaName string, tbInfo *model.TableInfo, or
 	query := fmt.Sprintf("SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', %s) SEPARATOR  ' + ')) AS checksum FROM (SELECT * FROM `%s`.`%s` WHERE %s ORDER BY %s) AS tmp;",
 		strings.Join(columnNames, ", "), schemaName, tbInfo.Name.O, limitRange, strings.Join(orderKeys, ","))
 	log.Debugf("checksum sql: %s", query)
-	rows, err := QuerySQL(db, query)
+	rows, err := QuerySQL(ctx, db, query)
 	if err != nil {
 		return "", errors.Trace(err)
 	}
@@ -225,7 +226,7 @@ func GetCRC32Checksum(db *sql.DB, schemaName string, tbInfo *model.TableInfo, or
 }
 
 // GetTidbLatestTSO returns tidb's latest TSO.
-func GetTidbLatestTSO(db *sql.DB) (int64, error) {
+func GetTidbLatestTSO(ctx context.Context, db *sql.DB) (int64, error) {
 	/*
 		example in tidb:
 		mysql> SHOW MASTER STATUS;
@@ -235,7 +236,7 @@ func GetTidbLatestTSO(db *sql.DB) (int64, error) {
 		| tidb-binlog | 400718757701615617 |              |                  |                   |
 		+-------------+--------------------+--------------+------------------+-------------------+
 	*/
-	rows, err := db.Query("SHOW MASTER STATUS")
+	rows, err := db.QueryContext(ctx, "SHOW MASTER STATUS")
 	if err != nil {
 		return 0, errors.Trace(err)
 	}
@@ -257,9 +258,9 @@ func GetTidbLatestTSO(db *sql.DB) (int64, error) {
 }
 
 // SetSnapshot set the snapshot variable for tidb
-func SetSnapshot(db *sql.DB, snapshot string) error {
+func SetSnapshot(ctx context.Context, db *sql.DB, snapshot string) error {
 	sql := fmt.Sprintf("SET @@tidb_snapshot='%s'", snapshot)
 	log.Infof("set history snapshot: %s", sql)
-	_, err := db.Exec(sql)
+	_, err := db.ExecContext(ctx, sql)
 	return errors.Trace(err)
 }

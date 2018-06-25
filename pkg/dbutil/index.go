@@ -1,6 +1,7 @@
 package dbutil
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strconv"
@@ -20,7 +21,7 @@ type IndexInfo struct {
 }
 
 // ShowIndex returns result of executing `show index`
-func ShowIndex(db *sql.DB, dbName string, table string) ([]*IndexInfo, error) {
+func ShowIndex(ctx context.Context, db *sql.DB, dbName string, table string) ([]*IndexInfo, error) {
 	/*
 		show index example result:
 		mysql> show index from test;
@@ -33,7 +34,7 @@ func ShowIndex(db *sql.DB, dbName string, table string) ([]*IndexInfo, error) {
 	*/
 	indices := make([]*IndexInfo, 0, 3)
 	query := fmt.Sprintf("SHOW INDEX FROM `%s`.`%s`", dbName, table)
-	rows, err := QuerySQL(db, query)
+	rows, err := QuerySQL(ctx, db, query)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -67,7 +68,7 @@ func ShowIndex(db *sql.DB, dbName string, table string) ([]*IndexInfo, error) {
 }
 
 // FindSuitableIndex returns a suitable index.
-func FindSuitableIndex(db *sql.DB, dbName string, tableInfo *model.TableInfo) (*model.ColumnInfo, error) {
+func FindSuitableIndex(ctx context.Context, db *sql.DB, dbName string, tableInfo *model.TableInfo) (*model.ColumnInfo, error) {
 	// find primary key
 	for _, index := range tableInfo.Indices {
 		if index.Primary {
@@ -83,7 +84,7 @@ func FindSuitableIndex(db *sql.DB, dbName string, tableInfo *model.TableInfo) (*
 	}
 
 	// no unique index found, seek index with max cardinality
-	indices, err := ShowIndex(db, dbName, tableInfo.Name.O)
+	indices, err := ShowIndex(ctx, db, dbName, tableInfo.Name.O)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

@@ -14,6 +14,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"flag"
 	"os"
@@ -56,7 +57,7 @@ func main() {
 		log.Fatalf("create source db %+v error %v", cfg.SourceDBCfg, err)
 	}
 	defer dbutil.CloseDB(sourceDB)
-	err = dbutil.SetSnapshot(sourceDB, cfg.SourceSnapshot)
+	err = dbutil.SetSnapshot(context.Background(), sourceDB, cfg.SourceSnapshot)
 	if err != nil {
 		log.Fatalf("set history snapshot %s for source db %+v error %v", cfg.SourceSnapshot, cfg.SourceDBCfg, err)
 	}
@@ -66,7 +67,7 @@ func main() {
 		log.Fatalf("create target db %+v error %v", cfg.TargetDBCfg, err)
 	}
 	defer dbutil.CloseDB(targetDB)
-	err = dbutil.SetSnapshot(targetDB, cfg.TargetSnapshot)
+	err = dbutil.SetSnapshot(context.Background(), targetDB, cfg.TargetSnapshot)
 	if err != nil {
 		log.Fatalf("set history snapshot %s for target db %+v error %v", cfg.TargetSnapshot, cfg.TargetDBCfg, err)
 	}

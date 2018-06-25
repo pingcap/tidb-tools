@@ -14,6 +14,7 @@
 package dbutil
 
 import (
+	"context"
 	"database/sql"
 	"strings"
 
@@ -28,8 +29,8 @@ import (
 )
 
 // GetTableInfoWithRowID returns table information with _tidb_rowid column if useRowID is true
-func GetTableInfoWithRowID(db *sql.DB, schemaName string, tableName string, useRowID bool) (*model.TableInfo, error) {
-	table, err := GetTableInfo(db, schemaName, tableName)
+func GetTableInfoWithRowID(ctx context.Context, db *sql.DB, schemaName string, tableName string, useRowID bool) (*model.TableInfo, error) {
+	table, err := GetTableInfo(ctx, db, schemaName, tableName)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -42,8 +43,8 @@ func GetTableInfoWithRowID(db *sql.DB, schemaName string, tableName string, useR
 }
 
 // GetTableInfo returns table information.
-func GetTableInfo(db *sql.DB, schemaName string, tableName string) (*model.TableInfo, error) {
-	createTableSQL, err := GetCreateTableSQL(db, schemaName, tableName)
+func GetTableInfo(ctx context.Context, db *sql.DB, schemaName string, tableName string) (*model.TableInfo, error) {
+	createTableSQL, err := GetCreateTableSQL(ctx, db, schemaName, tableName)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

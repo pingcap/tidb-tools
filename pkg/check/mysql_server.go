@@ -1,10 +1,10 @@
 package check
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
-	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
@@ -26,7 +26,7 @@ var MinVersion = [3]uint{5, 5, 0}
 
 // Check implements the PreChecker interface.
 // we only support version >= 5.5
-func (pc *MySQLVersionPreChecker) Check() *Result {
+func (pc *MySQLVersionPreChecker) Check(ctx context.Context) *Result {
 	result := &Result{
 		Name:  pc.Name(),
 		Desc:  "checks whether mysql version is satisfied",
@@ -35,9 +35,9 @@ func (pc *MySQLVersionPreChecker) Check() *Result {
 	}
 	defer log.Infof("[precheck] check mysql version, result %+v", result)
 
-	value, err := dbutil.ShowVersion(pc.db)
+	value, err := dbutil.ShowVersion(ctx, pc.db)
 	if err != nil {
-		result.ErrorMsg = errors.ErrorStack(err)
+		markCheckError(result, err)
 		return result
 	}
 
@@ -71,7 +71,7 @@ func NewMySQLServerIDPreChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker {
 }
 
 // Check implements the PreChecker interface.
-func (pc *MySQLServerIDPreChecker) Check() *Result {
+func (pc *MySQLServerIDPreChecker) Check(ctx context.Context) *Result {
 	result := &Result{
 		Name:  pc.Name(),
 		Desc:  "checks whether mysql server_id has been set > 1",
@@ -80,14 +80,15 @@ func (pc *MySQLServerIDPreChecker) Check() *Result {
 	}
 	defer log.Infof("[precheck] check mysql version, result %+v", result)
 
-	serverID, err := dbutil.ShowServerID(pc.db)
+	serverID, err := dbutil.ShowServerID(ctx, pc.db)
 	if err != nil {
 		if utils.OriginError(err) == sql.ErrNoRows {
 			result.ErrorMsg = "server_id not set"
 			result.Instruction = "please set server_id in your database"
 		} else {
-			result.ErrorMsg = errors.ErrorStack(err)
+			markCheckError(result, err)
 		}
+
 		return result
 	}
 

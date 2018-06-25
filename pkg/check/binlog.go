@@ -1,6 +1,7 @@
 package check
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -22,7 +23,7 @@ func NewMySQLBinlogEnablePreChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker
 }
 
 // Check implements the PreChecker interface.
-func (pc *MySQLBinlogEnablePreChecker) Check() *Result {
+func (pc *MySQLBinlogEnablePreChecker) Check(ctx context.Context) *Result {
 	result := &Result{
 		Name:  pc.Name(),
 		Desc:  "checks whether mysql binlog is enable",
@@ -31,9 +32,9 @@ func (pc *MySQLBinlogEnablePreChecker) Check() *Result {
 	}
 	defer log.Infof("[precheck] check binlog enable, result %+v", result)
 
-	value, err := dbutil.ShowLogBin(pc.db)
+	value, err := dbutil.ShowLogBin(ctx, pc.db)
 	if err != nil {
-		result.ErrorMsg = errors.ErrorStack(err)
+		markCheckError(result, err)
 		return result
 	}
 	if strings.ToUpper(value) != "ON" {
@@ -64,7 +65,7 @@ func NewMySQLBinlogFormatPreChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker
 }
 
 // Check implements the PreChecker interface.
-func (pc *MySQLBinlogFormatPreChecker) Check() *Result {
+func (pc *MySQLBinlogFormatPreChecker) Check(ctx context.Context) *Result {
 	result := &Result{
 		Name:  pc.Name(),
 		Desc:  "checks whether mysql binlog_format is ROW",
@@ -73,9 +74,9 @@ func (pc *MySQLBinlogFormatPreChecker) Check() *Result {
 	}
 	defer log.Infof("[precheck] check binlog_format, result %+v", result)
 
-	value, err := dbutil.ShowBinlogFormat(pc.db)
+	value, err := dbutil.ShowBinlogFormat(ctx, pc.db)
 	if err != nil {
-		result.ErrorMsg = errors.ErrorStack(err)
+		markCheckError(result, err)
 		return result
 	}
 	if strings.ToUpper(value) != "ROW" {
@@ -118,7 +119,7 @@ func NewMySQLBinlogRowImagePreChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Check
 // ref:
 // - https://dev.mysql.com/doc/refman/5.6/en/replication-options-binary-log.html#sysvar_binlog_row_image
 // - https://mariadb.com/kb/en/library/replication-and-binary-log-server-system-variables/#binlog_row_image
-func (pc *MySQLBinlogRowImagePreChecker) Check() *Result {
+func (pc *MySQLBinlogRowImagePreChecker) Check(ctx context.Context) *Result {
 	result := &Result{
 		Name:  pc.Name(),
 		Desc:  "checks whether mysql binlog_row_image is FULL",
@@ -128,9 +129,9 @@ func (pc *MySQLBinlogRowImagePreChecker) Check() *Result {
 	defer log.Infof("[precheck] check binlog_row_image, result %+v", result)
 
 	// check version firstly
-	value, err := dbutil.ShowVersion(pc.db)
+	value, err := dbutil.ShowVersion(ctx, pc.db)
 	if err != nil {
-		result.ErrorMsg = errors.ErrorStack(err)
+		markCheckError(result, err)
 		return result
 	}
 	version := toMySQLVersion(value)
@@ -141,7 +142,7 @@ func (pc *MySQLBinlogRowImagePreChecker) Check() *Result {
 		return result
 	}
 
-	value, err = dbutil.ShowBinlogRowImage(pc.db)
+	value, err = dbutil.ShowBinlogRowImage(ctx, pc.db)
 	if err != nil {
 		result.ErrorMsg = errors.ErrorStack(err)
 		return result

@@ -1,11 +1,14 @@
 package check
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
 
+	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	"github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 // MySQLVersion represents MySQL version number.
@@ -59,4 +62,15 @@ func (v MySQLVersion) String() string {
 // IsMariaDB tells whether the version is from mariadb.
 func IsMariaDB(version string) bool {
 	return strings.Contains(strings.ToUpper(version), "MARIADB")
+}
+
+func markCheckError(result *Result, err error) {
+	if err != nil {
+		if utils.OriginError(err) == context.Canceled {
+			result.State = StateWarning
+			result.ErrorMsg = context.Canceled.Error()
+		} else {
+			result.ErrorMsg = errors.ErrorStack(err)
+		}
+	}
 }
