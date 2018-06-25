@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 )
@@ -144,7 +143,7 @@ func (pc *MySQLBinlogRowImageChecker) Check(ctx context.Context) *Result {
 
 	value, err = dbutil.ShowBinlogRowImage(ctx, pc.db)
 	if err != nil {
-		result.ErrorMsg = errors.ErrorStack(err)
+		markCheckError(result, err)
 		return result
 	}
 	if strings.ToUpper(value) != "FULL" {

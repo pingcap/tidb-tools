@@ -13,7 +13,6 @@ func QuerySQL(ctx context.Context, db *sql.DB, query string) (*sql.Rows, error) 
 	log.Debugf("[query][sql] %s", query)
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
-		log.Errorf("query sql[%s] failed %v", query, errors.ErrorStack(err))
 		return nil, errors.Trace(err)
 	}
 	return rows, nil
