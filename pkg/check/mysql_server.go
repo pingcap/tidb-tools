@@ -59,7 +59,7 @@ func (pc *MySQLVersionChecker) Name() string {
 
 /*****************************************************/
 
-// MySQLServerIDChecker checks mysql/mariadb version.
+// MySQLServerIDChecker checks mysql/mariadb server ID.
 type MySQLServerIDChecker struct {
 	db     *sql.DB
 	dbinfo *dbutil.DBConfig

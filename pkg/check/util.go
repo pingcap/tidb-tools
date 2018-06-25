@@ -25,6 +25,10 @@ type MySQLVersion [3]uint
 // v is mysql version in string format.
 func toMySQLVersion(v string) MySQLVersion {
 	tmp := strings.Split(v, "-")
+	if len(tmp) == 0 {
+		return [3]uint{0, 0, 0}
+	}
+
 	tmp = strings.Split(tmp[0], ".")
 	if len(tmp) != 3 {
 		log.Warnf("invalid version %s", v)

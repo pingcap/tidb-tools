@@ -62,15 +62,16 @@ func (pc *SourcePrivilegeChecker) Check(ctx context.Context) *Result {
 		return result
 	}
 
+	if len(grantStmt.Users) == 0 {
+		result.ErrorMsg = fmt.Sprintf("grant has not user %s", grantStmt.Text())
+		return result
+	}
+
 	var (
 		hasPrivilegeOfReplicationSlave  bool
 		hasPrivilegeOfReplicationClient bool
 		hasPrivilegeOfReload            bool
 	)
-	if len(grantStmt.Users) == 0 {
-		result.ErrorMsg = fmt.Sprintf("grant has not user %s", grantStmt.Text())
-		return result
-	}
 
 	// TODO: user tidb parser(which not works very well now)
 	for _, grant := range grants {

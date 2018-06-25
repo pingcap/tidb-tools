@@ -4,7 +4,6 @@ import (
 	"context"
 	"sync"
 
-	"github.com/juju/errors"
 	"github.com/ngaut/log"
 )
 
@@ -70,7 +69,6 @@ func Do(ctx context.Context, checkers []Checker) (*Results, error) {
 		successful int64
 		failed     int64
 		warning    int64
-		err        error
 	)
 	total = int64(len(checkers))
 
@@ -124,5 +122,5 @@ func Do(ctx context.Context, checkers []Checker) (*Results, error) {
 	}
 
 	log.Infof("check finished, passed %v / total %v", passed, total)
-	return results, errors.Trace(err)
+	return results, nil
 }
