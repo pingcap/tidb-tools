@@ -1,6 +1,6 @@
 # sync-diff-inspector
 
-sync-diff-inspector is a tool for diff two database's data.
+sync-diff-inspector is a tool for compare two database's data.
 
 ## How to use
 
@@ -27,4 +27,4 @@ Usage of sync_diff_inspector:
         set true if target-db and source-db all support tidb implicit column _tidb_rowid
 ```
 
-For more detail you can read the config.toml.
+For more details you can read the config.toml.
