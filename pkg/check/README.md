@@ -7,7 +7,6 @@ It is mainly used for configuration checking of data synchronization between dat
 
 # Introduction
 
-## checker
 
 ### MySQL slave privilege Checker
 
