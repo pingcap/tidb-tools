@@ -14,7 +14,7 @@ In MySQL data synchronization, `REPLICATION SLAVE` and `REPLICATION CLIENT` are 
 
 ### MySQL Version Checker
 
-Syncer only support 5.5 <= version <= 8.0 now
+[Syncer](https://github.com/pingcap/docs-cn/blob/master/tools/syncer.md) only support 5.5 <= version <= 8.0 now
 
 ### MySQL Server ID Checker
 
@@ -26,7 +26,7 @@ MySQL Server(master) should enable binlog in master-slave replication.
 
 ### MySQL Binlog Format Checker
 
-Syncer only support `ROW` binlog format
+[Syncer](https://github.com/pingcap/docs-cn/blob/master/tools/syncer.md) only support `ROW` binlog format
 
 ### MySQL Binlog Row Image Checker
 
