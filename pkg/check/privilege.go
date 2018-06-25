@@ -15,22 +15,22 @@ import (
 
 /*****************************************************/
 
-// SourcePrivilegePreChecker checks data source privileges.
-type SourcePrivilegePreChecker struct {
+// SourcePrivilegeChecker checks data source privileges.
+type SourcePrivilegeChecker struct {
 	db     *sql.DB
 	dbinfo *dbutil.DBConfig
 }
 
-// NewSourcePrivilegePreChecker returns a PreChecker.
-func NewSourcePrivilegePreChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker {
-	return &SourcePrivilegePreChecker{db: db, dbinfo: dbinfo}
+// NewSourcePrivilegeChecker returns a Checker.
+func NewSourcePrivilegeChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker {
+	return &SourcePrivilegeChecker{db: db, dbinfo: dbinfo}
 }
 
-// Check implements the PreChecker interface.
+// Check implements the Checker interface.
 // We only check REPLICATION SLAVE, REPLICATION CLIENT, RELOAD privileges.
 // REPLICATION SLAVE and REPLICATION CLIENT are required.
 // RELOAD is strongly suggested to have.
-func (pc *SourcePrivilegePreChecker) Check(ctx context.Context) *Result {
+func (pc *SourcePrivilegeChecker) Check(ctx context.Context) *Result {
 	result := &Result{
 		Name:  pc.Name(),
 		Desc:  "checks data source privileges",
@@ -115,7 +115,7 @@ func (pc *SourcePrivilegePreChecker) Check(ctx context.Context) *Result {
 	return result
 }
 
-// Name implements the PreChecker interface.
-func (pc *SourcePrivilegePreChecker) Name() string {
+// Name implements the Checker interface.
+func (pc *SourcePrivilegeChecker) Name() string {
 	return "source_db_privilege"
 }

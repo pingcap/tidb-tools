@@ -10,30 +10,30 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/utils"
 )
 
-// MySQLVersionPreChecker checks mysql/mariadb/rds,... version.
-type MySQLVersionPreChecker struct {
+// MySQLVersionChecker checks mysql/mariadb/rds,... version.
+type MySQLVersionChecker struct {
 	db     *sql.DB
 	dbinfo *dbutil.DBConfig
 }
 
-// NewMySQLVersionPreChecker returns a PreChecker
-func NewMySQLVersionPreChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker {
-	return &MySQLVersionPreChecker{db: db, dbinfo: dbinfo}
+// NewMySQLVersionChecker returns a Checker
+func NewMySQLVersionChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker {
+	return &MySQLVersionChecker{db: db, dbinfo: dbinfo}
 }
 
 // MinVersion is mysql minimal version required
 var MinVersion = [3]uint{5, 5, 0}
 
-// Check implements the PreChecker interface.
+// Check implements the Checker interface.
 // we only support version >= 5.5
-func (pc *MySQLVersionPreChecker) Check(ctx context.Context) *Result {
+func (pc *MySQLVersionChecker) Check(ctx context.Context) *Result {
 	result := &Result{
 		Name:  pc.Name(),
 		Desc:  "checks whether mysql version is satisfied",
 		State: StateFailure,
 		Extra: fmt.Sprintf("%s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
 	}
-	defer log.Infof("[precheck] check mysql version, result %+v", result)
+	defer log.Infof("check mysql version, result %+v", result)
 
 	value, err := dbutil.ShowVersion(ctx, pc.db)
 	if err != nil {
@@ -52,33 +52,33 @@ func (pc *MySQLVersionPreChecker) Check(ctx context.Context) *Result {
 	return result
 }
 
-// Name implements the PreChecker interface.
-func (pc *MySQLVersionPreChecker) Name() string {
+// Name implements the Checker interface.
+func (pc *MySQLVersionChecker) Name() string {
 	return "mysql_version"
 }
 
 /*****************************************************/
 
-// MySQLServerIDPreChecker checks mysql/mariadb version.
-type MySQLServerIDPreChecker struct {
+// MySQLServerIDChecker checks mysql/mariadb version.
+type MySQLServerIDChecker struct {
 	db     *sql.DB
 	dbinfo *dbutil.DBConfig
 }
 
-// NewMySQLServerIDPreChecker returns a PreChecker
-func NewMySQLServerIDPreChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker {
-	return &MySQLServerIDPreChecker{db: db, dbinfo: dbinfo}
+// NewMySQLServerIDChecker returns a Checker
+func NewMySQLServerIDChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker {
+	return &MySQLServerIDChecker{db: db, dbinfo: dbinfo}
 }
 
-// Check implements the PreChecker interface.
-func (pc *MySQLServerIDPreChecker) Check(ctx context.Context) *Result {
+// Check implements the Checker interface.
+func (pc *MySQLServerIDChecker) Check(ctx context.Context) *Result {
 	result := &Result{
 		Name:  pc.Name(),
 		Desc:  "checks whether mysql server_id has been set > 1",
 		State: StateFailure,
 		Extra: fmt.Sprintf("%s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
 	}
-	defer log.Infof("[precheck] check mysql version, result %+v", result)
+	defer log.Infof("check mysql version, result %+v", result)
 
 	serverID, err := dbutil.ShowServerID(ctx, pc.db)
 	if err != nil {
@@ -101,7 +101,7 @@ func (pc *MySQLServerIDPreChecker) Check(ctx context.Context) *Result {
 	return result
 }
 
-// Name implements the PreChecker interface.
-func (pc *MySQLServerIDPreChecker) Name() string {
+// Name implements the Checker interface.
+func (pc *MySQLServerIDChecker) Name() string {
 	return "mysql_server_id"
 }
