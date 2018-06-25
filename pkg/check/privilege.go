@@ -1,4 +1,4 @@
-package precheck
+package check
 
 import (
 	"database/sql"
@@ -21,19 +21,19 @@ type SourcePrivilegePreChecker struct {
 }
 
 // NewSourcePrivilegePreChecker returns a PreChecker.
-func NewSourcePrivilegePreChecker(db *sql.DB, dbinfo *dbutil.DBConfig) PreChecker {
+func NewSourcePrivilegePreChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker {
 	return &SourcePrivilegePreChecker{db: db, dbinfo: dbinfo}
 }
 
-// PreCheck implements the PreChecker interface.
+// Check implements the PreChecker interface.
 // We only check REPLICATION SLAVE, REPLICATION CLIENT, RELOAD privileges.
 // REPLICATION SLAVE and REPLICATION CLIENT are required.
 // RELOAD is strongly suggested to have.
-func (pc *SourcePrivilegePreChecker) PreCheck() *PreCheckResult {
-	result := &PreCheckResult{
+func (pc *SourcePrivilegePreChecker) Check() *Result {
+	result := &Result{
 		Name:  pc.Name(),
 		Desc:  "checks data source privileges",
-		State: PreCheckState_Failure,
+		State: StateFailure,
 		Extra: fmt.Sprintf("%s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
 	}
 
@@ -74,7 +74,7 @@ func (pc *SourcePrivilegePreChecker) PreCheck() *PreCheckResult {
 	// TODO: user tidb parser(which not works very well now)
 	for _, grant := range grants {
 		if strings.Contains(grant, "ALL PRIVILEGES") {
-			result.State = PreCheckState_Success
+			result.State = StateSuccess
 			return result
 		}
 		if strings.Contains(grant, "REPLICATION SLAVE") {
@@ -104,13 +104,13 @@ func (pc *SourcePrivilegePreChecker) PreCheck() *PreCheckResult {
 		result.ErrorMsg = fmt.Sprintf("lack of %s privilege", privileges)
 		result.Instruction = fmt.Sprintf("GRANT %s ON *.* TO '%s'@'%s';", privileges, user.User.Username, "%")
 		if !hasPrivilegeOfReload && hasPrivilegeOfReplicationClient && hasPrivilegeOfReplicationSlave {
-			result.State = PreCheckState_Warning
+			result.State = StateWarning
 			result.Instruction += "Or you use no-lock option to dump data in next step"
 		}
 		return result
 	}
 
-	result.State = PreCheckState_Success
+	result.State = StateSuccess
 	return result
 }
 

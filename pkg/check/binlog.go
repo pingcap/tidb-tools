@@ -1,4 +1,4 @@
-package precheck
+package check
 
 import (
 	"database/sql"
@@ -17,16 +17,16 @@ type MySQLBinlogEnablePreChecker struct {
 }
 
 // NewMySQLBinlogEnablePreChecker returns a PreChecker.
-func NewMySQLBinlogEnablePreChecker(db *sql.DB, dbinfo *dbutil.DBConfig) PreChecker {
+func NewMySQLBinlogEnablePreChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker {
 	return &MySQLBinlogEnablePreChecker{db: db, dbinfo: dbinfo}
 }
 
-// PreCheck implements the PreChecker interface.
-func (pc *MySQLBinlogEnablePreChecker) PreCheck() *PreCheckResult {
-	result := &PreCheckResult{
+// Check implements the PreChecker interface.
+func (pc *MySQLBinlogEnablePreChecker) Check() *Result {
+	result := &Result{
 		Name:  pc.Name(),
 		Desc:  "checks whether mysql binlog is enable",
-		State: PreCheckState_Failure,
+		State: StateFailure,
 		Extra: fmt.Sprintf("%s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
 	}
 	defer log.Infof("[precheck] check binlog enable, result %+v", result)
@@ -41,7 +41,7 @@ func (pc *MySQLBinlogEnablePreChecker) PreCheck() *PreCheckResult {
 		result.Instruction = "ref: https://dev.mysql.com/doc/refman/5.7/en/replication-howto-masterbaseconfig.html"
 		return result
 	}
-	result.State = PreCheckState_Success
+	result.State = StateSuccess
 	return result
 }
 
@@ -59,16 +59,16 @@ type MySQLBinlogFormatPreChecker struct {
 }
 
 // NewMySQLBinlogFormatPreChecker returns a PreChecker.
-func NewMySQLBinlogFormatPreChecker(db *sql.DB, dbinfo *dbutil.DBConfig) PreChecker {
+func NewMySQLBinlogFormatPreChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker {
 	return &MySQLBinlogFormatPreChecker{db: db, dbinfo: dbinfo}
 }
 
-// PreCheck implements the PreChecker interface.
-func (pc *MySQLBinlogFormatPreChecker) PreCheck() *PreCheckResult {
-	result := &PreCheckResult{
+// Check implements the PreChecker interface.
+func (pc *MySQLBinlogFormatPreChecker) Check() *Result {
+	result := &Result{
 		Name:  pc.Name(),
 		Desc:  "checks whether mysql binlog_format is ROW",
-		State: PreCheckState_Failure,
+		State: StateFailure,
 		Extra: fmt.Sprintf("%s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
 	}
 	defer log.Infof("[precheck] check binlog_format, result %+v", result)
@@ -83,7 +83,7 @@ func (pc *MySQLBinlogFormatPreChecker) PreCheck() *PreCheckResult {
 		result.Instruction = "set global binlog_format=ROW;"
 		return result
 	}
-	result.State = PreCheckState_Success
+	result.State = StateSuccess
 
 	return result
 }
@@ -107,22 +107,22 @@ type MySQLBinlogRowImagePreChecker struct {
 }
 
 // NewMySQLBinlogRowImagePreChecker returns a PreChecker
-func NewMySQLBinlogRowImagePreChecker(db *sql.DB, dbinfo *dbutil.DBConfig) PreChecker {
+func NewMySQLBinlogRowImagePreChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker {
 	return &MySQLBinlogRowImagePreChecker{db: db, dbinfo: dbinfo}
 }
 
-// PreCheck implements the PreChecker interface.
+// Check implements the PreChecker interface.
 // 'binlog_row_image' is introduced since mysql 5.6.2, and mariadb 10.1.6.
 // > In MySQL 5.5 and earlier, full row images are always used for both before images and after images.
 // So we need check 'binlog_row_image' after mysql 5.6.2 version and mariadb 10.1.6.
 // ref:
 // - https://dev.mysql.com/doc/refman/5.6/en/replication-options-binary-log.html#sysvar_binlog_row_image
 // - https://mariadb.com/kb/en/library/replication-and-binary-log-server-system-variables/#binlog_row_image
-func (pc *MySQLBinlogRowImagePreChecker) PreCheck() *PreCheckResult {
-	result := &PreCheckResult{
+func (pc *MySQLBinlogRowImagePreChecker) Check() *Result {
+	result := &Result{
 		Name:  pc.Name(),
 		Desc:  "checks whether mysql binlog_row_image is FULL",
-		State: PreCheckState_Failure,
+		State: StateFailure,
 		Extra: fmt.Sprintf("%s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
 	}
 	defer log.Infof("[precheck] check binlog_row_image, result %+v", result)
@@ -137,7 +137,7 @@ func (pc *MySQLBinlogRowImagePreChecker) PreCheck() *PreCheckResult {
 
 	// for mysql.version < 5.6.2 || mariadb.version < 10.1.6,  we don't need to check binlog_row_image.
 	if (!IsMariaDB(value) && !version.IsAtLeast(mysqlBinlogRowImageRequired)) || (IsMariaDB(value) && !version.IsAtLeast(mariadbBinlogRowImageRequired)) {
-		result.State = PreCheckState_Success
+		result.State = StateSuccess
 		return result
 	}
 
@@ -151,7 +151,7 @@ func (pc *MySQLBinlogRowImagePreChecker) PreCheck() *PreCheckResult {
 		result.Instruction = "set global binlog_row_image = FULL;"
 		return result
 	}
-	result.State = PreCheckState_Success
+	result.State = StateSuccess
 	return result
 }
 

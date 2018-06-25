@@ -1,4 +1,4 @@
-package precheck
+package check
 
 import (
 	"fmt"

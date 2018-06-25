@@ -1,4 +1,4 @@
-package precheck
+package check
 
 import (
 	"database/sql"
@@ -17,20 +17,20 @@ type MySQLVersionPreChecker struct {
 }
 
 // NewMySQLVersionPreChecker returns a PreChecker
-func NewMySQLVersionPreChecker(db *sql.DB, dbinfo *dbutil.DBConfig) PreChecker {
+func NewMySQLVersionPreChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker {
 	return &MySQLVersionPreChecker{db: db, dbinfo: dbinfo}
 }
 
 // MinVersion is mysql minimal version required
 var MinVersion = [3]uint{5, 5, 0}
 
-// PreCheck implements the PreChecker interface.
+// Check implements the PreChecker interface.
 // we only support version >= 5.5
-func (pc *MySQLVersionPreChecker) PreCheck() *PreCheckResult {
-	result := &PreCheckResult{
+func (pc *MySQLVersionPreChecker) Check() *Result {
+	result := &Result{
 		Name:  pc.Name(),
 		Desc:  "checks whether mysql version is satisfied",
-		State: PreCheckState_Failure,
+		State: StateFailure,
 		Extra: fmt.Sprintf("%s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
 	}
 	defer log.Infof("[precheck] check mysql version, result %+v", result)
@@ -48,7 +48,7 @@ func (pc *MySQLVersionPreChecker) PreCheck() *PreCheckResult {
 		return result
 	}
 
-	result.State = PreCheckState_Success
+	result.State = StateSuccess
 	return result
 }
 
@@ -66,16 +66,16 @@ type MySQLServerIDPreChecker struct {
 }
 
 // NewMySQLServerIDPreChecker returns a PreChecker
-func NewMySQLServerIDPreChecker(db *sql.DB, dbinfo *dbutil.DBConfig) PreChecker {
+func NewMySQLServerIDPreChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker {
 	return &MySQLServerIDPreChecker{db: db, dbinfo: dbinfo}
 }
 
-// PreCheck implements the PreChecker interface.
-func (pc *MySQLServerIDPreChecker) PreCheck() *PreCheckResult {
-	result := &PreCheckResult{
+// Check implements the PreChecker interface.
+func (pc *MySQLServerIDPreChecker) Check() *Result {
+	result := &Result{
 		Name:  pc.Name(),
 		Desc:  "checks whether mysql server_id has been set > 1",
-		State: PreCheckState_Failure,
+		State: StateFailure,
 		Extra: fmt.Sprintf("%s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
 	}
 	defer log.Infof("[precheck] check mysql version, result %+v", result)
@@ -96,7 +96,7 @@ func (pc *MySQLServerIDPreChecker) PreCheck() *PreCheckResult {
 		result.Instruction = "please set server_id greater than 0"
 		return result
 	}
-	result.State = PreCheckState_Success
+	result.State = StateSuccess
 	return result
 }
 
