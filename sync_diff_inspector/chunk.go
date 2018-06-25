@@ -63,8 +63,14 @@ func getChunksForTable(db *sql.DB, Schema, tableName string, column *model.Colum
 	field := column.Name.O
 
 	// fetch min, max
-	query := fmt.Sprintf("SELECT %s MIN(`%s`) as MIN, MAX(`%s`) as MAX FROM `%s`.`%s` where %s",
-		"/*!40001 SQL_NO_CACHE */", field, field, Schema, tableName, where)
+	expression := fmt.Sprintf("`%s`", field)
+	if pkgdb.IsBitType(column.Tp) {
+		// get bit value with decimalism
+		expression = fmt.Sprintf("`%s`+0", field)
+	}
+	query := fmt.Sprintf("SELECT %s MIN(%s) as MIN, MAX(%s) as MAX FROM `%s`.`%s` where %s",
+		"/*!40001 SQL_NO_CACHE */", expression, expression, Schema, tableName, where)
+	log.Debugf("get min and max value by sql: %s", query)
 
 	// get the chunk count
 	cnt, err := pkgdb.GetRowCount(db, Schema, tableName, where)
@@ -174,12 +180,12 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 		for i = 0; i < int64(len(splitValues)+1); i++ {
 			if i == 0 {
 				minTmp = min
-				maxTmp = splitValues[i]
-			} else if i == int64(len(splitValues)) {
-				minTmp = splitValues[i-1]
-				maxTmp = max
 			} else {
 				minTmp = splitValues[i-1]
+			}
+			if i == int64(len(splitValues)) {
+				maxTmp = max
+			} else {
 				maxTmp = splitValues[i]
 			}
 			r := newChunkRange(minTmp, maxTmp, true, false)

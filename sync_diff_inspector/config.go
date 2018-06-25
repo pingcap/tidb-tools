@@ -92,7 +92,7 @@ type Config struct {
 // NewConfig creates a new config.
 func NewConfig() *Config {
 	cfg := &Config{}
-	cfg.FlagSet = flag.NewFlagSet("diff", flag.ContinueOnError)
+	cfg.FlagSet = flag.NewFlagSet("sync_diff_inspector", flag.ContinueOnError)
 	fs := cfg.FlagSet
 
 	fs.StringVar(&cfg.ConfigFile, "config", "", "Config file")

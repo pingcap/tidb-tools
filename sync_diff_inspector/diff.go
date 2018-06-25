@@ -489,12 +489,19 @@ func compareData(map1 map[string][]byte, map2 map[string][]byte, orderKeyCols []
 
 func getChunkRows(db *sql.DB, schema string, table *TableCheckCfg, where string, useRowID bool) (*sql.Rows, []*model.ColumnInfo, error) {
 	orderKeys, orderKeyCols := pkgdb.GetOrderKey(table.Info)
-	columns := "*"
+	columnNames := make([]string, 0, len(table.Info.Columns))
+	for _, col := range table.Info.Columns {
+		if pkgdb.IsBitType(col.Tp) {
+			columnNames = append(columnNames, fmt.Sprintf("`%s`+0 AS `%s`", col.Name.O, col.Name.O))
+		} else {
+			columnNames = append(columnNames, fmt.Sprintf("`%s`", col.Name.O))
+		}
+	}
 	if orderKeys[0] == pkgdb.ImplicitColName {
-		columns = fmt.Sprintf("*, %s", pkgdb.ImplicitColName)
+		columnNames = append(columnNames, pkgdb.ImplicitColName)
 	}
 	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ %s FROM `%s`.`%s` WHERE %s ORDER BY %s",
-		columns, schema, table.Name, where, strings.Join(orderKeys, ","))
+		strings.Join(columnNames, ", "), schema, table.Name, where, strings.Join(orderKeys, ","))
 
 	rows, err := pkgdb.QuerySQL(db, query)
 	if err != nil {
