@@ -6,7 +6,7 @@ A pure go library to handle TiDB Binlog replication.
 
 ### Reader 
 
-a package read [TiDB Binlog protocol](../binlog_proto).
+a package read [TiDB Binlog protocol](../binlog_proto/proto)
 
 ### Examples
 
