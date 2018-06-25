@@ -27,8 +27,8 @@ import (
 	"io"
 
 	"github.com/juju/errors"
-	"github.com/pingcap/tidb/context"
 	"github.com/pingcap/tidb/mysql"
+	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/auth"
 	"github.com/pingcap/tidb/util/encrypt"
@@ -76,7 +76,7 @@ type aesDecryptFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *aesDecryptFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *aesDecryptFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := c.verifyArgs(args); err != nil {
 		return nil, errors.Trace(c.verifyArgs(args))
 	}
@@ -89,6 +89,12 @@ func (c *aesDecryptFunctionClass) getFunction(ctx context.Context, args []Expres
 
 type builtinAesDecryptSig struct {
 	baseBuiltinFunc
+}
+
+func (b *builtinAesDecryptSig) Clone() builtinFunc {
+	newSig := &builtinAesDecryptSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
 }
 
 // evalString evals AES_DECRYPT(crypt_str, key_key).
@@ -118,7 +124,7 @@ type aesEncryptFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *aesEncryptFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *aesEncryptFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := c.verifyArgs(args); err != nil {
 		return nil, errors.Trace(c.verifyArgs(args))
 	}
@@ -131,6 +137,12 @@ func (c *aesEncryptFunctionClass) getFunction(ctx context.Context, args []Expres
 
 type builtinAesEncryptSig struct {
 	baseBuiltinFunc
+}
+
+func (b *builtinAesEncryptSig) Clone() builtinFunc {
+	newSig := &builtinAesEncryptSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
 }
 
 // evalString evals AES_ENCRYPT(str, key_str).
@@ -160,7 +172,7 @@ type decodeFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *decodeFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *decodeFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	return nil, errFunctionNotExists.GenByArgs("FUNCTION", "DECODE")
 }
 
@@ -168,7 +180,7 @@ type desDecryptFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *desDecryptFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *desDecryptFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	return nil, errFunctionNotExists.GenByArgs("FUNCTION", "DES_DECRYPT")
 }
 
@@ -176,7 +188,7 @@ type desEncryptFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *desEncryptFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *desEncryptFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	return nil, errFunctionNotExists.GenByArgs("FUNCTION", "DES_ENCRYPT")
 }
 
@@ -184,7 +196,7 @@ type encodeFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *encodeFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *encodeFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	return nil, errFunctionNotExists.GenByArgs("FUNCTION", "ENCODE")
 }
 
@@ -192,7 +204,7 @@ type encryptFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *encryptFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *encryptFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	return nil, errFunctionNotExists.GenByArgs("FUNCTION", "ENCRYPT")
 }
 
@@ -200,7 +212,7 @@ type oldPasswordFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *oldPasswordFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *oldPasswordFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	return nil, errFunctionNotExists.GenByArgs("FUNCTION", "OLD_PASSWORD")
 }
 
@@ -208,7 +220,7 @@ type passwordFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *passwordFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *passwordFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := c.verifyArgs(args); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -220,6 +232,12 @@ func (c *passwordFunctionClass) getFunction(ctx context.Context, args []Expressi
 
 type builtinPasswordSig struct {
 	baseBuiltinFunc
+}
+
+func (b *builtinPasswordSig) Clone() builtinFunc {
+	newSig := &builtinPasswordSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
 }
 
 // evalString evals a builtinPasswordSig.
@@ -234,6 +252,10 @@ func (b *builtinPasswordSig) evalString(row types.Row) (d string, isNull bool, e
 		return "", false, nil
 	}
 
+	// We should append a warning here because function "PASSWORD" is deprecated since MySQL 5.7.6.
+	// See https://dev.mysql.com/doc/refman/5.7/en/encryption-functions.html#function_password
+	b.ctx.GetSessionVars().StmtCtx.AppendWarning(errDeprecatedSyntaxNoReplacement.GenByArgs("PASSWORD"))
+
 	return auth.EncodePassword(pass), false, nil
 }
 
@@ -241,7 +263,7 @@ type randomBytesFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *randomBytesFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *randomBytesFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := c.verifyArgs(args); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -254,6 +276,12 @@ func (c *randomBytesFunctionClass) getFunction(ctx context.Context, args []Expre
 
 type builtinRandomBytesSig struct {
 	baseBuiltinFunc
+}
+
+func (b *builtinRandomBytesSig) Clone() builtinFunc {
+	newSig := &builtinRandomBytesSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
 }
 
 // evalString evals RANDOM_BYTES(len).
@@ -279,7 +307,7 @@ type md5FunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *md5FunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *md5FunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := c.verifyArgs(args); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -291,6 +319,12 @@ func (c *md5FunctionClass) getFunction(ctx context.Context, args []Expression) (
 
 type builtinMD5Sig struct {
 	baseBuiltinFunc
+}
+
+func (b *builtinMD5Sig) Clone() builtinFunc {
+	newSig := &builtinMD5Sig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
 }
 
 // evalString evals a builtinMD5Sig.
@@ -309,7 +343,7 @@ type sha1FunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *sha1FunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *sha1FunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := c.verifyArgs(args); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -321,6 +355,12 @@ func (c *sha1FunctionClass) getFunction(ctx context.Context, args []Expression) 
 
 type builtinSHA1Sig struct {
 	baseBuiltinFunc
+}
+
+func (b *builtinSHA1Sig) Clone() builtinFunc {
+	newSig := &builtinSHA1Sig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
 }
 
 // evalString evals SHA1(str).
@@ -343,7 +383,7 @@ type sha2FunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *sha2FunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *sha2FunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := c.verifyArgs(args); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -355,6 +395,12 @@ func (c *sha2FunctionClass) getFunction(ctx context.Context, args []Expression) 
 
 type builtinSHA2Sig struct {
 	baseBuiltinFunc
+}
+
+func (b *builtinSHA2Sig) Clone() builtinFunc {
+	newSig := &builtinSHA2Sig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
 }
 
 // Supported hash length of SHA-2 family
@@ -431,7 +477,7 @@ type compressFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *compressFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *compressFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := c.verifyArgs(args); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -449,6 +495,12 @@ func (c *compressFunctionClass) getFunction(ctx context.Context, args []Expressi
 
 type builtinCompressSig struct {
 	baseBuiltinFunc
+}
+
+func (b *builtinCompressSig) Clone() builtinFunc {
+	newSig := &builtinCompressSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
 }
 
 // evalString evals COMPRESS(str).
@@ -492,7 +544,7 @@ type uncompressFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *uncompressFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *uncompressFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := c.verifyArgs(args); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -505,6 +557,12 @@ func (c *uncompressFunctionClass) getFunction(ctx context.Context, args []Expres
 
 type builtinUncompressSig struct {
 	baseBuiltinFunc
+}
+
+func (b *builtinUncompressSig) Clone() builtinFunc {
+	newSig := &builtinUncompressSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
 }
 
 // evalString evals UNCOMPRESS(compressed_string).
@@ -535,7 +593,7 @@ type uncompressedLengthFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *uncompressedLengthFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *uncompressedLengthFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := c.verifyArgs(args); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -547,6 +605,12 @@ func (c *uncompressedLengthFunctionClass) getFunction(ctx context.Context, args 
 
 type builtinUncompressedLengthSig struct {
 	baseBuiltinFunc
+}
+
+func (b *builtinUncompressedLengthSig) Clone() builtinFunc {
+	newSig := &builtinUncompressedLengthSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
 }
 
 // evalInt evals UNCOMPRESSED_LENGTH(str).
@@ -573,6 +637,6 @@ type validatePasswordStrengthFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *validatePasswordStrengthFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *validatePasswordStrengthFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	return nil, errFunctionNotExists.GenByArgs("FUNCTION", "VALIDATE_PASSWORD_STRENGTH")
 }

@@ -19,10 +19,10 @@ import (
 
 	"github.com/cznic/mathutil"
 	"github.com/juju/errors"
-	"github.com/pingcap/tidb/context"
 	"github.com/pingcap/tidb/mysql"
+	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/types"
-	"github.com/pingcap/tipb/go-tipb"
+	tipb "github.com/pingcap/tipb/go-tipb"
 )
 
 var (
@@ -65,6 +65,9 @@ func numericContextResultType(ft *types.FieldType) types.EvalType {
 		if ft.Decimal > 0 {
 			return types.ETDecimal
 		}
+		return types.ETInt
+	}
+	if types.IsBinaryStr(ft) {
 		return types.ETInt
 	}
 	evalTp4Ft := types.ETReal
@@ -143,7 +146,7 @@ type arithmeticPlusFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *arithmeticPlusFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *arithmeticPlusFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := c.verifyArgs(args); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -175,6 +178,12 @@ func (c *arithmeticPlusFunctionClass) getFunction(ctx context.Context, args []Ex
 
 type builtinArithmeticPlusIntSig struct {
 	baseBuiltinFunc
+}
+
+func (s *builtinArithmeticPlusIntSig) Clone() builtinFunc {
+	newSig := &builtinArithmeticPlusIntSig{}
+	newSig.cloneFrom(&s.baseBuiltinFunc)
+	return newSig
 }
 
 func (s *builtinArithmeticPlusIntSig) evalInt(row types.Row) (val int64, isNull bool, err error) {
@@ -223,6 +232,12 @@ type builtinArithmeticPlusDecimalSig struct {
 	baseBuiltinFunc
 }
 
+func (s *builtinArithmeticPlusDecimalSig) Clone() builtinFunc {
+	newSig := &builtinArithmeticPlusDecimalSig{}
+	newSig.cloneFrom(&s.baseBuiltinFunc)
+	return newSig
+}
+
 func (s *builtinArithmeticPlusDecimalSig) evalDecimal(row types.Row) (*types.MyDecimal, bool, error) {
 	a, isNull, err := s.args[0].EvalDecimal(s.ctx, row)
 	if isNull || err != nil {
@@ -244,6 +259,12 @@ type builtinArithmeticPlusRealSig struct {
 	baseBuiltinFunc
 }
 
+func (s *builtinArithmeticPlusRealSig) Clone() builtinFunc {
+	newSig := &builtinArithmeticPlusRealSig{}
+	newSig.cloneFrom(&s.baseBuiltinFunc)
+	return newSig
+}
+
 func (s *builtinArithmeticPlusRealSig) evalReal(row types.Row) (float64, bool, error) {
 	a, isNull, err := s.args[0].EvalReal(s.ctx, row)
 	if isNull || err != nil {
@@ -263,7 +284,7 @@ type arithmeticMinusFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *arithmeticMinusFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *arithmeticMinusFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := c.verifyArgs(args); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -298,6 +319,12 @@ type builtinArithmeticMinusRealSig struct {
 	baseBuiltinFunc
 }
 
+func (s *builtinArithmeticMinusRealSig) Clone() builtinFunc {
+	newSig := &builtinArithmeticMinusRealSig{}
+	newSig.cloneFrom(&s.baseBuiltinFunc)
+	return newSig
+}
+
 func (s *builtinArithmeticMinusRealSig) evalReal(row types.Row) (float64, bool, error) {
 	a, isNull, err := s.args[0].EvalReal(s.ctx, row)
 	if isNull || err != nil {
@@ -315,6 +342,12 @@ func (s *builtinArithmeticMinusRealSig) evalReal(row types.Row) (float64, bool, 
 
 type builtinArithmeticMinusDecimalSig struct {
 	baseBuiltinFunc
+}
+
+func (s *builtinArithmeticMinusDecimalSig) Clone() builtinFunc {
+	newSig := &builtinArithmeticMinusDecimalSig{}
+	newSig.cloneFrom(&s.baseBuiltinFunc)
+	return newSig
 }
 
 func (s *builtinArithmeticMinusDecimalSig) evalDecimal(row types.Row) (*types.MyDecimal, bool, error) {
@@ -336,6 +369,12 @@ func (s *builtinArithmeticMinusDecimalSig) evalDecimal(row types.Row) (*types.My
 
 type builtinArithmeticMinusIntSig struct {
 	baseBuiltinFunc
+}
+
+func (s *builtinArithmeticMinusIntSig) Clone() builtinFunc {
+	newSig := &builtinArithmeticMinusIntSig{}
+	newSig.cloneFrom(&s.baseBuiltinFunc)
+	return newSig
 }
 
 func (s *builtinArithmeticMinusIntSig) evalInt(row types.Row) (val int64, isNull bool, err error) {
@@ -391,7 +430,7 @@ type arithmeticMultiplyFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *arithmeticMultiplyFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *arithmeticMultiplyFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := c.verifyArgs(args); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -426,9 +465,36 @@ func (c *arithmeticMultiplyFunctionClass) getFunction(ctx context.Context, args 
 }
 
 type builtinArithmeticMultiplyRealSig struct{ baseBuiltinFunc }
+
+func (s *builtinArithmeticMultiplyRealSig) Clone() builtinFunc {
+	newSig := &builtinArithmeticMultiplyRealSig{}
+	newSig.cloneFrom(&s.baseBuiltinFunc)
+	return newSig
+}
+
 type builtinArithmeticMultiplyDecimalSig struct{ baseBuiltinFunc }
+
+func (s *builtinArithmeticMultiplyDecimalSig) Clone() builtinFunc {
+	newSig := &builtinArithmeticMultiplyDecimalSig{}
+	newSig.cloneFrom(&s.baseBuiltinFunc)
+	return newSig
+}
+
 type builtinArithmeticMultiplyIntUnsignedSig struct{ baseBuiltinFunc }
+
+func (s *builtinArithmeticMultiplyIntUnsignedSig) Clone() builtinFunc {
+	newSig := &builtinArithmeticMultiplyIntUnsignedSig{}
+	newSig.cloneFrom(&s.baseBuiltinFunc)
+	return newSig
+}
+
 type builtinArithmeticMultiplyIntSig struct{ baseBuiltinFunc }
+
+func (s *builtinArithmeticMultiplyIntSig) Clone() builtinFunc {
+	newSig := &builtinArithmeticMultiplyIntSig{}
+	newSig.cloneFrom(&s.baseBuiltinFunc)
+	return newSig
+}
 
 func (s *builtinArithmeticMultiplyRealSig) evalReal(row types.Row) (float64, bool, error) {
 	a, isNull, err := s.args[0].EvalReal(s.ctx, row)
@@ -501,7 +567,7 @@ type arithmeticDivideFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *arithmeticDivideFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *arithmeticDivideFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := c.verifyArgs(args); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -517,11 +583,25 @@ func (c *arithmeticDivideFunctionClass) getFunction(ctx context.Context, args []
 	bf := newBaseBuiltinFuncWithTp(ctx, args, types.ETDecimal, types.ETDecimal, types.ETDecimal)
 	c.setType4DivDecimal(bf.tp, lhsTp, rhsTp)
 	sig := &builtinArithmeticDivideDecimalSig{bf}
+	sig.setPbCode(tipb.ScalarFuncSig_DivideDecimal)
 	return sig, nil
 }
 
 type builtinArithmeticDivideRealSig struct{ baseBuiltinFunc }
+
+func (s *builtinArithmeticDivideRealSig) Clone() builtinFunc {
+	newSig := &builtinArithmeticDivideRealSig{}
+	newSig.cloneFrom(&s.baseBuiltinFunc)
+	return newSig
+}
+
 type builtinArithmeticDivideDecimalSig struct{ baseBuiltinFunc }
+
+func (s *builtinArithmeticDivideDecimalSig) Clone() builtinFunc {
+	newSig := &builtinArithmeticDivideDecimalSig{}
+	newSig.cloneFrom(&s.baseBuiltinFunc)
+	return newSig
+}
 
 func (s *builtinArithmeticDivideRealSig) evalReal(row types.Row) (float64, bool, error) {
 	a, isNull, err := s.args[0].EvalReal(s.ctx, row)
@@ -557,15 +637,20 @@ func (s *builtinArithmeticDivideDecimalSig) evalDecimal(row types.Row) (*types.M
 	err = types.DecimalDiv(a, b, c, types.DivFracIncr)
 	if err == types.ErrDivByZero {
 		return c, true, errors.Trace(handleDivisionByZeroError(s.ctx))
+	} else if err == nil {
+		_, frac := c.PrecisionAndFrac()
+		if frac < s.baseBuiltinFunc.tp.Decimal {
+			err = c.Round(c, s.baseBuiltinFunc.tp.Decimal, types.ModeHalfEven)
+		}
 	}
-	return c, false, err
+	return c, false, errors.Trace(err)
 }
 
 type arithmeticIntDivideFunctionClass struct {
 	baseFunctionClass
 }
 
-func (c *arithmeticIntDivideFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *arithmeticIntDivideFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := c.verifyArgs(args); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -589,7 +674,20 @@ func (c *arithmeticIntDivideFunctionClass) getFunction(ctx context.Context, args
 }
 
 type builtinArithmeticIntDivideIntSig struct{ baseBuiltinFunc }
+
+func (s *builtinArithmeticIntDivideIntSig) Clone() builtinFunc {
+	newSig := &builtinArithmeticIntDivideIntSig{}
+	newSig.cloneFrom(&s.baseBuiltinFunc)
+	return newSig
+}
+
 type builtinArithmeticIntDivideDecimalSig struct{ baseBuiltinFunc }
+
+func (s *builtinArithmeticIntDivideDecimalSig) Clone() builtinFunc {
+	newSig := &builtinArithmeticIntDivideDecimalSig{}
+	newSig.cloneFrom(&s.baseBuiltinFunc)
+	return newSig
+}
 
 func (s *builtinArithmeticIntDivideIntSig) evalInt(row types.Row) (int64, bool, error) {
 	b, isNull, err := s.args[1].EvalInt(s.ctx, row)
@@ -683,7 +781,7 @@ func (c *arithmeticModFunctionClass) setType4ModRealOrDecimal(retTp, a, b *types
 	}
 }
 
-func (c *arithmeticModFunctionClass) getFunction(ctx context.Context, args []Expression) (builtinFunc, error) {
+func (c *arithmeticModFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
 	if err := c.verifyArgs(args); err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -719,6 +817,12 @@ type builtinArithmeticModRealSig struct {
 	baseBuiltinFunc
 }
 
+func (s *builtinArithmeticModRealSig) Clone() builtinFunc {
+	newSig := &builtinArithmeticModRealSig{}
+	newSig.cloneFrom(&s.baseBuiltinFunc)
+	return newSig
+}
+
 func (s *builtinArithmeticModRealSig) evalReal(row types.Row) (float64, bool, error) {
 	b, isNull, err := s.args[1].EvalReal(s.ctx, row)
 	if isNull || err != nil {
@@ -741,6 +845,12 @@ type builtinArithmeticModDecimalSig struct {
 	baseBuiltinFunc
 }
 
+func (s *builtinArithmeticModDecimalSig) Clone() builtinFunc {
+	newSig := &builtinArithmeticModDecimalSig{}
+	newSig.cloneFrom(&s.baseBuiltinFunc)
+	return newSig
+}
+
 func (s *builtinArithmeticModDecimalSig) evalDecimal(row types.Row) (*types.MyDecimal, bool, error) {
 	a, isNull, err := s.args[0].EvalDecimal(s.ctx, row)
 	if isNull || err != nil {
@@ -760,6 +870,12 @@ func (s *builtinArithmeticModDecimalSig) evalDecimal(row types.Row) (*types.MyDe
 
 type builtinArithmeticModIntSig struct {
 	baseBuiltinFunc
+}
+
+func (s *builtinArithmeticModIntSig) Clone() builtinFunc {
+	newSig := &builtinArithmeticModIntSig{}
+	newSig.cloneFrom(&s.baseBuiltinFunc)
+	return newSig
 }
 
 func (s *builtinArithmeticModIntSig) evalInt(row types.Row) (val int64, isNull bool, err error) {
