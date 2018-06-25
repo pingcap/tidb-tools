@@ -36,12 +36,12 @@ func toMySQLVersion(v string) MySQLVersion {
 	}
 	version := [3]uint{}
 	for i := range tmp {
-		v, err := strconv.ParseUint(tmp[i], 10, 64)
+		val, err := strconv.ParseUint(tmp[i], 10, 64)
 		if err != nil {
 			log.Warnf("invalid version %s", v)
 			return [3]uint{0, 0, 0}
 		}
-		version[i] = uint(v)
+		version[i] = uint(val)
 	}
 	return version
 }
