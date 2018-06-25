@@ -17,7 +17,7 @@ import (
 	"github.com/Shopify/sarama"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	pb "github.com/pingcap/tidb-tools/binlog_proto/go-binlog"
+	pb "github.com/pingcap/tidb-tools/tidb_binlog/binlog_proto/go-binlog"
 )
 
 func init() {
@@ -54,7 +54,7 @@ func (r *Reader) getTopic() (string, int32) {
 	return r.cfg.ClusterID + "_obinlog", 0
 }
 
-// NewReader return a instance of Reader
+// NewReader creates an instance of Reader
 func NewReader(cfg *Config) (r *Reader, err error) {
 	r = &Reader{
 		cfg:       cfg,
@@ -92,7 +92,7 @@ func (r *Reader) Close() {
 	r.client.Close()
 }
 
-// Messages return a chan to read message
+// Messages returns a chan that contains unread buffered message
 func (r *Reader) Messages() (msgs <-chan *Message) {
 	return r.msgs
 }
