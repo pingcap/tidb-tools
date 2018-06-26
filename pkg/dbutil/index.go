@@ -10,7 +10,7 @@ import (
 	"github.com/pingcap/tidb/model"
 )
 
-// IndexInfo saves index's information.
+// IndexInfo contains information of table index.
 type IndexInfo struct {
 	Table       string
 	NoneUnique  bool
@@ -21,7 +21,7 @@ type IndexInfo struct {
 }
 
 // ShowIndex returns result of executing `show index`
-func ShowIndex(ctx context.Context, db *sql.DB, dbName string, table string) ([]*IndexInfo, error) {
+func ShowIndex(ctx context.Context, db *sql.DB, schemaName string, table string) ([]*IndexInfo, error) {
 	/*
 		show index example result:
 		mysql> show index from test;
@@ -33,8 +33,8 @@ func ShowIndex(ctx context.Context, db *sql.DB, dbName string, table string) ([]
 		+-------+------------+----------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
 	*/
 	indices := make([]*IndexInfo, 0, 3)
-	query := fmt.Sprintf("SHOW INDEX FROM `%s`.`%s`", dbName, table)
-	rows, err := QuerySQL(ctx, db, query)
+	query := fmt.Sprintf("SHOW INDEX FROM `%s`.`%s`", schemaName, table)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -67,8 +67,12 @@ func ShowIndex(ctx context.Context, db *sql.DB, dbName string, table string) ([]
 	return indices, nil
 }
 
-// FindSuitableIndex returns a suitable index.
-func FindSuitableIndex(ctx context.Context, db *sql.DB, dbName string, tableInfo *model.TableInfo) (*model.ColumnInfo, error) {
+// FindSuitableIndex returns first column of a suitable index.
+// The priority is
+// * primary key
+// * unique key
+// * normal index which has max cardinality
+func FindSuitableIndex(ctx context.Context, db *sql.DB, schemaName string, tableInfo *model.TableInfo) (*model.ColumnInfo, error) {
 	// find primary key
 	for _, index := range tableInfo.Indices {
 		if index.Primary {
@@ -84,7 +88,7 @@ func FindSuitableIndex(ctx context.Context, db *sql.DB, dbName string, tableInfo
 	}
 
 	// no unique index found, seek index with max cardinality
-	indices, err := ShowIndex(ctx, db, dbName, tableInfo.Name.O)
+	indices, err := ShowIndex(ctx, db, schemaName, tableInfo.Name.O)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -99,7 +103,7 @@ func FindSuitableIndex(ctx context.Context, db *sql.DB, dbName string, tableInfo
 		if indexInfo.Cardinality > maxCardinality {
 			column := FindColumnByName(tableInfo.Columns, indexInfo.ColumnName)
 			if column == nil {
-				return nil, errors.NotFoundf("column %s in %s.%s", indexInfo.ColumnName, dbName, tableInfo.Name.O)
+				return nil, errors.NotFoundf("column %s in %s.%s", indexInfo.ColumnName, schemaName, tableInfo.Name.O)
 			}
 			maxCardinality = indexInfo.Cardinality
 			c = column
@@ -109,7 +113,7 @@ func FindSuitableIndex(ctx context.Context, db *sql.DB, dbName string, tableInfo
 	return c, nil
 }
 
-// SelectUniqueOrderKey returns some columns for orderby condition.
+// SelectUniqueOrderKey returns some columns for order by condition.
 func SelectUniqueOrderKey(tbInfo *model.TableInfo) ([]string, []*model.ColumnInfo) {
 	keys := make([]string, 0, 2)
 	keyCols := make([]*model.ColumnInfo, 0, 2)

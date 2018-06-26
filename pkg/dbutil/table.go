@@ -52,7 +52,7 @@ func GetTableInfo(ctx context.Context, db *sql.DB, schemaName string, tableName 
 	return GetTableInfoBySQL(createTableSQL)
 }
 
-// GetTableInfoBySQL returns table information by create table sql.
+// GetTableInfoBySQL returns table information by given create table sql.
 func GetTableInfoBySQL(createTableSQL string) (table *model.TableInfo, err error) {
 	stmt, err := parser.New().ParseOneStmt(createTableSQL, "", "")
 	if err != nil {

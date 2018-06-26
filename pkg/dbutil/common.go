@@ -26,14 +26,14 @@ import (
 )
 
 const (
-	// ImplicitColName is tidb's implicit column's name
+	// ImplicitColName is name of implicit column in TiDB
 	ImplicitColName = "_tidb_rowid"
 
-	// ImplicitColID is tidb's implicit column's id
+	// ImplicitColID is ID implicit column in TiDB
 	ImplicitColID = -1
 )
 
-// DBConfig is the DB configuration.
+// DBConfig is database configuration.
 type DBConfig struct {
 	Host string `toml:"host" json:"host"`
 
@@ -46,7 +46,7 @@ type DBConfig struct {
 	Schema string `toml:"schema" json:"schema"`
 }
 
-// String returns string of database config
+// String returns native format of database configuration
 func (c *DBConfig) String() string {
 	if c == nil {
 		return "<nil>"
@@ -56,7 +56,7 @@ func (c *DBConfig) String() string {
 
 // CreateDB creates a mysql connection FD
 func CreateDB(cfg DBConfig) (*sql.DB, error) {
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Schema)
+	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Schema)
 	dbConn, err := sql.Open("mysql", dbDSN)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -71,7 +71,7 @@ func CloseDB(db *sql.DB) error {
 	return errors.Trace(db.Close())
 }
 
-// GetCreateTableSQL gets the create table statements.
+// GetCreateTableSQL returns the create table statement.
 func GetCreateTableSQL(ctx context.Context, db *sql.DB, schemaName string, tableName string) (string, error) {
 	/*
 		show create table example result:
@@ -86,22 +86,22 @@ func GetCreateTableSQL(ctx context.Context, db *sql.DB, schemaName string, table
 		+-------+--------------------------------------------------------------------+
 	*/
 	query := fmt.Sprintf("SHOW CREATE TABLE `%s`.`%s`", schemaName, tableName)
-	row := db.QueryRowContext(ctx, query)
 
 	var tbl, createTable sql.NullString
-	err := row.Scan(&tbl, &createTable)
+	err := db.QueryRowContext(ctx, query).Scan(&tbl, &createTable)
 	if err != nil {
 		return "", errors.Trace(err)
 	}
 	if !tbl.Valid || !createTable.Valid {
 		return "", errors.NotFoundf("table %s", tableName)
 	}
+
 	return createTable.String, nil
 }
 
 // GetRowCount returns row count of the table.
 // if not specify where condition, return total row count of the table.
-func GetRowCount(ctx context.Context, db *sql.DB, dbName string, table string, where string) (int64, error) {
+func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName string, where string) (int64, error) {
 	/*
 		select count example result:
 		mysql> SELECT count(1) cnt from `test`.`itest` where id > 0;
@@ -112,44 +112,35 @@ func GetRowCount(ctx context.Context, db *sql.DB, dbName string, table string, w
 		+------+
 	*/
 
-	query := fmt.Sprintf("SELECT COUNT(1) cnt FROM `%s`.`%s`", dbName, table)
+	query := fmt.Sprintf("SELECT COUNT(1) cnt FROM `%s`.`%s`", schemaName, tableName)
 	if len(where) > 0 {
 		query += fmt.Sprintf(" WHERE %s", where)
 	}
 
-	rows, err := QuerySQL(ctx, db, query)
+	var cnt sql.NullInt64
+	err := db.QueryRowContext(ctx, query).Scan(&cnt)
 	if err != nil {
 		return 0, errors.Trace(err)
 	}
-	defer rows.Close()
-
-	var fields map[string][]byte
-	if rows.Next() {
-		fields, err = ScanRow(rows)
-		if err != nil {
-			return 0, errors.Trace(err)
-		}
+	if !cnt.Valid {
+		return 0, errors.NotFoundf("table `%s`.`%s`", schemaName, tableName)
 	}
 
-	cntStr, ok := fields["cnt"]
-	if !ok {
-		return 0, errors.NotFoundf("`cnt` field in `%s`.`%s`'s count result", dbName, table)
-	}
-	cnt, err := strconv.ParseInt(string(cntStr), 10, 64)
-	return cnt, errors.Trace(err)
+	return cnt.Int64, nil
 }
 
 // GetRandomValues returns some random value of a column, not used for number type column.
-func GetRandomValues(ctx context.Context, db *sql.DB, dbName string, table string, column string, num int64, min, max interface{}, limitRange string) ([]string, error) {
+// TODO: why not used for number type column? fix it
+func GetRandomValues(ctx context.Context, db *sql.DB, schemaName string, table string, column string, num int64, min, max interface{}, limitRange string) ([]string, error) {
 	if limitRange != "" {
 		limitRange = "true"
 	}
 
 	randomValue := make([]string, 0, num)
 	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` >= \"%v\" AND `%s` <= \"%v\" AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
-		column, column, dbName, table, column, min, column, max, limitRange, num, column)
+		column, column, schemaName, table, column, min, column, max, limitRange, num, column)
 	log.Debugf("get random values sql: %s", query)
-	rows, err := QuerySQL(ctx, db, query)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -167,9 +158,9 @@ func GetRandomValues(ctx context.Context, db *sql.DB, dbName string, table strin
 	return randomValue, nil
 }
 
-// GetTables gets all table in the schema
-func GetTables(ctx context.Context, db *sql.DB, dbName string) ([]string, error) {
-	rs, err := QuerySQL(ctx, db, fmt.Sprintf("SHOW TABLES IN `%s`;", dbName))
+// GetTables returns name of all tables in the specified schema
+func GetTables(ctx context.Context, db *sql.DB, schemaName string) ([]string, error) {
+	rs, err := db.QueryContext(ctx, fmt.Sprintf("SHOW TABLES IN `%s`;", schemaName))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -187,7 +178,7 @@ func GetTables(ctx context.Context, db *sql.DB, dbName string) ([]string, error)
 	return tbls, nil
 }
 
-// GetCRC32Checksum returns the checksum of some data
+// GetCRC32Checksum returns checksum code of some data by given condition
 func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName string, tbInfo *model.TableInfo, orderKeys []string, limitRange string) (string, error) {
 	/*
 		calculate CRC32 checksum example:
@@ -207,25 +198,20 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName string, tbInfo
 	query := fmt.Sprintf("SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', %s) SEPARATOR  ' + ')) AS checksum FROM (SELECT * FROM `%s`.`%s` WHERE %s ORDER BY %s) AS tmp;",
 		strings.Join(columnNames, ", "), schemaName, tbInfo.Name.O, limitRange, strings.Join(orderKeys, ","))
 	log.Debugf("checksum sql: %s", query)
-	rows, err := QuerySQL(ctx, db, query)
+
+	var checksum sql.NullString
+	err := db.QueryRowContext(ctx, query).Scan(&checksum)
 	if err != nil {
 		return "", errors.Trace(err)
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var checksum sql.NullString
-		err = rows.Scan(&checksum)
-		if err != nil {
-			return "", errors.Trace(err)
-		}
-		return checksum.String, nil
+	if !checksum.Valid {
+		return "", errors.Errorf("fail to get checksum from query %s", query)
 	}
 
-	return "", nil
+	return checksum.String, nil
 }
 
-// GetTidbLatestTSO returns tidb's latest TSO.
+// GetTidbLatestTSO returns tidb's current TSO.
 func GetTidbLatestTSO(ctx context.Context, db *sql.DB) (int64, error) {
 	/*
 		example in tidb:

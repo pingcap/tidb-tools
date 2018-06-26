@@ -4,7 +4,7 @@ import (
 	"github.com/pingcap/tidb/mysql"
 )
 
-// IsNumberType returns true if is number type
+// IsNumberType returns true if tp is number type
 func IsNumberType(tp byte) bool {
 	switch tp {
 	case mysql.TypeTiny, mysql.TypeShort, mysql.TypeLong, mysql.TypeLonglong, mysql.TypeInt24, mysql.TypeYear:
@@ -14,7 +14,7 @@ func IsNumberType(tp byte) bool {
 	return false
 }
 
-// IsFloatType returns true if is float type
+// IsFloatType returns true if tp is float type
 func IsFloatType(tp byte) bool {
 	switch tp {
 	case mysql.TypeFloat, mysql.TypeDouble, mysql.TypeNewDecimal:
