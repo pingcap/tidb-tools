@@ -20,7 +20,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-tools/pkg/db"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/model"
 )
 
@@ -50,10 +50,10 @@ type Config struct {
 	LogLevel string `toml:"log-level" json:"log-level"`
 
 	// source database's config
-	SourceDBCfg pkgdb.DBConfig `toml:"source-db" json:"source-db"`
+	SourceDBCfg dbutil.DBConfig `toml:"source-db" json:"source-db"`
 
 	// target database's config
-	TargetDBCfg pkgdb.DBConfig `toml:"target-db" json:"target-db"`
+	TargetDBCfg dbutil.DBConfig `toml:"target-db" json:"target-db"`
 
 	// for example, the whole data is [1...100]
 	// we can split these data to [1...10], [11...20], ..., [91...100]

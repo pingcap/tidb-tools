@@ -14,6 +14,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"flag"
 	"os"
@@ -22,7 +23,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-tools/pkg/db"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 )
 
@@ -51,17 +52,25 @@ func main() {
 		return
 	}
 
-	sourceDB, err := pkgdb.CreateDB(cfg.SourceDBCfg, cfg.SourceSnapshot)
+	sourceDB, err := dbutil.CreateDB(cfg.SourceDBCfg)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("create source db %+v error %v", cfg.SourceDBCfg, err)
 	}
-	defer pkgdb.CloseDB(sourceDB)
+	defer dbutil.CloseDB(sourceDB)
+	err = dbutil.SetSnapshot(context.Background(), sourceDB, cfg.SourceSnapshot)
+	if err != nil {
+		log.Fatalf("set history snapshot %s for source db %+v error %v", cfg.SourceSnapshot, cfg.SourceDBCfg, err)
+	}
 
-	targetDB, err := pkgdb.CreateDB(cfg.TargetDBCfg, cfg.TargetSnapshot)
+	targetDB, err := dbutil.CreateDB(cfg.TargetDBCfg)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("create target db %+v error %v", cfg.TargetDBCfg, err)
 	}
-	defer pkgdb.CloseDB(targetDB)
+	defer dbutil.CloseDB(targetDB)
+	err = dbutil.SetSnapshot(context.Background(), targetDB, cfg.TargetSnapshot)
+	if err != nil {
+		log.Fatalf("set history snapshot %s for target db %+v error %v", cfg.TargetSnapshot, cfg.TargetDBCfg, err)
+	}
 
 	if !checkSyncState(sourceDB, targetDB, cfg) {
 		log.Fatal("sourceDB don't equal targetDB")
