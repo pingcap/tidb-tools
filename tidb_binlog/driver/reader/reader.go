@@ -17,7 +17,7 @@ import (
 	"github.com/Shopify/sarama"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	pb "github.com/pingcap/tidb-tools/tidb_binlog/binlog_proto/go-binlog"
+	pb "github.com/pingcap/tidb-tools/tidb_binlog/slave_binlog_proto/go-binlog"
 )
 
 func init() {

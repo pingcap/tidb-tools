@@ -20,7 +20,7 @@ import (
 
 	"github.com/Shopify/sarama"
 	. "github.com/pingcap/check"
-	pb "github.com/pingcap/tidb-tools/tidb_binlog/binlog_proto/go-binlog"
+	pb "github.com/pingcap/tidb-tools/tidb_binlog/slave_binlog_proto/go-binlog"
 )
 
 func TestClient(t *testing.T) {
