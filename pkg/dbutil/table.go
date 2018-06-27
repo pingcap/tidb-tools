@@ -11,9 +11,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package pkgdb
+package dbutil
 
 import (
+	"context"
 	"database/sql"
 	"strings"
 
@@ -28,8 +29,8 @@ import (
 )
 
 // GetTableInfoWithRowID returns table information with _tidb_rowid column if useRowID is true
-func GetTableInfoWithRowID(db *sql.DB, schemaName string, tableName string, useRowID bool) (*model.TableInfo, error) {
-	table, err := GetTableInfo(db, schemaName, tableName)
+func GetTableInfoWithRowID(ctx context.Context, db *sql.DB, schemaName string, tableName string, useRowID bool) (*model.TableInfo, error) {
+	table, err := GetTableInfo(ctx, db, schemaName, tableName)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -42,8 +43,8 @@ func GetTableInfoWithRowID(db *sql.DB, schemaName string, tableName string, useR
 }
 
 // GetTableInfo returns table information.
-func GetTableInfo(db *sql.DB, schemaName string, tableName string) (*model.TableInfo, error) {
-	createTableSQL, err := GetCreateTableSQL(db, schemaName, tableName)
+func GetTableInfo(ctx context.Context, db *sql.DB, schemaName string, tableName string) (*model.TableInfo, error) {
+	createTableSQL, err := GetCreateTableSQL(ctx, db, schemaName, tableName)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -51,7 +52,7 @@ func GetTableInfo(db *sql.DB, schemaName string, tableName string) (*model.Table
 	return GetTableInfoBySQL(createTableSQL)
 }
 
-// GetTableInfoBySQL returns table information by create table sql.
+// GetTableInfoBySQL returns table information by given create table sql.
 func GetTableInfoBySQL(createTableSQL string) (table *model.TableInfo, err error) {
 	stmt, err := parser.New().ParseOneStmt(createTableSQL, "", "")
 	if err != nil {
@@ -239,7 +240,7 @@ func buildIndexColumns(columns []*model.ColumnInfo, idxColNames []*ast.IndexColN
 	idxColumns := make([]*model.IndexColumn, 0, len(idxColNames))
 
 	for _, ic := range idxColNames {
-		col := findCol(columns, ic.Column.Name.O)
+		col := FindColumnByName(columns, ic.Column.Name.O)
 
 		idxColumns = append(idxColumns, &model.IndexColumn{
 			Name:   col.Name,
@@ -256,8 +257,8 @@ func allocateColumnID(tblInfo *model.TableInfo) int64 {
 	return tblInfo.MaxColumnID
 }
 
-// findCol finds column in cols by name.
-func findCol(cols []*model.ColumnInfo, name string) *model.ColumnInfo {
+// FindColumnByName finds column by name.
+func FindColumnByName(cols []*model.ColumnInfo, name string) *model.ColumnInfo {
 	// column name don't distinguish capital and small letter
 	name = strings.ToLower(name)
 	for _, col := range cols {

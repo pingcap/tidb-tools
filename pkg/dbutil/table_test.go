@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package pkgdb
+package dbutil
 
 import (
 	"testing"
@@ -88,7 +88,7 @@ func (*testTableSuite) TestTable(c *C) {
 			c.Assert(testCase.indexs[j], Equals, index.Name.O)
 		}
 
-		col := findCol(tableInfo.Columns, testCase.colName)
+		col := FindColumnByName(tableInfo.Columns, testCase.colName)
 		c.Assert(testCase.fineCol, Equals, col != nil)
 	}
 }
