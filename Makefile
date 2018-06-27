@@ -10,7 +10,7 @@ PACKAGES := $$(go list ./... | grep -vE 'vendor')
 
 .PHONY: build importer checker dump_region binlogctl sync_diff_inspector test check deps
 
-build: importer checker check test
+build: check test importer checker dump_region binlogctl sync_diff_inspector
 
 importer:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/importer ./importer

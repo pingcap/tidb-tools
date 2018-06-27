@@ -20,7 +20,7 @@ type State string
 const (
 	// StateSuccess indicates that the check was successful
 	StateSuccess State = "success"
-	// StateFailure indicates that the check was faiful
+	// StateFailure indicates that the check was failed
 	StateFailure State = "fail"
 	// StateWarning indicates that the check had warnings
 	StateWarning State = "warn"
