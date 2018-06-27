@@ -46,6 +46,9 @@ func (to *testOffsetSuite) SetUpSuite(c *C) {
 	to.config = sarama.NewConfig()
 	to.config.Producer.Partitioner = sarama.NewManualPartitioner
 	to.config.Producer.Return.Successes = true
+	to.config.Net.DialTimeout = time.Second * 3
+	to.config.Net.ReadTimeout = time.Second * 3
+	to.config.Net.WriteTimeout = time.Second * 3
 	// need at least version to delete topic
 	to.config.Version = sarama.V0_10_1_0
 	var err error
