@@ -17,16 +17,16 @@ import (
 	"github.com/Shopify/sarama"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	pb "github.com/pingcap/tidb-tools/binlog_proto/go-binlog"
+	pb "github.com/pingcap/tidb-tools/tidb_binlog/slave_binlog_proto/go-binlog"
 )
 
-// KafkaSeeker implements Kafka Seeker
+// KafkaSeeker seeks offset in kafka topics by given condition
 type KafkaSeeker struct {
 	consumer sarama.Consumer
 	client   sarama.Client
 }
 
-// NewKafkaSeeker return a instance of KafkaSeeker
+// NewKafkaSeeker creates an instance of KafkaSeeker
 func NewKafkaSeeker(addr []string, config *sarama.Config) (*KafkaSeeker, error) {
 	client, err := sarama.NewClient(addr, config)
 	if err != nil {
@@ -46,13 +46,13 @@ func NewKafkaSeeker(addr []string, config *sarama.Config) (*KafkaSeeker, error) 
 	return s, nil
 }
 
-// Close release resource of KafkaSeeker
+// Close releases resources of KafkaSeeker
 func (ks *KafkaSeeker) Close() {
 	ks.consumer.Close()
 	ks.client.Close()
 }
 
-// Seek return the first offset which binlog CommitTs bigger than ts
+// Seek seeks the first offset which binlog CommitTs bigger than ts
 func (ks *KafkaSeeker) Seek(topic string, ts int64, partitions []int32) (offsets []int64, err error) {
 	if len(partitions) == 0 {
 		partitions, err = ks.consumer.Partitions(topic)

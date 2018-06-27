@@ -18,7 +18,7 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-tools/binlog_driver/reader"
+	"github.com/pingcap/tidb-tools/tidb_binlog/driver/reader"
 )
 
 var (
