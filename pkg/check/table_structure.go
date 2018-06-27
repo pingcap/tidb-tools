@@ -15,7 +15,7 @@ import (
 // TablesChecker checks table structures
 type TablesChecker struct {
 	db     *sql.DB
-	tables map[string][]string // `schema` => []`table`
+	tables map[string][]string // schema => []table; if []table is empty, query tables from db
 
 	errors, warnings int
 }
@@ -36,8 +36,18 @@ func (c *TablesChecker) Check(ctx context.Context) *Result {
 		State: StateSuccess,
 	}
 
+	var err error
+
 Loop:
 	for schema, tables := range c.tables {
+		if len(tables) == 0 {
+			tables, err = dbutil.GetTables(ctx, c.db, schema)
+			if err != nil {
+				markCheckError(r, err)
+				break Loop
+			}
+		}
+
 		for _, table := range tables {
 			statement, err := dbutil.GetCreateTableSQL(ctx, c.db, schema, table)
 			if err != nil {
@@ -47,7 +57,7 @@ Loop:
 
 			err = c.checkCreateSQL(statement)
 			if err != nil {
-				markCheckError(r, errors.Errorf("[schema %s, table %s]\t%v", schema, table, err))
+				markCheckError(r, errors.Errorf("\n[schema %s, table %s]\n%v", schema, table, err))
 			}
 		}
 	}

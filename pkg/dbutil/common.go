@@ -68,6 +68,10 @@ func CreateDB(cfg DBConfig) (*sql.DB, error) {
 
 // CloseDB closes the mysql fd
 func CloseDB(db *sql.DB) error {
+	if db == nil {
+		return nil
+	}
+
 	return errors.Trace(db.Close())
 }
 
