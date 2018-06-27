@@ -47,7 +47,7 @@ Loop:
 
 			err = c.checkCreateSQL(statement)
 			if err != nil {
-				markCheckError(r, errors.Annotatef(err, "[schema %s, table %s]\t", schema, table))
+				markCheckError(r, errors.Errorf("[schema %s, table %s]\t%v", schema, table, err))
 			}
 		}
 	}
