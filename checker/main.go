@@ -61,7 +61,7 @@ func main() {
 }
 
 func checkTables(schema string, tables []string) {
-	db, err := dbutil.CreateDB(dbutil.DBConfig{
+	db, err := dbutil.OpenDB(dbutil.DBConfig{
 		User:     *username,
 		Password: *password,
 		Host:     *host,

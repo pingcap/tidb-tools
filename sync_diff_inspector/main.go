@@ -52,7 +52,7 @@ func main() {
 		return
 	}
 
-	sourceDB, err := dbutil.CreateDB(cfg.SourceDBCfg)
+	sourceDB, err := dbutil.OpenDB(cfg.SourceDBCfg)
 	if err != nil {
 		log.Fatalf("create source db %+v error %v", cfg.SourceDBCfg, err)
 	}
@@ -62,7 +62,7 @@ func main() {
 		log.Fatalf("set history snapshot %s for source db %+v error %v", cfg.SourceSnapshot, cfg.SourceDBCfg, err)
 	}
 
-	targetDB, err := dbutil.CreateDB(cfg.TargetDBCfg)
+	targetDB, err := dbutil.OpenDB(cfg.TargetDBCfg)
 	if err != nil {
 		log.Fatalf("create target db %+v error %v", cfg.TargetDBCfg, err)
 	}
