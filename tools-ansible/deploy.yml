@@ -1,0 +1,36 @@
+# deploy tidb-enterprise-tools
+
+- name: create directories
+  hosts: all
+  run_once: true
+  tags: 
+    - always
+  roles:
+    - common_dir
+
+- name: deploying mydumper
+  hosts: mydumper_servers
+  tags: ['mydumper', 'never']
+  roles:
+    - mydumper
+
+- name: deploying loader 
+  hosts: loader_servers
+  tags: ['loader', 'never']
+  roles:
+    - loader
+
+- name: deploying syncer
+  hosts: syncer_servers
+  tags: ['syncer', 'never']
+  roles:
+    - syncer
+
+
+- name: deploying integated tools 
+  hosts: integrated_servers
+  roles:
+    - { role: mydumper, when: integrated_mode|default(false) }
+    - { role: loader, when: integrated_mode|default(false) }
+    - { role: syncer, when: integrated_mode|default(false)}
+    - { role: integrated, when: integrated_mode|default(false)}

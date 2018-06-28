@@ -1,0 +1,71 @@
+---
+
+- name: Stop if ansible version is too low, make sure that the Ansible version is Ansible 2.5.0 or later, otherwise a compatibility issue occurs.
+  assert:
+    that:
+      - ansible_version.full|version_compare('2.5.0', '>=')
+
+- name: detect outbound network
+  shell: >
+    warn=no
+    curl -s --connect-timeout 10 www.baidu.com 2>/dev/null >/dev/null; echo $?
+  changed_when: false
+  register: outbound_network_st
+
+- name: set outbound network fact
+  set_fact: has_outbound_network={{ outbound_network_st.stdout.strip() == '0' }}
+
+- fail:
+    msg: "The Control Machine must have access to the Internet in order to download tidb-tools packages"
+  when: not has_outbound_network
+
+- name: detect GFW
+  shell: >
+    warn=no
+    curl -s --connect-timeout 10 google.com 2>/dev/null >/dev/null; echo $?
+  changed_when: false
+  register: gfw_st
+
+- name: set GFW fact
+  set_fact: under_gfw={{ gfw_st.stdout.strip() != '0' }}
+
+- name: create downloads and resources directories
+  file: path="{{ item }}" state=directory mode=0755
+  with_items:
+  - "{{ downloads_dir }}"
+  - "{{ resources_dir }}"
+  - "{{ resources_dir }}/bin"
+  - "{{ conf_dir }}"
+
+- name: create tidb_enterprise_tools_packages.yml
+  template: src=tidb_enterprise_tools_packages.yml.j2 dest={{ playbook_dir }}/conf/tidb_enterprise_tools_packages.yml
+
+- include_vars: file={{ playbook_dir }}/conf/tidb_enterprise_tools_packages.yml
+
+- name: download packages
+  get_url:
+    url: "{{ item.url }}"
+    dest: "{{ downloads_dir }}/{{ item.name }}-{{ item.version }}.tar.gz"
+    force: yes
+    validate_certs: no
+  register: get_url_result
+  until: "'OK' in get_url_result.msg or 'file already exists' in get_url_result.msg"
+  retries: 4
+  delay: "{{ retry_stagger | random + 3 }}"
+  with_items: "{{ tidb_enterprise_tools_packages }}"
+  when:
+    - has_outbound_network
+    - not under_gfw
+
+- name: unarchive tidb-enterprise-tools binary
+  shell: ls -1 {{ item.name }}-{{ item.version }}.tar.gz | xargs -n1 tar xzf
+  args:
+    chdir: "{{ downloads_dir }}"
+    warn: no
+  with_items: "{{ tidb_enterprise_tools_packages }}"
+
+
+- name: cp tidb-enterprise-tools binary
+  shell: >
+    cp -v {{ downloads_dir }}/{{ item.name }}-{{ item.version}}*/bin/* "{{ resources_dir }}/bin/"
+  with_items: "{{ tidb_enterprise_tools_packages }}"

@@ -1,0 +1,36 @@
+---
+# tasks file for loader
+
+- name: deploy binary
+  copy: src="{{ resources_dir }}/bin/loader" dest="{{ deploy_dir }}/bin/" mode=0755 backup=yes
+  register: loader_binary
+
+- name: backup binary file
+  command: mv "{{ loader_binary.backup_file }}" "{{ backup_dir }}"
+  when: loader_binary.changed and loader_binary.backup_file is defined
+
+- name: create configuration file 
+  copy: src="{{ conf_dir }}/{{ loader_config_file }}" dest="{{ deploy_dir }}/conf" mode=0644
+
+- name: create run script
+  template:
+    src: "{{ item }}_{{ role_name }}_binary.sh.j2"
+    dest: "{{ deploy_dir }}/scripts/{{ item }}_{{ role_name }}_{{ job_name }}.sh"
+    mode: "0755"
+    backup: yes
+  with_items:
+    - run
+  vars:
+    role_status_dir: status/{{ role_name }}/{{ job_name }}
+  register: loader_script
+
+- name: backup script file
+  command: mv "{{ loader_script.backup_file }}" "{{ backup_dir }}"
+  when: loader_script.changed and loader_script.backup_file is defined
+
+- name: deploy systemd
+  include_role:
+    name: systemd
+  vars:
+    this_role_name: loader_{{ job_name }}
+    service_name: loader-{{ job_name }}

@@ -1,0 +1,11 @@
+---
+# tasks file for mydumper
+
+- name: deploy binary
+  copy: src="{{ resources_dir }}/bin/mydumper" dest="{{ deploy_dir }}/bin/" mode=0755 backup=yes
+  register: mydumper_binary
+
+- name: backup binary file
+  command: mv "{{ mydumper_binary.backup_file }}" "{{ backup_dir }}"
+  when: mydumper_binary.changed and mydumper_binary.backup_file is defined
+

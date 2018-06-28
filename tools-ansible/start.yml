@@ -1,0 +1,15 @@
+--- 
+
+
+- hosts: syncer_servers
+  tags: ['syncer', 'never']
+  tasks:
+    - name: start syncer by systemd
+      become: true
+      systemd: name=syncer-{{ job_name }}.service state=started enabled=no
+
+    - name: wait for syncer up
+      wait_for: |
+        host={{ ansible_host }} port={{ syncer_status_port }} state=present
+        send='GET /metrics HTTP/1.0\r\n\r\n' search_regex='200 OK'
+    

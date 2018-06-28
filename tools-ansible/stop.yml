@@ -1,0 +1,12 @@
+--- 
+
+
+- hosts: syncer_servers
+  tags: ['syncer', 'never']
+  tasks:
+    - name: stop syncer by systemd
+      become: true
+      systemd: name=syncer-{{ job_name }}.service state=stopped enabled=no
+
+    - name: wait for syncer down
+      wait_for: host={{ ansible_host }} port={{ syncer_status_port }} state=stopped

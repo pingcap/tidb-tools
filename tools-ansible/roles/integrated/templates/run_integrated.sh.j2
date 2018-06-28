@@ -1,0 +1,66 @@
+#!/bin/bash
+
+mydumper={{ deploy_dir }}/bin/mydumper
+syncer={{ deploy_dir }}/bin/syncer
+loader={{ deploy_dir }}/bin/loader
+
+work_dir={{ deploy_dir }}
+dump_dir={{ deploy_dir }}/data/mydumper_{{ job_name }}
+meta_dir="${work_dir}/meta"
+conf_dir="${work_dir}/conf"
+log_dir="${work_dir}/log"
+scripts_dir="${work_dir}/scripts"
+
+master_host="{{ master_host }}"
+master_port={{ master_port }}
+master_user="{{ master_user }}"
+master_password="{{ master_password }}"
+db={{ dump_db }}
+
+function opmsg() {
+    echo $1
+}
+
+
+# get_meta_from_dumpfile gets binlog meta info from dump files and write to meta_file
+function get_meta_from_dumpfile() {
+    local master_status=$(awk '/SHOW MASTER STATUS/{flag=1;next}/SHOW SLAVE STATUS/{flag=0}flag' ${dump_dir}/metadata)
+    local binlog_name=$(echo "${master_status}" | awk '/Log/{print $2}')
+    local binlog_pos=$(echo "${master_status}" | awk '/Pos/{print $2}')
+    local binlog_gtids=$(echo "${master_status}" | awk 'match ($0, /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}:[0-9]+(-[0-9]+){0,1}/) {print substr($0, RSTART, RLENGTH)}')
+    local binlog_gtids_concat=$( echo "${binlog_gtids}" | tr '\n' ',' |  sed 's/,$//')
+    cat > "${meta_dir}/syncer_{{ job_name }}.meta" <<EOF
+binlog-name = "${binlog_name}"
+binlog-pos = ${binlog_pos}
+binlog-gtid = "${binlog_gtids_concat}"
+EOF
+}
+
+
+# dump_db dumps database from MySQL slave
+function dump_db() {
+    ${mydumper} --long-query-guard 300 -h "${master_host}" -P "${master_port}" -u root -p "${master_password}" -t 32 -s 100000 -F 64 -B "${db}" --skip-tz-utc -o "${dump_dir}" || { EC=$?; opmsg "dump database ${db} failed exit code: $EC"; exit $EC; }
+    opmsg "dump database ${db} done"
+}
+
+# load_db loads database from dump_dir to TiDB cluster
+function load_db() {
+    sh ${scripts_dir}/run_loader_{{ job_name }}.sh
+    opmsg "load database ${db} done"
+}
+
+# sync_db sync database from MySQL master to TiDB cluster
+function sync_db() {
+    opmsg "start syncer for ${db}"
+    sh ${scripts_dir}/run_syncer_{{ job_name }}.sh
+}
+
+function main() {
+    dump_db
+    get_meta_from_dumpfile
+    load_db
+    sync_db
+}
+
+main
+
