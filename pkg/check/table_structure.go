@@ -120,7 +120,7 @@ func (c *TablesChecker) checkAST(stmt ast.StmtNode) error {
 			return errors.Trace(err)
 		}
 	}
-	return errors.Trace(err)
+	return nil
 }
 
 func (c *TablesChecker) checkColumnDef(def *ast.ColumnDef) error {
