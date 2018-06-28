@@ -89,10 +89,12 @@ func checkSyncState(sourceDB, targetDB *sql.DB, cfg *Config) bool {
 		log.Fatalf("fail to initialize diff process %v", errors.ErrorStack(err))
 	}
 
-	ok, err := d.Equal()
+	err = d.Equal()
 	if err != nil {
 		log.Fatalf("check data difference error %v", errors.ErrorStack(err))
 	}
 
-	return ok
+	log.Info(d.report.String())
+
+	return d.report.Pass
 }

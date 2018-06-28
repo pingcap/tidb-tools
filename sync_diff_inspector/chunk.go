@@ -42,6 +42,7 @@ type CheckJob struct {
 	Table  string
 	Column *model.ColumnInfo
 	Where  string
+	Args   []interface{}
 	Chunk  chunkRange
 }
 
@@ -55,9 +56,9 @@ func newChunkRange(begin, end interface{}, containBegin, containEnd bool) chunkR
 	}
 }
 
-func getChunksForTable(db *sql.DB, Schema, tableName string, column *model.ColumnInfo, where string, chunkSize, sample int) ([]chunkRange, error) {
+func getChunksForTable(db *sql.DB, schema, table string, column *model.ColumnInfo, where string, chunkSize, sample int) ([]chunkRange, error) {
 	if column == nil {
-		log.Warnf("no suitable index found for %s.%s", Schema, tableName)
+		log.Warnf("no suitable index found for %s.%s", schema, table)
 		return nil, nil
 	}
 
@@ -65,15 +66,15 @@ func getChunksForTable(db *sql.DB, Schema, tableName string, column *model.Colum
 
 	// fetch min, max
 	query := fmt.Sprintf("SELECT %s MIN(`%s`) as MIN, MAX(`%s`) as MAX FROM `%s`.`%s` where %s",
-		"/*!40001 SQL_NO_CACHE */", field, field, Schema, tableName, where)
+		"/*!40001 SQL_NO_CACHE */", field, field, schema, table, where)
 
 	// get the chunk count
-	cnt, err := dbutil.GetRowCount(context.Background(), db, Schema, tableName, where)
+	cnt, err := dbutil.GetRowCount(context.Background(), db, schema, table, where)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	if cnt == 0 {
-		log.Infof("no data found in %s.%s", Schema, tableName)
+		log.Infof("no data found in %s.%s", schema, table)
 		return nil, nil
 	}
 
@@ -117,7 +118,7 @@ func getChunksForTable(db *sql.DB, Schema, tableName string, column *model.Colum
 		}
 		chunk = newChunkRange(min.String, max.String, true, true)
 	}
-	return splitRange(db, &chunk, chunkCnt, Schema, tableName, column, where)
+	return splitRange(db, &chunk, chunkCnt, schema, table, column, where)
 }
 
 func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table string, column *model.ColumnInfo, limitRange string) ([]chunkRange, error) {
@@ -175,12 +176,12 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 		for i = 0; i < int64(len(splitValues)+1); i++ {
 			if i == 0 {
 				minTmp = min
-				maxTmp = splitValues[i]
-			} else if i == int64(len(splitValues)) {
-				minTmp = splitValues[i-1]
-				maxTmp = max
 			} else {
 				minTmp = splitValues[i-1]
+			}
+			if i == int64(len(splitValues)) {
+				maxTmp = max
+			} else {
 				maxTmp = splitValues[i]
 			}
 			r := newChunkRange(minTmp, maxTmp, true, false)
@@ -247,22 +248,15 @@ func GenerateCheckJob(db *sql.DB, Schema string, table *model.TableInfo, splitFi
 	log.Debugf("chunks: %+v", chunks)
 
 	jobCnt += len(chunks)
-	var (
-		chunk chunkRange
-		where string
-	)
+
 	for {
 		length := len(chunks)
 		if length == 0 {
 			break
 		}
-		if length%2 == 0 {
-			chunk = chunks[0]
-			chunks = chunks[1:]
-		} else {
-			chunk = chunks[length-1]
-			chunks = chunks[:length-1]
-		}
+
+		chunk := chunks[0]
+		chunks = chunks[1:]
 
 		gt := ">"
 		lt := "<"
@@ -272,21 +266,15 @@ func GenerateCheckJob(db *sql.DB, Schema string, table *model.TableInfo, splitFi
 		if chunk.containEnd {
 			lt = "<="
 		}
-		if reflect.TypeOf(chunk.begin).Kind() == reflect.Int64 {
-			where = fmt.Sprintf("(`%s` %s %d AND `%s` %s %d)", column.Name, gt, chunk.begin, column.Name, lt, chunk.end)
-		} else if reflect.TypeOf(chunk.begin).Kind() == reflect.Float64 {
-			where = fmt.Sprintf("(`%s` %s %f AND `%s` %s %f)", column.Name, gt, chunk.begin, column.Name, lt, chunk.end)
-		} else {
-			where = fmt.Sprintf("(`%s` %s \"%v\" AND `%s` %s \"%v\")", column.Name, gt, chunk.begin, column.Name, lt, chunk.end)
-		}
-		where = fmt.Sprintf("%s AND %s", where, limitRange)
+		where := fmt.Sprintf("(`%s` %s ? AND `%s` %s ? AND %s)", column.Name, gt, column.Name, lt, limitRange)
 
-		log.Debugf("%s.%s create dump job: where: %s", Schema, table.Name.O, where)
+		log.Debugf("%s.%s create dump job, where: %s, begin: %v, end: %v", Schema, table.Name.O, where, chunk.begin, chunk.end)
 		jobBucket = append(jobBucket, &CheckJob{
 			Schema: Schema,
 			Table:  table.Name.O,
 			Column: column,
 			Where:  where,
+			Args:   []interface{}{chunk.begin, chunk.end},
 			Chunk:  chunk,
 		})
 	}
