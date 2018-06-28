@@ -52,9 +52,9 @@ func NewReport(schema string) *Report {
 // String returns a string of this Report.
 func (r *Report) String() (report string) {
 	if r.Pass {
-		report = fmt.Sprintf("check result of schema %s: Success!\n", r.Schema)
+		report = fmt.Sprintf("\ncheck result of schema %s: Success!\n", r.Schema)
 	} else {
-		report = fmt.Sprintf("check result of schema %s: Failed!\n", r.Schema)
+		report = fmt.Sprintf("\ncheck result of schema %s: Failed!\n", r.Schema)
 	}
 
 	if !r.TableNameEqual {
@@ -63,7 +63,7 @@ func (r *Report) String() (report string) {
 	report = fmt.Sprintf("%s%d tables' check passed, %d table's check failed.\n\n", report, r.PassNum, r.FailedNum)
 
 	for table, result := range r.TableResults {
-		report = fmt.Sprintf("%stable: %s", report, table)
+		report = fmt.Sprintf("%stable: %s\n", report, table)
 		if !result.StructEqual {
 			report = fmt.Sprintf("%stable's struct not equal\n", report)
 		} else {
