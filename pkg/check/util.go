@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 )
@@ -72,9 +71,9 @@ func markCheckError(result *Result, err error) {
 	if err != nil {
 		if utils.OriginError(err) == context.Canceled {
 			result.State = StateWarning
-			result.ErrorMsg = context.Canceled.Error()
 		} else {
-			result.ErrorMsg = errors.ErrorStack(err)
+			result.State = StateFailure
 		}
+		result.ErrorMsg = fmt.Sprintf("%v\n%s", err, result.ErrorMsg)
 	}
 }

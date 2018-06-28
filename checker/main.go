@@ -14,42 +14,25 @@
 package main
 
 import (
-	"database/sql"
+	"context"
 	"flag"
 	"fmt"
 	"os"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	"github.com/pingcap/tidb-tools/pkg/check"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 var (
-	logLevel     = flag.String("L", "info", "log level: info, debug, warn, error, fatal")
 	host         = flag.String("host", "127.0.0.1", "MySQL host")
 	port         = flag.Int("port", 3306, "MySQL port")
 	username     = flag.String("user", "root", "User name")
 	password     = flag.String("password", "", "Password")
 	printVersion = flag.Bool("V", false, "prints version and exit")
 )
-
-func openDB(dbName string) (*sql.DB, error) {
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8", *username, *password, *host, *port, dbName)
-	log.Infof("Database DSN: %s", dbDSN)
-	db, err := sql.Open("mysql", dbDSN)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	return db, nil
-}
-
-func closeDB(db *sql.DB) error {
-	if db == nil {
-		return nil
-	}
-	return errors.Trace(db.Close())
-}
 
 func main() {
 	flag.Usage = func() {
@@ -70,23 +53,32 @@ func main() {
 		log.Error("Miss database name")
 		return
 	}
-	log.SetLevelByString(*logLevel)
-	c := &checker{
-		dbName: flag.Args()[0],
-		tbls:   flag.Args()[1:],
-	}
-	err := c.check()
+
+	schema := flag.Args()[0]
+	tables := flag.Args()[1:]
+	checkTables(schema, tables)
+	log.Infof("complete checking!!")
+}
+
+func checkTables(schema string, tables []string) {
+	db, err := dbutil.OpenDB(dbutil.DBConfig{
+		User:     *username,
+		Password: *password,
+		Host:     *host,
+		Port:     *port,
+		Schema:   schema,
+	})
 	if err != nil {
-		log.Errorf("Check database error: %s", err)
-		os.Exit(2)
-	} else if c.warnings > 0 || c.errs > 0 {
-		log.Errorf("Check database %s with %d errors and %d warnings.", c.dbName, c.errs, c.warnings)
-		os.Exit(2)
+		log.Fatal("create database connection failed:", err)
+	}
+	defer dbutil.CloseDB(db)
+
+	result := check.NewTablesChecker(db, map[string][]string{schema: tables}).Check(context.Background())
+	if result.State == check.StateSuccess {
+		log.Infof("check schema %s successfully!", schema)
+	} else if result.State == check.StateWarning {
+		log.Warningf("check schema %s and find warnings.\n%s", schema, result.ErrorMsg)
 	} else {
-		fmt.Println("Check database succ!")
-	}
-	err = c.close()
-	if err != nil {
-		log.Errorf("Close db with error %s", err)
+		log.Errorf("check schema %s and failed.\n%s", schema, result.ErrorMsg)
 	}
 }

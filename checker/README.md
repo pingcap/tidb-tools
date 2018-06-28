@@ -6,8 +6,6 @@ Checker is a tool for checking the compatibility of an existed MySQL database wi
 
 ```
 Usage of checker:
-  -L string
-        log level: debug, info, warn, error, fatal (default "info")
   --host string
         MySQL host (default "127.0.0.1")
   --port int
