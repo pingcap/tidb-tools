@@ -40,13 +40,12 @@ func (c *TablesChecker) Check(ctx context.Context) *Result {
 
 	var err error
 
-Loop:
 	for schema, tables := range c.tables {
 		if len(tables) == 0 {
 			tables, err = dbutil.GetTables(ctx, c.db, schema)
 			if err != nil {
 				markCheckError(r, err)
-				break Loop
+				return r
 			}
 		}
 
@@ -54,7 +53,7 @@ Loop:
 			statement, err := dbutil.GetCreateTableSQL(ctx, c.db, schema, table)
 			if err != nil {
 				markCheckError(r, err)
-				break Loop
+				return r
 			}
 
 			err = c.checkCreateSQL(statement)
