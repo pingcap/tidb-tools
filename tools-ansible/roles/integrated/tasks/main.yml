@@ -12,7 +12,9 @@
 
 - name: backup script file
   command: mv "{{ integrated_script.backup_file }}" "{{ backup_dir }}"
-  when: integrated_script.changed and integrated_script.backup_file is defined
+  when: 
+    - integrated_script.changed 
+    - integrated_script.backup_file is defined
 
 - name: deploy systemd
   include_role:

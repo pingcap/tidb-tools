@@ -12,8 +12,6 @@ conf_dir: "{{ playbook_dir }}/conf"
 resources_dir: "{{ playbook_dir }}/resources"
 script_dir:    "{{ playbook_dir }}/scripts"
 binary_dir:    "{{ playbook_dir }}/resources/bin"
-fetch_tmp_dir: "{{ playbook_dir }}/fetch_tmp"
-fetch_log_dir: "{{ playbook_dir }}/fetch_log"
 
 # Random shifts for retrying failed ops like downloading
 retry_stagger: 5
