@@ -71,6 +71,8 @@ func markCheckError(result *Result, err error) {
 	if err != nil {
 		if utils.OriginError(err) == context.Canceled {
 			result.State = StateWarning
+		} else {
+			result.State = StateFailure
 		}
 		result.ErrorMsg = fmt.Sprintf("%v\n%s", err, result.ErrorMsg)
 	}
