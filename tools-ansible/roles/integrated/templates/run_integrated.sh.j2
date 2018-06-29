@@ -15,7 +15,6 @@ master_host="{{ master_host }}"
 master_port={{ master_port }}
 master_user="{{ master_user }}"
 master_password="{{ master_password }}"
-db={{ dump_db }}
 
 function opmsg() {
     echo $1
@@ -39,19 +38,20 @@ EOF
 
 # dump_db dumps database from MySQL slave
 function dump_db() {
-    ${mydumper} --long-query-guard 300 -h "${master_host}" -P "${master_port}" -u root -p "${master_password}" -t 32 -s 100000 -F 64 -B "${db}" --skip-tz-utc -o "${dump_dir}" || { EC=$?; opmsg "dump database ${db} failed exit code: $EC"; exit $EC; }
     opmsg "dump database ${db} done"
+    ${mydumper} --long-query-guard 300 -h "${master_host}" -P "${master_port}" -u root -p "${master_password}" -t 32 --statement-size 100000 --chunk-filesize 64 --regex '^(?!(mysql\.|sys\.|information_schema\.|performance_schema\.))' --skip-tz-utc -o "${dump_dir}" || { EC=$?; opmsg "dump database failed exit code: $EC"; exit $EC; }
+    opmsg "dump database done"
 }
 
 # load_db loads database from dump_dir to TiDB cluster
 function load_db() {
     sh ${scripts_dir}/run_loader_{{ job_name }}.sh
-    opmsg "load database ${db} done"
+    opmsg "load database done"
 }
 
 # sync_db sync database from MySQL master to TiDB cluster
 function sync_db() {
-    opmsg "start syncer for ${db}"
+    opmsg "start syncer"
     sh ${scripts_dir}/run_syncer_{{ job_name }}.sh
 }
 

@@ -7,6 +7,6 @@ master_port: 3306
 master_user: "root"
 master_password: ""
 dump_dir: "{{ deploy_dir }}/data/mydumper_{{ job_name }}"
-chunk_size: 60  # in MB
+chunk_size: 64  # in MB
 statement_size: 100000 # in byts
 long_query_guard: 100 # in seconds
