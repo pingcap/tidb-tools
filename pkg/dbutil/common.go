@@ -54,8 +54,8 @@ func (c *DBConfig) String() string {
 	return fmt.Sprintf("DBConfig(%+v)", *c)
 }
 
-// CreateDB creates a mysql connection FD
-func CreateDB(cfg DBConfig) (*sql.DB, error) {
+// OpenDB opens a mysql connection FD
+func OpenDB(cfg DBConfig) (*sql.DB, error) {
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Schema)
 	dbConn, err := sql.Open("mysql", dbDSN)
 	if err != nil {
@@ -68,6 +68,10 @@ func CreateDB(cfg DBConfig) (*sql.DB, error) {
 
 // CloseDB closes the mysql fd
 func CloseDB(db *sql.DB) error {
+	if db == nil {
+		return nil
+	}
+
 	return errors.Trace(db.Close())
 }
 

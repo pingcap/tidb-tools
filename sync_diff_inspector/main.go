@@ -54,7 +54,7 @@ func main() {
 
 	ctx := context.Background()
 
-	sourceDB, err := dbutil.CreateDB(cfg.SourceDBCfg)
+	sourceDB, err := dbutil.OpenDB(cfg.SourceDBCfg)
 	if err != nil {
 		log.Fatalf("create source db %+v error %v", cfg.SourceDBCfg, err)
 	}
@@ -66,7 +66,7 @@ func main() {
 		}
 	}
 
-	targetDB, err := dbutil.CreateDB(cfg.TargetDBCfg)
+	targetDB, err := dbutil.OpenDB(cfg.TargetDBCfg)
 	if err != nil {
 		log.Fatalf("create target db %+v error %v", cfg.TargetDBCfg, err)
 	}
