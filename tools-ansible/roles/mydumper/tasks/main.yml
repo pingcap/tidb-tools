@@ -9,3 +9,25 @@
   command: mv "{{ mydumper_binary.backup_file }}" "{{ backup_dir }}"
   when: mydumper_binary.changed and mydumper_binary.backup_file is defined
 
+- name: create run script
+  template:
+    src: "{{ item }}_{{ role_name }}_binary.sh.j2"
+    dest: "{{ deploy_dir }}/scripts/{{ item }}_{{ role_name }}_{{ job_name }}.sh"
+    mode: "0755"
+    backup: yes
+  with_items:
+    - run
+  vars:
+    role_status_dir: status/{{ role_name }}/{{ job_name }}
+  register: mydumper_script
+
+- name: backup script file
+  command: mv "{{ mydumper_script.backup_file }}" "{{ backup_dir }}"
+  when: mydumper_script.changed and mydumper_script.backup_file is defined
+
+- name: deploy systemd
+  include_role:
+    name: systemd
+  vars:
+    this_role_name: mydumper_{{ job_name }}
+    service_name: mydumper-{{ job_name }}

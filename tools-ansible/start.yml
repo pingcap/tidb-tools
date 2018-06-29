@@ -12,4 +12,11 @@
       wait_for: |
         host={{ ansible_host }} port={{ syncer_status_port }} state=present
         send='GET /metrics HTTP/1.0\r\n\r\n' search_regex='200 OK'
-    
+
+
+- hosts: mydumper_servers
+  tags: ['mydumper', 'never']
+  tasks:
+    - name: start mydumper by systemd
+      become: true
+      systemd: name=mydumper-{{ job_name }}.service state=started enabled=no

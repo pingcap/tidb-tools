@@ -10,3 +10,11 @@
 
     - name: wait for syncer down
       wait_for: host={{ ansible_host }} port={{ syncer_status_port }} state=stopped
+
+
+- hosts: mydumper_servers
+  tags: ['mydumper', 'never']
+  tasks:
+    - name: stop mydumper by systemd
+      become: true
+      systemd: name=mydumper-{{ job_name }}.service state=stopped enabled=no
