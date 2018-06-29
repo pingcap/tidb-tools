@@ -18,3 +18,10 @@
     - name: stop mydumper by systemd
       become: true
       systemd: name=mydumper-{{ job_name }}.service state=stopped enabled=no
+
+- hosts: loader_servers
+  tags: ['loader', 'never']
+  tasks:
+    - name: stop loader by systemd
+      become: true
+      systemd: name=loader-{{ job_name }}.service state=stopped enabled=no
