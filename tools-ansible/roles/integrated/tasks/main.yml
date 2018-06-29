@@ -1,4 +1,14 @@
-- name: create run script
+- name: create integrated script
+  template:
+    src: "{{ role_name }}.sh.j2"
+    dest: "{{ deploy_dir }}/bin/{{ role_name }}_{{ job_name }}.sh"
+    mode: "0755"
+    backup: yes
+  vars:
+    role_status_dir: status/{{ role_name }}/{{ job_name }}
+  register: integrated_script
+
+- name: create run_integrated script
   template:
     src: "{{ item }}_{{ role_name }}.sh.j2"
     dest: "{{ deploy_dir }}/scripts/{{ item }}_{{ role_name }}_{{ job_name }}.sh"
@@ -8,13 +18,19 @@
     - run
   vars:
     role_status_dir: status/{{ role_name }}/{{ job_name }}
-  register: integrated_script
+  register: run_integrated_script
 
 - name: backup script file
   command: mv "{{ integrated_script.backup_file }}" "{{ backup_dir }}"
   when: 
     - integrated_script.changed 
     - integrated_script.backup_file is defined
+
+- name: backup run script file
+  command: mv "{{ run_integrated_script.backup_file }}" "{{ backup_dir }}"
+  when: 
+    - run_integrated_script.changed 
+    - run_integrated_script.backup_file is defined
 
 - name: deploy systemd
   include_role:
