@@ -3,3 +3,6 @@
 systemd_restart_policy: "always"
 
 syncer_config_file: "syncer_{{ job_name }}.toml"
+
+syncer_status_port: 10081
+job_name: 1

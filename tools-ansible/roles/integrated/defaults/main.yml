@@ -1,3 +1,6 @@
 # the systemd restart value can be  no, on-success, on-failure, on-abnormal, on-watchdog, on-abort, or always. 
 # we choose no here.
 systemd_restart_policy: "no"
+syncer_status_port: 10081
+loader_status_port: 10084
+job_name: 1

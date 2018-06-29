@@ -10,3 +10,4 @@ dump_dir: "{{ deploy_dir }}/data/mydumper_{{ job_name }}"
 chunk_size: 64  # in MB
 statement_size: 100000 # in byts
 long_query_guard: 100 # in seconds
+job_name: 1

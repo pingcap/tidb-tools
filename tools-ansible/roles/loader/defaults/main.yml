@@ -3,3 +3,6 @@
 systemd_restart_policy: "no"
 
 loader_config_file: "loader_{{ job_name }}.toml"
+
+loader_status_port: 10084
+job_name: 1
