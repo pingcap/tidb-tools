@@ -18,8 +18,6 @@ import (
 	"database/sql"
 	"flag"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -54,10 +52,7 @@ func main() {
 		return
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	handleSignal(func() {
-		cancel()
-	})
+	ctx := context.Background()
 
 	sourceDB, err := dbutil.CreateDB(cfg.SourceDBCfg)
 	if err != nil {
@@ -108,21 +103,4 @@ func checkSyncState(ctx context.Context, sourceDB, targetDB *sql.DB, cfg *Config
 	log.Info(d.report.String())
 
 	return d.report.Pass
-}
-
-func handleSignal(closeFn func()) {
-	sc := make(chan os.Signal, 1)
-
-	signal.Notify(sc,
-		syscall.SIGHUP,
-		syscall.SIGINT,
-		syscall.SIGTERM,
-		syscall.SIGQUIT)
-
-	go func() {
-		sig := <-sc
-		log.Infof("got signal [%d] to exit.", sig)
-		closeFn()
-		os.Exit(0)
-	}()
 }
