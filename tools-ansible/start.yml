@@ -30,8 +30,8 @@
       systemd: name=loader-{{ job_name }}.service state=started enabled=no
 
 - hosts: integrated_servers
-  tags: ['integrated', 'never']
   tasks:
     - name: start integrated script by systemd
       become: true
       systemd: name=integrated-{{ job_name }}.service state=started enabled=no
+      when: integrated_mode|default(false)

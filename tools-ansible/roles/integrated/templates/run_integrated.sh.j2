@@ -38,7 +38,6 @@ EOF
 
 # dump_db dumps database from MySQL slave
 function dump_db() {
-    opmsg "dump database ${db} done"
     ${mydumper} --long-query-guard 300 -h "${master_host}" -P "${master_port}" -u root -p "${master_password}" -t 32 --statement-size 100000 --chunk-filesize 64 --regex '^(?!(mysql\.|sys\.|information_schema\.|performance_schema\.))' --skip-tz-utc -o "${dump_dir}" || { EC=$?; opmsg "dump database failed exit code: $EC"; exit $EC; }
     opmsg "dump database done"
 }
