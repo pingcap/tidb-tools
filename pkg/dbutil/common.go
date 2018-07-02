@@ -134,12 +134,12 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 }
 
 // GetRandomValues returns some random value of a column.
-func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int64, min, max interface{}, limitRange string) ([]string, error) {
+func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int64, min, max interface{}, limitRange string) ([]interface{}, error) {
 	if limitRange != "" {
 		limitRange = "true"
 	}
 
-	randomValue := make([]string, 0, num)
+	randomValue := make([]interface{}, 0, num)
 	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` >= ? AND `%s` <= ? AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
 		column, column, schemaName, table, column, column, limitRange, num, column)
 	log.Debugf("get random values sql: %s, min: %v, max: %v", query, min, max)
@@ -150,7 +150,7 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 	defer rows.Close()
 
 	for rows.Next() {
-		var value string
+		var value interface{}
 		err = rows.Scan(&value)
 		if err != nil {
 			return nil, errors.Trace(err)

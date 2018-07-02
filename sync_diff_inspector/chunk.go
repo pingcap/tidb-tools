@@ -177,12 +177,12 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 			if i == 0 {
 				minTmp = min
 			} else {
-				minTmp = splitValues[i-1]
+				minTmp = splitValues[i-1].(string)
 			}
 			if i == int64(len(splitValues)) {
 				maxTmp = max
 			} else {
-				maxTmp = splitValues[i]
+				maxTmp = splitValues[i].(string)
 			}
 			r := newChunkRange(minTmp, maxTmp, true, false)
 			chunks = append(chunks, r)

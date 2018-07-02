@@ -80,6 +80,7 @@ func (r *Report) String() (report string) {
 	return
 }
 
+// SetTableStructCheckResult sets the struct check result for table.
 func (r *Report) SetTableStructCheckResult(table string, equal bool) {
 	r.Lock()
 	defer r.Unlock()
@@ -93,6 +94,7 @@ func (r *Report) SetTableStructCheckResult(table string, equal bool) {
 	}
 }
 
+// SetTableDataCheckResult sets the data check result for table.
 func (r *Report) SetTableDataCheckResult(table string, equal bool) {
 	r.Lock()
 	defer r.Unlock()

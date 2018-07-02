@@ -1,6 +1,6 @@
 # sync-diff-inspector
 
-sync-diff-inspector is a tool for compare two database's data.
+sync-diff-inspector is a tool for comparing two database's data.
 
 ## How to use
 
