@@ -58,7 +58,7 @@ func (r *Report) String() (report string) {
 	/*
 		output example:
 		check result of schema test: fail!
-		1 tables' check passed, 2 table's check failed.
+		1 tables' check passed, 2 tables' check failed.
 
 		table: test1
 		table's struct equal
@@ -73,7 +73,7 @@ func (r *Report) String() (report string) {
 		table's data equal
 	*/
 	report = fmt.Sprintf("\ncheck result of schema %s: %s!\n", r.Schema, r.Result)
-	report = fmt.Sprintf("%s%d tables' check passed, %d table's check failed.\n", report, r.PassNum, r.FailedNum)
+	report = fmt.Sprintf("%s%d tables' check passed, %d tables' check failed.\n", report, r.PassNum, r.FailedNum)
 
 	var failTableRsult, passTableResult string
 	for table, result := range r.TableResults {
