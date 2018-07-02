@@ -18,6 +18,13 @@ import (
 	"sync"
 )
 
+const (
+	// Pass means all data and struct of tables are equal
+	Pass = "pass"
+	// Fail means not all data or struct of tables are equal
+	Fail = "fail"
+)
+
 // TableResult saves the check result for every table.
 type TableResult struct {
 	Table       string
@@ -29,53 +36,69 @@ type TableResult struct {
 type Report struct {
 	sync.RWMutex
 
-	Schema         string
-	TableNameEqual bool
-	SourceTables   []string
-	TargetTables   []string
-	PassNum        int32
-	FailedNum      int32
-	TableResults   map[string]*TableResult
-	Pass           bool
+	Schema string
+	// Result is pass or fail
+	Result       string
+	PassNum      int32
+	FailedNum    int32
+	TableResults map[string]*TableResult
 }
 
 // NewReport returns a new Report.
 func NewReport(schema string) *Report {
 	return &Report{
-		Schema:         schema,
-		TableResults:   make(map[string]*TableResult),
-		TableNameEqual: true,
-		Pass:           true,
+		Schema:       schema,
+		TableResults: make(map[string]*TableResult),
+		Result:       Pass,
 	}
 }
 
 // String returns a string of this Report.
 func (r *Report) String() (report string) {
-	if r.Pass {
-		report = fmt.Sprintf("\ncheck result of schema %s: Success!\n", r.Schema)
-	} else {
-		report = fmt.Sprintf("\ncheck result of schema %s: Failed!\n", r.Schema)
-	}
+	/*
+		output example:
+		check result of schema test: fail!
+		1 tables' check passed, 2 table's check failed.
 
-	if !r.TableNameEqual {
-		report = fmt.Sprintf("%sget different table! source tables: %v, target tables: %v\n", report, r.SourceTables, r.TargetTables)
-	}
-	report = fmt.Sprintf("%s%d tables' check passed, %d table's check failed.\n\n", report, r.PassNum, r.FailedNum)
+		table: test1
+		table's struct equal
+		table's data not equal
 
+		table: test2
+		table's struct equal
+		table's data not equal
+
+		table: test3
+		table's struct equal
+		table's data equal
+	*/
+	report = fmt.Sprintf("\ncheck result of schema %s: %s!\n", r.Schema, r.Result)
+	report = fmt.Sprintf("%s%d tables' check passed, %d table's check failed.\n", report, r.PassNum, r.FailedNum)
+
+	var failTableRsult, passTableResult string
 	for table, result := range r.TableResults {
-		report = fmt.Sprintf("%stable: %s\n", report, table)
+		var structResult, dataResult string
 		if !result.StructEqual {
-			report = fmt.Sprintf("%stable's struct not equal\n", report)
+			structResult = "table's struct not equal"
 		} else {
-			report = fmt.Sprintf("%stable's struct equal\n", report)
+			structResult = "table's struct equal"		
 		}
 
 		if !result.DataEqual {
-			report = fmt.Sprintf("%stable's data not equal\n\n", report)
+			dataResult = "table's data not equal"
 		} else {
-			report = fmt.Sprintf("%stable's data equal\n\n", report)
+			dataResult = "table's data equal"
+		}
+
+		if !result.StructEqual || !result.DataEqual {
+			failTableRsult = fmt.Sprintf("%stable: %s\n%s\n%s\n\n", failTableRsult, table, structResult, dataResult)
+		} else {
+			passTableResult = fmt.Sprintf("%stable: %s\n%s\n%s\n\n", passTableResult, table, structResult, dataResult)
 		}
 	}
+
+	// first print the check failed table's information 
+	report = fmt.Sprintf("%s\n%s%s", report, failTableRsult, passTableResult)
 
 	return
 }

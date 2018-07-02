@@ -108,10 +108,7 @@ func (df *Diff) Equal() (err error) {
 	// len(df.tables) == 0 means check all tables
 	if !eq && len(df.tables) == 0 {
 		log.Errorf("show tables get different table. [source db tables] %v [target db tables] %v", tbls1, tbls2)
-		df.report.Pass = false
-		df.report.TableNameEqual = false
-		df.report.SourceTables = tbls1
-		df.report.TargetTables = tbls2
+		df.report.Result = Fail
 	}
 
 	if len(df.tables) == 0 {
@@ -139,7 +136,7 @@ func (df *Diff) Equal() (err error) {
 		}
 		if !eq1 {
 			log.Errorf("table have different struct: %s\n", table.Name)
-			df.report.Pass = false
+			df.report.Result = Fail
 		}
 		df.report.SetTableStructCheckResult(table.Name, eq1)
 
@@ -150,7 +147,7 @@ func (df *Diff) Equal() (err error) {
 		}
 		if !eq2 {
 			log.Errorf("table %s's data is not equal", table.Name)
-			df.report.Pass = false
+			df.report.Result = Fail
 		}
 		df.report.SetTableDataCheckResult(table.Name, eq2)
 

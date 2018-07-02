@@ -102,5 +102,5 @@ func checkSyncState(ctx context.Context, sourceDB, targetDB *sql.DB, cfg *Config
 
 	log.Info(d.report.String())
 
-	return d.report.Pass
+	return d.report.Result == Pass
 }
