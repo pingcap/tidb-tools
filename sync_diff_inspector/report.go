@@ -55,6 +55,8 @@ func NewReport(schema string) *Report {
 
 // String returns a string of this Report.
 func (r *Report) String() (report string) {
+	r.RLock()
+	defer r.RUnlock()
 	/*
 		output example:
 		check result of schema test: fail!
@@ -81,7 +83,7 @@ func (r *Report) String() (report string) {
 		if !result.StructEqual {
 			structResult = "table's struct not equal"
 		} else {
-			structResult = "table's struct equal"		
+			structResult = "table's struct equal"
 		}
 
 		if !result.DataEqual {
@@ -97,7 +99,7 @@ func (r *Report) String() (report string) {
 		}
 	}
 
-	// first print the check failed table's information 
+	// first print the check failed table's information
 	report = fmt.Sprintf("%s\n%s%s", report, failTableRsult, passTableResult)
 
 	return
@@ -115,6 +117,10 @@ func (r *Report) SetTableStructCheckResult(table string, equal bool) {
 			StructEqual: equal,
 		}
 	}
+
+	if !equal {
+		r.Result = Fail
+	}
 }
 
 // SetTableDataCheckResult sets the data check result for table.
@@ -128,5 +134,9 @@ func (r *Report) SetTableDataCheckResult(table string, equal bool) {
 		r.TableResults[table] = &TableResult{
 			DataEqual: equal,
 		}
+	}
+
+	if !equal {
+		r.Result = Fail
 	}
 }

@@ -136,7 +136,6 @@ func (df *Diff) Equal() (err error) {
 		}
 		if !eq1 {
 			log.Errorf("table have different struct: %s\n", table.Name)
-			df.report.Result = Fail
 		}
 		df.report.SetTableStructCheckResult(table.Name, eq1)
 
@@ -147,7 +146,6 @@ func (df *Diff) Equal() (err error) {
 		}
 		if !eq2 {
 			log.Errorf("table %s's data is not equal", table.Name)
-			df.report.Result = Fail
 		}
 		df.report.SetTableDataCheckResult(table.Name, eq2)
 
@@ -459,6 +457,7 @@ func compareData(map1 map[string][]byte, map2 map[string][]byte, orderKeyCols []
 		if string(data1) == string(data2) {
 			continue
 		}
+		log.Errorf("%s | %s", string(data1), string(data2))
 		equal = false
 		log.Errorf("find difference data, data1: %s, data2: %s", map1, map2)
 		break
