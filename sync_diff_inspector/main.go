@@ -100,7 +100,7 @@ func checkSyncState(ctx context.Context, sourceDB, targetDB *sql.DB, cfg *Config
 		log.Fatalf("check data difference error %v", errors.ErrorStack(err))
 	}
 
-	log.Info(d.report.String())
+	log.Info(d.report)
 
 	return d.report.Result == Pass
 }

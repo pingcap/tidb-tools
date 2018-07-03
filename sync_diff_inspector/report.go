@@ -75,7 +75,7 @@ func (r *Report) String() (report string) {
 		table's data equal
 	*/
 	report = fmt.Sprintf("\ncheck result of schema %s: %s!\n", r.Schema, r.Result)
-	report = fmt.Sprintf("%s%d tables' check passed, %d tables' check failed.\n", report, r.PassNum, r.FailedNum)
+	report += fmt.Sprintf("%d tables' check passed, %d tables' check failed.\n", r.PassNum, r.FailedNum)
 
 	var failTableRsult, passTableResult string
 	for table, result := range r.TableResults {
@@ -100,7 +100,7 @@ func (r *Report) String() (report string) {
 	}
 
 	// first print the check failed table's information
-	report = fmt.Sprintf("%s\n%s%s", report, failTableRsult, passTableResult)
+	report += fmt.Sprintf("\n%s%s", failTableRsult, passTableResult)
 
 	return
 }
