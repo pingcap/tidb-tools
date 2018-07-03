@@ -457,7 +457,6 @@ func compareData(map1 map[string][]byte, map2 map[string][]byte, orderKeyCols []
 		if string(data1) == string(data2) {
 			continue
 		}
-		log.Errorf("%s | %s", string(data1), string(data2))
 		equal = false
 		log.Errorf("find difference data, data1: %s, data2: %s", map1, map2)
 		break
