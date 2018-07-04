@@ -58,6 +58,10 @@ type macthedResult struct {
 	rules []interface{}
 }
 
+func (r *macthedResult) empty() bool {
+	return len(r.nodes) == 0 && len(r.rules) == 0
+}
+
 type trieSelector struct {
 	sync.RWMutex
 
@@ -201,13 +205,14 @@ func (t *trieSelector) Match(schema, table string) interface{} {
 	)
 	t.matchNode(t.root, schema, matchedSchemaResult)
 
-	// not found matched rule in schema level
-	if len(matchedSchemaResult.nodes) == 0 && len(matchedSchemaResult.rules) == 0 {
+	// not found matched rules in schema level
+	if matchedSchemaResult.empty() {
 		t.addToCache(cacheKey, nil)
 		t.Unlock()
 		return nil
 	}
 
+	// find first(shortest) matched rule in schema level
 	if len(matchedSchemaResult.rules) > 0 {
 		matchedSchemaRule = matchedSchemaResult.rules[0]
 	}
@@ -223,7 +228,7 @@ func (t *trieSelector) Match(schema, table string) interface{} {
 		matchedTableResult := &macthedResult{
 			rules: make([]interface{}, 0, 4),
 		}
-		// find matched rule in table level
+		// find matched rules in table level
 		t.matchNode(si, table, matchedTableResult)
 		if len(matchedTableResult.rules) > 0 {
 			t.addToCache(cacheKey, matchedTableResult.rules[0])
@@ -231,7 +236,7 @@ func (t *trieSelector) Match(schema, table string) interface{} {
 			return matchedTableResult.rules[0]
 		}
 	}
-	// not found matched rule in table level, return  mathed rule of schema
+	// not found matched rule in table level, return mathed rule in schema level
 	t.addToCache(cacheKey, matchedSchemaRule)
 	t.Unlock()
 	return matchedSchemaRule
