@@ -24,10 +24,9 @@ func TestClient(t *testing.T) {
 }
 
 var _ = Suite(&testSelectorSuite{
-	schemas: []string{"schema*"},
 	tables: map[string][]string{
 		"t*":      {"test*"},
-		"schema*": {"test*", "abc*", "xyz"},
+		"schema*": {"", "test*", "abc*", "xyz"},
 		"?bc":     {"t1_abc", "t1_ab?", "abc*"},
 		"a?c":     {"t2_abc", "t2_ab*", "a?b"},
 		"ab?":     {"t3_ab?", "t3_ab*", "ab?"},
@@ -56,8 +55,7 @@ var _ = Suite(&testSelectorSuite{
 })
 
 type testSelectorSuite struct {
-	tables  map[string][]string
-	schemas []string
+	tables map[string][]string
 
 	matchCase []struct {
 		schame, table string
@@ -70,6 +68,7 @@ func (t *testSelectorSuite) TestRoute(c *C) {
 	s := NewTrieSelector()
 	t.testInsert(c, s)
 	t.testMatch(c, s)
+	t.testReplace(c, s)
 }
 
 type dummyRule struct {
@@ -81,30 +80,50 @@ func (t *testSelectorSuite) testInsert(c *C, s Selector) {
 	schemaRules, tableRules := t.testGenerateExpectedRules()
 
 	for schema, rule := range schemaRules {
-		err = s.InsertSchema(schema, rule)
+		err = s.Insert(schema, "", rule, false)
 		c.Assert(err, IsNil)
-		err = s.InsertSchema(schema, rule)
+		err = s.Insert(schema, "", rule, false)
 		c.Assert(err, NotNil)
+		err = s.Insert(schema, "", rule, true)
+		c.Assert(err, IsNil)
 	}
 
 	for schema, tables := range tableRules {
 		for table, rule := range tables {
-			err = s.InsertTable(schema, table, rule)
+			err = s.Insert(schema, table, rule, false)
 			c.Assert(err, IsNil)
-			err = s.InsertTable(schema, table, rule)
+			err = s.Insert(schema, table, rule, false)
 			c.Assert(err, NotNil)
+			err = s.Insert(schema, table, rule, true)
+			c.Assert(err, IsNil)
 		}
 	}
 
 	// insert wrong pattern
-	err = s.InsertSchema("sche*a", nil)
+	err = s.Insert("sche*a", "", nil, true)
 	c.Assert(err, NotNil)
-	err = s.InsertTable("schema*", "", &dummyRule{"error"})
+	err = s.Insert("ab**", "", &dummyRule{"error"}, true)
 	c.Assert(err, NotNil)
-	err = s.InsertTable("ab**", "", &dummyRule{"error"})
+	err = s.Insert("abcd", "ab**", &dummyRule{"error"}, true)
 	c.Assert(err, NotNil)
-	err = s.InsertTable("abcd", "ab**", &dummyRule{"error"})
-	c.Assert(err, NotNil)
+
+	schemas, tables := s.AllRules()
+	c.Assert(schemas, DeepEquals, schemaRules)
+	c.Assert(tables, DeepEquals, tableRules)
+}
+
+func (t *testSelectorSuite) testReplace(c *C, s Selector) {
+	var err error
+	schemaRules, tableRules := t.testGenerateExpectedRules()
+	replacedRule := &dummyRule{"replace"}
+
+	for schema := range schemaRules {
+		schemaRules[schema] = replacedRule
+		err = s.Insert(schema, "", replacedRule, false)
+		c.Assert(err, NotNil)
+		err = s.Insert(schema, "", replacedRule, true)
+		c.Assert(err, IsNil)
+	}
 
 	schemas, tables := s.AllRules()
 	c.Assert(schemas, DeepEquals, schemaRules)
@@ -147,10 +166,6 @@ func (t *testSelectorSuite) testMatch(c *C, s Selector) {
 
 func (t *testSelectorSuite) testGenerateExpectedRules() (map[string]interface{}, map[string]map[string]interface{}) {
 	schemaRules := make(map[string]interface{})
-	for _, schema := range t.schemas {
-		schemaRules[schema] = &dummyRule{quoateSchemaTable(schema, "")}
-	}
-
 	tableRules := make(map[string]map[string]interface{})
 	for schema, tables := range t.tables {
 		_, ok := tableRules[schema]
@@ -158,7 +173,11 @@ func (t *testSelectorSuite) testGenerateExpectedRules() (map[string]interface{},
 			tableRules[schema] = make(map[string]interface{})
 		}
 		for _, table := range tables {
-			tableRules[schema][table] = &dummyRule{quoateSchemaTable(schema, table)}
+			if len(table) == 0 {
+				schemaRules[schema] = &dummyRule{quoateSchemaTable(schema, "")}
+			} else {
+				tableRules[schema][table] = &dummyRule{quoateSchemaTable(schema, table)}
+			}
 		}
 	}
 
