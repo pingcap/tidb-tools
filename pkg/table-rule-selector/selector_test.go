@@ -46,11 +46,11 @@ func (t *testSelectorSuite) testInsert(c *C, s Selector) {
 	c.Assert(err, NotNil)
 
 	tableRules := map[string]map[string]interface{}{
-		"?bc":     {"abc": &dummyRule{"nobody"}, "ab?": &dummyRule{"selected"}},
-		"a?c":     {"abc": &dummyRule{"nobody"}, "ab*": &dummyRule{"selected"}},
-		"ab?":     {"ab?": &dummyRule{"nobody"}, "ab*": &dummyRule{"selected"}},
-		"ab*":     {"abc": &dummyRule{"selected"}, "abc*": &dummyRule{"nobody"}},
-		"abc":     {"abc": &dummyRule{"selected"}, "abc?": &dummyRule{"nobody"}},
+		"?bc":     {"t1_abc": &dummyRule{"nobody"}, "t1_ab?": &dummyRule{"selected"}},
+		"a?c":     {"t2_abc": &dummyRule{"nobody"}, "t2_ab*": &dummyRule{"selected"}},
+		"ab?":     {"t3_ab?": &dummyRule{"nobody"}, "t3_ab*": &dummyRule{"selected"}},
+		"ab*":     {"t4_abc": &dummyRule{"selected"}, "t4_abc*": &dummyRule{"nobody"}},
+		"abc":     {"t5_abc": &dummyRule{"selected"}, "t5_abc*": &dummyRule{"nobody"}},
 		"schema*": {"test*": &dummyRule{"test"}, "abc*": &dummyRule{"abc"}, "xyz": &dummyRule{"xyz"}},
 		"t*":      {"test*": &dummyRule{"test"}},
 	}
@@ -73,10 +73,11 @@ func (t *testSelectorSuite) testInsert(c *C, s Selector) {
 func (t *testSelectorSuite) testMatch(c *C, s Selector) {
 	cases := [][]string{
 		// test one level
-		{"dbc", "abc", "selected"},
-		{"adc", "abc", "selected"},
-		{"abd", "abc", "selected"},
-		{"abc", "abd", "selected"},
+		{"dbc", "t1_abc", "selected"},
+		{"adc", "t2_abc", "selected"},
+		{"abd", "t3_abc", "selected"},
+		{"abc", "t4_abc", "selected"},
+		{"abc", "t5_abc", "selected"},
 		// test only schema rule
 		{"schema1", "xxx", "schema"},
 		{"schema1", "", "schema"},
