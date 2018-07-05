@@ -39,33 +39,39 @@ type Selector interface {
 	InsertSchema(schema string, rule interface{}) error
 	// InsertTable will insert one rule of schema/table into trie
 	InsertTable(schema, table string, rule interface{}) error
-	// Match will return matched rule
-	// now Match only returns one matched rule, priorities are as follows
-	// * which level matched rule to return
-	// 1. if table is empty or macthed rule of table level doesn't exist, return matched rule of schema level;
-	// 2. otherwise return matched rule of table level.
-	// * which matched rule in one level to return
-	// 1. the first(shortest) matched rule.
-	Match(schema, table string) interface{}
+	// Match will return all matched rules
+	Match(schema, table string) RuleSet
 	// Remove will remove one rule
 	Remove(schema, table string) error
 	// AllRules will returns all rules
 	AllRules() (map[string]interface{}, map[string]map[string]interface{})
 }
 
+// RuleSet is a set of rules that selected
+type RuleSet []interface{}
+
+func (r RuleSet) clone() RuleSet {
+	if r == nil {
+		return nil
+	}
+
+	c := make(RuleSet, 0, len(r))
+	return append(c, r...)
+}
+
 type macthedResult struct {
 	nodes []*node
-	rules []interface{}
+	rules RuleSet
 }
 
 func (r *macthedResult) empty() bool {
-	return len(r.nodes) == 0 && len(r.rules) == 0
+	return r == nil || (len(r.nodes) == 0 && len(r.rules) == 0)
 }
 
 type trieSelector struct {
 	sync.RWMutex
 
-	cache map[string]interface{}
+	cache map[string]RuleSet
 	root  *node
 }
 
@@ -88,7 +94,7 @@ func newNode() *node {
 
 // NewTrieSelector returns a trie Selector
 func NewTrieSelector() Selector {
-	return &trieSelector{cache: make(map[string]interface{}), root: newNode()}
+	return &trieSelector{cache: make(map[string]RuleSet), root: newNode()}
 }
 
 // InsertSchema implements Selector's interface.
@@ -184,62 +190,52 @@ func (t *trieSelector) insert(root *node, pattern string, rule interface{}) (*it
 }
 
 // Match implements Selector's interface.
-func (t *trieSelector) Match(schema, table string) interface{} {
+func (t *trieSelector) Match(schema, table string) RuleSet {
 	// try to find schema/table in cache
 	t.RLock()
 	cacheKey := quoateSchemaTable(schema, table)
-	rule, ok := t.cache[cacheKey]
+	rules, ok := t.cache[cacheKey]
 	t.RUnlock()
 	if ok {
-		return rule
+		return rules.clone()
 	}
+
+	matchedSchemaResult := &macthedResult{
+		nodes: make([]*node, 0, 4),
+		rules: make(RuleSet, 0, 4),
+	}
+	rules = nil
 
 	// find matched rules
 	t.Lock()
-	var (
-		matchedSchemaResult = &macthedResult{
-			nodes: make([]*node, 0, 4),
-			rules: make([]interface{}, 0, 4),
-		}
-		matchedSchemaRule interface{}
-	)
+	defer t.Unlock()
 	t.matchNode(t.root, schema, matchedSchemaResult)
 
 	// not found matched rules in schema level
 	if matchedSchemaResult.empty() {
 		t.addToCache(cacheKey, nil)
-		t.Unlock()
 		return nil
 	}
 
-	// find first(shortest) matched rule in schema level
-	if len(matchedSchemaResult.rules) > 0 {
-		matchedSchemaRule = matchedSchemaResult.rules[0]
-	}
+	rules = append(rules, matchedSchemaResult.rules...)
 
 	// only need to find schema level matched rule
 	if len(table) == 0 {
-		t.addToCache(cacheKey, matchedSchemaRule)
-		t.Unlock()
-		return matchedSchemaRule
+		t.addToCache(cacheKey, rules)
+		return rules.clone()
 	}
 
 	for _, si := range matchedSchemaResult.nodes {
 		matchedTableResult := &macthedResult{
-			rules: make([]interface{}, 0, 4),
+			rules: make(RuleSet, 0, 4),
 		}
 		// find matched rules in table level
 		t.matchNode(si, table, matchedTableResult)
-		if len(matchedTableResult.rules) > 0 {
-			t.addToCache(cacheKey, matchedTableResult.rules[0])
-			t.Unlock()
-			return matchedTableResult.rules[0]
-		}
+		rules = append(rules, matchedTableResult.rules...)
 	}
 	// not found matched rule in table level, return mathed rule in schema level
-	t.addToCache(cacheKey, matchedSchemaRule)
-	t.Unlock()
-	return matchedSchemaRule
+	t.addToCache(cacheKey, rules)
+	return rules.clone()
 }
 
 // Remove implements Selector interface.
@@ -267,7 +263,9 @@ func (t *trieSelector) AllRules() (map[string]interface{}, map[string]map[string
 
 		characters = characters[:0]
 		t.travel(n, characters, rules, nil)
-		tableRules[schema] = rules
+		if len(rules) > 0 {
+			tableRules[schema] = rules
+		}
 	}
 	t.RUnlock()
 	return schemaRules, tableRules
@@ -360,8 +358,8 @@ func insertMatchedItemIntoMap(pattern string, entity *item, rules map[string]int
 	}
 }
 
-func (t *trieSelector) addToCache(key string, targets interface{}) {
-	t.cache[key] = targets
+func (t *trieSelector) addToCache(key string, rules RuleSet) {
+	t.cache[key] = rules
 	if len(t.cache) > maxCacheNum {
 		for literal := range t.cache {
 			delete(t.cache, literal)
@@ -371,7 +369,7 @@ func (t *trieSelector) addToCache(key string, targets interface{}) {
 }
 
 func (t *trieSelector) clearCache() {
-	t.cache = make(map[string]interface{})
+	t.cache = make(map[string]RuleSet)
 }
 
 func quoateSchemaTable(schema, table string) string {

@@ -99,9 +99,9 @@ func saveMeta(metaFileName string, ts int64, timeZone string) error {
 
 	if timeZone != "" {
 		t := utils.TSOToRoughTime(ts)
-		location, err := time.LoadLocation(timeZone)
-		if err != nil {
-			log.Warningf("fail to load location %s", timeZone)
+		location, err1 := time.LoadLocation(timeZone)
+		if err1 != nil {
+			log.Warningf("fail to load location %s, error %v", timeZone, err1)
 		} else {
 			buf.WriteString(t.UTC().String())
 			buf.WriteByte('\n')
