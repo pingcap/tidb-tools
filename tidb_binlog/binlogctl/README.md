@@ -24,6 +24,20 @@ Usage of binlogctl:
 	-time-zone Asia/Shanghai
 		set time zone if you want save time info in savepoint file, for example Asia/Shanghai for CST time, `Local` for local time
 ```
+## Download Binary ( CentOS 7+ platform )
+
+```bash
+# Download the tool package.
+wget http://download.pingcap.org/tidb-tools-latest-linux-amd64.tar.gz
+wget http://download.pingcap.org/tidb-tools-latest-linux-amd64.sha256
+
+# Check the file integrity. If the result is OK, the file is correct.
+sha256sum -c tidb-tools-latest-linux-amd64.sha256
+
+# Extract the package.
+tar -xzf tidb-tools-latest-linux-amd64.tar.gz
+cd tidb-tools-latest-linux-amd64
+```
 
 ## Example
 
@@ -44,7 +58,6 @@ we would format output later :)
 ```
 bin/binlogctl -pd-urls=http://127.0.0.1:2379 -cmd delete-pump/delete-drainer -node-id ip-127-0-0-1:8250/{nodeID}
 ```
-
 
 ### generate meta
 meta contains commit TS that can be used to specifies the location of the synchronized data

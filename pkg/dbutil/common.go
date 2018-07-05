@@ -133,25 +133,24 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 	return cnt.Int64, nil
 }
 
-// GetRandomValues returns some random value of a column, not used for number type column.
-// TODO: why not used for number type column? fix it
-func GetRandomValues(ctx context.Context, db *sql.DB, schemaName string, table string, column string, num int64, min, max interface{}, limitRange string) ([]string, error) {
+// GetRandomValues returns some random value of a column.
+func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int64, min, max interface{}, limitRange string) ([]interface{}, error) {
 	if limitRange != "" {
 		limitRange = "true"
 	}
 
-	randomValue := make([]string, 0, num)
-	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` >= \"%v\" AND `%s` <= \"%v\" AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
-		column, column, schemaName, table, column, min, column, max, limitRange, num, column)
-	log.Debugf("get random values sql: %s", query)
-	rows, err := db.QueryContext(ctx, query)
+	randomValue := make([]interface{}, 0, num)
+	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` >= ? AND `%s` <= ? AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
+		column, column, schemaName, table, column, column, limitRange, num, column)
+	log.Debugf("get random values sql: %s, min: %v, max: %v", query, min, max)
+	rows, err := db.QueryContext(ctx, query, min, max)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var value string
+		var value interface{}
 		err = rows.Scan(&value)
 		if err != nil {
 			return nil, errors.Trace(err)
@@ -183,7 +182,7 @@ func GetTables(ctx context.Context, db *sql.DB, schemaName string) ([]string, er
 }
 
 // GetCRC32Checksum returns checksum code of some data by given condition
-func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName string, tbInfo *model.TableInfo, orderKeys []string, limitRange string) (string, error) {
+func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName string, tbInfo *model.TableInfo, orderKeys []string, limitRange string, args []interface{}) (string, error) {
 	/*
 		calculate CRC32 checksum example:
 		mysql> SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', a, b, c, d) SEPARATOR  ' + ')) AS checksum
@@ -201,10 +200,10 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName string, tbInfo
 
 	query := fmt.Sprintf("SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', %s) SEPARATOR  ' + ')) AS checksum FROM (SELECT * FROM `%s`.`%s` WHERE %s ORDER BY %s) AS tmp;",
 		strings.Join(columnNames, ", "), schemaName, tbInfo.Name.O, limitRange, strings.Join(orderKeys, ","))
-	log.Debugf("checksum sql: %s", query)
+	log.Debugf("checksum sql: %s, args: %v", query, args)
 
 	var checksum sql.NullString
-	err := db.QueryRowContext(ctx, query).Scan(&checksum)
+	err := db.QueryRowContext(ctx, query, args...).Scan(&checksum)
 	if err != nil {
 		return "", errors.Trace(err)
 	}

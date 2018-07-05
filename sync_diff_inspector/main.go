@@ -52,14 +52,18 @@ func main() {
 		return
 	}
 
+	ctx := context.Background()
+
 	sourceDB, err := dbutil.OpenDB(cfg.SourceDBCfg)
 	if err != nil {
 		log.Fatalf("create source db %+v error %v", cfg.SourceDBCfg, err)
 	}
 	defer dbutil.CloseDB(sourceDB)
-	err = dbutil.SetSnapshot(context.Background(), sourceDB, cfg.SourceSnapshot)
-	if err != nil {
-		log.Fatalf("set history snapshot %s for source db %+v error %v", cfg.SourceSnapshot, cfg.SourceDBCfg, err)
+	if cfg.SourceSnapshot != "" {
+		err = dbutil.SetSnapshot(ctx, sourceDB, cfg.SourceSnapshot)
+		if err != nil {
+			log.Fatalf("set history snapshot %s for source db %+v error %v", cfg.SourceSnapshot, cfg.SourceDBCfg, err)
+		}
 	}
 
 	targetDB, err := dbutil.OpenDB(cfg.TargetDBCfg)
@@ -67,32 +71,36 @@ func main() {
 		log.Fatalf("create target db %+v error %v", cfg.TargetDBCfg, err)
 	}
 	defer dbutil.CloseDB(targetDB)
-	err = dbutil.SetSnapshot(context.Background(), targetDB, cfg.TargetSnapshot)
-	if err != nil {
-		log.Fatalf("set history snapshot %s for target db %+v error %v", cfg.TargetSnapshot, cfg.TargetDBCfg, err)
+	if cfg.TargetSnapshot != "" {
+		err = dbutil.SetSnapshot(ctx, targetDB, cfg.TargetSnapshot)
+		if err != nil {
+			log.Fatalf("set history snapshot %s for target db %+v error %v", cfg.TargetSnapshot, cfg.TargetDBCfg, err)
+		}
 	}
 
-	if !checkSyncState(sourceDB, targetDB, cfg) {
+	if !checkSyncState(ctx, sourceDB, targetDB, cfg) {
 		log.Fatal("sourceDB don't equal targetDB")
 	}
 	log.Info("test pass!!!")
 }
 
-func checkSyncState(sourceDB, targetDB *sql.DB, cfg *Config) bool {
+func checkSyncState(ctx context.Context, sourceDB, targetDB *sql.DB, cfg *Config) bool {
 	beginTime := time.Now()
 	defer func() {
 		log.Infof("check data finished, all cost %v", time.Since(beginTime))
 	}()
 
-	d, err := NewDiff(sourceDB, targetDB, cfg)
+	d, err := NewDiff(ctx, sourceDB, targetDB, cfg)
 	if err != nil {
 		log.Fatalf("fail to initialize diff process %v", errors.ErrorStack(err))
 	}
 
-	ok, err := d.Equal()
+	err = d.Equal()
 	if err != nil {
 		log.Fatalf("check data difference error %v", errors.ErrorStack(err))
 	}
 
-	return ok
+	log.Info(d.report)
+
+	return d.report.Result == Pass
 }
