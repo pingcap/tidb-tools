@@ -85,8 +85,7 @@ type item struct {
 
 	rule interface{}
 	// schema level ->(to) table level
-	nextLevel         *node
-	nextLevelRulesNum int
+	nextLevel *node
 }
 
 func newNode() *node {
@@ -117,7 +116,7 @@ func (t *trieSelector) Insert(schema, table string, rule interface{}, replace bo
 }
 
 func (t *trieSelector) insertSchema(schema string, rule interface{}, replace bool) error {
-	_, _, err := t.insert(t.root, schema, rule, replace)
+	_, err := t.insert(t.root, schema, rule, replace)
 	if err != nil {
 		return errors.Annotate(err, "insert into schema selector")
 	}
@@ -126,7 +125,7 @@ func (t *trieSelector) insertSchema(schema string, rule interface{}, replace boo
 }
 
 func (t *trieSelector) InsertTable(schema, table string, rule interface{}, replace bool) error {
-	schemaEntity, _, err := t.insert(t.root, schema, nil, false)
+	schemaEntity, err := t.insert(t.root, schema, nil, false)
 	if err != nil {
 		return errors.Annotate(err, "insert into schema selector")
 	}
@@ -135,31 +134,25 @@ func (t *trieSelector) InsertTable(schema, table string, rule interface{}, repla
 		schemaEntity.nextLevel = newNode()
 	}
 
-	_, isNewRule, err := t.insert(schemaEntity.nextLevel, table, rule, replace)
+	_, err = t.insert(schemaEntity.nextLevel, table, rule, replace)
 	if err != nil {
 		return errors.Annotate(err, "insert into table selector")
-	}
-
-	if isNewRule {
-		schemaEntity.nextLevelRulesNum++
 	}
 
 	return nil
 }
 
 // if rule is nil, just extract nodes
-// return leaf item node, whether is new rule, error
-func (t *trieSelector) insert(root *node, pattern string, rule interface{}, replace bool) (*item, bool, error) {
+func (t *trieSelector) insert(root *node, pattern string, rule interface{}, replace bool) (*item, error) {
 	var (
 		n           = root
 		hadAsterisk = false
 		entity      *item
-		isNewRule   bool
 	)
 
 	for i := range pattern {
 		if hadAsterisk {
-			return nil, false, errors.Errorf("pattern %s is invaild", pattern)
+			return nil, errors.Errorf("pattern %s is invaild", pattern)
 		}
 
 		switch pattern[i] {
@@ -189,15 +182,14 @@ func (t *trieSelector) insert(root *node, pattern string, rule interface{}, repl
 	}
 
 	if rule != nil {
-		isNewRule = !replace && entity.rule == nil
 		if !replace && entity.rule != nil {
-			return nil, false, errors.AlreadyExistsf("pattern %s", pattern)
+			return nil, errors.AlreadyExistsf("pattern %s", pattern)
 		}
 		entity.rule = rule
 		t.clearCache()
 	}
 
-	return entity, isNewRule, nil
+	return entity, nil
 }
 
 // Match implements Selector's interface.
@@ -250,9 +242,80 @@ func (t *trieSelector) Match(schema, table string) RuleSet {
 }
 
 // Remove implements Selector interface.
-// Not implemention.
+// TODO: remove useless nodes and lazy deletion
 func (t *trieSelector) Remove(schema, table string) error {
+	t.Lock()
+	defer t.Unlock()
+
+	if len(schema) == 0 {
+		return errors.NotValidf("schema pattern %s", schema)
+	}
+
+	schemaItems, err := t.track(t.root, schema)
+	if err != nil {
+		return errors.Annotate(err, "schema level")
+	}
+
+	schemaLeafItem := schemaItems[len(schemaItems)-1]
+	if len(table) > 0 {
+		if schemaLeafItem.nextLevel == nil {
+			return errors.NotFoundf("table level %s", table)
+		}
+
+		tableItems, err := t.track(schemaLeafItem.nextLevel, table)
+		if err != nil {
+			return errors.Annotate(err, "table level")
+		}
+
+		if tableItems[len(tableItems)-1].rule == nil {
+			return errors.NotFoundf("pattern schema %s table %s", schema, table)
+		}
+
+		// remove table level nodes
+		tableItems[len(tableItems)-1].rule = nil
+		return nil
+	}
+
+	if schemaLeafItem.rule == nil {
+		return errors.NotFoundf("pattern schema %s", schema)
+	}
+
+	schemaLeafItem.rule = nil
 	return nil
+}
+
+func (t *trieSelector) track(n *node, pattern string) ([]*item, error) {
+	items := make([]*item, 0, len(pattern))
+	for i := range pattern {
+		switch pattern[i] {
+		case asterisk:
+			if n.asterisk == nil {
+				return nil, errors.NotFoundf("pattern %v", pattern)
+			}
+
+			if i != len(pattern)-1 {
+				return nil, errors.NotValidf("pattern %v ", pattern)
+			}
+
+			items = append(items, n.asterisk)
+		case question:
+			if n.question == nil {
+				return nil, errors.NotFoundf("pattern %v", pattern)
+			}
+
+			items = append(items, n.question)
+			n = n.question.child
+		default:
+			item, ok := n.characters[pattern[i]]
+			if !ok {
+				return nil, errors.NotFoundf("pattern %v", pattern)
+			}
+			items = append(items, item)
+			n = item.child
+		}
+	}
+
+	return items, nil
 }
 
 // AllRules implements Router's AllRules
