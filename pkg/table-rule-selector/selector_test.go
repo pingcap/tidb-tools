@@ -93,8 +93,10 @@ func (t *testSelectorSuite) testInsert(c *C, s Selector) {
 	for schema, rule := range t.expectedSchemaRules {
 		err = s.Insert(schema, "", rule, false)
 		c.Assert(err, IsNil)
+		// test duplicate error
 		err = s.Insert(schema, "", rule, false)
 		c.Assert(err, NotNil)
+		// test simple replace
 		err = s.Insert(schema, "", rule, true)
 		c.Assert(err, IsNil)
 	}
@@ -103,16 +105,20 @@ func (t *testSelectorSuite) testInsert(c *C, s Selector) {
 		for table, rule := range tables {
 			err = s.Insert(schema, table, rule, false)
 			c.Assert(err, IsNil)
+			// test duplicate error
 			err = s.Insert(schema, table, rule, false)
 			c.Assert(err, NotNil)
+			// test simple replace
 			err = s.Insert(schema, table, rule, true)
 			c.Assert(err, IsNil)
 		}
 	}
 
 	// insert wrong pattern
-	err = s.Insert("sche*a", "", nil, true)
+	// rule can't be nil
+	err = s.Insert("schema", "", nil, true)
 	c.Assert(err, NotNil)
+	// asterisk must be the last character of pattern
 	err = s.Insert("ab**", "", &dummyRule{"error"}, true)
 	c.Assert(err, NotNil)
 	err = s.Insert("abcd", "ab**", &dummyRule{"error"}, true)
@@ -152,8 +158,10 @@ func (t *testSelectorSuite) testReplace(c *C, s Selector) {
 	)
 	for schema := range t.expectedSchemaRules {
 		t.expectedSchemaRules[schema] = replacedRule
+		// to prevent it doesn't exist
 		err = s.Insert(schema, "", replacedRule, true)
 		c.Assert(err, IsNil)
+		// test replace
 		err = s.Insert(schema, "", replacedRule, true)
 		c.Assert(err, IsNil)
 		err = s.Insert(schema, "", replacedRule, false)
