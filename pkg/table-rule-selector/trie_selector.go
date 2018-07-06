@@ -273,6 +273,7 @@ func (t *trieSelector) Remove(schema, table string) error {
 
 		// remove table level nodes
 		tableItems[len(tableItems)-1].rule = nil
+		t.clearCache()
 		return nil
 	}
 
@@ -281,6 +282,7 @@ func (t *trieSelector) Remove(schema, table string) error {
 	}
 
 	schemaLeafItem.rule = nil
+	t.clearCache()
 	return nil
 }
 

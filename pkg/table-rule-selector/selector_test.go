@@ -32,6 +32,7 @@ var _ = Suite(&testSelectorSuite{
 		"ab?":     {"t3_ab?", "t3_ab*", "ab?"},
 		"ab*":     {"t4_abc", "t4_abc*", "ab*"},
 		"abc":     {"abc"},
+		"abd":     {"abc"},
 	},
 	matchCase: []struct {
 		schame, table string
@@ -74,7 +75,7 @@ type testSelectorSuite struct {
 	expectedTableRules  map[string]map[string]interface{}
 }
 
-func (t *testSelectorSuite) TestRoute(c *C) {
+func (t *testSelectorSuite) TestSelector(c *C) {
 	s := NewTrieSelector()
 	t.expectedSchemaRules, t.expectedTableRules = t.testGenerateExpectedRules()
 
