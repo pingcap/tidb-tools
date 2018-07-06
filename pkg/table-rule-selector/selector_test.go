@@ -55,12 +55,16 @@ var _ = Suite(&testSelectorSuite{
 })
 
 type testSelectorSuite struct {
+	// for generate rules,
+	// we use dummy rule which contains schema and table pattern information to simplify test
 	tables map[string][]string
 
 	matchCase []struct {
 		schame, table string
 		matchedNum    int
-		matchedRules  []string //schema, table, schema, table...
+		// // for generate rules,
+		// we use dummy rule which contains schema(matchedRules[2*i]) and table(matchedRules[2*i+1]) pattern information to simplify test
+		matchedRules []string //schema, table, schema, table...
 	}
 }
 

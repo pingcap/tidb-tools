@@ -85,8 +85,8 @@ type item struct {
 
 	rule interface{}
 	// schema level ->(to) table level
-	nextLevel        *node
-	nextLevelRuleNum int
+	nextLevel         *node
+	nextLevelRulesNum int
 }
 
 func newNode() *node {
@@ -117,7 +117,7 @@ func (t *trieSelector) Insert(schema, table string, rule interface{}, replace bo
 }
 
 func (t *trieSelector) insertSchema(schema string, rule interface{}, replace bool) error {
-	_, err := t.insert(t.root, schema, rule, replace)
+	_, _, err := t.insert(t.root, schema, rule, replace)
 	if err != nil {
 		return errors.Annotate(err, "insert into schema selector")
 	}
@@ -126,7 +126,7 @@ func (t *trieSelector) insertSchema(schema string, rule interface{}, replace boo
 }
 
 func (t *trieSelector) InsertTable(schema, table string, rule interface{}, replace bool) error {
-	schemaEntity, err := t.insert(t.root, schema, nil, false)
+	schemaEntity, _, err := t.insert(t.root, schema, nil, false)
 	if err != nil {
 		return errors.Annotate(err, "insert into schema selector")
 	}
@@ -135,25 +135,31 @@ func (t *trieSelector) InsertTable(schema, table string, rule interface{}, repla
 		schemaEntity.nextLevel = newNode()
 	}
 
-	_, err = t.insert(schemaEntity.nextLevel, table, rule, replace)
+	_, isNewRule, err := t.insert(schemaEntity.nextLevel, table, rule, replace)
 	if err != nil {
 		return errors.Annotate(err, "insert into table selector")
+	}
+
+	if isNewRule {
+		schemaEntity.nextLevelRulesNum++
 	}
 
 	return nil
 }
 
 // if rule is nil, just extract nodes
-func (t *trieSelector) insert(root *node, pattern string, rule interface{}, replace bool) (*item, error) {
+// return leaf item node, whether is new rule, error
+func (t *trieSelector) insert(root *node, pattern string, rule interface{}, replace bool) (*item, bool, error) {
 	var (
 		n           = root
 		hadAsterisk = false
 		entity      *item
+		isNewRule   bool
 	)
 
 	for i := range pattern {
 		if hadAsterisk {
-			return nil, errors.Errorf("pattern %s is invaild", pattern)
+			return nil, false, errors.Errorf("pattern %s is invaild", pattern)
 		}
 
 		switch pattern[i] {
@@ -183,14 +189,15 @@ func (t *trieSelector) insert(root *node, pattern string, rule interface{}, repl
 	}
 
 	if rule != nil {
+		isNewRule = !replace && entity.rule == nil
 		if !replace && entity.rule != nil {
-			return nil, errors.AlreadyExistsf("pattern %s", pattern)
+			return nil, false, errors.AlreadyExistsf("pattern %s", pattern)
 		}
 		entity.rule = rule
 		t.clearCache()
 	}
 
-	return entity, nil
+	return entity, isNewRule, nil
 }
 
 // Match implements Selector's interface.
