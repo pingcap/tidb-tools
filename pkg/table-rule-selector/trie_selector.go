@@ -59,12 +59,12 @@ func (r RuleSet) clone() RuleSet {
 	return append(c, r...)
 }
 
-type macthedResult struct {
+type matchedResult struct {
 	nodes []*node
 	rules RuleSet
 }
 
-func (r *macthedResult) empty() bool {
+func (r *matchedResult) empty() bool {
 	return r == nil || (len(r.nodes) == 0 && len(r.rules) == 0)
 }
 
@@ -108,7 +108,7 @@ func (t *trieSelector) Insert(schema, table string, rule interface{}, replace bo
 	if len(table) == 0 {
 		err = t.insertSchema(schema, rule, replace)
 	} else {
-		err = t.InsertTable(schema, table, rule, replace)
+		err = t.insertTable(schema, table, rule, replace)
 	}
 	t.Unlock()
 
@@ -124,7 +124,7 @@ func (t *trieSelector) insertSchema(schema string, rule interface{}, replace boo
 	return nil
 }
 
-func (t *trieSelector) InsertTable(schema, table string, rule interface{}, replace bool) error {
+func (t *trieSelector) insertTable(schema, table string, rule interface{}, replace bool) error {
 	schemaEntity, err := t.insert(t.root, schema, nil, false)
 	if err != nil {
 		return errors.Annotate(err, "insert into schema selector")
@@ -152,7 +152,7 @@ func (t *trieSelector) insert(root *node, pattern string, rule interface{}, repl
 
 	for i := range pattern {
 		if hadAsterisk {
-			return nil, errors.Errorf("pattern %s is invaild", pattern)
+			return nil, errors.NotValidf("pattern %s", pattern)
 		}
 
 		switch pattern[i] {
@@ -196,14 +196,14 @@ func (t *trieSelector) insert(root *node, pattern string, rule interface{}, repl
 func (t *trieSelector) Match(schema, table string) RuleSet {
 	// try to find schema/table in cache
 	t.RLock()
-	cacheKey := quoateSchemaTable(schema, table)
+	cacheKey := quoteSchemaTable(schema, table)
 	rules, ok := t.cache[cacheKey]
 	t.RUnlock()
 	if ok {
 		return rules.clone()
 	}
 
-	matchedSchemaResult := &macthedResult{
+	matchedSchemaResult := &matchedResult{
 		nodes: make([]*node, 0, 4),
 		rules: make(RuleSet, 0, 4),
 	}
@@ -229,13 +229,14 @@ func (t *trieSelector) Match(schema, table string) RuleSet {
 	}
 
 	for _, si := range matchedSchemaResult.nodes {
-		matchedTableResult := &macthedResult{
+		matchedTableResult := &matchedResult{
 			rules: make(RuleSet, 0, 4),
 		}
 		// find matched rules in table level
 		t.matchNode(si, table, matchedTableResult)
 		rules = append(rules, matchedTableResult.rules...)
 	}
+
 	// not found matched rule in table level, return mathed rule in schema level
 	t.addToCache(cacheKey, rules)
 	return rules.clone()
@@ -248,27 +249,27 @@ func (t *trieSelector) Remove(schema, table string) error {
 	defer t.Unlock()
 
 	if len(schema) == 0 {
-		return errors.NotValidf("schema pattern %s", schema)
+		return errors.NotValidf("schema/table %s/%s", schema, table)
 	}
 
 	schemaItems, err := t.track(t.root, schema)
 	if err != nil {
-		return errors.Annotate(err, "schema level")
+		return errors.Annotatef(err, "track schema/table %s/%s in schema level", schema, table)
 	}
 
 	schemaLeafItem := schemaItems[len(schemaItems)-1]
 	if len(table) > 0 {
 		if schemaLeafItem.nextLevel == nil {
-			return errors.NotFoundf("table level %s", table)
+			return errors.NotFoundf("table level while we track chema/table %s/%s", schema, table)
 		}
 
 		tableItems, err := t.track(schemaLeafItem.nextLevel, table)
 		if err != nil {
-			return errors.Annotate(err, "table level")
+			return errors.Annotatef(err, "track schema/table %s/%s in table level", schema, table)
 		}
 
 		if tableItems[len(tableItems)-1].rule == nil {
-			return errors.NotFoundf("pattern schema %s table %s", schema, table)
+			return errors.NotFoundf("schema/table %s/%s in table level", schema, table)
 		}
 
 		// remove table level nodes
@@ -278,7 +279,7 @@ func (t *trieSelector) Remove(schema, table string) error {
 	}
 
 	if schemaLeafItem.rule == nil {
-		return errors.NotFoundf("pattern schema %s", schema)
+		return errors.NotFoundf("schema/table %s/%s in schema level", schema, table)
 	}
 
 	schemaLeafItem.rule = nil
@@ -320,16 +321,16 @@ func (t *trieSelector) track(n *node, pattern string) ([]*item, error) {
 	return items, nil
 }
 
-// AllRules implements Router's AllRules
+// AllRules implements Selector's AllRules
 func (t *trieSelector) AllRules() (map[string]interface{}, map[string]map[string]interface{}) {
 	var (
 		tableRules  = make(map[string]map[string]interface{})
 		schemaNodes = make(map[string]*node)
 		schemaRules = make(map[string]interface{})
-		characters  []byte
+		word        []byte
 	)
 	t.RLock()
-	t.travel(t.root, characters, schemaRules, schemaNodes)
+	t.travel(t.root, word, schemaRules, schemaNodes)
 
 	for schema, n := range schemaNodes {
 		rules, ok := tableRules[schema]
@@ -337,8 +338,8 @@ func (t *trieSelector) AllRules() (map[string]interface{}, map[string]map[string
 			rules = make(map[string]interface{})
 		}
 
-		characters = characters[:0]
-		t.travel(n, characters, rules, nil)
+		word = word[:0]
+		t.travel(n, word, rules, nil)
 		if len(rules) > 0 {
 			tableRules[schema] = rules
 		}
@@ -347,36 +348,32 @@ func (t *trieSelector) AllRules() (map[string]interface{}, map[string]map[string
 	return schemaRules, tableRules
 }
 
-func (t *trieSelector) travel(n *node, characters []byte, rules map[string]interface{}, nodes map[string]*node) {
+func (t *trieSelector) travel(n *node, word []byte, rules map[string]interface{}, nodes map[string]*node) {
 	if n == nil {
 		return
 	}
 
 	if n.asterisk != nil {
-		if n.asterisk != nil {
-			pattern := append(characters, asterisk)
-			insertMatchedItemIntoMap(string(pattern), n.asterisk, rules, nodes)
-		}
+		pattern := append(word, asterisk)
+		insertMatchedItemIntoMap(string(pattern), n.asterisk, rules, nodes)
 	}
 
 	if n.question != nil {
-		pattern := append(characters, question)
-		if n.question != nil {
-			insertMatchedItemIntoMap(string(pattern), n.question, rules, nodes)
-		}
+		pattern := append(word, question)
+		insertMatchedItemIntoMap(string(pattern), n.question, rules, nodes)
 		t.travel(n.question.child, pattern, rules, nodes)
 	}
 
 	for char, item := range n.characters {
-		pattern := append(characters, char)
+		pattern := append(word, char)
 		if item != nil {
 			insertMatchedItemIntoMap(string(pattern), item, rules, nodes)
+			t.travel(item.child, pattern, rules, nodes)
 		}
-		t.travel(item.child, pattern, rules, nodes)
 	}
 }
 
-func (t *trieSelector) matchNode(n *node, s string, mr *macthedResult) {
+func (t *trieSelector) matchNode(n *node, s string, mr *matchedResult) {
 	if n == nil {
 		return
 	}
@@ -414,7 +411,7 @@ func (t *trieSelector) matchNode(n *node, s string, mr *macthedResult) {
 	}
 }
 
-func appendMatchedItem(entity *item, mr *macthedResult) {
+func appendMatchedItem(entity *item, mr *matchedResult) {
 	if entity.rule != nil {
 		mr.rules = append(mr.rules, entity.rule)
 	}
@@ -448,7 +445,7 @@ func (t *trieSelector) clearCache() {
 	t.cache = make(map[string]RuleSet)
 }
 
-func quoateSchemaTable(schema, table string) string {
+func quoteSchemaTable(schema, table string) string {
 	if len(schema) == 0 {
 		return ""
 	}

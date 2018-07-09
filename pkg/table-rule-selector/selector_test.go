@@ -35,7 +35,7 @@ var _ = Suite(&testSelectorSuite{
 		"abd":     {"abc"},
 	},
 	matchCase: []struct {
-		schame, table string
+		schema, table string
 		matchedNum    int
 		matchedRules  []string //schema, table, schema, table...
 	}{
@@ -62,7 +62,7 @@ type testSelectorSuite struct {
 	tables map[string][]string
 
 	matchCase []struct {
-		schame, table string
+		schema, table string
 		matchedNum    int
 		// // for generate rules,
 		// we use dummy rule which contains schema(matchedRules[2*i]) and table(matchedRules[2*i+1]) pattern information to simplify test
@@ -178,15 +178,15 @@ func (t *testSelectorSuite) testReplace(c *C, s Selector) {
 func (t *testSelectorSuite) testMatch(c *C, s Selector) {
 	cache := make(map[string]RuleSet)
 	for _, mc := range t.matchCase {
-		rules := s.Match(mc.schame, mc.table)
+		rules := s.Match(mc.schema, mc.table)
 		expectedRules := make(RuleSet, 0, mc.matchedNum)
 		for i := 0; i < mc.matchedNum; i++ {
-			rule := &dummyRule{quoateSchemaTable(mc.matchedRules[2*i], mc.matchedRules[2*i+1])}
+			rule := &dummyRule{quoteSchemaTable(mc.matchedRules[2*i], mc.matchedRules[2*i+1])}
 			expectedRules = append(expectedRules, rule)
 		}
 
 		c.Assert(rules, DeepEquals, expectedRules)
-		cache[quoateSchemaTable(mc.schame, mc.table)] = expectedRules
+		cache[quoteSchemaTable(mc.schema, mc.table)] = expectedRules
 	}
 
 	// test cache
@@ -197,15 +197,15 @@ func (t *testSelectorSuite) testMatch(c *C, s Selector) {
 	// test not mathced
 	rule := s.Match("t1", "")
 	c.Assert(rule, IsNil)
-	cache[quoateSchemaTable("t1", "")] = rule
+	cache[quoteSchemaTable("t1", "")] = rule
 
 	rule = s.Match("t1", "abc")
 	c.Assert(rule, IsNil)
-	cache[quoateSchemaTable("t1", "abc")] = rule
+	cache[quoteSchemaTable("t1", "abc")] = rule
 
 	rule = s.Match("xxx", "abc")
 	c.Assert(rule, IsNil)
-	cache[quoateSchemaTable("xxx", "abc")] = rule
+	cache[quoteSchemaTable("xxx", "abc")] = rule
 	c.Assert(trie.cache, DeepEquals, cache)
 }
 
@@ -219,9 +219,9 @@ func (t *testSelectorSuite) testGenerateExpectedRules() (map[string]interface{},
 		}
 		for _, table := range tables {
 			if len(table) == 0 {
-				schemaRules[schema] = &dummyRule{quoateSchemaTable(schema, "")}
+				schemaRules[schema] = &dummyRule{quoteSchemaTable(schema, "")}
 			} else {
-				tableRules[schema][table] = &dummyRule{quoateSchemaTable(schema, table)}
+				tableRules[schema][table] = &dummyRule{quoteSchemaTable(schema, table)}
 			}
 		}
 	}
