@@ -1,0 +1,196 @@
+// Copyright 2018 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package filter
+
+import (
+	"regexp"
+	"strings"
+
+	"github.com/juju/errors"
+	"github.com/pingcap/tidb-tools/pkg/table-rule-selector"
+)
+
+// ActionType is how to handle mathed items
+type ActionType string
+
+//  show Actions that how to handle rule
+const (
+	Skip ActionType = "skip"
+	Do   ActionType = "Do"
+)
+
+// EventType is DML/DDL Event type
+type EventType string
+
+// show DML/DDL Events
+const (
+	InsertEevent EventType = "insert"
+	UpdateEvent  EventType = "update"
+	DeleteEvent  EventType = "delete"
+
+	CreateDatabase EventType = "create database"
+	DropDatabase   EventType = "drop database"
+	CreateTable    EventType = "create table"
+	DropTable      EventType = "drop table"
+	TruncateTable  EventType = "truncate table"
+	RenameTable    EventType = "rename table"
+	CreateIndex    EventType = "create index"
+	DropIndex      EventType = "drop index"
+	AlertTable     EventType = "alter table"
+	// if need, add more	AlertTableOption     = "alert table option"
+
+	NullEvent EventType = ""
+)
+
+// BinlogEventRule is a rule to filters binlog events
+type BinlogEventRule struct {
+	SchemaPattern string         `json:"schema-pattern" toml:"schema-pattern"`
+	TablePattern  string         `json:"table-pattern" toml:"table-pattern"`
+	DMLEevent     []EventType    `json:"dml" toml:"dml"`
+	DDLEvent      []EventType    `json:"ddl" toml:"ddl"`
+	SQLPattern    []string       `json:"sql-pattern" toml:"sql-pattern"` // regular expression
+	SQLRegularExp *regexp.Regexp `json:"-" toml:"-"`
+
+	Action ActionType `json:"action" toml:"action"`
+}
+
+// Valid returns invalid rule error
+// TODO: check valid of dml/ddl event
+func (b *BinlogEventRule) Valid() error {
+	if len(b.SQLPattern) > 0 {
+		reg, err := regexp.Compile("(?i)" + strings.Join(b.SQLPattern, "|"))
+		if err != nil {
+			return errors.Annotatef(err, "compile regular expression %+v", b.SQLPattern)
+		}
+		b.SQLRegularExp = reg
+	}
+
+	if b.Action != Do && b.Action != Skip {
+		return errors.NotValidf("action of binlog event rule %+v should not be empty", b)
+	}
+
+	return nil
+}
+
+// BinlogEvent filters binlog events by given rules
+type BinlogEvent struct {
+	selector.Selector
+}
+
+// NewBinlogEvent returns a binlog event filter
+func NewBinlogEvent(rules []*BinlogEventRule) (*BinlogEvent, error) {
+	b := &BinlogEvent{
+		Selector: selector.NewTrieSelector(),
+	}
+
+	for _, rule := range rules {
+		if err := b.AddRule(rule); err != nil {
+			return nil, errors.Annotatef(err, "fail to initial rule %+v in binlog event filter", rule)
+		}
+	}
+
+	return b, nil
+}
+
+// AddRule adds a rule into table router
+func (b *BinlogEvent) AddRule(rule *BinlogEventRule) error {
+	err := rule.Valid()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	err = b.Insert(rule.SchemaPattern, rule.TablePattern, rule, false)
+	if err != nil {
+		return errors.Annotatef(err, "add rule %+v into event filter", rule)
+	}
+
+	return nil
+}
+
+// UpdateRule updates rule
+func (b *BinlogEvent) UpdateRule(rule *BinlogEventRule) error {
+	err := rule.Valid()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	err = b.Insert(rule.SchemaPattern, rule.TablePattern, rule, true)
+	if err != nil {
+		return errors.Annotatef(err, "add rule %+v into event filter", rule)
+	}
+
+	return nil
+}
+
+// RemoveRule removes a rule from table router
+func (b *BinlogEvent) RemoveRule(rule *BinlogEventRule) error {
+	err := b.Remove(rule.SchemaPattern, rule.TablePattern)
+	if err != nil {
+		return errors.Annotatef(err, "remove rule %+v", rule)
+	}
+
+	return nil
+}
+
+// Filter filters event or queries by given rules
+// returns action and error
+func (b *BinlogEvent) Filter(schema, table string, dml, ddl EventType, rawQuery string) (ActionType, error) {
+	rules := b.Match(schema, table)
+	if len(rules) == 0 {
+		return Do, nil
+	}
+
+	for _, rule := range rules {
+		binlogEventRule, ok := rule.(*BinlogEventRule)
+		if !ok {
+			return "", errors.NotValidf("rule %+v", rule)
+		}
+
+		matched := false
+		if len(dml) > 0 {
+			matched = b.matchEvent(dml, binlogEventRule.DMLEevent)
+		} else if len(ddl) > 0 {
+			matched = b.matchEvent(ddl, binlogEventRule.DDLEvent)
+		} else if len(rawQuery) > 0 {
+			matched = binlogEventRule.SQLRegularExp.FindStringIndex(rawQuery) != nil
+		} else {
+			if binlogEventRule.Action == Skip { // skip has highest priority
+				return Skip, nil
+			}
+		}
+
+		// skip has highest priority
+		if matched {
+			if binlogEventRule.Action == Skip {
+				return Skip, nil
+			}
+		} else {
+			if binlogEventRule.Action == Do {
+				return Skip, nil
+			}
+		}
+	}
+
+	return Do, nil
+}
+
+func (b *BinlogEvent) matchEvent(event EventType, rules []EventType) bool {
+	for _, rule := range rules {
+		if rule == event {
+			return true
+		}
+	}
+
+	return false
+}
