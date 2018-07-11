@@ -55,12 +55,12 @@ const (
 
 // BinlogEventRule is a rule to filter binlog events
 type BinlogEventRule struct {
-	SchemaPattern string         `json:"schema-pattern" toml:"schema-pattern"`
-	TablePattern  string         `json:"table-pattern" toml:"table-pattern"`
-	DMLEvent      []EventType    `json:"dml" toml:"dml"`
-	DDLEvent      []EventType    `json:"ddl" toml:"ddl"`
-	SQLPattern    []string       `json:"sql-pattern" toml:"sql-pattern"` // regular expression
-	SQLRegularExp *regexp.Regexp `json:"-" toml:"-"`
+	SchemaPattern string      `json:"schema-pattern" toml:"schema-pattern"`
+	TablePattern  string      `json:"table-pattern" toml:"table-pattern"`
+	DMLEvent      []EventType `json:"dml" toml:"dml"`
+	DDLEvent      []EventType `json:"ddl" toml:"ddl"`
+	SQLPattern    []string    `json:"sql-pattern" toml:"sql-pattern"` // regular expression
+	sqlRegularExp *regexp.Regexp
 
 	Action ActionType `json:"action" toml:"action"`
 }
@@ -73,7 +73,7 @@ func (b *BinlogEventRule) Valid() error {
 		if err != nil {
 			return errors.Annotatef(err, "compile regular expression %+v", b.SQLPattern)
 		}
-		b.SQLRegularExp = reg
+		b.sqlRegularExp = reg
 	}
 
 	if b.Action != Do && b.Action != Skip {
@@ -163,7 +163,7 @@ func (b *BinlogEvent) Filter(schema, table string, dml, ddl EventType, rawQuery 
 		} else if len(ddl) > 0 {
 			matched = b.matchEvent(ddl, binlogEventRule.DDLEvent)
 		} else if len(rawQuery) > 0 {
-			matched = binlogEventRule.SQLRegularExp.FindStringIndex(rawQuery) != nil
+			matched = binlogEventRule.sqlRegularExp.FindStringIndex(rawQuery) != nil
 		} else {
 			if binlogEventRule.Action == Skip { // skip has highest priority
 				return Skip, nil
