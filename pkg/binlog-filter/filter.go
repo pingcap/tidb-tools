@@ -35,6 +35,12 @@ type EventType string
 
 // show DML/DDL Events
 const (
+	// it indicates all dml/ddl events in rule
+	AllEvent EventType = "all"
+	// it indicates no any dml/ddl events in  rule,
+	// and equals empty rule.DDLEvent/DMLEvent
+	NoneEvent EventType = "none"
+
 	InsertEvent EventType = "insert"
 	UpdateEvent EventType = "update"
 	DeleteEvent EventType = "delete"
@@ -187,6 +193,14 @@ func (b *BinlogEvent) Filter(schema, table string, dml, ddl EventType, rawQuery 
 
 func (b *BinlogEvent) matchEvent(event EventType, rules []EventType) bool {
 	for _, rule := range rules {
+		if rule == AllEvent {
+			return true
+		}
+
+		if rule == NoneEvent {
+			return false
+		}
+
 		if rule == event {
 			return true
 		}
