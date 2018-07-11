@@ -60,7 +60,7 @@ func (t *testRouterSuite) TestRoute(c *C) {
 		c.Assert(table, Equals, cs[3])
 	}
 
-	// test update rules
+	// update rules
 	rules[0].TargetTable = "xxx"
 	cases[0][3] = "xxx"
 	err = router.UpdateRule(rules[0])
@@ -72,10 +72,10 @@ func (t *testRouterSuite) TestRoute(c *C) {
 		c.Assert(table, Equals, cs[3])
 	}
 
-	// test remove rule
+	// remove rule
 	err = router.RemoveRule(rules[0])
 	c.Assert(err, IsNil)
-	// test remove not existing rule
+	// remove not existing rule
 	err = router.RemoveRule(rules[0])
 	c.Assert(err, NotNil)
 	schema, table, err := router.Route(cases[0][0], cases[0][1])
@@ -86,7 +86,7 @@ func (t *testRouterSuite) TestRoute(c *C) {
 	rules = rules[1:]
 	cases = cases[1:]
 
-	// test mismacthed
+	// mismatched
 	_, _, err = router.Route("test_3_a", "")
 	c.Assert(err, NotNil)
 	// test multiple schema level rules

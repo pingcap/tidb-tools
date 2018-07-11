@@ -27,20 +27,20 @@ type TableRule struct {
 	TargetTable   string `json:"target-table" toml:"target-table"`
 }
 
-// Valid returns invalid rule error
+// Valid checks validity of rule
 func (t *TableRule) Valid() error {
 	if len(t.SchemaPattern) == 0 {
-		return errors.NotValidf("schema pattern of table route rule %+v should not be empty")
+		return errors.Errorf("schema pattern of table route rule %+v should not be empty")
 	}
 
 	if len(t.TargetSchema) == 0 {
-		return errors.NotValidf("target schema of table route rule %+v should not be empty")
+		return errors.Errorf("target schema of table route rule %+v should not be empty")
 	}
 
 	return nil
 }
 
-// Table routes schema/table to target schema/table by some route rules
+// Table routes schema/table to target schema/table by given route rules
 type Table struct {
 	selector.Selector
 }
@@ -53,7 +53,7 @@ func NewTableRouter(rules []*TableRule) (*Table, error) {
 
 	for _, rule := range rules {
 		if err := r.AddRule(rule); err != nil {
-			return nil, errors.Annotatef(err, "fail to initial rule %+v in table router", rule)
+			return nil, errors.Annotatef(err, "initial rule %+v in table router", rule)
 		}
 	}
 
@@ -84,7 +84,7 @@ func (r *Table) UpdateRule(rule *TableRule) error {
 
 	err = r.Insert(rule.SchemaPattern, rule.TablePattern, rule, true)
 	if err != nil {
-		return errors.Annotatef(err, "add rule %+v into table router", rule)
+		return errors.Annotatef(err, "update rule %+v into table router", rule)
 	}
 
 	return nil
@@ -101,7 +101,7 @@ func (r *Table) RemoveRule(rule *TableRule) error {
 }
 
 // Route routes schema/table to target schema/table
-// unsupport to route schema/table to multiple schema/table
+// don't support to route schema/table to multiple schema/table
 func (r *Table) Route(schema, table string) (string, string, error) {
 	rules := r.Match(schema, table)
 	var (
