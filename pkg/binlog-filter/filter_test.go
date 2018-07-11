@@ -29,7 +29,7 @@ type testRouterSuite struct{}
 
 func (t *testRouterSuite) TestRoute(c *C) {
 	rules := []*BinlogEventRule{
-		{"test_1_*", "abc*", []EventType{DeleteEvent, InsertEevent}, []EventType{CreateIndex, DropIndex}, []string{"^DROP\\s+PROCEDURE", "^CREATE\\s+PROCEDURE"}, nil, Skip},
+		{"test_1_*", "abc*", []EventType{DeleteEvent, InsertEvent}, []EventType{CreateIndex, DropIndex}, []string{"^DROP\\s+PROCEDURE", "^CREATE\\s+PROCEDURE"}, nil, Skip},
 	}
 
 	cases := []struct {
@@ -39,7 +39,7 @@ func (t *testRouterSuite) TestRoute(c *C) {
 		action        ActionType
 	}{
 		{"test_1_a", "abc1", DeleteEvent, NullEvent, "", Skip},
-		{"test_1_a", "abc1", InsertEevent, NullEvent, "", Skip},
+		{"test_1_a", "abc1", InsertEvent, NullEvent, "", Skip},
 		{"test_1_a", "abc1", UpdateEvent, NullEvent, "", Do},
 		{"test_1_a", "abc1", NullEvent, CreateIndex, "", Skip},
 		{"test_1_a", "abc1", NullEvent, RenameTable, "", Do},
@@ -63,8 +63,8 @@ func (t *testRouterSuite) TestRoute(c *C) {
 		c.Assert(action, Equals, cs.action)
 	}
 
-	// test update rules
-	rules[0].DMLEevent = []EventType{}
+	// update rules
+	rules[0].DMLEvent = []EventType{}
 	cases[0].action = Do // delete
 	cases[1].action = Do // insert
 	err = filter.UpdateRule(rules[0])
@@ -76,7 +76,7 @@ func (t *testRouterSuite) TestRoute(c *C) {
 	}
 
 	// test multiple rules
-	rule := &BinlogEventRule{"test_*", "ab*", []EventType{InsertEevent}, []EventType{CreateIndex, TruncateTable}, []string{"^DROP\\s+PROCEDURE"}, nil, Do}
+	rule := &BinlogEventRule{"test_*", "ab*", []EventType{InsertEvent}, []EventType{CreateIndex, TruncateTable}, []string{"^DROP\\s+PROCEDURE"}, nil, Do}
 	err = filter.AddRule(rule)
 	c.Assert(err, IsNil)
 	cases[0].action = Skip //delete
@@ -89,10 +89,10 @@ func (t *testRouterSuite) TestRoute(c *C) {
 		c.Assert(action, Equals, cs.action)
 	}
 
-	// test remove rule
+	// remove rule
 	err = filter.RemoveRule(rules[0])
 	c.Assert(err, IsNil)
-	// test remove not existing rule
+	// remove not existing rule
 	err = filter.RemoveRule(rules[0])
 	c.Assert(err, NotNil)
 	cases[3].action = Do // create index
@@ -103,13 +103,13 @@ func (t *testRouterSuite) TestRoute(c *C) {
 		c.Assert(action, Equals, cs.action)
 	}
 
-	// test mismacthed
-	action, err := filter.Filter("xxx_a", "", InsertEevent, NullEvent, "")
+	// mismatched
+	action, err := filter.Filter("xxx_a", "", InsertEvent, NullEvent, "")
 	c.Assert(action, Equals, Do)
 
 	// invalid rule
 	err = filter.Selector.Insert("test_1_*", "abc*", "error", false)
 	c.Assert(err, IsNil)
-	_, err = filter.Filter("test_1_a", "abc", InsertEevent, NullEvent, "")
+	_, err = filter.Filter("test_1_a", "abc", InsertEvent, NullEvent, "")
 	c.Assert(err, NotNil)
 }

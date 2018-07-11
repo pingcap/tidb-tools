@@ -15,7 +15,7 @@ package filter
 
 import "github.com/pingcap/tidb/ast"
 
-// AstToDDLEvent return filter.DDLEvent
+// AstToDDLEvent returns filter.DDLEvent
 func AstToDDLEvent(node ast.StmtNode) EventType {
 	switch node.(type) {
 	case *ast.CreateDatabaseStmt:

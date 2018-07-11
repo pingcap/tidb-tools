@@ -21,12 +21,12 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/table-rule-selector"
 )
 
-// ActionType is how to handle mathed items
+// ActionType indicates how to handle matched items
 type ActionType string
 
-//  show Actions that how to handle rule
+//  show that how to handle rules
 const (
-	Skip ActionType = "skip"
+	Skip ActionType = "Skip"
 	Do   ActionType = "Do"
 )
 
@@ -35,9 +35,9 @@ type EventType string
 
 // show DML/DDL Events
 const (
-	InsertEevent EventType = "insert"
-	UpdateEvent  EventType = "update"
-	DeleteEvent  EventType = "delete"
+	InsertEvent EventType = "insert"
+	UpdateEvent EventType = "update"
+	DeleteEvent EventType = "delete"
 
 	CreateDatabase EventType = "create database"
 	DropDatabase   EventType = "drop database"
@@ -53,11 +53,11 @@ const (
 	NullEvent EventType = ""
 )
 
-// BinlogEventRule is a rule to filters binlog events
+// BinlogEventRule is a rule to filter binlog events
 type BinlogEventRule struct {
 	SchemaPattern string         `json:"schema-pattern" toml:"schema-pattern"`
 	TablePattern  string         `json:"table-pattern" toml:"table-pattern"`
-	DMLEevent     []EventType    `json:"dml" toml:"dml"`
+	DMLEvent      []EventType    `json:"dml" toml:"dml"`
 	DDLEvent      []EventType    `json:"ddl" toml:"ddl"`
 	SQLPattern    []string       `json:"sql-pattern" toml:"sql-pattern"` // regular expression
 	SQLRegularExp *regexp.Regexp `json:"-" toml:"-"`
@@ -65,8 +65,8 @@ type BinlogEventRule struct {
 	Action ActionType `json:"action" toml:"action"`
 }
 
-// Valid returns invalid rule error
-// TODO: check valid of dml/ddl event
+// Valid checks validity of rule.
+// TODO: check validity of dml/ddl event.
 func (b *BinlogEventRule) Valid() error {
 	if len(b.SQLPattern) > 0 {
 		reg, err := regexp.Compile("(?i)" + strings.Join(b.SQLPattern, "|"))
@@ -77,7 +77,7 @@ func (b *BinlogEventRule) Valid() error {
 	}
 
 	if b.Action != Do && b.Action != Skip {
-		return errors.NotValidf("action of binlog event rule %+v should not be empty", b)
+		return errors.Errorf("action of binlog event rule %+v should not be empty", b)
 	}
 
 	return nil
@@ -96,14 +96,14 @@ func NewBinlogEvent(rules []*BinlogEventRule) (*BinlogEvent, error) {
 
 	for _, rule := range rules {
 		if err := b.AddRule(rule); err != nil {
-			return nil, errors.Annotatef(err, "fail to initial rule %+v in binlog event filter", rule)
+			return nil, errors.Annotatef(err, "initial rule %+v in binlog event filter", rule)
 		}
 	}
 
 	return b, nil
 }
 
-// AddRule adds a rule into table router
+// AddRule adds a rule into binlog event filter
 func (b *BinlogEvent) AddRule(rule *BinlogEventRule) error {
 	err := rule.Valid()
 	if err != nil {
@@ -112,13 +112,13 @@ func (b *BinlogEvent) AddRule(rule *BinlogEventRule) error {
 
 	err = b.Insert(rule.SchemaPattern, rule.TablePattern, rule, false)
 	if err != nil {
-		return errors.Annotatef(err, "add rule %+v into event filter", rule)
+		return errors.Annotatef(err, "add rule %+v into binlog event filter", rule)
 	}
 
 	return nil
 }
 
-// UpdateRule updates rule
+// UpdateRule updates binlog event filter rule
 func (b *BinlogEvent) UpdateRule(rule *BinlogEventRule) error {
 	err := rule.Valid()
 	if err != nil {
@@ -127,13 +127,13 @@ func (b *BinlogEvent) UpdateRule(rule *BinlogEventRule) error {
 
 	err = b.Insert(rule.SchemaPattern, rule.TablePattern, rule, true)
 	if err != nil {
-		return errors.Annotatef(err, "add rule %+v into event filter", rule)
+		return errors.Annotatef(err, "update rule %+v into binlog event filter", rule)
 	}
 
 	return nil
 }
 
-// RemoveRule removes a rule from table router
+// RemoveRule removes a rule from binlog event filter
 func (b *BinlogEvent) RemoveRule(rule *BinlogEventRule) error {
 	err := b.Remove(rule.SchemaPattern, rule.TablePattern)
 	if err != nil {
@@ -143,7 +143,7 @@ func (b *BinlogEvent) RemoveRule(rule *BinlogEventRule) error {
 	return nil
 }
 
-// Filter filters event or queries by given rules
+// Filter filters events or queries by given rules
 // returns action and error
 func (b *BinlogEvent) Filter(schema, table string, dml, ddl EventType, rawQuery string) (ActionType, error) {
 	rules := b.Match(schema, table)
@@ -159,7 +159,7 @@ func (b *BinlogEvent) Filter(schema, table string, dml, ddl EventType, rawQuery 
 
 		matched := false
 		if len(dml) > 0 {
-			matched = b.matchEvent(dml, binlogEventRule.DMLEevent)
+			matched = b.matchEvent(dml, binlogEventRule.DMLEvent)
 		} else if len(ddl) > 0 {
 			matched = b.matchEvent(ddl, binlogEventRule.DDLEvent)
 		} else if len(rawQuery) > 0 {
