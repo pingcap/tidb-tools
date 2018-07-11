@@ -30,11 +30,11 @@ type TableRule struct {
 // Valid checks validity of rule
 func (t *TableRule) Valid() error {
 	if len(t.SchemaPattern) == 0 {
-		return errors.Errorf("schema pattern of table route rule %+v should not be empty")
+		return errors.New("schema pattern of table route rule should not be empty")
 	}
 
 	if len(t.TargetSchema) == 0 {
-		return errors.Errorf("target schema of table route rule %+v should not be empty")
+		return errors.New("target schema of table route rule should not be empty")
 	}
 
 	return nil
@@ -133,7 +133,7 @@ func (r *Table) Route(schema, table string) (string, string, error) {
 		}
 
 		if len(schemaRules) > 1 {
-			return "", "", errors.NotSupportedf("route %s/%s to rule set(%d)", schema, table, len(rules))
+			return "", "", errors.NotSupportedf("route %s/%s to rule set(%d)", schema, table, len(schemaRules))
 		}
 
 		targetSchema, targetTable = schemaRules[0].TargetSchema, schemaRules[0].TargetTable
