@@ -14,15 +14,15 @@ Binlog Filter is a libary to provide a simple and unified way to filter binlog e
 
 - Do/Ignore binlog events
     
-    Synchronize/Ignore some specified replicated binlog events from these specfied databases/tables by given rules.
+    Synchronize/Ignore some specified replicated `Binlog Events` from these specfied databases/tables by given rules.
 
 - Do/Ignore binlog queries
 
-    Synchronize/Ignore some specified replicated binlog queries that is in Binog Query Event from these specfied databases/tables by given rules.
+    Synchronize/Ignore some specified replicated queries that is in `Binog Query Event` from these specfied databases/tables by given rules.
 
 ## binlog event rule
 
-we define a rule BinlogEventRule to filter specified binlog events and queries that is in Binog Query Event
+we define a rule `BinlogEventRule` to filter specified `Binlog Events` and queries that is in `Binog Query Event`
 
 ```go
 type BinlogEventRule struct {
@@ -40,35 +40,35 @@ type BinlogEventRule struct {
 now we support following events 
 
 ``` go
-    // it indicates all dml/ddl events in rule
-    AllEvent
+// it indicates all dml/ddl events in rule
+AllEvent
     
-	// it indicates no any dml/ddl events in rule,
-	// and equals empty rule.DDLEvent/DMLEvent array
-	NoneEvent
+// it indicates no any dml/ddl events in rule,
+// and equals empty rule.DDLEvent/DMLEvent array
+NoneEvent
 
-    // DML events
-	InsertEvent
-	UpdateEvent
-	DeleteEvent
+// DML events
+InsertEvent
+UpdateEvent
+DeleteEvent
 
-    // DDL events
-	CreateDatabase
-	DropDatabase
-	CreateTable
-	DropTable
-	TruncateTable
-	RenameTable
-	CreateIndex
-	DropIndex
-	AlertTable
+// DDL events
+CreateDatabase
+DropDatabase
+CreateTable
+DropTable
+TruncateTable
+RenameTable
+CreateIndex
+DropIndex
+AlertTable
 
-    // unknow event
-	NullEvent EventType = ""
+// unknow event
+NullEvent EventType = ""
 ```
 
 ## notice
-if you want to use BinlogEventRule to synchronize/ignore some table, you must pay attention to setting `AllEvent` and `NoneEvent`.
+if you want to use `BinlogEventRule` to synchronize/ignore some table, you may need to pay attention to setting `AllEvent` and `NoneEvent`.
 
 like synchronizing all events from specified table, ignore is opposite.
 ``` go
