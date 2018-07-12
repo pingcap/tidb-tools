@@ -26,8 +26,8 @@ type ActionType string
 
 //  show that how to handle rules
 const (
-	Skip ActionType = "Skip"
-	Do   ActionType = "Do"
+	Ignore ActionType = "Ignore"
+	Do     ActionType = "Do"
 )
 
 // EventType is DML/DDL Event type
@@ -82,7 +82,7 @@ func (b *BinlogEventRule) Valid() error {
 		b.sqlRegularExp = reg
 	}
 
-	if b.Action != Do && b.Action != Skip {
+	if b.Action != Do && b.Action != Ignore {
 		return errors.Errorf("action of binlog event rule %+v should not be empty", b)
 	}
 
@@ -171,19 +171,19 @@ func (b *BinlogEvent) Filter(schema, table string, dml, ddl EventType, rawQuery 
 		} else if len(rawQuery) > 0 {
 			matched = binlogEventRule.sqlRegularExp.FindStringIndex(rawQuery) != nil
 		} else {
-			if binlogEventRule.Action == Skip { // skip has highest priority
-				return Skip, nil
+			if binlogEventRule.Action == Ignore { // Ignore has highest priority
+				return Ignore, nil
 			}
 		}
 
-		// skip has highest priority
+		// ignore has highest priority
 		if matched {
-			if binlogEventRule.Action == Skip {
-				return Skip, nil
+			if binlogEventRule.Action == Ignore {
+				return Ignore, nil
 			}
 		} else {
 			if binlogEventRule.Action == Do {
-				return Skip, nil
+				return Ignore, nil
 			}
 		}
 	}

@@ -29,7 +29,7 @@ type testRouterSuite struct{}
 
 func (t *testRouterSuite) TestRoute(c *C) {
 	rules := []*BinlogEventRule{
-		{"test_1_*", "abc*", []EventType{DeleteEvent, InsertEvent}, []EventType{CreateIndex, DropIndex}, []string{"^DROP\\s+PROCEDURE", "^CREATE\\s+PROCEDURE"}, nil, Skip},
+		{"test_1_*", "abc*", []EventType{DeleteEvent, InsertEvent}, []EventType{CreateIndex, DropIndex}, []string{"^DROP\\s+PROCEDURE", "^CREATE\\s+PROCEDURE"}, nil, Ignore},
 	}
 
 	cases := []struct {
@@ -38,13 +38,13 @@ func (t *testRouterSuite) TestRoute(c *C) {
 		sql           string
 		action        ActionType
 	}{
-		{"test_1_a", "abc1", DeleteEvent, NullEvent, "", Skip},
-		{"test_1_a", "abc1", InsertEvent, NullEvent, "", Skip},
+		{"test_1_a", "abc1", DeleteEvent, NullEvent, "", Ignore},
+		{"test_1_a", "abc1", InsertEvent, NullEvent, "", Ignore},
 		{"test_1_a", "abc1", UpdateEvent, NullEvent, "", Do},
-		{"test_1_a", "abc1", NullEvent, CreateIndex, "", Skip},
+		{"test_1_a", "abc1", NullEvent, CreateIndex, "", Ignore},
 		{"test_1_a", "abc1", NullEvent, RenameTable, "", Do},
-		{"test_1_a", "abc1", NullEvent, NullEvent, "drop procedure abc", Skip},
-		{"test_1_a", "abc1", NullEvent, NullEvent, "create procedure abc", Skip},
+		{"test_1_a", "abc1", NullEvent, NullEvent, "drop procedure abc", Ignore},
+		{"test_1_a", "abc1", NullEvent, NullEvent, "create procedure abc", Ignore},
 		{"test_1_a", "abc1", NullEvent, NullEvent, "create function abc", Do},
 	}
 
@@ -79,10 +79,10 @@ func (t *testRouterSuite) TestRoute(c *C) {
 	rule := &BinlogEventRule{"test_*", "ab*", []EventType{InsertEvent}, []EventType{CreateIndex, TruncateTable}, []string{"^DROP\\s+PROCEDURE"}, nil, Do}
 	err = filter.AddRule(rule)
 	c.Assert(err, IsNil)
-	cases[0].action = Skip //delete
-	cases[2].action = Skip // update
-	cases[4].action = Skip // rename table
-	cases[7].action = Skip // create function
+	cases[0].action = Ignore //delete
+	cases[2].action = Ignore // update
+	cases[4].action = Ignore // rename table
+	cases[7].action = Ignore // create function
 	for _, cs := range cases {
 		action, err := filter.Filter(cs.schema, cs.table, cs.dml, cs.ddl, cs.sql)
 		c.Assert(err, IsNil)
