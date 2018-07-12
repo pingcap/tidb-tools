@@ -70,7 +70,7 @@ NullEvent EventType = ""
 ## notice
 if you want to use `BinlogEventRule` to synchronize/ignore some table, you may need to pay attention to setting `AllEvent` and `NoneEvent`.
 
-like synchronizing all events from specified table, ignore is opposite.
+like synchronizing all events from specified table or setting a do table, ignore is opposite.
 ``` go
 BinlogEventRule {
 	SchemaPattern: test*,

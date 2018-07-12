@@ -30,6 +30,7 @@ type testRouterSuite struct{}
 func (t *testRouterSuite) TestRoute(c *C) {
 	rules := []*BinlogEventRule{
 		{"test_1_*", "abc*", []EventType{DeleteEvent, InsertEvent}, []EventType{CreateIndex, DropIndex}, []string{"^DROP\\s+PROCEDURE", "^CREATE\\s+PROCEDURE"}, nil, Ignore},
+		{"xxx_*", "abc_*", []EventType{AllEvent}, []EventType{NoneEvent}, nil, nil, Ignore},
 	}
 
 	cases := []struct {
@@ -46,6 +47,9 @@ func (t *testRouterSuite) TestRoute(c *C) {
 		{"test_1_a", "abc1", NullEvent, NullEvent, "drop procedure abc", Ignore},
 		{"test_1_a", "abc1", NullEvent, NullEvent, "create procedure abc", Ignore},
 		{"test_1_a", "abc1", NullEvent, NullEvent, "create function abc", Do},
+		{"xxx_1", "abc_1", NullEvent, NullEvent, "create function abc", Do},
+		{"xxx_1", "abc_1", InsertEvent, NullEvent, "", Ignore},
+		{"xxx_1", "abc_1", NullEvent, CreateIndex, "", Do},
 	}
 
 	// initial binlog event filter
@@ -65,10 +69,16 @@ func (t *testRouterSuite) TestRoute(c *C) {
 
 	// update rules
 	rules[0].DMLEvent = []EventType{}
-	cases[0].action = Do // delete
-	cases[1].action = Do // insert
-	err = filter.UpdateRule(rules[0])
-	c.Assert(err, IsNil)
+	rules[1].Action = Do
+	for _, rule := range rules {
+		err = filter.UpdateRule(rule)
+		c.Assert(err, IsNil)
+	}
+
+	cases[0].action = Do      // delete
+	cases[1].action = Do      // insert
+	cases[9].action = Do      // match all event and insert
+	cases[10].action = Ignore // match none event and create index
 	for _, cs := range cases {
 		action, err := filter.Filter(cs.schema, cs.table, cs.dml, cs.ddl, cs.sql)
 		c.Assert(err, IsNil)

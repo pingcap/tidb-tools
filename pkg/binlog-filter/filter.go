@@ -168,7 +168,12 @@ func (b *BinlogEvent) Filter(schema, table string, dml, ddl EventType, rawQuery 
 			matched = b.matchEvent(dml, binlogEventRule.DMLEvent)
 		} else if len(ddl) > 0 {
 			matched = b.matchEvent(ddl, binlogEventRule.DDLEvent)
-		} else if len(rawQuery) > 0 && len(binlogEventRule.SQLPattern) > 0 {
+		} else if len(rawQuery) > 0 {
+			if len(binlogEventRule.SQLPattern) == 0 {
+				// sql pattern is disabled , just continue
+				continue
+			}
+
 			matched = binlogEventRule.sqlRegularExp.FindStringIndex(rawQuery) != nil
 		} else {
 			if binlogEventRule.Action == Ignore { // Ignore has highest priority
