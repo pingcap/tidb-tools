@@ -96,9 +96,8 @@ func (b *BinlogReader) Walk() error {
 		commitTs := binlog.GetCommitTs()
 		tp := binlog.GetTp()
 		preWriteValue := binlog.GetPrewriteValue()
-		log.Infof("start ts: %d, commit ts: %d, tp: %v", startTs, commitTs, tp)
+		log.Infof("start ts: %d, commit ts: %d, tp: %v, preWriteValue length: %d", startTs, commitTs, tp, len(preWriteValue))
 
-		preWriteValue = binlog.GetPrewriteValue()
 		preWrite := &pb.PrewriteValue{}
 		err = preWrite.Unmarshal(preWriteValue)
 		if err != nil {
