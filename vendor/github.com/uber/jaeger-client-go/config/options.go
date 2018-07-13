@@ -29,10 +29,12 @@ type Options struct {
 	metrics             metrics.Factory
 	logger              jaeger.Logger
 	reporter            jaeger.Reporter
+	sampler             jaeger.Sampler
 	contribObservers    []jaeger.ContribObserver
 	observers           []jaeger.Observer
 	gen128Bit           bool
 	zipkinSharedRPCSpan bool
+	maxTagValueLength   int
 	tags                []opentracing.Tag
 	injectors           map[interface{}]jaeger.Injector
 	extractors          map[interface{}]jaeger.Extractor
@@ -59,6 +61,13 @@ func Logger(logger jaeger.Logger) Option {
 func Reporter(reporter jaeger.Reporter) Option {
 	return func(c *Options) {
 		c.reporter = reporter
+	}
+}
+
+// Sampler can be provided explicitly to override the configuration.
+func Sampler(sampler jaeger.Sampler) Option {
+	return func(c *Options) {
+		c.sampler = sampler
 	}
 }
 
@@ -90,6 +99,13 @@ func Gen128Bit(gen128Bit bool) Option {
 func ZipkinSharedRPCSpan(zipkinSharedRPCSpan bool) Option {
 	return func(c *Options) {
 		c.zipkinSharedRPCSpan = zipkinSharedRPCSpan
+	}
+}
+
+// MaxTagValueLength can be provided to override the default max tag value length.
+func MaxTagValueLength(maxTagValueLength int) Option {
+	return func(c *Options) {
+		c.maxTagValueLength = maxTagValueLength
 	}
 }
 
