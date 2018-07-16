@@ -197,23 +197,15 @@ func (t *tidbParser) handleDropTable(schema string, node *ast.DropTableStmt) ([]
 func (t *tidbParser) handleRenameTable(schema string, node *ast.RenameTableStmt) ([]string, error) {
 	sqls := make([]string, 0, len(node.TableToTables))
 	for _, table := range node.TableToTables {
-		renamedOldSchema, renamedOldTable, ignore, err := t.filterAndRenameDDL(schema, table.OldTable.Schema.O, table.OldTable.Name.O, filter.RenameTable)
+		sql, err := t.makeRenameTable(schema, table.OldTable.Schema.O, table.OldTable.Name.O, table.NewTable.Schema.O, table.NewTable.Name.O)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		if ignore {
+		if len(sql) == 0 {
 			continue
 		}
 
-		renameSchema, renamedTable, ignore, err := t.filterAndRenameDDL(schema, table.NewTable.Schema.O, table.NewTable.Name.O, filter.RenameTable)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		if ignore {
-			continue
-		}
-
-		sqls = append(sqls, fmt.Sprintf("RENAME TABLE `%s`.`%s` TO `%s`.`5s`", renamedOldSchema, renamedOldTable, renameSchema, renamedTable))
+		sqls = append(sqls, sql)
 	}
 
 	return sqls, nil
@@ -233,7 +225,61 @@ func (t *tidbParser) handleTruncateTable(schema string, node *ast.TruncateTableS
 
 func (t *tidbParser) handleAlterTable(schema string, node *ast.AlterTableStmt) ([]string, error) {
 	// implement it later
-	return nil, nil
+	renamedSchema, renamedTable, ignore, err := t.filterAndRenameDDL(schema, node.Table.Schema.O, node.Table.Name.O, filter.RenameTable)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	if ignore {
+		return nil, nil
+	}
+
+	var (
+		sqls = make([]string, 0, len(node.Specs))
+		sql  string
+	)
+
+	for _, spec := range node.Specs {
+		if spec.Tp == ast.AlterTableRenameTable {
+			sql, err = t.makeRenameTable(schema, node.Table.Schema.O, node.Table.Name.O, spec.NewTable.Schema.O, spec.NewTable.Name.O)
+		} else {
+			sql, err = t.analyzeAlterSpec(spec)
+		}
+
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		if len(sql) == 0 {
+			continue
+		}
+
+		sqls = append(sqls, fmt.Sprintf("ALTER TABLE `%s`.`%s` %s", renamedSchema, renamedTable, sql))
+	}
+
+	return sqls, nil
+}
+
+func (t *tidbParser) analyzeAlterSpec(spec *ast.AlterTableSpec) (string, error) {
+	return "", nil
+}
+
+func (t *tidbParser) makeRenameTable(schemaInContext, oldSchema, oldTable, renameSchema, renameTable string) (string, error) {
+	renamedOldSchema, renamedOldTable, ignore, err := t.filterAndRenameDDL(schemaInContext, oldSchema, oldTable, filter.RenameTable)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	if ignore {
+		return "", nil
+	}
+
+	renameSchema, renamedTable, ignore, err := t.filterAndRenameDDL(schemaInContext, renamedOldTable, renameTable, filter.RenameTable)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	if ignore {
+		return "", nil
+	}
+
+	return fmt.Sprintf("RENAME TABLE `%s`.`%s` TO `%s`.`5s`", renamedOldSchema, renamedOldTable, renameSchema, renamedTable), nil
 }
 
 func (t *tidbParser) filterAndRenameDDL(schemaInContext, schema, table string, event filter.EventType) (string, string, bool, error) {
