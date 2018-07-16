@@ -10,9 +10,9 @@ var (
 	lastCPUUsageTime    int64
 )
 
-// CalcCPUUsage calculates CPU usage and returns percentage in float64(e.g. 2.5 means 2.5%).
+// GetCPUPercentage calculates CPU usage and returns percentage in float64(e.g. 2.5 means 2.5%).
 // http://man7.org/linux/man-pages/man2/getrusage.2.html
-func CalcCPUUsage() float64 {
+func GetCPUPercentage() float64 {
 	var ru syscall.Rusage
 	syscall.Getrusage(syscall.RUSAGE_SELF, &ru)
 	usageTime := ru.Utime.Nano() + ru.Stime.Nano()
