@@ -1,0 +1,43 @@
+syntax = "proto2";
+package pump.info;
+import "gogoproto/gogo.proto";
+
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+
+enum PumpState {
+  // Online means the pump can receive request.
+  Online   = 0;
+
+	// Pausing means the pump is pausing.
+	Pausing  = 1;
+
+	// Paused means the pump is already paused.
+	Paused   = 2;
+
+	// Closing means the pump is closing, and the state will be Offline when closed.
+	Closing  = 3;
+
+  // ForceClosing means the pump is closing by force.
+  ForceClosing = 4;
+
+	// Offline means the pump is offline, and will not provide service.
+	Offline  = 5;
+}
+
+message PumpStatus {
+  // the id of pump.
+	optional string node_id = 1 [ (gogoproto.nullable) = false ];
+
+	// the state of pump.
+	optional PumpState State = 2 [ (gogoproto.nullable) = false ];
+
+	// the score of pump, it is report by pump, calculated by pump's qps, disk usage and binlog's data size. 
+	// if Score is less than 0, means the pump is useless.
+	optional int64 Score = 3;
+
+	// the label of this pump, pump client will only send to a pump which label is matched.
+	optional string Label = 4 [ (gogoproto.nullable) = false ];
+}
+
