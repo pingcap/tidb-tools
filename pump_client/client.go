@@ -35,10 +35,22 @@ type PumpsClient struct {
 
 	// NeedCheckPumps saves the pumps need to be checked.
 	NeedCheckPumps []*PumpStatus
+
+	Selector *Selector
 }
 
 // NewPumpClient returns a PumpsClient.
-func NewPumpsClient(endpoints []string, security *tls.Config) *PumpsClient {
+func NewPumpsClient(endpoints []string, security *tls.Config, algorithm string) *PumpsClient {
+	var selector Selector
+	switch algorithm {
+	case Hash:
+		selector = NewHashSelector()
+	case Score:
+		selector = NewScoreSelector()
+	default:
+		selector = NewHashSelector()
+	}
+
 
 
 }
