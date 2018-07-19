@@ -14,7 +14,6 @@
 package parser
 
 import (
-	"fmt"
 	"strings"
 
 	filter "github.com/pingcap/tidb-tools/pkg/binlog-filter"
@@ -22,6 +21,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb/ast"
+	"github.com/pingcap/tidb/model"
 	"github.com/pingcap/tidb/parser"
 )
 
@@ -68,55 +68,76 @@ func (t *tidbParser) Handle(schema, statement string) ([]string, bool, error) {
 		return nil, true, nil
 	}
 
+	// parse statement, if it doesn't contain any DDL statements, ignore it
 	nodes, err := t.Parse(statement, "", "")
 	if err != nil {
 		return nil, false, errors.Annotatef(err, "parser ddl %s", statement)
 	}
-	if len(nodes) == 0 { // skip it
+	if len(nodes) == 0 { // ignore it
 		return nil, true, nil
 	}
 
-	node := nodes[0]
-	_, isDDL := node.(ast.DDLNode)
-	if !isDDL {
-		// let sqls be empty
-		return nil, true, nil
-	}
+	var sqls []string
+	for _, node := range nodes {
+		_, isDDL := node.(ast.DDLNode)
+		if !isDDL {
+			continue
+		}
 
-	sqls, err := t.handleDDL(schema, statement, node)
-	if err != nil {
-		return nil, false, errors.Annotatef(err, "handle ddl %s", statement)
+		// filter and transform statement
+		subSQLs, err := t.handleDDL(schema, statement, node)
+		if err != nil {
+			return nil, false, errors.Annotatef(err, "handle ddl %s", statement)
+		}
+		sqls = append(sqls, subSQLs...)
 	}
 
 	return sqls, false, nil
 }
 
-func (t *tidbParser) handleDDL(schema, statement string, node ast.StmtNode) ([]string, error) {
-	sqls := make([]string, 0, 1)
-	// poor filter/transformation feature
+func (t *tidbParser) handleDDL(schema string, statement string, node ast.StmtNode) ([]string, error) {
+	var (
+		modifiedNodes []ast.StmtNode
+		err           error
+	)
+	// poor filter/transformation implemention
 	switch v := node.(type) {
 	case *ast.CreateDatabaseStmt:
-		return t.handleCreateDatabase(v)
+		modifiedNodes, err = t.handleCreateDatabase(v)
 	case *ast.DropDatabaseStmt:
-		return t.handleDropDatabase(v)
+		modifiedNodes, err = t.handleDropDatabase(v)
 	case *ast.CreateTableStmt:
-		return t.handleCreateTable(schema, v)
+		modifiedNodes, err = t.handleCreateTable(schema, v)
 	case *ast.DropTableStmt:
-		return t.handleDropTable(schema, v)
+		modifiedNodes, err = t.handleDropTable(schema, v)
 	case *ast.AlterTableStmt:
-		return t.handleAlterTable(schema, v)
+		modifiedNodes, err = t.handleAlterTable(schema, v)
 	case *ast.RenameTableStmt:
-		return t.handleRenameTable(schema, v)
+		modifiedNodes, err = t.handleRenameTable(schema, v)
 	case *ast.TruncateTableStmt:
-		return t.handleTruncateTable(schema, v)
+		modifiedNodes, err = t.handleTruncateTable(schema, v)
 	default:
-		sqls = append(sqls, statement)
+		return nil, errors.NotSupportedf("DDL %+v(%T)", node, node)
+	}
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	// analyze queries from ast nodes
+	sqls := make([]string, 0, len(modifiedNodes))
+	for _, modifiedNode := range modifiedNodes {
+		modifiedSQL, err := AnalyzeASTNode(modifiedNode, statement)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+
+		sqls = append(sqls, modifiedSQL)
 	}
 
 	return sqls, nil
 }
 
-func (t *tidbParser) handleCreateDatabase(node *ast.CreateDatabaseStmt) ([]string, error) {
+func (t *tidbParser) handleCreateDatabase(node *ast.CreateDatabaseStmt) ([]ast.StmtNode, error) {
 	renamedSchema, _, ignore, err := t.filterAndRenameDDL(node.Name, node.Name, "", filter.CreateDatabase)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -124,61 +145,54 @@ func (t *tidbParser) handleCreateDatabase(node *ast.CreateDatabaseStmt) ([]strin
 	if ignore {
 		return nil, nil
 	}
+	node.Name = renamedSchema
 
-	return []string{fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`;", renamedSchema)}, nil
+	return []ast.StmtNode{node}, nil
 }
 
-func (t *tidbParser) handleDropDatabase(node *ast.DropDatabaseStmt) ([]string, error) {
-	renamedSchema, _, ignore, err := t.filterAndRenameDDL(node.Name, node.Name, "", filter.CreateDatabase)
+func (t *tidbParser) handleDropDatabase(node *ast.DropDatabaseStmt) ([]ast.StmtNode, error) {
+	renamedSchema, _, ignore, err := t.filterAndRenameDDL(node.Name, node.Name, "", filter.DropDatabase)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	if ignore {
 		return nil, nil
 	}
+	node.Name = renamedSchema
 
-	return []string{fmt.Sprintf("DROP DATABASE IF EXISTS `%s`;", renamedSchema)}, nil
+	return []ast.StmtNode{node}, nil
 }
 
-func (t *tidbParser) handleCreateTable(schema string, node *ast.CreateTableStmt) ([]string, error) {
+func (t *tidbParser) handleCreateTable(schema string, node *ast.CreateTableStmt) ([]ast.StmtNode, error) {
 	schemaName, tableName := node.Table.Schema.O, node.Table.Name.O
-	renamedSchema, renamedTable, ignore, err := t.filterAndRenameDDL(schema, schemaName, tableName, filter.CreateDatabase)
+	renamedSchema, renamedTable, ignore, err := t.filterAndRenameDDL(schema, schemaName, tableName, filter.CreateTable)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	if ignore {
 		return nil, nil
 	}
+	node.Table.Schema = model.CIStr{renamedSchema, strings.ToLower(renamedSchema)}
+	node.Table.Name = model.CIStr{renamedTable, strings.ToLower(renamedTable)}
 
 	if node.ReferTable != nil {
 		referSchemaName, referTableName := node.ReferTable.Schema.O, node.ReferTable.Name.O
-		renamedReferSchema, renamedReferTable, ignore, err := t.filterAndRenameDDL(schema, referSchemaName, referTableName, filter.CreateDatabase)
+		renamedReferSchema, renamedReferTable, ignore, err := t.filterAndRenameDDL(schema, referSchemaName, referTableName, filter.CreateTable)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 		if ignore {
 			return nil, nil
 		}
-
-		return []string{fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s` LIKE `%s`.`%s`", renamedSchema, renamedTable, renamedReferSchema, renamedReferTable)}, nil
+		node.ReferTable.Schema = model.CIStr{renamedReferSchema, strings.ToLower(renamedReferSchema)}
+		node.ReferTable.Name = model.CIStr{renamedReferTable, strings.ToLower(renamedReferTable)}
 	}
 
-	colStrs := make([]string, 0, len(node.Cols))
-	for _, col := range node.Cols {
-		colStr, err := t.anaLyzeColumnDefinition(col)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-
-		colStrs = append(colStrs, colStr)
-	}
-
-	tableOptionStr := ""
-	return []string{fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s` (%s) %s", renamedSchema, renamedTable, strings.Join(colStrs, ","), tableOptionStr)}, nil
+	return []ast.StmtNode{node}, nil
 }
 
-func (t *tidbParser) handleDropTable(schema string, node *ast.DropTableStmt) ([]string, error) {
-	sqls := make([]string, 0, len(node.Tables))
+func (t *tidbParser) handleDropTable(schema string, node *ast.DropTableStmt) ([]ast.StmtNode, error) {
+	nodes := make([]ast.StmtNode, 0, len(node.Tables))
 	for _, table := range node.Tables {
 		renamedSchema, renamedTable, ignore, err := t.filterAndRenameDDL(schema, table.Schema.O, table.Name.O, filter.DropTable)
 		if err != nil {
@@ -187,31 +201,19 @@ func (t *tidbParser) handleDropTable(schema string, node *ast.DropTableStmt) ([]
 		if ignore {
 			continue
 		}
+		table.Schema = model.CIStr{renamedSchema, strings.ToLower(renamedSchema)}
+		table.Name = model.CIStr{renamedTable, strings.ToLower(renamedTable)}
 
-		sqls = append(sqls, fmt.Sprintf("DROP TABLE IF EXISTS `%s`.`%s`", renamedSchema, renamedTable))
+		nodes = append(nodes, &ast.DropTableStmt{
+			IfExists: node.IfExists,
+			Tables:   []*ast.TableName{table},
+		})
 	}
 
-	return sqls, nil
+	return nodes, nil
 }
 
-func (t *tidbParser) handleRenameTable(schema string, node *ast.RenameTableStmt) ([]string, error) {
-	sqls := make([]string, 0, len(node.TableToTables))
-	for _, table := range node.TableToTables {
-		sql, err := t.makeRenameTable(schema, table.OldTable.Schema.O, table.OldTable.Name.O, table.NewTable.Schema.O, table.NewTable.Name.O)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		if len(sql) == 0 {
-			continue
-		}
-
-		sqls = append(sqls, sql)
-	}
-
-	return sqls, nil
-}
-
-func (t *tidbParser) handleTruncateTable(schema string, node *ast.TruncateTableStmt) ([]string, error) {
+func (t *tidbParser) handleTruncateTable(schema string, node *ast.TruncateTableStmt) ([]ast.StmtNode, error) {
 	renamedSchema, renamedTable, ignore, err := t.filterAndRenameDDL(schema, node.Table.Schema.O, node.Table.Name.O, filter.TruncateTable)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -219,11 +221,46 @@ func (t *tidbParser) handleTruncateTable(schema string, node *ast.TruncateTableS
 	if ignore {
 		return nil, nil
 	}
+	node.Table.Schema = model.CIStr{renamedSchema, strings.ToLower(renamedSchema)}
+	node.Table.Name = model.CIStr{renamedTable, strings.ToLower(renamedTable)}
 
-	return []string{fmt.Sprintf("TRUNCATE TABLE `%s`.`%s`", renamedSchema, renamedTable)}, nil
+	return []ast.StmtNode{node}, nil
 }
 
-func (t *tidbParser) handleAlterTable(schema string, node *ast.AlterTableStmt) ([]string, error) {
+func (t *tidbParser) handleRenameTable(schema string, node *ast.RenameTableStmt) ([]ast.StmtNode, error) {
+	nodes := make([]ast.StmtNode, 0, len(node.TableToTables))
+	for _, table := range node.TableToTables {
+		renamedOldSchema, renamedOldTable, ignore, err := t.filterAndRenameDDL(schema, table.OldTable.Schema.O, table.OldTable.Name.O, filter.RenameTable)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		if ignore {
+			return nil, nil
+		}
+		table.OldTable.Schema = model.CIStr{renamedOldSchema, strings.ToLower(renamedOldSchema)}
+		table.OldTable.Name = model.CIStr{renamedOldTable, strings.ToLower(renamedOldTable)}
+
+		renamedNewSchema, renamedNewTable, ignore, err := t.filterAndRenameDDL(schema, table.NewTable.Schema.O, table.NewTable.Name.O, filter.RenameTable)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		if ignore {
+			return nil, nil
+		}
+		table.NewTable.Schema = model.CIStr{renamedNewSchema, strings.ToLower(renamedNewSchema)}
+		table.NewTable.Name = model.CIStr{renamedNewTable, strings.ToLower(renamedNewTable)}
+
+		nodes = append(nodes, &ast.RenameTableStmt{
+			OldTable:      table.OldTable,
+			NewTable:      table.NewTable,
+			TableToTables: []*ast.TableToTable{table},
+		})
+	}
+
+	return nodes, nil
+}
+
+func (t *tidbParser) handleAlterTable(schema string, node *ast.AlterTableStmt) ([]ast.StmtNode, error) {
 	// implement it later
 	renamedSchema, renamedTable, ignore, err := t.filterAndRenameDDL(schema, node.Table.Schema.O, node.Table.Name.O, filter.RenameTable)
 	if err != nil {
@@ -232,54 +269,39 @@ func (t *tidbParser) handleAlterTable(schema string, node *ast.AlterTableStmt) (
 	if ignore {
 		return nil, nil
 	}
+	node.Table.Schema = model.CIStr{renamedSchema, strings.ToLower(renamedSchema)}
+	node.Table.Name = model.CIStr{renamedTable, strings.ToLower(renamedTable)}
 
 	var (
-		sqls = make([]string, 0, len(node.Specs))
-		sql  string
+		nodes       = make([]ast.StmtNode, 0, len(node.Specs))
+		renameNodes []ast.StmtNode
 	)
-
 	for _, spec := range node.Specs {
 		if spec.Tp == ast.AlterTableRenameTable {
-			sql, err = t.makeRenameTable(schema, node.Table.Schema.O, node.Table.Name.O, spec.NewTable.Schema.O, spec.NewTable.Name.O)
+			renamedNewSchema, renamedNewTable, ignore, err := t.filterAndRenameDDL(schema, spec.NewTable.Schema.O, spec.NewTable.Name.O, filter.RenameTable)
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+			if ignore {
+				return nil, nil
+			}
+			spec.NewTable.Schema = model.CIStr{renamedNewSchema, strings.ToLower(renamedNewSchema)}
+			spec.NewTable.Name = model.CIStr{renamedNewTable, strings.ToLower(renamedNewTable)}
+
+			renameNodes = append(renameNodes, &ast.RenameTableStmt{
+				OldTable:      node.Table,
+				NewTable:      spec.NewTable,
+				TableToTables: []*ast.TableToTable{{OldTable: node.Table, NewTable: spec.NewTable}},
+			})
 		} else {
-			sql, err = t.analyzeAlterSpec(spec)
+			nodes = append(nodes, &ast.AlterTableStmt{
+				Table: node.Table,
+				Specs: []*ast.AlterTableSpec{spec},
+			})
 		}
-
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		if len(sql) == 0 {
-			continue
-		}
-
-		sqls = append(sqls, fmt.Sprintf("ALTER TABLE `%s`.`%s` %s", renamedSchema, renamedTable, sql))
 	}
 
-	return sqls, nil
-}
-
-func (t *tidbParser) analyzeAlterSpec(spec *ast.AlterTableSpec) (string, error) {
-	return "", nil
-}
-
-func (t *tidbParser) makeRenameTable(schemaInContext, oldSchema, oldTable, renameSchema, renameTable string) (string, error) {
-	renamedOldSchema, renamedOldTable, ignore, err := t.filterAndRenameDDL(schemaInContext, oldSchema, oldTable, filter.RenameTable)
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-	if ignore {
-		return "", nil
-	}
-
-	renameSchema, renamedTable, ignore, err := t.filterAndRenameDDL(schemaInContext, renamedOldTable, renameTable, filter.RenameTable)
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-	if ignore {
-		return "", nil
-	}
-
-	return fmt.Sprintf("RENAME TABLE `%s`.`%s` TO `%s`.`5s`", renamedOldSchema, renamedOldTable, renameSchema, renamedTable), nil
+	return append(nodes, renameNodes...), nil
 }
 
 func (t *tidbParser) filterAndRenameDDL(schemaInContext, schema, table string, event filter.EventType) (string, string, bool, error) {
@@ -287,19 +309,20 @@ func (t *tidbParser) filterAndRenameDDL(schemaInContext, schema, table string, e
 		schema = schemaInContext
 	}
 
-	action, err := t.filter.Filter(schema, table, filter.NullEvent, event, "")
-	if err != nil {
-		return "", "", false, errors.Annotatef(err, "filter event on %s/%s", event, schema, table)
+	if t.filter != nil {
+		action, err := t.filter.Filter(schema, table, filter.NullEvent, event, "")
+		if err != nil {
+			return "", "", false, errors.Annotatef(err, "filter event on %s/%s", event, schema, table)
+		}
+		if action == filter.Ignore {
+			return "", "", true, nil
+		}
 	}
-	if action == filter.Ignore {
-		return "", "", true, nil
+
+	if t.router == nil {
+		return schema, table, false, nil
 	}
 
 	renamedSchema, renamedTable, err := t.router.Route(schema, table)
 	return renamedSchema, renamedTable, false, errors.Annotatef(err, "router schema %s/%s", schema, table)
-}
-
-func (t *tidbParser) anaLyzeColumnDefinition(col *ast.ColumnDef) (string, error) {
-	// implement it later
-	return "", nil
 }

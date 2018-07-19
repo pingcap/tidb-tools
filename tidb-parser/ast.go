@@ -385,7 +385,7 @@ func columnToSQL(typeDef string, newColumn *ast.ColumnDef) string {
 	return fmt.Sprintf("%s %s%s", columnNameToSQL(newColumn.Name), typeDef, columnOptionsToSQL(newColumn.Options))
 }
 
-func alterTableSpecToSQL(spec *ast.AlterTableSpec, ntable *ast.TableName) []string {
+func alterTableSpecToSQL(spec *ast.AlterTableSpec) string {
 	var (
 		suffixes []string
 		suffix   string
@@ -393,35 +393,30 @@ func alterTableSpecToSQL(spec *ast.AlterTableSpec, ntable *ast.TableName) []stri
 
 	switch spec.Tp {
 	case ast.AlterTableOption:
-		suffix += tableOptionsToSQL(spec.Options)
-		suffixes = append(suffixes, suffix)
+		return tableOptionsToSQL(spec.Options)
 
 	case ast.AlterTableAddColumns:
 		for _, newColumn := range spec.NewColumns {
-			suffix = ""
 			typeDef := fullFieldTypeToSQL(newColumn.Tp)
-			suffix += fmt.Sprintf("ADD COLUMN %s", columnToSQL(typeDef, newColumn))
+			suffix = columnToSQL(typeDef, newColumn)
 			if spec.Position != nil {
 				suffix += positionToSQL(spec.Position)
 			}
 			suffixes = append(suffixes, suffix)
 		}
+		return fmt.Sprintf("ADD COLUMN (%s)", strings.Join(suffixes, ","))
 
 	case ast.AlterTableDropColumn:
-		suffix += fmt.Sprintf("DROP COLUMN %s", columnNameToSQL(spec.OldColumnName))
-		suffixes = append(suffixes, suffix)
+		return fmt.Sprintf("DROP COLUMN %s", columnNameToSQL(spec.OldColumnName))
 
 	case ast.AlterTableDropIndex:
-		suffix += fmt.Sprintf("DROP INDEX `%s`", escapeName(spec.Name))
-		suffixes = append(suffixes, suffix)
+		return fmt.Sprintf("DROP INDEX `%s`", escapeName(spec.Name))
 
 	case ast.AlterTableAddConstraint:
-		suffix += constraintToSQL(spec.Constraint)
-		suffixes = append(suffixes, suffix)
+		return constraintToSQL(spec.Constraint)
 
 	case ast.AlterTableDropForeignKey:
-		suffix += fmt.Sprintf("DROP FOREIGN KEY `%s`", escapeName(spec.Name))
-		suffixes = append(suffixes, suffix)
+		return fmt.Sprintf("DROP FOREIGN KEY `%s`", escapeName(spec.Name))
 
 	case ast.AlterTableModifyColumn:
 		// TiDB doesn't support alter table modify column charset and collation.
@@ -430,7 +425,7 @@ func alterTableSpecToSQL(spec *ast.AlterTableSpec, ntable *ast.TableName) []stri
 		if spec.Position != nil {
 			suffix += positionToSQL(spec.Position)
 		}
-		suffixes = append(suffixes, suffix)
+		return suffix
 
 	// FIXME: should support [FIRST|AFTER col_name], but tidb parser not support this currently.
 	case ast.AlterTableChangeColumn:
@@ -443,12 +438,10 @@ func alterTableSpecToSQL(spec *ast.AlterTableSpec, ntable *ast.TableName) []stri
 		if spec.Position != nil {
 			suffix += positionToSQL(spec.Position)
 		}
-		suffixes = append(suffixes, suffix)
+		return suffix
 
 	case ast.AlterTableRenameTable:
-		*ntable = *spec.NewTable
-		suffix += fmt.Sprintf("RENAME TO %s", tableNameToSQL(spec.NewTable))
-		suffixes = append(suffixes, suffix)
+		return fmt.Sprintf("RENAME TO %s", tableNameToSQL(spec.NewTable))
 
 	case ast.AlterTableAlterColumn:
 		suffix += fmt.Sprintf("ALTER COLUMN %s ", columnNameToSQL(spec.NewColumns[0].Name))
@@ -457,41 +450,34 @@ func alterTableSpecToSQL(spec *ast.AlterTableSpec, ntable *ast.TableName) []stri
 		} else {
 			suffix += "DROP DEFAULT"
 		}
-		suffixes = append(suffixes, suffix)
+		return suffix
 
 	case ast.AlterTableDropPrimaryKey:
-		suffix += "DROP PRIMARY KEY"
-		suffixes = append(suffixes, suffix)
+		return "DROP PRIMARY KEY"
 
 	case ast.AlterTableLock:
 		// just ignore it
-	default:
 	}
-	return suffixes
+
+	return ""
 }
 
-func alterTableStmtToSQL(stmt *ast.AlterTableStmt, ntable *ast.TableName) []string {
+func alterTableStmtToSQL(stmt *ast.AlterTableStmt) string {
 	var (
-		sqls   []string
-		prefix string
+		defStrs = make([]string, 0, len(stmt.Specs))
+		prefix  = fmt.Sprintf("ALTER TABLE %s ", tableNameToSQL(stmt.Table))
 	)
-	if ntable.Name.O != "" {
-		prefix = fmt.Sprintf("ALTER TABLE %s ", tableNameToSQL(ntable))
-	} else {
-		prefix = fmt.Sprintf("ALTER TABLE %s ", tableNameToSQL(stmt.Table))
-	}
-
-	if len(stmt.Specs) != 1 {
-		log.Warnf("[syncer] statement specs length != 1, %+v", stmt.Specs)
-	}
-
 	for _, spec := range stmt.Specs {
-		log.Infof("spec %+v", spec)
-		for _, suffix := range alterTableSpecToSQL(spec, ntable) {
-			sqls = append(sqls, prefix+suffix)
+		defStr := alterTableSpecToSQL(spec)
+		log.Infof("spec %+v, text %s", spec, defStr)
+		if len(defStr) == 0 {
+			continue
 		}
-	}
 
-	log.Debugf("alter table stmt to sql:%v", sqls)
-	return sqls
+		defStrs = append(defStrs, defStr)
+	}
+	query := fmt.Sprintf("%s %s", prefix, strings.Join(defStrs, ","))
+	log.Debugf("alter table stmt to query %s", query)
+
+	return query
 }
