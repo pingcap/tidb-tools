@@ -11,49 +11,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package pump_client
+package client
 
 import (
-
+	"sync"
 
 	binlog "github.com/pingcap/tipb/go-binlog"
 )
 
 const (
+	// Hash means hash algorithm
 	Hash = "hash"
+
+	// Score means choose pump by it's score.
 	Score = "score"
 )
 
-/*
-type PumpSelector struct {
-	// TsMap saves the map of start_ts with pump when send prepare binlog.
-	// And Commit binlog should send to the same pump.
-	TsMap map[int64]*PumpStatus
-	
-	// the pumps to be selected.
-	Pumps []*PumpStatus
-
-	// Selector will select a situable pump for sending binlog.
-	Selector *SelectorAlgorithm
-}
-
-//
-func NewPumpSelector(pumps []*PumpStatus, algorithm string) *PumpSelector {
-	
-
-	return &PumpSelector {
-		TsMap: make(map[int64]*PumpStatus),
-		Pumps: pumps,
-		Selector: selector,
-	}
-}
-
-// SetPumps set pumps to be selected.
-func (PumpSelector) SetPumps([[]*PumpStatus) {
- 
-}
-*/
-
+// PumpSelector selects pump for sending binlog.
 type PumpSelector interface {
 	// SetPumps set pumps to be selected.
 	SetPumps([]*PumpStatus)
@@ -64,8 +38,8 @@ type PumpSelector interface {
 	// returns the next pump.
 	Next(*PumpStatus, *binlog.Binlog, int32) *PumpStatus
 
-	// DeleteTsMap removes the map information of ts. 
-	DeleteTsMap(int64)
+	// DeleteTsMap removes the map information of ts.
+	DeleteTsMap(ts int64)
 }
 
 // HashSelector select a pump by hash.
@@ -75,7 +49,7 @@ type HashSelector struct {
 	// TsMap saves the map of start_ts with pump when send prepare binlog.
 	// And Commit binlog should send to the same pump.
 	TsMap map[int64]*PumpStatus
-	
+
 	// PumpMap saves the map of pump's node id with pump.
 	PumpMap map[string]*PumpStatus
 
@@ -83,11 +57,12 @@ type HashSelector struct {
 	Pumps []*PumpStatus
 }
 
-func NewHashSelector() *HashSelector {
-	return &HashSelector {
+// NewHashSelector returns a new HashSelector.
+func NewHashSelector() PumpSelector {
+	return &HashSelector{
 		TsMap:   make(map[int64]*PumpStatus),
 		PumpMap: make(map[string]*PumpStatus),
-		Pumps:   make([]*PumpStatus),
+		Pumps:   make([]*PumpStatus, 0, 10),
 	}
 }
 
@@ -96,33 +71,33 @@ func (h *HashSelector) SetPumps(pumps []*PumpStatus) {
 	h.Lock()
 	h.Pumps = pumps
 	for _, pump := range pumps {
-		h.PumpMap[pumpStatus.NodeID] = pumpStatus
+		h.PumpMap[pump.NodeID] = pump
 	}
-	h.UnLock()
+	h.Unlock()
 }
 
 // Select implement PumpSelector.Select.
 func (h *HashSelector) Select(b *binlog.Binlog) *PumpStatus {
 	if b.Tp == binlog.BinlogType_Prewrite {
-		pump := h.Pumps[b.StartTs%len(h.Pumps)]
+		pump := h.Pumps[int(b.StartTs)%len(h.Pumps)]
 		h.Lock()
 		h.TsMap[b.StartTs] = pump
 		h.Unlock()
-		return h.Pumps[b.StartTs%len(h.Pumps)]
-	} else {
-		h.RLock()
-		pump, ok := h.TsMap[b.StartTs]
-		h.Unlock()
-		if ok {
-			return pump
-		}
-
-		return h.Pumps[b.StartTs%len(h.Pumps)]
+		return h.Pumps[int(b.StartTs)%len(h.Pumps)]
 	}
+
+	h.RLock()
+	pump, ok := h.TsMap[b.StartTs]
+	h.Unlock()
+	if ok {
+		return pump
+	}
+
+	return h.Pumps[int(b.StartTs)%len(h.Pumps)]
 }
 
 // Next implement PumpSelector.Next.
-func(h *HashSelector) Next(pump *PumpStatus, b *binlog.Binlog, retryTime int32) *PumpStatus {
+func (h *HashSelector) Next(pump *PumpStatus, b *binlog.Binlog, retryTime int32) *PumpStatus {
 	nextPump := h.Pumps[(int(b.StartTs)+int(retryTime))%len(h.Pumps)]
 	h.Lock()
 	h.TsMap[b.StartTs] = pump
@@ -132,31 +107,36 @@ func(h *HashSelector) Next(pump *PumpStatus, b *binlog.Binlog, retryTime int32) 
 }
 
 // DeleteTsMap implement PumpSelector.DeleteTsMap.
-func(h *HashSelector) DeleteTsMap(ts int64) {
+func (h *HashSelector) DeleteTsMap(ts int64) {
 	h.Lock()
 	delete(h.TsMap, ts)
-	h.UnLock()
+	h.Unlock()
 }
 
 // ScoreSelector select a pump by pump's score.
-type ScoreSelector struct {}
+type ScoreSelector struct{}
+
+// NewScoreSelector returns a new ScoreSelector.
+func NewScoreSelector() PumpSelector {
+	return &ScoreSelector{}
+}
 
 // SetPumps implement PumpSelector.SetPumps.
-func(s *ScoreSelector) SetPumps(pumps []*PumpStatus) {
+func (s *ScoreSelector) SetPumps(pumps []*PumpStatus) {
 	// TODO
 }
 
 // Select implement PumpSelector.Select.
-func(s *ScoreSelector) Select(b *binlog.Binlog) *PumpStatus {
+func (s *ScoreSelector) Select(b *binlog.Binlog) *PumpStatus {
 	// TODO
 	return nil
 }
 
 // Next implement PumpSelector.Next.
-func(s *ScoreSelector) Next(pump *PumpStatus, b *binlog.Binlog, retryTime int32) *PumpStatus {
+func (s *ScoreSelector) Next(pump *PumpStatus, b *binlog.Binlog, retryTime int32) *PumpStatus {
 	// TODO
 	return nil
 }
 
 // DeleteTsMap implement PumpSelector.DeleteTsMap.
-func(s *ScoreSelector) DeleteTsMap(ts int64) {}
+func (s *ScoreSelector) DeleteTsMap(ts int64) {}
