@@ -97,6 +97,9 @@ func NewPumpsClient(ctx context.Context, clusterID uint64, endpoints []string, s
 	}
 	newPumpsClient.Selector.SetPumps(newPumpsClient.AvaliablePumps)
 
+	go newPumpsClient.WatchStatus(ctx)
+	go newPumpsClient.Heartbeat(ctx)
+
 	return newPumpsClient, nil
 }
 
@@ -115,6 +118,7 @@ func (c *PumpsClient) GetPumpStatus(pctx context.Context) error {
 	}
 
 	for _, status := range nodesStatus {
+		log.Infof("get pump %v from etcd", status)
 		// TODO: use real info
 		pumpStatus := &PumpStatus{
 			NodeID:      status.NodeID,
@@ -147,6 +151,7 @@ func (c *PumpsClient) GetPumpStatus(pctx context.Context) error {
 // WriteBinlog writes binlog to a situable pump.
 func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 	pump := c.Selector.Select(binlog)
+	log.Infof("write binlog choose pump %v", pump)
 
 	commitData, err := binlog.Marshal()
 	if err != nil {
@@ -196,7 +201,19 @@ func (c *PumpsClient) SetPumpAvaliable(pump *PumpStatus, avaliable bool) {
 		for j, p := range c.AvaliablePumps {
 			if p.NodeID == pump.NodeID {
 				c.AvaliablePumps = append(c.AvaliablePumps[:j], c.AvaliablePumps[j+1:]...)
+				break
 			}
 		}
 	}
+}
+
+// WatchStatus watchs pump's status in etcd.
+func (c *PumpsClient) WatchStatus(ctx context.Context) {
+	// TODO
+}
+
+// Heartbeat send heartbeat request to NeedCheckPumps,
+// if pump can return response, remove it from NeedCheckPumps.
+func (c *PumpsClient) Heartbeat(ctx context.Context) {
+	// TODO
 }
