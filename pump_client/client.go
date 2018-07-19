@@ -18,11 +18,12 @@ import (
 	"crypto/tls"
 	"net"
 	"path"
+	"strings"
 	"time"
 
 	//"github.com/pingcap/pd/pd-client"
 	"github.com/juju/errors"
-	//"github.com/ngaut/log"
+	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/etcd"
 	pb "github.com/pingcap/tipb/go-binlog"
 	"google.golang.org/grpc"
@@ -31,14 +32,20 @@ import (
 const (
 	// DefaultEtcdTimeout is the default timeout config for etcd.
 	DefaultEtcdTimeout = 5 * time.Second
+
+	// DefaultRetryTime is the default time of retry.
+	DefaultRetryTime = 20
+
+	// BinlogWriteTimeout is the max time binlog can use to write to pump.
+	BinlogWriteTimeout = 15 * time.Second
 )
 
 // PumpsClient is the client of pumps.
 type PumpsClient struct {
 	Ctx context.Context
 
-	// the client of pd.
-	//PdClient  pd.Client
+	// the cluster id of this tidb cluster.
+	ClusterID uint64
 
 	// the client of etcd.
 	EtcdCli *etcd.Client
@@ -54,10 +61,13 @@ type PumpsClient struct {
 
 	// Selector will select a suitable pump.
 	Selector PumpSelector
+
+	// the max retry time if write binlog failed.
+	RetryTime int
 }
 
 // NewPumpsClient returns a PumpsClient.
-func NewPumpsClient(ctx context.Context, endpoints []string, security *tls.Config, algorithm string) (*PumpsClient, error) {
+func NewPumpsClient(ctx context.Context, clusterID uint64, endpoints []string, security *tls.Config, algorithm string) (*PumpsClient, error) {
 	var selector PumpSelector
 	switch algorithm {
 	case Hash:
@@ -74,15 +84,18 @@ func NewPumpsClient(ctx context.Context, endpoints []string, security *tls.Confi
 	}
 
 	newPumpsClient := &PumpsClient{
-		Ctx:      ctx,
-		EtcdCli:  cli,
-		Selector: selector,
+		Ctx:       ctx,
+		ClusterID: clusterID,
+		EtcdCli:   cli,
+		Selector:  selector,
+		RetryTime: DefaultRetryTime,
 	}
 
 	err = newPumpsClient.GetPumpStatus(ctx)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+	newPumpsClient.Selector.SetPumps(newPumpsClient.AvaliablePumps)
 
 	return newPumpsClient, nil
 }
@@ -129,4 +142,61 @@ func (c *PumpsClient) GetPumpStatus(pctx context.Context) error {
 	}
 
 	return nil
+}
+
+// WriteBinlog writes binlog to a situable pump.
+func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
+	pump := c.Selector.Select(binlog)
+
+	commitData, err := binlog.Marshal()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	req := &pb.WriteBinlogReq{ClusterID: c.ClusterID, Payload: commitData}
+
+	// Retry many times because we may raise CRITICAL error here.
+	for i := 0; i < c.RetryTime; i++ {
+		var resp *pb.WriteBinlogResp
+		ctx, cancel := context.WithTimeout(context.Background(), BinlogWriteTimeout)
+		resp, err = pump.Client.WriteBinlog(ctx, req)
+		cancel()
+		if err == nil && resp.Errmsg != "" {
+			err = errors.New(resp.Errmsg)
+		}
+		if err == nil {
+			return nil
+		}
+		if strings.Contains(err.Error(), "received message larger than max") {
+			// This kind of error is not critical and not retryable, return directly.
+			return errors.Errorf("binlog data is too large (%s)", err.Error())
+		}
+
+		log.Errorf("write binlog error %v", err)
+
+		// choose a new pump
+		// TODO: set pump avaliable
+		pump = c.Selector.Next(pump, binlog, i+1)
+		time.Sleep(time.Second)
+	}
+
+	return nil
+}
+
+// SetPumpAvaliable set pump's isAvaliable, and modify NeedCheckPumps or AvaliablePumps.
+func (c *PumpsClient) SetPumpAvaliable(pump *PumpStatus, avaliable bool) {
+	pump.IsAvaliable = avaliable
+	if avaliable {
+		for i, p := range c.NeedCheckPumps {
+			if p.NodeID == pump.NodeID {
+				c.NeedCheckPumps = append(c.NeedCheckPumps[:i], c.NeedCheckPumps[i+1:]...)
+				break
+			}
+		}
+	} else {
+		for j, p := range c.AvaliablePumps {
+			if p.NodeID == pump.NodeID {
+				c.AvaliablePumps = append(c.AvaliablePumps[:j], c.AvaliablePumps[j+1:]...)
+			}
+		}
+	}
 }

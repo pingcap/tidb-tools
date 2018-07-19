@@ -16,7 +16,7 @@ package client
 import (
 	"sync"
 
-	binlog "github.com/pingcap/tipb/go-binlog"
+	pb "github.com/pingcap/tipb/go-binlog"
 )
 
 const (
@@ -33,10 +33,10 @@ type PumpSelector interface {
 	SetPumps([]*PumpStatus)
 
 	// Select returns a situable pump.
-	Select(*binlog.Binlog) *PumpStatus
+	Select(*pb.Binlog) *PumpStatus
 
 	// returns the next pump.
-	Next(*PumpStatus, *binlog.Binlog, int32) *PumpStatus
+	Next(*PumpStatus, *pb.Binlog, int) *PumpStatus
 
 	// DeleteTsMap removes the map information of ts.
 	DeleteTsMap(ts int64)
@@ -77,30 +77,30 @@ func (h *HashSelector) SetPumps(pumps []*PumpStatus) {
 }
 
 // Select implement PumpSelector.Select.
-func (h *HashSelector) Select(b *binlog.Binlog) *PumpStatus {
-	if b.Tp == binlog.BinlogType_Prewrite {
-		pump := h.Pumps[int(b.StartTs)%len(h.Pumps)]
+func (h *HashSelector) Select(binlog *pb.Binlog) *PumpStatus {
+	if binlog.Tp == pb.BinlogType_Prewrite {
+		pump := h.Pumps[int(binlog.StartTs)%len(h.Pumps)]
 		h.Lock()
-		h.TsMap[b.StartTs] = pump
+		h.TsMap[binlog.StartTs] = pump
 		h.Unlock()
-		return h.Pumps[int(b.StartTs)%len(h.Pumps)]
+		return h.Pumps[int(binlog.StartTs)%len(h.Pumps)]
 	}
 
 	h.RLock()
-	pump, ok := h.TsMap[b.StartTs]
+	pump, ok := h.TsMap[binlog.StartTs]
 	h.Unlock()
 	if ok {
 		return pump
 	}
 
-	return h.Pumps[int(b.StartTs)%len(h.Pumps)]
+	return h.Pumps[int(binlog.StartTs)%len(h.Pumps)]
 }
 
 // Next implement PumpSelector.Next.
-func (h *HashSelector) Next(pump *PumpStatus, b *binlog.Binlog, retryTime int32) *PumpStatus {
-	nextPump := h.Pumps[(int(b.StartTs)+int(retryTime))%len(h.Pumps)]
+func (h *HashSelector) Next(pump *PumpStatus, binlog *pb.Binlog, retryTime int) *PumpStatus {
+	nextPump := h.Pumps[(int(binlog.StartTs)+int(retryTime))%len(h.Pumps)]
 	h.Lock()
-	h.TsMap[b.StartTs] = pump
+	h.TsMap[binlog.StartTs] = pump
 	h.Unlock()
 
 	return nextPump
@@ -127,13 +127,13 @@ func (s *ScoreSelector) SetPumps(pumps []*PumpStatus) {
 }
 
 // Select implement PumpSelector.Select.
-func (s *ScoreSelector) Select(b *binlog.Binlog) *PumpStatus {
+func (s *ScoreSelector) Select(binlog *pb.Binlog) *PumpStatus {
 	// TODO
 	return nil
 }
 
 // Next implement PumpSelector.Next.
-func (s *ScoreSelector) Next(pump *PumpStatus, b *binlog.Binlog, retryTime int32) *PumpStatus {
+func (s *ScoreSelector) Next(pump *PumpStatus, binlog *pb.Binlog, retryTime int) *PumpStatus {
 	// TODO
 	return nil
 }
