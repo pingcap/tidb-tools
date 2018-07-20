@@ -44,6 +44,9 @@ func AnalyzeASTNode(node ast.StmtNode, statement string) (string, error) {
 		return AnalyzeRenameTable(v)
 	case *ast.TruncateTableStmt:
 		return AnalyzeTruncateTable(v)
+	case *ast.CreateIndexStmt:
+	case *ast.DropIndexStmt:
+		return AnalyzeDropIndex(v)
 	}
 
 	return "", errors.NotSupportedf("DDL %+v(%T)", node, node)
@@ -82,6 +85,16 @@ func AnalyzeRenameTable(node *ast.RenameTableStmt) (string, error) {
 	}
 
 	return fmt.Sprintf("RENAME TABLE %s", strings.Join(t2ts, ",")), nil
+}
+
+// AnalyzeCreateIndex returns create index query text
+func AnalyzeCreateIndex(node *ast.CreateIndexStmt) (string, error) {
+	return "", nil
+}
+
+// AnalyzeDropIndex returns drop index query text
+func AnalyzeDropIndex(node *ast.DropIndexStmt) (string, error) {
+	return fmt.Sprintf("DROP INDEX IF EXISTS %s ON `%s`.`%s`", node.IndexName, node.Table.Schema, node.Table.Name), nil
 }
 
 // AnalyzeCreateTable returns create table query text

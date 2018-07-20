@@ -101,6 +101,7 @@ func (t *tidbParser) handleDDL(schema string, statement string, node ast.StmtNod
 		err           error
 	)
 	// poor filter/transformation implemention
+	// unified return ast.StmtNode array to spit some DDL
 	switch v := node.(type) {
 	case *ast.CreateDatabaseStmt:
 		modifiedNodes, err = t.handleCreateDatabase(v)
@@ -116,6 +117,10 @@ func (t *tidbParser) handleDDL(schema string, statement string, node ast.StmtNod
 		modifiedNodes, err = t.handleRenameTable(schema, v)
 	case *ast.TruncateTableStmt:
 		modifiedNodes, err = t.handleTruncateTable(schema, v)
+	case *ast.CreateIndexStmt:
+		modifiedNodes, err = t.handleCreateIndex(schema, v)
+	case *ast.DropIndexStmt:
+		modifiedNodes, err = t.handleDropIndex(schema, v)
 	default:
 		return nil, errors.NotSupportedf("DDL %+v(%T)", node, node)
 	}
@@ -192,7 +197,6 @@ func (t *tidbParser) handleCreateTable(schema string, node *ast.CreateTableStmt)
 }
 
 func (t *tidbParser) handleDropTable(schema string, node *ast.DropTableStmt) ([]ast.StmtNode, error) {
-	nodes := make([]ast.StmtNode, 0, len(node.Tables))
 	for _, table := range node.Tables {
 		renamedSchema, renamedTable, ignore, err := t.filterAndRenameDDL(schema, table.Schema.O, table.Name.O, filter.DropTable)
 		if err != nil {
@@ -203,14 +207,9 @@ func (t *tidbParser) handleDropTable(schema string, node *ast.DropTableStmt) ([]
 		}
 		table.Schema = model.CIStr{renamedSchema, strings.ToLower(renamedSchema)}
 		table.Name = model.CIStr{renamedTable, strings.ToLower(renamedTable)}
-
-		nodes = append(nodes, &ast.DropTableStmt{
-			IfExists: node.IfExists,
-			Tables:   []*ast.TableName{table},
-		})
 	}
 
-	return nodes, nil
+	return []ast.StmtNode{node}, nil
 }
 
 func (t *tidbParser) handleTruncateTable(schema string, node *ast.TruncateTableStmt) ([]ast.StmtNode, error) {
@@ -227,6 +226,7 @@ func (t *tidbParser) handleTruncateTable(schema string, node *ast.TruncateTableS
 	return []ast.StmtNode{node}, nil
 }
 
+// now we only support syntax `RENAME TABLE tbl_name TO new_tbl_name`
 func (t *tidbParser) handleRenameTable(schema string, node *ast.RenameTableStmt) ([]ast.StmtNode, error) {
 	nodes := make([]ast.StmtNode, 0, len(node.TableToTables))
 	for _, table := range node.TableToTables {
@@ -277,7 +277,8 @@ func (t *tidbParser) handleAlterTable(schema string, node *ast.AlterTableStmt) (
 		renameNodes []ast.StmtNode
 	)
 	for _, spec := range node.Specs {
-		if spec.Tp == ast.AlterTableRenameTable {
+		switch spec.Tp {
+		case ast.AlterTableRenameTable:
 			renamedNewSchema, renamedNewTable, ignore, err := t.filterAndRenameDDL(schema, spec.NewTable.Schema.O, spec.NewTable.Name.O, filter.RenameTable)
 			if err != nil {
 				return nil, errors.Trace(err)
@@ -293,7 +294,18 @@ func (t *tidbParser) handleAlterTable(schema string, node *ast.AlterTableStmt) (
 				NewTable:      spec.NewTable,
 				TableToTables: []*ast.TableToTable{{OldTable: node.Table, NewTable: spec.NewTable}},
 			})
-		} else {
+		case ast.AlterTableAddColumns:
+			for i := range spec.NewColumns {
+				newSpec := &ast.AlterTableSpec{}
+				*newSpec = *spec
+				newSpec.NewColumns = spec.NewColumns[i : i+1]
+
+				nodes = append(nodes, &ast.AlterTableStmt{
+					Table: node.Table,
+					Specs: []*ast.AlterTableSpec{newSpec},
+				})
+			}
+		default:
 			nodes = append(nodes, &ast.AlterTableStmt{
 				Table: node.Table,
 				Specs: []*ast.AlterTableSpec{spec},
@@ -302,6 +314,34 @@ func (t *tidbParser) handleAlterTable(schema string, node *ast.AlterTableStmt) (
 	}
 
 	return append(nodes, renameNodes...), nil
+}
+
+func (t *tidbParser) handleCreateIndex(schema string, node *ast.CreateIndexStmt) ([]ast.StmtNode, error) {
+	renamedSchema, renamedTable, ignore, err := t.filterAndRenameDDL(schema, node.Table.Schema.O, node.Table.Name.O, filter.CreateIndex)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	if ignore {
+		return nil, nil
+	}
+	node.Table.Schema = model.CIStr{renamedSchema, strings.ToLower(renamedSchema)}
+	node.Table.Name = model.CIStr{renamedTable, strings.ToLower(renamedTable)}
+
+	return []ast.StmtNode{node}, nil
+}
+
+func (t *tidbParser) handleDropIndex(schema string, node *ast.DropIndexStmt) ([]ast.StmtNode, error) {
+	renamedSchema, renamedTable, ignore, err := t.filterAndRenameDDL(schema, node.Table.Schema.O, node.Table.Name.O, filter.DropIndex)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	if ignore {
+		return nil, nil
+	}
+	node.Table.Schema = model.CIStr{renamedSchema, strings.ToLower(renamedSchema)}
+	node.Table.Name = model.CIStr{renamedTable, strings.ToLower(renamedTable)}
+
+	return []ast.StmtNode{node}, nil
 }
 
 func (t *tidbParser) filterAndRenameDDL(schemaInContext, schema, table string, event filter.EventType) (string, string, bool, error) {
