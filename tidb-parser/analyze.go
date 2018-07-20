@@ -132,7 +132,10 @@ func AnalyzeAlterTable(node *ast.AlterTableStmt) (string, error) {
 func AnalyzeTableOption(option *ast.TableOption) (string, error) {
 	switch option.Tp {
 	case ast.TableOptionEngine:
-		return fmt.Sprintf("ENGINE %s", option.StrValue), nil
+		if option.StrValue == "" {
+			return fmt.Sprintf(" ENGINE = ''"), nil
+		}
+		return fmt.Sprintf(" ENGINE = %s", option.StrValue), nil
 	case ast.TableOptionCollate:
 		return fmt.Sprintf("DEAULT COLLATE %s", option.StrValue), nil
 	case ast.TableOptionCharset:
@@ -144,7 +147,7 @@ func AnalyzeTableOption(option *ast.TableOption) (string, error) {
 	case ast.TableOptionAvgRowLength:
 		return fmt.Sprintf("AVG_ROW_LENGTH=%d", option.UintValue), nil
 	case ast.TableOptionConnection:
-		return fmt.Sprintf("CONNECTION=%d", option.UintValue), nil
+		return fmt.Sprintf("CONNECTION=%s", option.StrValue), nil
 	case ast.TableOptionCheckSum:
 		return fmt.Sprintf("CHECKSUM=%d", option.UintValue), nil
 	case ast.TableOptionPassword:

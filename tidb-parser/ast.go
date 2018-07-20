@@ -289,75 +289,21 @@ func indexOptionToSQL(option *ast.IndexOption) string {
 }
 
 func tableOptionsToSQL(options []*ast.TableOption) string {
-	sql := ""
 	if len(options) == 0 {
-		return sql
+		return ""
 	}
 
+	sqls := make([]string, 0, len(options))
 	for _, opt := range options {
-		switch opt.Tp {
-		case ast.TableOptionEngine:
-			if opt.StrValue == "" {
-				sql += fmt.Sprintf(" ENGINE = ''")
-			} else {
-				sql += fmt.Sprintf(" ENGINE = %s", opt.StrValue)
-			}
-
-		case ast.TableOptionCharset:
-			sql += fmt.Sprintf(" CHARACTER SET = %s", opt.StrValue)
-
-		case ast.TableOptionCollate:
-			sql += fmt.Sprintf(" COLLATE = %s", opt.StrValue)
-
-		case ast.TableOptionAutoIncrement:
-			sql += fmt.Sprintf(" AUTO_INCREMENT = %d", opt.UintValue)
-
-		case ast.TableOptionComment:
-			sql += fmt.Sprintf(" COMMENT '%s'", opt.StrValue)
-
-		case ast.TableOptionAvgRowLength:
-			sql += fmt.Sprintf(" AVG_ROW_LENGTH = %d", opt.UintValue)
-
-		case ast.TableOptionCheckSum:
-			sql += fmt.Sprintf(" CHECKSUM = %d", opt.UintValue)
-
-		case ast.TableOptionCompression:
-			// In TiDB parser.y, the rule is "COMPRESSION" EqOpt Identifier. No single quote here.
-			sql += fmt.Sprintf(" COMPRESSION = '%s'", opt.StrValue)
-
-		case ast.TableOptionConnection:
-			sql += fmt.Sprintf(" CONNECTION = '%s'", opt.StrValue)
-
-		case ast.TableOptionPassword:
-			sql += fmt.Sprintf(" PASSWORD = '%s'", opt.StrValue)
-
-		case ast.TableOptionKeyBlockSize:
-			sql += fmt.Sprintf(" KEY_BLOCK_SIZE = %d", opt.UintValue)
-
-		case ast.TableOptionMaxRows:
-			sql += fmt.Sprintf(" MAX_ROWS = %d", opt.UintValue)
-
-		case ast.TableOptionMinRows:
-			sql += fmt.Sprintf(" MIN_ROWS = %d", opt.UintValue)
-
-		case ast.TableOptionDelayKeyWrite:
-			sql += fmt.Sprintf(" DELAY_KEY_WRITE = %d", opt.UintValue)
-
-		case ast.TableOptionRowFormat:
-			sql += fmt.Sprintf(" ROW_FORMAT = %s", formatRowFormat(opt.UintValue))
-
-		case ast.TableOptionStatsPersistent:
-			// Since TiDB doesn't support this feature, we just give a default value.
-			sql += " STATS_PERSISTENT = DEFAULT"
-		default:
-			panic("unreachable")
+		sql, err := AnalyzeTableOption(opt)
+		if err != nil {
+			panic(err) // refine it later
 		}
 
+		sqls = append(sqls, sql)
 	}
 
-	// trim prefix space
-	sql = strings.TrimPrefix(sql, " ")
-	return sql
+	return strings.Join(sqls, " ")
 }
 
 func formatRowFormat(rf uint64) string {
