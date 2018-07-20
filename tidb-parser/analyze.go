@@ -20,6 +20,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb/ast"
+	"github.com/pingcap/tidb/types"
 )
 
 // handle create table temporarily
@@ -89,7 +90,27 @@ func AnalyzeRenameTable(node *ast.RenameTableStmt) (string, error) {
 
 // AnalyzeCreateIndex returns create index query text
 func AnalyzeCreateIndex(node *ast.CreateIndexStmt) (string, error) {
-	return "", nil
+	uniqueStr := ""
+	if node.Unique {
+		uniqueStr = "UNIQUE"
+	}
+
+	indexOpStr, err := AnalyzeIndexOption(node.IndexOption)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+
+	indexColumnList := make([]string, 0, len(node.IndexColNames))
+	for _, indexCol := range node.IndexColNames {
+		length := ""
+		if indexCol.Length != types.UnspecifiedLength {
+			length = fmt.Sprintf("(%d)", indexCol.Length)
+		}
+
+		indexColumnList = append(indexColumnList, fmt.Sprintf("%s%s", indexCol.Column.Name.O, length))
+	}
+
+	return fmt.Sprintf("CREATE %s INDEX %s ON `%s`.`%s` (%s) %s", uniqueStr, node.IndexName, node.Table.Schema, node.Table.Name, strings.Join(indexColumnList, ","), indexOpStr), nil
 }
 
 // AnalyzeDropIndex returns drop index query text
@@ -126,6 +147,20 @@ func AnalyzeAlterTable(node *ast.AlterTableStmt) (string, error) {
 	query := fmt.Sprintf("%s %s", prefix, strings.Join(defStrs, ","))
 
 	return query, nil
+}
+
+// AnalyzeIndexOption returns index option text
+func AnalyzeIndexOption(option *ast.IndexOption) (string, error) {
+	tp := option.Tp.String()
+	if len(tp) > 0 {
+		tp = fmt.Sprintf("USING %s", tp)
+	}
+
+	if len(option.Comment) > 0 {
+		return fmt.Sprintf("%s COMMENT %s", tp, option.Comment), nil
+	}
+
+	return tp, nil
 }
 
 // AnalyzeTableOption returns table option text
