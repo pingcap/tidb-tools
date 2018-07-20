@@ -19,12 +19,14 @@ import (
 	"net"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	//"github.com/pingcap/pd/pd-client"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/etcd"
+	"github.com/pingcap/tidb-tools/pkg/utils"
 	pb "github.com/pingcap/tipb/go-binlog"
 	"google.golang.org/grpc"
 )
@@ -36,13 +38,17 @@ const (
 	// DefaultRetryTime is the default time of retry.
 	DefaultRetryTime = 20
 
-	// BinlogWriteTimeout is the max time binlog can use to write to pump.
-	BinlogWriteTimeout = 15 * time.Second
+	// DefaultBinlogWriteTimeout is the default max time binlog can use to write to pump.
+	DefaultBinlogWriteTimeout = 15 * time.Second
 )
 
 // PumpsClient is the client of pumps.
 type PumpsClient struct {
+	sync.RWMutex
+
 	Ctx context.Context
+
+	Cancel context.CancelFunc
 
 	// the cluster id of this tidb cluster.
 	ClusterID uint64
@@ -64,10 +70,13 @@ type PumpsClient struct {
 
 	// the max retry time if write binlog failed.
 	RetryTime int
+
+	// BinlogWriteTimeout is the max time binlog can use to write to pump.
+	BinlogWriteTimeout time.Duration
 }
 
 // NewPumpsClient returns a PumpsClient.
-func NewPumpsClient(ctx context.Context, clusterID uint64, endpoints []string, security *tls.Config, algorithm string) (*PumpsClient, error) {
+func NewPumpsClient(etcdURLs string, security *tls.Config, algorithm string) (*PumpsClient, error) {
 	var selector PumpSelector
 	switch algorithm {
 	case Hash:
@@ -78,17 +87,24 @@ func NewPumpsClient(ctx context.Context, clusterID uint64, endpoints []string, s
 		selector = NewHashSelector()
 	}
 
-	cli, err := etcd.NewClientFromCfg(endpoints, DefaultEtcdTimeout, RootPath, security)
+	ectdEndpoints, err := utils.ParseHostPortAddr(etcdURLs)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
+	cli, err := etcd.NewClientFromCfg(ectdEndpoints, DefaultEtcdTimeout, RootPath, security)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
 	newPumpsClient := &PumpsClient{
-		Ctx:       ctx,
-		ClusterID: clusterID,
-		EtcdCli:   cli,
-		Selector:  selector,
-		RetryTime: DefaultRetryTime,
+		Ctx:                ctx,
+		Cancel:             cancel,
+		EtcdCli:            cli,
+		Selector:           selector,
+		RetryTime:          DefaultRetryTime,
+		BinlogWriteTimeout: DefaultBinlogWriteTimeout,
 	}
 
 	err = newPumpsClient.GetPumpStatus(ctx)
@@ -149,20 +165,22 @@ func (c *PumpsClient) GetPumpStatus(pctx context.Context) error {
 }
 
 // WriteBinlog writes binlog to a situable pump.
-func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
+func (c *PumpsClient) WriteBinlog(clusterID uint64, binlog *pb.Binlog) error {
+	c.RLock()
 	pump := c.Selector.Select(binlog)
+	c.RUnlock()
 	log.Infof("write binlog choose pump %v", pump)
 
 	commitData, err := binlog.Marshal()
 	if err != nil {
 		return errors.Trace(err)
 	}
-	req := &pb.WriteBinlogReq{ClusterID: c.ClusterID, Payload: commitData}
+	req := &pb.WriteBinlogReq{ClusterID: clusterID, Payload: commitData}
 
 	// Retry many times because we may raise CRITICAL error here.
 	for i := 0; i < c.RetryTime; i++ {
 		var resp *pb.WriteBinlogResp
-		ctx, cancel := context.WithTimeout(context.Background(), BinlogWriteTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), c.BinlogWriteTimeout)
 		resp, err = pump.Client.WriteBinlog(ctx, req)
 		cancel()
 		if err == nil && resp.Errmsg != "" {
@@ -178,9 +196,11 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 
 		log.Errorf("write binlog error %v", err)
 
-		// choose a new pump
-		// TODO: set pump avaliable
-		pump = c.Selector.Next(pump, binlog, i+1)
+		// every pump can retry 5 times, if retry 5 times and still failed, set this pump unavaliable, and choose a new pump.
+		if (i+1)%5 == 0 {
+			c.SetPumpAvaliable(pump, false)
+			pump = c.Selector.Next(pump, binlog, i/5+1)
+		}
 		time.Sleep(time.Second)
 	}
 
@@ -189,6 +209,9 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 
 // SetPumpAvaliable set pump's isAvaliable, and modify NeedCheckPumps or AvaliablePumps.
 func (c *PumpsClient) SetPumpAvaliable(pump *PumpStatus, avaliable bool) {
+	c.Lock()
+	defer c.Unlock()
+
 	pump.IsAvaliable = avaliable
 	if avaliable {
 		for i, p := range c.NeedCheckPumps {

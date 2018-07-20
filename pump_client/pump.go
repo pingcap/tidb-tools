@@ -78,6 +78,7 @@ type LatestPos struct {
 }
 
 // NodeStatus describes the status information of a node in etcd
+// TODO: adjust this struct with PumpStatus.
 type NodeStatus struct {
 	NodeID         string
 	Host           string

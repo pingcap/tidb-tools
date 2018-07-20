@@ -86,12 +86,14 @@ func (h *HashSelector) Select(binlog *pb.Binlog) *PumpStatus {
 		return h.Pumps[int(binlog.StartTs)%len(h.Pumps)]
 	}
 
-	h.RLock()
+	h.Lock()
 	pump, ok := h.TsMap[binlog.StartTs]
-	h.Unlock()
 	if ok {
+		h.DeleteTsMap(binlog.StartTs)
+		h.Unlock()
 		return pump
 	}
+	h.Unlock()
 
 	return h.Pumps[int(binlog.StartTs)%len(h.Pumps)]
 }
