@@ -46,6 +46,7 @@ func AnalyzeASTNode(node ast.StmtNode, statement string) (string, error) {
 	case *ast.TruncateTableStmt:
 		return AnalyzeTruncateTable(v)
 	case *ast.CreateIndexStmt:
+		return AnalyzeCreateIndex(v)
 	case *ast.DropIndexStmt:
 		return AnalyzeDropIndex(v)
 	}
@@ -67,7 +68,7 @@ func AnalyzeDropDatabase(node *ast.DropDatabaseStmt) (string, error) {
 func AnalyzeDropTable(node *ast.DropTableStmt) (string, error) {
 	tableNames := make([]string, 0, len(node.Tables))
 	for _, table := range node.Tables {
-		tableNames = append(tableNames, fmt.Sprintf("`%s`.`%s`", table.Schema, table.Name))
+		tableNames = append(tableNames, TableName(table.Schema.O, table.Name.O))
 	}
 
 	return fmt.Sprintf("DROP TABLE IF EXISTS %s", strings.Join(tableNames, ",")), nil
@@ -75,14 +76,14 @@ func AnalyzeDropTable(node *ast.DropTableStmt) (string, error) {
 
 // AnalyzeTruncateTable returns truncate table query text
 func AnalyzeTruncateTable(node *ast.TruncateTableStmt) (string, error) {
-	return fmt.Sprintf("TRUNCATE TABLE `%s`.`%s`", node.Table.Schema, node.Table.Name), nil
+	return fmt.Sprintf("TRUNCATE TABLE %s", TableName(node.Table.Schema.O, node.Table.Name.O)), nil
 }
 
 // AnalyzeRenameTable returns rename table query text
 func AnalyzeRenameTable(node *ast.RenameTableStmt) (string, error) {
 	t2ts := make([]string, 0, len(node.TableToTables))
 	for _, t := range node.TableToTables {
-		t2ts = append(t2ts, fmt.Sprintf("`%s`.`%s` TO `%s`.`%s`", t.OldTable.Schema, t.OldTable.Name, t.NewTable.Schema, t.NewTable.Name))
+		t2ts = append(t2ts, fmt.Sprintf("%s TO %s", TableName(t.OldTable.Schema.O, t.OldTable.Name.O), TableName(t.NewTable.Schema.O, t.NewTable.Name.O)))
 	}
 
 	return fmt.Sprintf("RENAME TABLE %s", strings.Join(t2ts, ",")), nil
@@ -110,24 +111,25 @@ func AnalyzeCreateIndex(node *ast.CreateIndexStmt) (string, error) {
 		indexColumnList = append(indexColumnList, fmt.Sprintf("%s%s", indexCol.Column.Name.O, length))
 	}
 
-	return fmt.Sprintf("CREATE %s INDEX %s ON `%s`.`%s` (%s) %s", uniqueStr, node.IndexName, node.Table.Schema, node.Table.Name, strings.Join(indexColumnList, ","), indexOpStr), nil
+	return fmt.Sprintf("CREATE %s INDEX %s ON %s (%s) %s", uniqueStr, node.IndexName, TableName(node.Table.Schema.O, node.Table.Name.O), strings.Join(indexColumnList, ","), indexOpStr), nil
 }
 
 // AnalyzeDropIndex returns drop index query text
 func AnalyzeDropIndex(node *ast.DropIndexStmt) (string, error) {
-	return fmt.Sprintf("DROP INDEX IF EXISTS %s ON `%s`.`%s`", node.IndexName, node.Table.Schema, node.Table.Name), nil
+	return fmt.Sprintf("DROP INDEX IF EXISTS %s ON %s", node.IndexName, TableName(node.Table.Schema.O, node.Table.Name.O)), nil
 }
 
 // AnalyzeCreateTable returns create table query text
 func AnalyzeCreateTable(node *ast.CreateTableStmt, statement string) (string, error) {
 	if node.ReferTable != nil {
-		return fmt.Sprintf("CREATE TABLE IF NOT EXISTS `%s`.`%s` LIKE `%s`.`%s`", node.Table.Schema, node.Table.Name, node.ReferTable.Schema, node.ReferTable.Name), nil
+		return fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s LIKE %s", TableName(node.Table.Schema.O, node.Table.Name.O), TableName(node.ReferTable.Schema.O, node.ReferTable.Name.O)), nil
 	}
 
+	// handle create table temporarily
 	sqlPrefix := createTableRegex.FindString(statement)
 	index := findLastWord(sqlPrefix)
 	endChars := findTableDefineIndex(sqlPrefix[index:])
-	return createTableRegex.ReplaceAllString(statement, fmt.Sprintf("%s`%s`.`%s`%s", sqlPrefix[:index], node.Table.Schema, node.Table.Name, endChars)), nil
+	return createTableRegex.ReplaceAllString(statement, fmt.Sprintf("%s%s%s", sqlPrefix[:index], TableName(node.Table.Schema.O, node.Table.Name.O), endChars)), nil
 }
 
 // AnalyzeAlterTable returns alter table query text
@@ -157,7 +159,7 @@ func AnalyzeIndexOption(option *ast.IndexOption) (string, error) {
 	}
 
 	if len(option.Comment) > 0 {
-		return fmt.Sprintf("%s COMMENT %s", tp, option.Comment), nil
+		return fmt.Sprintf("%s COMMENT \"%s\"", tp, option.Comment), nil
 	}
 
 	return tp, nil

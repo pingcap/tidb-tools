@@ -14,6 +14,8 @@
 package parser
 
 import (
+	"fmt"
+
 	"github.com/pingcap/tidb/ast"
 )
 
@@ -25,6 +27,15 @@ var TableRowFormat = map[uint64]string{
 	ast.RowFormatCompressed: "ROW_FORMAT=COMPRESSED",
 	ast.RowFormatRedundant:  "ROW_FORMAT=REDUNDANT",
 	ast.RowFormatCompact:    "ROW_FORMAT=COMPACT",
+}
+
+// TableName returns `schema`.`table` or `table`
+func TableName(schema, table string) string {
+	if len(schema) == 0 {
+		return fmt.Sprintf("`%s`", table)
+	}
+
+	return fmt.Sprintf("`%s`.`%s`", schema, table)
 }
 
 func findLastWord(literal string) int {
