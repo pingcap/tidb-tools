@@ -20,7 +20,6 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb/ast"
-	"github.com/pingcap/tidb/types"
 )
 
 // handle create table temporarily
@@ -56,12 +55,12 @@ func AnalyzeASTNode(node ast.StmtNode, statement string) (string, error) {
 
 // AnalyzeCreateDatabase returns create database query text
 func AnalyzeCreateDatabase(node *ast.CreateDatabaseStmt) (string, error) {
-	return fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`;", node.Name), nil
+	return fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`;", escapeName(node.Name)), nil
 }
 
 // AnalyzeDropDatabase returns drop database query text
 func AnalyzeDropDatabase(node *ast.DropDatabaseStmt) (string, error) {
-	return fmt.Sprintf("DROP DATABASE IF EXISTS `%s`;", node.Name), nil
+	return fmt.Sprintf("DROP DATABASE IF EXISTS `%s`;", escapeName(node.Name)), nil
 }
 
 // AnalyzeDropTable returns drop table query text
@@ -96,27 +95,13 @@ func AnalyzeCreateIndex(node *ast.CreateIndexStmt) (string, error) {
 		uniqueStr = "UNIQUE"
 	}
 
-	indexOpStr, err := AnalyzeIndexOption(node.IndexOption)
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-
-	indexColumnList := make([]string, 0, len(node.IndexColNames))
-	for _, indexCol := range node.IndexColNames {
-		length := ""
-		if indexCol.Length != types.UnspecifiedLength {
-			length = fmt.Sprintf("(%d)", indexCol.Length)
-		}
-
-		indexColumnList = append(indexColumnList, fmt.Sprintf("%s%s", indexCol.Column.Name.O, length))
-	}
-
-	return fmt.Sprintf("CREATE %s INDEX %s ON %s (%s) %s", uniqueStr, node.IndexName, TableName(node.Table.Schema.O, node.Table.Name.O), strings.Join(indexColumnList, ","), indexOpStr), nil
+	indexOpStr := AnalyzeIndexOption(node.IndexOption)
+	return fmt.Sprintf("CREATE %s INDEX `%s` ON %s (%s) %s", uniqueStr, escapeName(node.IndexName), TableName(node.Table.Schema.O, node.Table.Name.O), analyzeIndexColNames(node.IndexColNames), indexOpStr), nil
 }
 
 // AnalyzeDropIndex returns drop index query text
 func AnalyzeDropIndex(node *ast.DropIndexStmt) (string, error) {
-	return fmt.Sprintf("DROP INDEX IF EXISTS %s ON %s", node.IndexName, TableName(node.Table.Schema.O, node.Table.Name.O)), nil
+	return fmt.Sprintf("DROP INDEX IF EXISTS %s ON %s", escapeName(node.IndexName), TableName(node.Table.Schema.O, node.Table.Name.O)), nil
 }
 
 // AnalyzeCreateTable returns create table query text
@@ -135,77 +120,34 @@ func AnalyzeCreateTable(node *ast.CreateTableStmt, statement string) (string, er
 // AnalyzeAlterTable returns alter table query text
 func AnalyzeAlterTable(node *ast.AlterTableStmt) (string, error) {
 	var (
-		defStrs = make([]string, 0, len(node.Specs))
-		prefix  = fmt.Sprintf("ALTER TABLE %s ", tableNameToSQL(node.Table))
+		specStrs    = make([]string, 0, len(node.Specs))
+		alterPrefix = fmt.Sprintf("ALTER TABLE %s ", TableName(node.Table.Schema.O, node.Table.Name.O))
 	)
 	for _, spec := range node.Specs {
-		defStr := alterTableSpecToSQL(spec)
-		if len(defStr) == 0 {
+		specStr, err := AnalyzeAlterTableSpec(spec)
+		if err != nil {
+			return "", errors.Trace(err)
+		}
+		if len(specStr) == 0 {
 			continue
 		}
 
-		defStrs = append(defStrs, defStr)
+		specStrs = append(specStrs, specStr)
 	}
-	query := fmt.Sprintf("%s %s", prefix, strings.Join(defStrs, ","))
 
-	return query, nil
+	return fmt.Sprintf("%s %s", alterPrefix, strings.Join(specStrs, ",")), nil
 }
 
 // AnalyzeIndexOption returns index option text
-func AnalyzeIndexOption(option *ast.IndexOption) (string, error) {
+func AnalyzeIndexOption(option *ast.IndexOption) string {
 	tp := option.Tp.String()
 	if len(tp) > 0 {
 		tp = fmt.Sprintf("USING %s", tp)
 	}
 
 	if len(option.Comment) > 0 {
-		return fmt.Sprintf("%s COMMENT \"%s\"", tp, option.Comment), nil
+		return fmt.Sprintf("%s COMMENT \"%s\"", tp, option.Comment)
 	}
 
-	return tp, nil
-}
-
-// AnalyzeTableOption returns table option text
-func AnalyzeTableOption(option *ast.TableOption) (string, error) {
-	switch option.Tp {
-	case ast.TableOptionEngine:
-		if option.StrValue == "" {
-			return fmt.Sprintf(" ENGINE = ''"), nil
-		}
-		return fmt.Sprintf(" ENGINE = %s", option.StrValue), nil
-	case ast.TableOptionCollate:
-		return fmt.Sprintf("DEAULT COLLATE %s", option.StrValue), nil
-	case ast.TableOptionCharset:
-		return fmt.Sprintf("DEFAULT CHARACTER SET %s", option.StrValue), nil
-	case ast.TableOptionAutoIncrement:
-		return fmt.Sprintf("AUTO_INCREMET=%d", option.UintValue), nil
-	case ast.TableOptionComment:
-		return fmt.Sprintf("COMMENT=%s", option.StrValue), nil
-	case ast.TableOptionAvgRowLength:
-		return fmt.Sprintf("AVG_ROW_LENGTH=%d", option.UintValue), nil
-	case ast.TableOptionConnection:
-		return fmt.Sprintf("CONNECTION=%s", option.StrValue), nil
-	case ast.TableOptionCheckSum:
-		return fmt.Sprintf("CHECKSUM=%d", option.UintValue), nil
-	case ast.TableOptionPassword:
-		return fmt.Sprintf("PASSWORD=%s", option.StrValue), nil
-	case ast.TableOptionCompression:
-		return fmt.Sprintf("COMPRESSION=%s", option.StrValue), nil
-	case ast.TableOptionKeyBlockSize:
-		return fmt.Sprintf("KEY_BLOCK_SIZE=%d", option.UintValue), nil
-	case ast.TableOptionMaxRows:
-		return fmt.Sprintf("MAX_ROWS=%d", option.UintValue), nil
-	case ast.TableOptionMinRows:
-		return fmt.Sprintf("MIN_ROWS=%d", option.UintValue), nil
-	case ast.TableOptionDelayKeyWrite:
-		return fmt.Sprintf("DELAY_KEY_WRITE=%d", option.UintValue), nil
-	case ast.TableOptionRowFormat:
-		return fmt.Sprintf("%s", TableRowFormat[option.UintValue]), nil
-	case ast.TableOptionStatsPersistent:
-		return fmt.Sprintf("STATS_PERSISTENT=DEFAULT"), nil
-	case ast.TableOptionShardRowID:
-		return fmt.Sprintf("SHARD_ROW_ID_BITS=%d", option.UintValue), nil
-	}
-
-	return "", nil
+	return tp
 }

@@ -196,9 +196,9 @@ func (t *testAnalyzeSuite) TestCreateIndex(c *C) {
 		"create unique index x on T.t (id) USING btree comment \"haha\"",
 	}
 	expectedSQLs := []string{
-		"CREATE  INDEX x ON `t` (id(10),name) USING HASH COMMENT \"haha\"",
-		"CREATE UNIQUE INDEX x ON `T` (id)",
-		"CREATE UNIQUE INDEX x ON `T`.`t` (id) USING BTREE COMMENT \"haha\"",
+		"CREATE  INDEX `x` ON `t` (`id`(10),`name`) USING HASH COMMENT \"haha\"",
+		"CREATE UNIQUE INDEX `x` ON `T` (`id`)",
+		"CREATE UNIQUE INDEX `x` ON `T`.`t` (`id`) USING BTREE COMMENT \"haha\"",
 	}
 
 	for i := range sqlCases {

@@ -15,6 +15,7 @@ package parser
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/pingcap/tidb/ast"
 )
@@ -32,10 +33,14 @@ var TableRowFormat = map[uint64]string{
 // TableName returns `schema`.`table` or `table`
 func TableName(schema, table string) string {
 	if len(schema) == 0 {
-		return fmt.Sprintf("`%s`", table)
+		return fmt.Sprintf("`%s`", escapeName(table))
 	}
 
-	return fmt.Sprintf("`%s`.`%s`", schema, table)
+	return fmt.Sprintf("`%s`.`%s`", escapeName(schema), escapeName(table))
+}
+
+func escapeName(name string) string {
+	return strings.Replace(name, "`", "``", -1)
 }
 
 func findLastWord(literal string) int {
