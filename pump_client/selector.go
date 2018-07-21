@@ -78,6 +78,10 @@ func (h *HashSelector) SetPumps(pumps []*PumpStatus) {
 
 // Select implement PumpSelector.Select.
 func (h *HashSelector) Select(binlog *pb.Binlog) *PumpStatus {
+	if len(h.Pumps) == 0 {
+		return nil
+	}
+
 	if binlog.Tp == pb.BinlogType_Prewrite {
 		pump := h.Pumps[int(binlog.StartTs)%len(h.Pumps)]
 		h.Lock()

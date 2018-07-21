@@ -150,6 +150,7 @@ func (c *PumpsClient) GetPumpStatus(pctx context.Context) error {
 			dialerOpt := grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
 				return net.DialTimeout("tcp", addr, timeout)
 			})
+			log.Infof("create gcpc client at %s", status.Host)
 			clientConn, err := grpc.Dial(status.Host, dialerOpt, grpc.WithInsecure())
 			if err != nil {
 				return errors.Errorf("create grpc client for %s failed, error %v", status.NodeID, err)
@@ -179,6 +180,10 @@ func (c *PumpsClient) WriteBinlog(clusterID uint64, binlog *pb.Binlog) error {
 
 	// Retry many times because we may raise CRITICAL error here.
 	for i := 0; i < c.RetryTime; i++ {
+		if pump == nil {
+			return errors.New("no pump can use")
+		}
+
 		var resp *pb.WriteBinlogResp
 		ctx, cancel := context.WithTimeout(context.Background(), c.BinlogWriteTimeout)
 		resp, err = pump.Client.WriteBinlog(ctx, req)
