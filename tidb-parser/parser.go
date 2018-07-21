@@ -58,11 +58,11 @@ func NewTiDBParser(router *router.Table, filter *filter.BinlogEvent) Parser {
 
 // Handle implements Parser interface.
 func (t *tidbParser) Handle(schema, statement string) ([]string, bool, error) {
-	// filter unsupported ddl (use schema:* table:* global rule)
+	// filter unsupported ddl (use schema:* table:'' global rule)
 	if t.filter != nil {
 		action, err := t.filter.Filter("", "", filter.NullEvent, filter.NullEvent, statement)
 		if err != nil {
-			return nil, false, errors.Annotate(err, "filter unsupported ddl")
+			return nil, false, errors.Annotatef(err, "filter unsupported ddl %s", statement)
 		}
 		if action == filter.Ignore {
 			// need to skip it
@@ -92,6 +92,9 @@ func (t *tidbParser) Handle(schema, statement string) ([]string, bool, error) {
 			return nil, false, errors.Annotatef(err, "handle ddl %s", statement)
 		}
 		sqls = append(sqls, subSQLs...)
+	}
+	if len(sqls) == 0 { // skip it
+		return nil, true, nil
 	}
 
 	return sqls, false, nil
