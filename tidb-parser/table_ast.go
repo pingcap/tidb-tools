@@ -44,27 +44,27 @@ func analyzeTableOption(option *ast.TableOption) (string, error) {
 	switch option.Tp {
 	case ast.TableOptionEngine:
 		if option.StrValue == "" {
-			return fmt.Sprintf(" ENGINE = ''"), nil
+			return fmt.Sprintf("ENGINE=''"), nil
 		}
-		return fmt.Sprintf(" ENGINE = %s", option.StrValue), nil
+		return fmt.Sprintf("ENGINE=%s", option.StrValue), nil
 	case ast.TableOptionCollate:
-		return fmt.Sprintf("DEAULT COLLATE %s", option.StrValue), nil
+		return fmt.Sprintf("DEFAULT COLLATE %s", option.StrValue), nil
 	case ast.TableOptionCharset:
 		return fmt.Sprintf("DEFAULT CHARACTER SET %s", option.StrValue), nil
 	case ast.TableOptionAutoIncrement:
-		return fmt.Sprintf("AUTO_INCREMET=%d", option.UintValue), nil
+		return fmt.Sprintf("AUTO_INCREMENT=%d", option.UintValue), nil
 	case ast.TableOptionComment:
-		return fmt.Sprintf("COMMENT=%s", option.StrValue), nil
+		return fmt.Sprintf("COMMENT='%s'", option.StrValue), nil
 	case ast.TableOptionAvgRowLength:
 		return fmt.Sprintf("AVG_ROW_LENGTH=%d", option.UintValue), nil
 	case ast.TableOptionConnection:
-		return fmt.Sprintf("CONNECTION=%s", option.StrValue), nil
+		return fmt.Sprintf("CONNECTION='%s'", option.StrValue), nil
 	case ast.TableOptionCheckSum:
 		return fmt.Sprintf("CHECKSUM=%d", option.UintValue), nil
 	case ast.TableOptionPassword:
-		return fmt.Sprintf("PASSWORD=%s", option.StrValue), nil
+		return fmt.Sprintf("PASSWORD='%s'", option.StrValue), nil
 	case ast.TableOptionCompression:
-		return fmt.Sprintf("COMPRESSION=%s", option.StrValue), nil
+		return fmt.Sprintf("COMPRESSION='%s'", option.StrValue), nil
 	case ast.TableOptionKeyBlockSize:
 		return fmt.Sprintf("KEY_BLOCK_SIZE=%d", option.UintValue), nil
 	case ast.TableOptionMaxRows:
@@ -91,7 +91,7 @@ func AnalyzeAlterTableSpec(spec *ast.AlterTableSpec) (string, error) {
 		return analyzeTableOptions(spec.Options)
 
 	case ast.AlterTableAddColumns:
-		colDefStrs := make([]string, len(spec.NewColumns))
+		colDefStrs := make([]string, 0, len(spec.NewColumns))
 		for _, newColumn := range spec.NewColumns {
 			colDefStr := analyzeColumnDef(newColumn)
 			if spec.Position != nil {

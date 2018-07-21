@@ -121,7 +121,7 @@ func AnalyzeCreateTable(node *ast.CreateTableStmt, statement string) (string, er
 func AnalyzeAlterTable(node *ast.AlterTableStmt) (string, error) {
 	var (
 		specStrs    = make([]string, 0, len(node.Specs))
-		alterPrefix = fmt.Sprintf("ALTER TABLE %s ", TableName(node.Table.Schema.O, node.Table.Name.O))
+		alterPrefix = fmt.Sprintf("ALTER TABLE %s", TableName(node.Table.Schema.O, node.Table.Name.O))
 	)
 	for _, spec := range node.Specs {
 		specStr, err := AnalyzeAlterTableSpec(spec)
@@ -136,18 +136,4 @@ func AnalyzeAlterTable(node *ast.AlterTableStmt) (string, error) {
 	}
 
 	return fmt.Sprintf("%s %s", alterPrefix, strings.Join(specStrs, ",")), nil
-}
-
-// AnalyzeIndexOption returns index option text
-func AnalyzeIndexOption(option *ast.IndexOption) string {
-	tp := option.Tp.String()
-	if len(tp) > 0 {
-		tp = fmt.Sprintf("USING %s", tp)
-	}
-
-	if len(option.Comment) > 0 {
-		return fmt.Sprintf("%s COMMENT \"%s\"", tp, option.Comment)
-	}
-
-	return tp
 }

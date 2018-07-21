@@ -19,6 +19,9 @@ import (
 	"strings"
 
 	"github.com/pingcap/tidb/ast"
+	"github.com/pingcap/tidb/mysql"
+	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/tidb/util/charset"
 )
 
 func analyzeColumnPosition(pos *ast.ColumnPosition) string {
@@ -79,7 +82,7 @@ func analyzeColumnOption(opt *ast.ColumnOption) string {
 		return "PRIMARY KEY"
 	case ast.ColumnOptionComment:
 		opt.Expr.Format(&str)
-		return fmt.Sprintf("COMMENT '%s'", str.String())
+		return fmt.Sprintf("COMMENT %s", str.String())
 	case ast.ColumnOptionOnUpdate:
 		opt.Expr.Format(&str)
 		return fmt.Sprintf("ON UPDATE %s", str.String())
@@ -116,7 +119,31 @@ func analyzeVirtualOrStored(stored bool) string {
 
 func analyzeColumnDef(def *ast.ColumnDef) string {
 	optStrs := analyzeColumnOptions(def.Options)
-	return fmt.Sprintf("%s %s %s", analyzeColumnName(def.Name), def.Tp, optStrs)
+	return fmt.Sprintf("%s %s %s", analyzeColumnName(def.Name), analyzeColumnTP(def.Tp), optStrs)
+}
+
+func analyzeColumnTP(ft *types.FieldType) string {
+	strs := []string{ft.CompactStr()}
+	if mysql.HasUnsignedFlag(ft.Flag) {
+		strs = append(strs, "UNSIGNED")
+	}
+	if mysql.HasZerofillFlag(ft.Flag) {
+		strs = append(strs, "ZEROFILL")
+	}
+	if mysql.HasBinaryFlag(ft.Flag) && (ft.Charset != charset.CharsetBin || (!types.IsTypeChar(ft.Tp) && !types.IsTypeBlob(ft.Tp))) {
+		strs = append(strs, "BINARY")
+	}
+
+	if types.IsTypeChar(ft.Tp) || types.IsTypeBlob(ft.Tp) {
+		if ft.Charset != "" && ft.Charset != charset.CharsetBin {
+			strs = append(strs, fmt.Sprintf("CHARACTER SET %s", ft.Charset))
+		}
+		if ft.Collate != "" && ft.Collate != charset.CharsetBin {
+			strs = append(strs, fmt.Sprintf("COLLATE %s", ft.Collate))
+		}
+	}
+
+	return strings.Join(strs, " ")
 }
 
 func analyzeConstraint(constraint *ast.Constraint) string {

@@ -34,3 +34,21 @@ func analyzeIndexColNames(cols []*ast.IndexColName) string {
 
 	return strings.Join(indexColumnList, ",")
 }
+
+// AnalyzeIndexOption returns index option text
+func AnalyzeIndexOption(option *ast.IndexOption) string {
+	if option == nil {
+		return ""
+	}
+
+	tp := option.Tp.String()
+	if len(tp) > 0 {
+		tp = fmt.Sprintf("USING %s", tp)
+	}
+
+	if len(option.Comment) > 0 {
+		return fmt.Sprintf("%s COMMENT \"%s\"", tp, option.Comment)
+	}
+
+	return tp
+}
