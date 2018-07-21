@@ -37,9 +37,6 @@ type PumpSelector interface {
 
 	// returns the next pump.
 	Next(*PumpStatus, *pb.Binlog, int) *PumpStatus
-
-	// DeleteTsMap removes the map information of ts.
-	DeleteTsMap(ts int64)
 }
 
 // HashSelector select a pump by hash.
@@ -78,26 +75,24 @@ func (h *HashSelector) SetPumps(pumps []*PumpStatus) {
 
 // Select implement PumpSelector.Select.
 func (h *HashSelector) Select(binlog *pb.Binlog) *PumpStatus {
+	h.Lock()
+	defer h.Unlock()
+
 	if len(h.Pumps) == 0 {
 		return nil
 	}
 
 	if binlog.Tp == pb.BinlogType_Prewrite {
 		pump := h.Pumps[int(binlog.StartTs)%len(h.Pumps)]
-		h.Lock()
 		h.TsMap[binlog.StartTs] = pump
-		h.Unlock()
 		return h.Pumps[int(binlog.StartTs)%len(h.Pumps)]
 	}
 
-	h.Lock()
 	pump, ok := h.TsMap[binlog.StartTs]
 	if ok {
-		h.DeleteTsMap(binlog.StartTs)
-		h.Unlock()
+		h.deleteTsMap(binlog.StartTs)
 		return pump
 	}
-	h.Unlock()
 
 	return h.Pumps[int(binlog.StartTs)%len(h.Pumps)]
 }
@@ -112,11 +107,10 @@ func (h *HashSelector) Next(pump *PumpStatus, binlog *pb.Binlog, retryTime int) 
 	return nextPump
 }
 
-// DeleteTsMap implement PumpSelector.DeleteTsMap.
-func (h *HashSelector) DeleteTsMap(ts int64) {
-	h.Lock()
-	delete(h.TsMap, ts)
-	h.Unlock()
+func (h *HashSelector) deleteTsMap(ts int64) {
+	if _, ok := h.TsMap[ts]; ok {
+		delete(h.TsMap, ts)
+	}
 }
 
 // ScoreSelector select a pump by pump's score.
@@ -143,6 +137,3 @@ func (s *ScoreSelector) Next(pump *PumpStatus, binlog *pb.Binlog, retryTime int)
 	// TODO
 	return nil
 }
-
-// DeleteTsMap implement PumpSelector.DeleteTsMap.
-func (s *ScoreSelector) DeleteTsMap(ts int64) {}

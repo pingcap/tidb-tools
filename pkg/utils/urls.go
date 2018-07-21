@@ -14,6 +14,7 @@
 package utils
 
 import (
+	"fmt"
 	"net"
 	"net/url"
 	"strings"
@@ -28,6 +29,9 @@ func ParseHostPortAddr(s string) ([]string, error) {
 
 	for _, str := range strs {
 		str = strings.TrimSpace(str)
+		if !strings.Contains(str, "http") {
+			str = fmt.Sprintf("http://%s", str)
+		}
 		u, err := url.Parse(str)
 		if err != nil {
 			return nil, errors.Trace(err)
