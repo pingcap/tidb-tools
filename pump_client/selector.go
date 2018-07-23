@@ -106,7 +106,7 @@ func (h *HashSelector) Next(pump *PumpStatus, binlog *pb.Binlog, retryTime int) 
 	if len(h.Pumps) == 0 {
 		return nil
 	}
-	
+
 	nextPump := h.Pumps[(int(binlog.StartTs)+int(retryTime))%len(h.Pumps)]
 	h.Lock()
 	h.TsMap[binlog.StartTs] = pump

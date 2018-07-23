@@ -14,127 +14,87 @@
 package client
 
 import (
-	"encoding/json"
+	"fmt"
+	"net"
+	"strings"
 	"time"
 
-	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-tools/pkg/etcd"
+	"github.com/pingcap/tidb-tools/tidb_binlog/node"
 	pb "github.com/pingcap/tipb/go-binlog"
+	"google.golang.org/grpc"
 )
 
-// PumpState is the state of pump.
-type PumpState string
-
 const (
-	// Online means the pump can receive request.
-	Online PumpState = "online"
-
-	// Pausing means the pump is pausing.
-	Pausing PumpState = "pausing"
-
-	// Paused means the pump is already paused.
-	Paused PumpState = "paused"
-
-	// Closing means the pump is closing, and the state will be Offline when closed.
-	Closing PumpState = "closing"
-
-	// Offline means the pump is offline, and will not provide service.
-	Offline PumpState = "offline"
-
 	// RootPath is the root path of the keys stored in etcd for pumps.
 	RootPath = "/tidb-binlog/pumps"
 )
 
 // PumpStatus saves pump's status
 type PumpStatus struct {
-	// the id of pump.
-	NodeID string
-
-	// the state of pump.
-	State PumpState
-
-	// the score of pump, it is report by pump, calculated by pump's qps, disk usage and binlog's data size.
-	// if Score is less than 0, means the pump is useless.
-	Score int64
-
-	// the label of this pump, pump client will only send to a pump which label is matched.
-	Label string
+	node.Status
 
 	// the pump is avaliable or not.
 	IsAvaliable bool
 
 	// the client of this pump
 	Client pb.PumpClient
-
-	// UpdateTime is the last update time of pump's status.
-	UpdateTime time.Time
 }
 
-// LatestPos is the latest position in pump
-type LatestPos struct {
-	FilePos  pb.Pos `json:"file-position"`
-	KafkaPos pb.Pos `json:"kafka-position"`
+// NewPumpStatus returns a new PumpStatus according to node's status.
+func NewPumpStatus(status *node.Status) *PumpStatus {
+	pumpStatus := &PumpStatus{}
+	pumpStatus.NodeID = status.NodeID
+	pumpStatus.Host = status.Host
+	pumpStatus.State = status.State
+	pumpStatus.Score = status.Score
+	pumpStatus.Label = status.Label
+	pumpStatus.IsAvaliable = (status.State == node.Online)
+	pumpStatus.UpdateTime = status.UpdateTime
+
+	err := createGrpcClient(pumpStatus)
+	if err != nil {
+		log.Errorf("create grpc client for %s failed, error %v", status.NodeID, err)
+		pumpStatus.IsAvaliable = false
+	}
+
+	return pumpStatus
 }
 
-// NodeStatus describes the status information of a node in etcd
-// TODO: adjust this struct with PumpStatus.
-type NodeStatus struct {
-	NodeID         string
-	Host           string
-	IsAlive        bool
-	IsOffline      bool
-	LatestFilePos  pb.Pos
-	LatestKafkaPos pb.Pos
-	OfflineTS      int64
+// createGrpcClient create grpc client for online pump.
+func createGrpcClient(p *PumpStatus) error {
+	if pumpStatus.State != node.Online {
+		return nil
+	}
+
+	dialerOpt := grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
+		return net.DialTimeout("tcp", addr, timeout)
+	})
+	log.Infof("create gcpc client at %s", p.Host)
+	//clientConn, err := grpc.Dial(status.Host, dialerOpt, grpc.WithInsecure())
+	port := strings.Split(p.Host, ":")[1]
+	clientConn, err := grpc.Dial(fmt.Sprintf("10.203.13.41:%s", port), dialerOpt, grpc.WithInsecure())
+	if err != nil {
+		return err
+	}
+	p.Client = pb.NewPumpClient(clientConn)
+
+
 }
 
-func nodeStatusFromEtcdNode(id string, node *etcd.Node) (*NodeStatus, error) {
-	var (
-		isAlive       bool
-		status        = &NodeStatus{}
-		latestPos     = &LatestPos{}
-		isObjectExist bool
-	)
-	for key, n := range node.Childs {
-		switch key {
-		case "object":
-			isObjectExist = true
-			if err := json.Unmarshal(n.Value, &status); err != nil {
-				return nil, errors.Annotatef(err, "error unmarshal NodeStatus with nodeID(%s)", id)
-			}
-		case "alive":
-			isAlive = true
-			if err := json.Unmarshal(n.Value, &latestPos); err != nil {
-				return nil, errors.Annotatef(err, "error unmarshal NodeStatus with nodeID(%s)", id)
-			}
-		}
+// statusChanged returns true if old status is different from new status.
+func statusChanged(oldStatus *PumpStatus, newStatus *node.Status) bool {
+	// attention: the score should update less frequently, otherwise pumps client will always be locked for update status.
+	if oldStatus.State != newStatus.State || oldStatus.Score != newStatus.Score || oldStatus.Label != newStatus.Label {
+		return true
 	}
 
-	if !isObjectExist {
-		log.Errorf("node %s doesn't exist", id)
-		return nil, nil
-	}
-
-	status.IsAlive = isAlive
-	if isAlive {
-		status.LatestFilePos = latestPos.FilePos
-		status.LatestKafkaPos = latestPos.KafkaPos
-	}
-	return status, nil
+	return false
 }
 
-func nodesStatusFromEtcdNode(root *etcd.Node) ([]*NodeStatus, error) {
-	var statuses []*NodeStatus
-	for id, n := range root.Childs {
-		status, err := nodeStatusFromEtcdNode(id, n)
-		if err != nil {
-			return nil, err
-		}
-		if status == nil {
-			continue
-		}
-		statuses = append(statuses, status)
-	}
-	return statuses, nil
+// updateStatus update old status.
+func updateStatus(oldStatus *PumpStatus, newStatus *node.Status) {
+	oldStatus.State = newStatus.State
+	oldStatus.Score = newStatus.Score
+	oldStatus.Label = newStatus.Label
 }

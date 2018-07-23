@@ -14,24 +14,22 @@
 package client
 
 import (
-	//"errors"
-	"context"
+	"encoding/json"
 	"crypto/tls"
-	"net"
 	"path"
 	"strings"
 	"sync"
 	"time"
-	"fmt"
 
 	//"github.com/pingcap/pd/pd-client"
+	"github.com/coreos/etcd/mvcc/mvccpb"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/etcd"
 	"github.com/pingcap/tidb-tools/pkg/utils"
+	"github.com/pingcap/tidb-tools/tidb_binlog/node"
 	pb "github.com/pingcap/tipb/go-binlog"
-	"google.golang.org/grpc"
-	"github.com/coreos/etcd/mvcc/mvccpb"
+	"golang.org/x/net/context"
 )
 
 const (
@@ -64,6 +62,9 @@ type PumpsClient struct {
 	// Pumps saves the whole pumps' status.
 	Pumps []*PumpStatus
 
+	// PumpMap saves the map of pump's node and pump status.
+	PumpMap map[string]*PumpStatus
+
 	// AvliablePumps saves the whole avaliable pumps' status.
 	AvaliablePumps []*PumpStatus
 
@@ -89,6 +90,7 @@ func NewPumpsClient(etcdURLs string, security *tls.Config, algorithm string) (*P
 	case Score:
 		selector = NewScoreSelector()
 	default:
+		log.Warnf("unknow algorithm %s, use hash as default", algorithm)
 		selector = NewHashSelector()
 	}
 
@@ -127,6 +129,9 @@ func NewPumpsClient(etcdURLs string, security *tls.Config, algorithm string) (*P
 
 // GetPumpStatus retruns all the pumps status in the etcd.
 func (c *PumpsClient) GetPumpStatus(pctx context.Context) error {
+	c.Lock()
+	defer c.Unlock()
+
 	ctx, cancel := context.WithTimeout(pctx, DefaultEtcdTimeout)
 	defer cancel()
 
@@ -134,36 +139,17 @@ func (c *PumpsClient) GetPumpStatus(pctx context.Context) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	nodesStatus, err := nodesStatusFromEtcdNode(resp)
+	nodesStatus, err := node.NodesStatusFromEtcdNode(resp)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
 	for _, status := range nodesStatus {
 		log.Infof("get pump %v from etcd", status)
-		// TODO: use real info
-		pumpStatus := &PumpStatus{
-			NodeID:      status.NodeID,
-			State:       Online,
-			Score:       1,
-			Label:       "",
-			IsAvaliable: true,
-			UpdateTime:  time.Now(),
-		}
+		pumpStatus := NewPumpStatus(status)
 		c.Pumps = append(c.Pumps, pumpStatus)
-
-		if pumpStatus.State == Online {
-			dialerOpt := grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
-				return net.DialTimeout("tcp", addr, timeout)
-			})
-			log.Infof("create gcpc client at %s", status.Host)
-			//clientConn, err := grpc.Dial(status.Host, dialerOpt, grpc.WithInsecure())
-			port := strings.Split(status.Host, ":")[1]
-			clientConn, err := grpc.Dial(fmt.Sprintf("10.203.13.41:%s", port), dialerOpt, grpc.WithInsecure())
-			if err != nil {
-				return errors.Errorf("create grpc client for %s failed, error %v", status.NodeID, err)
-			}
-			pumpStatus.Client = pb.NewPumpClient(clientConn)
+		c.PumpMap[status.NodeID] = pumpStatus
+		if pumpStatus.State == node.Online {
 			c.AvaliablePumps = append(c.AvaliablePumps, pumpStatus)
 		} else {
 			c.NeedCheckPumps = append(c.NeedCheckPumps, pumpStatus)
@@ -211,7 +197,9 @@ func (c *PumpsClient) WriteBinlog(clusterID uint64, binlog *pb.Binlog) error {
 
 		// every pump can retry 5 times, if retry 5 times and still failed, set this pump unavaliable, and choose a new pump.
 		if (i+1)%5 == 0 {
-			c.SetPumpAvaliable(pump, false)
+			c.Lock()
+			c.setPumpAvaliable(pump, false)
+			c.Unlock()
 			log.Infof("avaliable pumps: %v", c.AvaliablePumps)
 			pump = c.Selector.Next(pump, binlog, i/5+1)
 			log.Infof("write binlog choose pump %v", pump)
@@ -219,14 +207,11 @@ func (c *PumpsClient) WriteBinlog(clusterID uint64, binlog *pb.Binlog) error {
 		time.Sleep(time.Second)
 	}
 
-	return errors.New("write binlog failed!")
+	return errors.New("write binlog failed")
 }
 
-// SetPumpAvaliable set pump's isAvaliable, and modify NeedCheckPumps or AvaliablePumps.
-func (c *PumpsClient) SetPumpAvaliable(pump *PumpStatus, avaliable bool) {
-	c.Lock()
-	defer c.Unlock()
-
+// setPumpAvaliable set pump's isAvaliable, and modify NeedCheckPumps or AvaliablePumps.
+func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 	pump.IsAvaliable = avaliable
 	if avaliable {
 		for i, p := range c.NeedCheckPumps {
@@ -249,6 +234,25 @@ func (c *PumpsClient) SetPumpAvaliable(pump *PumpStatus, avaliable bool) {
 	c.Selector.SetPumps(c.AvaliablePumps)
 }
 
+// addPump add a new pump.
+func (c *PumpsClient) addPump(pump *PumpStatus) {
+	if pump.State == node.Online {
+		pump.IsAvaliable = true
+		c.AvaliablePumps = append(c.AvaliablePumps, pump)
+	} else {
+		pump.IsAvaliable = false
+		c.NeedCheckPumps = append(c.NeedCheckPumps, pump)
+	}
+
+	// TODO: create grpc client.
+	c.Pumps = append(c.Pumps, pump)
+}
+
+// removePump removes a pump.
+func (c *PumpsClient) removePump(pump *PumpStatus) {
+	// TODO
+}
+
 // WatchStatus watchs pump's status in etcd.
 func (c *PumpsClient) WatchStatus() {
 	defer c.wg.Done()
@@ -261,11 +265,38 @@ func (c *PumpsClient) WatchStatus() {
 		case wresp := <-rch:
 			for _, ev := range wresp.Events {
 				log.Infof("%s %q : %q\n", ev.Type, ev.Kv.Key, ev.Kv.Value)
+				status := &node.Status
+				err := json.Unmarshal(ev.Kv.Value, &status)
+				if err != nil {
+					log.Errorf("unmarshal status %q failed", ev.Kv.Value)
+					continue
+				}
+				// strings.Contains(ev.Kv.Key, "alive")
+				
 				switch ev.Type {
 				case mvccpb.PUT:
+					if statusChanged(c.PumpMap[status.NodeID], status) {
+						c.Lock()
+						updateStatus(c.PumpMap[status.NodeID], status)
+						if statue.State != node.Online {
+							c.setPumpAvaliable(c.PumpMap[status.NodeID], false)
+						}
+						c.Unlock()
+					}
 					// judge pump's status is changed or not.
 				case mvccpb.DELETE:
-					// this pump is offline.
+					if strings.Contains(ev.Kv.Key, "object") {
+						// object node is deleted, means this node is offline.
+						// c.RemovePump()
+					} else {
+						// set this pump's state to unknow, and this pump is not avaliable.
+						c.Lock()
+						if pumpStatus, ok := c.PumpMap[status.NodeID]; ok {
+							pumpStatus.State = node.unknow
+							c.setPumpAvaliable(pumpStatus, false)
+						}
+						c.Unlock()
+					}
 				}
 			}
 		}
@@ -285,9 +316,9 @@ func (c *PumpsClient) Heartbeat() {
 
 		// TODO: send heartbeat.
 		// if heartbeat success, update c.NeedCheckPumps.
-	}
 
-	log.Info("pumps client heartbeat finished")
+		// write fake binlog as heartbeat?
+	}
 }
 
 // Close closes the PumpsClient.
