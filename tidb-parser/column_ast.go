@@ -149,14 +149,14 @@ func analyzeColumnTP(ft *types.FieldType) string {
 func analyzeConstraint(constraint *ast.Constraint) string {
 	switch constraint.Tp {
 	case ast.ConstraintIndex:
-		return fmt.Sprintf("ADD INDEX %s (%s) %s", escapeName(constraint.Name), analyzeIndexColNames(constraint.Keys), AnalyzeIndexOption(constraint.Option))
+		return fmt.Sprintf("ADD INDEX %s (%s) %s", escapeName(constraint.Name), analyzeIndexColNames(constraint.Keys), analyzeIndexOption(constraint.Option))
 
 	case ast.ConstraintUniq:
 		str := "ADD CONSTRAINT"
 		if constraint.Name != "" {
 			str = fmt.Sprintf("%s `%s`", str, escapeName(constraint.Name))
 		}
-		return fmt.Sprintf("%s UNIQUE INDEX (%s) %s", str, analyzeIndexColNames(constraint.Keys), AnalyzeIndexOption(constraint.Option))
+		return fmt.Sprintf("%s UNIQUE INDEX (%s) %s", str, analyzeIndexColNames(constraint.Keys), analyzeIndexOption(constraint.Option))
 
 	case ast.ConstraintForeignKey:
 		str := "ADD CONSTRAINT"
@@ -171,14 +171,14 @@ func analyzeConstraint(constraint *ast.Constraint) string {
 		if constraint.Name != "" {
 			str = fmt.Sprintf("%s `%s`", str, escapeName(constraint.Name))
 		}
-		return fmt.Sprintf("%s PRIMARY KEY (%s) %s", str, analyzeIndexColNames(constraint.Keys), AnalyzeIndexOption(constraint.Option))
+		return fmt.Sprintf("%s PRIMARY KEY (%s) %s", str, analyzeIndexColNames(constraint.Keys), analyzeIndexOption(constraint.Option))
 
 	case ast.ConstraintFulltext:
 		str := "ADD FULLTEXT INDEX"
 		if constraint.Name != "" {
 			str = fmt.Sprintf("%s `%s`", str, escapeName(constraint.Name))
 		}
-		return fmt.Sprintf("%s (%s) %s", str, analyzeIndexColNames(constraint.Keys), AnalyzeIndexOption(constraint.Option))
+		return fmt.Sprintf("%s (%s) %s", str, analyzeIndexColNames(constraint.Keys), analyzeIndexOption(constraint.Option))
 	}
 
 	return ""

@@ -35,8 +35,7 @@ func analyzeIndexColNames(cols []*ast.IndexColName) string {
 	return strings.Join(indexColumnList, ",")
 }
 
-// AnalyzeIndexOption returns index option text
-func AnalyzeIndexOption(option *ast.IndexOption) string {
+func analyzeIndexOption(option *ast.IndexOption) string {
 	if option == nil {
 		return ""
 	}

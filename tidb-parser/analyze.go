@@ -95,7 +95,7 @@ func AnalyzeCreateIndex(node *ast.CreateIndexStmt) (string, error) {
 		uniqueStr = "UNIQUE"
 	}
 
-	indexOpStr := AnalyzeIndexOption(node.IndexOption)
+	indexOpStr := analyzeIndexOption(node.IndexOption)
 	return fmt.Sprintf("CREATE %s INDEX `%s` ON %s (%s) %s", uniqueStr, escapeName(node.IndexName), TableName(node.Table.Schema.O, node.Table.Name.O), analyzeIndexColNames(node.IndexColNames), indexOpStr), nil
 }
 
