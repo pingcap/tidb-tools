@@ -52,7 +52,7 @@ func NewPumpStatus(status *node.Status) *PumpStatus {
 	pumpStatus.IsAvaliable = (status.State == node.Online)
 	pumpStatus.UpdateTime = status.UpdateTime
 
-	err := createGrpcClient(pumpStatus)
+	err := pumpStatus.createGrpcClient()
 	if err != nil {
 		log.Errorf("create grpc client for %s failed, error %v", status.NodeID, err)
 		pumpStatus.IsAvaliable = false
@@ -62,8 +62,8 @@ func NewPumpStatus(status *node.Status) *PumpStatus {
 }
 
 // createGrpcClient create grpc client for online pump.
-func createGrpcClient(p *PumpStatus) error {
-	if pumpStatus.State != node.Online {
+func (p *PumpStatus) createGrpcClient() error {
+	if p.State != node.Online {
 		return nil
 	}
 
@@ -79,13 +79,13 @@ func createGrpcClient(p *PumpStatus) error {
 	}
 	p.Client = pb.NewPumpClient(clientConn)
 
-
+	return nil
 }
 
-// statusChanged returns true if old status is different from new status.
-func statusChanged(oldStatus *PumpStatus, newStatus *node.Status) bool {
+// statusChanged returns true if status is different from new status.
+func (p *PumpStatus) statusChanged(newStatus *node.Status) bool {
 	// attention: the score should update less frequently, otherwise pumps client will always be locked for update status.
-	if oldStatus.State != newStatus.State || oldStatus.Score != newStatus.Score || oldStatus.Label != newStatus.Label {
+	if p.State != newStatus.State || p.Score != newStatus.Score || p.Label != newStatus.Label {
 		return true
 	}
 
@@ -93,8 +93,8 @@ func statusChanged(oldStatus *PumpStatus, newStatus *node.Status) bool {
 }
 
 // updateStatus update old status.
-func updateStatus(oldStatus *PumpStatus, newStatus *node.Status) {
-	oldStatus.State = newStatus.State
-	oldStatus.Score = newStatus.Score
-	oldStatus.Label = newStatus.Label
+func (p *PumpStatus) updateStatus(newStatus *node.Status) {
+	p.State = newStatus.State
+	p.Score = newStatus.Score
+	p.Label = newStatus.Label
 }

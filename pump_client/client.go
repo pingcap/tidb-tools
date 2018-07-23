@@ -14,8 +14,8 @@
 package client
 
 import (
-	"encoding/json"
 	"crypto/tls"
+	"encoding/json"
 	"path"
 	"strings"
 	"sync"
@@ -41,6 +41,9 @@ const (
 
 	// DefaultBinlogWriteTimeout is the default max time binlog can use to write to pump.
 	DefaultBinlogWriteTimeout = 15 * time.Second
+
+	aliveStr  = "alive"
+	objectStr = "object"
 )
 
 // PumpsClient is the client of pumps.
@@ -237,6 +240,7 @@ func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 // addPump add a new pump.
 func (c *PumpsClient) addPump(pump *PumpStatus) {
 	if pump.State == node.Online {
+		pump.createGrpcClient()
 		pump.IsAvaliable = true
 		c.AvaliablePumps = append(c.AvaliablePumps, pump)
 	} else {
@@ -244,7 +248,7 @@ func (c *PumpsClient) addPump(pump *PumpStatus) {
 		c.NeedCheckPumps = append(c.NeedCheckPumps, pump)
 	}
 
-	// TODO: create grpc client.
+	c.PumpMap[pump.NodeID] = pump
 	c.Pumps = append(c.Pumps, pump)
 }
 
@@ -265,34 +269,34 @@ func (c *PumpsClient) WatchStatus() {
 		case wresp := <-rch:
 			for _, ev := range wresp.Events {
 				log.Infof("%s %q : %q\n", ev.Type, ev.Kv.Key, ev.Kv.Value)
-				status := &node.Status
+				status := &node.Status{}
 				err := json.Unmarshal(ev.Kv.Value, &status)
 				if err != nil {
 					log.Errorf("unmarshal status %q failed", ev.Kv.Value)
 					continue
 				}
-				// strings.Contains(ev.Kv.Key, "alive")
-				
+				// strings.Contains(ev.Kv.Key, aliveStr)
+
 				switch ev.Type {
 				case mvccpb.PUT:
-					if statusChanged(c.PumpMap[status.NodeID], status) {
+					if c.PumpMap[status.NodeID].statusChanged(status) {
 						c.Lock()
-						updateStatus(c.PumpMap[status.NodeID], status)
-						if statue.State != node.Online {
+						c.PumpMap[status.NodeID].updateStatus(status)
+						if status.State != node.Online {
 							c.setPumpAvaliable(c.PumpMap[status.NodeID], false)
 						}
 						c.Unlock()
 					}
 					// judge pump's status is changed or not.
 				case mvccpb.DELETE:
-					if strings.Contains(ev.Kv.Key, "object") {
+					if strings.Contains(string(ev.Kv.Key), objectStr) {
 						// object node is deleted, means this node is offline.
 						// c.RemovePump()
 					} else {
 						// set this pump's state to unknow, and this pump is not avaliable.
 						c.Lock()
 						if pumpStatus, ok := c.PumpMap[status.NodeID]; ok {
-							pumpStatus.State = node.unknow
+							pumpStatus.State = node.Unknow
 							c.setPumpAvaliable(pumpStatus, false)
 						}
 						c.Unlock()
@@ -317,7 +321,7 @@ func (c *PumpsClient) Heartbeat() {
 		// TODO: send heartbeat.
 		// if heartbeat success, update c.NeedCheckPumps.
 
-		// write fake binlog as heartbeat?
+		// or write fake binlog as heartbeat?
 	}
 }
 
