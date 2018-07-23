@@ -149,14 +149,7 @@ func (c *PumpsClient) GetPumpStatus(pctx context.Context) error {
 
 	for _, status := range nodesStatus {
 		log.Infof("get pump %v from etcd", status)
-		pumpStatus := NewPumpStatus(status)
-		c.Pumps = append(c.Pumps, pumpStatus)
-		c.PumpMap[status.NodeID] = pumpStatus
-		if pumpStatus.State == node.Online {
-			c.AvaliablePumps = append(c.AvaliablePumps, pumpStatus)
-		} else {
-			c.NeedCheckPumps = append(c.NeedCheckPumps, pumpStatus)
-		}
+		c.addPump(status)
 	}
 
 	return nil
@@ -238,13 +231,11 @@ func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 }
 
 // addPump add a new pump.
-func (c *PumpsClient) addPump(pump *PumpStatus) {
-	if pump.State == node.Online {
-		pump.createGrpcClient()
-		pump.IsAvaliable = true
+func (c *PumpsClient) addPump(status *node.Status) {
+	pump := NewPumpStatus(status)
+	if status.State == node.Online {
 		c.AvaliablePumps = append(c.AvaliablePumps, pump)
 	} else {
-		pump.IsAvaliable = false
 		c.NeedCheckPumps = append(c.NeedCheckPumps, pump)
 	}
 
@@ -253,8 +244,37 @@ func (c *PumpsClient) addPump(pump *PumpStatus) {
 }
 
 // removePump removes a pump.
-func (c *PumpsClient) removePump(pump *PumpStatus) {
-	// TODO
+func (c *PumpsClient) removePump(nodeID string) {
+	if _, ok := c.PumpMap[nodeID]; ok {
+		delete(c.PumpMap, nodeID)
+	}
+
+	for i, p := range c.NeedCheckPumps {
+		if p.NodeID == nodeID {
+			c.NeedCheckPumps = append(c.NeedCheckPumps[:i], c.NeedCheckPumps[i+1:]...)
+			break
+		}
+	}
+
+	for j, p := range c.AvaliablePumps {
+		if p.NodeID == nodeID {
+			c.AvaliablePumps = append(c.AvaliablePumps[:j], c.AvaliablePumps[j+1:]...)
+			break
+		}
+	}
+
+	for k, p := range c.Pumps {
+		if p.NodeID == nodeID {
+			c.AvaliablePumps = append(c.Pumps[:k], c.Pumps[k+1:]...)
+			break
+		}
+	}
+}
+
+// exist returns true if pumps client has pump matched this nodeID.
+func (c *PumpsClient) exist(nodeID string) bool {
+	_, ok := c.PumpMap[nodeID]
+	return ok
 }
 
 // WatchStatus watchs pump's status in etcd.
@@ -275,31 +295,43 @@ func (c *PumpsClient) WatchStatus() {
 					log.Errorf("unmarshal status %q failed", ev.Kv.Value)
 					continue
 				}
-				// strings.Contains(ev.Kv.Key, aliveStr)
 
 				switch ev.Type {
 				case mvccpb.PUT:
-					if c.PumpMap[status.NodeID].statusChanged(status) {
-						c.Lock()
-						c.PumpMap[status.NodeID].updateStatus(status)
-						if status.State != node.Online {
-							c.setPumpAvaliable(c.PumpMap[status.NodeID], false)
+					// only need handle PUT event for `alive` node.
+					if strings.Contains(string(ev.Kv.Key), aliveStr) {
+						if !c.exist(status.NodeID) {
+							c.addPump(status)
 						}
-						c.Unlock()
+
+						// judge pump's status is changed or not.
+						if c.PumpMap[status.NodeID].statusChanged(status) {
+							c.Lock()
+							c.PumpMap[status.NodeID].updateStatus(status)
+							if status.State != node.Online {
+								c.setPumpAvaliable(c.PumpMap[status.NodeID], false)
+							}
+							c.Unlock()
+						}
 					}
-					// judge pump's status is changed or not.
 				case mvccpb.DELETE:
-					if strings.Contains(string(ev.Kv.Key), objectStr) {
-						// object node is deleted, means this node is offline.
-						// c.RemovePump()
-					} else {
+					nodeID, nodeTp := node.AnalyzeKey(string(ev.Kv.Key))
+					if nodeTp == objectStr {
+						// object node is deleted, means this node is unregister, and can remove this pump.
+						c.Lock()
+						c.removePump(nodeID)
+						c.Unlock()
+					} else if nodeTp == aliveStr {
+						// this pump is not alive, and we don't know the pump's state.
 						// set this pump's state to unknow, and this pump is not avaliable.
 						c.Lock()
-						if pumpStatus, ok := c.PumpMap[status.NodeID]; ok {
+						if pumpStatus, ok := c.PumpMap[nodeID]; ok {
 							pumpStatus.State = node.Unknow
 							c.setPumpAvaliable(pumpStatus, false)
 						}
 						c.Unlock()
+					} else {
+						log.Warnf("get unknow key %s from etcd", string(ev.Kv.Key))
 					}
 				}
 			}

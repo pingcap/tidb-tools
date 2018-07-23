@@ -3,20 +3,14 @@ package node
 import (
 	"encoding/json"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/etcd"
-	pb "github.com/pingcap/tipb/go-binlog"
 	"golang.org/x/net/context"
 )
-
-// LatestPos is the latest position in pump
-type LatestPos struct {
-	FilePos  pb.Pos `json:"file-position"`
-	KafkaPos pb.Pos `json:"kafka-position"`
-}
 
 // EtcdRegistry wraps the reactions with etcd
 type EtcdRegistry struct {
@@ -67,7 +61,7 @@ func (r *EtcdRegistry) Nodes(pctx context.Context, prefix string) ([]*Status, er
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	status, err := nodesStatusFromEtcdNode(resp)
+	status, err := NodesStatusFromEtcdNode(resp)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -91,17 +85,15 @@ func (r *EtcdRegistry) RegisterNode(pctx context.Context, prefix, nodeID, host s
 }
 
 // MarkOfflineNode marks offline node in the etcd
-func (r *EtcdRegistry) MarkOfflineNode(pctx context.Context, prefix, nodeID, host string, latestKafkaPos, latestFilePos pb.Pos, latestTS int64) error {
+func (r *EtcdRegistry) MarkOfflineNode(pctx context.Context, prefix, nodeID, host string, updateTime time.Time) error {
 	ctx, cancel := context.WithTimeout(pctx, r.reqTimeout)
 	defer cancel()
 
 	obj := &Status{
-		NodeID:         nodeID,
-		Host:           host,
-		IsOffline:      true,
-		LatestKafkaPos: latestKafkaPos,
-		LatestFilePos:  latestFilePos,
-		OfflineTS:      latestTS,
+		NodeID:     nodeID,
+		Host:       host,
+		State:      Offline,
+		UpdateTime: updateTime,
 	}
 
 	log.Infof("%s mark offline information %+v", nodeID, obj)
@@ -173,43 +165,46 @@ func (r *EtcdRegistry) createNode(ctx context.Context, prefix, nodeID, host stri
 }
 
 // RefreshNode keeps the heartbeats with etcd
-func (r *EtcdRegistry) RefreshNode(pctx context.Context, prefix, nodeID string, ttl int64, latestFilePos, latestKafkaPos pb.Pos) error {
+func (r *EtcdRegistry) RefreshNode(pctx context.Context, prefix, nodeID, label string, state State, score, ttl int64) error {
 	ctx, cancel := context.WithTimeout(pctx, r.reqTimeout)
 	defer cancel()
 
 	aliveKey := r.prefixed(prefix, nodeID, "alive")
 
-	latestPos := &LatestPos{
-		FilePos:  latestFilePos,
-		KafkaPos: latestKafkaPos,
+	status := &Status{
+		Label:      label,
+		Score:      score,
+		State:      state,
+		UpdateTime: time.Now(),
 	}
-	latestPosBytes, err := json.Marshal(latestPos)
+
+	statusBytes, err := json.Marshal(status)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
 	// try to touch alive state of node, update ttl
-	err = r.client.UpdateOrCreate(ctx, aliveKey, string(latestPosBytes), ttl)
+	err = r.client.UpdateOrCreate(ctx, aliveKey, string(statusBytes), ttl)
 	return errors.Trace(err)
 }
 
 func nodeStatusFromEtcdNode(id string, node *etcd.Node) (*Status, error) {
 	var (
 		isAlive       bool
-		status        = &Status{}
-		latestPos     = &LatestPos{}
+		statusMain    = &Status{}
+		statusInfo    = &Status{}
 		isObjectExist bool
 	)
 	for key, n := range node.Childs {
 		switch key {
 		case "object":
 			isObjectExist = true
-			if err := json.Unmarshal(n.Value, &status); err != nil {
+			if err := json.Unmarshal(n.Value, &statusMain); err != nil {
 				return nil, errors.Annotatef(err, "error unmarshal NodeStatus with nodeID(%s)", id)
 			}
 		case "alive":
 			isAlive = true
-			if err := json.Unmarshal(n.Value, &latestPos); err != nil {
+			if err := json.Unmarshal(n.Value, &statusInfo); err != nil {
 				return nil, errors.Annotatef(err, "error unmarshal NodeStatus with nodeID(%s)", id)
 			}
 		}
@@ -220,15 +215,20 @@ func nodeStatusFromEtcdNode(id string, node *etcd.Node) (*Status, error) {
 		return nil, nil
 	}
 
-	status.IsAlive = isAlive
 	if isAlive {
-		status.LatestFilePos = latestPos.FilePos
-		status.LatestKafkaPos = latestPos.KafkaPos
+		statusMain.Label = statusInfo.Label
+		statusMain.Score = statusInfo.Score
+		statusMain.State = statusInfo.State
+		statusMain.UpdateTime = statusInfo.UpdateTime
+	} else {
+		statusMain.State = Unknow
 	}
-	return status, nil
+
+	return statusMain, nil
 }
 
-func nodesStatusFromEtcdNode(root *etcd.Node) ([]*Status, error) {
+// NodesStatusFromEtcdNode returns nodes' status under root node.
+func NodesStatusFromEtcdNode(root *etcd.Node) ([]*Status, error) {
 	var statuses []*Status
 	for id, n := range root.Childs {
 		status, err := nodeStatusFromEtcdNode(id, n)
@@ -241,4 +241,15 @@ func nodesStatusFromEtcdNode(root *etcd.Node) ([]*Status, error) {
 		statuses = append(statuses, status)
 	}
 	return statuses, nil
+}
+
+// AnalyzeKey returns nodeID and node type by analyze key path.
+func AnalyzeKey(key string) (string, string) {
+	paths := strings.Split(key, "/")
+	if len(paths) < 4 {
+		log.Errorf("can't get nodeID or node type from key %s", key)
+		return "", ""
+	}
+
+	return paths[2], paths[3]
 }

@@ -70,13 +70,13 @@ func unregisterNode(urls, kind, nodeID string) error {
 
 	for _, n := range nodes {
 		if n.NodeID == nodeID {
-			if n.IsAlive {
+			if n.State != node.Unknow {
 				return errors.Errorf("kind %s is alive, don't allow to delete it", n.NodeID)
 			}
 
 			switch kind {
 			case pumpNode:
-				return registry.MarkOfflineNode(context.Background(), nodePrefix[kind], n.NodeID, n.Host, n.LatestKafkaPos, n.LatestFilePos, n.OfflineTS)
+				return registry.MarkOfflineNode(context.Background(), nodePrefix[kind], n.NodeID, n.Host, n.UpdateTime)
 			case drainerNode:
 				return registry.UnregisterNode(context.Background(), nodePrefix[kind], n.NodeID)
 			default:
