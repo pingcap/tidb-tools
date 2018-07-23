@@ -87,8 +87,9 @@ func (t *testRouterSuite) TestRoute(c *C) {
 	cases = cases[1:]
 
 	// mismatched
-	_, _, err = router.Route("test_3_a", "")
-	c.Assert(err, NotNil)
+	schema, _, err = router.Route("test_3_a", "")
+	c.Assert(err, IsNil)
+	c.Assert("test_3_a", Equals, "test_3_a")
 	// test multiple schema level rules
 	err = router.AddRule(&TableRule{"test_*", "", "error", ""})
 	c.Assert(err, IsNil)

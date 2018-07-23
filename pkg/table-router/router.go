@@ -128,15 +128,13 @@ func (r *Table) Route(schema, table string) (string, string, error) {
 		targetTable  string
 	)
 	if len(table) == 0 || len(tableRules) == 0 {
-		if len(schemaRules) == 0 {
-			return "", "", errors.NotFoundf("route %s/%s", schema, table)
-		}
-
 		if len(schemaRules) > 1 {
 			return "", "", errors.NotSupportedf("route %s/%s to rule set(%d)", schema, table, len(schemaRules))
 		}
 
-		targetSchema, targetTable = schemaRules[0].TargetSchema, schemaRules[0].TargetTable
+		if len(schemaRules) == 1 {
+			targetSchema, targetTable = schemaRules[0].TargetSchema, schemaRules[0].TargetTable
+		}
 	} else {
 		if len(tableRules) > 1 {
 			return "", "", errors.NotSupportedf("route %s/%s to rule set(%d)", schema, table, len(tableRules))
