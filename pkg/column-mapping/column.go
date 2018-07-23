@@ -25,11 +25,11 @@ import (
 type ActionType string
 
 // Exprs is some built-in expression for column mapping
+// only support some poor expressions now, we would unify tableInfo later and support more
 var Exprs = map[string]func(*columnInfo, []interface{}) []interface{}{
-	"addPrefix":          addPrefix,
-	"addSuufix":          addSuffix,
-	"clone":              cloneColumn,
-	"addAutoIncrementPK": addAutoIncrementPk,
+	"addPrefix": addPrefix,
+	"addSufix":  addSuffix,
+	"clone":     cloneColumn,
 }
 
 // Rule is a rule to map column
@@ -44,8 +44,36 @@ type Rule struct {
 }
 
 // Valid checks validity of rule.
+// add prefix/suffix: it should have target column and one argument
+// clone: it should have source and target column
 func (r *Rule) Valid() error {
+	if _, ok := Exprs[r.Expression]; !ok {
+		return errors.NotFoundf("expression %s", r.Expression)
+	}
+
+	if (r.Expression == "addPrefix" || r.Expression == "addSuffix") && len(r.Arguments) != 1 {
+		return errors.NotValidf("arguments %v for add prefix/suffix", r.Arguments)
+	}
+
 	return nil
+}
+
+// check source and target position
+func (r *Rule) checkColumnPosition(source, target int) (int, int, error) {
+	// if not found target, ignore it
+	if target == -1 {
+		return source, target, errors.NotFoundf("target column %s", r.TargetColumn)
+	}
+
+	if r.Expression == "clone" && source == -1 {
+		return source, target, errors.NotFoundf("source column %s", r.SourceColumn)
+	}
+
+	if target < source { // must add column and added column is before source column
+		source--
+	}
+
+	return source, target, nil
 }
 
 type columnInfo struct {
@@ -224,15 +252,10 @@ func (m *Mapping) queryColumnInfo(schema, table string, columns []string) (*colu
 
 	sourcePosition := findColumnPosition(columns, rule.SourceColumn)
 	targetPosition := findColumnPosition(columns, rule.TargetColumn)
-	if targetPosition == -1 { // if not found target, ignore it
-		m.cache.Lock()
-		m.cache.infos[tableName(schema, table)] = info
-		m.cache.Unlock()
 
-		return info, nil
-	}
-	if targetPosition < sourcePosition { // must add column and added column is before source column
-		sourcePosition--
+	sourcePosition, targetPosition, err := rule.checkColumnPosition(sourcePosition, targetPosition)
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
 
 	info = &columnInfo{
@@ -284,15 +307,6 @@ func cloneColumn(info *columnInfo, vals []interface{}) []interface{} {
 	newVals := make([]interface{}, 0, len(vals))
 	newVals = append(newVals, vals[:info.targetPosition]...)
 	newVals = append(newVals, vals[info.sourcePosition])
-	newVals = append(newVals, vals[info.targetPosition:]...)
-
-	return newVals
-}
-
-func addAutoIncrementPk(info *columnInfo, vals []interface{}) []interface{} {
-	newVals := make([]interface{}, 0, len(vals))
-	newVals = append(newVals, vals[:info.targetPosition]...)
-	newVals = append(newVals, nil)
 	newVals = append(newVals, vals[info.targetPosition:]...)
 
 	return newVals
