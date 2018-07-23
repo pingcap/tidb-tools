@@ -21,15 +21,22 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/table-rule-selector"
 )
 
-// ActionType indicates how to handle column mapping
-type ActionType string
+// Expr indicates how to handle column mapping
+type Expr string
+
+// poor Expr
+const (
+	AddPredix Expr = "add prefix"
+	AddSuffix Expr = "add suffix"
+	Clone     Expr = "clone column"
+)
 
 // Exprs is some built-in expression for column mapping
 // only support some poor expressions now, we would unify tableInfo later and support more
-var Exprs = map[string]func(*columnInfo, []interface{}) []interface{}{
-	"addPrefix": addPrefix,
-	"addSufix":  addSuffix,
-	"clone":     cloneColumn,
+var Exprs = map[Expr]func(*columnInfo, []interface{}) []interface{}{
+	AddPredix: addPrefix,
+	AddSuffix: addSuffix,
+	Clone:     cloneColumn,
 }
 
 // Rule is a rule to map column
@@ -38,7 +45,7 @@ type Rule struct {
 	PatternTable     string   `yaml:"pattern-table" json:"pattern-table" toml:"pattern-table"`
 	SourceColumn     string   `yaml:"source-column" json:"source-column" toml:"source-column"` // modify, add refer column, ignore
 	TargetColumn     string   `yaml:"target-column" json:"target-column" toml:"target-column"` // add column, modify
-	Expression       string   `yaml:"expression" json:"expression" toml:"expression"`
+	Expression       Expr     `yaml:"expression" json:"expression" toml:"expression"`
 	Arguments        []string `yaml:"arguments" json:"arguments" toml:"arguments"`
 	CreateTableQuery string   `yaml:"create-table-query" json:"create-table-query" toml:"create-table-query"`
 }
@@ -51,7 +58,7 @@ func (r *Rule) Valid() error {
 		return errors.NotFoundf("expression %s", r.Expression)
 	}
 
-	if (r.Expression == "addPrefix" || r.Expression == "addSuffix") && len(r.Arguments) != 1 {
+	if (r.Expression == AddPredix || r.Expression == AddSuffix) && len(r.Arguments) != 1 {
 		return errors.NotValidf("arguments %v for add prefix/suffix", r.Arguments)
 	}
 
@@ -65,7 +72,7 @@ func (r *Rule) checkColumnPosition(source, target int) (int, int, error) {
 		return source, target, errors.NotFoundf("target column %s", r.TargetColumn)
 	}
 
-	if r.Expression == "clone" && source == -1 {
+	if r.Expression == Clone && source == -1 {
 		return source, target, errors.NotFoundf("source column %s", r.SourceColumn)
 	}
 
@@ -191,7 +198,7 @@ func (m *Mapping) queryColumnInfo(schema, table string, columns []string) (*colu
 
 	m.cache.RLock()
 	ci, ok := m.cache.infos[tableName(schema, table)]
-	m.cache.Unlock()
+	m.cache.RUnlock()
 	if ok {
 		return ci, nil
 	}
@@ -224,6 +231,7 @@ func (m *Mapping) queryColumnInfo(schema, table string, columns []string) (*colu
 		}
 	}
 
+	// only support one expression for one table now, refine it later
 	var rule *Rule
 	if len(table) == 0 || len(tableRules) == 0 {
 		if len(schemaRules) > 1 {
