@@ -31,6 +31,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	pb "github.com/pingcap/tipb/go-binlog"
 	"google.golang.org/grpc"
+	"github.com/coreos/etcd/mvcc/mvccpb"
 )
 
 const (
@@ -252,15 +253,23 @@ func (c *PumpsClient) SetPumpAvaliable(pump *PumpStatus, avaliable bool) {
 func (c *PumpsClient) WatchStatus() {
 	defer c.wg.Done()
 	rch := c.EtcdCli.Watch(c.ctx, RootPath)
-	for wresp := range rch {
-		for _, ev := range wresp.Events {
-			log.Infof("%s %q : %q\n", ev.Type, ev.Kv.Key, ev.Kv.Value)
-			// TODO: judge status changed or not
-			// if changed, update pumps client.
+	for {
+		select {
+		case <-c.ctx.Done():
+			log.Info("pumps client watch status finished")
+			return
+		case wresp := <-rch:
+			for _, ev := range wresp.Events {
+				log.Infof("%s %q : %q\n", ev.Type, ev.Kv.Key, ev.Kv.Value)
+				switch ev.Type {
+				case mvccpb.PUT:
+					// judge pump's status is changed or not.
+				case mvccpb.DELETE:
+					// this pump is offline.
+				}
+			}
 		}
 	}
-
-	log.Info("pumps client watch status finished")
 }
 
 // Heartbeat send heartbeat request to NeedCheckPumps,
@@ -274,7 +283,8 @@ func (c *PumpsClient) Heartbeat() {
 			return
 		}
 
-		// TODO: if heartbeat success, update pumps.
+		// TODO: send heartbeat.
+		// if heartbeat success, update c.NeedCheckPumps.
 	}
 
 	log.Info("pumps client heartbeat finished")
