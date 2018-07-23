@@ -16,6 +16,7 @@ package client
 import (
 	"sync"
 
+	"github.com/ngaut/log"
 	pb "github.com/pingcap/tipb/go-binlog"
 )
 
@@ -67,6 +68,7 @@ func NewHashSelector() PumpSelector {
 func (h *HashSelector) SetPumps(pumps []*PumpStatus) {
 	h.Lock()
 	h.Pumps = pumps
+	h.PumpMap = make(map[string]*PumpStatus)
 	for _, pump := range pumps {
 		h.PumpMap[pump.NodeID] = pump
 	}
@@ -81,6 +83,7 @@ func (h *HashSelector) Select(binlog *pb.Binlog) *PumpStatus {
 	if len(h.Pumps) == 0 {
 		return nil
 	}
+	log.Infof("can select pumps %v", h.Pumps)
 
 	if binlog.Tp == pb.BinlogType_Prewrite {
 		pump := h.Pumps[int(binlog.StartTs)%len(h.Pumps)]
@@ -88,10 +91,11 @@ func (h *HashSelector) Select(binlog *pb.Binlog) *PumpStatus {
 		return h.Pumps[int(binlog.StartTs)%len(h.Pumps)]
 	}
 
-	pump, ok := h.TsMap[binlog.StartTs]
-	if ok {
-		h.deleteTsMap(binlog.StartTs)
-		return pump
+	if pump, ok := h.TsMap[binlog.StartTs]; ok {
+		if _, ok = h.PumpMap[pump.NodeID]; ok {
+			h.deleteTsMap(binlog.StartTs)
+			return pump
+		}
 	}
 
 	return h.Pumps[int(binlog.StartTs)%len(h.Pumps)]
@@ -99,6 +103,10 @@ func (h *HashSelector) Select(binlog *pb.Binlog) *PumpStatus {
 
 // Next implement PumpSelector.Next.
 func (h *HashSelector) Next(pump *PumpStatus, binlog *pb.Binlog, retryTime int) *PumpStatus {
+	if len(h.Pumps) == 0 {
+		return nil
+	}
+	
 	nextPump := h.Pumps[(int(binlog.StartTs)+int(retryTime))%len(h.Pumps)]
 	h.Lock()
 	h.TsMap[binlog.StartTs] = pump

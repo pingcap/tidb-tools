@@ -14,6 +14,7 @@
 package client
 
 import (
+	//"errors"
 	"context"
 	"crypto/tls"
 	"net"
@@ -21,6 +22,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"fmt"
 
 	//"github.com/pingcap/pd/pd-client"
 	"github.com/juju/errors"
@@ -46,9 +48,11 @@ const (
 type PumpsClient struct {
 	sync.RWMutex
 
-	Ctx context.Context
+	ctx context.Context
 
-	Cancel context.CancelFunc
+	cancel context.CancelFunc
+
+	wg sync.WaitGroup
 
 	// the cluster id of this tidb cluster.
 	ClusterID uint64
@@ -99,8 +103,8 @@ func NewPumpsClient(etcdURLs string, security *tls.Config, algorithm string) (*P
 
 	ctx, cancel := context.WithCancel(context.Background())
 	newPumpsClient := &PumpsClient{
-		Ctx:                ctx,
-		Cancel:             cancel,
+		ctx:                ctx,
+		cancel:             cancel,
 		EtcdCli:            cli,
 		Selector:           selector,
 		RetryTime:          DefaultRetryTime,
@@ -113,8 +117,9 @@ func NewPumpsClient(etcdURLs string, security *tls.Config, algorithm string) (*P
 	}
 	newPumpsClient.Selector.SetPumps(newPumpsClient.AvaliablePumps)
 
-	go newPumpsClient.WatchStatus(ctx)
-	go newPumpsClient.Heartbeat(ctx)
+	newPumpsClient.wg.Add(2)
+	go newPumpsClient.WatchStatus()
+	go newPumpsClient.Heartbeat()
 
 	return newPumpsClient, nil
 }
@@ -151,7 +156,9 @@ func (c *PumpsClient) GetPumpStatus(pctx context.Context) error {
 				return net.DialTimeout("tcp", addr, timeout)
 			})
 			log.Infof("create gcpc client at %s", status.Host)
-			clientConn, err := grpc.Dial(status.Host, dialerOpt, grpc.WithInsecure())
+			//clientConn, err := grpc.Dial(status.Host, dialerOpt, grpc.WithInsecure())
+			port := strings.Split(status.Host, ":")[1]
+			clientConn, err := grpc.Dial(fmt.Sprintf("10.203.13.41:%s", port), dialerOpt, grpc.WithInsecure())
 			if err != nil {
 				return errors.Errorf("create grpc client for %s failed, error %v", status.NodeID, err)
 			}
@@ -204,12 +211,14 @@ func (c *PumpsClient) WriteBinlog(clusterID uint64, binlog *pb.Binlog) error {
 		// every pump can retry 5 times, if retry 5 times and still failed, set this pump unavaliable, and choose a new pump.
 		if (i+1)%5 == 0 {
 			c.SetPumpAvaliable(pump, false)
+			log.Infof("avaliable pumps: %v", c.AvaliablePumps)
 			pump = c.Selector.Next(pump, binlog, i/5+1)
+			log.Infof("write binlog choose pump %v", pump)
 		}
 		time.Sleep(time.Second)
 	}
 
-	return nil
+	return errors.New("write binlog failed!")
 }
 
 // SetPumpAvaliable set pump's isAvaliable, and modify NeedCheckPumps or AvaliablePumps.
@@ -225,6 +234,7 @@ func (c *PumpsClient) SetPumpAvaliable(pump *PumpStatus, avaliable bool) {
 				break
 			}
 		}
+		c.AvaliablePumps = append(c.AvaliablePumps, pump)
 	} else {
 		for j, p := range c.AvaliablePumps {
 			if p.NodeID == pump.NodeID {
@@ -232,16 +242,48 @@ func (c *PumpsClient) SetPumpAvaliable(pump *PumpStatus, avaliable bool) {
 				break
 			}
 		}
+		c.NeedCheckPumps = append(c.NeedCheckPumps, pump)
 	}
+
+	c.Selector.SetPumps(c.AvaliablePumps)
 }
 
 // WatchStatus watchs pump's status in etcd.
-func (c *PumpsClient) WatchStatus(ctx context.Context) {
-	// TODO
+func (c *PumpsClient) WatchStatus() {
+	defer c.wg.Done()
+	rch := c.EtcdCli.Watch(c.ctx, RootPath)
+	for wresp := range rch {
+		for _, ev := range wresp.Events {
+			log.Infof("%s %q : %q\n", ev.Type, ev.Kv.Key, ev.Kv.Value)
+			// TODO: judge status changed or not
+			// if changed, update pumps client.
+		}
+	}
+
+	log.Info("pumps client watch status finished")
 }
 
 // Heartbeat send heartbeat request to NeedCheckPumps,
 // if pump can return response, remove it from NeedCheckPumps.
-func (c *PumpsClient) Heartbeat(ctx context.Context) {
-	// TODO
+func (c *PumpsClient) Heartbeat() {
+	defer c.wg.Done()
+	for {
+		select {
+		case <-c.ctx.Done():
+			log.Infof("pump client heartbeat finished")
+			return
+		}
+
+		// TODO: if heartbeat success, update pumps.
+	}
+
+	log.Info("pumps client heartbeat finished")
+}
+
+// Close closes the PumpsClient.
+func (c *PumpsClient) Close() {
+	log.Infof("pumps client is closing")
+	c.cancel()
+	c.wg.Wait()
+	log.Infof("pumps client is closed")
 }
