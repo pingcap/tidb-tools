@@ -245,6 +245,7 @@ func NodesStatusFromEtcdNode(root *etcd.Node) ([]*Status, error) {
 
 // AnalyzeKey returns nodeID and node type by analyze key path.
 func AnalyzeKey(key string) (string, string) {
+	// the key looks like: /tidb-binlog/pumps/nodeID/alive
 	paths := strings.Split(key, "/")
 	if len(paths) < 4 {
 		log.Errorf("can't get nodeID or node type from key %s", key)

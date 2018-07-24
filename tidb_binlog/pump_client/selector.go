@@ -117,12 +117,6 @@ func (h *HashSelector) Next(pump *PumpStatus, binlog *pb.Binlog, retryTime int) 
 	return nextPump
 }
 
-func (h *HashSelector) deleteTsMap(ts int64) {
-	if _, ok := h.TsMap[ts]; ok {
-		delete(h.TsMap, ts)
-	}
-}
-
 // ScoreSelector select a pump by pump's score.
 type ScoreSelector struct{}
 
