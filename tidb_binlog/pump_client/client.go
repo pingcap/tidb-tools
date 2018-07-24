@@ -216,7 +216,13 @@ func (c *PumpsClient) writeBinlog(req *pb.WriteBinlogReq, pump *PumpStatus) (*pb
 func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 	pump.IsAvaliable = avaliable
 	if avaliable {
-		pump.createGrpcClient()
+		err := pump.createGrpcClient()
+		if err != nil {
+			log.Errorf("create grpc client fot pump %s failed, error: %v", pump.NodeID, err)
+			pump.IsAvaliable = false
+			return
+		}
+
 		for i, p := range c.NeedCheckPumps {
 			if p.NodeID == pump.NodeID {
 				c.NeedCheckPumps = append(c.NeedCheckPumps[:i], c.NeedCheckPumps[i+1:]...)
