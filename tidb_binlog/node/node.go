@@ -46,6 +46,6 @@ type Status struct {
 	// pump client will only send to a pump which label is matched.
 	Label string
 
-	// UpdateTime is the last update time of pump's status.
+	// UpdateTime is the last update time of node's status.
 	UpdateTime time.Time
 }

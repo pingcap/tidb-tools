@@ -216,6 +216,7 @@ func (c *PumpsClient) writeBinlog(req *pb.WriteBinlogReq, pump *PumpStatus) (*pb
 func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 	pump.IsAvaliable = avaliable
 	if avaliable {
+		pump.createGrpcClient()
 		for i, p := range c.NeedCheckPumps {
 			if p.NodeID == pump.NodeID {
 				c.NeedCheckPumps = append(c.NeedCheckPumps[:i], c.NeedCheckPumps[i+1:]...)
