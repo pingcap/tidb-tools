@@ -61,9 +61,6 @@ type PumpsClient struct {
 
 	wg sync.WaitGroup
 
-	// the cluster id of this tidb cluster.
-	ClusterID uint64
-
 	// the client of etcd.
 	EtcdCli *etcd.Client
 
@@ -187,7 +184,7 @@ func (c *PumpsClient) WriteBinlog(clusterID uint64, binlog *pb.Binlog) error {
 			return nil
 		}
 		if strings.Contains(err.Error(), "received message larger than max") {
-			// This kind of error is not critical and not retryable, return directly.
+			// This kind of error is critical and not retryable, return directly.
 			return errors.Errorf("binlog data is too large (%s)", err.Error())
 		}
 
