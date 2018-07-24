@@ -71,9 +71,7 @@ func (p *PumpStatus) createGrpcClient() error {
 		return net.DialTimeout("tcp", addr, timeout)
 	})
 	log.Infof("create gcpc client at %s", p.Host)
-	//clientConn, err := grpc.Dial(status.Host, dialerOpt, grpc.WithInsecure())
-	port := strings.Split(p.Host, ":")[1]
-	clientConn, err := grpc.Dial(fmt.Sprintf("10.203.13.41:%s", port), dialerOpt, grpc.WithInsecure())
+	clientConn, err := grpc.Dial(status.Host, dialerOpt, grpc.WithInsecure())
 	if err != nil {
 		return err
 	}

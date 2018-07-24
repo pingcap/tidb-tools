@@ -14,7 +14,7 @@
 package utils
 
 import (
-	"fmt"
+	//"fmt"
 	"net"
 	"net/url"
 	"strings"
@@ -29,12 +29,15 @@ func ParseHostPortAddr(s string) ([]string, error) {
 
 	for _, str := range strs {
 		str = strings.TrimSpace(str)
-		if !strings.Contains(str, "http") {
-			str = fmt.Sprintf("http://%s", str)
-		}
+
 		u, err := url.Parse(str)
 		if err != nil {
-			return nil, errors.Trace(err)
+			// str may looks like 127.0.0.1:8000
+			if _, _, err := net.SplitHostPort(str); err != nil {
+				return nil, errors.Errorf(`URL address does not have the form "host:port": %s`, str)
+			}
+			addrs = append(addrs, str)
+			continue
 		}
 		if u.Scheme != "http" && u.Scheme != "https" && u.Scheme != "unix" && u.Scheme != "unixs" {
 			return nil, errors.Errorf("URL scheme must be http, https, unix, or unixs: %s", str)
