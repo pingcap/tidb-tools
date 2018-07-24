@@ -90,7 +90,6 @@ func unregisterNode(urls, kind, nodeID string) error {
 
 // createRegistry returns an ectd registry
 func createRegistry(urls string) (*node.EtcdRegistry, error) {
-	log.Infof("etcd urls: %s", urls)
 	ectdEndpoints, err := utils.ParseHostPortAddr(urls)
 	if err != nil {
 		return nil, errors.Trace(err)
