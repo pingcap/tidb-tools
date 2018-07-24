@@ -14,9 +14,10 @@
 package client
 
 import (
+	"hash/fnv"
+	"strconv"
 	"sync"
 
-	"github.com/ngaut/log"
 	pb "github.com/pingcap/tipb/go-binlog"
 )
 
@@ -83,22 +84,23 @@ func (h *HashSelector) Select(binlog *pb.Binlog) *PumpStatus {
 	if len(h.Pumps) == 0 {
 		return nil
 	}
-	log.Infof("can select pumps %v", h.Pumps)
 
 	if binlog.Tp == pb.BinlogType_Prewrite {
-		pump := h.Pumps[int(binlog.StartTs)%len(h.Pumps)]
+		pump := h.Pumps[hashTs(binlog.StartTs)%len(h.Pumps)]
 		h.TsMap[binlog.StartTs] = pump
-		return h.Pumps[int(binlog.StartTs)%len(h.Pumps)]
+		return pump
 	}
 
+	// binlog is commit binlog or rollback binlog, choose the same pump by start ts map.
 	if pump, ok := h.TsMap[binlog.StartTs]; ok {
+		delete(h.TsMap, binlog.StartTs)
 		if _, ok = h.PumpMap[pump.NodeID]; ok {
-			h.deleteTsMap(binlog.StartTs)
 			return pump
 		}
 	}
 
-	return h.Pumps[int(binlog.StartTs)%len(h.Pumps)]
+	// can't find pump in ts map, or the pump is not avaliable, choose a new one.
+	return h.Pumps[hashTs(binlog.StartTs)%len(h.Pumps)]
 }
 
 // Next implement PumpSelector.Next.
@@ -107,7 +109,7 @@ func (h *HashSelector) Next(pump *PumpStatus, binlog *pb.Binlog, retryTime int) 
 		return nil
 	}
 
-	nextPump := h.Pumps[(int(binlog.StartTs)+int(retryTime))%len(h.Pumps)]
+	nextPump := h.Pumps[(hashTs(binlog.StartTs)+int(retryTime))%len(h.Pumps)]
 	h.Lock()
 	h.TsMap[binlog.StartTs] = pump
 	h.Unlock()
@@ -144,4 +146,10 @@ func (s *ScoreSelector) Select(binlog *pb.Binlog) *PumpStatus {
 func (s *ScoreSelector) Next(pump *PumpStatus, binlog *pb.Binlog, retryTime int) *PumpStatus {
 	// TODO
 	return nil
+}
+
+func hashTs(ts int64) int {
+	h := fnv.New32a()
+	h.Write([]byte(strconv.FormatInt(ts, 10)))
+	return int(h.Sum32())
 }
