@@ -51,6 +51,14 @@ const (
 	fakeClusterID uint64 = 110119120
 )
 
+var (
+	// ErrNoAvaliablePump means no avaliable pump to write binlog.
+	ErrNoAvaliablePump = errors.New("no avaliable pump to write binlog")
+
+	// ErrWriteBinlog means write binlog failed, and reach the max retry time.
+	ErrWriteBinlog = errors.New("write binlog failed")
+)
+
 // PumpsClient is the client of pumps.
 type PumpsClient struct {
 	sync.RWMutex
@@ -171,7 +179,7 @@ func (c *PumpsClient) WriteBinlog(clusterID uint64, binlog *pb.Binlog) error {
 	// Retry many times because we may raise CRITICAL error here.
 	for i := 0; i < c.RetryTime; i++ {
 		if pump == nil {
-			return errors.New("no pump can use")
+			return ErrNoAvaliablePump
 		}
 
 		resp, err := c.writeBinlog(req, pump)
@@ -198,7 +206,7 @@ func (c *PumpsClient) WriteBinlog(clusterID uint64, binlog *pb.Binlog) error {
 		time.Sleep(time.Second)
 	}
 
-	return errors.New("write binlog failed")
+	return ErrWriteBinlog
 }
 
 func (c *PumpsClient) writeBinlog(req *pb.WriteBinlogReq, pump *PumpStatus) (*pb.WriteBinlogResp, error) {
