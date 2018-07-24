@@ -14,7 +14,6 @@
 package client
 
 import (
-	"fmt"
 	"net"
 	"strings"
 	"time"
@@ -63,7 +62,7 @@ func NewPumpStatus(status *node.Status) *PumpStatus {
 
 // createGrpcClient create grpc client for online pump.
 func (p *PumpStatus) createGrpcClient() error {
-	if p.State != node.Online {
+	if p.Client != nil || p.State != node.Online {
 		return nil
 	}
 

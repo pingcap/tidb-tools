@@ -215,7 +215,7 @@ func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 	if avaliable {
 		err := pump.createGrpcClient()
 		if err != nil {
-			log.Errorf("create grpc client fot pump %s failed, error: %v", pump.NodeID, err)
+			log.Errorf("create grpc client for pump %s failed, error: %v", pump.NodeID, err)
 			pump.IsAvaliable = false
 			return
 		}
@@ -369,7 +369,13 @@ func (c *PumpsClient) heartbeat() {
 					continue
 				}
 
-				_, err := c.writeBinlog(req, pump)
+				err := pump.createGrpcClient()
+				if err != nil {
+					log.Errorf("create grpc client for pump %s failed, error %v", pump.NodeID, errors.Trace(err))
+					continue
+				}
+
+				_, err = c.writeBinlog(req, pump)
 				if strings.Contains(err.Error(), "cluster ID are mismatch") {
 					checkPassPumps = append(checkPassPumps, pump)
 				}
