@@ -4,6 +4,23 @@ import (
 	"time"
 )
 
+var (
+	// DefaultRootPath is the root path of the keys stored in etcd.
+	DefaultRootPath = "/tidb_binlog"
+
+	// PumpNode is the name of pump.
+	PumpNode = "pump"
+
+	// DrainerNode is the name of drainer.
+	DrainerNode = "drainer"
+
+	// NodePrefix is the map for node and prefix.
+	NodePrefix = map[string]string{
+		PumpNode:    "pumps",
+		DrainerNode: "drainers",
+	}
+)
+
 // State is the state of node.
 type State string
 

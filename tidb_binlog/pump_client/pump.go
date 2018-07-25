@@ -15,7 +15,6 @@ package client
 
 import (
 	"net"
-	"strings"
 	"time"
 
 	"github.com/ngaut/log"
@@ -70,7 +69,7 @@ func (p *PumpStatus) createGrpcClient() error {
 		return net.DialTimeout("tcp", addr, timeout)
 	})
 	log.Infof("create gcpc client at %s", p.Host)
-	clientConn, err := grpc.Dial(status.Host, dialerOpt, grpc.WithInsecure())
+	clientConn, err := grpc.Dial(p.Host, dialerOpt, grpc.WithInsecure())
 	if err != nil {
 		return err
 	}

@@ -26,15 +26,6 @@ import (
 
 var (
 	etcdDialTimeout = 5 * time.Second
-
-	// kind of node
-	pumpNode    = "pump"
-	drainerNode = "drainer"
-
-	nodePrefix = map[string]string{
-		pumpNode:    "pumps",
-		drainerNode: "cisterns",
-	}
 )
 
 // queryNodesByKind returns specified nodes, like pumps/drainers
@@ -44,7 +35,7 @@ func queryNodesByKind(urls string, kind string) error {
 		return errors.Trace(err)
 	}
 
-	nodes, err := registry.Nodes(context.Background(), nodePrefix[kind])
+	nodes, err := registry.Nodes(context.Background(), node.NodePrefix[kind])
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -63,7 +54,7 @@ func unregisterNode(urls, kind, nodeID string) error {
 		return errors.Trace(err)
 	}
 
-	nodes, err := registry.Nodes(context.Background(), nodePrefix[kind])
+	nodes, err := registry.Nodes(context.Background(), node.NodePrefix[kind])
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -75,10 +66,10 @@ func unregisterNode(urls, kind, nodeID string) error {
 			}
 
 			switch kind {
-			case pumpNode:
-				return registry.MarkOfflineNode(context.Background(), nodePrefix[kind], n.NodeID, n.Host, n.UpdateTime)
-			case drainerNode:
-				return registry.UnregisterNode(context.Background(), nodePrefix[kind], n.NodeID)
+			case node.PumpNode:
+				return registry.MarkOfflineNode(context.Background(), node.NodePrefix[kind], n.NodeID, n.Host, n.UpdateTime)
+			case node.DrainerNode:
+				return registry.UnregisterNode(context.Background(), node.NodePrefix[kind], n.NodeID)
 			default:
 				return errors.NotSupportedf("node %s", kind)
 			}
@@ -94,7 +85,7 @@ func createRegistry(urls string) (*node.EtcdRegistry, error) {
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	cli, err := etcd.NewClientFromCfg(ectdEndpoints, etcdDialTimeout, etcd.DefaultRootPath, nil)
+	cli, err := etcd.NewClientFromCfg(ectdEndpoints, etcdDialTimeout, node.DefaultRootPath, nil)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

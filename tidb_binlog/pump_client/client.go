@@ -21,7 +21,6 @@ import (
 	"sync"
 	"time"
 
-	//"github.com/pingcap/pd/pd-client"
 	"github.com/coreos/etcd/mvcc/mvccpb"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
@@ -72,11 +71,8 @@ type PumpsClient struct {
 	// the client of etcd.
 	EtcdCli *etcd.Client
 
-	// Pumps saves the whole pumps' status.
-	Pumps []*PumpStatus
-
-	// PumpMap saves the map of pump's node and pump status.
-	PumpMap map[string]*PumpStatus
+	// Pumps saves the map of pump's nodeID and pump status.
+	Pumps map[string]*PumpStatus
 
 	// AvliablePumps saves the whole avaliable pumps' status.
 	AvaliablePumps []*PumpStatus
@@ -148,7 +144,7 @@ func (c *PumpsClient) getPumpStatus(pctx context.Context) error {
 	ctx, cancel := context.WithTimeout(pctx, DefaultEtcdTimeout)
 	defer cancel()
 
-	resp, err := c.EtcdCli.List(ctx, path.Join(RootPath))
+	resp, err := c.EtcdCli.List(ctx, path.Join(node.DefaultRootPath))
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -257,14 +253,13 @@ func (c *PumpsClient) addPump(status *node.Status) {
 		c.NeedCheckPumps = append(c.NeedCheckPumps, pump)
 	}
 
-	c.PumpMap[pump.NodeID] = pump
-	c.Pumps = append(c.Pumps, pump)
+	c.Pumps[pump.NodeID] = pump
 }
 
 // removePump removes a pump.
 func (c *PumpsClient) removePump(nodeID string) {
-	if _, ok := c.PumpMap[nodeID]; ok {
-		delete(c.PumpMap, nodeID)
+	if _, ok := c.Pumps[nodeID]; ok {
+		delete(c.Pumps, nodeID)
 	}
 
 	for i, p := range c.NeedCheckPumps {
@@ -280,18 +275,11 @@ func (c *PumpsClient) removePump(nodeID string) {
 			break
 		}
 	}
-
-	for k, p := range c.Pumps {
-		if p.NodeID == nodeID {
-			c.Pumps = append(c.Pumps[:k], c.Pumps[k+1:]...)
-			break
-		}
-	}
 }
 
 // exist returns true if pumps client has pump matched this nodeID.
 func (c *PumpsClient) exist(nodeID string) bool {
-	_, ok := c.PumpMap[nodeID]
+	_, ok := c.Pumps[nodeID]
 	return ok
 }
 
@@ -323,11 +311,11 @@ func (c *PumpsClient) watchStatus() {
 						}
 
 						// judge pump's status is changed or not.
-						if c.PumpMap[status.NodeID].statusChanged(status) {
+						if c.Pumps[status.NodeID].statusChanged(status) {
 							c.Lock()
-							c.PumpMap[status.NodeID].updateStatus(status)
+							c.Pumps[status.NodeID].updateStatus(status)
 							if status.State != node.Online {
-								c.setPumpAvaliable(c.PumpMap[status.NodeID], false)
+								c.setPumpAvaliable(c.Pumps[status.NodeID], false)
 							}
 							c.Unlock()
 						}
@@ -343,7 +331,7 @@ func (c *PumpsClient) watchStatus() {
 						// this pump is not alive, and we don't know the pump's state.
 						// set this pump's state to unknow, and this pump is not avaliable.
 						c.Lock()
-						if pumpStatus, ok := c.PumpMap[nodeID]; ok {
+						if pumpStatus, ok := c.Pumps[nodeID]; ok {
 							pumpStatus.State = node.Unknow
 							c.setPumpAvaliable(pumpStatus, false)
 						}
