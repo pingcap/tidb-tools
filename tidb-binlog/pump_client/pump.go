@@ -18,14 +18,9 @@ import (
 	"time"
 
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-tools/tidb_binlog/node"
+	"github.com/pingcap/tidb-tools/tidb-binlog/node"
 	pb "github.com/pingcap/tipb/go-binlog"
 	"google.golang.org/grpc"
-)
-
-const (
-	// RootPath is the root path of the keys stored in etcd for pumps.
-	RootPath = "/tidb-binlog/pumps"
 )
 
 // PumpStatus saves pump's status

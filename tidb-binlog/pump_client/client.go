@@ -26,7 +26,7 @@ import (
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/etcd"
 	"github.com/pingcap/tidb-tools/pkg/utils"
-	"github.com/pingcap/tidb-tools/tidb_binlog/node"
+	"github.com/pingcap/tidb-tools/tidb-binlog/node"
 	pb "github.com/pingcap/tipb/go-binlog"
 	"golang.org/x/net/context"
 )
@@ -108,7 +108,8 @@ func NewPumpsClient(etcdURLs string, security *tls.Config, algorithm string) (*P
 		return nil, errors.Trace(err)
 	}
 
-	cli, err := etcd.NewClientFromCfg(ectdEndpoints, DefaultEtcdTimeout, RootPath, security)
+	rootPath := path.Join(node.DefaultRootPath, node.NodePrefix[node.PumpNode])
+	cli, err := etcd.NewClientFromCfg(ectdEndpoints, DefaultEtcdTimeout, rootPath, security)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -277,7 +278,8 @@ func (c *PumpsClient) exist(nodeID string) bool {
 // watchStatus watchs pump's status in etcd.
 func (c *PumpsClient) watchStatus() {
 	defer c.wg.Done()
-	rch := c.EtcdCli.Watch(c.ctx, RootPath)
+	rootPath := path.Join(node.DefaultRootPath, node.NodePrefix[node.PumpNode])
+	rch := c.EtcdCli.Watch(c.ctx, rootPath)
 	for {
 		select {
 		case <-c.ctx.Done():

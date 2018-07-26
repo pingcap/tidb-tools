@@ -19,7 +19,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-tools/tidb_binlog/node"
+	"github.com/pingcap/tidb-tools/tidb-binlog/node"
 )
 
 func main() {

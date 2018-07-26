@@ -5,8 +5,8 @@ import (
 )
 
 var (
-	// DefaultRootPath is the root path of the keys stored in etcd.
-	DefaultRootPath = "/tidb_binlog"
+	// DefaultRootPath is the root path of the keys stored in etcd, the `2.1` is the tidb-binlog's version.
+	DefaultRootPath = "/tidb-binlog/2.1"
 
 	// PumpNode is the name of pump.
 	PumpNode = "pump"

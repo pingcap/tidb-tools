@@ -21,7 +21,7 @@ import (
 	"github.com/juju/errors"
 )
 
-// ParseHostPortAddr returns a scheme://host:port list
+// ParseHostPortAddr returns a scheme://host:port or host:port list
 func ParseHostPortAddr(s string) ([]string, error) {
 	strs := strings.Split(s, ",")
 	addrs := make([]string, 0, len(strs))

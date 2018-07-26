@@ -20,7 +20,7 @@ import (
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/etcd"
 	"github.com/pingcap/tidb-tools/pkg/utils"
-	"github.com/pingcap/tidb-tools/tidb_binlog/node"
+	"github.com/pingcap/tidb-tools/tidb-binlog/node"
 	"golang.org/x/net/context"
 )
 

@@ -34,7 +34,7 @@ dump_region:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/dump_region ./dump_region
 
 binlogctl:
-	$(GO) build -ldflags '$(LDFLAGS)' -o bin/binlogctl ./tidb_binlog/binlogctl
+	$(GO) build -ldflags '$(LDFLAGS)' -o bin/binlogctl ./tidb-binlog/binlogctl
 
 sync_diff_inspector:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/sync_diff_inspector ./sync_diff_inspector
