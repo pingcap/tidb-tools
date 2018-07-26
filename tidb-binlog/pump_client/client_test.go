@@ -56,7 +56,7 @@ func (*testClientSuite) TestPumpsClient(c *C) {
 	}
 
 	for _, pump := range pumps {
-		pumpsClient.addPump(pump)
+		pumpsClient.addPump(pump, false)
 	}
 	pumpsClient.Selector.SetPumps(pumpsClient.AvaliablePumps)
 

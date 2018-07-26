@@ -41,13 +41,14 @@ const (
 	// DefaultBinlogWriteTimeout is the default max time binlog can use to write to pump.
 	DefaultBinlogWriteTimeout = 15 * time.Second
 
-	// DefaultHeartbeatWaitTime is the default wait time for send heartbeat to unavaliable pumps.
-	DefaultHeartbeatWaitTime = 30 * time.Second
+	// CheckInterval is the default interval for check unavaliable pumps.
+	CheckInterval = 30 * time.Second
+
+	// RetryInterval is the default interval of retrying to write binlog.
+	RetryInterval = 100 * time.Millisecond
 
 	aliveStr  = "alive"
 	objectStr = "object"
-
-	fakeClusterID uint64 = 110119120
 )
 
 var (
@@ -67,6 +68,9 @@ type PumpsClient struct {
 	cancel context.CancelFunc
 
 	wg sync.WaitGroup
+
+	// ClusterID is the cluster ID of this tidb cluster.
+	ClusterID uint64
 
 	// the client of etcd.
 	EtcdCli *etcd.Client
@@ -91,7 +95,7 @@ type PumpsClient struct {
 }
 
 // NewPumpsClient returns a PumpsClient.
-func NewPumpsClient(etcdURLs string, security *tls.Config, algorithm string) (*PumpsClient, error) {
+func NewPumpsClient(etcdURLs string, clusterID uint64, security *tls.Config, algorithm string) (*PumpsClient, error) {
 	var selector PumpSelector
 	switch algorithm {
 	case Hash:
@@ -118,6 +122,7 @@ func NewPumpsClient(etcdURLs string, security *tls.Config, algorithm string) (*P
 	newPumpsClient := &PumpsClient{
 		ctx:                ctx,
 		cancel:             cancel,
+		ClusterID:          clusterID,
 		EtcdCli:            cli,
 		Pumps:              make(map[string]*PumpStatus),
 		AvaliablePumps:     make(map[string]*PumpStatus),
@@ -135,7 +140,7 @@ func NewPumpsClient(etcdURLs string, security *tls.Config, algorithm string) (*P
 
 	newPumpsClient.wg.Add(2)
 	go newPumpsClient.watchStatus()
-	go newPumpsClient.heartbeat()
+	go newPumpsClient.detect()
 
 	return newPumpsClient, nil
 }
@@ -159,22 +164,25 @@ func (c *PumpsClient) getPumpStatus(pctx context.Context) error {
 
 	for _, status := range nodesStatus {
 		log.Debugf("[pumps client] get pump %v from etcd", status)
-		c.addPump(NewPumpStatus(status))
+		c.addPump(NewPumpStatus(status), false)
 	}
 
 	return nil
 }
 
 // WriteBinlog writes binlog to a situable pump.
-func (c *PumpsClient) WriteBinlog(clusterID uint64, binlog *pb.Binlog) error {
+func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 	pump := c.Selector.Select(binlog)
+	if pump == nil {
+		return ErrNoAvaliablePump
+	}
 	log.Debugf("[pumps client] write binlog choose pump %s", pump.NodeID)
 
 	commitData, err := binlog.Marshal()
 	if err != nil {
 		return errors.Trace(err)
 	}
-	req := &pb.WriteBinlogReq{ClusterID: clusterID, Payload: commitData}
+	req := &pb.WriteBinlogReq{ClusterID: c.ClusterID, Payload: commitData}
 
 	// Retry many times because we may raise CRITICAL error here.
 	for i := 0; i < c.RetryTime; i++ {
@@ -203,7 +211,7 @@ func (c *PumpsClient) WriteBinlog(clusterID uint64, binlog *pb.Binlog) error {
 			pump = c.Selector.Next(pump, binlog, i/5+1)
 			log.Debugf("[pumps client] avaliable pumps: %v, write binlog choose pump %v", c.AvaliablePumps, pump)
 		}
-		time.Sleep(time.Second)
+		time.Sleep(RetryInterval)
 	}
 
 	return ErrWriteBinlog
@@ -228,15 +236,11 @@ func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 			return
 		}
 
-		if _, ok := c.NeedCheckPumps[pump.NodeID]; ok {
-			delete(c.NeedCheckPumps, pump.NodeID)
-		}
+		delete(c.NeedCheckPumps, pump.NodeID)
 		c.AvaliablePumps[pump.NodeID] = pump
-	} else {
-		if _, ok := c.AvaliablePumps[pump.NodeID]; ok {
-			delete(c.AvaliablePumps, pump.NodeID)
-		}
 
+	} else {
+		delete(c.AvaliablePumps, pump.NodeID)
 		c.NeedCheckPumps[pump.NodeID] = pump
 	}
 
@@ -244,29 +248,26 @@ func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 }
 
 // addPump add a new pump.
-func (c *PumpsClient) addPump(pump *PumpStatus) {
+func (c *PumpsClient) addPump(pump *PumpStatus, updateSelector bool) {
 	if pump.State == node.Online {
 		c.AvaliablePumps[pump.NodeID] = pump
 	} else {
 		c.NeedCheckPumps[pump.NodeID] = pump
 	}
-
 	c.Pumps[pump.NodeID] = pump
+
+	if updateSelector {
+		c.Selector.SetPumps(c.AvaliablePumps)
+	}
 }
 
 // removePump removes a pump.
 func (c *PumpsClient) removePump(nodeID string) {
-	if _, ok := c.Pumps[nodeID]; ok {
-		delete(c.Pumps, nodeID)
-	}
+	delete(c.Pumps, nodeID)
+	delete(c.NeedCheckPumps, nodeID)
+	delete(c.AvaliablePumps, nodeID)
 
-	if _, ok := c.NeedCheckPumps[nodeID]; ok {
-		delete(c.NeedCheckPumps, nodeID)
-	}
-
-	if _, ok := c.AvaliablePumps[nodeID]; ok {
-		delete(c.AvaliablePumps, nodeID)
-	}
+	c.Selector.SetPumps(c.AvaliablePumps)
 }
 
 // exist returns true if pumps client has pump matched this nodeID.
@@ -300,7 +301,9 @@ func (c *PumpsClient) watchStatus() {
 					// only need handle PUT event for `alive` node.
 					if strings.Contains(string(ev.Kv.Key), aliveStr) {
 						if !c.exist(status.NodeID) {
-							c.addPump(NewPumpStatus(status))
+							c.Lock()
+							c.addPump(NewPumpStatus(status), true)
+							c.Unlock()
 						}
 
 						// judge pump's status is changed or not.
@@ -340,9 +343,9 @@ func (c *PumpsClient) watchStatus() {
 	}
 }
 
-// heartbeat send heartbeat request to NeedCheckPumps,
+// detect send detect binlog to NeedCheckPumps,
 // if pump can return response, remove it from NeedCheckPumps.
-func (c *PumpsClient) heartbeat() {
+func (c *PumpsClient) detect() {
 	defer c.wg.Done()
 	for {
 		select {
@@ -350,10 +353,10 @@ func (c *PumpsClient) heartbeat() {
 			log.Infof("[pumps client] heartbeat finished")
 			return
 		default:
-			// send fake binlog to pump with wrong clusterID,
-			// if this pump can return `mismatch` error, means this pump is avaliable.
+			// send fake binlog to pump, if this pump can return response without error
+			// means this pump is avaliable.
 			checkPassPumps := make([]*PumpStatus, 0, 1)
-			req := &pb.WriteBinlogReq{ClusterID: fakeClusterID, Payload: nil}
+			req := &pb.WriteBinlogReq{ClusterID: c.ClusterID, Payload: nil}
 			c.RLock()
 			for _, pump := range c.NeedCheckPumps {
 				if pump.Status.State != node.Online && pump.Status.State != node.Unknow {
@@ -367,8 +370,10 @@ func (c *PumpsClient) heartbeat() {
 				}
 
 				_, err = c.writeBinlog(req, pump)
-				if strings.Contains(err.Error(), "cluster ID are mismatch") {
+				if err == nil {
 					checkPassPumps = append(checkPassPumps, pump)
+				} else {
+					log.Errorf("[pumps client] write detect binlog to pump %s error %v", pump.NodeID, err)
 				}
 			}
 			c.RUnlock()
@@ -379,7 +384,7 @@ func (c *PumpsClient) heartbeat() {
 			}
 			c.Unlock()
 
-			time.Sleep(DefaultHeartbeatWaitTime)
+			time.Sleep(CheckInterval)
 		}
 	}
 }
