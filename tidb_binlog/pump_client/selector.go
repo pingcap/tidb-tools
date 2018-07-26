@@ -32,7 +32,7 @@ const (
 // PumpSelector selects pump for sending binlog.
 type PumpSelector interface {
 	// SetPumps set pumps to be selected.
-	SetPumps([]*PumpStatus)
+	SetPumps(map[string]*PumpStatus)
 
 	// Select returns a situable pump.
 	Select(*pb.Binlog) *PumpStatus
@@ -66,12 +66,12 @@ func NewHashSelector() PumpSelector {
 }
 
 // SetPumps implement PumpSelector.SetPumps.
-func (h *HashSelector) SetPumps(pumps []*PumpStatus) {
+func (h *HashSelector) SetPumps(pumps map[string]*PumpStatus) {
 	h.Lock()
-	h.Pumps = pumps
-	h.PumpMap = make(map[string]*PumpStatus)
+	h.PumpMap = pumps
+	h.Pumps = make([]*PumpStatus, 0, len(pumps))
 	for _, pump := range pumps {
-		h.PumpMap[pump.NodeID] = pump
+		h.Pumps = append(h.Pumps, pump)
 	}
 	h.Unlock()
 }
@@ -128,7 +128,7 @@ func NewScoreSelector() PumpSelector {
 }
 
 // SetPumps implement PumpSelector.SetPumps.
-func (s *ScoreSelector) SetPumps(pumps []*PumpStatus) {
+func (s *ScoreSelector) SetPumps(pumps map[string]*PumpStatus) {
 	// TODO
 }
 

@@ -40,8 +40,8 @@ type testClientSuite struct{}
 func (*testClientSuite) TestPumpsClient(c *C) {
 	pumpsClient := &PumpsClient{
 		Pumps:              make(map[string]*PumpStatus),
-		AvaliablePumps:     make([]*PumpStatus, 0, 5),
-		NeedCheckPumps:     make([]*PumpStatus, 0, 5),
+		AvaliablePumps:     make(map[string]*PumpStatus),
+		NeedCheckPumps:     make(map[string]*PumpStatus),
 		Selector:           NewHashSelector(),
 		RetryTime:          DefaultRetryTime,
 		BinlogWriteTimeout: DefaultBinlogWriteTimeout,

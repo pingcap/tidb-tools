@@ -75,10 +75,10 @@ type PumpsClient struct {
 	Pumps map[string]*PumpStatus
 
 	// AvliablePumps saves the whole avaliable pumps' status.
-	AvaliablePumps []*PumpStatus
+	AvaliablePumps map[string]*PumpStatus
 
 	// NeedCheckPumps saves the pumps need to be checked.
-	NeedCheckPumps []*PumpStatus
+	NeedCheckPumps map[string]*PumpStatus
 
 	// Selector will select a suitable pump.
 	Selector PumpSelector
@@ -119,8 +119,8 @@ func NewPumpsClient(etcdURLs string, security *tls.Config, algorithm string) (*P
 		cancel:             cancel,
 		EtcdCli:            cli,
 		Pumps:              make(map[string]*PumpStatus),
-		AvaliablePumps:     make([]*PumpStatus, 0, 5),
-		NeedCheckPumps:     make([]*PumpStatus, 0, 5),
+		AvaliablePumps:     make(map[string]*PumpStatus),
+		NeedCheckPumps:     make(map[string]*PumpStatus),
 		Selector:           selector,
 		RetryTime:          DefaultRetryTime,
 		BinlogWriteTimeout: DefaultBinlogWriteTimeout,
@@ -227,21 +227,16 @@ func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 			return
 		}
 
-		for i, p := range c.NeedCheckPumps {
-			if p.NodeID == pump.NodeID {
-				c.NeedCheckPumps = append(c.NeedCheckPumps[:i], c.NeedCheckPumps[i+1:]...)
-				break
-			}
+		if _, ok := c.NeedCheckPumps[pump.NodeID]; ok {
+			delete(c.NeedCheckPumps, pump.NodeID)
 		}
-		c.AvaliablePumps = append(c.AvaliablePumps, pump)
+		c.AvaliablePumps[pump.NodeID] = pump
 	} else {
-		for j, p := range c.AvaliablePumps {
-			if p.NodeID == pump.NodeID {
-				c.AvaliablePumps = append(c.AvaliablePumps[:j], c.AvaliablePumps[j+1:]...)
-				break
-			}
+		if _, ok := c.AvaliablePumps[pump.NodeID]; ok {
+			delete(c.AvaliablePumps, pump.NodeID)
 		}
-		c.NeedCheckPumps = append(c.NeedCheckPumps, pump)
+
+		c.NeedCheckPumps[pump.NodeID] = pump
 	}
 
 	c.Selector.SetPumps(c.AvaliablePumps)
@@ -250,9 +245,9 @@ func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 // addPump add a new pump.
 func (c *PumpsClient) addPump(pump *PumpStatus) {
 	if pump.State == node.Online {
-		c.AvaliablePumps = append(c.AvaliablePumps, pump)
+		c.AvaliablePumps[pump.NodeID] = pump
 	} else {
-		c.NeedCheckPumps = append(c.NeedCheckPumps, pump)
+		c.NeedCheckPumps[pump.NodeID] = pump
 	}
 
 	c.Pumps[pump.NodeID] = pump
@@ -264,18 +259,12 @@ func (c *PumpsClient) removePump(nodeID string) {
 		delete(c.Pumps, nodeID)
 	}
 
-	for i, p := range c.NeedCheckPumps {
-		if p.NodeID == nodeID {
-			c.NeedCheckPumps = append(c.NeedCheckPumps[:i], c.NeedCheckPumps[i+1:]...)
-			break
-		}
+	if _, ok := c.NeedCheckPumps[nodeID]; ok {
+		delete(c.NeedCheckPumps, nodeID)
 	}
 
-	for j, p := range c.AvaliablePumps {
-		if p.NodeID == nodeID {
-			c.AvaliablePumps = append(c.AvaliablePumps[:j], c.AvaliablePumps[j+1:]...)
-			break
-		}
+	if _, ok := c.AvaliablePumps[nodeID]; ok {
+		delete(c.AvaliablePumps, nodeID)
 	}
 }
 
@@ -318,6 +307,8 @@ func (c *PumpsClient) watchStatus() {
 							c.Pumps[status.NodeID].updateStatus(status)
 							if status.State != node.Online {
 								c.setPumpAvaliable(c.Pumps[status.NodeID], false)
+							} else {
+								c.setPumpAvaliable(c.Pumps[status.NodeID], true)
 							}
 							c.Unlock()
 						}
