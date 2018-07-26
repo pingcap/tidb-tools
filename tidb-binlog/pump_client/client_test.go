@@ -38,10 +38,13 @@ var _ = Suite(&testClientSuite{})
 type testClientSuite struct{}
 
 func (*testClientSuite) TestPumpsClient(c *C) {
+	pumpInfos := &PumpInfos{
+		Pumps:          make(map[string]*PumpStatus),
+		AvaliablePumps: make(map[string]*PumpStatus),
+		NeedCheckPumps: make(map[string]*PumpStatus),
+	}
 	pumpsClient := &PumpsClient{
-		Pumps:              make(map[string]*PumpStatus),
-		AvaliablePumps:     make(map[string]*PumpStatus),
-		NeedCheckPumps:     make(map[string]*PumpStatus),
+		Pumps:              pumpInfos,
 		Selector:           NewHashSelector(),
 		RetryTime:          DefaultRetryTime,
 		BinlogWriteTimeout: DefaultBinlogWriteTimeout,
@@ -58,7 +61,7 @@ func (*testClientSuite) TestPumpsClient(c *C) {
 	for _, pump := range pumps {
 		pumpsClient.addPump(pump, false)
 	}
-	pumpsClient.Selector.SetPumps(pumpsClient.AvaliablePumps)
+	pumpsClient.Selector.SetPumps(pumpsClient.Pumps.AvaliablePumps)
 
 	tCase := &testCase{}
 
@@ -86,11 +89,13 @@ func (*testClientSuite) TestPumpsClient(c *C) {
 
 	tCase.setNodeID = []string{"pump0", "", "pump0", "pump1", "pump2"}
 	tCase.setAvliable = []bool{true, false, false, true, true}
-	tCase.choosePumps = []*PumpStatus{pumpsClient.Pumps["pump0"], pumpsClient.Pumps["pump0"], nil, pumpsClient.Pumps["pump1"], pumpsClient.Pumps["pump2"]}
+	tCase.choosePumps = []*PumpStatus{pumpsClient.Pumps.Pumps["pump0"], pumpsClient.Pumps.Pumps["pump0"], nil,
+		pumpsClient.Pumps.Pumps["pump1"], pumpsClient.Pumps.Pumps["pump2"]}
 
 	for i, nodeID := range tCase.setNodeID {
+		fmt.Println(i)
 		if nodeID != "" {
-			pumpsClient.setPumpAvaliable(pumpsClient.Pumps[nodeID], tCase.setAvliable[i])
+			pumpsClient.setPumpAvaliable(pumpsClient.Pumps.Pumps[nodeID], tCase.setAvliable[i])
 		}
 		pump := pumpsClient.Selector.Select(tCase.binlogs[i])
 		c.Assert(pump, Equals, tCase.choosePumps[i])

@@ -59,10 +59,21 @@ var (
 	ErrWriteBinlog = errors.New("write binlog failed")
 )
 
+// PumpInfos saves pumps' infomations in pumps client.
+type PumpInfos struct {
+	sync.RWMutex
+	// Pumps saves the map of pump's nodeID and pump status.
+	Pumps map[string]*PumpStatus
+
+	// AvliablePumps saves the whole avaliable pumps' status.
+	AvaliablePumps map[string]*PumpStatus
+
+	// NeedCheckPumps saves the pumps need to be checked.
+	NeedCheckPumps map[string]*PumpStatus
+}
+
 // PumpsClient is the client of pumps.
 type PumpsClient struct {
-	sync.RWMutex
-
 	ctx context.Context
 
 	cancel context.CancelFunc
@@ -75,14 +86,8 @@ type PumpsClient struct {
 	// the client of etcd.
 	EtcdCli *etcd.Client
 
-	// Pumps saves the map of pump's nodeID and pump status.
-	Pumps map[string]*PumpStatus
-
-	// AvliablePumps saves the whole avaliable pumps' status.
-	AvaliablePumps map[string]*PumpStatus
-
-	// NeedCheckPumps saves the pumps need to be checked.
-	NeedCheckPumps map[string]*PumpStatus
+	// Pumps saves the pumps' information.
+	Pumps *PumpInfos
 
 	// Selector will select a suitable pump.
 	Selector PumpSelector
@@ -118,15 +123,19 @@ func NewPumpsClient(etcdURLs string, clusterID uint64, security *tls.Config, alg
 		return nil, errors.Trace(err)
 	}
 
+	pumpInfos := &PumpInfos{
+		Pumps:          make(map[string]*PumpStatus),
+		AvaliablePumps: make(map[string]*PumpStatus),
+		NeedCheckPumps: make(map[string]*PumpStatus),
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	newPumpsClient := &PumpsClient{
 		ctx:                ctx,
 		cancel:             cancel,
 		ClusterID:          clusterID,
 		EtcdCli:            cli,
-		Pumps:              make(map[string]*PumpStatus),
-		AvaliablePumps:     make(map[string]*PumpStatus),
-		NeedCheckPumps:     make(map[string]*PumpStatus),
+		Pumps:              pumpInfos,
 		Selector:           selector,
 		RetryTime:          DefaultRetryTime,
 		BinlogWriteTimeout: DefaultBinlogWriteTimeout,
@@ -136,7 +145,7 @@ func NewPumpsClient(etcdURLs string, clusterID uint64, security *tls.Config, alg
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	newPumpsClient.Selector.SetPumps(newPumpsClient.AvaliablePumps)
+	newPumpsClient.Selector.SetPumps(newPumpsClient.Pumps.AvaliablePumps)
 
 	newPumpsClient.wg.Add(2)
 	go newPumpsClient.watchStatus()
@@ -147,8 +156,8 @@ func NewPumpsClient(etcdURLs string, clusterID uint64, security *tls.Config, alg
 
 // getPumpStatus retruns all the pumps status in the etcd.
 func (c *PumpsClient) getPumpStatus(pctx context.Context) error {
-	c.Lock()
-	defer c.Unlock()
+	c.Pumps.Lock()
+	defer c.Pumps.Unlock()
 
 	ctx, cancel := context.WithTimeout(pctx, DefaultEtcdTimeout)
 	defer cancel()
@@ -205,11 +214,11 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 
 		// every pump can retry 5 times, if retry 5 times and still failed, set this pump unavaliable, and choose a new pump.
 		if (i+1)%5 == 0 {
-			c.Lock()
+			c.Pumps.Lock()
 			c.setPumpAvaliable(pump, false)
-			c.Unlock()
+			c.Pumps.Unlock()
 			pump = c.Selector.Next(pump, binlog, i/5+1)
-			log.Debugf("[pumps client] avaliable pumps: %v, write binlog choose pump %v", c.AvaliablePumps, pump)
+			log.Debugf("[pumps client] avaliable pumps: %v, write binlog choose pump %v", c.Pumps.AvaliablePumps, pump)
 		}
 		time.Sleep(RetryInterval)
 	}
@@ -236,43 +245,48 @@ func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 			return
 		}
 
-		delete(c.NeedCheckPumps, pump.NodeID)
-		c.AvaliablePumps[pump.NodeID] = pump
+		delete(c.Pumps.NeedCheckPumps, pump.NodeID)
+		c.Pumps.AvaliablePumps[pump.NodeID] = pump
 
 	} else {
-		delete(c.AvaliablePumps, pump.NodeID)
-		c.NeedCheckPumps[pump.NodeID] = pump
+		delete(c.Pumps.AvaliablePumps, pump.NodeID)
+		c.Pumps.NeedCheckPumps[pump.NodeID] = pump
 	}
 
-	c.Selector.SetPumps(c.AvaliablePumps)
+	c.Selector.SetPumps(c.Pumps.AvaliablePumps)
 }
 
 // addPump add a new pump.
 func (c *PumpsClient) addPump(pump *PumpStatus, updateSelector bool) {
 	if pump.State == node.Online {
-		c.AvaliablePumps[pump.NodeID] = pump
+		c.Pumps.AvaliablePumps[pump.NodeID] = pump
 	} else {
-		c.NeedCheckPumps[pump.NodeID] = pump
+		c.Pumps.NeedCheckPumps[pump.NodeID] = pump
 	}
-	c.Pumps[pump.NodeID] = pump
+	c.Pumps.Pumps[pump.NodeID] = pump
 
 	if updateSelector {
-		c.Selector.SetPumps(c.AvaliablePumps)
+		c.Selector.SetPumps(c.Pumps.AvaliablePumps)
 	}
+}
+
+// updatePump update pump's status.
+func (c *PumpsClient) updatePump(status *node.Status) {
+	c.Pumps.Pumps[status.NodeID].updateStatus(status)
 }
 
 // removePump removes a pump.
 func (c *PumpsClient) removePump(nodeID string) {
-	delete(c.Pumps, nodeID)
-	delete(c.NeedCheckPumps, nodeID)
-	delete(c.AvaliablePumps, nodeID)
+	delete(c.Pumps.Pumps, nodeID)
+	delete(c.Pumps.NeedCheckPumps, nodeID)
+	delete(c.Pumps.AvaliablePumps, nodeID)
 
-	c.Selector.SetPumps(c.AvaliablePumps)
+	c.Selector.SetPumps(c.Pumps.AvaliablePumps)
 }
 
 // exist returns true if pumps client has pump matched this nodeID.
 func (c *PumpsClient) exist(nodeID string) bool {
-	_, ok := c.Pumps[nodeID]
+	_, ok := c.Pumps.Pumps[nodeID]
 	return ok
 }
 
@@ -301,39 +315,40 @@ func (c *PumpsClient) watchStatus() {
 					// only need handle PUT event for `alive` node.
 					if strings.Contains(string(ev.Kv.Key), aliveStr) {
 						if !c.exist(status.NodeID) {
-							c.Lock()
+							c.Pumps.Lock()
 							c.addPump(NewPumpStatus(status), true)
-							c.Unlock()
+							c.Pumps.Unlock()
+							continue
 						}
 
 						// judge pump's status is changed or not.
-						if c.Pumps[status.NodeID].statusChanged(status) {
-							c.Lock()
-							c.Pumps[status.NodeID].updateStatus(status)
+						if c.Pumps.Pumps[status.NodeID].statusChanged(status) {
+							c.Pumps.Lock()
+							c.updatePump(status)
 							if status.State != node.Online {
-								c.setPumpAvaliable(c.Pumps[status.NodeID], false)
+								c.setPumpAvaliable(c.Pumps.Pumps[status.NodeID], false)
 							} else {
-								c.setPumpAvaliable(c.Pumps[status.NodeID], true)
+								c.setPumpAvaliable(c.Pumps.Pumps[status.NodeID], true)
 							}
-							c.Unlock()
+							c.Pumps.Unlock()
 						}
 					}
 				case mvccpb.DELETE:
 					nodeID, nodeTp := node.AnalyzeKey(string(ev.Kv.Key))
 					if nodeTp == objectStr {
 						// object node is deleted, means this node is unregister, and can remove this pump.
-						c.Lock()
+						c.Pumps.Lock()
 						c.removePump(nodeID)
-						c.Unlock()
+						c.Pumps.Unlock()
 					} else if nodeTp == aliveStr {
 						// this pump is not alive, and we don't know the pump's state.
 						// set this pump's state to unknow, and this pump is not avaliable.
-						c.Lock()
-						if pumpStatus, ok := c.Pumps[nodeID]; ok {
+						c.Pumps.Lock()
+						if pumpStatus, ok := c.Pumps.Pumps[nodeID]; ok {
 							pumpStatus.State = node.Unknow
 							c.setPumpAvaliable(pumpStatus, false)
 						}
-						c.Unlock()
+						c.Pumps.Unlock()
 					} else {
 						log.Warnf("[pumps client] get unknow key %s from etcd", string(ev.Kv.Key))
 					}
@@ -355,10 +370,16 @@ func (c *PumpsClient) detect() {
 		default:
 			// send fake binlog to pump, if this pump can return response without error
 			// means this pump is avaliable.
+			needCheckPumps := make([]*PumpStatus, 0, len(c.Pumps.NeedCheckPumps))
 			checkPassPumps := make([]*PumpStatus, 0, 1)
 			req := &pb.WriteBinlogReq{ClusterID: c.ClusterID, Payload: nil}
-			c.RLock()
-			for _, pump := range c.NeedCheckPumps {
+			c.Pumps.RLock()
+			for _, pump := range c.Pumps.NeedCheckPumps {
+				needCheckPumps = append(needCheckPumps, pump)
+			}
+			c.Pumps.RUnlock()
+
+			for _, pump := range needCheckPumps {
 				if pump.Status.State != node.Online && pump.Status.State != node.Unknow {
 					continue
 				}
@@ -376,13 +397,12 @@ func (c *PumpsClient) detect() {
 					log.Errorf("[pumps client] write detect binlog to pump %s error %v", pump.NodeID, err)
 				}
 			}
-			c.RUnlock()
 
-			c.Lock()
+			c.Pumps.Lock()
 			for _, pump := range checkPassPumps {
 				c.setPumpAvaliable(pump, true)
 			}
-			c.Unlock()
+			c.Pumps.Unlock()
 
 			time.Sleep(CheckInterval)
 		}
