@@ -221,13 +221,12 @@ func nodeStatusFromEtcdNode(id string, node *etcd.Node) (*Status, error) {
 		return nil, nil
 	}
 
+	statusMain.IsAlive = isAlive
 	if isAlive {
 		statusMain.Label = statusInfo.Label
 		statusMain.Score = statusInfo.Score
 		statusMain.State = statusInfo.State
 		statusMain.UpdateTime = statusInfo.UpdateTime
-	} else {
-		statusMain.State = Unknow
 	}
 
 	return statusMain, nil

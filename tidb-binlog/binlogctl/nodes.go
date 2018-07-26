@@ -61,7 +61,7 @@ func unregisterNode(urls, kind, nodeID string) error {
 
 	for _, n := range nodes {
 		if n.NodeID == nodeID {
-			if n.State != node.Unknow {
+			if n.IsAlive {
 				return errors.Errorf("kind %s is alive, don't allow to delete it", n.NodeID)
 			}
 

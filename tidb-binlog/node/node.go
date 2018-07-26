@@ -39,9 +39,6 @@ const (
 
 	// Offline means the node is offline, and will not provide service.
 	Offline State = "offline"
-
-	// Unknow means the node's state is unkonw.
-	Unknow State = "unknow"
 )
 
 // Status describes the status information of a tidb-binlog node in etcd.
@@ -54,6 +51,9 @@ type Status struct {
 
 	// the state of pump.
 	State State
+
+	// the node is alive or not.
+	IsAlive bool
 
 	// the score of node, it is report by node, calculated by node's qps, disk usage and binlog's data size.
 	// if Score is less than 0, means this node is useless. Now only used for pump.

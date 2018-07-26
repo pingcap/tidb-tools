@@ -340,7 +340,7 @@ func (c *PumpsClient) watchStatus() {
 						// set this pump's state to unknow, and this pump is not avaliable.
 						c.Pumps.Lock()
 						if pumpStatus, ok := c.Pumps.Pumps[nodeID]; ok {
-							pumpStatus.State = node.Unknow
+							pumpStatus.IsAlive = false
 							c.setPumpAvaliable(pumpStatus, false)
 						}
 						c.Pumps.Unlock()
@@ -375,7 +375,7 @@ func (c *PumpsClient) detect() {
 			c.Pumps.RUnlock()
 
 			for _, pump := range needCheckPumps {
-				if pump.Status.State != node.Online && pump.Status.State != node.Unknow {
+				if pump.Status.State != node.Online && !pump.Status.IsAlive {
 					continue
 				}
 
