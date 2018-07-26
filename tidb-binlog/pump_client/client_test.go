@@ -93,7 +93,6 @@ func (*testClientSuite) TestPumpsClient(c *C) {
 		pumpsClient.Pumps.Pumps["pump1"], pumpsClient.Pumps.Pumps["pump2"]}
 
 	for i, nodeID := range tCase.setNodeID {
-		fmt.Println(i)
 		if nodeID != "" {
 			pumpsClient.setPumpAvaliable(pumpsClient.Pumps.Pumps[nodeID], tCase.setAvliable[i])
 		}

@@ -83,8 +83,8 @@ type PumpsClient struct {
 	// ClusterID is the cluster ID of this tidb cluster.
 	ClusterID uint64
 
-	// the client of etcd.
-	EtcdCli *etcd.Client
+	// the registry of etcd.
+	EtcdRegistry *node.EtcdRegistry
 
 	// Pumps saves the pumps' information.
 	Pumps *PumpInfos
@@ -103,13 +103,15 @@ type PumpsClient struct {
 func NewPumpsClient(etcdURLs string, clusterID uint64, security *tls.Config, algorithm string) (*PumpsClient, error) {
 	var selector PumpSelector
 	switch algorithm {
+	case Range:
+		selector = NewRangeSelector()
 	case Hash:
 		selector = NewHashSelector()
 	case Score:
 		selector = NewScoreSelector()
 	default:
-		log.Warnf("unknow algorithm %s, use hash as default", algorithm)
-		selector = NewHashSelector()
+		log.Warnf("unknow algorithm %s, use range as default", algorithm)
+		selector = NewRangeSelector()
 	}
 
 	ectdEndpoints, err := utils.ParseHostPortAddr(etcdURLs)
@@ -134,7 +136,7 @@ func NewPumpsClient(etcdURLs string, clusterID uint64, security *tls.Config, alg
 		ctx:                ctx,
 		cancel:             cancel,
 		ClusterID:          clusterID,
-		EtcdCli:            cli,
+		EtcdRegistry:       node.NewEtcdRegistry(cli, DefaultEtcdTimeout),
 		Pumps:              pumpInfos,
 		Selector:           selector,
 		RetryTime:          DefaultRetryTime,
@@ -159,14 +161,7 @@ func (c *PumpsClient) getPumpStatus(pctx context.Context) error {
 	c.Pumps.Lock()
 	defer c.Pumps.Unlock()
 
-	ctx, cancel := context.WithTimeout(pctx, DefaultEtcdTimeout)
-	defer cancel()
-
-	resp, err := c.EtcdCli.List(ctx, path.Join(node.DefaultRootPath))
-	if err != nil {
-		return errors.Trace(err)
-	}
-	nodesStatus, err := node.NodesStatusFromEtcdNode(resp)
+	nodesStatus, err := c.EtcdRegistry.Nodes(pctx, node.DefaultRootPath)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -294,7 +289,7 @@ func (c *PumpsClient) exist(nodeID string) bool {
 func (c *PumpsClient) watchStatus() {
 	defer c.wg.Done()
 	rootPath := path.Join(node.DefaultRootPath, node.NodePrefix[node.PumpNode])
-	rch := c.EtcdCli.Watch(c.ctx, rootPath)
+	rch := c.EtcdRegistry.WatchNode(c.ctx, rootPath)
 	for {
 		select {
 		case <-c.ctx.Done():

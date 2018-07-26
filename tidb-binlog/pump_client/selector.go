@@ -22,7 +22,10 @@ import (
 )
 
 const (
-	// Hash means hash algorithm
+	// Range means range algorithm.
+	Range = "range"
+
+	// Hash means hash algorithm.
 	Hash = "hash"
 
 	// Score means choose pump by it's score.
@@ -68,10 +71,11 @@ func NewHashSelector() PumpSelector {
 // SetPumps implement PumpSelector.SetPumps.
 func (h *HashSelector) SetPumps(pumps map[string]*PumpStatus) {
 	h.Lock()
-	h.PumpMap = pumps
+	h.PumpMap = make(map[string]*PumpStatus)
 	h.Pumps = make([]*PumpStatus, 0, len(pumps))
-	for _, pump := range pumps {
+	for nodeID, pump := range pumps {
 		h.Pumps = append(h.Pumps, pump)
+		h.PumpMap[nodeID] = pump
 	}
 	h.Unlock()
 }
@@ -150,10 +154,11 @@ func NewRangeSelector() PumpSelector {
 // SetPumps implement PumpSelector.SetPumps.
 func (r *RangeSelector) SetPumps(pumps map[string]*PumpStatus) {
 	r.Lock()
-	r.PumpMap = pumps
+	r.PumpMap = make(map[string]*PumpStatus)
 	r.Pumps = make([]*PumpStatus, 0, len(pumps))
-	for _, pump := range pumps {
+	for nodeID, pump := range pumps {
 		r.Pumps = append(r.Pumps, pump)
+		r.PumpMap[nodeID] = pump
 	}
 	r.Offset = 0
 	r.Unlock()

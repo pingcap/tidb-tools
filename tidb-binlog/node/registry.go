@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/coreos/etcd/clientv3"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/etcd"
@@ -186,6 +187,11 @@ func (r *EtcdRegistry) RefreshNode(pctx context.Context, prefix, nodeID, label s
 	// try to touch alive state of node, update ttl
 	err = r.client.UpdateOrCreate(ctx, aliveKey, string(statusBytes), ttl)
 	return errors.Trace(err)
+}
+
+// WatchNode watchs node's event
+func (r *EtcdRegistry) WatchNode(pctx context.Context, prefix string) clientv3.WatchChan {
+	return r.client.Watch(pctx, prefix)
 }
 
 func nodeStatusFromEtcdNode(id string, node *etcd.Node) (*Status, error) {
