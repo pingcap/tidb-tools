@@ -118,6 +118,9 @@ func NewPumpsClient(etcdURLs string, security *tls.Config, algorithm string) (*P
 		ctx:                ctx,
 		cancel:             cancel,
 		EtcdCli:            cli,
+		Pumps:              make(map[string]*PumpStatus),
+		AvaliablePumps:     make([]*PumpStatus, 0, 5),
+		NeedCheckPumps:     make([]*PumpStatus, 0, 5),
 		Selector:           selector,
 		RetryTime:          DefaultRetryTime,
 		BinlogWriteTimeout: DefaultBinlogWriteTimeout,
@@ -154,8 +157,8 @@ func (c *PumpsClient) getPumpStatus(pctx context.Context) error {
 	}
 
 	for _, status := range nodesStatus {
-		log.Infof("get pump %v from etcd", status)
-		c.addPump(status)
+		log.Debugf("[pumps client] get pump %v from etcd", status)
+		c.addPump(NewPumpStatus(status))
 	}
 
 	return nil
@@ -164,7 +167,7 @@ func (c *PumpsClient) getPumpStatus(pctx context.Context) error {
 // WriteBinlog writes binlog to a situable pump.
 func (c *PumpsClient) WriteBinlog(clusterID uint64, binlog *pb.Binlog) error {
 	pump := c.Selector.Select(binlog)
-	log.Infof("write binlog choose pump %v", pump)
+	log.Debugf("[pumps client] write binlog choose pump %s", pump.NodeID)
 
 	commitData, err := binlog.Marshal()
 	if err != nil {
@@ -186,7 +189,7 @@ func (c *PumpsClient) WriteBinlog(clusterID uint64, binlog *pb.Binlog) error {
 			return nil
 		}
 
-		log.Errorf("write binlog error %v", err)
+		log.Errorf("[pumps client] write binlog error %v", err)
 		if isCriticalError(err) {
 			return err
 		}
@@ -197,7 +200,7 @@ func (c *PumpsClient) WriteBinlog(clusterID uint64, binlog *pb.Binlog) error {
 			c.setPumpAvaliable(pump, false)
 			c.Unlock()
 			pump = c.Selector.Next(pump, binlog, i/5+1)
-			log.Infof("avaliable pumps: %v, write binlog choose pump %v", c.AvaliablePumps, pump)
+			log.Debugf("[pumps client] avaliable pumps: %v, write binlog choose pump %v", c.AvaliablePumps, pump)
 		}
 		time.Sleep(time.Second)
 	}
@@ -219,7 +222,7 @@ func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 	if avaliable {
 		err := pump.createGrpcClient()
 		if err != nil {
-			log.Errorf("create grpc client for pump %s failed, error: %v", pump.NodeID, err)
+			log.Errorf("[pumps client] create grpc client for pump %s failed, error: %v", pump.NodeID, err)
 			pump.IsAvaliable = false
 			return
 		}
@@ -245,9 +248,8 @@ func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 }
 
 // addPump add a new pump.
-func (c *PumpsClient) addPump(status *node.Status) {
-	pump := NewPumpStatus(status)
-	if status.State == node.Online {
+func (c *PumpsClient) addPump(pump *PumpStatus) {
+	if pump.State == node.Online {
 		c.AvaliablePumps = append(c.AvaliablePumps, pump)
 	} else {
 		c.NeedCheckPumps = append(c.NeedCheckPumps, pump)
@@ -290,15 +292,15 @@ func (c *PumpsClient) watchStatus() {
 	for {
 		select {
 		case <-c.ctx.Done():
-			log.Info("pumps client watch status finished")
+			log.Info("[pumps client] watch status finished")
 			return
 		case wresp := <-rch:
 			for _, ev := range wresp.Events {
-				log.Infof("%s %q : %q\n", ev.Type, ev.Kv.Key, ev.Kv.Value)
+				log.Debugf("[pumps client] watch etcd event type:%s, key: %q, value: %q", ev.Type, ev.Kv.Key, ev.Kv.Value)
 				status := &node.Status{}
 				err := json.Unmarshal(ev.Kv.Value, &status)
 				if err != nil {
-					log.Errorf("unmarshal status %q failed", ev.Kv.Value)
+					log.Errorf("[pumps client] unmarshal pump status %q failed", ev.Kv.Value)
 					continue
 				}
 
@@ -307,7 +309,7 @@ func (c *PumpsClient) watchStatus() {
 					// only need handle PUT event for `alive` node.
 					if strings.Contains(string(ev.Kv.Key), aliveStr) {
 						if !c.exist(status.NodeID) {
-							c.addPump(status)
+							c.addPump(NewPumpStatus(status))
 						}
 
 						// judge pump's status is changed or not.
@@ -337,7 +339,7 @@ func (c *PumpsClient) watchStatus() {
 						}
 						c.Unlock()
 					} else {
-						log.Warnf("get unknow key %s from etcd", string(ev.Kv.Key))
+						log.Warnf("[pumps client] get unknow key %s from etcd", string(ev.Kv.Key))
 					}
 				}
 			}
@@ -352,7 +354,7 @@ func (c *PumpsClient) heartbeat() {
 	for {
 		select {
 		case <-c.ctx.Done():
-			log.Infof("pump client heartbeat finished")
+			log.Infof("[pumps client] heartbeat finished")
 			return
 		default:
 			// send fake binlog to pump with wrong clusterID,
@@ -367,7 +369,7 @@ func (c *PumpsClient) heartbeat() {
 
 				err := pump.createGrpcClient()
 				if err != nil {
-					log.Errorf("create grpc client for pump %s failed, error %v", pump.NodeID, errors.Trace(err))
+					log.Errorf("[pumps client] create grpc client for pump %s failed, error %v", pump.NodeID, errors.Trace(err))
 					continue
 				}
 
@@ -391,10 +393,10 @@ func (c *PumpsClient) heartbeat() {
 
 // Close closes the PumpsClient.
 func (c *PumpsClient) Close() {
-	log.Infof("pumps client is closing")
+	log.Infof("[pumps client] is closing")
 	c.cancel()
 	c.wg.Wait()
-	log.Infof("pumps client is closed")
+	log.Infof("[pumps client] is closed")
 }
 
 func isCriticalError(err error) bool {

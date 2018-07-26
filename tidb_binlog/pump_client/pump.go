@@ -52,7 +52,7 @@ func NewPumpStatus(status *node.Status) *PumpStatus {
 
 	err := pumpStatus.createGrpcClient()
 	if err != nil {
-		log.Errorf("create grpc client for %s failed, error %v", status.NodeID, err)
+		log.Errorf("[pumps client] create grpc client for %s failed, error %v", status.NodeID, err)
 		pumpStatus.IsAvaliable = false
 	}
 
@@ -68,7 +68,7 @@ func (p *PumpStatus) createGrpcClient() error {
 	dialerOpt := grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
 		return net.DialTimeout("tcp", addr, timeout)
 	})
-	log.Infof("create gcpc client at %s", p.Host)
+	log.Debugf("[pumps client] create gcpc client at %s", p.Host)
 	clientConn, err := grpc.Dial(p.Host, dialerOpt, grpc.WithInsecure())
 	if err != nil {
 		return err
