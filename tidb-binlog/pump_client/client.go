@@ -308,30 +308,35 @@ func (c *PumpsClient) watchStatus() {
 				switch ev.Type {
 				case mvccpb.PUT:
 					// only need handle PUT event for `alive` node.
-					if strings.Contains(string(ev.Kv.Key), aliveStr) {
-						if !c.exist(status.NodeID) {
-							c.Pumps.Lock()
-							c.addPump(NewPumpStatus(status), true)
-							c.Pumps.Unlock()
-							continue
-						}
+					if strings.Contains(string(ev.Kv.Key), objectStr) {
+						continue
+					}
 
-						// judge pump's status is changed or not.
-						if c.Pumps.Pumps[status.NodeID].statusChanged(status) {
-							c.Pumps.Lock()
-							c.updatePump(status)
-							if status.State != node.Online {
-								c.setPumpAvaliable(c.Pumps.Pumps[status.NodeID], false)
-							} else {
+					if !c.exist(status.NodeID) {
+						c.Pumps.Lock()
+						c.addPump(NewPumpStatus(status), true)
+						c.Pumps.Unlock()
+						continue
+					}
+
+					// judge pump's status is changed or not.
+					statusChanged, stateChanged := c.Pumps.Pumps[status.NodeID].statusChanged(status)
+					if statusChanged {
+						c.Pumps.Lock()
+						c.updatePump(status)
+						if stateChanged {
+							if status.State == node.Online {
 								c.setPumpAvaliable(c.Pumps.Pumps[status.NodeID], true)
+							} else if c.Pumps.Pumps[status.NodeID].State == node.Online {
+								c.setPumpAvaliable(c.Pumps.Pumps[status.NodeID], false)
 							}
-							c.Pumps.Unlock()
 						}
+						c.Pumps.Unlock()
 					}
 				case mvccpb.DELETE:
 					nodeID, nodeTp := node.AnalyzeKey(string(ev.Kv.Key))
 					if nodeTp == objectStr {
-						// object node is deleted, means this node is unregister, and can remove this pump.
+						// object node is deleted, means this node is offline, and can remove this pump.
 						c.Pumps.Lock()
 						c.removePump(nodeID)
 						c.Pumps.Unlock()

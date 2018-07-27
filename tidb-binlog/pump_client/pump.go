@@ -73,14 +73,14 @@ func (p *PumpStatus) createGrpcClient() error {
 	return nil
 }
 
-// statusChanged returns true if status is different from new status.
-func (p *PumpStatus) statusChanged(newStatus *node.Status) bool {
-	// attention: the score should update less frequently, otherwise pumps client will always be locked for update status.
-	if p.State != newStatus.State || p.Score != newStatus.Score || p.Label != newStatus.Label {
-		return true
+func (p *PumpStatus) statusChanged(newStatus *node.Status) (statusChanged, stateChanged bool) {
+	if p.State != newStatus.State {
+		return true, true
+	} else if p.Score != newStatus.Score || p.Label != newStatus.Label {
+		return true, false
 	}
 
-	return false
+	return false, false
 }
 
 // updateStatus update old status.

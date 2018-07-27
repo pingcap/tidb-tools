@@ -37,15 +37,31 @@ var _ = Suite(&testClientSuite{})
 
 type testClientSuite struct{}
 
-func (*testClientSuite) TestPumpsClient(c *C) {
+func (t *testClientSuite) TestPumpsClient(c *C) {
+	algorithms := []string{Hash, Range}
+	for _, algorithm := range algorithms {
+		t.testPumpsClient(c, algorithm)
+	}
+}
+
+func (*testClientSuite) testPumpsClient(c *C, algorithm string) {
 	pumpInfos := &PumpInfos{
 		Pumps:          make(map[string]*PumpStatus),
 		AvaliablePumps: make(map[string]*PumpStatus),
 		NeedCheckPumps: make(map[string]*PumpStatus),
 	}
+
+	var selector PumpSelector
+	switch algorithm {
+	case Range:
+		selector = NewRangeSelector()
+	case Hash:
+		selector = NewHashSelector()
+	}
+
 	pumpsClient := &PumpsClient{
 		Pumps:              pumpInfos,
-		Selector:           NewHashSelector(),
+		Selector:           selector,
 		RetryTime:          DefaultRetryTime,
 		BinlogWriteTimeout: DefaultBinlogWriteTimeout,
 	}
@@ -80,17 +96,21 @@ func (*testClientSuite) TestPumpsClient(c *C) {
 			Tp:       pb.BinlogType_Commit,
 			StartTs:  3,
 			CommitTs: 4,
+		},
+		{
+			Tp:      pb.BinlogType_Prewrite,
+			StartTs: 5,
 		}, {
 			Tp:       pb.BinlogType_Commit,
-			StartTs:  6,
-			CommitTs: 7,
+			StartTs:  5,
+			CommitTs: 6,
 		},
 	}
 
-	tCase.setNodeID = []string{"pump0", "", "pump0", "pump1", "pump2"}
-	tCase.setAvliable = []bool{true, false, false, true, true}
+	tCase.setNodeID = []string{"pump0", "", "pump0", "pump1", "", "pump2"}
+	tCase.setAvliable = []bool{true, false, false, true, false, true}
 	tCase.choosePumps = []*PumpStatus{pumpsClient.Pumps.Pumps["pump0"], pumpsClient.Pumps.Pumps["pump0"], nil,
-		pumpsClient.Pumps.Pumps["pump1"], pumpsClient.Pumps.Pumps["pump2"]}
+		pumpsClient.Pumps.Pumps["pump1"], pumpsClient.Pumps.Pumps["pump1"], pumpsClient.Pumps.Pumps["pump1"]}
 
 	for i, nodeID := range tCase.setNodeID {
 		if nodeID != "" {
