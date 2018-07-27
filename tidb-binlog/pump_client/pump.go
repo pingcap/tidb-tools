@@ -41,7 +41,7 @@ func NewPumpStatus(status *node.Status) *PumpStatus {
 	pumpStatus.Host = status.Host
 	pumpStatus.State = status.State
 	pumpStatus.Score = status.Score
-	pumpStatus.Label = status.Label
+	pumpStatus.IsAlive = status.IsAlive
 	pumpStatus.IsAvaliable = (status.State == node.Online)
 	pumpStatus.UpdateTime = status.UpdateTime
 
@@ -76,7 +76,7 @@ func (p *PumpStatus) createGrpcClient() error {
 func (p *PumpStatus) statusChanged(newStatus *node.Status) (statusChanged, stateChanged bool) {
 	if p.State != newStatus.State {
 		return true, true
-	} else if p.Score != newStatus.Score || p.Label != newStatus.Label {
+	} else if p.Score != newStatus.Score {
 		return true, false
 	}
 
@@ -87,5 +87,4 @@ func (p *PumpStatus) statusChanged(newStatus *node.Status) (statusChanged, state
 func (p *PumpStatus) updateStatus(newStatus *node.Status) {
 	p.State = newStatus.State
 	p.Score = newStatus.Score
-	p.Label = newStatus.Label
 }

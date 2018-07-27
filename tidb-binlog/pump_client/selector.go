@@ -35,7 +35,7 @@ const (
 // PumpSelector selects pump for sending binlog.
 type PumpSelector interface {
 	// SetPumps set pumps to be selected.
-	SetPumps(map[string]*PumpStatus)
+	SetPumps([]*PumpStatus)
 
 	// Select returns a situable pump.
 	Select(*pb.Binlog) *PumpStatus
@@ -69,19 +69,19 @@ func NewHashSelector() PumpSelector {
 }
 
 // SetPumps implement PumpSelector.SetPumps.
-func (h *HashSelector) SetPumps(pumps map[string]*PumpStatus) {
+func (h *HashSelector) SetPumps(pumps []*PumpStatus) {
 	h.Lock()
 	h.PumpMap = make(map[string]*PumpStatus)
-	h.Pumps = make([]*PumpStatus, 0, len(pumps))
-	for nodeID, pump := range pumps {
-		h.Pumps = append(h.Pumps, pump)
-		h.PumpMap[nodeID] = pump
+	h.Pumps = pumps
+	for _, pump := range pumps {
+		h.PumpMap[pump.NodeID] = pump
 	}
 	h.Unlock()
 }
 
 // Select implement PumpSelector.Select.
 func (h *HashSelector) Select(binlog *pb.Binlog) *PumpStatus {
+	// TODO: use status' label to match situale pump.
 	h.Lock()
 	defer h.Unlock()
 
@@ -152,13 +152,12 @@ func NewRangeSelector() PumpSelector {
 }
 
 // SetPumps implement PumpSelector.SetPumps.
-func (r *RangeSelector) SetPumps(pumps map[string]*PumpStatus) {
+func (r *RangeSelector) SetPumps(pumps []*PumpStatus) {
 	r.Lock()
 	r.PumpMap = make(map[string]*PumpStatus)
-	r.Pumps = make([]*PumpStatus, 0, len(pumps))
-	for nodeID, pump := range pumps {
-		r.Pumps = append(r.Pumps, pump)
-		r.PumpMap[nodeID] = pump
+	r.Pumps = pumps
+	for _, pump := range pumps {
+		r.PumpMap[pump.NodeID] = pump
 	}
 	r.Offset = 0
 	r.Unlock()
@@ -166,6 +165,7 @@ func (r *RangeSelector) SetPumps(pumps map[string]*PumpStatus) {
 
 // Select implement PumpSelector.Select.
 func (r *RangeSelector) Select(binlog *pb.Binlog) *PumpStatus {
+	// TODO: use status' label to match situale pump.
 	r.Lock()
 	defer func() {
 		if r.Offset == len(r.Pumps) {
@@ -229,7 +229,7 @@ func NewScoreSelector() PumpSelector {
 }
 
 // SetPumps implement PumpSelector.SetPumps.
-func (s *ScoreSelector) SetPumps(pumps map[string]*PumpStatus) {
+func (s *ScoreSelector) SetPumps(pumps []*PumpStatus) {
 	// TODO
 }
 

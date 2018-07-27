@@ -147,7 +147,7 @@ func NewPumpsClient(etcdURLs string, clusterID uint64, security *tls.Config, alg
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	newPumpsClient.Selector.SetPumps(newPumpsClient.Pumps.AvaliablePumps)
+	newPumpsClient.Selector.SetPumps(copyPumps(newPumpsClient.Pumps.AvaliablePumps))
 
 	newPumpsClient.wg.Add(2)
 	go newPumpsClient.watchStatus()
@@ -248,7 +248,7 @@ func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 		c.Pumps.NeedCheckPumps[pump.NodeID] = pump
 	}
 
-	c.Selector.SetPumps(c.Pumps.AvaliablePumps)
+	c.Selector.SetPumps(copyPumps(c.Pumps.AvaliablePumps))
 }
 
 // addPump add a new pump.
@@ -261,7 +261,7 @@ func (c *PumpsClient) addPump(pump *PumpStatus, updateSelector bool) {
 	c.Pumps.Pumps[pump.NodeID] = pump
 
 	if updateSelector {
-		c.Selector.SetPumps(c.Pumps.AvaliablePumps)
+		c.Selector.SetPumps(copyPumps(c.Pumps.AvaliablePumps))
 	}
 }
 
@@ -276,7 +276,7 @@ func (c *PumpsClient) removePump(nodeID string) {
 	delete(c.Pumps.NeedCheckPumps, nodeID)
 	delete(c.Pumps.AvaliablePumps, nodeID)
 
-	c.Selector.SetPumps(c.Pumps.AvaliablePumps)
+	c.Selector.SetPumps(copyPumps(c.Pumps.AvaliablePumps))
 }
 
 // exist returns true if pumps client has pump matched this nodeID.
@@ -341,8 +341,7 @@ func (c *PumpsClient) watchStatus() {
 						c.removePump(nodeID)
 						c.Pumps.Unlock()
 					} else if nodeTp == aliveStr {
-						// this pump is not alive, and we don't know the pump's state.
-						// set this pump's state to unknow, and this pump is not avaliable.
+						// this pump is not alive, and this pump is not avaliable.
 						c.Pumps.Lock()
 						if pumpStatus, ok := c.Pumps.Pumps[nodeID]; ok {
 							pumpStatus.IsAlive = false
@@ -420,4 +419,13 @@ func (c *PumpsClient) Close() {
 func isCriticalError(err error) bool {
 	// TODO: add some critical error.
 	return false
+}
+
+func copyPumps(pumps map[string]*PumpStatus) []*PumpStatus {
+	ps := make([]*PumpStatus, 0, len(pumps))
+	for _, pump := range pumps {
+		ps = append(ps, pump)
+	}
+
+	return ps
 }

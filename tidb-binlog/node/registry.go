@@ -166,14 +166,13 @@ func (r *EtcdRegistry) createNode(ctx context.Context, prefix, nodeID, host stri
 }
 
 // RefreshNode keeps the heartbeats with etcd
-func (r *EtcdRegistry) RefreshNode(pctx context.Context, prefix, nodeID, label string, state State, score, ttl int64) error {
+func (r *EtcdRegistry) RefreshNode(pctx context.Context, prefix, nodeID string, state State, score, ttl int64) error {
 	ctx, cancel := context.WithTimeout(pctx, r.reqTimeout)
 	defer cancel()
 
 	aliveKey := r.prefixed(prefix, nodeID, "alive")
 
 	status := &Status{
-		Label:      label,
 		Score:      score,
 		State:      state,
 		UpdateTime: time.Now(),
@@ -223,7 +222,6 @@ func nodeStatusFromEtcdNode(id string, node *etcd.Node) (*Status, error) {
 
 	statusMain.IsAlive = isAlive
 	if isAlive {
-		statusMain.Label = statusInfo.Label
 		statusMain.Score = statusInfo.Score
 		statusMain.State = statusInfo.State
 		statusMain.UpdateTime = statusInfo.UpdateTime

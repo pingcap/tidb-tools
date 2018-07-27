@@ -41,6 +41,11 @@ const (
 	Offline State = "offline"
 )
 
+// Label is key/value pairs that are attached to objects
+type Label struct {
+	Labels map[string]string
+}
+
 // Status describes the status information of a tidb-binlog node in etcd.
 type Status struct {
 	// the id of node.
@@ -61,7 +66,7 @@ type Status struct {
 
 	// the label of this node. Now only used for pump.
 	// pump client will only send to a pump which label is matched.
-	Label string
+	Label *Label
 
 	// UpdateTime is the last update time of node's status.
 	UpdateTime time.Time

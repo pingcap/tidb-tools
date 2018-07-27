@@ -77,7 +77,7 @@ func (*testClientSuite) testPumpsClient(c *C, algorithm string) {
 	for _, pump := range pumps {
 		pumpsClient.addPump(pump, false)
 	}
-	pumpsClient.Selector.SetPumps(pumpsClient.Pumps.AvaliablePumps)
+	pumpsClient.Selector.SetPumps(copyPumps(pumpsClient.Pumps.AvaliablePumps))
 
 	tCase := &testCase{}
 
