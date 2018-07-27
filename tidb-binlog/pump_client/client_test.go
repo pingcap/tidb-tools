@@ -96,8 +96,7 @@ func (*testClientSuite) testPumpsClient(c *C, algorithm string) {
 			Tp:       pb.BinlogType_Commit,
 			StartTs:  3,
 			CommitTs: 4,
-		},
-		{
+		}, {
 			Tp:      pb.BinlogType_Prewrite,
 			StartTs: 5,
 		}, {
