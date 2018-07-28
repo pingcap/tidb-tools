@@ -20,6 +20,7 @@ import (
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
 	pb "github.com/pingcap/tipb/go-binlog"
+	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
 
@@ -72,18 +73,17 @@ func (p *PumpStatus) createGrpcClient() error {
 	return nil
 }
 
-func (p *PumpStatus) statusChanged(newStatus *node.Status) (statusChanged, stateChanged bool) {
-	if p.State != newStatus.State {
-		return true, true
-	} else if p.Score != newStatus.Score {
-		return true, false
-	}
+func (p *PumpStatus) writeBinlog(req *pb.WriteBinlogReq, timeout time.Duration) (*pb.WriteBinlogResp, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	resp, err := p.Client.WriteBinlog(ctx, req)
+	cancel()
 
-	return false, false
+	return resp, err
 }
 
-// updateStatus update old status.
-func (p *PumpStatus) updateStatus(newStatus *node.Status) {
-	p.State = newStatus.State
-	p.Score = newStatus.Score
+func (p *PumpStatus) statusChanged(newStatus *node.Status) bool {
+	if p.State != newStatus.State || p.Score != newStatus.Score {
+		return true
+	}
+	return false
 }

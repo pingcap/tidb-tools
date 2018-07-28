@@ -28,11 +28,11 @@ const (
 )
 
 const (
-	generateMeta      = "generate_meta"
-	queryPumps        = "pumps"
-	queryDrainer      = "drainers"
-	unregisterPumps   = "delete-pump"
-	unregisterDrainer = "delete-drainer"
+	generateMeta  = "generate_meta"
+	queryPumps    = "pumps"
+	queryDrainer  = "drainers"
+	updatePumps   = "update-pump"
+	updateDrainer = "update-drainer"
 )
 
 // Config holds the configuration of drainer

@@ -47,38 +47,6 @@ func queryNodesByKind(urls string, kind string) error {
 	return nil
 }
 
-// unregisterNode unregisters specified node
-func unregisterNode(urls, kind, nodeID string) error {
-	registry, err := createRegistry(urls)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	nodes, err := registry.Nodes(context.Background(), node.NodePrefix[kind])
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	for _, n := range nodes {
-		if n.NodeID == nodeID {
-			if n.IsAlive {
-				return errors.Errorf("kind %s is alive, don't allow to delete it", n.NodeID)
-			}
-
-			switch kind {
-			case node.PumpNode:
-				return registry.MarkOfflineNode(context.Background(), node.NodePrefix[kind], n.NodeID, n.Host, n.UpdateTime)
-			case node.DrainerNode:
-				return registry.UnregisterNode(context.Background(), node.NodePrefix[kind], n.NodeID)
-			default:
-				return errors.NotSupportedf("node %s", kind)
-			}
-		}
-	}
-
-	return errors.NotFoundf("node %s, id %s from etcd %s", kind, nodeID, urls)
-}
-
 // createRegistry returns an ectd registry
 func createRegistry(urls string) (*node.EtcdRegistry, error) {
 	ectdEndpoints, err := utils.ParseHostPortAddr(urls)

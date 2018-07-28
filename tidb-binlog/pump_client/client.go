@@ -17,7 +17,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"path"
-	"strings"
 	"sync"
 	"time"
 
@@ -46,9 +45,6 @@ const (
 
 	// RetryInterval is the default interval of retrying to write binlog.
 	RetryInterval = 100 * time.Millisecond
-
-	aliveStr  = "alive"
-	objectStr = "object"
 )
 
 var (
@@ -194,7 +190,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 			return ErrNoAvaliablePump
 		}
 
-		resp, err := c.writeBinlog(req, pump)
+		resp, err := pump.writeBinlog(req, c.BinlogWriteTimeout)
 		if err == nil && resp.Errmsg != "" {
 			err = errors.New(resp.Errmsg)
 		}
@@ -219,14 +215,6 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 	}
 
 	return ErrWriteBinlog
-}
-
-func (c *PumpsClient) writeBinlog(req *pb.WriteBinlogReq, pump *PumpStatus) (*pb.WriteBinlogResp, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), c.BinlogWriteTimeout)
-	resp, err := pump.Client.WriteBinlog(ctx, req)
-	cancel()
-
-	return resp, err
 }
 
 // setPumpAvaliable set pump's isAvaliable, and modify NeedCheckPumps or AvaliablePumps.
@@ -267,7 +255,9 @@ func (c *PumpsClient) addPump(pump *PumpStatus, updateSelector bool) {
 
 // updatePump update pump's status.
 func (c *PumpsClient) updatePump(status *node.Status) {
-	c.Pumps.Pumps[status.NodeID].updateStatus(status)
+	if _, ok := c.Pumps.Pumps[status.NodeID]; ok {
+		c.Pumps.Pumps[status.NodeID].Status = *status
+	}
 }
 
 // removePump removes a pump.
@@ -307,11 +297,6 @@ func (c *PumpsClient) watchStatus() {
 
 				switch ev.Type {
 				case mvccpb.PUT:
-					// only need handle PUT event for `alive` node.
-					if strings.Contains(string(ev.Kv.Key), objectStr) {
-						continue
-					}
-
 					if !c.exist(status.NodeID) {
 						c.Pumps.Lock()
 						c.addPump(NewPumpStatus(status), true)
@@ -319,38 +304,16 @@ func (c *PumpsClient) watchStatus() {
 						continue
 					}
 
-					// judge pump's status is changed or not.
-					statusChanged, stateChanged := c.Pumps.Pumps[status.NodeID].statusChanged(status)
-					if statusChanged {
-						c.Pumps.Lock()
-						c.updatePump(status)
-						if stateChanged {
-							if status.State == node.Online {
-								c.setPumpAvaliable(c.Pumps.Pumps[status.NodeID], true)
-							} else if c.Pumps.Pumps[status.NodeID].State == node.Online {
-								c.setPumpAvaliable(c.Pumps.Pumps[status.NodeID], false)
-							}
-						}
-						c.Pumps.Unlock()
-					}
+					c.Pumps.Lock()
+					c.updatePump(status)
+					c.Pumps.Unlock()
+
 				case mvccpb.DELETE:
-					nodeID, nodeTp := node.AnalyzeKey(string(ev.Kv.Key))
-					if nodeTp == objectStr {
-						// object node is deleted, means this node is offline, and can remove this pump.
-						c.Pumps.Lock()
-						c.removePump(nodeID)
-						c.Pumps.Unlock()
-					} else if nodeTp == aliveStr {
-						// this pump is not alive, and this pump is not avaliable.
-						c.Pumps.Lock()
-						if pumpStatus, ok := c.Pumps.Pumps[nodeID]; ok {
-							pumpStatus.IsAlive = false
-							c.setPumpAvaliable(pumpStatus, false)
-						}
-						c.Pumps.Unlock()
-					} else {
-						log.Warnf("[pumps client] get unknow key %s from etcd", string(ev.Kv.Key))
-					}
+					// now will not delete pump node in fact, just for compatibility。
+					nodeID := node.AnalyzeKey(string(ev.Kv.Key))
+					c.Pumps.Lock()
+					c.removePump(nodeID)
+					c.Pumps.Unlock()
 				}
 			}
 		}
@@ -392,7 +355,7 @@ func (c *PumpsClient) detect() {
 					continue
 				}
 
-				_, err = c.writeBinlog(req, pump)
+				_, err = pump.writeBinlog(req, c.BinlogWriteTimeout)
 				if err == nil {
 					checkPassPumps = append(checkPassPumps, pump)
 				} else {

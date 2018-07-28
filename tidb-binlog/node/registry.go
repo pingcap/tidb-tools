@@ -85,41 +85,8 @@ func (r *EtcdRegistry) RegisterNode(pctx context.Context, prefix, nodeID, host s
 	}
 }
 
-// MarkOfflineNode marks offline node in the etcd
-func (r *EtcdRegistry) MarkOfflineNode(pctx context.Context, prefix, nodeID, host string, updateTime time.Time) error {
-	ctx, cancel := context.WithTimeout(pctx, r.reqTimeout)
-	defer cancel()
-
-	obj := &Status{
-		NodeID:     nodeID,
-		Host:       host,
-		State:      Offline,
-		UpdateTime: updateTime,
-	}
-
-	log.Infof("%s mark offline information %+v", nodeID, obj)
-	objstr, err := json.Marshal(obj)
-	if err != nil {
-		return errors.Annotatef(err, "error marshal NodeStatus(%v)", obj)
-	}
-
-	key := r.prefixed(prefix, nodeID, "object")
-	err = r.client.Update(ctx, key, string(objstr), 0)
-	return errors.Trace(err)
-}
-
-// UnregisterNode unregisters the node in the etcd
-func (r *EtcdRegistry) UnregisterNode(pctx context.Context, prefix, nodeID string) error {
-	ctx, cancel := context.WithTimeout(pctx, r.reqTimeout)
-	defer cancel()
-
-	key := r.prefixed(prefix, nodeID)
-	err := r.client.Delete(ctx, key, true)
-	return errors.Trace(err)
-}
-
 func (r *EtcdRegistry) checkNodeExists(ctx context.Context, prefix, nodeID string) (bool, error) {
-	_, err := r.client.Get(ctx, r.prefixed(prefix, nodeID, "object"))
+	_, err := r.client.Get(ctx, r.prefixed(prefix, nodeID))
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return false, nil
@@ -146,7 +113,7 @@ func (r *EtcdRegistry) updateNode(ctx context.Context, prefix, nodeID, host stri
 	if err != nil {
 		return errors.Annotatef(err, "error marshal NodeStatus(%v)", obj)
 	}
-	key := r.prefixed(prefix, nodeID, "object")
+	key := r.prefixed(prefix, nodeID)
 	err = r.client.Update(ctx, key, string(objstr), 0)
 	return errors.Trace(err)
 }
@@ -160,31 +127,8 @@ func (r *EtcdRegistry) createNode(ctx context.Context, prefix, nodeID, host stri
 	if err != nil {
 		return errors.Annotatef(err, "error marshal NodeStatus(%v)", obj)
 	}
-	key := r.prefixed(prefix, nodeID, "object")
+	key := r.prefixed(prefix, nodeID)
 	err = r.client.Create(ctx, key, string(objstr), nil)
-	return errors.Trace(err)
-}
-
-// RefreshNode keeps the heartbeats with etcd
-func (r *EtcdRegistry) RefreshNode(pctx context.Context, prefix, nodeID string, state State, score, ttl int64) error {
-	ctx, cancel := context.WithTimeout(pctx, r.reqTimeout)
-	defer cancel()
-
-	aliveKey := r.prefixed(prefix, nodeID, "alive")
-
-	status := &Status{
-		Score:      score,
-		State:      state,
-		UpdateTime: time.Now(),
-	}
-
-	statusBytes, err := json.Marshal(status)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	// try to touch alive state of node, update ttl
-	err = r.client.UpdateOrCreate(ctx, aliveKey, string(statusBytes), ttl)
 	return errors.Trace(err)
 }
 
@@ -194,40 +138,13 @@ func (r *EtcdRegistry) WatchNode(pctx context.Context, prefix string) clientv3.W
 }
 
 func nodeStatusFromEtcdNode(id string, node *etcd.Node) (*Status, error) {
-	var (
-		isAlive       bool
-		statusMain    = &Status{}
-		statusInfo    = &Status{}
-		isObjectExist bool
-	)
-	for key, n := range node.Childs {
-		switch key {
-		case "object":
-			isObjectExist = true
-			if err := json.Unmarshal(n.Value, &statusMain); err != nil {
-				return nil, errors.Annotatef(err, "error unmarshal NodeStatus with nodeID(%s)", id)
-			}
-		case "alive":
-			isAlive = true
-			if err := json.Unmarshal(n.Value, &statusInfo); err != nil {
-				return nil, errors.Annotatef(err, "error unmarshal NodeStatus with nodeID(%s)", id)
-			}
-		}
+	status := &Status{}
+
+	if err := json.Unmarshal(node.Value, &status); err != nil {
+		return nil, errors.Annotatef(err, "error unmarshal NodeStatus with nodeID(%s)", id)
 	}
 
-	if !isObjectExist {
-		log.Errorf("node %s doesn't exist", id)
-		return nil, nil
-	}
-
-	statusMain.IsAlive = isAlive
-	if isAlive {
-		statusMain.Score = statusInfo.Score
-		statusMain.State = statusInfo.State
-		statusMain.UpdateTime = statusInfo.UpdateTime
-	}
-
-	return statusMain, nil
+	return status, nil
 }
 
 // NodesStatusFromEtcdNode returns nodes' status under root node.
@@ -246,14 +163,14 @@ func NodesStatusFromEtcdNode(root *etcd.Node) ([]*Status, error) {
 	return statuses, nil
 }
 
-// AnalyzeKey returns nodeID and node type by analyze key path.
-func AnalyzeKey(key string) (string, string) {
-	// the key looks like: /tidb-binlog/2.1/pumps/nodeID/alive
+// AnalyzeKey returns nodeID by analyze key path.
+func AnalyzeKey(key string) string {
+	// the key looks like: /tidb-binlog/2.1/pumps/nodeID
 	paths := strings.Split(key, "/")
-	if len(paths) < 5 {
+	if len(paths) < 4 {
 		log.Errorf("can't get nodeID or node type from key %s", key)
-		return "", ""
+		return ""
 	}
 
-	return paths[3], paths[4]
+	return paths[3]
 }
