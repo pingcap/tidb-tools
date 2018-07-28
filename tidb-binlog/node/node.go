@@ -14,7 +14,7 @@ var (
 	// DrainerNode is the name of drainer.
 	DrainerNode = "drainer"
 
-	// NodePrefix is the map for node and prefix.
+	// NodePrefix is the map (node => it's prefix in storage)
 	NodePrefix = map[string]string{
 		PumpNode:    "pumps",
 		DrainerNode: "drainers",

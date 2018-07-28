@@ -388,6 +388,9 @@ func (c *PumpsClient) detect() {
 					log.Errorf("[pumps client] create grpc client for pump %s failed, error %v", pump.NodeID, errors.Trace(err))
 					continue
 				}
+				if pump.Client == nil {
+					continue
+				}
 
 				_, err = c.writeBinlog(req, pump)
 				if err == nil {

@@ -37,13 +37,12 @@ type PumpStatus struct {
 // NewPumpStatus returns a new PumpStatus according to node's status.
 func NewPumpStatus(status *node.Status) *PumpStatus {
 	pumpStatus := &PumpStatus{}
-	pumpStatus.NodeID = status.NodeID
-	pumpStatus.Host = status.Host
-	pumpStatus.State = status.State
-	pumpStatus.Score = status.Score
-	pumpStatus.IsAlive = status.IsAlive
+	pumpStatus.Status = *status
 	pumpStatus.IsAvaliable = (status.State == node.Online)
-	pumpStatus.UpdateTime = status.UpdateTime
+
+	if !pumpStatus.IsAvaliable {
+		return pumpStatus
+	}
 
 	err := pumpStatus.createGrpcClient()
 	if err != nil {
@@ -56,7 +55,7 @@ func NewPumpStatus(status *node.Status) *PumpStatus {
 
 // createGrpcClient create grpc client for online pump.
 func (p *PumpStatus) createGrpcClient() error {
-	if p.Client != nil || p.State != node.Online {
+	if p.Client != nil {
 		return nil
 	}
 
