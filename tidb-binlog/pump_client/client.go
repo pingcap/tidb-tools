@@ -154,9 +154,6 @@ func NewPumpsClient(etcdURLs string, clusterID uint64, security *tls.Config, alg
 
 // getPumpStatus retruns all the pumps status in the etcd.
 func (c *PumpsClient) getPumpStatus(pctx context.Context) error {
-	c.Pumps.Lock()
-	defer c.Pumps.Unlock()
-
 	nodesStatus, err := c.EtcdRegistry.Nodes(pctx, node.DefaultRootPath)
 	if err != nil {
 		return errors.Trace(err)
@@ -164,7 +161,9 @@ func (c *PumpsClient) getPumpStatus(pctx context.Context) error {
 
 	for _, status := range nodesStatus {
 		log.Debugf("[pumps client] get pump %v from etcd", status)
+		c.Pumps.Lock()
 		c.addPump(NewPumpStatus(status), false)
+		c.Pumps.Unlock()
 	}
 
 	return nil
@@ -362,12 +361,12 @@ func (c *PumpsClient) detect() {
 					log.Errorf("[pumps client] write detect binlog to pump %s error %v", pump.NodeID, err)
 				}
 			}
-
-			c.Pumps.Lock()
+			
 			for _, pump := range checkPassPumps {
+				c.Pumps.Lock()
 				c.setPumpAvaliable(pump, true)
+				c.Pumps.Unlock()
 			}
-			c.Pumps.Unlock()
 
 			time.Sleep(CheckInterval)
 		}

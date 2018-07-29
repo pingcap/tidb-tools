@@ -69,8 +69,8 @@ func (r *EtcdRegistry) Nodes(pctx context.Context, prefix string) ([]*Status, er
 	return status, nil
 }
 
-// RegisterNode registers the node in the etcd
-func (r *EtcdRegistry) RegisterNode(pctx context.Context, prefix, nodeID, host string) error {
+// UpdateNode update the node information.
+func (r *EtcdRegistry) UpdateNode(pctx context.Context, prefix, nodeID, host, state string) error {
 	ctx, cancel := context.WithTimeout(pctx, r.reqTimeout)
 	defer cancel()
 
@@ -78,10 +78,11 @@ func (r *EtcdRegistry) RegisterNode(pctx context.Context, prefix, nodeID, host s
 		return errors.Trace(err)
 	} else if !exists {
 		// not found then create a new  node
-		return r.createNode(ctx, prefix, nodeID, host)
+		log.Warnf("node %s dosen't exist!", nodeID)
+		return r.createNode(ctx, prefix, nodeID, host, state)
 	} else {
 		// found it, update host infomation of the node
-		return r.updateNode(ctx, prefix, nodeID, host)
+		return r.updateNode(ctx, prefix, nodeID, host, state)
 	}
 }
 
@@ -96,18 +97,11 @@ func (r *EtcdRegistry) checkNodeExists(ctx context.Context, prefix, nodeID strin
 	return true, nil
 }
 
-// UpdateNode updates the node infomation
-func (r *EtcdRegistry) UpdateNode(pctx context.Context, prefix, nodeID, host string) error {
-	ctx, cancel := context.WithTimeout(pctx, r.reqTimeout)
-	defer cancel()
-
-	return r.updateNode(ctx, prefix, nodeID, host)
-}
-
-func (r *EtcdRegistry) updateNode(ctx context.Context, prefix, nodeID, host string) error {
+func (r *EtcdRegistry) updateNode(ctx context.Context, prefix, nodeID, host, state string) error {
 	obj := &Status{
 		NodeID: nodeID,
 		Host:   host,
+		State:  StateMap[state],
 	}
 	objstr, err := json.Marshal(obj)
 	if err != nil {
@@ -118,10 +112,11 @@ func (r *EtcdRegistry) updateNode(ctx context.Context, prefix, nodeID, host stri
 	return errors.Trace(err)
 }
 
-func (r *EtcdRegistry) createNode(ctx context.Context, prefix, nodeID, host string) error {
+func (r *EtcdRegistry) createNode(ctx context.Context, prefix, nodeID, host, state string) error {
 	obj := &Status{
 		NodeID: nodeID,
 		Host:   host,
+		State:  StateMap[state],
 	}
 	objstr, err := json.Marshal(obj)
 	if err != nil {

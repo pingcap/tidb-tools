@@ -47,6 +47,28 @@ func queryNodesByKind(urls string, kind string) error {
 	return nil
 }
 
+// updateNodeState update pump or drainer's state.
+func updateNodeState(urls, kind, nodeID, state string) error {
+	registry, err := createRegistry(urls)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	nodes, err := registry.Nodes(context.Background(), node.NodePrefix[kind])
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	for _, n := range nodes {
+		if n.NodeID != nodeID {
+			continue
+		}
+		return registry.UpdateNode(context.Background(), node.NodePrefix[kind], n.NodeID, n.Host, state)
+	}
+
+	return errors.NotFoundf("node %s, id %s from etcd %s", kind, nodeID, urls)
+}
+
 // createRegistry returns an ectd registry
 func createRegistry(urls string) (*node.EtcdRegistry, error) {
 	ectdEndpoints, err := utils.ParseHostPortAddr(urls)

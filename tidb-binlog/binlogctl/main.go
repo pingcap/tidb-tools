@@ -42,9 +42,9 @@ func main() {
 	case queryDrainer:
 		err = queryNodesByKind(cfg.EtcdURLs, node.DrainerNode)
 	case updatePumps:
-		//err = unregisterNode(cfg.EtcdURLs, node.PumpNode, cfg.NodeID)
+		err = updateNodeState(cfg.EtcdURLs, node.PumpNode, cfg.NodeID, cfg.State)
 	case updateDrainer:
-		//err = unregisterNode(cfg.EtcdURLs, node.DrainerNode, cfg.NodeID)
+		err = updateNodeState(cfg.EtcdURLs, node.DrainerNode, cfg.NodeID, cfg.State)
 	}
 
 	if err != nil {

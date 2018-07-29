@@ -41,6 +41,17 @@ const (
 	Offline State = "offline"
 )
 
+var (
+	// StateMap saves the correspondence between state string and state.
+	StateMap = map[string]State{
+		"online":  Online,
+		"pausing": Pausing,
+		"paused":  Paused,
+		"closing": Closing,
+		"offline": Offline,
+	}
+)
+
 // Label is key/value pairs that are attached to objects
 type Label struct {
 	Labels map[string]string
