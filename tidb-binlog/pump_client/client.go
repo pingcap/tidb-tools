@@ -64,8 +64,8 @@ type PumpInfos struct {
 	// AvliablePumps saves the whole avaliable pumps' status.
 	AvaliablePumps map[string]*PumpStatus
 
-	// NeedCheckPumps saves the pumps need to be checked.
-	NeedCheckPumps map[string]*PumpStatus
+	// UnAvaliablePumps saves the pumps need to be checked.
+	UnAvaliablePumps map[string]*PumpStatus
 }
 
 // PumpsClient is the client of pumps.
@@ -111,9 +111,9 @@ func NewPumpsClient(etcdURLs string, clusterID uint64, security *tls.Config, alg
 	}
 
 	pumpInfos := &PumpInfos{
-		Pumps:          make(map[string]*PumpStatus),
-		AvaliablePumps: make(map[string]*PumpStatus),
-		NeedCheckPumps: make(map[string]*PumpStatus),
+		Pumps:            make(map[string]*PumpStatus),
+		AvaliablePumps:   make(map[string]*PumpStatus),
+		UnAvaliablePumps: make(map[string]*PumpStatus),
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -201,7 +201,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 	return ErrWriteBinlog
 }
 
-// setPumpAvaliable set pump's isAvaliable, and modify NeedCheckPumps or AvaliablePumps.
+// setPumpAvaliable set pump's isAvaliable, and modify UnAvaliablePumps or AvaliablePumps.
 func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 	pump.IsAvaliable = avaliable
 	if avaliable {
@@ -213,7 +213,7 @@ func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 		}
 
 		c.Pumps.Lock()
-		delete(c.Pumps.NeedCheckPumps, pump.NodeID)
+		delete(c.Pumps.UnAvaliablePumps, pump.NodeID)
 		if _, ok := c.Pumps.Pumps[pump.NodeID]; ok {
 			c.Pumps.AvaliablePumps[pump.NodeID] = pump
 		}
@@ -223,7 +223,7 @@ func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 		c.Pumps.Lock()
 		delete(c.Pumps.AvaliablePumps, pump.NodeID)
 		if _, ok := c.Pumps.Pumps[pump.NodeID]; ok {
-			c.Pumps.NeedCheckPumps[pump.NodeID] = pump
+			c.Pumps.UnAvaliablePumps[pump.NodeID] = pump
 		}
 		c.Pumps.Unlock()
 	}
@@ -240,7 +240,7 @@ func (c *PumpsClient) addPump(pump *PumpStatus, updateSelector bool) {
 	if pump.State == node.Online {
 		c.Pumps.AvaliablePumps[pump.NodeID] = pump
 	} else {
-		c.Pumps.NeedCheckPumps[pump.NodeID] = pump
+		c.Pumps.UnAvaliablePumps[pump.NodeID] = pump
 	}
 	c.Pumps.Pumps[pump.NodeID] = pump
 
@@ -256,16 +256,16 @@ func (c *PumpsClient) updatePump(status *node.Status) (pump *PumpStatus, avaliab
 	var ok bool
 	c.Pumps.Lock()
 	if pump, ok = c.Pumps.Pumps[status.NodeID]; ok {
-		if c.Pumps.Pumps[status.NodeID].Status.State != status.State {
+		if pump.Status.State != status.State {
 			if status.State == node.Online {
 				avaliableChanged = true
 				avaliable = true
-			} else if c.Pumps.Pumps[status.NodeID].Status.State == node.Online {
+			} else if pump.Status.State == node.Online {
 				avaliableChanged = true
 				avaliable = false
 			}
 		}
-		c.Pumps.Pumps[status.NodeID].Status = *status
+		pump.Status = *status
 	}
 	c.Pumps.Unlock()
 
@@ -276,7 +276,7 @@ func (c *PumpsClient) updatePump(status *node.Status) (pump *PumpStatus, avaliab
 func (c *PumpsClient) removePump(nodeID string) {
 	c.Pumps.Lock()
 	delete(c.Pumps.Pumps, nodeID)
-	delete(c.Pumps.NeedCheckPumps, nodeID)
+	delete(c.Pumps.UnAvaliablePumps, nodeID)
 	delete(c.Pumps.AvaliablePumps, nodeID)
 	c.Selector.SetPumps(copyPumps(c.Pumps.AvaliablePumps))
 	c.Pumps.Unlock()
@@ -332,8 +332,8 @@ func (c *PumpsClient) watchStatus() {
 	}
 }
 
-// detect send detect binlog to NeedCheckPumps,
-// if pump can return response, remove it from NeedCheckPumps.
+// detect send detect binlog to UnAvaliablePumps,
+// if pump can return response, remove it from UnAvaliablePumps.
 func (c *PumpsClient) detect() {
 	defer c.wg.Done()
 	for {
@@ -344,20 +344,18 @@ func (c *PumpsClient) detect() {
 		default:
 			// send fake binlog to pump, if this pump can return response without error
 			// means this pump is avaliable.
-			needCheckPumps := make([]*PumpStatus, 0, len(c.Pumps.NeedCheckPumps))
+			needCheckPumps := make([]*PumpStatus, 0, len(c.Pumps.UnAvaliablePumps))
 			checkPassPumps := make([]*PumpStatus, 0, 1)
 			req := &pb.WriteBinlogReq{ClusterID: c.ClusterID, Payload: nil}
 			c.Pumps.RLock()
-			for _, pump := range c.Pumps.NeedCheckPumps {
-				needCheckPumps = append(needCheckPumps, pump)
+			for _, pump := range c.Pumps.UnAvaliablePumps {
+				if pump.Status.State == node.Online {
+					needCheckPumps = append(needCheckPumps, pump)
+				}
 			}
 			c.Pumps.RUnlock()
 
 			for _, pump := range needCheckPumps {
-				if pump.Status.State != node.Online {
-					continue
-				}
-
 				err := pump.createGrpcClient()
 				if err != nil {
 					log.Errorf("[pumps client] create grpc client for pump %s failed, error %v", pump.NodeID, errors.Trace(err))

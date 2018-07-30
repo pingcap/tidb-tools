@@ -46,22 +46,14 @@ func (t *testClientSuite) TestPumpsClient(c *C) {
 
 func (*testClientSuite) testPumpsClient(c *C, algorithm string) {
 	pumpInfos := &PumpInfos{
-		Pumps:          make(map[string]*PumpStatus),
-		AvaliablePumps: make(map[string]*PumpStatus),
-		NeedCheckPumps: make(map[string]*PumpStatus),
-	}
-
-	var selector PumpSelector
-	switch algorithm {
-	case Range:
-		selector = NewRangeSelector()
-	case Hash:
-		selector = NewHashSelector()
+		Pumps:            make(map[string]*PumpStatus),
+		AvaliablePumps:   make(map[string]*PumpStatus),
+		UnAvaliablePumps: make(map[string]*PumpStatus),
 	}
 
 	pumpsClient := &PumpsClient{
 		Pumps:              pumpInfos,
-		Selector:           selector,
+		Selector:           NewSelector(algorithm),
 		RetryTime:          DefaultRetryTime,
 		BinlogWriteTimeout: DefaultBinlogWriteTimeout,
 	}
