@@ -2,6 +2,8 @@ package node
 
 import (
 	"time"
+
+	"github.com/juju/errors"
 )
 
 var (
@@ -41,16 +43,23 @@ const (
 	Offline State = "offline"
 )
 
-var (
-	// StateMap saves the correspondence between state string and state.
-	StateMap = map[string]State{
-		"online":  Online,
-		"pausing": Pausing,
-		"paused":  Paused,
-		"closing": Closing,
-		"offline": Offline,
+// GetState returns a state by state name.
+func GetState(state string) (State, error) {
+	switch state {
+	case "online":
+		return Online, nil
+	case "pausing":
+		return Pausing, nil
+	case "paused":
+		return Paused, nil
+	case "closing":
+		return Closing, nil
+	case "offline":
+		return Offline, nil
+	default:
+		return Offline, errors.NotFoundf("state %s", state)
 	}
-)
+}
 
 // Label is key/value pairs that are attached to objects
 type Label struct {

@@ -361,7 +361,7 @@ func (c *PumpsClient) detect() {
 					log.Errorf("[pumps client] write detect binlog to pump %s error %v", pump.NodeID, err)
 				}
 			}
-			
+
 			for _, pump := range checkPassPumps {
 				c.Pumps.Lock()
 				c.setPumpAvaliable(pump, true)

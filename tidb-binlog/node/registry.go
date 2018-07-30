@@ -70,9 +70,14 @@ func (r *EtcdRegistry) Nodes(pctx context.Context, prefix string) ([]*Status, er
 }
 
 // UpdateNode update the node information.
-func (r *EtcdRegistry) UpdateNode(pctx context.Context, prefix, nodeID, host, state string) error {
+func (r *EtcdRegistry) UpdateNode(pctx context.Context, prefix, nodeID, host, stateStr string) error {
 	ctx, cancel := context.WithTimeout(pctx, r.reqTimeout)
 	defer cancel()
+
+	state, err := GetState(stateStr)
+	if err != nil {
+		return errors.Trace(err)
+	}
 
 	if exists, err := r.checkNodeExists(ctx, prefix, nodeID); err != nil {
 		return errors.Trace(err)
@@ -97,11 +102,11 @@ func (r *EtcdRegistry) checkNodeExists(ctx context.Context, prefix, nodeID strin
 	return true, nil
 }
 
-func (r *EtcdRegistry) updateNode(ctx context.Context, prefix, nodeID, host, state string) error {
+func (r *EtcdRegistry) updateNode(ctx context.Context, prefix, nodeID, host string, state State) error {
 	obj := &Status{
 		NodeID: nodeID,
 		Host:   host,
-		State:  StateMap[state],
+		State:  state,
 	}
 	objstr, err := json.Marshal(obj)
 	if err != nil {
@@ -112,11 +117,11 @@ func (r *EtcdRegistry) updateNode(ctx context.Context, prefix, nodeID, host, sta
 	return errors.Trace(err)
 }
 
-func (r *EtcdRegistry) createNode(ctx context.Context, prefix, nodeID, host, state string) error {
+func (r *EtcdRegistry) createNode(ctx context.Context, prefix, nodeID, host string, state State) error {
 	obj := &Status{
 		NodeID: nodeID,
 		Host:   host,
-		State:  StateMap[state],
+		State:  state,
 	}
 	objstr, err := json.Marshal(obj)
 	if err != nil {
