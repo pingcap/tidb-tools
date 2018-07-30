@@ -112,11 +112,11 @@ func (h *HashSelector) Select(binlog *pb.Binlog) *PumpStatus {
 func (h *HashSelector) Next(pump *PumpStatus, binlog *pb.Binlog, retryTime int) *PumpStatus {
 	h.Lock()
 	defer h.Unlock()
-	
+
 	if len(h.Pumps) == 0 {
 		return nil
 	}
-	
+
 	nextPump := h.Pumps[(hashTs(binlog.StartTs)+int(retryTime))%len(h.Pumps)]
 	if binlog.Tp == pb.BinlogType_Prewrite {
 		h.TsMap[binlog.StartTs] = pump
@@ -203,9 +203,7 @@ func (r *RangeSelector) Select(binlog *pb.Binlog) *PumpStatus {
 func (r *RangeSelector) Next(pump *PumpStatus, binlog *pb.Binlog, retryTime int) *PumpStatus {
 	r.Lock()
 	defer func() {
-		if r.Offset == len(r.Pumps) {
-			r.Offset = 0
-		}
+		r.Offset = (r.Offset + 1) % len(r.Pumps)
 		r.Unlock()
 	}()
 
