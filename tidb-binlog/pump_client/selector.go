@@ -110,16 +110,17 @@ func (h *HashSelector) Select(binlog *pb.Binlog) *PumpStatus {
 
 // Next implement PumpSelector.Next.
 func (h *HashSelector) Next(pump *PumpStatus, binlog *pb.Binlog, retryTime int) *PumpStatus {
+	h.Lock()
+	defer h.Unlock()
+	
 	if len(h.Pumps) == 0 {
 		return nil
 	}
-
+	
 	nextPump := h.Pumps[(hashTs(binlog.StartTs)+int(retryTime))%len(h.Pumps)]
-	h.Lock()
 	if binlog.Tp == pb.BinlogType_Prewrite {
 		h.TsMap[binlog.StartTs] = pump
 	}
-	h.Unlock()
 
 	return nextPump
 }

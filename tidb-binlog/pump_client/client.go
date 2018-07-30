@@ -150,9 +150,7 @@ func (c *PumpsClient) getPumpStatus(pctx context.Context) error {
 
 	for _, status := range nodesStatus {
 		log.Debugf("[pumps client] get pump %v from etcd", status)
-		c.Pumps.Lock()
 		c.addPump(NewPumpStatus(status), false)
-		c.Pumps.Unlock()
 	}
 
 	return nil
@@ -193,9 +191,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 
 		// every pump can retry 5 times, if retry 5 times and still failed, set this pump unavaliable, and choose a new pump.
 		if (i+1)%5 == 0 {
-			c.Pumps.Lock()
 			c.setPumpAvaliable(pump, false)
-			c.Pumps.Unlock()
 			pump = c.Selector.Next(pump, binlog, i/5+1)
 			log.Debugf("[pumps client] avaliable pumps: %v, write binlog choose pump %v", c.Pumps.AvaliablePumps, pump)
 		}
@@ -216,19 +212,31 @@ func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 			return
 		}
 
+		c.Pumps.Lock()
 		delete(c.Pumps.NeedCheckPumps, pump.NodeID)
-		c.Pumps.AvaliablePumps[pump.NodeID] = pump
+		if _, ok := c.Pumps.Pumps[pump.NodeID]; ok {
+			c.Pumps.AvaliablePumps[pump.NodeID] = pump
+		}
+		c.Pumps.Unlock()
 
 	} else {
+		c.Pumps.Lock()
 		delete(c.Pumps.AvaliablePumps, pump.NodeID)
-		c.Pumps.NeedCheckPumps[pump.NodeID] = pump
+		if _, ok := c.Pumps.Pumps[pump.NodeID]; ok {
+			c.Pumps.NeedCheckPumps[pump.NodeID] = pump
+		}
+		c.Pumps.Unlock()
 	}
 
+	c.Pumps.RLock()
 	c.Selector.SetPumps(copyPumps(c.Pumps.AvaliablePumps))
+	c.Pumps.RUnlock()
 }
 
 // addPump add a new pump.
 func (c *PumpsClient) addPump(pump *PumpStatus, updateSelector bool) {
+	c.Pumps.Lock()
+
 	if pump.State == node.Online {
 		c.Pumps.AvaliablePumps[pump.NodeID] = pump
 	} else {
@@ -239,27 +247,46 @@ func (c *PumpsClient) addPump(pump *PumpStatus, updateSelector bool) {
 	if updateSelector {
 		c.Selector.SetPumps(copyPumps(c.Pumps.AvaliablePumps))
 	}
+
+	c.Pumps.Unlock()
 }
 
-// updatePump update pump's status.
-func (c *PumpsClient) updatePump(status *node.Status) {
-	if _, ok := c.Pumps.Pumps[status.NodeID]; ok {
+// updatePump update pump's status, and return whether pump's IsAvaliable should be changed.
+func (c *PumpsClient) updatePump(status *node.Status) (pump *PumpStatus, avaliableChanged, avaliable bool) {
+	var ok bool
+	c.Pumps.Lock()
+	if pump, ok = c.Pumps.Pumps[status.NodeID]; ok {
+		if c.Pumps.Pumps[status.NodeID].Status.State != status.State {
+			if status.State == node.Online {
+				avaliableChanged = true
+				avaliable = true
+			} else if c.Pumps.Pumps[status.NodeID].Status.State == node.Online {
+				avaliableChanged = true
+				avaliable = false
+			}
+		}
 		c.Pumps.Pumps[status.NodeID].Status = *status
 	}
+	c.Pumps.Unlock()
+
+	return
 }
 
 // removePump removes a pump.
 func (c *PumpsClient) removePump(nodeID string) {
+	c.Pumps.Lock()
 	delete(c.Pumps.Pumps, nodeID)
 	delete(c.Pumps.NeedCheckPumps, nodeID)
 	delete(c.Pumps.AvaliablePumps, nodeID)
-
 	c.Selector.SetPumps(copyPumps(c.Pumps.AvaliablePumps))
+	c.Pumps.Unlock()
 }
 
 // exist returns true if pumps client has pump matched this nodeID.
 func (c *PumpsClient) exist(nodeID string) bool {
+	c.Pumps.RLock()
 	_, ok := c.Pumps.Pumps[nodeID]
+	c.Pumps.RUnlock()
 	return ok
 }
 
@@ -286,22 +313,19 @@ func (c *PumpsClient) watchStatus() {
 				switch ev.Type {
 				case mvccpb.PUT:
 					if !c.exist(status.NodeID) {
-						c.Pumps.Lock()
 						c.addPump(NewPumpStatus(status), true)
-						c.Pumps.Unlock()
 						continue
 					}
 
-					c.Pumps.Lock()
-					c.updatePump(status)
-					c.Pumps.Unlock()
+					pump, avaliableChanged, avaliable := c.updatePump(status)
+					if avaliableChanged {
+						c.setPumpAvaliable(pump, avaliable)
+					}
 
 				case mvccpb.DELETE:
-					// now will not delete pump node in fact, just for compatibility。
+					// now will not delete pump node in fact, just for compatibility.
 					nodeID := node.AnalyzeNodeID(string(ev.Kv.Key))
-					c.Pumps.Lock()
 					c.removePump(nodeID)
-					c.Pumps.Unlock()
 				}
 			}
 		}
@@ -330,7 +354,7 @@ func (c *PumpsClient) detect() {
 			c.Pumps.RUnlock()
 
 			for _, pump := range needCheckPumps {
-				if pump.Status.State != node.Online && !pump.Status.IsAlive {
+				if pump.Status.State != node.Online {
 					continue
 				}
 

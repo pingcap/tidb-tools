@@ -41,7 +41,7 @@ func NewPumpStatus(status *node.Status) *PumpStatus {
 	pumpStatus.Status = *status
 	pumpStatus.IsAvaliable = (status.State == node.Online)
 
-	if !pumpStatus.IsAvaliable {
+	if status.State != node.Online {
 		return pumpStatus
 	}
 
@@ -79,11 +79,4 @@ func (p *PumpStatus) writeBinlog(req *pb.WriteBinlogReq, timeout time.Duration) 
 	cancel()
 
 	return resp, err
-}
-
-func (p *PumpStatus) statusChanged(newStatus *node.Status) bool {
-	if p.State != newStatus.State || p.Score != newStatus.Score {
-		return true
-	}
-	return false
 }
