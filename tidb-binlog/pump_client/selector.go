@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/ngaut/log"
 	pb "github.com/pingcap/tipb/go-binlog"
 )
 
@@ -243,6 +244,24 @@ func (s *ScoreSelector) Select(binlog *pb.Binlog) *PumpStatus {
 func (s *ScoreSelector) Next(pump *PumpStatus, binlog *pb.Binlog, retryTime int) *PumpStatus {
 	// TODO
 	return nil
+}
+
+// NewSelector returns a PumpSelector according to the algorithm.
+func NewSelector(algorithm string) PumpSelector {
+	var selector PumpSelector
+	switch algorithm {
+	case Range:
+		selector = NewRangeSelector()
+	case Hash:
+		selector = NewHashSelector()
+	case Score:
+		selector = NewScoreSelector()
+	default:
+		log.Warnf("unknow algorithm %s, use range as default", algorithm)
+		selector = NewRangeSelector()
+	}
+
+	return selector
 }
 
 func hashTs(ts int64) int {

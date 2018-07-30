@@ -91,7 +91,8 @@ func (r *EtcdRegistry) UpdateNode(pctx context.Context, prefix, nodeID, host, st
 			return errors.Trace(err)
 		}
 		// found it, update host infomation of the node
-		return r.updateNode(ctx, prefix, status, state)
+		status.State = state
+		return r.updateNode(ctx, prefix, status)
 	}
 }
 
@@ -106,8 +107,7 @@ func (r *EtcdRegistry) checkNodeExists(ctx context.Context, prefix, nodeID strin
 	return true, nil
 }
 
-func (r *EtcdRegistry) updateNode(ctx context.Context, prefix string, status *Status, state State) error {
-	status.State = state
+func (r *EtcdRegistry) updateNode(ctx context.Context, prefix string, status *Status) error {
 	objstr, err := json.Marshal(status)
 	if err != nil {
 		return errors.Annotatef(err, "error marshal NodeStatus(%v)", status)
@@ -164,14 +164,26 @@ func NodesStatusFromEtcdNode(root *etcd.Node) ([]*Status, error) {
 	return statuses, nil
 }
 
-// AnalyzeKey returns nodeID by analyze key path.
-func AnalyzeKey(key string) string {
-	// the key looks like: /tidb-binlog/2.1/pumps/nodeID
+// AnalyzeNodeID returns nodeID by analyze key path.
+func AnalyzeNodeID(key string) string {
+	// the key looks like: /tidb-binlog/v1/pumps/nodeID, or /tidb-binlog/pumps/nodeID for old binlog version.
 	paths := strings.Split(key, "/")
-	if len(paths) < 4 {
+	nodeIDOffset := 3
+
+	if len(paths) >= 2 {
+		// version string start with 'v'
+		if !strings.HasPrefix(paths[1], "v") {
+			nodeIDOffset = 2
+		}
+	} else {
 		log.Errorf("can't get nodeID or node type from key %s", key)
 		return ""
 	}
 
-	return paths[3]
+	if len(paths) < nodeIDOffset+1 {
+		log.Errorf("can't get nodeID or node type from key %s", key)
+		return ""
+	}
+
+	return paths[nodeIDOffset]
 }

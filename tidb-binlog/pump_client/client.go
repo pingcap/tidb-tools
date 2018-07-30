@@ -97,18 +97,7 @@ type PumpsClient struct {
 
 // NewPumpsClient returns a PumpsClient.
 func NewPumpsClient(etcdURLs string, clusterID uint64, security *tls.Config, algorithm string) (*PumpsClient, error) {
-	var selector PumpSelector
-	switch algorithm {
-	case Range:
-		selector = NewRangeSelector()
-	case Hash:
-		selector = NewHashSelector()
-	case Score:
-		selector = NewScoreSelector()
-	default:
-		log.Warnf("unknow algorithm %s, use range as default", algorithm)
-		selector = NewRangeSelector()
-	}
+	selector := NewSelector(algorithm)
 
 	ectdEndpoints, err := utils.ParseHostPortAddr(etcdURLs)
 	if err != nil {
@@ -309,7 +298,7 @@ func (c *PumpsClient) watchStatus() {
 
 				case mvccpb.DELETE:
 					// now will not delete pump node in fact, just for compatibility。
-					nodeID := node.AnalyzeKey(string(ev.Kv.Key))
+					nodeID := node.AnalyzeNodeID(string(ev.Kv.Key))
 					c.Pumps.Lock()
 					c.removePump(nodeID)
 					c.Pumps.Unlock()
