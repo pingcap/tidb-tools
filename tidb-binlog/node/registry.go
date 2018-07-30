@@ -86,8 +86,12 @@ func (r *EtcdRegistry) UpdateNode(pctx context.Context, prefix, nodeID, host, st
 		log.Warnf("node %s dosen't exist!", nodeID)
 		return r.createNode(ctx, prefix, nodeID, host, state)
 	} else {
+		status, err := r.Node(ctx, prefix, nodeID)
+		if err != nil {
+			return errors.Trace(err)
+		}
 		// found it, update host infomation of the node
-		return r.updateNode(ctx, prefix, nodeID, host, state)
+		return r.updateNode(ctx, prefix, status, state)
 	}
 }
 
@@ -102,17 +106,13 @@ func (r *EtcdRegistry) checkNodeExists(ctx context.Context, prefix, nodeID strin
 	return true, nil
 }
 
-func (r *EtcdRegistry) updateNode(ctx context.Context, prefix, nodeID, host string, state State) error {
-	obj := &Status{
-		NodeID: nodeID,
-		Host:   host,
-		State:  state,
-	}
-	objstr, err := json.Marshal(obj)
+func (r *EtcdRegistry) updateNode(ctx context.Context, prefix string, status *Status, state State) error {
+	status.State = state
+	objstr, err := json.Marshal(status)
 	if err != nil {
-		return errors.Annotatef(err, "error marshal NodeStatus(%v)", obj)
+		return errors.Annotatef(err, "error marshal NodeStatus(%v)", status)
 	}
-	key := r.prefixed(prefix, nodeID)
+	key := r.prefixed(prefix, status.NodeID)
 	err = r.client.Update(ctx, key, string(objstr), 0)
 	return errors.Trace(err)
 }
@@ -123,6 +123,7 @@ func (r *EtcdRegistry) createNode(ctx context.Context, prefix, nodeID, host stri
 		Host:   host,
 		State:  state,
 	}
+
 	objstr, err := json.Marshal(obj)
 	if err != nil {
 		return errors.Annotatef(err, "error marshal NodeStatus(%v)", obj)

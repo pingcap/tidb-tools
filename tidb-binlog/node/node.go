@@ -1,8 +1,6 @@
 package node
 
 import (
-	"time"
-
 	"github.com/juju/errors"
 )
 
@@ -88,6 +86,6 @@ type Status struct {
 	// pump client will only send to a pump which label is matched.
 	Label *Label
 
-	// UpdateTime is the last update time of node's status.
-	UpdateTime time.Time
+	// UpdateTS is the last update ts of node's status.
+	UpdateTS int64
 }
