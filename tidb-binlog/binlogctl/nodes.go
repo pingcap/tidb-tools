@@ -20,21 +20,12 @@ import (
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/etcd"
 	"github.com/pingcap/tidb-tools/pkg/utils"
-	"github.com/pingcap/tidb-tools/tidb_binlog/node"
+	"github.com/pingcap/tidb-tools/tidb-binlog/node"
 	"golang.org/x/net/context"
 )
 
 var (
 	etcdDialTimeout = 5 * time.Second
-
-	// kind of node
-	pumpNode    = "pump"
-	drainerNode = "drainer"
-
-	nodePrefix = map[string]string{
-		pumpNode:    "pumps",
-		drainerNode: "cisterns",
-	}
 )
 
 // queryNodesByKind returns specified nodes, like pumps/drainers
@@ -44,7 +35,7 @@ func queryNodesByKind(urls string, kind string) error {
 		return errors.Trace(err)
 	}
 
-	nodes, err := registry.Nodes(context.Background(), nodePrefix[kind])
+	nodes, err := registry.Nodes(context.Background(), node.NodePrefix[kind])
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -56,33 +47,23 @@ func queryNodesByKind(urls string, kind string) error {
 	return nil
 }
 
-// unregisterNode unregisters specified node
-func unregisterNode(urls, kind, nodeID string) error {
+// updateNodeState update pump or drainer's state.
+func updateNodeState(urls, kind, nodeID, state string) error {
 	registry, err := createRegistry(urls)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	nodes, err := registry.Nodes(context.Background(), nodePrefix[kind])
+	nodes, err := registry.Nodes(context.Background(), node.NodePrefix[kind])
 	if err != nil {
 		return errors.Trace(err)
 	}
 
 	for _, n := range nodes {
-		if n.NodeID == nodeID {
-			if n.IsAlive {
-				return errors.Errorf("kind %s is alive, don't allow to delete it", n.NodeID)
-			}
-
-			switch kind {
-			case pumpNode:
-				return registry.MarkOfflineNode(context.Background(), nodePrefix[kind], n.NodeID, n.Host, n.LatestKafkaPos, n.LatestFilePos, n.OfflineTS)
-			case drainerNode:
-				return registry.UnregisterNode(context.Background(), nodePrefix[kind], n.NodeID)
-			default:
-				return errors.NotSupportedf("node %s", kind)
-			}
+		if n.NodeID != nodeID {
+			continue
 		}
+		return registry.UpdateNode(context.Background(), node.NodePrefix[kind], n.NodeID, n.Addr, state)
 	}
 
 	return errors.NotFoundf("node %s, id %s from etcd %s", kind, nodeID, urls)
@@ -94,7 +75,7 @@ func createRegistry(urls string) (*node.EtcdRegistry, error) {
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	cli, err := etcd.NewClientFromCfg(ectdEndpoints, etcdDialTimeout, etcd.DefaultRootPath, nil)
+	cli, err := etcd.NewClientFromCfg(ectdEndpoints, etcdDialTimeout, node.DefaultRootPath, nil)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

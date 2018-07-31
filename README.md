@@ -33,7 +33,7 @@ A tool for checking the compatibility of an existed MySQL database with TiDB.
 
 A tool for comparing two database's data and outputs a brief report about differences.
 
-[binlogctl](./tidb_binlog/binlogctl)
+[binlogctl](./tidb-binlog/binlogctl)
 
 A tool for performing some tidb-binlog related operations, like query status pump/drainer and unregister someone pump/drainer.
 
