@@ -64,7 +64,8 @@ type PumpInfos struct {
 	// AvliablePumps saves the whole avaliable pumps' status.
 	AvaliablePumps map[string]*PumpStatus
 
-	// UnAvaliablePumps saves the pumps need to be checked.
+	// UnAvaliablePumps saves the unAvaliable pumps.
+	// And only pump with Online state in this map need check is it avaliable.
 	UnAvaliablePumps map[string]*PumpStatus
 }
 
@@ -335,8 +336,7 @@ func (c *PumpsClient) watchStatus() {
 	}
 }
 
-// detect send detect binlog to UnAvaliablePumps,
-// if pump can return response, remove it from UnAvaliablePumps.
+// detect send detect binlog to pumps with online state in UnAvaliablePumps,
 func (c *PumpsClient) detect() {
 	defer c.wg.Done()
 	for {
@@ -345,7 +345,7 @@ func (c *PumpsClient) detect() {
 			log.Infof("[pumps client] heartbeat finished")
 			return
 		default:
-			// send fake binlog to pump, if this pump can return response without error
+			// send detect binlog to pump, if this pump can return response without error
 			// means this pump is avaliable.
 			needCheckPumps := make([]*PumpStatus, 0, len(c.Pumps.UnAvaliablePumps))
 			checkPassPumps := make([]*PumpStatus, 0, 1)

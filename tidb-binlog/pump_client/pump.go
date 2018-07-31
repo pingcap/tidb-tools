@@ -24,11 +24,24 @@ import (
 	"google.golang.org/grpc"
 )
 
-// PumpStatus saves pump's status
+// PumpStatus saves pump's status.
 type PumpStatus struct {
+	/*
+		Pump has these state:
+		Online:
+			only when pump's state is online that pumps client can write binlog to.
+		Pausing:
+			this pump is pausing, and can't provide write binlog service. And this state will turn into Paused when pump is quit.
+		Paused:
+			this pump is paused, and can't provide write binlog service.
+		Closing:
+			this pump is closing, and can't provide write binlog service. And this state will turn into Offline when pump is quit.
+		Offline:
+			this pump is offline, and can't provide write binlog service forever.
+	*/
 	node.Status
 
-	// the pump is avaliable or not.
+	// the pump is avaliable or not
 	IsAvaliable bool
 
 	grpcConn *grpc.ClientConn
