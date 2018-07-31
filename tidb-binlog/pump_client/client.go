@@ -205,7 +205,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 // setPumpAvaliable set pump's isAvaliable, and modify UnAvaliablePumps or AvaliablePumps.
 func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 	pump.IsAvaliable = avaliable
-	if avaliable {
+	if pump.IsAvaliable {
 		err := pump.createGrpcClient()
 		if err != nil {
 			log.Errorf("[pumps client] create grpc client for pump %s failed, error: %v", pump.NodeID, err)

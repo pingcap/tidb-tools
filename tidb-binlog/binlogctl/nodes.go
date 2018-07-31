@@ -63,7 +63,7 @@ func updateNodeState(urls, kind, nodeID, state string) error {
 		if n.NodeID != nodeID {
 			continue
 		}
-		return registry.UpdateNode(context.Background(), node.NodePrefix[kind], n.NodeID, n.Host, state)
+		return registry.UpdateNode(context.Background(), node.NodePrefix[kind], n.NodeID, n.Addr, state)
 	}
 
 	return errors.NotFoundf("node %s, id %s from etcd %s", kind, nodeID, urls)

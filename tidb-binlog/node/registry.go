@@ -70,7 +70,7 @@ func (r *EtcdRegistry) Nodes(pctx context.Context, prefix string) ([]*Status, er
 }
 
 // UpdateNode update the node information.
-func (r *EtcdRegistry) UpdateNode(pctx context.Context, prefix, nodeID, host, stateStr string) error {
+func (r *EtcdRegistry) UpdateNode(pctx context.Context, prefix, nodeID, addr, stateStr string) error {
 	ctx, cancel := context.WithTimeout(pctx, r.reqTimeout)
 	defer cancel()
 
@@ -84,13 +84,13 @@ func (r *EtcdRegistry) UpdateNode(pctx context.Context, prefix, nodeID, host, st
 	} else if !exists {
 		// not found then create a new node
 		log.Warnf("node %s dosen't exist!", nodeID)
-		return r.createNode(ctx, prefix, nodeID, host, state)
+		return r.createNode(ctx, prefix, nodeID, addr, state)
 	} else {
 		status, err := r.Node(ctx, prefix, nodeID)
 		if err != nil {
 			return errors.Trace(err)
 		}
-		// found it, update host infomation of the node
+		// found it, update status infomation of the node
 		status.State = state
 		return r.updateNode(ctx, prefix, status)
 	}
@@ -117,10 +117,10 @@ func (r *EtcdRegistry) updateNode(ctx context.Context, prefix string, status *St
 	return errors.Trace(err)
 }
 
-func (r *EtcdRegistry) createNode(ctx context.Context, prefix, nodeID, host string, state State) error {
+func (r *EtcdRegistry) createNode(ctx context.Context, prefix, nodeID, addr string, state State) error {
 	obj := &Status{
 		NodeID: nodeID,
-		Host:   host,
+		Addr:   addr,
 		State:  state,
 	}
 

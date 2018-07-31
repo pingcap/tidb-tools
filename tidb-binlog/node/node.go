@@ -69,8 +69,8 @@ type Status struct {
 	// the id of node.
 	NodeID string `json:"nodeId"`
 
-	// the host of pump or node.
-	Host string `json:"host"`
+	// the address of pump or node.
+	Addr string `json:"addr"`
 
 	// the state of pump.
 	State State `json:"state"`
