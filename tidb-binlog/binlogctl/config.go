@@ -28,11 +28,11 @@ const (
 )
 
 const (
-	generateMeta      = "generate_meta"
-	queryPumps        = "pumps"
-	queryDrainer      = "drainers"
-	unregisterPumps   = "delete-pump"
-	unregisterDrainer = "delete-drainer"
+	generateMeta  = "generate_meta"
+	queryPumps    = "pumps"
+	queryDrainer  = "drainers"
+	updatePumps   = "update-pump"
+	updateDrainer = "update-drainer"
 )
 
 // Config holds the configuration of drainer
@@ -47,6 +47,7 @@ type Config struct {
 	SSLCA        string `toml:"ssl-ca" json:"ssl-ca"`
 	SSLCert      string `toml:"ssl-cert" json:"ssl-cert"`
 	SSLKey       string `toml:"ssl-key" json:"ssl-key"`
+	State        string `toml:"state" json:"state"`
 	tls          *tls.Config
 	printVersion bool
 }
@@ -64,6 +65,7 @@ func NewConfig() *Config {
 	cfg.FlagSet.StringVar(&cfg.SSLCert, "ssl-cert", "", "Path of file that contains X509 certificate in PEM format for connection with cluster components.")
 	cfg.FlagSet.StringVar(&cfg.SSLKey, "ssl-key", "", "Path of file that contains X509 key in PEM format for connection with cluster components.")
 	cfg.FlagSet.StringVar(&cfg.TimeZone, "time-zone", "", "set time zone if you want save time info in savepoint file, for example `Asia/Shanghai` for CST time, `Local` for local time")
+	cfg.FlagSet.StringVar(&cfg.State, "state", "", "set node's state, can set to online, pausing, paused, closing or offline.")
 	cfg.FlagSet.BoolVar(&cfg.printVersion, "V", false, "prints version and exit")
 
 	return cfg

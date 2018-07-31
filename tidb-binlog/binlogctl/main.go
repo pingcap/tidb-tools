@@ -19,6 +19,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	"github.com/pingcap/tidb-tools/tidb-binlog/node"
 )
 
 func main() {
@@ -37,13 +38,13 @@ func main() {
 	case generateMeta:
 		err = generateMetaInfo(cfg)
 	case queryPumps:
-		err = queryNodesByKind(cfg.EtcdURLs, pumpNode)
+		err = queryNodesByKind(cfg.EtcdURLs, node.PumpNode)
 	case queryDrainer:
-		err = queryNodesByKind(cfg.EtcdURLs, drainerNode)
-	case unregisterPumps:
-		err = unregisterNode(cfg.EtcdURLs, pumpNode, cfg.NodeID)
-	case unregisterDrainer:
-		err = unregisterNode(cfg.EtcdURLs, drainerNode, cfg.NodeID)
+		err = queryNodesByKind(cfg.EtcdURLs, node.DrainerNode)
+	case updatePumps:
+		err = updateNodeState(cfg.EtcdURLs, node.PumpNode, cfg.NodeID, cfg.State)
+	case updateDrainer:
+		err = updateNodeState(cfg.EtcdURLs, node.DrainerNode, cfg.NodeID, cfg.State)
 	}
 
 	if err != nil {
