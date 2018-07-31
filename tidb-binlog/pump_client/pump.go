@@ -31,6 +31,8 @@ type PumpStatus struct {
 	// the pump is avaliable or not.
 	IsAvaliable bool
 
+	grpcConn *grpc.ClientConn
+
 	// the client of this pump
 	Client pb.PumpClient
 }
@@ -68,9 +70,19 @@ func (p *PumpStatus) createGrpcClient() error {
 	if err != nil {
 		return err
 	}
+
+	p.grpcConn = clientConn
 	p.Client = pb.NewPumpClient(clientConn)
 
 	return nil
+}
+
+// closeGrpcClient closes the pump's grpc connection.
+func (p *PumpStatus) closeGrpcClient() {
+	if p.grpcConn != nil {
+		p.grpcConn.Close()
+		p.Client = nil
+	}
 }
 
 func (p *PumpStatus) writeBinlog(req *pb.WriteBinlogReq, timeout time.Duration) (*pb.WriteBinlogResp, error) {

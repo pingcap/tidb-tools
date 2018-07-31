@@ -275,6 +275,9 @@ func (c *PumpsClient) updatePump(status *node.Status) (pump *PumpStatus, avaliab
 // removePump removes a pump.
 func (c *PumpsClient) removePump(nodeID string) {
 	c.Pumps.Lock()
+	if pump, ok := c.Pumps.Pumps[nodeID]; ok {
+		pump.closeGrpcClient()
+	}
 	delete(c.Pumps.Pumps, nodeID)
 	delete(c.Pumps.UnAvaliablePumps, nodeID)
 	delete(c.Pumps.AvaliablePumps, nodeID)
