@@ -66,7 +66,7 @@ func (r *Rule) Valid() error {
 }
 
 // check source and target position
-func (r *Rule) checkColumnPosition(source, target int) (int, int, error) {
+func (r *Rule) adjustColumnPosition(source, target int) (int, int, error) {
 	// if not found target, ignore it
 	if target == -1 {
 		return source, target, errors.NotFoundf("target column %s", r.TargetColumn)
@@ -196,10 +196,6 @@ func (m *Mapping) HandleDDL(schema, table string, columns []string, statement st
 }
 
 func (m *Mapping) queryColumnInfo(schema, table string, columns []string) (*columnInfo, error) {
-	var info = &columnInfo{
-		ignore: true,
-	}
-
 	m.cache.RLock()
 	ci, ok := m.cache.infos[tableName(schema, table)]
 	m.cache.RUnlock()
@@ -207,6 +203,9 @@ func (m *Mapping) queryColumnInfo(schema, table string, columns []string) (*colu
 		return ci, nil
 	}
 
+	var info = &columnInfo{
+		ignore: true,
+	}
 	rules := m.Match(schema, table)
 	if len(rules) == 0 {
 		m.cache.Lock()
@@ -265,7 +264,7 @@ func (m *Mapping) queryColumnInfo(schema, table string, columns []string) (*colu
 	sourcePosition := findColumnPosition(columns, rule.SourceColumn)
 	targetPosition := findColumnPosition(columns, rule.TargetColumn)
 
-	sourcePosition, targetPosition, err := rule.checkColumnPosition(sourcePosition, targetPosition)
+	sourcePosition, targetPosition, err := rule.adjustColumnPosition(sourcePosition, targetPosition)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
