@@ -2,7 +2,7 @@
 
 ## introduction
 
-column mapping is a libary to provide a simple and unified way to mapping columns of table:
+column mapping is a library to provide a simple and unified way to mapping columns of table:
 
 - add prefix for one column
 
