@@ -72,12 +72,14 @@ func (r *Rule) checkColumnPosition(source, target int) (int, int, error) {
 		return source, target, errors.NotFoundf("target column %s", r.TargetColumn)
 	}
 
-	if r.Expression == Clone && source == -1 {
-		return source, target, errors.NotFoundf("source column %s", r.SourceColumn)
-	}
+	if r.Expression == Clone {
+		if source == -1 {
+			return source, target, errors.NotFoundf("source column %s", r.SourceColumn)
+		}
 
-	if target < source { // must add column and added column is before source column
-		source--
+		if target < source { // must add column and added column is before source column
+			source--
+		}
 	}
 
 	return source, target, nil
@@ -183,10 +185,12 @@ func (m *Mapping) HandleDDL(schema, table string, columns []string, statement st
 	if err != nil {
 		return statement, errors.Trace(err)
 	}
+
 	if info.ignore == true {
 		return statement, nil
 	}
 
+	m.resetCache()
 	// only output erro now, wait fix it manually
 	return statement, errors.NotImplementedf("ddl %s @ column mapping rule %s/%s:%+v", statement, schema, table, info.rule)
 }
@@ -312,7 +316,7 @@ func addSuffix(info *columnInfo, vals []interface{}) []interface{} {
 }
 
 func cloneColumn(info *columnInfo, vals []interface{}) []interface{} {
-	newVals := make([]interface{}, 0, len(vals))
+	newVals := make([]interface{}, 0, len(vals)+1)
 	newVals = append(newVals, vals[:info.targetPosition]...)
 	newVals = append(newVals, vals[info.sourcePosition])
 	newVals = append(newVals, vals[info.targetPosition:]...)
