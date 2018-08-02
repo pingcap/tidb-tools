@@ -26,7 +26,7 @@ type Expr string
 
 // poor Expr
 const (
-	AddPredix Expr = "add prefix"
+	AddPrefix Expr = "add prefix"
 	AddSuffix Expr = "add suffix"
 	Clone     Expr = "clone column"
 )
@@ -34,14 +34,14 @@ const (
 // Exprs is some built-in expression for column mapping
 // only support some poor expressions now, we would unify tableInfo later and support more
 var Exprs = map[Expr]func(*columnInfo, []interface{}) []interface{}{
-	AddPredix: addPrefix,
+	AddPrefix: addPrefix,
 	AddSuffix: addSuffix,
 	Clone:     cloneColumn,
 }
 
 // Rule is a rule to map column
 type Rule struct {
-	PatternSchema    string   `yaml:"pattern-schema" json:"parttern-schema" toml:"pattern-schema"`
+	PatternSchema    string   `yaml:"pattern-schema" json:"pattern-schema" toml:"pattern-schema"`
 	PatternTable     string   `yaml:"pattern-table" json:"pattern-table" toml:"pattern-table"`
 	SourceColumn     string   `yaml:"source-column" json:"source-column" toml:"source-column"` // modify, add refer column, ignore
 	TargetColumn     string   `yaml:"target-column" json:"target-column" toml:"target-column"` // add column, modify
@@ -58,7 +58,7 @@ func (r *Rule) Valid() error {
 		return errors.NotFoundf("expression %s", r.Expression)
 	}
 
-	if (r.Expression == AddPredix || r.Expression == AddSuffix) && len(r.Arguments) != 1 {
+	if (r.Expression == AddPrefix || r.Expression == AddSuffix) && len(r.Arguments) != 1 {
 		return errors.NotValidf("arguments %v for add prefix/suffix", r.Arguments)
 	}
 
@@ -159,8 +159,8 @@ func (m *Mapping) RemoveRule(rule *Rule) error {
 	return nil
 }
 
-// HanldeRowVlaue handles row value
-func (m *Mapping) HanldeRowVlaue(schema, table string, columns []string, vals []interface{}) ([]interface{}, error) {
+// HandleRowValue handles row value
+func (m *Mapping) HandleRowValue(schema, table string, columns []string, vals []interface{}) ([]interface{}, error) {
 	info, err := m.queryColumnInfo(schema, table, columns)
 	if err != nil {
 		return nil, errors.Trace(err)
