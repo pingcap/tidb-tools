@@ -14,7 +14,6 @@
 package client
 
 import (
-	"crypto/tls"
 	"encoding/json"
 	"path"
 	"sync"
@@ -23,6 +22,7 @@ import (
 	"github.com/coreos/etcd/mvcc/mvccpb"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	"github.com/pingcap/pd/pd-client"
 	"github.com/pingcap/tidb-tools/pkg/etcd"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
@@ -97,10 +97,23 @@ type PumpsClient struct {
 }
 
 // NewPumpsClient returns a PumpsClient.
-func NewPumpsClient(etcdURLs string, clusterID uint64, security *tls.Config, algorithm string) (*PumpsClient, error) {
+func NewPumpsClient(etcdURLs string, algorithm string, securityOpt pd.SecurityOption) (*PumpsClient, error) {
 	selector := NewSelector(algorithm)
 
 	ectdEndpoints, err := utils.ParseHostPortAddr(etcdURLs)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	// get clusterid
+	pdCli, err := pd.NewClient(ectdEndpoints, securityOpt)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	clusterID := pdCli.GetClusterID(context.Background())
+	pdCli.Close()
+
+	security, err := utils.ToTLSConfig(securityOpt.CAPath, securityOpt.CertPath, securityOpt.KeyPath)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
