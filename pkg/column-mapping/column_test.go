@@ -45,22 +45,22 @@ func (t *testColumnMappingSuit) TestHandle(c *C) {
 	c.Assert(m.cache.infos, HasLen, 0)
 
 	// test clone
-	vals, err := m.HandleRowValue("test", "abc", []string{"id", "copyid", "name"}, []interface{}{1, "name"})
+	vals, _, err := m.HandleRowValue("test", "abc", []string{"id", "copyid", "name"}, []interface{}{1, "name"})
 	c.Assert(err, IsNil)
 	c.Assert(vals, DeepEquals, []interface{}{1, 1, "name"})
 
 	// test cache
-	vals, err = m.HandleRowValue("test", "abc", []string{"copyid", "name", "id"}, []interface{}{"name", 1})
+	vals, _, err = m.HandleRowValue("test", "abc", []string{"copyid", "name", "id"}, []interface{}{"name", 1})
 	c.Assert(err, IsNil)
 	c.Assert(vals, DeepEquals, []interface{}{"name", "name", 1})
 
 	m.resetCache()
-	vals, err = m.HandleRowValue("test", "abc", []string{"copyid", "name", "id"}, []interface{}{"name", 1})
+	vals, _, err = m.HandleRowValue("test", "abc", []string{"copyid", "name", "id"}, []interface{}{"name", 1})
 	c.Assert(err, IsNil)
 	c.Assert(vals, DeepEquals, []interface{}{1, "name", 1})
 
 	// test add prefix
-	vals, err = m.HandleRowValue("test", "xxx", []string{"id"}, []interface{}{1.1})
+	vals, _, err = m.HandleRowValue("test", "xxx", []string{"id"}, []interface{}{1.1})
 	c.Assert(err, IsNil)
 	c.Assert(vals, DeepEquals, []interface{}{"instance_id:1.1"})
 }

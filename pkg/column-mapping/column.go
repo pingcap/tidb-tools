@@ -40,6 +40,7 @@ var Exprs = map[Expr]func(*columnInfo, []interface{}) []interface{}{
 }
 
 // Rule is a rule to map column
+// TODO: we will do it later, if we need to implement a real column mapping, we need table structure of source and target system
 type Rule struct {
 	PatternSchema    string   `yaml:"pattern-schema" json:"pattern-schema" toml:"pattern-schema"`
 	PatternTable     string   `yaml:"pattern-table" json:"pattern-table" toml:"pattern-table"`
@@ -104,6 +105,10 @@ type Mapping struct {
 
 // NewMapping returns a column mapping
 func NewMapping(rules []*Rule) (*Mapping, error) {
+	if len(rules) == 0 {
+		return nil, nil
+	}
+
 	m := &Mapping{
 		Selector: selector.NewTrieSelector(),
 	}
@@ -120,6 +125,10 @@ func NewMapping(rules []*Rule) (*Mapping, error) {
 
 // AddRule adds a rule into mapping
 func (m *Mapping) AddRule(rule *Rule) error {
+	if m == nil || rule == nil {
+		return nil
+	}
+
 	err := rule.Valid()
 	if err != nil {
 		return errors.Trace(err)
@@ -136,6 +145,10 @@ func (m *Mapping) AddRule(rule *Rule) error {
 
 // UpdateRule updates mapping rule
 func (m *Mapping) UpdateRule(rule *Rule) error {
+	if m == nil || rule == nil {
+		return nil
+	}
+
 	err := rule.Valid()
 	if err != nil {
 		return errors.Trace(err)
@@ -152,6 +165,10 @@ func (m *Mapping) UpdateRule(rule *Rule) error {
 
 // RemoveRule removes a rule from mapping
 func (m *Mapping) RemoveRule(rule *Rule) error {
+	if m == nil || rule == nil {
+		return nil
+	}
+
 	m.resetCache()
 	err := m.Remove(rule.PatternSchema, rule.PatternTable)
 	if err != nil {
@@ -162,37 +179,45 @@ func (m *Mapping) RemoveRule(rule *Rule) error {
 }
 
 // HandleRowValue handles row value
-func (m *Mapping) HandleRowValue(schema, table string, columns []string, vals []interface{}) ([]interface{}, error) {
+func (m *Mapping) HandleRowValue(schema, table string, columns []string, vals []interface{}) ([]interface{}, []int, error) {
+	if m == nil {
+		return vals, nil, nil
+	}
+
 	info, err := m.queryColumnInfo(schema, table, columns)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
 	if info.ignore == true {
-		return vals, nil
+		return vals, nil, nil
 	}
 
 	exp, ok := Exprs[info.rule.Expression]
 	if !ok {
-		return nil, errors.NotFoundf("column mapping expression %s", info.rule.Expression)
+		return nil, nil, errors.NotFoundf("column mapping expression %s", info.rule.Expression)
 	}
 
-	return exp(info, vals), nil
+	return exp(info, vals), []int{info.sourcePosition, info.targetPosition}, nil
 }
 
 // HandleDDL handles ddl
-func (m *Mapping) HandleDDL(schema, table string, columns []string, statement string) (string, error) {
+func (m *Mapping) HandleDDL(schema, table string, columns []string, statement string) (string, []int, error) {
+	if m == nil {
+		return statement, nil, nil
+	}
+
 	info, err := m.queryColumnInfo(schema, table, columns)
 	if err != nil {
-		return statement, errors.Trace(err)
+		return statement, nil, errors.Trace(err)
 	}
 
 	if info.ignore == true {
-		return statement, nil
+		return statement, nil, nil
 	}
 
 	m.resetCache()
 	// only output erro now, wait fix it manually
-	return statement, errors.NotImplementedf("ddl %s @ column mapping rule %s/%s:%+v", statement, schema, table, info.rule)
+	return statement, nil, errors.NotImplementedf("ddl %s @ column mapping rule %s/%s:%+v", statement, schema, table, info.rule)
 }
 
 func (m *Mapping) queryColumnInfo(schema, table string, columns []string) (*columnInfo, error) {
