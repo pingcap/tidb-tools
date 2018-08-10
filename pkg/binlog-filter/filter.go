@@ -96,10 +96,6 @@ type BinlogEvent struct {
 
 // NewBinlogEvent returns a binlog event filter
 func NewBinlogEvent(rules []*BinlogEventRule) (*BinlogEvent, error) {
-	if len(rules) == 0 {
-		return nil, nil
-	}
-
 	b := &BinlogEvent{
 		Selector: selector.NewTrieSelector(),
 	}

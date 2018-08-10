@@ -15,28 +15,53 @@ package column
 
 import (
 	"fmt"
+	"strconv"
 	"sync"
 
 	"github.com/juju/errors"
 	"github.com/pingcap/tidb-tools/pkg/table-rule-selector"
 )
 
+var (
+	// for partition ID, ref definition of partitionID
+	schemaIDBitSize       = 9
+	tableIDBitSize        = 10
+	maxOriginID     int64 = 17592186044416
+)
+
+// SetPartitionRule sets bit size of schema ID and table ID
+func SetPartitionRule(schemaSize, tableSize int) {
+	schemaIDBitSize = schemaSize
+	tableIDBitSize = tableSize
+	maxOriginID = 1 << uint(64-schemaSize-tableSize-1)
+}
+
 // Expr indicates how to handle column mapping
 type Expr string
 
 // poor Expr
 const (
-	AddPrefix Expr = "add prefix"
-	AddSuffix Expr = "add suffix"
-	Clone     Expr = "clone column"
+	AddPrefix   Expr = "add prefix"
+	AddSuffix   Expr = "add suffix"
+	PartitionID Expr = "partition id"
 )
 
 // Exprs is some built-in expression for column mapping
-// only support some poor expressions now, we would unify tableInfo later and support more
-var Exprs = map[Expr]func(*columnInfo, []interface{}) []interface{}{
-	AddPrefix: addPrefix,
-	AddSuffix: addSuffix,
-	Clone:     cloneColumn,
+// only supports some poor expressions now,
+// we would unify tableInfo later and support more
+var Exprs = map[Expr]func(*mappingInfo, []interface{}) ([]interface{}, error){
+	AddPrefix: addPrefix, // arguments contains prefix
+	AddSuffix: addSuffix, // arguments contains suffix
+	// arguments contains [prefix of schema, prefix of table]
+	// we would compute a ID like
+	// [1:1 bit][2:9 bits][3:10 bits][4:44 bits] int64  (using default bits length)
+	// # 1 useless, no reason
+	// # 2 schema ID (schema suffix)
+	// # 3 table ID (table suffix)
+	// # 4 origin ID (>= 0, <= 17592186044415)
+	//
+	// others: schema = arguments[1] + schema suffix, table = arguments[3] + table suffix
+	PartitionID: partitionID,
 }
 
 // Rule is a rule to map column
@@ -59,8 +84,20 @@ func (r *Rule) Valid() error {
 		return errors.NotFoundf("expression %s", r.Expression)
 	}
 
-	if (r.Expression == AddPrefix || r.Expression == AddSuffix) && len(r.Arguments) != 1 {
-		return errors.NotValidf("arguments %v for add prefix/suffix", r.Arguments)
+	if r.TargetColumn == "" {
+		return errors.NotValidf("rule need to be applied a target column")
+	}
+
+	if r.Expression == AddPrefix || r.Expression == AddSuffix {
+		if len(r.Arguments) != 1 {
+			return errors.NotValidf("arguments %v for add prefix/suffix", r.Arguments)
+		}
+	}
+
+	if r.Expression == PartitionID {
+		if len(r.Arguments) != 2 {
+			return errors.NotValidf("arguments %v for patition id", r.Arguments)
+		}
 	}
 
 	return nil
@@ -73,24 +110,17 @@ func (r *Rule) adjustColumnPosition(source, target int) (int, int, error) {
 		return source, target, errors.NotFoundf("target column %s", r.TargetColumn)
 	}
 
-	if r.Expression == Clone {
-		if source == -1 {
-			return source, target, errors.NotFoundf("source column %s", r.SourceColumn)
-		}
-
-		if target < source { // must add column and added column is before source column
-			source--
-		}
-	}
-
 	return source, target, nil
 }
 
-type columnInfo struct {
+type mappingInfo struct {
 	ignore         bool
 	sourcePosition int
 	targetPosition int
 	rule           *Rule
+
+	schemaID int64
+	tableID  int64
 }
 
 // Mapping maps column to something by rules
@@ -99,16 +129,12 @@ type Mapping struct {
 
 	cache struct {
 		sync.RWMutex
-		infos map[string]*columnInfo
+		infos map[string]*mappingInfo
 	}
 }
 
 // NewMapping returns a column mapping
 func NewMapping(rules []*Rule) (*Mapping, error) {
-	if len(rules) == 0 {
-		return nil, nil
-	}
-
 	m := &Mapping{
 		Selector: selector.NewTrieSelector(),
 	}
@@ -197,7 +223,12 @@ func (m *Mapping) HandleRowValue(schema, table string, columns []string, vals []
 		return nil, nil, errors.NotFoundf("column mapping expression %s", info.rule.Expression)
 	}
 
-	return exp(info, vals), []int{info.sourcePosition, info.targetPosition}, nil
+	vals, err = exp(info, vals)
+	if err != nil {
+		return nil, nil, errors.Trace(err)
+	}
+
+	return vals, []int{info.sourcePosition, info.targetPosition}, nil
 }
 
 // HandleDDL handles ddl
@@ -220,7 +251,7 @@ func (m *Mapping) HandleDDL(schema, table string, columns []string, statement st
 	return statement, nil, errors.NotImplementedf("ddl %s @ column mapping rule %s/%s:%+v", statement, schema, table, info.rule)
 }
 
-func (m *Mapping) queryColumnInfo(schema, table string, columns []string) (*columnInfo, error) {
+func (m *Mapping) queryColumnInfo(schema, table string, columns []string) (*mappingInfo, error) {
 	m.cache.RLock()
 	ci, ok := m.cache.infos[tableName(schema, table)]
 	m.cache.RUnlock()
@@ -228,7 +259,7 @@ func (m *Mapping) queryColumnInfo(schema, table string, columns []string) (*colu
 		return ci, nil
 	}
 
-	var info = &columnInfo{
+	var info = &mappingInfo{
 		ignore: true,
 	}
 	rules := m.Match(schema, table)
@@ -262,21 +293,17 @@ func (m *Mapping) queryColumnInfo(schema, table string, columns []string) (*colu
 	// only support one expression for one table now, refine it later
 	var rule *Rule
 	if len(table) == 0 || len(tableRules) == 0 {
-		if len(schemaRules) > 1 {
+		if len(schemaRules) != 1 {
 			return nil, errors.NotSupportedf("route %s/%s to rule set(%d)", schema, table, len(schemaRules))
 		}
 
-		if len(schemaRules) == 1 {
-			rule = schemaRules[0]
-		}
+		rule = schemaRules[0]
 	} else {
-		if len(tableRules) > 1 {
+		if len(tableRules) != 1 {
 			return nil, errors.NotSupportedf("route %s/%s to rule set(%d)", schema, table, len(tableRules))
 		}
 
-		if len(tableRules) == 1 {
-			rule = tableRules[0]
-		}
+		rule = tableRules[0]
 	}
 	if rule == nil {
 		m.cache.Lock()
@@ -286,6 +313,7 @@ func (m *Mapping) queryColumnInfo(schema, table string, columns []string) (*colu
 		return info, nil
 	}
 
+	// compute source and target column position
 	sourcePosition := findColumnPosition(columns, rule.SourceColumn)
 	targetPosition := findColumnPosition(columns, rule.TargetColumn)
 
@@ -294,10 +322,18 @@ func (m *Mapping) queryColumnInfo(schema, table string, columns []string) (*colu
 		return nil, errors.Trace(err)
 	}
 
-	info = &columnInfo{
+	info = &mappingInfo{
 		sourcePosition: sourcePosition,
 		targetPosition: targetPosition,
 		rule:           rule,
+	}
+
+	// if expr is partition ID, compute schema and table ID
+	if rule.Expression == PartitionID {
+		info.schemaID, info.tableID, err = computePartitionID(schema, table, rule)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
 	}
 
 	m.cache.Lock()
@@ -309,7 +345,7 @@ func (m *Mapping) queryColumnInfo(schema, table string, columns []string) (*colu
 
 func (m *Mapping) resetCache() {
 	m.cache.Lock()
-	m.cache.infos = make(map[string]*columnInfo)
+	m.cache.infos = make(map[string]*mappingInfo)
 	m.cache.Unlock()
 }
 
@@ -327,23 +363,78 @@ func tableName(schema, table string) string {
 	return fmt.Sprintf("`%s`.`%s`", schema, table)
 }
 
-func addPrefix(info *columnInfo, vals []interface{}) []interface{} {
+func addPrefix(info *mappingInfo, vals []interface{}) ([]interface{}, error) {
 	prefix := info.rule.Arguments[0]
-	vals[info.targetPosition] = fmt.Sprintf("%s:%v", prefix, vals[info.targetPosition])
-	return vals
+	originStr, ok := vals[info.targetPosition].(string)
+	if !ok {
+		return nil, errors.NotValidf("column %d value is not string, but %v", info.targetPosition, vals[info.targetPosition])
+	}
+
+	// fast to concatenated string
+	rawByte := make([]byte, 0, len(prefix)+len(originStr))
+	rawByte = append(rawByte, prefix...)
+	rawByte = append(rawByte, originStr...)
+
+	vals[info.targetPosition] = string(rawByte)
+	return vals, nil
 }
 
-func addSuffix(info *columnInfo, vals []interface{}) []interface{} {
+func addSuffix(info *mappingInfo, vals []interface{}) ([]interface{}, error) {
 	suffix := info.rule.Arguments[0]
-	vals[info.targetPosition] = fmt.Sprintf("%v:%s", vals[info.targetPosition], suffix)
-	return vals
+	originStr, ok := vals[info.targetPosition].(string)
+	if !ok {
+		return nil, errors.NotValidf("column %d value is not string, but %v", info.targetPosition, vals[info.targetPosition])
+	}
+
+	rawByte := make([]byte, 0, len(suffix)+len(originStr))
+	rawByte = append(rawByte, originStr...)
+	rawByte = append(rawByte, suffix...)
+
+	vals[info.targetPosition] = string(rawByte)
+	return vals, nil
 }
 
-func cloneColumn(info *columnInfo, vals []interface{}) []interface{} {
-	newVals := make([]interface{}, 0, len(vals)+1)
-	newVals = append(newVals, vals[:info.targetPosition]...)
-	newVals = append(newVals, vals[info.sourcePosition])
-	newVals = append(newVals, vals[info.targetPosition:]...)
+func partitionID(info *mappingInfo, vals []interface{}) ([]interface{}, error) {
+	// only int64 now
+	originID, ok := vals[info.targetPosition].(int64)
+	if !ok {
+		return nil, errors.NotValidf("column %d value is not int64, but %v", info.targetPosition, vals[info.targetPosition])
+	}
 
-	return newVals
+	if originID >= maxOriginID || originID < 0 {
+		return nil, errors.NotValidf("id must less than %d, bigger or equal than 0, but get %d", maxOriginID, originID)
+	}
+
+	vals[info.targetPosition] = int64(info.schemaID | info.tableID | originID)
+	return vals, nil
+}
+
+func computePartitionID(schema, table string, rule *Rule) (int64, int64, error) {
+	shiftCnt := uint(64 - schemaIDBitSize - 1)
+	schemaID, err := computeID(schema, rule.Arguments[0], schemaIDBitSize, shiftCnt)
+	if err != nil {
+		return 0, 0, errors.Trace(err)
+	}
+
+	shiftCnt = shiftCnt - uint(tableIDBitSize)
+	tableID, err := computeID(table, rule.Arguments[1], tableIDBitSize, shiftCnt)
+	if err != nil {
+		return 0, 0, errors.Trace(err)
+	}
+
+	return schemaID, tableID, nil
+}
+
+func computeID(name string, prefix string, bitSize int, shiftCount uint) (int64, error) {
+	if len(prefix) >= len(name) || prefix != name[:len(prefix)] {
+		return 0, errors.NotValidf("%s is not prefix of %s", prefix, name)
+	}
+
+	idStr := name[len(prefix):]
+	id, err := strconv.ParseUint(idStr, 10, bitSize)
+	if err != nil {
+		return 0, errors.NotValidf("suffix of %d is not int64", idStr)
+	}
+
+	return int64(id << shiftCount), nil
 }
