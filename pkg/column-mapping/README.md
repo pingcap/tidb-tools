@@ -39,7 +39,7 @@ partition id, with arguments [prefix of schema, prefix of table].  we would comp
 - 2: schema ID (schema suffix)
 - 3: table ID (table suffix)
 - 4: origin ID (>= 0, <= 17592186044415)
-And schema = arguments[1] + schema suffix, table = arguments[3] + table suffix
+And schema = arguments[0] + schema suffix, table = arguments[1] + table suffix
 ```
 
 ## notice

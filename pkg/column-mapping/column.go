@@ -60,7 +60,7 @@ var Exprs = map[Expr]func(*mappingInfo, []interface{}) ([]interface{}, error){
 	// # 3 table ID (table suffix)
 	// # 4 origin ID (>= 0, <= 17592186044415)
 	//
-	// others: schema = arguments[1] + schema suffix, table = arguments[3] + table suffix
+	// others: schema = arguments[0] + schema suffix, table = arguments[1] + table suffix
 	PartitionID: partitionID,
 }
 
