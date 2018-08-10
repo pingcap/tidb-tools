@@ -396,16 +396,48 @@ func addSuffix(info *mappingInfo, vals []interface{}) ([]interface{}, error) {
 
 func partitionID(info *mappingInfo, vals []interface{}) ([]interface{}, error) {
 	// only int64 now
-	originID, ok := vals[info.targetPosition].(int64)
-	if !ok {
-		return nil, errors.NotValidf("column %d value is not int64, but %v", info.targetPosition, vals[info.targetPosition])
+	var (
+		originID int64
+		err      error
+		isChars  bool
+	)
+
+	switch rawID := vals[info.targetPosition].(type) {
+	case int:
+		originID = int64(rawID)
+	case int8:
+		originID = int64(rawID)
+	case int32:
+		originID = int64(rawID)
+	case int64:
+		originID = rawID
+	case uint:
+		originID = int64(rawID)
+	case uint16:
+		originID = int64(rawID)
+	case uint32:
+		originID = int64(rawID)
+	case uint64:
+		originID = int64(rawID)
+	case string:
+		originID, err = strconv.ParseInt(rawID, 10, 64)
+		if err != nil {
+			return nil, errors.NotValidf("column %d value is not int, but %v", info.targetPosition, vals[info.targetPosition])
+		}
+		isChars = true
 	}
 
 	if originID >= maxOriginID || originID < 0 {
 		return nil, errors.NotValidf("id must less than %d, bigger or equal than 0, but get %d", maxOriginID, originID)
 	}
 
-	vals[info.targetPosition] = int64(info.schemaID | info.tableID | originID)
+	originID = int64(info.schemaID | info.tableID | originID)
+	if isChars {
+		vals[info.targetPosition] = strconv.FormatInt(originID, 10)
+	} else {
+		vals[info.targetPosition] = originID
+	}
+
 	return vals, nil
 }
 

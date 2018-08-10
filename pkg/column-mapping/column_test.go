@@ -14,6 +14,7 @@
 package column
 
 import (
+	"fmt"
 	"testing"
 
 	. "github.com/pingcap/check"
@@ -157,7 +158,11 @@ func (t *testColumnMappingSuit) TestPartitionID(c *C) {
 	_, err = partitionID(info, []interface{}{"ha", 1 << 44})
 	c.Assert(err, NotNil)
 
-	vals, err := partitionID(info, []interface{}{"ha", int64(1)})
+	vals, err := partitionID(info, []interface{}{"ha", 1})
 	c.Assert(err, IsNil)
 	c.Assert(vals, DeepEquals, []interface{}{"ha", int64(1<<54 | 1<<44 | 1)})
+
+	vals, err = partitionID(info, []interface{}{"ha", "123"})
+	c.Assert(err, IsNil)
+	c.Assert(vals, DeepEquals, []interface{}{"ha", fmt.Sprintf("%d", int64(1<<54|1<<44|123))})
 }
