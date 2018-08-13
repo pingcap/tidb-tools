@@ -39,6 +39,9 @@ binlogctl:
 sync_diff_inspector:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/sync_diff_inspector ./sync_diff_inspector
 
+calculate_checksum:
+	$(GO) build -ldflags '$(LDFLAGS)' -o ./bin/calculate_checksum ./checksum/cmd/calculate_checksum
+
 test:
 	@export log_level=error; \
 	$(GOTEST) -cover $(PACKAGES)
