@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
@@ -54,6 +55,7 @@ func NewTableChecksum(cfg *Config, sourceDB *sql.DB) (*TableChecksum, error) {
 }
 
 func (tc *TableChecksum) Process(ctx context.Context) error {
+	timer := time.Now()
 	err := tc.initTables(ctx)
 	if err != nil {
 		return errors.Trace(err)
@@ -68,6 +70,8 @@ func (tc *TableChecksum) Process(ctx context.Context) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+	log.Infof("process schema %s_%d_%s takes %v", tc.cfg.SourceDBCfg.Host, tc.cfg.SourceDBCfg.Port, tc.sourceSchema, time.Since(timer))
+
 	// TODO: write another program to compare checksum(do it with XOR)
 	return nil
 }
@@ -86,6 +90,7 @@ func (tc *TableChecksum) saveChecksum() error {
 		if err != nil {
 			log.Errorf("write checksum failed fname %s, checksum %d", fname, checksum)
 		}
+		fd.Write([]byte{'\n'})
 		err = fd.Close()
 		if err != nil {
 			log.Errorf("close file %s err %v", fname, err)
@@ -237,7 +242,7 @@ func (tc *TableChecksum) checksumChunkData(ctx context.Context, checkJobs []*Che
 		if err != nil {
 			return 0, errors.Trace(err)
 		}
-		log.Debugf("table %s chunk checksum %v", table.Name, chunkChecksum)
+		log.Infof("table `%s`.`%s` chunk checksum %v, query %s, ars %v", tc.sourceSchema, table.Name, chunkChecksum, query, job.Args)
 
 		checksum ^= chunkChecksum
 	}

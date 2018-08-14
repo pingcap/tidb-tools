@@ -4,6 +4,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -11,9 +13,6 @@ import (
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/checksum"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-
-	"net/http"
-	_ "net/http/pprof"
 )
 
 func main() {
@@ -46,12 +45,6 @@ func main() {
 	}
 	defer dbutil.CloseDB(sourceDB)
 
-	// targetDB, err := dbutil.OpenDB(cfg.TargetDBCfg)
-	// if err != nil {
-	// 	log.Fatalf("create target db %+v error %v", cfg.TargetDBCfg, err)
-	// }
-	// defer dbutil.CloseDB(targetDB)
-
 	tc, err := checksum.NewTableChecksum(cfg, sourceDB)
 	if err != nil {
 		log.Fatal(errors.ErrorStack(err))
@@ -62,7 +55,5 @@ func main() {
 	if err != nil {
 		log.Fatal(errors.ErrorStack(err))
 	}
-
-	// log.Info("test pass!!!")
 
 }
