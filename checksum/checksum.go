@@ -8,6 +8,7 @@ import (
 	"hash/crc64"
 	"math/rand"
 	"os"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -32,10 +33,32 @@ type TableChecksum struct {
 	checkThreadCount int
 	tables           []*TableCheckCfg
 
+	chunkChecksumsMu struct {
+		sync.RWMutex
+		chunkChecksums map[table]chunkChecksums
+	}
+
 	tableChecksumsMu struct {
 		sync.RWMutex
 		checksums map[table]uint64
 	}
+}
+
+type chunkChecksums []chunkChecksum
+
+func (c chunkChecksums) Len() int { return len(c) }
+
+func (c chunkChecksums) Swap(i, j int) { c[i], c[j] = c[j], c[i] }
+
+func (c chunkChecksums) Less(i, j int) bool {
+	rangeI := c[i].chunkRange[0].(int64)
+	rangeJ := c[j].chunkRange[0].(int64)
+	return rangeI < rangeJ
+}
+
+type chunkChecksum struct {
+	checksum   uint64
+	chunkRange []interface{}
 }
 
 func NewTableChecksum(cfg *Config, sourceDB *sql.DB) (*TableChecksum, error) {
@@ -50,6 +73,7 @@ func NewTableChecksum(cfg *Config, sourceDB *sql.DB) (*TableChecksum, error) {
 	}
 
 	tc.tableChecksumsMu.checksums = make(map[table]uint64)
+	tc.chunkChecksumsMu.chunkChecksums = make(map[table]chunkChecksums)
 
 	return tc, nil
 }
@@ -70,6 +94,12 @@ func (tc *TableChecksum) Process(ctx context.Context) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+
+	err = tc.generateChunkChecksumFile()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	log.Infof("process schema %s_%d_%s takes %v", tc.cfg.SourceDBCfg.Host, tc.cfg.SourceDBCfg.Port, tc.sourceSchema, time.Since(timer))
 
 	// TODO: write another program to compare checksum(do it with XOR)
@@ -97,6 +127,36 @@ func (tc *TableChecksum) saveChecksum() error {
 		}
 	}
 
+	return nil
+}
+
+func (tc *TableChecksum) generateChunkChecksumFile() error {
+	tc.chunkChecksumsMu.Lock()
+	for table, tableChunkChecksums := range tc.chunkChecksumsMu.chunkChecksums {
+		fname := fmt.Sprintf("%s_%d_%s_%s.chunkchecksums", tc.cfg.SourceDBCfg.Host, tc.cfg.SourceDBCfg.Port, table.schema, table.name)
+
+		fd, err := os.OpenFile(fname, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		sort.Sort(tableChunkChecksums)
+		for _, chunkChecksum := range tableChunkChecksums {
+			_, err = fd.WriteString(strconv.FormatUint(chunkChecksum.checksum, 10))
+			if err != nil {
+				log.Errorf("write chunk checksum failed fname %s, chunk checksum %d", fname, chunkChecksum.checksum)
+			}
+			fd.WriteString(" ")
+			fd.WriteString(fmt.Sprintf("%v", chunkChecksum.chunkRange))
+			fd.Write([]byte{'\n'})
+		}
+
+		err = fd.Close()
+		if err != nil {
+			log.Errorf("close file %s err %v", fname, err)
+		}
+	}
+
+	tc.chunkChecksumsMu.Unlock()
 	return nil
 }
 
@@ -230,21 +290,31 @@ func (tc *TableChecksum) ChecksumTableData(ctx context.Context, tableCfg *TableC
 	return nil
 }
 
-func (tc *TableChecksum) checksumChunkData(ctx context.Context, checkJobs []*CheckJob, table *TableCheckCfg) (uint64, error) {
+func (tc *TableChecksum) checksumChunkData(ctx context.Context, checkJobs []*CheckJob, tableCfg *TableCheckCfg) (uint64, error) {
 	if len(checkJobs) == 0 {
 		return 0, nil
 	}
 
 	var checksum uint64
 	for _, job := range checkJobs {
-		query := generateRangeQuery(tc.sourceSchema, table.Name, job.Where)
-		chunkChecksum, err := GetCrc64ChecksumByQuery(ctx, tc.sourceDB, tc.ecmaTable, query, job.Args)
+		query := generateRangeQuery(tc.sourceSchema, tableCfg.Name, job.Where)
+		chunkChecksumValue, err := GetCrc64ChecksumByQuery(ctx, tc.sourceDB, tc.ecmaTable, query, job.Args)
 		if err != nil {
 			return 0, errors.Trace(err)
 		}
-		log.Infof("table `%s`.`%s` chunk checksum %v, query %s, ars %v", tc.sourceSchema, table.Name, chunkChecksum, query, job.Args)
+		log.Infof("table `%s`.`%s` chunk checksum %v, query %s, ars %v", tc.sourceSchema, tableCfg.Name, chunkChecksumValue, query, job.Args)
 
-		checksum ^= chunkChecksum
+		tc.chunkChecksumsMu.Lock()
+		key := table{tc.sourceSchema, tableCfg.Name}
+		tc.chunkChecksumsMu.chunkChecksums[key] = append(
+			tc.chunkChecksumsMu.chunkChecksums[key],
+			chunkChecksum{
+				checksum:   chunkChecksumValue,
+				chunkRange: job.Args,
+			})
+		tc.chunkChecksumsMu.Unlock()
+
+		checksum ^= chunkChecksumValue
 	}
 
 	return checksum, nil
