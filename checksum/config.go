@@ -43,6 +43,7 @@ func NewConfig() *Config {
 	return cfg
 }
 
+// Config is the configurations of cmd/(calculated_checksum and compare_checksum mixes here)
 type Config struct {
 	*flag.FlagSet `json:"-"`
 

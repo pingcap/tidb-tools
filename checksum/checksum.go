@@ -18,11 +18,29 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 )
 
+type chunkChecksums []chunkChecksum
+
+func (c chunkChecksums) Len() int { return len(c) }
+
+func (c chunkChecksums) Swap(i, j int) { c[i], c[j] = c[j], c[i] }
+
+func (c chunkChecksums) Less(i, j int) bool {
+	rangeI := c[i].chunkRange[0].(int64)
+	rangeJ := c[j].chunkRange[0].(int64)
+	return rangeI < rangeJ
+}
+
+type chunkChecksum struct {
+	checksum   uint64
+	chunkRange []interface{}
+}
+
 type table struct {
 	schema string
 	name   string
 }
 
+// TableChecksum calculates table checksum.
 type TableChecksum struct {
 	ecmaTable        *crc64.Table
 	cfg              *Config
@@ -44,23 +62,7 @@ type TableChecksum struct {
 	}
 }
 
-type chunkChecksums []chunkChecksum
-
-func (c chunkChecksums) Len() int { return len(c) }
-
-func (c chunkChecksums) Swap(i, j int) { c[i], c[j] = c[j], c[i] }
-
-func (c chunkChecksums) Less(i, j int) bool {
-	rangeI := c[i].chunkRange[0].(int64)
-	rangeJ := c[j].chunkRange[0].(int64)
-	return rangeI < rangeJ
-}
-
-type chunkChecksum struct {
-	checksum   uint64
-	chunkRange []interface{}
-}
-
+// NewTableChecksum creates an instance of TableChecksum.
 func NewTableChecksum(cfg *Config, sourceDB *sql.DB) (*TableChecksum, error) {
 	tc := &TableChecksum{
 		ecmaTable:        crc64.MakeTable(crc64.ECMA),
@@ -79,6 +81,7 @@ func NewTableChecksum(cfg *Config, sourceDB *sql.DB) (*TableChecksum, error) {
 	return tc, nil
 }
 
+// Process calculates table checksum and then save it to local file named by table name.
 func (tc *TableChecksum) Process(ctx context.Context) error {
 	timer := time.Now()
 	err := tc.initTables(ctx)
@@ -86,7 +89,7 @@ func (tc *TableChecksum) Process(ctx context.Context) error {
 		return errors.Trace(err)
 	}
 
-	err = tc.DoChecksums(ctx)
+	err = tc.doChecksums(ctx)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -193,7 +196,7 @@ func (tc *TableChecksum) initTables(ctx context.Context) error {
 	return nil
 }
 
-func (tc *TableChecksum) DoChecksums(ctx context.Context) error {
+func (tc *TableChecksum) doChecksums(ctx context.Context) error {
 	for _, table := range tc.tables {
 		err := tc.ChecksumTableData(ctx, table)
 		if err != nil {
@@ -209,6 +212,7 @@ func generateRangeQuery(schemaName, tableName string, where string) string {
 	return fmt.Sprintf("SELECT * FROM `%s`.`%s` WHERE %s", schemaName, tableName, where)
 }
 
+// GetCrc64ChecksumByQuery fetch data rows from the query and do md5 hash for each row, and finally XOR them with crc64 hash, returns a final crc64 checksum.
 func GetCrc64ChecksumByQuery(ctx context.Context, db *sql.DB, ecmaTable *crc64.Table, query string, args []interface{}) (uint64, error) {
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
