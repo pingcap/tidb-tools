@@ -70,6 +70,7 @@ func NewTableChecksum(cfg *Config, sourceDB *sql.DB) (*TableChecksum, error) {
 		sample:           cfg.Sample,
 		checkThreadCount: cfg.CheckThreadCount,
 		sourceSchema:     cfg.SourceDBCfg.Schema,
+		tables:           cfg.Tables,
 	}
 
 	tc.tableChecksumsMu.checksums = make(map[table]uint64)
