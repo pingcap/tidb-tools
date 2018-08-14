@@ -10,7 +10,7 @@ import (
 	"github.com/pingcap/tidb/model"
 )
 
-// TableCheckCfg is the config of table to be checked.
+// TableCheckCfg is the config of table to be checked. It's used for calculate_checksum program.
 type TableCheckCfg struct {
 	// table name
 	Name string `toml:"name"`
@@ -23,6 +23,12 @@ type TableCheckCfg struct {
 	Info  *model.TableInfo
 }
 
+// CompareConfig is used for compare_checksum program.
+type CompareConfig struct {
+	From []string `toml:"from" json:"from"`
+	To   []string `toml:"to" json:"to"`
+}
+
 // NewConfig creates a new config.
 func NewConfig() *Config {
 	cfg := &Config{}
@@ -32,7 +38,7 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.ConfigFile, "config", "config.toml", "Config file")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVar(&cfg.LogFile, "log-file", "", "log file name")
-	fs.IntVar(&cfg.ProfilePort, "profile-port", 9999, "the port for go pprof")
+	fs.IntVar(&cfg.ProfilePort, "profile-port", 0, "the port for go pprof")
 
 	return cfg
 }
@@ -65,6 +71,7 @@ type Config struct {
 	// the config of table to be checked
 	Tables []*TableCheckCfg `toml:"check-table" json:"check-table"`
 
+	Compares []*CompareConfig `toml:"compare" json:"compare"`
 	// config file
 	ConfigFile string
 

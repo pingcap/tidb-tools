@@ -96,6 +96,7 @@ func (tc *TableChecksum) Process(ctx context.Context) error {
 		return errors.Trace(err)
 	}
 
+	// very useful for debugging
 	err = tc.generateChunkChecksumFile()
 	if err != nil {
 		return errors.Trace(err)
@@ -303,7 +304,7 @@ func (tc *TableChecksum) checksumChunkData(ctx context.Context, checkJobs []*Che
 		if err != nil {
 			return 0, errors.Trace(err)
 		}
-		log.Infof("table `%s`.`%s` chunk checksum %v, query %s, ars %v", tc.sourceSchema, tableCfg.Name, chunkChecksumValue, query, job.Args)
+		log.Infof("table `%s`.`%s` chunk checksum %v, query %s, range %v", tc.sourceSchema, tableCfg.Name, chunkChecksumValue, query, job.Args)
 
 		tc.chunkChecksumsMu.Lock()
 		key := table{tc.sourceSchema, tableCfg.Name}

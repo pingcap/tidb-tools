@@ -28,7 +28,9 @@ func main() {
 	}
 
 	go func() {
-		http.ListenAndServe(fmt.Sprintf(":%d", cfg.ProfilePort), nil)
+		if cfg.ProfilePort != 0 {
+			http.ListenAndServe(fmt.Sprintf(":%d", cfg.ProfilePort), nil)
+		}
 	}()
 
 	log.SetLevelByString(cfg.LogLevel)
