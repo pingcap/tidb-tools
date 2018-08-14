@@ -1,5 +1,4 @@
 # checksum related program configurations
-#  global configuration
 log-level = "info"
 log-file = "checksum.log"
 

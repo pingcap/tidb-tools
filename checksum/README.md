@@ -120,7 +120,6 @@ A full example of the configurations of `compare_checksum`.
 
 ```
 # checksum related program configurations
-#  global configuration
 log-level = "info"
 log-file = "checksum.log"
 
