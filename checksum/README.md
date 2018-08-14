@@ -90,7 +90,7 @@ schema = "sbtest4"
 #range = "id<100"
 ```
 
-If you want
+If you want to specify tables to be processed, use `[[check-table]]`. You can also specify the `range` condition in the `[[check-table]]` section, which will appear in `SELECT * FROM sbtest4.sbtest1 WHERE <built-in-condition> AND id<100` for example.
 
 #### running example
 
