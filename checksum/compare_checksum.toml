@@ -1,0 +1,28 @@
+# checksum related program configurations
+#  global configuration
+log-level = "info"
+log-file = "checksum.log"
+
+#profile-port = 9999
+
+# [[compare]] is a list
+[[compare]]
+# Put sharding table checksum files to 'from' section
+from = [
+    "./127.0.0.1_3309_sbtest4_sbtest1.checksum",
+]
+# Put the merged table checksum files to 'to' section. For most cases it should be only one file here.
+to = [
+    "./127.0.0.1_4000_sbtest4_sbtest1.checksum"
+]
+
+[[compare]]
+# Put sharding table checksum files to 'from' section
+from = [
+    "./127.0.0.1_3309_sbtest4_sbtest2.checksum",
+]
+# Put the merged table checksum files to 'to' section. For most cases it should be only one file here.
+to = [
+    "./127.0.0.1_4000_sbtest4_sbtest2.checksum"
+]
+
