@@ -225,7 +225,7 @@ func GetCrc64ChecksumByQuery(ctx context.Context, db *sql.DB, ecmaTable *crc64.T
 		for _, col := range singleRow {
 			h.Write(col)
 		}
-		sum := crc64.Update(checksum, ecmaTable, h.Sum(nil))
+		sum := crc64.Update(0, ecmaTable, h.Sum(nil))
 		checksum ^= sum
 	}
 
