@@ -1,7 +1,9 @@
 # diff Configuration.
 
 log-level = "info"
-#log-file = "checksum.log"
+log-file = "checksum.log"
+
+profile-port = 9999
 
 # for example, the whole data is [1...100]
 # we can split these data to [1...10], [11...20], ..., [91...100]
