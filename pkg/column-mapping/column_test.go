@@ -46,7 +46,7 @@ func (t *testColumnMappingSuit) TestRule(c *C) {
 	inValidRule.Expression = PartitionID
 	c.Assert(inValidRule.Valid(), NotNil)
 
-	inValidRule.Arguments = []string{"test_", "t_"}
+	inValidRule.Arguments = []string{"1", "test_", "t_"}
 	c.Assert(inValidRule.Valid(), IsNil)
 }
 
@@ -88,8 +88,9 @@ func (t *testColumnMappingSuit) TestHandle(c *C) {
 }
 
 func (t *testColumnMappingSuit) TestQueryColumnInfo(c *C) {
+	SetPartitionRule(4, 7, 8)
 	rules := []*Rule{
-		{"test*", "xxx*", "", "id", PartitionID, []string{"test_", "xxx_"}, "xx"},
+		{"test*", "xxx*", "", "id", PartitionID, []string{"8", "test_", "xxx_"}, "xx"},
 	}
 
 	// initial column mapping
@@ -101,51 +102,80 @@ func (t *testColumnMappingSuit) TestQueryColumnInfo(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(info.ignore, IsTrue)
 
+	// test matched
 	info, err = m.queryColumnInfo("test_2", "xxx_1", []string{"id", "name"})
 	c.Assert(info, DeepEquals, &mappingInfo{
 		sourcePosition: -1,
 		targetPosition: 0,
 		rule:           rules[0],
-		schemaID:       int64(2 << 54),
+		instanceID:     int64(8 << 59),
+		schemaID:       int64(2 << 52),
 		tableID:        int64(1 << 44),
 	})
 
+	m.resetCache()
+	SetPartitionRule(0, 0, 3)
+	info, err = m.queryColumnInfo("test_2", "xxx_1", []string{"id", "name"})
+	c.Assert(info, DeepEquals, &mappingInfo{
+		sourcePosition: -1,
+		targetPosition: 0,
+		rule:           rules[0],
+		instanceID:     int64(0),
+		schemaID:       int64(0),
+		tableID:        int64(1 << 60),
+	})
 }
 
 func (t *testColumnMappingSuit) TestSetPartitionRule(c *C) {
-	c.Assert(schemaIDBitSize, Equals, 9)
-	c.Assert(tableIDBitSize, Equals, 10)
+	SetPartitionRule(4, 7, 8)
+	c.Assert(instanceIDBitSize, Equals, 4)
+	c.Assert(schemaIDBitSize, Equals, 7)
+	c.Assert(tableIDBitSize, Equals, 8)
 	c.Assert(maxOriginID, Equals, int64(1<<44))
 
-	SetPartitionRule(3, 4)
+	SetPartitionRule(0, 3, 4)
+	c.Assert(instanceIDBitSize, Equals, 0)
 	c.Assert(schemaIDBitSize, Equals, 3)
 	c.Assert(tableIDBitSize, Equals, 4)
 	c.Assert(maxOriginID, Equals, int64(1<<56))
 }
 
 func (t *testColumnMappingSuit) TestComputePartitionID(c *C) {
-	SetPartitionRule(9, 10)
+	SetPartitionRule(4, 7, 8)
 
 	rule := &Rule{
 		Arguments: []string{"test", "t"},
 	}
-	_, _, err := computePartitionID("test_1", "t_1", rule)
+	_, _, _, err := computePartitionID("test_1", "t_1", rule)
 	c.Assert(err, NotNil)
-	_, _, err = computePartitionID("test", "t", rule)
+	_, _, _, err = computePartitionID("test", "t", rule)
 	c.Assert(err, NotNil)
 
 	rule = &Rule{
-		Arguments: []string{"test_", "t_"},
+		Arguments: []string{"2", "test_", "t_"},
 	}
-	schemaID, tableID, err := computePartitionID("test_1", "t_1", rule)
+	instanceID, schemaID, tableID, err := computePartitionID("test_1", "t_1", rule)
 	c.Assert(err, IsNil)
-	c.Assert(schemaID, Equals, int64(1<<54))
+	c.Assert(instanceID, Equals, int64(2<<59))
+	c.Assert(schemaID, Equals, int64(1<<52))
 	c.Assert(tableID, Equals, int64(1<<44))
+
+	SetPartitionRule(4, 0, 8)
+	rule = &Rule{
+		Arguments: []string{"2", "test_", "t_"},
+	}
+	instanceID, schemaID, tableID, err = computePartitionID("test_1", "t_1", rule)
+	c.Assert(err, IsNil)
+	c.Assert(instanceID, Equals, int64(2<<59))
+	c.Assert(schemaID, Equals, int64(0))
+	c.Assert(tableID, Equals, int64(1<<51))
 }
 
 func (t *testColumnMappingSuit) TestPartitionID(c *C) {
+	SetPartitionRule(4, 7, 8)
 	info := &mappingInfo{
-		schemaID:       int64(1 << 54),
+		instanceID:     int64(2 << 59),
+		schemaID:       int64(1 << 52),
 		tableID:        int64(1 << 44),
 		targetPosition: 1,
 	}
@@ -160,9 +190,10 @@ func (t *testColumnMappingSuit) TestPartitionID(c *C) {
 
 	vals, err := partitionID(info, []interface{}{"ha", 1})
 	c.Assert(err, IsNil)
-	c.Assert(vals, DeepEquals, []interface{}{"ha", int64(1<<54 | 1<<44 | 1)})
+	c.Assert(vals, DeepEquals, []interface{}{"ha", int64(2<<59 | 1<<52 | 1<<44 | 1)})
 
+	info.instanceID = 0
 	vals, err = partitionID(info, []interface{}{"ha", "123"})
 	c.Assert(err, IsNil)
-	c.Assert(vals, DeepEquals, []interface{}{"ha", fmt.Sprintf("%d", int64(1<<54|1<<44|123))})
+	c.Assert(vals, DeepEquals, []interface{}{"ha", fmt.Sprintf("%d", int64(1<<52|1<<44|123))})
 }

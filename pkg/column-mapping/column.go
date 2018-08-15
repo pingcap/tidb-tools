@@ -24,16 +24,18 @@ import (
 
 var (
 	// for partition ID, ref definition of partitionID
-	schemaIDBitSize       = 9
-	tableIDBitSize        = 10
-	maxOriginID     int64 = 17592186044416
+	instanceIDBitSize       = 4
+	schemaIDBitSize         = 7
+	tableIDBitSize          = 8
+	maxOriginID       int64 = 17592186044416
 )
 
 // SetPartitionRule sets bit size of schema ID and table ID
-func SetPartitionRule(schemaSize, tableSize int) {
-	schemaIDBitSize = schemaSize
-	tableIDBitSize = tableSize
-	maxOriginID = 1 << uint(64-schemaSize-tableSize-1)
+func SetPartitionRule(instanceIDSize, schemaIDSize, tableIDSize int) {
+	instanceIDBitSize = instanceIDSize
+	schemaIDBitSize = schemaIDSize
+	tableIDBitSize = tableIDSize
+	maxOriginID = 1 << uint(64-instanceIDSize-schemaIDSize-tableIDSize-1)
 }
 
 // Expr indicates how to handle column mapping
@@ -52,7 +54,7 @@ const (
 var Exprs = map[Expr]func(*mappingInfo, []interface{}) ([]interface{}, error){
 	AddPrefix: addPrefix, // arguments contains prefix
 	AddSuffix: addSuffix, // arguments contains suffix
-	// arguments contains [prefix of schema, prefix of table]
+	// arguments contains [instance_id, prefix of schema, prefix of table]
 	// we would compute a ID like
 	// [1:1 bit][2:9 bits][3:10 bits][4:44 bits] int64  (using default bits length)
 	// # 1 useless, no reason
@@ -60,7 +62,7 @@ var Exprs = map[Expr]func(*mappingInfo, []interface{}) ([]interface{}, error){
 	// # 3 table ID (table suffix)
 	// # 4 origin ID (>= 0, <= 17592186044415)
 	//
-	// others: schema = arguments[0] + schema suffix, table = arguments[1] + table suffix
+	// others: schema = arguments[1] + schema suffix, table = arguments[2] + table suffix
 	PartitionID: partitionID,
 }
 
@@ -95,7 +97,7 @@ func (r *Rule) Valid() error {
 	}
 
 	if r.Expression == PartitionID {
-		if len(r.Arguments) != 2 {
+		if len(r.Arguments) != 3 {
 			return errors.NotValidf("arguments %v for patition id", r.Arguments)
 		}
 	}
@@ -119,8 +121,9 @@ type mappingInfo struct {
 	targetPosition int
 	rule           *Rule
 
-	schemaID int64
-	tableID  int64
+	instanceID int64
+	schemaID   int64
+	tableID    int64
 }
 
 // Mapping maps column to something by rules
@@ -330,7 +333,7 @@ func (m *Mapping) queryColumnInfo(schema, table string, columns []string) (*mapp
 
 	// if expr is partition ID, compute schema and table ID
 	if rule.Expression == PartitionID {
-		info.schemaID, info.tableID, err = computePartitionID(schema, table, rule)
+		info.instanceID, info.schemaID, info.tableID, err = computePartitionID(schema, table, rule)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -431,7 +434,7 @@ func partitionID(info *mappingInfo, vals []interface{}) ([]interface{}, error) {
 		return nil, errors.NotValidf("id must less than %d, bigger or equal than 0, but get %d", maxOriginID, originID)
 	}
 
-	originID = int64(info.schemaID | info.tableID | originID)
+	originID = int64(info.instanceID | info.schemaID | info.tableID | originID)
 	if isChars {
 		vals[info.targetPosition] = strconv.FormatInt(originID, 10)
 	} else {
@@ -441,20 +444,29 @@ func partitionID(info *mappingInfo, vals []interface{}) ([]interface{}, error) {
 	return vals, nil
 }
 
-func computePartitionID(schema, table string, rule *Rule) (int64, int64, error) {
-	shiftCnt := uint(64 - schemaIDBitSize - 1)
-	schemaID, err := computeID(schema, rule.Arguments[0], schemaIDBitSize, shiftCnt)
-	if err != nil {
-		return 0, 0, errors.Trace(err)
+func computePartitionID(schema, table string, rule *Rule) (instanceID int64, schemaID int64, tableID int64, err error) {
+	shiftCnt := uint(64 - instanceIDBitSize - 1)
+	if instanceIDBitSize > 0 {
+		instanceID, err = strconv.ParseInt(rule.Arguments[0], 10, 64)
+		if err != nil {
+			return
+		}
+		instanceID = int64(instanceID << shiftCnt)
 	}
 
-	shiftCnt = shiftCnt - uint(tableIDBitSize)
-	tableID, err := computeID(table, rule.Arguments[1], tableIDBitSize, shiftCnt)
-	if err != nil {
-		return 0, 0, errors.Trace(err)
+	if schemaIDBitSize > 0 {
+		shiftCnt = shiftCnt - uint(schemaIDBitSize)
+		schemaID, err = computeID(schema, rule.Arguments[1], schemaIDBitSize, shiftCnt)
+		if err != nil {
+			return
+		}
 	}
 
-	return schemaID, tableID, nil
+	if tableIDBitSize > 0 {
+		shiftCnt = shiftCnt - uint(tableIDBitSize)
+		tableID, err = computeID(table, rule.Arguments[2], tableIDBitSize, shiftCnt)
+	}
+	return
 }
 
 func computeID(name string, prefix string, bitSize int, shiftCount uint) (int64, error) {
