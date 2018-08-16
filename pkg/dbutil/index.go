@@ -115,24 +115,40 @@ func FindSuitableIndex(ctx context.Context, db *sql.DB, schemaName string, table
 
 // SelectUniqueOrderKey returns some columns for order by condition.
 func SelectUniqueOrderKey(tbInfo *model.TableInfo) ([]string, []*model.ColumnInfo) {
-	keys := make([]string, 0, 2)
-	keyCols := make([]*model.ColumnInfo, 0, 2)
-
+	primaryKeys := make([]string, 0, 2)
+	uniqueKeys  := make([]string, 0, 2)
+	primaryKeyCols := make([]*model.ColumnInfo, 0, 2)
+	uniqueKeyCols  := make([]*model.ColumnInfo, 0, 2)
+	
 	for _, index := range tbInfo.Indices {
 		if index.Primary {
 			for _, indexCol := range index.Columns {
-				keys = append(keys, indexCol.Name.O)
-				keyCols = append(keyCols, tbInfo.Columns[indexCol.Offset])
+				primaryKeys = append(keys, indexCol.Name.O)
+				primaryKeyCols = append(keyCols, tbInfo.Columns[indexCol.Offset])
+			}
+		}
+		if index.Unique {
+			for _, indexCol := range index.Columns {
+				uniqueKeys = append(keys, indexCol.Name.O)
+				uniqueKeyCols = append(keyCols, tbInfo.Columns[indexCol.Offset])
 			}
 		}
 	}
 
-	if len(keys) == 0 {
-		// no primary key found, use all fields as order by key
-		for _, col := range tbInfo.Columns {
-			keys = append(keys, col.Name.O)
-			keyCols = append(keyCols, col)
-		}
+	if len(primaryKeys) != 0 {
+		return primaryKeys, primaryKeyCols
+	}
+
+	if len(uniqueKeys) != 0 {
+		return uniqueKeys, uniqueKeyCols
+	}
+
+	// no primary key or unique found, use all fields as order by key
+	keys := make([]string, 0, 2)
+	keyCols := make([]*model.ColumnInfo, 0, 2)	
+	for _, col := range tbInfo.Columns {
+		keys = append(keys, col.Name.O)
+		keyCols = append(keyCols, col)
 	}
 
 	return keys, keyCols
