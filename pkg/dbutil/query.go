@@ -28,10 +28,10 @@ func ScanRowsToInterfaces(rows *sql.Rows) ([][]interface{}, error) {
 }
 
 // ScanRow scans rows into a map.
-func ScanRow(rows *sql.Rows) (map[string][]byte, error) {
+func ScanRow(rows *sql.Rows) (map[string][]byte, map[string]bool, error) {
 	cols, err := rows.Columns()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
 
 	colVals := make([][]byte, len(cols))
@@ -42,13 +42,15 @@ func ScanRow(rows *sql.Rows) (map[string][]byte, error) {
 
 	err = rows.Scan(colValsI...)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
 
 	result := make(map[string][]byte)
+	null := make(map[string]bool)
 	for i := range colVals {
 		result[cols[i]] = colVals[i]
+		null[cols[i]] = (colVals[i] == nil)
 	}
 
-	return result, nil
+	return result, null, nil
 }
