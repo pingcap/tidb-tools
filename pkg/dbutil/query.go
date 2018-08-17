@@ -27,7 +27,7 @@ func ScanRowsToInterfaces(rows *sql.Rows) ([][]interface{}, error) {
 	return rowsData, nil
 }
 
-// ScanRow scans rows into a map.
+// ScanRow scans rows into a map, and another map specify the value is null or not.
 func ScanRow(rows *sql.Rows) (map[string][]byte, map[string]bool, error) {
 	cols, err := rows.Columns()
 	if err != nil {

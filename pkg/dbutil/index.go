@@ -129,6 +129,8 @@ func SelectUniqueOrderKey(tbInfo *model.TableInfo) ([]string, []*model.ColumnInf
 			break
 		}
 		if index.Unique {
+			keys = keys[:0]
+			keyCols = keyCols[:0]
 			for _, indexCol := range index.Columns {
 				keys = append(keys, indexCol.Name.O)
 				keyCols = append(keyCols, tbInfo.Columns[indexCol.Offset])
