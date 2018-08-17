@@ -410,7 +410,6 @@ func (df *Diff) WriteSqls() {
 }
 
 func generateDML(tp string, data map[string][]byte, null map[string]bool, keys []*model.ColumnInfo, table *model.TableInfo, schema string) (sql string) {
-	// TODO: can't distinguish NULL between ""
 	switch tp {
 	case "replace":
 		colNames := make([]string, 0, len(table.Columns))
