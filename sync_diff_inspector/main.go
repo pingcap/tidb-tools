@@ -27,9 +27,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/utils"
 )
 
-var maxOpenConns = 100
-var maxIdleConns = 100
-
 func main() {
 	cfg := NewConfig()
 	err := cfg.Parse(os.Args[1:])
@@ -61,8 +58,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("create source db %+v error %v", cfg.SourceDBCfg, err)
 	}
-	sourceDB.SetMaxOpenConns(maxOpenConns)
-	sourceDB.SetMaxIdleConns(maxIdleConns)
+	sourceDB.SetMaxOpenConns(cfg.CheckThreadCount)
+	sourceDB.SetMaxIdleConns(cfg.CheckThreadCount)
 	defer dbutil.CloseDB(sourceDB)
 	if cfg.SourceSnapshot != "" {
 		err = dbutil.SetSnapshot(ctx, sourceDB, cfg.SourceSnapshot)
@@ -75,8 +72,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("create target db %+v error %v", cfg.TargetDBCfg, err)
 	}
-	targetDB.SetMaxOpenConns(maxOpenConns)
-	targetDB.SetMaxIdleConns(maxIdleConns)
+	targetDB.SetMaxOpenConns(cfg.CheckThreadCount)
+	targetDB.SetMaxIdleConns(cfg.CheckThreadCount)
 	defer dbutil.CloseDB(targetDB)
 	if cfg.TargetSnapshot != "" {
 		err = dbutil.SetSnapshot(ctx, targetDB, cfg.TargetSnapshot)
