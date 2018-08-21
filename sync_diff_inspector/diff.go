@@ -274,7 +274,7 @@ func (df *Diff) checkChunkDataEqual(checkJobs []*CheckJob, table *TableCheckCfg)
 		}
 
 		// if checksum is not equal, compare the data
-		log.Errorf("table: %s, range: %s, args: %v, checksum is not equal", job.Table, job.Args, job.Where)
+		log.Errorf("table: %s, range: %s, args: %v, checksum is not equal, one is %s, another is %s", job.Table, job.Args, job.Where, checksum1, checksum2)
 		rows1, orderKeyCols, err := getChunkRows(df.ctx, df.db1, df.schema, table, job.Where, job.Args, df.useRowID)
 		if err != nil {
 			return false, errors.Trace(err)
