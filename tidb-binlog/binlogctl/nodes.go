@@ -14,6 +14,8 @@
 package main
 
 import (
+	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/juju/errors"
@@ -63,7 +65,15 @@ func updateNodeState(urls, kind, nodeID, state string) error {
 		if n.NodeID != nodeID {
 			continue
 		}
-		return registry.UpdateNode(context.Background(), node.NodePrefix[kind], n.NodeID, n.Addr, state)
+		switch state {
+		case "pause", "close":
+			// pause node, then node's state will be pausing
+			// close node, then node's state will be closing
+			return applyAction(n, state)
+		default:
+			n.State = state
+			return registry.UpdateNode(context.Background(), node.NodePrefix[kind], n)
+		}
 	}
 
 	return errors.NotFoundf("node %s, id %s from etcd %s", kind, nodeID, urls)
@@ -81,4 +91,21 @@ func createRegistry(urls string) (*node.EtcdRegistry, error) {
 	}
 
 	return node.NewEtcdRegistry(cli, etcdDialTimeout), nil
+}
+
+func applyAction(node *node.Status, action string) error {
+	client := &http.Client{}
+	url := fmt.Sprintf("http://%s/state/%s/%s", node.Addr, node.NodeID, action)
+	log.Debugf("send put http request %s", url)
+	req, err := http.NewRequest("PUT", url, nil)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	_, err = client.Do(req)
+	if err == nil {
+		log.Infof("apply action %s on node %s success", action, node.NodeID)
+		return nil
+	}
+
+	return errors.Trace(err)
 }
