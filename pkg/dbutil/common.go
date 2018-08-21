@@ -206,6 +206,8 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName string, tbInfo
 		+------------+
 		| 1171947116 |
 		+------------+
+
+		Notice: in the older tidb version, tidb will get different checksum with mysql, can see this issue pingcap/tidb#7446
 	*/
 	isTiDB, err := IsTiDB(ctx, db)
 	if err != nil {
