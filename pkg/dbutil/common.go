@@ -33,6 +33,11 @@ const (
 	ImplicitColID = -1
 )
 
+var (
+	// ErrVersionNotFound means can't get the database's version
+	ErrVersionNotFound = errors.New("can't get the database's version")
+)
+
 // DBConfig is database configuration.
 type DBConfig struct {
 	Host string `toml:"host" json:"host"`
@@ -283,23 +288,26 @@ func SetSnapshot(ctx context.Context, db *sql.DB, snapshot string) error {
 	return errors.Trace(err)
 }
 
-// GetTiDBVersion returns the tidb's version
-func GetTiDBVersion(ctx context.Context, db *sql.DB) (string, error) {
+// GetDBVersion returns the database's version
+func GetDBVersion(ctx context.Context, db *sql.DB) (string, error) {
 	/*
-		example in tidb:
-		mysql> SELECT tidb_version()\G
-		*************************** 1. row ***************************
-		tidb_version(): Release Version: v2.1.0-beta-260-gd4e0885
-		Git Commit Hash: d4e08853e4d4d867676f0f17ec6e5b15d5a0bdf8
-		Git Branch: master
-		UTC Build Time: 2018-08-21 03:59:16
-		GoVersion: go version go1.10.3 darwin/amd64
-		Race Enabled: false
-		TiKV Min Version: 2.1.0-alpha.1-ff3dd160846b7d1aed9079c389fc188f7f5ea13e
-		Check Table Before Drop: false
-		1 row in set (0.00 sec)
+		example in TiDB:
+		mysql> select version();
+		+--------------------------------------+
+		| version()                            |
+		+--------------------------------------+
+		| 5.7.10-TiDB-v2.1.0-beta-173-g7e48ab1 |
+		+--------------------------------------+
+
+		example in MySQL:
+		mysql> select version();
+		+-----------+
+		| version() |
+		+-----------+
+		| 5.7.21    |
+		+-----------+
 	*/
-	query := "SELECT tidb_version()"
+	query := "SELECT version()"
 	result, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return "", errors.Trace(err)
@@ -314,24 +322,19 @@ func GetTiDBVersion(ctx context.Context, db *sql.DB) (string, error) {
 	}
 
 	if version.Valid {
-		// TODO: need analyse the tidb version string
 		return version.String, nil
 	}
 
-	return "", errors.New("can't get the tidb's version")
+	return "", ErrVersionNotFound
 }
 
 // IsTiDB returns true if this database is tidb
 func IsTiDB(ctx context.Context, db *sql.DB) (bool, error) {
-	_, err := GetTiDBVersion(ctx, db)
+	version, err := GetDBVersion(ctx, db)
 	if err != nil {
-		if strings.Contains(err.Error(), "tidb_version does not exist") {
-			return false, nil
-		}
-
-		log.Errorf("get tidb version meets error %v", err)
+		log.Errorf("get database's version meets error %v", err)
 		return false, errors.Trace(err)
 	}
 
-	return true, nil
+	return strings.Contains(strings.ToLower(version), "tidb"), nil
 }
