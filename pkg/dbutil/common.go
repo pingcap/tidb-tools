@@ -184,26 +184,51 @@ func GetTables(ctx context.Context, db *sql.DB, schemaName string) ([]string, er
 // GetCRC32Checksum returns checksum code of some data by given condition
 func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName string, tbInfo *model.TableInfo, orderKeys []string, limitRange string, args []interface{}) (string, error) {
 	/*
+		TODO: use same sql to calculate CRC32 checksum in TiDB and MySQL when TiDB support ORDER BY in GROUP_CONTACT.
+
 		calculate CRC32 checksum example:
-		mysql> SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', a, b, c, d) SEPARATOR  ' + ')) AS checksum
-			> FROM (SELECT * FROM `test`.`test2` WHERE `a` >= 29100000 AND `a` < 29200000 AND true order by a) AS tmp;
+
+		in TiDB:
+		mysql> SELECT CRC32(GROUP_CONCAT(row SEPARATOR ' + ')) AS checksum
+			> FROM (SELECT CONCAT_WS(",",a,b,c) AS row
+			> FROM (SELECT * FROM test.test WHERE `a` >= 0 AND `a` < 10 AND true ORDER BY a) AS tmp) AS rows ORDER BY row;
+		+------------+
+		| checksum   |
+		+------------+
+		| 1171947116 |
+		+------------+
+
+		in MySQL:
+		mysql> SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', a, b, c ) ORDER BY a ASC SEPARATOR ' + ')) AS checksum
+			> FROM test.test WHERE `a` >= 0 AND `a` < 10 AND true;
 		+------------+
 		| checksum   |
 		+------------+
 		| 1171947116 |
 		+------------+
 	*/
+	isTiDB, err := IsTiDB(ctx, db)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+
 	columnNames := make([]string, 0, len(tbInfo.Columns))
 	for _, col := range tbInfo.Columns {
 		columnNames = append(columnNames, col.Name.O)
 	}
 
-	query := fmt.Sprintf("SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', %s) SEPARATOR  ' + ')) AS checksum FROM (SELECT * FROM `%s`.`%s` WHERE %s ORDER BY %s) AS tmp;",
-		strings.Join(columnNames, ", "), schemaName, tbInfo.Name.O, limitRange, strings.Join(orderKeys, ","))
+	var query string
+	if isTiDB {
+		query = fmt.Sprintf("SELECT CRC32(GROUP_CONCAT(row SEPARATOR ' + ')) AS checksum FROM (SELECT CONCAT_WS(',',%s) AS row FROM (SELECT * FROM `%s`.`%s` WHERE %s ORDER BY %s) AS tmp) AS rows ORDER BY row;",
+			strings.Join(columnNames, ", "), schemaName, tbInfo.Name.O, limitRange, strings.Join(orderKeys, ","))
+	} else {
+		query = fmt.Sprintf("SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',',%s) ORDER BY %s ASC SEPARATOR ' + ')) AS checksum FROM `%s`.`%s` WHERE %s;",
+			strings.Join(columnNames, ", "), strings.Join(orderKeys, ","), schemaName, tbInfo.Name.O, limitRange)
+	}
 	log.Debugf("checksum sql: %s, args: %v", query, args)
 
 	var checksum sql.NullString
-	err := db.QueryRowContext(ctx, query, args...).Scan(&checksum)
+	err = db.QueryRowContext(ctx, query, args...).Scan(&checksum)
 	if err != nil {
 		return "", errors.Trace(err)
 	}
@@ -254,4 +279,57 @@ func SetSnapshot(ctx context.Context, db *sql.DB, snapshot string) error {
 	log.Infof("set history snapshot: %s", sql)
 	_, err := db.ExecContext(ctx, sql)
 	return errors.Trace(err)
+}
+
+// GetTiDBVersion returns the tidb's version
+func GetTiDBVersion(ctx context.Context, db *sql.DB) (string, error) {
+	/*
+		example in tidb:
+		mysql> SELECT tidb_version()\G
+		*************************** 1. row ***************************
+		tidb_version(): Release Version: v2.1.0-beta-260-gd4e0885
+		Git Commit Hash: d4e08853e4d4d867676f0f17ec6e5b15d5a0bdf8
+		Git Branch: master
+		UTC Build Time: 2018-08-21 03:59:16
+		GoVersion: go version go1.10.3 darwin/amd64
+		Race Enabled: false
+		TiKV Min Version: 2.1.0-alpha.1-ff3dd160846b7d1aed9079c389fc188f7f5ea13e
+		Check Table Before Drop: false
+		1 row in set (0.00 sec)
+	*/
+	query := "SELECT tidb_version()"
+	result, err := db.QueryContext(ctx, query)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	var version sql.NullString
+	for result.Next() {
+		err := result.Scan(&version)
+		if err != nil {
+			return "", errors.Trace(err)
+		}
+		break
+	}
+
+	if version.Valid {
+		// TODO: need analyse the tidb version string
+		return version.String, nil
+	}
+
+	return "", errors.New("can't get the tidb's version")
+}
+
+// IsTiDB returns true if this database is tidb
+func IsTiDB(ctx context.Context, db *sql.DB) (bool, error) {
+	_, err := GetTiDBVersion(ctx, db)
+	if err != nil {
+		if strings.Contains(err.Error(), "tidb_version does not exist") {
+			return false, nil
+		}
+
+		log.Errorf("get tidb version meets error %v", err)
+		return false, errors.Trace(err)
+	}
+
+	return true, nil
 }
