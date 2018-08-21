@@ -31,10 +31,10 @@ func main() {
 	flag.Parse()
 
 	cfg := &reader.Config{
-		KafakaAddr: []string{"127.0.0.1:9092"},
-		Offset:     *offset,
-		CommitTS:   *commitTS,
-		ClusterID:  *clusterID,
+		KafkaAddr: []string{"127.0.0.1:9092"},
+		Offset:    *offset,
+		CommitTS:  *commitTS,
+		ClusterID: *clusterID,
 	}
 
 	breader, err := reader.NewReader(cfg)

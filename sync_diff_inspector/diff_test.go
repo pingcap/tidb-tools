@@ -40,11 +40,43 @@ func (*testDiffSuite) TestGenerateSQLs(c *C) {
 		"update_time": []byte("10:10:10"),
 		"money":       []byte("11.1111"),
 	}
+	null := map[string]bool{
+		"id":          false,
+		"name":        false,
+		"birthday":    false,
+		"update_time": false,
+		"money":       false,
+	}
 	_, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
-	replaceSQL := generateDML("replace", rowsData, orderKeyCols, tableInfo, "test")
-	deleteSQL := generateDML("delete", rowsData, orderKeyCols, tableInfo, "test")
-	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(id,name,birthday,update_time,money) VALUES (1,\"xxx\",\"2018-01-01 00:00:00\",\"10:10:10\",11.1111);")
-	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` where id = 1;")
+	replaceSQL := generateDML("replace", rowsData, null, orderKeyCols, tableInfo, "test")
+	deleteSQL := generateDML("delete", rowsData, null, orderKeyCols, tableInfo, "test")
+	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (1,\"xxx\",\"2018-01-01 00:00:00\",\"10:10:10\",11.1111);")
+	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` where `id` = 1;")
+
+	// test the unique key
+	createTableSQL2 := "CREATE TABLE `test`.`atest` (`id` int(24), `name` varchar(24), `birthday` datetime, `update_time` time, `money` decimal(20,2), unique key(`id`, `name`))"
+	tableInfo2, err := dbutil.GetTableInfoBySQL(createTableSQL2)
+	c.Assert(err, IsNil)
+	_, orderKeyCols2 := dbutil.SelectUniqueOrderKey(tableInfo2)
+	replaceSQL = generateDML("replace", rowsData, null, orderKeyCols2, tableInfo2, "test")
+	deleteSQL = generateDML("delete", rowsData, null, orderKeyCols2, tableInfo2, "test")
+	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (1,\"xxx\",\"2018-01-01 00:00:00\",\"10:10:10\",11.1111);")
+	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` where `id` = 1 AND `name` = \"xxx\";")
+
+	// test value is nil
+	rowsData["name"] = []byte("")
+	null["name"] = true
+	replaceSQL = generateDML("replace", rowsData, null, orderKeyCols, tableInfo, "test")
+	deleteSQL = generateDML("delete", rowsData, null, orderKeyCols, tableInfo, "test")
+	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (1,NULL,\"2018-01-01 00:00:00\",\"10:10:10\",11.1111);")
+	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` where `id` = 1;")
+
+	rowsData["id"] = []byte("")
+	null["id"] = true
+	replaceSQL = generateDML("replace", rowsData, null, orderKeyCols, tableInfo, "test")
+	deleteSQL = generateDML("delete", rowsData, null, orderKeyCols, tableInfo, "test")
+	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (NULL,NULL,\"2018-01-01 00:00:00\",\"10:10:10\",11.1111);")
+	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` where `id` is NULL;")
 }
 
 func (*testDiffSuite) TestTableStructEqual(c *C) {

@@ -36,7 +36,7 @@ var (
 	password = flag.String("p", "", "password")
 	host     = flag.String("h", "localhost", "host")
 
-	kafkaAddr = flag.String("kafakaAddr", "127.0.0.1:9092", "kafkaAddr like 127.0.0.1:9092,127.0.0.1:9093")
+	kafkaAddr = flag.String("kafkaAddr", "127.0.0.1:9092", "kafkaAddr like 127.0.0.1:9092,127.0.0.1:9093")
 	clusterID = flag.String("clusterID", "6561373978432450126", "clusterID")
 	offset    = flag.Int64("offset", sarama.OffsetNewest, "offset")
 	commitTS  = flag.Int64("commitTS", 0, "commitTS")
@@ -55,10 +55,10 @@ func main() {
 	flag.Parse()
 
 	cfg := &reader.Config{
-		KafakaAddr: strings.Split(*kafkaAddr, ","),
-		Offset:     *offset,
-		CommitTS:   *commitTS,
-		ClusterID:  *clusterID,
+		KafkaAddr: strings.Split(*kafkaAddr, ","),
+		Offset:    *offset,
+		CommitTS:  *commitTS,
+		ClusterID: *clusterID,
 	}
 
 	breader, err := reader.NewReader(cfg)
