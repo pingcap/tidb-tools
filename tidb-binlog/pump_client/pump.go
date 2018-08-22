@@ -73,8 +73,9 @@ func NewPumpStatus(status *node.Status, security *tls.Config) *PumpStatus {
 
 // createGrpcClient create grpc client for online pump.
 func (p *PumpStatus) createGrpcClient(security *tls.Config) error {
-	if p.Client != nil {
-		return nil
+	// release the old connection, and create a new one
+	if p.grpcConn != nil {
+		p.grpcConn.Close()
 	}
 
 	dialerOpt := grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {

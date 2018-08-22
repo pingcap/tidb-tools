@@ -75,9 +75,11 @@ func updateNodeState(urls, kind, nodeID, state string) error {
 			// pause node, then node's state will be pausing
 			// close node, then node's state will be closing
 			return applyAction(n, state)
-		default:
+		case node.Online, node.Pausing, node.Paused, node.Closing, node.Offline:
 			n.State = state
 			return registry.UpdateNode(context.Background(), node.NodePrefix[kind], n)
+		default:
+			return errors.Errorf("state %s is illegal", state)
 		}
 	}
 
