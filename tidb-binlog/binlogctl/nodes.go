@@ -51,6 +51,11 @@ func queryNodesByKind(urls string, kind string) error {
 
 // updateNodeState update pump or drainer's state.
 func updateNodeState(urls, kind, nodeID, state string) error {
+	/*
+		node's state can be online, pausing, paused, closing and offline.
+		if the state is one of them, will update the node's state saved in etcd directly.
+		otherwise if the state is pause or close, will send request to node.
+	*/
 	registry, err := createRegistry(urls)
 	if err != nil {
 		return errors.Trace(err)

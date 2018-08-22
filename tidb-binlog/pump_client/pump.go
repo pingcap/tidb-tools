@@ -14,6 +14,7 @@
 package client
 
 import (
+	"crypto/tls"
 	"net"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	pb "github.com/pingcap/tipb/go-binlog"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 // PumpStatus saves pump's status.
@@ -51,7 +53,7 @@ type PumpStatus struct {
 }
 
 // NewPumpStatus returns a new PumpStatus according to node's status.
-func NewPumpStatus(status *node.Status) *PumpStatus {
+func NewPumpStatus(status *node.Status, security *tls.Config) *PumpStatus {
 	pumpStatus := &PumpStatus{}
 	pumpStatus.Status = *status
 	pumpStatus.IsAvaliable = (status.State == node.Online)
@@ -60,7 +62,7 @@ func NewPumpStatus(status *node.Status) *PumpStatus {
 		return pumpStatus
 	}
 
-	err := pumpStatus.createGrpcClient()
+	err := pumpStatus.createGrpcClient(security)
 	if err != nil {
 		log.Errorf("[pumps client] create grpc client for %s failed, error %v", status.NodeID, err)
 		pumpStatus.IsAvaliable = false
@@ -70,7 +72,7 @@ func NewPumpStatus(status *node.Status) *PumpStatus {
 }
 
 // createGrpcClient create grpc client for online pump.
-func (p *PumpStatus) createGrpcClient() error {
+func (p *PumpStatus) createGrpcClient(security *tls.Config) error {
 	if p.Client != nil {
 		return nil
 	}
@@ -79,7 +81,13 @@ func (p *PumpStatus) createGrpcClient() error {
 		return net.DialTimeout("tcp", addr, timeout)
 	})
 	log.Debugf("[pumps client] create gcpc client at %s", p.Addr)
-	clientConn, err := grpc.Dial(p.Addr, dialerOpt, grpc.WithInsecure())
+	var clientConn *grpc.ClientConn
+	var err error
+	if security != nil {
+		clientConn, err = grpc.Dial(p.Addr, dialerOpt, grpc.WithTransportCredentials(credentials.NewTLS(security)))
+	} else {
+		clientConn, err = grpc.Dial(p.Addr, dialerOpt, grpc.WithInsecure())
+	}
 	if err != nil {
 		return err
 	}

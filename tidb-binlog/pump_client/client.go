@@ -14,6 +14,7 @@
 package client
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"path"
 	"sync"
@@ -94,6 +95,9 @@ type PumpsClient struct {
 
 	// BinlogWriteTimeout is the max time binlog can use to write to pump.
 	BinlogWriteTimeout time.Duration
+
+	// Security is the security config
+	Security *tls.Config
 }
 
 // NewPumpsClient returns a PumpsClient.
@@ -140,6 +144,7 @@ func NewPumpsClient(etcdURLs string, algorithm string, securityOpt pd.SecurityOp
 		Selector:           selector,
 		RetryTime:          DefaultRetryTime,
 		BinlogWriteTimeout: DefaultBinlogWriteTimeout,
+		Security:           security,
 	}
 
 	err = newPumpsClient.getPumpStatus(ctx)
@@ -164,7 +169,7 @@ func (c *PumpsClient) getPumpStatus(pctx context.Context) error {
 
 	for _, status := range nodesStatus {
 		log.Debugf("[pumps client] get pump %v from etcd", status)
-		c.addPump(NewPumpStatus(status), false)
+		c.addPump(NewPumpStatus(status, c.Security), false)
 	}
 
 	return nil
@@ -219,7 +224,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 	pump.IsAvaliable = avaliable
 	if pump.IsAvaliable {
-		err := pump.createGrpcClient()
+		err := pump.createGrpcClient(c.Security)
 		if err != nil {
 			log.Errorf("[pumps client] create grpc client for pump %s failed, error: %v", pump.NodeID, err)
 			pump.IsAvaliable = false
@@ -330,7 +335,7 @@ func (c *PumpsClient) watchStatus() {
 				switch ev.Type {
 				case mvccpb.PUT:
 					if !c.exist(status.NodeID) {
-						c.addPump(NewPumpStatus(status), true)
+						c.addPump(NewPumpStatus(status, c.Security), true)
 						continue
 					}
 
@@ -372,7 +377,7 @@ func (c *PumpsClient) detect() {
 			c.Pumps.RUnlock()
 
 			for _, pump := range needCheckPumps {
-				err := pump.createGrpcClient()
+				err := pump.createGrpcClient(c.Security)
 				if err != nil {
 					log.Errorf("[pumps client] create grpc client for pump %s failed, error %v", pump.NodeID, errors.Trace(err))
 					continue
