@@ -324,7 +324,6 @@ func (c *PumpsClient) watchStatus() {
 			return
 		case wresp := <-rch:
 			for _, ev := range wresp.Events {
-				log.Debugf("[pumps client] watch etcd event type:%s, key: %q, value: %q", ev.Type, ev.Kv.Key, ev.Kv.Value)
 				status := &node.Status{}
 				err := json.Unmarshal(ev.Kv.Value, &status)
 				if err != nil {
@@ -335,18 +334,21 @@ func (c *PumpsClient) watchStatus() {
 				switch ev.Type {
 				case mvccpb.PUT:
 					if !c.exist(status.NodeID) {
+						log.Infof("[pumps client] find a new pump %s", status.NodeID)
 						c.addPump(NewPumpStatus(status, c.Security), true)
 						continue
 					}
 
 					pump, avaliableChanged, avaliable := c.updatePump(status)
 					if avaliableChanged {
+						log.Infof("[pumps client] pump %s's state is changed to %s", pump.Status.NodeID, status.State)
 						c.setPumpAvaliable(pump, avaliable)
 					}
 
 				case mvccpb.DELETE:
 					// now will not delete pump node in fact, just for compatibility.
 					nodeID := node.AnalyzeNodeID(string(ev.Kv.Key))
+					log.Infof("[pumps client] remove pump %s", nodeID)
 					c.removePump(nodeID)
 				}
 			}
