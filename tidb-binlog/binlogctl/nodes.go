@@ -14,6 +14,8 @@
 package main
 
 import (
+	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/juju/errors"
@@ -49,6 +51,10 @@ func queryNodesByKind(urls string, kind string) error {
 
 // updateNodeState update pump or drainer's state.
 func updateNodeState(urls, kind, nodeID, state string) error {
+	/*
+		node's state can be online, pausing, paused, closing and offline.
+		if the state is one of them, will update the node's state saved in etcd directly.
+	*/
 	registry, err := createRegistry(urls)
 	if err != nil {
 		return errors.Trace(err)
@@ -63,7 +69,13 @@ func updateNodeState(urls, kind, nodeID, state string) error {
 		if n.NodeID != nodeID {
 			continue
 		}
-		return registry.UpdateNode(context.Background(), node.NodePrefix[kind], n.NodeID, n.Addr, state)
+		switch state {
+		case node.Online, node.Pausing, node.Paused, node.Closing, node.Offline:
+			n.State = state
+			return registry.UpdateNode(context.Background(), node.NodePrefix[kind], n)
+		default:
+			return errors.Errorf("state %s is illegal", state)
+		}
 	}
 
 	return errors.NotFoundf("node %s, id %s from etcd %s", kind, nodeID, urls)
@@ -81,4 +93,39 @@ func createRegistry(urls string) (*node.EtcdRegistry, error) {
 	}
 
 	return node.NewEtcdRegistry(cli, etcdDialTimeout), nil
+}
+
+func applyAction(urls, kind, nodeID string, action string) error {
+	registry, err := createRegistry(urls)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	nodes, err := registry.Nodes(context.Background(), node.NodePrefix[kind])
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	for _, n := range nodes {
+		if n.NodeID != nodeID {
+			continue
+		}
+
+		client := &http.Client{}
+		url := fmt.Sprintf("http://%s/state/%s/%s", n.Addr, n.NodeID, action)
+		log.Debugf("send put http request %s", url)
+		req, err := http.NewRequest("PUT", url, nil)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		_, err = client.Do(req)
+		if err == nil {
+			log.Infof("apply action %s on node %s success", action, n.NodeID)
+			return nil
+		}
+
+		return errors.Trace(err)
+	}
+
+	return errors.NotFoundf("nodeID %s", nodeID)
 }

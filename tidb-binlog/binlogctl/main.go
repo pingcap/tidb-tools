@@ -22,6 +22,11 @@ import (
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
 )
 
+const (
+	pause = "pause"
+	close = "close"
+)
+
 func main() {
 	cfg := NewConfig()
 	err := cfg.Parse(os.Args[1:])
@@ -39,12 +44,20 @@ func main() {
 		err = generateMetaInfo(cfg)
 	case queryPumps:
 		err = queryNodesByKind(cfg.EtcdURLs, node.PumpNode)
-	case queryDrainer:
+	case queryDrainers:
 		err = queryNodesByKind(cfg.EtcdURLs, node.DrainerNode)
-	case updatePumps:
+	case updatePump:
 		err = updateNodeState(cfg.EtcdURLs, node.PumpNode, cfg.NodeID, cfg.State)
 	case updateDrainer:
 		err = updateNodeState(cfg.EtcdURLs, node.DrainerNode, cfg.NodeID, cfg.State)
+	case pausePump:
+		err = applyAction(cfg.EtcdURLs, node.PumpNode, cfg.NodeID, pause)
+	case pauseDrainer:
+		err = applyAction(cfg.EtcdURLs, node.DrainerNode, cfg.NodeID, pause)
+	case offlinePump:
+		err = applyAction(cfg.EtcdURLs, node.PumpNode, cfg.NodeID, close)
+	case offlineDrainer:
+		err = applyAction(cfg.EtcdURLs, node.DrainerNode, cfg.NodeID, close)
 	}
 
 	if err != nil {

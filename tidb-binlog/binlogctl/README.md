@@ -54,10 +54,18 @@ Then the result will be like this:
 we would format output later :)
 
 
-### unregister pump/drainer
+### update pump/drainer's state
+pump/drainer's state can be online, pausing, paused, closing and offline. In most cases, we only need update pump/drainer's state to paused or offline.
 ```
-bin/binlogctl -pd-urls=http://127.0.0.1:2379 -cmd delete-pump/delete-drainer -node-id ip-127-0-0-1:8250/{nodeID}
+bin/binlogctl -pd-urls=http://127.0.0.1:2379 -cmd update-pump/update-drainer -node-id ip-127-0-0-1:8250/{nodeID} -state {state}
 ```
+This cmd will update pump/drainer's state.
+
+### pause/offline pump/drainer
+```
+bin/binlogctl -pd-urls=http://127.0.0.1:2379 -cmd pause-pump/pause-drainer/offline-pump/offline-drainer -node-id ip-127-0-0-1:8250/{nodeID}
+```
+binlogctl will send http request to pump/drainer, and finally pump/drainer will exit by itself with paused or offline state.
 
 ### generate meta
 meta contains commit TS that can be used to specifies the location of the synchronized data

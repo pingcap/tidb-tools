@@ -1,9 +1,5 @@
 package node
 
-import (
-	"github.com/juju/errors"
-)
-
 var (
 	// DefaultRootPath is the root path of the keys stored in etcd, the `v1` is the tidb-binlog's version.
 	DefaultRootPath = "/tidb-binlog/v1"
@@ -21,43 +17,22 @@ var (
 	}
 )
 
-// State is the state of node.
-type State string
-
 const (
 	// Online means the node can receive request.
-	Online State = "online"
+	Online = "online"
 
 	// Pausing means the node is pausing.
-	Pausing State = "pausing"
+	Pausing = "pausing"
 
 	// Paused means the node is already paused.
-	Paused State = "paused"
+	Paused = "paused"
 
 	// Closing means the node is closing, and the state will be Offline when closed.
-	Closing State = "closing"
+	Closing = "closing"
 
 	// Offline means the node is offline, and will not provide service.
-	Offline State = "offline"
+	Offline = "offline"
 )
-
-// GetState returns a state by state name.
-func GetState(state string) (State, error) {
-	switch state {
-	case "online":
-		return Online, nil
-	case "pausing":
-		return Pausing, nil
-	case "paused":
-		return Paused, nil
-	case "closing":
-		return Closing, nil
-	case "offline":
-		return Offline, nil
-	default:
-		return Offline, errors.NotFoundf("state %s", state)
-	}
-}
 
 // Label is key/value pairs that are attached to objects
 type Label struct {
@@ -69,11 +44,11 @@ type Status struct {
 	// the id of node.
 	NodeID string `json:"nodeId"`
 
-	// the address of pump or node.
-	Addr string `json:"addr"`
+	// the host of pump or node.
+	Addr string `json:"host"`
 
 	// the state of pump.
-	State State `json:"state"`
+	State string `json:"state"`
 
 	// the node is alive or not.
 	IsAlive bool `json:"isAlive"`
@@ -85,6 +60,10 @@ type Status struct {
 	// the label of this node. Now only used for pump.
 	// pump client will only send to a pump which label is matched.
 	Label *Label `json:"label"`
+
+	// for pump: max commit ts in pump
+	// for drainer: drainer has consume all binlog less than or equal MaxCommitTS
+	MaxCommitTS int64 `json:"maxCommitTS"`
 
 	// UpdateTS is the last update ts of node's status.
 	UpdateTS int64 `json:"updateTS"`

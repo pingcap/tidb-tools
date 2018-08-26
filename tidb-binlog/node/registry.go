@@ -42,12 +42,13 @@ func (r *EtcdRegistry) Node(pctx context.Context, prefix, nodeID string) (*Statu
 	ctx, cancel := context.WithTimeout(pctx, r.reqTimeout)
 	defer cancel()
 
-	resp, err := r.client.List(ctx, r.prefixed(prefix, nodeID))
+	data, err := r.client.Get(ctx, r.prefixed(prefix, nodeID))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	status, err := nodeStatusFromEtcdNode(nodeID, resp)
-	if err != nil {
+
+	status := &Status{}
+	if err = json.Unmarshal(data, &status); err != nil {
 		return nil, errors.Annotatef(err, "Invalid nodeID(%s)", nodeID)
 	}
 	return status, nil
@@ -70,28 +71,18 @@ func (r *EtcdRegistry) Nodes(pctx context.Context, prefix string) ([]*Status, er
 }
 
 // UpdateNode update the node information.
-func (r *EtcdRegistry) UpdateNode(pctx context.Context, prefix, nodeID, addr, stateStr string) error {
+func (r *EtcdRegistry) UpdateNode(pctx context.Context, prefix string, status *Status) error {
 	ctx, cancel := context.WithTimeout(pctx, r.reqTimeout)
 	defer cancel()
 
-	state, err := GetState(stateStr)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	if exists, err := r.checkNodeExists(ctx, prefix, nodeID); err != nil {
+	if exists, err := r.checkNodeExists(ctx, prefix, status.NodeID); err != nil {
 		return errors.Trace(err)
 	} else if !exists {
 		// not found then create a new node
-		log.Warnf("node %s dosen't exist!", nodeID)
-		return r.createNode(ctx, prefix, nodeID, addr, state)
+		log.Infof("node %s dosen't exist, will create one", status.NodeID)
+		return r.createNode(ctx, prefix, status)
 	} else {
-		status, err := r.Node(ctx, prefix, nodeID)
-		if err != nil {
-			return errors.Trace(err)
-		}
 		// found it, update status infomation of the node
-		status.State = state
 		return r.updateNode(ctx, prefix, status)
 	}
 }
@@ -117,18 +108,12 @@ func (r *EtcdRegistry) updateNode(ctx context.Context, prefix string, status *St
 	return errors.Trace(err)
 }
 
-func (r *EtcdRegistry) createNode(ctx context.Context, prefix, nodeID, addr string, state State) error {
-	obj := &Status{
-		NodeID: nodeID,
-		Addr:   addr,
-		State:  state,
-	}
-
-	objstr, err := json.Marshal(obj)
+func (r *EtcdRegistry) createNode(ctx context.Context, prefix string, status *Status) error {
+	objstr, err := json.Marshal(status)
 	if err != nil {
-		return errors.Annotatef(err, "error marshal NodeStatus(%v)", obj)
+		return errors.Annotatef(err, "error marshal NodeStatus(%v)", status)
 	}
-	key := r.prefixed(prefix, nodeID)
+	key := r.prefixed(prefix, status.NodeID)
 	err = r.client.Create(ctx, key, string(objstr), nil)
 	return errors.Trace(err)
 }
@@ -142,7 +127,7 @@ func nodeStatusFromEtcdNode(id string, node *etcd.Node) (*Status, error) {
 	status := &Status{}
 
 	if err := json.Unmarshal(node.Value, &status); err != nil {
-		return nil, errors.Annotatef(err, "error unmarshal NodeStatus with nodeID(%s)", id)
+		return nil, errors.Annotatef(err, "error unmarshal NodeStatus with nodeID(%s), node value(%s)", id, node.Value)
 	}
 
 	return status, nil

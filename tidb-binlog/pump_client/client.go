@@ -23,6 +23,7 @@ import (
 	"github.com/coreos/etcd/mvcc/mvccpb"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	"github.com/pingcap/pd/pd-client"
 	"github.com/pingcap/tidb-tools/pkg/etcd"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
@@ -94,13 +95,29 @@ type PumpsClient struct {
 
 	// BinlogWriteTimeout is the max time binlog can use to write to pump.
 	BinlogWriteTimeout time.Duration
+
+	// Security is the security config
+	Security *tls.Config
 }
 
 // NewPumpsClient returns a PumpsClient.
-func NewPumpsClient(etcdURLs string, clusterID uint64, security *tls.Config, algorithm string) (*PumpsClient, error) {
+func NewPumpsClient(etcdURLs string, algorithm string, securityOpt pd.SecurityOption) (*PumpsClient, error) {
 	selector := NewSelector(algorithm)
 
 	ectdEndpoints, err := utils.ParseHostPortAddr(etcdURLs)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	// get clusterid
+	pdCli, err := pd.NewClient(ectdEndpoints, securityOpt)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	clusterID := pdCli.GetClusterID(context.Background())
+	pdCli.Close()
+
+	security, err := utils.ToTLSConfig(securityOpt.CAPath, securityOpt.CertPath, securityOpt.KeyPath)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -127,6 +144,7 @@ func NewPumpsClient(etcdURLs string, clusterID uint64, security *tls.Config, alg
 		Selector:           selector,
 		RetryTime:          DefaultRetryTime,
 		BinlogWriteTimeout: DefaultBinlogWriteTimeout,
+		Security:           security,
 	}
 
 	err = newPumpsClient.getPumpStatus(ctx)
@@ -151,7 +169,7 @@ func (c *PumpsClient) getPumpStatus(pctx context.Context) error {
 
 	for _, status := range nodesStatus {
 		log.Debugf("[pumps client] get pump %v from etcd", status)
-		c.addPump(NewPumpStatus(status), false)
+		c.addPump(NewPumpStatus(status, c.Security), false)
 	}
 
 	return nil
@@ -206,7 +224,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 	pump.IsAvaliable = avaliable
 	if pump.IsAvaliable {
-		err := pump.createGrpcClient()
+		err := pump.createGrpcClient(c.Security)
 		if err != nil {
 			log.Errorf("[pumps client] create grpc client for pump %s failed, error: %v", pump.NodeID, err)
 			pump.IsAvaliable = false
@@ -306,7 +324,6 @@ func (c *PumpsClient) watchStatus() {
 			return
 		case wresp := <-rch:
 			for _, ev := range wresp.Events {
-				log.Debugf("[pumps client] watch etcd event type:%s, key: %q, value: %q", ev.Type, ev.Kv.Key, ev.Kv.Value)
 				status := &node.Status{}
 				err := json.Unmarshal(ev.Kv.Value, &status)
 				if err != nil {
@@ -317,18 +334,21 @@ func (c *PumpsClient) watchStatus() {
 				switch ev.Type {
 				case mvccpb.PUT:
 					if !c.exist(status.NodeID) {
-						c.addPump(NewPumpStatus(status), true)
+						log.Infof("[pumps client] find a new pump %s", status.NodeID)
+						c.addPump(NewPumpStatus(status, c.Security), true)
 						continue
 					}
 
 					pump, avaliableChanged, avaliable := c.updatePump(status)
 					if avaliableChanged {
+						log.Infof("[pumps client] pump %s's state is changed to %s", pump.Status.NodeID, status.State)
 						c.setPumpAvaliable(pump, avaliable)
 					}
 
 				case mvccpb.DELETE:
 					// now will not delete pump node in fact, just for compatibility.
 					nodeID := node.AnalyzeNodeID(string(ev.Kv.Key))
+					log.Infof("[pumps client] remove pump %s", nodeID)
 					c.removePump(nodeID)
 				}
 			}
@@ -359,7 +379,7 @@ func (c *PumpsClient) detect() {
 			c.Pumps.RUnlock()
 
 			for _, pump := range needCheckPumps {
-				err := pump.createGrpcClient()
+				err := pump.createGrpcClient(c.Security)
 				if err != nil {
 					log.Errorf("[pumps client] create grpc client for pump %s failed, error %v", pump.NodeID, errors.Trace(err))
 					continue
