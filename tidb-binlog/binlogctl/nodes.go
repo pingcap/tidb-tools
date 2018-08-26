@@ -54,7 +54,6 @@ func updateNodeState(urls, kind, nodeID, state string) error {
 	/*
 		node's state can be online, pausing, paused, closing and offline.
 		if the state is one of them, will update the node's state saved in etcd directly.
-		otherwise if the state is pause or close, will send request to node.
 	*/
 	registry, err := createRegistry(urls)
 	if err != nil {
@@ -71,10 +70,6 @@ func updateNodeState(urls, kind, nodeID, state string) error {
 			continue
 		}
 		switch state {
-		case "pause", "close":
-			// pause node, then node's state will be pausing
-			// close node, then node's state will be closing
-			return applyAction(n, state)
 		case node.Online, node.Pausing, node.Paused, node.Closing, node.Offline:
 			n.State = state
 			return registry.UpdateNode(context.Background(), node.NodePrefix[kind], n)
@@ -100,19 +95,37 @@ func createRegistry(urls string) (*node.EtcdRegistry, error) {
 	return node.NewEtcdRegistry(cli, etcdDialTimeout), nil
 }
 
-func applyAction(node *node.Status, action string) error {
-	client := &http.Client{}
-	url := fmt.Sprintf("http://%s/state/%s/%s", node.Addr, node.NodeID, action)
-	log.Debugf("send put http request %s", url)
-	req, err := http.NewRequest("PUT", url, nil)
+func applyAction(urls, kind, nodeID string, action string) error {
+	registry, err := createRegistry(urls)
 	if err != nil {
 		return errors.Trace(err)
 	}
-	_, err = client.Do(req)
-	if err == nil {
-		log.Infof("apply action %s on node %s success", action, node.NodeID)
-		return nil
+
+	nodes, err := registry.Nodes(context.Background(), node.NodePrefix[kind])
+	if err != nil {
+		return errors.Trace(err)
 	}
 
-	return errors.Trace(err)
+	for _, n := range nodes {
+		if n.NodeID != nodeID {
+			continue
+		}
+
+		client := &http.Client{}
+		url := fmt.Sprintf("http://%s/state/%s/%s", n.Addr, n.NodeID, action)
+		log.Debugf("send put http request %s", url)
+		req, err := http.NewRequest("PUT", url, nil)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		_, err = client.Do(req)
+		if err == nil {
+			log.Infof("apply action %s on node %s success", action, n.NodeID)
+			return nil
+		}
+
+		return errors.Trace(err)
+	}
+
+	return errors.NotFoundf("nodeID %s", nodeID)
 }

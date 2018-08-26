@@ -61,7 +61,11 @@ bin/binlogctl -pd-urls=http://127.0.0.1:2379 -cmd update-pump/update-drainer -no
 ```
 This cmd will update pump/drainer's state.
 
-And if you want to pause or close pump/drainer, you can set the state to `pause` or `close`, then binlogctl will send request to pump/drainer, and finally pump/drainer will exit by itself with paused or offline state.
+### pause/offline pump/drainer
+```
+bin/binlogctl -pd-urls=http://127.0.0.1:2379 -cmd pause-pump/pause-drainer/offline-pump/offline-drainer -node-id ip-127-0-0-1:8250/{nodeID}
+```
+binlogctl will send http request to pump/drainer, and finally pump/drainer will exit by itself with paused or offline state.
 
 ### generate meta
 meta contains commit TS that can be used to specifies the location of the synchronized data
