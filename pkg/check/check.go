@@ -3,8 +3,6 @@ package check
 import (
 	"context"
 	"sync"
-
-	"github.com/ngaut/log"
 )
 
 // Checker is interface that defines checker to check configurations of system.
@@ -93,7 +91,6 @@ func Do(ctx context.Context, checkers []Checker) (*Results, error) {
 				finished = (total == successful+warning+failed)
 				results.Results = append(results.Results, result)
 
-				log.Debugf("check result:%+v", result)
 				if finished {
 					return
 				}
@@ -121,6 +118,5 @@ func Do(ctx context.Context, checkers []Checker) (*Results, error) {
 		Warning:    warning,
 	}
 
-	log.Infof("check finished, passed %v / total %v", passed, total)
 	return results, nil
 }

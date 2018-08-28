@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 )
@@ -29,11 +28,10 @@ var MinVersion = [3]uint{5, 5, 0}
 func (pc *MySQLVersionChecker) Check(ctx context.Context) *Result {
 	result := &Result{
 		Name:  pc.Name(),
-		Desc:  "checks whether mysql version is satisfied",
+		Desc:  "check whether mysql version is satisfied",
 		State: StateFailure,
-		Extra: fmt.Sprintf("%s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
+		Extra: fmt.Sprintf("address of db instance - %s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
 	}
-	defer log.Infof("check mysql version, result %+v", result)
 
 	value, err := dbutil.ShowVersion(ctx, pc.db)
 	if err != nil {
@@ -41,7 +39,12 @@ func (pc *MySQLVersionChecker) Check(ctx context.Context) *Result {
 		return result
 	}
 
-	version := toMySQLVersion(value)
+	version, err := toMySQLVersion(value)
+	if err != nil {
+		markCheckError(result, err)
+		return result
+	}
+
 	if !version.IsAtLeast(MinVersion) {
 		result.ErrorMsg = fmt.Sprintf("version required at least %v but got %v", MinVersion, version)
 		result.Instruction = "Please upgrade your database system"
@@ -74,11 +77,10 @@ func NewMySQLServerIDChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker {
 func (pc *MySQLServerIDChecker) Check(ctx context.Context) *Result {
 	result := &Result{
 		Name:  pc.Name(),
-		Desc:  "checks whether mysql server_id has been set > 1",
+		Desc:  "check whether mysql server_id has been set > 1",
 		State: StateFailure,
-		Extra: fmt.Sprintf("%s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
+		Extra: fmt.Sprintf("address of db instance - %s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
 	}
-	defer log.Infof("check mysql version, result %+v", result)
 
 	serverID, err := dbutil.ShowServerID(ctx, pc.db)
 	if err != nil {

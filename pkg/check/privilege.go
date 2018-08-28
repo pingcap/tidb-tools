@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/ast"
 	"github.com/pingcap/tidb/parser"
@@ -33,9 +32,9 @@ func NewSourcePrivilegeChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker {
 func (pc *SourcePrivilegeChecker) Check(ctx context.Context) *Result {
 	result := &Result{
 		Name:  pc.Name(),
-		Desc:  "checks data source privileges",
+		Desc:  "check privileges of source DB",
 		State: StateFailure,
-		Extra: fmt.Sprintf("%s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
+		Extra: fmt.Sprintf("address of db instance - %s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
 	}
 
 	grants, err := dbutil.ShowGrants(ctx, pc.db, "", "")
@@ -47,8 +46,6 @@ func (pc *SourcePrivilegeChecker) Check(ctx context.Context) *Result {
 		result.ErrorMsg = "there is no such grant defined for current user on host '%'"
 		return result
 	}
-
-	log.Debugf("grants %+v", grants)
 
 	// get username and hostname
 	node, err := parser.New().ParseOneStmt(grants[0], "", "")

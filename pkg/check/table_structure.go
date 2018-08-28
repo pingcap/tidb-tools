@@ -34,7 +34,7 @@ func NewTablesChecker(db *sql.DB, tables map[string][]string) Checker {
 func (c *TablesChecker) Check(ctx context.Context) *Result {
 	r := &Result{
 		Name:  c.Name(),
-		Desc:  "table structure compatibility check",
+		Desc:  "check compatibility of table structure",
 		State: StateSuccess,
 	}
 
