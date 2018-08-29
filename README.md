@@ -34,7 +34,7 @@ When tidb-tools are built successfully, you can find the binary in the `bin` dir
 
 - [binlogctl](./tidb_binlog/binlogctl)
 
-    A tool for performing some tidb-binlog related operations, like the query status of Pump/Drainer and unregistering some Pump/Drainer.
+    A tool for performing some tidb-binlog related operations, like querying the status of Pump/Drainer and unregistering some Pump/Drainer.
 
 ## License
 
