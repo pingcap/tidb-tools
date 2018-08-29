@@ -22,11 +22,11 @@ When tidb-tools are built successfully, you can find the binary in the `bin` dir
 
 - [importer](./importer)
 
-    A tool for generating and inserting data to the database which is compatible with the MySQL protocol, like MySQL and TiDB.
+    A tool for generating and inserting data to any database which is compatible with the MySQL protocol, like MySQL and TiDB.
 
 - [checker](./checker)
 
-    A tool for checking the compatibility of an existed MySQL database with TiDB.
+    A tool for checking the compatibility of an existing MySQL database with TiDB.
 
 - [sync_diff_inspector](./sync_diff_inspector)
 
