@@ -35,7 +35,7 @@ A tool for comparing two database's data and outputs a brief report about differ
 
 [binlogctl](./tidb_binlog/binlogctl)
 
-A tool for performing some tidb-binlog related operations, like quering status of pumps/drainers and unregister one pumps/drainers.
+A tool for performing some tidb-binlog related operations, like quering status of pumps/drainers and unregister one pump/drainer.
 
 ## License
 Apache 2.0 license. See the [LICENSE](./LICENSE) file for details.
