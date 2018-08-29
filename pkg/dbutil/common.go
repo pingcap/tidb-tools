@@ -187,55 +187,28 @@ func GetTables(ctx context.Context, db *sql.DB, schemaName string) ([]string, er
 }
 
 // GetCRC32Checksum returns checksum code of some data by given condition
-func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName string, tbInfo *model.TableInfo, orderKeys []string, limitRange string, args []interface{}) (string, error) {
+func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (string, error) {
 	/*
-		TODO: use same sql to calculate CRC32 checksum in TiDB and MySQL when TiDB support ORDER BY in GROUP_CONTACT.
-
 		calculate CRC32 checksum example:
-
-		in TiDB:
-		mysql> SELECT CRC32(GROUP_CONCAT(row SEPARATOR ' + ')) AS checksum
-			> FROM (SELECT CONCAT_WS(",",a,b,c) AS row
-			> FROM (SELECT * FROM test.test WHERE `a` >= 0 AND `a` < 10 AND true ORDER BY a) AS tmp) AS rows ORDER BY row;
+		mysql> SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',',id,name,age))AS UNSIGNED)) AS checksum FROM test.test WHERE id > 0 AND id < 10;
 		+------------+
 		| checksum   |
 		+------------+
-		| 1171947116 |
+		| 1466098199 |
 		+------------+
-
-		in MySQL:
-		mysql> SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',', a, b, c ) ORDER BY a ASC SEPARATOR ' + ')) AS checksum
-			> FROM test.test WHERE `a` >= 0 AND `a` < 10 AND true;
-		+------------+
-		| checksum   |
-		+------------+
-		| 1171947116 |
-		+------------+
-
-		Notice: in the older tidb version, tidb will get different checksum with mysql, can see this issue pingcap/tidb#7446
 	*/
-	isTiDB, err := IsTiDB(ctx, db)
-	if err != nil {
-		return "", errors.Trace(err)
-	}
 
 	columnNames := make([]string, 0, len(tbInfo.Columns))
 	for _, col := range tbInfo.Columns {
 		columnNames = append(columnNames, col.Name.O)
 	}
 
-	var query string
-	if isTiDB {
-		query = fmt.Sprintf("SELECT CRC32(GROUP_CONCAT(row SEPARATOR ' + ')) AS checksum FROM (SELECT CONCAT_WS(',',%s) AS row FROM (SELECT * FROM `%s`.`%s` WHERE %s ORDER BY %s) AS tmp) AS rows ORDER BY row;",
-			strings.Join(columnNames, ", "), schemaName, tbInfo.Name.O, limitRange, strings.Join(orderKeys, ","))
-	} else {
-		query = fmt.Sprintf("SELECT CRC32(GROUP_CONCAT(CONCAT_WS(',',%s) ORDER BY %s ASC SEPARATOR ' + ')) AS checksum FROM `%s`.`%s` WHERE %s;",
-			strings.Join(columnNames, ", "), strings.Join(orderKeys, ","), schemaName, tbInfo.Name.O, limitRange)
-	}
+	query := fmt.Sprintf("SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',',%s))AS UNSIGNED)) AS checksum FROM `%s`.`%s` WHERE %s;",
+		strings.Join(columnNames, ", "), schemaName, tbInfo.Name.O, limitRange)
 	log.Debugf("checksum sql: %s, args: %v", query, args)
 
 	var checksum sql.NullString
-	err = db.QueryRowContext(ctx, query, args...).Scan(&checksum)
+	err := db.QueryRowContext(ctx, query, args...).Scan(&checksum)
 	if err != nil {
 		return "", errors.Trace(err)
 	}
