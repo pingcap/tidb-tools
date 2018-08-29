@@ -39,6 +39,7 @@ type Diff struct {
 	sample           int
 	checkThreadCount int
 	useRowID         bool
+	useChecksum      bool
 	tables           []*TableCheckCfg
 	fixSQLFile       *os.File
 	sqlCh            chan string
@@ -53,18 +54,19 @@ func NewDiff(ctx context.Context, db1, db2 *sql.DB, cfg *Config) (diff *Diff, er
 	diff = &Diff{
 		db1:              db1,
 		db2:              db2,
-		schema:           cfg.SourceDBCfg.Schema,
+		//schema:           cfg.SourceDBCfg.Schema,
 		chunkSize:        cfg.ChunkSize,
 		sample:           cfg.Sample,
 		checkThreadCount: cfg.CheckThreadCount,
 		useRowID:         cfg.UseRowID,
+		useChecksum:      cfg.UseChecksum,
 		tables:           cfg.Tables,
 		sqlCh:            make(chan string),
-		report:           NewReport(cfg.SourceDBCfg.Schema),
+		//report:           NewReport(cfg.SourceDBCfg.Schema),
 		ctx:              ctx,
 	}
 	for _, table := range diff.tables {
-		table.Info, err = dbutil.GetTableInfoWithRowID(ctx, diff.db1, diff.schema, table.Name, cfg.UseRowID)
+		table.Info, err = dbutil.GetTableInfoWithRowID(ctx, diff.db1, diff.schema, table.Table, cfg.UseRowID)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -114,7 +116,7 @@ func (df *Diff) Equal() (err error) {
 	if len(df.tables) == 0 {
 		df.tables = make([]*TableCheckCfg, 0, len(tbls1))
 		for _, name := range tbls1 {
-			table := &TableCheckCfg{Name: name, Schema: df.schema}
+			table := &TableCheckCfg{Table: name, Schema: df.schema}
 			table.Info, err = dbutil.GetTableInfoWithRowID(df.ctx, df.db1, df.schema, name, df.useRowID)
 			if err != nil {
 				return errors.Trace(err)
@@ -126,7 +128,7 @@ func (df *Diff) Equal() (err error) {
 
 	for _, table := range df.tables {
 		tableInfo1 := table.Info
-		tableInfo2, err := dbutil.GetTableInfoWithRowID(df.ctx, df.db2, df.schema, table.Name, df.useRowID)
+		tableInfo2, err := dbutil.GetTableInfoWithRowID(df.ctx, df.db2, df.schema, table.Table, df.useRowID)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -135,9 +137,9 @@ func (df *Diff) Equal() (err error) {
 			return errors.Trace(err)
 		}
 		if !eq1 {
-			log.Errorf("table have different struct: %s\n", table.Name)
+			log.Errorf("table have different struct: %s\n", table.Table)
 		}
-		df.report.SetTableStructCheckResult(table.Name, eq1)
+		df.report.SetTableStructCheckResult(table.Table, eq1)
 
 		eq2, err := df.EqualTableData(table)
 		if err != nil {
@@ -145,9 +147,9 @@ func (df *Diff) Equal() (err error) {
 			return errors.Trace(err)
 		}
 		if !eq2 {
-			log.Errorf("table %s's data is not equal", table.Name)
+			log.Errorf("table %s's data is not equal", table.Table)
 		}
-		df.report.SetTableDataCheckResult(table.Name, eq2)
+		df.report.SetTableDataCheckResult(table.Table, eq2)
 
 		if eq1 && eq2 {
 			df.report.PassNum++
@@ -257,24 +259,26 @@ func (df *Diff) checkChunkDataEqual(checkJobs []*CheckJob, table *TableCheckCfg)
 	}
 
 	for _, job := range checkJobs {
-		// first check the checksum is equal or not
-		orderKeys, _ := dbutil.SelectUniqueOrderKey(table.Info)
-		checksum1, err := dbutil.GetCRC32Checksum(df.ctx, df.db1, df.schema, table.Info, orderKeys, job.Where, job.Args)
-		if err != nil {
-			return false, errors.Trace(err)
+		if df.useChecksum {
+			// first check the checksum is equal or not
+			checksum1, err := dbutil.GetCRC32Checksum(df.ctx, df.db1, df.schema, table.Info, job.Where, job.Args)
+			if err != nil {
+				return false, errors.Trace(err)
+			}
+
+			checksum2, err := dbutil.GetCRC32Checksum(df.ctx, df.db2, df.schema, table.Info, job.Where, job.Args)
+			if err != nil {
+				return false, errors.Trace(err)
+			}
+			if checksum1 == checksum2 {
+				log.Infof("table: %s, range: %s, args: %v, checksum is equal, checksum: %s", job.Table, job.Where, job.Args, checksum1)
+				continue
+			}
+
+			log.Errorf("table: %s, range: %s, args: %v, checksum is not equal, one is %s, another is %s", job.Table, job.Args, job.Where, checksum1, checksum2)
 		}
 
-		checksum2, err := dbutil.GetCRC32Checksum(df.ctx, df.db2, df.schema, table.Info, orderKeys, job.Where, job.Args)
-		if err != nil {
-			return false, errors.Trace(err)
-		}
-		if checksum1 == checksum2 {
-			log.Infof("table: %s, range: %s, args: %v, checksum is equal, checksum: %s", job.Table, job.Where, job.Args, checksum1)
-			continue
-		}
-
-		// if checksum is not equal, compare the data
-		log.Errorf("table: %s, range: %s, args: %v, checksum is not equal, one is %s, another is %s", job.Table, job.Args, job.Where, checksum1, checksum2)
+		// if checksum is not equal or don't need compare checksum, compare the data
 		rows1, orderKeyCols, err := getChunkRows(df.ctx, df.db1, df.schema, table, job.Where, job.Args, df.useRowID)
 		if err != nil {
 			return false, errors.Trace(err)
@@ -530,7 +534,7 @@ func getChunkRows(ctx context.Context, db *sql.DB, schema string, table *TableCh
 		columns = fmt.Sprintf("*, %s", dbutil.ImplicitColName)
 	}
 	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ %s FROM `%s`.`%s` WHERE %s ORDER BY %s",
-		columns, schema, table.Name, where, strings.Join(orderKeys, ","))
+		columns, schema, table.Table, where, strings.Join(orderKeys, ","))
 
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {

@@ -26,28 +26,69 @@ target-snapshot = "2016-10-08 16:45:26"
 
 # if check-table is nil, all tables in the schema will be checked.
 [[check-table]]
+# config this variable if have more than one source database.
+source = "source-1"
+
+# schema name.
+schema = "test"
+
 # table name.
-name = "test"
+table = "test"
 
 # field should be the primary key, unique key or field with index. 
 # if comment this, diff will find a suitable field.
 index-field = "id"
 
-# check data's range
+# check data's range.
+range = "age > 10 AND age < 20"
+
+# a example for sharding tables.
+[[check-table]]
+# schema name in target database.
+schema = "test"
+
+# table name in target database.
+table = "test"
+
+# field should be the primary key, unique key or field with index. 
+# if comment this, diff will find a suitable field.
+# index-field = "id"
+
+# check data's range.
 # range = "age > 10 AND age < 20"
 
-[source-db]
+# sharding tables.
+[[check-table.sharding-tables]]
+source = "source-1"
+schema = "test"
+table  = "test1"
+
+[[check-table.sharding-tables]]
+source = "source-1"
+schema = "test"
+table  = "test2"
+
+[[check-table.sharding-tables]]
+source = "source-2"
+schema = "test"
+table  = "test*"
+
+[[source-db]]
 host = "127.0.0.1"
 port = 3306
 user = "root"
 password = ""
-# schema name
-schema = "test"
+label = "source-1"
+
+[[source-db]]
+host = "127.0.0.2"
+port = 3306
+user = "root"
+password = ""
+label = "source-2"
 
 [target-db]
 host = "127.0.0.1"
 port = 4000
 user = "root"
 password = ""
-# schema name
-schema = "test"

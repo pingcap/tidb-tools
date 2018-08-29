@@ -31,14 +31,18 @@ const (
 
 // TableCheckCfg is the config of table to be checked.
 type TableCheckCfg struct {
+	// data source's label
+	Source string `toml:"source"`
+	// schema name
+	Schema string `toml:schema`
 	// table name
-	Name string `toml:"name"`
-	// Schema is seted in SourceDBCfg
-	Schema string
+	Table string `toml:"table"`
 	// field should be the primary key, unique key or field with index
 	Field string `toml:"index-field"`
 	// select range, for example: "age > 10 AND age < 20"
 	Range string `toml:"range"`
+
+	ShardingTables []TableCheckCfg `toml:"sharding-tables"`
 	Info  *model.TableInfo
 }
 
@@ -50,7 +54,7 @@ type Config struct {
 	LogLevel string `toml:"log-level" json:"log-level"`
 
 	// source database's config
-	SourceDBCfg dbutil.DBConfig `toml:"source-db" json:"source-db"`
+	SourceDBCfg []dbutil.DBConfig `toml:"source-db" json:"source-db"`
 
 	// target database's config
 	TargetDBCfg dbutil.DBConfig `toml:"target-db" json:"target-db"`
@@ -69,6 +73,9 @@ type Config struct {
 
 	// set true if target-db and source-db all support tidb implicit column "_tidb_rowid"
 	UseRowID bool `toml:"use-rowid" json:"use-rowid"`
+
+	// set false if want to comapre the data directly
+	UseChecksum bool `toml:"use-checksum" json:"use-checksum"`
 
 	// the name of the file which saves sqls used to fix different data
 	FixSQLFile string `toml:"fix-sql-file" json:"fix-sql-file"`
@@ -101,6 +108,7 @@ func NewConfig() *Config {
 	fs.IntVar(&cfg.Sample, "sample", 100, "the percent of sampling check")
 	fs.IntVar(&cfg.CheckThreadCount, "check-thread-count", 1, "how many goroutines are created to check data")
 	fs.BoolVar(&cfg.UseRowID, "use-rowid", false, "set true if target-db and source-db all support tidb implicit column _tidb_rowid")
+	fs.BoolVar(&cfg.UseChecksum, "use-checksum", true, "set false if want to comapre the data directly")
 	fs.StringVar(&cfg.FixSQLFile, "fix-sql-file", "fix.sql", "the name of the file which saves sqls used to fix different data")
 	fs.StringVar(&cfg.SourceSnapshot, "source-snapshot", "", "source database's snapshot config")
 	fs.StringVar(&cfg.TargetSnapshot, "target-snapshot", "", "target database's snapshot config")

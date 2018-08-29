@@ -45,6 +45,11 @@ func main() {
 	}
 
 	log.SetLevelByString(cfg.LogLevel)
+	for _, table := range cfg.Tables {
+		log.Infof("check table: %v", table)
+	}
+	
+	return
 
 	ok := cfg.checkConfig()
 	if !ok {
@@ -54,7 +59,7 @@ func main() {
 
 	ctx := context.Background()
 
-	sourceDB, err := dbutil.OpenDB(cfg.SourceDBCfg)
+	sourceDB, err := dbutil.OpenDB(cfg.SourceDBCfg[0])
 	if err != nil {
 		log.Fatalf("create source db %+v error %v", cfg.SourceDBCfg, err)
 	}
