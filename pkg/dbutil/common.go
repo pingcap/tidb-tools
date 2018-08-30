@@ -285,6 +285,8 @@ func GetDBVersion(ctx context.Context, db *sql.DB) (string, error) {
 	if err != nil {
 		return "", errors.Trace(err)
 	}
+	defer result.Close()
+
 	var version sql.NullString
 	for result.Next() {
 		err := result.Scan(&version)

@@ -15,7 +15,7 @@ package main
 
 import (
 	"context"
-	"database/sql"
+	//"database/sql"
 	"flag"
 	"os"
 	"time"
@@ -23,7 +23,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	//"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 )
 
@@ -59,6 +59,7 @@ func main() {
 
 	ctx := context.Background()
 
+	/*
 	sourceDB, err := dbutil.OpenDB(cfg.SourceDBCfg[0])
 	if err != nil {
 		log.Fatalf("create source db %+v error %v", cfg.SourceDBCfg, err)
@@ -86,20 +87,22 @@ func main() {
 			log.Fatalf("set history snapshot %s for target db %+v error %v", cfg.TargetSnapshot, cfg.TargetDBCfg, err)
 		}
 	}
+	*/
 
-	if !checkSyncState(ctx, sourceDB, targetDB, cfg) {
+	if !checkSyncState(ctx, cfg) {
 		log.Fatal("sourceDB don't equal targetDB")
 	}
 	log.Info("test pass!!!")
 }
 
-func checkSyncState(ctx context.Context, sourceDB, targetDB *sql.DB, cfg *Config) bool {
+//func checkSyncState(ctx context.Context, sourceDB, targetDB *sql.DB, cfg *Config) bool {
+func checkSyncState(ctx context.Context, cfg *Config) bool {
 	beginTime := time.Now()
 	defer func() {
 		log.Infof("check data finished, all cost %v", time.Since(beginTime))
 	}()
 
-	d, err := NewDiff(ctx, sourceDB, targetDB, cfg)
+	d, err := NewDiff(ctx, cfg)
 	if err != nil {
 		log.Fatalf("fail to initialize diff process %v", errors.ErrorStack(err))
 	}

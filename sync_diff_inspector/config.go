@@ -29,6 +29,14 @@ const (
 	percent100 = 100
 )
 
+type DBConfig struct {
+	dbutil.DBConfig
+
+	Label string `toml:"label" json:"label"`
+
+	Snapshot string `toml:"snapshot" json:"snapshot"`
+}
+
 // TableCheckCfg is the config of table to be checked.
 type TableCheckCfg struct {
 	// data source's label
@@ -41,8 +49,10 @@ type TableCheckCfg struct {
 	Field string `toml:"index-field"`
 	// select range, for example: "age > 10 AND age < 20"
 	Range string `toml:"range"`
-
-	ShardingTables []TableCheckCfg `toml:"sharding-tables"`
+	// saves the source tables's info.
+	// may have more than one source for sharding tables.
+	// or you want to compare table with different schema and table name.
+	SourceTables []TableCheckCfg `toml:"source-tables"`
 	Info  *model.TableInfo
 }
 
@@ -54,10 +64,10 @@ type Config struct {
 	LogLevel string `toml:"log-level" json:"log-level"`
 
 	// source database's config
-	SourceDBCfg []dbutil.DBConfig `toml:"source-db" json:"source-db"`
+	SourceDBCfg []DBConfig `toml:"source-db" json:"source-db"`
 
 	// target database's config
-	TargetDBCfg dbutil.DBConfig `toml:"target-db" json:"target-db"`
+	TargetDBCfg DBConfig `toml:"target-db" json:"target-db"`
 
 	// for example, the whole data is [1...100]
 	// we can split these data to [1...10], [11...20], ..., [91...100]

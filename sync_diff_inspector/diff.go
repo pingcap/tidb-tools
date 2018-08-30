@@ -34,6 +34,8 @@ import (
 type Diff struct {
 	db1              *sql.DB
 	db2              *sql.DB
+	sourceDBs        map[string]*sql.DB
+	targetDB         *sql.DB
 	schema           string
 	chunkSize        int
 	sample           int
@@ -50,10 +52,10 @@ type Diff struct {
 }
 
 // NewDiff returns a Diff instance.
-func NewDiff(ctx context.Context, db1, db2 *sql.DB, cfg *Config) (diff *Diff, err error) {
+func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 	diff = &Diff{
-		db1:              db1,
-		db2:              db2,
+		//db1:              db1,
+		//db2:              db2,
 		//schema:           cfg.SourceDBCfg.Schema,
 		chunkSize:        cfg.ChunkSize,
 		sample:           cfg.Sample,
@@ -65,8 +67,53 @@ func NewDiff(ctx context.Context, db1, db2 *sql.DB, cfg *Config) (diff *Diff, er
 		//report:           NewReport(cfg.SourceDBCfg.Schema),
 		ctx:              ctx,
 	}
+
+	
+	// create connection for source.
+	diff.sourceDBs = make(map[string]*sql.DB)
+	for _, source := range cfg.SourceDBCfg {
+		sourceDB, err := dbutil.OpenDB(source.DBConfig)
+		if err != nil {
+			log.Fatalf("create source db %+v error %v", cfg.SourceDBCfg, err)
+		}
+		sourceDB.SetMaxOpenConns(cfg.CheckThreadCount)
+		sourceDB.SetMaxIdleConns(cfg.CheckThreadCount)
+		// TODO: close when exit
+		//defer dbutil.CloseDB(sourceDB)
+		if source.Snapshot != "" {
+			err = dbutil.SetSnapshot(ctx, sourceDB, cfg.SourceSnapshot)
+			if err != nil {
+				log.Fatalf("set history snapshot %s for source db %+v error %v", cfg.SourceSnapshot, cfg.SourceDBCfg, err)
+			}
+		}
+		if source.Label != "" {
+			diff.sourceDBs[source.Label] = sourceDB
+		} else {
+			label := fmt.Sprintf("%s:%s", source.Host, source.Port)
+			diff.sourceDBs[label] = sourceDB
+		}
+		diff.db1 = sourceDB
+	}
+
+	// create connection for target.
+	diff.targetDB, err = dbutil.OpenDB(cfg.TargetDBCfg.DBConfig)
+	if err != nil {
+		log.Fatalf("create target db %+v error %v", cfg.TargetDBCfg, err)
+	}
+	diff.targetDB.SetMaxOpenConns(cfg.CheckThreadCount)
+	diff.targetDB.SetMaxIdleConns(cfg.CheckThreadCount)
+	// TODO: close when exit
+	//defer dbutil.CloseDB(targetDB)
+	if cfg.TargetDBCfg.Snapshot != "" {
+		err = dbutil.SetSnapshot(ctx, diff.targetDB, cfg.TargetSnapshot)
+		if err != nil {
+			log.Fatalf("set history snapshot %s for target db %+v error %v", cfg.TargetSnapshot, cfg.TargetDBCfg, err)
+		}
+	}
+	diff.db2 = diff.targetDB
+
 	for _, table := range diff.tables {
-		table.Info, err = dbutil.GetTableInfoWithRowID(ctx, diff.db1, diff.schema, table.Table, cfg.UseRowID)
+		table.Info, err = dbutil.GetTableInfoWithRowID(ctx, diff.targetDB, diff.schema, table.Table, cfg.UseRowID)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
