@@ -36,6 +36,7 @@ When tidb-tools are built successfully, you can find the binary in the `bin` dir
 
     A tool for performing some tidb-binlog related operations, like querying the status of Pump/Drainer and unregistering some Pump/Drainer.
 
+
 ## License
 
 Apache 2.0 license. See the [LICENSE](./LICENSE) file for details.
