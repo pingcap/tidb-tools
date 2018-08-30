@@ -55,6 +55,7 @@ type TableCheckCfg struct {
 	// saves the source tables's info.
 	// may have more than one source for sharding tables.
 	// or you want to compare table with different schema and table name.
+	// SourceTables can be nil when source and target is one-to-one correspondence.
 	SourceTables []TableCheckCfg `toml:"source-tables"`
 	Info  *model.TableInfo
 }
@@ -182,6 +183,8 @@ func (c *Config) checkConfig() bool {
 		log.Errorf("check-thcount must greater than 0!")
 		return false
 	}
+
+	// TODO: add some check here
 
 	return true
 }

@@ -36,7 +36,7 @@ type Diff struct {
 	db2              *sql.DB
 	sourceDBs        map[string]DBConfig
 	targetDB         DBConfig
-	schema           string
+	//schema           string
 	chunkSize        int
 	sample           int
 	checkThreadCount int
@@ -75,8 +75,7 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 		}
 		source.Conn.SetMaxOpenConns(cfg.CheckThreadCount)
 		source.Conn.SetMaxIdleConns(cfg.CheckThreadCount)
-		// TODO: close when exit
-		//defer dbutil.CloseDB(sourceDB)
+
 		if source.Snapshot != "" {
 			err = dbutil.SetSnapshot(ctx, source.Conn, cfg.SourceSnapshot)
 			if err != nil {
@@ -100,8 +99,7 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 	}
 	cfg.TargetDBCfg.Conn.SetMaxOpenConns(cfg.CheckThreadCount)
 	cfg.TargetDBCfg.Conn.SetMaxIdleConns(cfg.CheckThreadCount)
-	// TODO: close when exit
-	//defer dbutil.CloseDB(targetDB)
+
 	if cfg.TargetDBCfg.Snapshot != "" {
 		err = dbutil.SetSnapshot(ctx,cfg.TargetDBCfg.Conn, cfg.TargetSnapshot)
 		if err != nil {
@@ -111,11 +109,12 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 	diff.db2 = diff.targetDB.Conn
 
 	for _, table := range diff.tables {
-		table.Info, err = dbutil.GetTableInfoWithRowID(ctx, diff.targetDB.Conn, diff.schema, table.Table, cfg.UseRowID)
+		table.Info, err = dbutil.GetTableInfoWithRowID(ctx, diff.targetDB.Conn, diff.targetDB.Schema, table.Table, cfg.UseRowID)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		table.Schema = diff.schema
+		// TODO: 
+		table.Schema = diff.targetDB.Schema
 	}
 	diff.fixSQLFile, err = os.Create(cfg.FixSQLFile)
 	if err != nil {
@@ -129,8 +128,10 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 func (df *Diff) Equal() (err error) {
 	defer func() {
 		df.fixSQLFile.Close()
-		df.db1.Close()
-		df.db2.Close()
+		for _, db := range df.sourceDBs {
+			db.Conn.Close()
+		}
+		df.targetDB.Conn.Close()
 	}()
 
 	df.wg.Add(1)
@@ -139,64 +140,108 @@ func (df *Diff) Equal() (err error) {
 		df.wg.Done()
 	}()
 
-	tbls1, err := dbutil.GetTables(df.ctx, df.db1, df.schema)
+	targetTables, err := dbutil.GetTables(df.ctx, df.targetDB.Conn, df.targetDB.Schema)
 	if err != nil {
 		err = errors.Trace(err)
 		return
 	}
 
-	tbls2, err := dbutil.GetTables(df.ctx, df.db2, df.schema)
-	if err != nil {
-		err = errors.Trace(err)
-		return
+	// if only have one source, and don't specify the tables need to check, we need confirm the source and target have same tables.
+	if len(df.sourceDBs) == 1 && len(df.tables) == 0{
+		for _, sourceDB := range df.sourceDBs {
+			sourceTables, err1 := dbutil.GetTables(df.ctx, sourceDB.Conn, sourceDB.Schema)
+			if err1 != nil {
+				err = errors.Trace(err)
+				return
+			}
+			eq := equalStrings(sourceTables, targetTables)
+			if !eq {
+				log.Errorf("show tables get different table. [source db tables] %v [target db tables] %v", sourceTables, targetTables)
+				df.report.Result = Fail
+				return
+			}
+		}
 	}
 
-	eq := equalStrings(tbls1, tbls2)
-	// len(df.tables) == 0 means check all tables
-	if !eq && len(df.tables) == 0 {
-		log.Errorf("show tables get different table. [source db tables] %v [target db tables] %v", tbls1, tbls2)
-		df.report.Result = Fail
-	}
+	if len(df.sourceDBs) > 1 && len(df.tables) == 0 {
+		log.Fatal("must specify check tables if have more than one source")
+	} 
 
 	if len(df.tables) == 0 {
-		df.tables = make([]*TableCheckCfg, 0, len(tbls1))
-		for _, name := range tbls1 {
-			table := &TableCheckCfg{Table: name, Schema: df.schema}
-			table.Info, err = dbutil.GetTableInfoWithRowID(df.ctx, df.db1, df.schema, name, df.useRowID)
+		// we need check all the tables
+		df.tables = make([]*TableCheckCfg, 0, len(targetTables))
+		for _, name := range targetTables {
+			table := &TableCheckCfg{Table: name, Schema: df.targetDB.Schema}
+			table.Info, err = dbutil.GetTableInfoWithRowID(df.ctx, df.targetDB.Conn, df.targetDB.Schema, name, df.useRowID)
 			if err != nil {
 				return errors.Trace(err)
 			}
-			table.Schema = df.schema
+			table.Schema = df.targetDB.Schema
 			df.tables = append(df.tables, table)
 		}
 	}
 
 	for _, table := range df.tables {
-		tableInfo1 := table.Info
-		tableInfo2, err := dbutil.GetTableInfoWithRowID(df.ctx, df.db2, df.schema, table.Table, df.useRowID)
-		if err != nil {
-			return errors.Trace(err)
+		structEqual := true
+		dataEqual := true
+
+		//tableInfo1 := table.Info
+		//tableInfo2, err := dbutil.GetTableInfoWithRowID(df.ctx, df.db2, df.schema, table.Table, df.useRowID)
+		targetTableInfo := table.Info
+
+		if len(table.SourceTables) != 0 {
+			for _, sourceTable := range table.SourceTables {
+				var conn *sql.DB
+				if sourceTable.Source == "" {
+					conn = df.GetOneSource().Conn
+				} else {
+					conn = df.sourceDBs[sourceTable.Source].Conn
+				}
+				sourceTableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, conn, sourceTable.Schema, sourceTable.Table, df.useRowID)
+				if err != nil {
+					return errors.Trace(err)
+				}
+				eq, err := df.EqualTableStruct(sourceTableInfo, targetTableInfo)
+				if err != nil {
+					return errors.Trace(err)
+				}
+
+				if !eq {
+					structEqual = false
+				}
+			}
+		} else {
+			sourceDB := df.GetOneSource()
+			sourceTableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, sourceDB.Conn, sourceDB.Schema, table.Table, df.useRowID)
+			if err != nil {
+				return errors.Trace(err)
+			}
+			eq, err := df.EqualTableStruct(sourceTableInfo, targetTableInfo)
+			if err != nil {
+				return errors.Trace(err)
+			}
+
+			if !eq {
+				structEqual = false
+			}
 		}
-		eq1, err := df.EqualTableStruct(tableInfo1, tableInfo2)
-		if err != nil {
-			return errors.Trace(err)
-		}
-		if !eq1 {
+
+		if !structEqual {
 			log.Errorf("table have different struct: %s\n", table.Table)
 		}
-		df.report.SetTableStructCheckResult(table.Table, eq1)
+		df.report.SetTableStructCheckResult(table.Table, structEqual)
 
-		eq2, err := df.EqualTableData(table)
+		dataEqual, err := df.EqualTableData(table)
 		if err != nil {
 			log.Errorf("equal table error %v", err)
 			return errors.Trace(err)
 		}
-		if !eq2 {
+		if !dataEqual {
 			log.Errorf("table %s's data is not equal", table.Table)
 		}
-		df.report.SetTableDataCheckResult(table.Table, eq2)
+		df.report.SetTableDataCheckResult(table.Table, dataEqual)
 
-		if eq1 && eq2 {
+		if structEqual && dataEqual {
 			df.report.PassNum++
 		} else {
 			df.report.FailedNum++
@@ -457,6 +502,15 @@ func (df *Diff) WriteSqls() {
 			return
 		}
 	}
+}
+
+// GetOneSource returns a source
+func (df *Diff) GetOneSource() DBConfig {
+	for _, source := range df.sourceDBs {
+		return source
+	}
+
+	return DBConfig{}
 }
 
 func generateDML(tp string, data map[string][]byte, null map[string]bool, keys []*model.ColumnInfo, table *model.TableInfo, schema string) (sql string) {
