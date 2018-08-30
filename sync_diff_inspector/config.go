@@ -16,6 +16,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"database/sql"
 
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
@@ -35,6 +36,8 @@ type DBConfig struct {
 	Label string `toml:"label" json:"label"`
 
 	Snapshot string `toml:"snapshot" json:"snapshot"`
+
+	Conn *sql.DB
 }
 
 // TableCheckCfg is the config of table to be checked.
