@@ -22,7 +22,7 @@ Usage of binlogctl:
 	-ssl-key string
 		Path of file that contains X509 key in PEM format for connection with cluster components
 	-time-zone Asia/Shanghai
-		set time zone if you want to save time info in the savepoint file, for example `Asia`/`Shanghai` for CST time and `Local` for the local time
+		set time zone if you want to save time info in the savepoint file, for example `Asia/Shanghai` for CST time and `Local` for the local time
 ```
 
 ## Download Binary (CentOS 7+ platform)
