@@ -57,13 +57,15 @@ func (o *incompatibilityOption) String() string {
 // Because of the early TiDB engineering design, we did not have a complete list of check items, which are all based on experience now.
 type TablesChecker struct {
 	db     *sql.DB
+	dbinfo *dbutil.DBConfig
 	tables map[string][]string // schema => []table; if []table is empty, query tables from db
 }
 
 // NewTablesChecker returns a Checker
-func NewTablesChecker(db *sql.DB, tables map[string][]string) Checker {
+func NewTablesChecker(db *sql.DB, dbinfo *dbutil.DBConfig, tables map[string][]string) Checker {
 	return &TablesChecker{
 		db:     db,
+		dbinfo: dbinfo,
 		tables: tables,
 	}
 }
@@ -74,6 +76,7 @@ func (c *TablesChecker) Check(ctx context.Context) *Result {
 		Name:  c.Name(),
 		Desc:  "check compatibility of table structure",
 		State: StateSuccess,
+		Extra: fmt.Sprintf("address of db instance - %s:%d", c.dbinfo.Host, c.dbinfo.Port),
 	}
 
 	var (
@@ -98,8 +101,11 @@ func (c *TablesChecker) Check(ctx context.Context) *Result {
 				return r
 			}
 
-			options[tableName] = c.checkCreateSQL(statement)
-			statements[tableName] = statement
+			opts := c.checkCreateSQL(statement)
+			if len(opts) > 0 {
+				options[tableName] = c.checkCreateSQL(statement)
+				statements[tableName] = statement
+			}
 		}
 	}
 
@@ -237,13 +243,16 @@ func (c *TablesChecker) checkTableOption(opt *ast.TableOption) *incompatibilityO
 // * check whether they have same column list
 // * check whether they have auto_increment key
 type ShardingTablesCheck struct {
+	name string
+
 	dbs    map[string]*sql.DB
 	tables map[string]map[string][]string // instance => {schema: [table1, table2, ...]}
 }
 
 // NewShardingTablesCheck returns a Checker
-func NewShardingTablesCheck(dbs map[string]*sql.DB, tables map[string]map[string][]string) Checker {
+func NewShardingTablesCheck(name string, dbs map[string]*sql.DB, tables map[string]map[string][]string) Checker {
 	return &ShardingTablesCheck{
+		name:   name,
 		dbs:    dbs,
 		tables: tables,
 	}
@@ -255,11 +264,12 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 		Name:  c.Name(),
 		Desc:  "check consistency of sharding table structures",
 		State: StateSuccess,
+		Extra: fmt.Sprintf("sharding %s", c.name),
 	}
 
 	var (
 		hasAutoIncrementKeyTableNum int
-		hasAutoIncrementKeyTables   []string
+		hasAutoIncrementKeyTables   = make(map[string][]string)
 
 		stmtNode  *ast.CreateTableStmt
 		tableName string
@@ -273,27 +283,33 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 
 		for schema, tables := range schemas {
 			for _, table := range tables {
+				if len(tables) == 0 {
+					continue
+				}
 				statement, err := dbutil.GetCreateTableSQL(ctx, db, schema, table)
 				if err != nil {
 					markCheckError(r, err)
+					r.Extra = fmt.Sprintf("instance %s on sharding %s", instance, c.name)
 					return r
 				}
 
 				stmt, err := parser.New().ParseOneStmt(statement, "", "")
 				if err != nil {
 					markCheckError(r, errors.Annotatef(err, "statement %s", statement))
+					r.Extra = fmt.Sprintf("instance %s on sharding %s", instance, c.name)
 					return r
 				}
 
 				ctStmt, ok := stmt.(*ast.CreateTableStmt)
 				if !ok {
 					markCheckError(r, errors.Errorf("Expect CreateTableStmt but got %T", stmt))
+					r.Extra = fmt.Sprintf("instance %s on sharding %s", instance, c.name)
 					return r
 				}
 
 				if c.hashAutoIncrementKey(ctStmt) {
 					hasAutoIncrementKeyTableNum++
-					hasAutoIncrementKeyTables = append(hasAutoIncrementKeyTables, dbutil.TableName(schema, table))
+					hasAutoIncrementKeyTables[instance] = append(hasAutoIncrementKeyTables[instance], dbutil.TableName(schema, table))
 				}
 
 				if stmtNode == nil {
@@ -305,6 +321,7 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 				err = c.checkConsistency(stmtNode, ctStmt, tableName, dbutil.TableName(schema, table))
 				if err != nil {
 					markCheckError(r, err)
+					r.Extra = fmt.Sprintf("instance %s on sharding %s", instance, c.name)
 					r.Instruction = "please set same table structure for sharding tables"
 					return r
 				}
@@ -314,7 +331,7 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 
 	if hasAutoIncrementKeyTableNum > 1 {
 		r.State = StateWarning
-		r.ErrorMsg = fmt.Sprintf("tables %s have auto-increment key, would conflict with each other to cause data corruption", strings.Join(hasAutoIncrementKeyTables, ","))
+		r.ErrorMsg = fmt.Sprintf("(%d) tables %+v have auto-increment key, would conflict with each other to cause data corruption", hasAutoIncrementKeyTableNum, hasAutoIncrementKeyTables)
 		r.Instruction = "please set column mapping rules for them, or handle it by yourself"
 		r.Extra = AutoIncrementKeyChecking
 	}
@@ -337,7 +354,7 @@ func (c *ShardingTablesCheck) hashAutoIncrementKey(stmt *ast.CreateTableStmt) bo
 			}
 		}
 
-		if hasAutoIncrementOpt && isUnique {
+		if hasAutoIncrementOpt || isUnique {
 			return true
 		}
 	}
@@ -351,25 +368,48 @@ type briefColumnInfo struct {
 	isPrimaryKey bool
 }
 
+func (c *briefColumnInfo) String() string {
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, "%s %s", c.name, c.tp)
+	if c.isPrimaryKey {
+		fmt.Fprintln(&buf, " primary key")
+	} else if c.isUniqueKey {
+		fmt.Fprintln(&buf, " unique key")
+	}
+
+	return buf.String()
+}
+
+type briefColumnInfos []*briefColumnInfo
+
+func (cs briefColumnInfos) String() string {
+	var colStrs = make([]string, 0, len(cs))
+	for _, col := range cs {
+		colStrs = append(colStrs, col.String())
+	}
+
+	return strings.Join(colStrs, "\n")
+}
+
 func (c *ShardingTablesCheck) checkConsistency(self, other *ast.CreateTableStmt, selfName, otherName string) error {
 	selfColumnList := getBriefColumnList(self)
 	otherColumnList := getBriefColumnList(other)
 
 	if len(selfColumnList) != len(otherColumnList) {
-		return errors.Errorf("column length mismacth (%d vs %s)\n table %s columns %+v\n table %s column %+v", len(selfColumnList), len(otherColumnList), selfName, selfColumnList, other, otherColumnList)
+		return errors.Errorf("column length mismacth (%d vs %d)\n table %s\ncolumns %s\n\ntable%s\ncolumns %s", len(selfColumnList), len(otherColumnList), selfName, selfColumnList, otherName, otherColumnList)
 	}
 
 	for i := range selfColumnList {
 		if *selfColumnList[i] != *otherColumnList[i] {
-			return errors.Errorf("different column definition\n column %v on table %s\n column %v on table %s", selfColumnList[i], selfName, otherColumnList[i], otherName)
+			return errors.Errorf("different column definition\ncolumn %s on table %s\ncolumn %s on table %s", selfColumnList[i], selfName, otherColumnList[i], otherName)
 		}
 	}
 
 	return nil
 }
 
-func getBriefColumnList(stmt *ast.CreateTableStmt) []*briefColumnInfo {
-	columnList := make([]*briefColumnInfo, 0, len(stmt.Cols))
+func getBriefColumnList(stmt *ast.CreateTableStmt) briefColumnInfos {
+	columnList := make(briefColumnInfos, 0, len(stmt.Cols))
 	for _, col := range stmt.Cols {
 		bc := &briefColumnInfo{
 			name: col.Name.Name.L,
