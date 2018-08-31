@@ -125,8 +125,12 @@ func (c *TablesChecker) Check(ctx context.Context) *Result {
 		for _, option := range opts {
 			switch option.state {
 			case StateWarning:
+				if len(r.State) == 0 {
+					r.State = StateWarning
+				}
 				warningMessages = append(warningMessages, option.String())
 			case StateFailure:
+				r.State = StateFailure
 				errMessages = append(errMessages, option.String())
 			}
 		}
@@ -142,9 +146,6 @@ func (c *TablesChecker) Check(ctx context.Context) *Result {
 		}
 	}
 
-	if len(options) > 0 {
-		r.State = StateWarning
-	}
 	r.ErrorMsg = information.String()
 
 	return r
@@ -239,7 +240,7 @@ func (c *TablesChecker) checkTableOption(opt *ast.TableOption) *incompatibilityO
 	return nil
 }
 
-// ShardingTablesCheck checks consistency of sharding table structures
+// ShardingTablesCheck checks consistency of table structures of one sharding group
 // * check whether they have same column list
 // * check whether they have auto_increment key
 type ShardingTablesCheck struct {
@@ -396,7 +397,7 @@ func (c *ShardingTablesCheck) checkConsistency(self, other *ast.CreateTableStmt,
 	otherColumnList := getBriefColumnList(other)
 
 	if len(selfColumnList) != len(otherColumnList) {
-		return errors.Errorf("column length mismacth (%d vs %d)\n table %s\ncolumns %s\n\ntable%s\ncolumns %s", len(selfColumnList), len(otherColumnList), selfName, selfColumnList, otherName, otherColumnList)
+		return errors.Errorf("column length mismatch (%d vs %d)\n table %s\ncolumns %s\n\ntable%s\ncolumns %s", len(selfColumnList), len(otherColumnList), selfName, selfColumnList, otherName, otherColumnList)
 	}
 
 	for i := range selfColumnList {
