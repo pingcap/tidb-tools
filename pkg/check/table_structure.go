@@ -103,7 +103,7 @@ func (c *TablesChecker) Check(ctx context.Context) *Result {
 
 			opts := c.checkCreateSQL(statement)
 			if len(opts) > 0 {
-				options[tableName] = c.checkCreateSQL(statement)
+				options[tableName] = opts
 				statements[tableName] = statement
 			}
 		}
