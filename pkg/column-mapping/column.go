@@ -62,7 +62,9 @@ var Exprs = map[Expr]func(*mappingInfo, []interface{}) ([]interface{}, error){
 	// # 3 table ID (table suffix)
 	// # 4 origin ID (>= 0, <= 17592186044415)
 	//
-	// others: schema = arguments[1] + schema suffix, table = arguments[2] + table suffix
+	// others: schema = arguments[1] + schema suffix
+	//         table = arguments[2] + table suffix
+	//  example: schema = schema_1 table = t_1  => arguments[1] = "schema_", arguments[2] = "t_"
 	PartitionID: partitionID,
 }
 
@@ -80,7 +82,7 @@ type Rule struct {
 
 // Valid checks validity of rule.
 // add prefix/suffix: it should have target column and one argument
-// clone: it should have source and target column
+// partition id: it should have 3 arguments
 func (r *Rule) Valid() error {
 	if _, ok := Exprs[r.Expression]; !ok {
 		return errors.NotFoundf("expression %s", r.Expression)
@@ -428,6 +430,8 @@ func partitionID(info *mappingInfo, vals []interface{}) ([]interface{}, error) {
 			return nil, errors.NotValidf("column %d value is not int, but %v", info.targetPosition, vals[info.targetPosition])
 		}
 		isChars = true
+	default:
+		return nil, errors.NotValidf("type %T(%v)", vals[info.targetPosition])
 	}
 
 	if originID >= maxOriginID || originID < 0 {
@@ -447,7 +451,7 @@ func partitionID(info *mappingInfo, vals []interface{}) ([]interface{}, error) {
 func computePartitionID(schema, table string, rule *Rule) (instanceID int64, schemaID int64, tableID int64, err error) {
 	shiftCnt := uint(64 - instanceIDBitSize - 1)
 	if instanceIDBitSize > 0 {
-		instanceID, err = strconv.ParseInt(rule.Arguments[0], 10, 64)
+		instanceID, err = strconv.ParseInt(rule.Arguments[0], 10, instanceIDBitSize)
 		if err != nil {
 			return
 		}
@@ -477,7 +481,7 @@ func computeID(name string, prefix string, bitSize int, shiftCount uint) (int64,
 	idStr := name[len(prefix):]
 	id, err := strconv.ParseUint(idStr, 10, bitSize)
 	if err != nil {
-		return 0, errors.NotValidf("suffix of %d is not int64", idStr)
+		return 0, errors.NotValidf("suffix of %s is not int64", idStr)
 	}
 
 	return int64(id << shiftCount), nil
