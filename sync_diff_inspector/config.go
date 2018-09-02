@@ -42,8 +42,8 @@ type DBConfig struct {
 
 // TableCheckCfg is the config of table to be checked.
 type TableCheckCfg struct {
-	// data source's label
-	Source string `toml:"source"`
+	// database's label
+	DBLabel string `toml:"db-label"`
 	// schema name
 	Schema string `toml:schema`
 	// table name
@@ -185,6 +185,21 @@ func (c *Config) checkConfig() bool {
 	}
 
 	// TODO: add some check here
+	if len(c.SourceDBCfg) > 1 {
+		if len(c.Tables) == 0 {
+			log.Error("must specify check tables if have more than one source")
+			return false
+		}
+
+		for _, table := range c.Tables {
+			for _, sourceTable := range table.SourceTables {
+				if sourceTable.DBLabel == "" {
+					log.Error("must specify the table's database label if have more than one source")
+					return false
+				}
+			}
+		}
+	}
 
 	return true
 }
