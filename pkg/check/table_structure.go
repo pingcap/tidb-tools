@@ -284,9 +284,6 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 
 		for schema, tables := range schemas {
 			for _, table := range tables {
-				if len(tables) == 0 {
-					continue
-				}
 				statement, err := dbutil.GetCreateTableSQL(ctx, db, schema, table)
 				if err != nil {
 					markCheckError(r, err)
@@ -355,7 +352,7 @@ func (c *ShardingTablesCheck) hashAutoIncrementKey(stmt *ast.CreateTableStmt) bo
 			}
 		}
 
-		if hasAutoIncrementOpt || isUnique {
+		if hasAutoIncrementOpt && isUnique {
 			return true
 		}
 	}
