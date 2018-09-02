@@ -1,0 +1,90 @@
+// Copyright 2018 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package main
+
+import (
+	//"container/heap"
+	"strconv"
+
+	"github.com/ngaut/log"
+	"github.com/pingcap/tidb/model"
+)
+
+type RowData struct {
+	Data         map[string][]byte
+	Null         map[string]bool
+	OrderKeyCols []*model.ColumnInfo
+}
+
+// RowDatas is a heap of MergeItems.
+type RowDatas []RowData
+
+func (r RowDatas) Len() int { return len(r) }
+func (r RowDatas) Less(i, j int) bool {
+	var ok bool
+	var data1, data2 []byte
+
+	for _, col := range r[i].OrderKeyCols {
+		if data1, ok = r[i].Data[col.Name.O]; !ok {
+			log.Errorf("don't have key %s", col.Name.O)
+			return false
+		}
+		if data2, ok = r[j].Data[col.Name.O]; !ok {
+			log.Errorf("don't have key %s", col.Name.O)
+			return false
+		}
+		if needQuotes(col.FieldType) {
+			if string(data1) > string(data2) {
+				return false
+			} else if string(data1) < string(data2) {
+				return true
+			} else {
+				continue
+			}
+		} else {
+			num1, err1 := strconv.ParseFloat(string(data1), 64)
+			num2, err2 := strconv.ParseFloat(string(data2), 64)
+			if err1 != nil || err2 != nil {
+				log.Errorf("convert %s, %s to float failed, err1: %v, err2: %v", string(data1), string(data2), err1, err2)
+				return false
+			}
+			if num1 > num2 {
+				return false
+				break
+			} else if num1 < num2 {
+				return true
+				break
+			} else {
+				continue
+			}
+		}
+	}
+
+	return false
+}
+func (r RowDatas) Swap(i, j int) { r[i], r[j] = r[j], r[i] }
+
+// Push implements heap.Interface's Push function
+func (r *RowDatas) Push(x interface{}) {
+	*r = append(*r, x.(RowData))
+}
+
+// Pop implements heap.Interface's Pop function
+func (r *RowDatas) Pop() interface{} {
+	old := *r
+	n := len(old)
+	x := old[n-1]
+	*r = old[0 : n-1]
+	return x
+}

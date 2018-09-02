@@ -78,7 +78,7 @@ func getMaxMinValue(sources map[string]DBConfig, table *TableCheckCfg, column *m
 				// min is NULL, means that no table data.
 				continue
 			}
-			
+
 			if !getValue || minTmp.Int64 < min {
 				min = minTmp.Int64
 			}
@@ -88,7 +88,7 @@ func getMaxMinValue(sources map[string]DBConfig, table *TableCheckCfg, column *m
 			getValue = true
 		}
 		return min, max, getValue, nil
-		
+
 	} else if dbutil.IsFloatType(column.Tp) {
 		var min, max float64
 		for _, sourceTable := range table.SourceTables {
@@ -102,7 +102,7 @@ func getMaxMinValue(sources map[string]DBConfig, table *TableCheckCfg, column *m
 				// min is NULL, means that no table data.
 				continue
 			}
-			
+
 			if !getValue || minTmp.Float64 < min {
 				min = minTmp.Float64
 			}
@@ -125,7 +125,7 @@ func getMaxMinValue(sources map[string]DBConfig, table *TableCheckCfg, column *m
 				// min is NULL, means that no table data.
 				continue
 			}
-			
+
 			if !getValue || minTmp.String < min {
 				min = minTmp.String
 			}
@@ -146,9 +146,9 @@ func getChunksForTable(sources map[string]DBConfig, target DBConfig, table *Tabl
 
 	// get the chunk count
 	cnt, err := dbutil.GetRowCount(context.Background(), target.Conn, target.Schema, table.Table, table.Range)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

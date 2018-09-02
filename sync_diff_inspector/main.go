@@ -15,7 +15,6 @@ package main
 
 import (
 	"context"
-	//"database/sql"
 	"flag"
 	"os"
 	"time"
@@ -23,7 +22,6 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	//"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 )
 
@@ -48,7 +46,7 @@ func main() {
 	for _, table := range cfg.Tables {
 		log.Infof("check table: %v", table)
 	}
-	
+
 	return
 
 	ok := cfg.checkConfig()
@@ -58,36 +56,6 @@ func main() {
 	}
 
 	ctx := context.Background()
-
-	/*
-	sourceDB, err := dbutil.OpenDB(cfg.SourceDBCfg[0])
-	if err != nil {
-		log.Fatalf("create source db %+v error %v", cfg.SourceDBCfg, err)
-	}
-	sourceDB.SetMaxOpenConns(cfg.CheckThreadCount)
-	sourceDB.SetMaxIdleConns(cfg.CheckThreadCount)
-	defer dbutil.CloseDB(sourceDB)
-	if cfg.SourceSnapshot != "" {
-		err = dbutil.SetSnapshot(ctx, sourceDB, cfg.SourceSnapshot)
-		if err != nil {
-			log.Fatalf("set history snapshot %s for source db %+v error %v", cfg.SourceSnapshot, cfg.SourceDBCfg, err)
-		}
-	}
-
-	targetDB, err := dbutil.OpenDB(cfg.TargetDBCfg)
-	if err != nil {
-		log.Fatalf("create target db %+v error %v", cfg.TargetDBCfg, err)
-	}
-	targetDB.SetMaxOpenConns(cfg.CheckThreadCount)
-	targetDB.SetMaxIdleConns(cfg.CheckThreadCount)
-	defer dbutil.CloseDB(targetDB)
-	if cfg.TargetSnapshot != "" {
-		err = dbutil.SetSnapshot(ctx, targetDB, cfg.TargetSnapshot)
-		if err != nil {
-			log.Fatalf("set history snapshot %s for target db %+v error %v", cfg.TargetSnapshot, cfg.TargetDBCfg, err)
-		}
-	}
-	*/
 
 	if !checkSyncState(ctx, cfg) {
 		log.Fatal("sourceDB don't equal targetDB")

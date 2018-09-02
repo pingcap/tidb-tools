@@ -14,9 +14,9 @@
 package main
 
 import (
+	"database/sql"
 	"flag"
 	"fmt"
-	"database/sql"
 
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
@@ -57,7 +57,7 @@ type TableCheckCfg struct {
 	// or you want to compare table with different schema and table name.
 	// SourceTables can be nil when source and target is one-to-one correspondence.
 	SourceTables []TableCheckCfg `toml:"source-tables"`
-	Info  *model.TableInfo
+	Info         *model.TableInfo
 }
 
 // Config is the configuration.
