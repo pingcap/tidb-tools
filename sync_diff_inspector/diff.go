@@ -302,7 +302,7 @@ func (df *Diff) EqualTableStruct(tableInfo1, tableInfo2 *model.TableInfo) (bool,
 // EqualTableData checks data is equal or not.
 func (df *Diff) EqualTableData(table *TableCheckCfg) (bool, error) {
 	// TODO: now only check data between source data's min and max, need check data less than min and greater than max.
-	allJobs, err := GenerateCheckJob(df.sourceDBs, table, df.chunkSize, df.sample, df.useRowID)
+	allJobs, err := GenerateCheckJob(df.sourceDBs, df.targetDB, table, df.chunkSize, df.sample, df.useRowID)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
