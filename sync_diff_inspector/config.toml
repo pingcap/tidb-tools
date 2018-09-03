@@ -17,15 +17,15 @@ sample-percent = 100
 # set true if target-db and source-db all support tidb implicit column "_tidb_rowid"
 use-rowid = false
 
+# calculate the data's checksum, and compare data by checksum.
+use-checksum = true
+
 # the name of the file which saves sqls used to fix different data
 fix-sql-file = "fix.sql"
 
 # if check-table is nil, all tables in the schema will be checked.
 [[check-table]]
-# config this variable if have more than one source database.
-# source = "source-1"
-
-# table name.
+# target table name.
 table = "test"
 
 # field should be the primary key, unique key or field with index. 
@@ -49,16 +49,16 @@ table = "test"
 
 # source tables.
 [[check-table.source-tables]]
-source = "source-1"
+label = "source-1"
 table  = "test1"
 
 [[check-table.source-tables]]
-source = "source-1"
+label = "source-1"
 table  = "test2"
 
 [[check-table.source-tables]]
 source = "source-2"
-table  = "test*"
+table  = "test3"
 
 [[source-db]]
 host = "127.0.0.1"
@@ -66,7 +66,7 @@ port = 3306
 user = "root"
 password = ""
 schema = "test"
-#label = "source-1"
+label = "source-1"
 # remove comment if use tidb's snapshot data
 # snapshot = "2016-10-08 16:45:26"
 

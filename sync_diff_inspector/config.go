@@ -43,7 +43,7 @@ type DBConfig struct {
 // TableCheckCfg is the config of table to be checked.
 type TableCheckCfg struct {
 	// database's label
-	DBLabel string `toml:"db-label"`
+	DBLabel string `toml:"label"`
 	// schema name
 	Schema string `toml:schema`
 	// table name
