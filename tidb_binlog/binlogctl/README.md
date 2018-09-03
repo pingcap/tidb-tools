@@ -47,7 +47,8 @@ cd tidb-tools-latest-linux-amd64
 Run the following command:
 
 ```
-bin/binlogctl -pd-urls=http://127.0.0.1:2379 -cmd pumps/drainers
+bin/binlogctl -pd-urls=http://127.0.0.1:2379 -cmd pumps
+bin/binlogctl -pd-urls=http://127.0.0.1:2379 -cmd drainers
 ```
 
 Then the result will be like this (the output will be formatted later):
@@ -59,7 +60,8 @@ Then the result will be like this (the output will be formatted later):
 ### Unregister Pump/Drainer
 
 ```
-bin/binlogctl -pd-urls=http://127.0.0.1:2379 -cmd delete-pump/delete-drainer -node-id ip-127-0-0-1:8250/{nodeID}
+bin/binlogctl -pd-urls=http://127.0.0.1:2379 -cmd delete-pump -node-id ip-127-0-0-1:8250/{nodeID}
+bin/binlogctl -pd-urls=http://127.0.0.1:2379 -cmd delete-drainer -node-id ip-127-0-0-1:8250/{nodeID}
 ```
 
 ### Generate `meta`
