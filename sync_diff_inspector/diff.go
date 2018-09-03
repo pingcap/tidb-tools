@@ -79,13 +79,7 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 				log.Fatalf("set history snapshot %s for source db %+v error %v", cfg.SourceSnapshot, cfg.SourceDBCfg, err)
 			}
 		}
-
-		if source.Label != "" {
-			diff.sourceDBs[source.Label] = source
-		} else {
-			label := fmt.Sprintf("%s:%s", source.Host, source.Port)
-			diff.sourceDBs[label] = source
-		}
+		diff.sourceDBs[source.Label] = source
 	}
 
 	// create connection for target.
@@ -109,9 +103,9 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		// TODO:
 		table.Schema = diff.targetDB.Schema
 	}
+
 	diff.fixSQLFile, err = os.Create(cfg.FixSQLFile)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -158,11 +152,6 @@ func (df *Diff) Equal() (err error) {
 			}
 		}
 	}
-
-	// can removed
-	//if len(df.sourceDBs) > 1 && len(df.tables) == 0 {
-	//	log.Fatal("must specify check tables if have more than one source")
-	//}
 
 	if len(df.tables) == 0 {
 		// we need check all the tables
@@ -222,26 +211,9 @@ func (df *Diff) CheckTableStruct(table *TableCheckCfg) (bool, error) {
 	structEqual := true
 	targetTableInfo := table.Info
 
-	if len(table.SourceTables) != 0 {
-		for _, sourceTable := range table.SourceTables {
-			conn := df.sourceDBs[sourceTable.DBLabel].Conn
-			sourceTableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, conn, sourceTable.Schema, sourceTable.Table, df.useRowID)
-			if err != nil {
-				return false, errors.Trace(err)
-			}
-			eq, err := df.EqualTableStruct(sourceTableInfo, targetTableInfo)
-			if err != nil {
-				return false, errors.Trace(err)
-			}
-
-			if !eq {
-				structEqual = false
-			}
-		}
-	} else {
-		// if do't have sourceTables, the target and source's table is one to one correspondence.
-		sourceDB := df.GetOneSource()
-		sourceTableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, sourceDB.Conn, sourceDB.Schema, table.Table, df.useRowID)
+	for _, sourceTable := range table.SourceTables {
+		conn := df.sourceDBs[sourceTable.DBLabel].Conn
+		sourceTableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, conn, sourceTable.Schema, sourceTable.Table, df.useRowID)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -254,6 +226,7 @@ func (df *Diff) CheckTableStruct(table *TableCheckCfg) (bool, error) {
 			structEqual = false
 		}
 	}
+
 	return structEqual, nil
 }
 
@@ -395,7 +368,7 @@ func (df *Diff) checkChunkDataEqual(checkJobs []*CheckJob, table *TableCheckCfg)
 		sourceRows := make([]*sql.Rows, 0, len(table.SourceTables))
 		for _, sourceTable := range table.SourceTables {
 			source := df.sourceDBs[sourceTable.DBLabel]
-			rows, _, err := getChunkRows(df.ctx, source.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.Info, job.Where, job.Args, df.useRowID)
+			rows, _, err := getChunkRows(df.ctx, source.Conn, sourceTable.Schema, sourceTable.Table, table.Info, job.Where, job.Args, df.useRowID)
 			if err != nil {
 				return false, errors.Trace(err)
 			}
@@ -546,15 +519,6 @@ func (df *Diff) WriteSqls() {
 			return
 		}
 	}
-}
-
-// GetOneSource returns a source
-func (df *Diff) GetOneSource() DBConfig {
-	for _, source := range df.sourceDBs {
-		return source
-	}
-
-	return DBConfig{}
 }
 
 func generateDML(tp string, data map[string][]byte, null map[string]bool, keys []*model.ColumnInfo, table *model.TableInfo, schema string) (sql string) {

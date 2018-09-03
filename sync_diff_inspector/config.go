@@ -190,6 +190,13 @@ func (c *Config) checkConfig() bool {
 		return false
 	}
 
+	for i := range c.SourceDBCfg {
+		if c.SourceDBCfg[i].Label == "" {
+			// add label for source database
+			c.SourceDBCfg[i].Label = fmt.Sprintf("%s:%d", c.SourceDBCfg[i].Host, c.SourceDBCfg[i].Port)
+		}
+	}
+
 	if len(c.SourceDBCfg) > 1 {
 		if len(c.Tables) == 0 {
 			log.Error("must specify check tables if have more than one source")
@@ -211,12 +218,12 @@ func (c *Config) checkConfig() bool {
 				log.Error("must sepcify the source's information if have more than one source database")
 				return false
 			}
-
+			log.Infof("source config: %v", c.SourceDBCfg[0])
 			// create a default source
-			table.SourceTables = []TableCheckCfg{TableCheckCfg{
-				DBLabel:   c.SourceDBCfg[0].Label,
-				Schema:    c.SourceDBCfg[0].Schema,
-				Table:     table.Table,
+			table.SourceTables = []TableCheckCfg{{
+				DBLabel: c.SourceDBCfg[0].Label,
+				Schema:  c.SourceDBCfg[0].Schema,
+				Table:   table.Table,
 			}}
 		} else {
 			for _, sourceTable := range table.SourceTables {
@@ -229,7 +236,7 @@ func (c *Config) checkConfig() bool {
 					}
 				}
 			}
-		}		
+		}
 	}
 
 	return true

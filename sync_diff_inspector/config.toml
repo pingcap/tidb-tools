@@ -23,7 +23,7 @@ fix-sql-file = "fix.sql"
 # if check-table is nil, all tables in the schema will be checked.
 [[check-table]]
 # config this variable if have more than one source database.
-source = "source-1"
+# source = "source-1"
 
 # table name.
 table = "test"
@@ -66,7 +66,7 @@ port = 3306
 user = "root"
 password = ""
 schema = "test"
-label = "source-1"
+#label = "source-1"
 # remove comment if use tidb's snapshot data
 # snapshot = "2016-10-08 16:45:26"
 

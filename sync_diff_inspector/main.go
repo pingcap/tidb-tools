@@ -43,9 +43,6 @@ func main() {
 	}
 
 	log.SetLevelByString(cfg.LogLevel)
-	for _, table := range cfg.Tables {
-		log.Infof("check table: %v", table)
-	}
 
 	ok := cfg.checkConfig()
 	if !ok {
