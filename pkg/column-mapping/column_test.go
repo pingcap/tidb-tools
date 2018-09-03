@@ -104,6 +104,7 @@ func (t *testColumnMappingSuit) TestQueryColumnInfo(c *C) {
 
 	// test matched
 	info, err = m.queryColumnInfo("test_2", "xxx_1", []string{"id", "name"})
+	c.Assert(err, IsNil)
 	c.Assert(info, DeepEquals, &mappingInfo{
 		sourcePosition: -1,
 		targetPosition: 0,

@@ -451,11 +451,12 @@ func partitionID(info *mappingInfo, vals []interface{}) ([]interface{}, error) {
 func computePartitionID(schema, table string, rule *Rule) (instanceID int64, schemaID int64, tableID int64, err error) {
 	shiftCnt := uint(64 - instanceIDBitSize - 1)
 	if instanceIDBitSize > 0 {
-		instanceID, err = strconv.ParseInt(rule.Arguments[0], 10, instanceIDBitSize)
+		var instanceIDUnsign uint64
+		instanceIDUnsign, err = strconv.ParseUint(rule.Arguments[0], 10, instanceIDBitSize)
 		if err != nil {
 			return
 		}
-		instanceID = int64(instanceID << shiftCnt)
+		instanceID = int64(instanceIDUnsign << shiftCnt)
 	}
 
 	if schemaIDBitSize > 0 {
