@@ -95,6 +95,8 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 	for _, testCase := range testCases {
 		chunks, err := splitRange(nil, testCase.chunk, testCase.chunkCnt, "", "", nil, "")
 		c.Assert(err, IsNil)
+		// the last two chunk is for data>max and data<min
+		chunks = chunks[:len(chunks)-2]
 		for i, chunk := range chunks {
 			c.Assert(chunk.begin, Equals, testCase.expectChunks[i].begin)
 			c.Assert(chunk.end, Equals, testCase.expectChunks[i].end)

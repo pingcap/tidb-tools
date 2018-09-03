@@ -58,7 +58,6 @@ func main() {
 	log.Info("test pass!!!")
 }
 
-//func checkSyncState(ctx context.Context, sourceDB, targetDB *sql.DB, cfg *Config) bool {
 func checkSyncState(ctx context.Context, cfg *Config) bool {
 	beginTime := time.Now()
 	defer func() {

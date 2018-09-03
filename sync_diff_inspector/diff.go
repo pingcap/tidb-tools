@@ -207,13 +207,13 @@ func (df *Diff) Equal() (err error) {
 	return
 }
 
+// CheckTableStruct checks table's struct is equal or not.
 func (df *Diff) CheckTableStruct(table *TableCheckCfg) (bool, error) {
 	structEqual := true
 	targetTableInfo := table.Info
 
 	for _, sourceTable := range table.SourceTables {
 		conn := df.sourceDBs[sourceTable.DBLabel].Conn
-		log.Infof("conn: %v, lable: %s", conn, sourceTable.DBLabel)
 		sourceTableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, conn, sourceTable.Schema, sourceTable.Table, df.useRowID)
 		if err != nil {
 			return false, errors.Trace(err)
@@ -324,7 +324,6 @@ func (df *Diff) getSourceTableChecksum(table *TableCheckCfg, job *CheckJob) (int
 
 	for _, sourceTable := range table.SourceTables {
 		source := df.sourceDBs[sourceTable.DBLabel]
-		// first check the checksum is equal or not
 		checksumTmp, err := dbutil.GetCRC32Checksum(df.ctx, source.Conn, sourceTable.Schema, sourceTable.Table, table.Info, job.Where, job.Args)
 		if err != nil {
 			return -1, errors.Trace(err)

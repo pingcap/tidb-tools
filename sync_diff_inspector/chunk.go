@@ -135,8 +135,14 @@ func getChunksForTable(db DBConfig, table *TableCheckCfg, column *model.ColumnIn
 func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table string, column *model.ColumnInfo, limitRange string) ([]chunkRange, error) {
 	var chunks []chunkRange
 
+	addOutRangeChunk := func() {
+		chunks = append(chunks, newChunkRange(struct{}{}, chunk.begin, false, false, true, false))
+		chunks = append(chunks, newChunkRange(chunk.end, struct{}{}, false, false, false, true))
+	}
+
 	if count <= 1 {
 		chunks = append(chunks, *chunk)
+		addOutRangeChunk()
 		return chunks, nil
 	}
 
@@ -154,10 +160,6 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 			cutoff += step
 		}
 
-		// add chunk for data > max and data < min
-		chunks = append(chunks, newChunkRange(0, min, false, false, true, false))
-		chunks = append(chunks, newChunkRange(max, 0, false, false, false, true))
-
 		log.Debugf("getChunksForTable cut table: cnt=%d min=%v max=%v step=%v chunk=%d", count, min, max, step, len(chunks))
 	} else if reflect.TypeOf(chunk.begin).Kind() == reflect.Float64 {
 		min, ok1 := chunk.begin.(float64)
@@ -172,10 +174,6 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 			chunks = append(chunks, r)
 			cutoff += step
 		}
-
-		// add chunk for data > max and data < min
-		chunks = append(chunks, newChunkRange(0, min, false, false, true, false))
-		chunks = append(chunks, newChunkRange(max, 0, false, false, false, true))
 
 		log.Debugf("getChunksForTable cut table: cnt=%d min=%v max=%v step=%v chunk=%d",
 			count, min, max, step, len(chunks))
@@ -209,16 +207,15 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 			chunks = append(chunks, r)
 		}
 
-		// add chunk for data > max and data < min
-		chunks = append(chunks, newChunkRange("", min, false, false, true, false))
-		chunks = append(chunks, newChunkRange(max, "", false, false, false, true))
-
 		log.Debugf("getChunksForTable cut table: cnt=%d min=%s max=%s chunk=%d", count, min, max, len(chunks))
 	}
 
 	chunks[len(chunks)-1].end = chunk.end
 	chunks[0].containBegin = chunk.containBegin
 	chunks[len(chunks)-1].containEnd = chunk.containEnd
+
+	addOutRangeChunk()
+
 	return chunks, nil
 }
 

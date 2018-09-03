@@ -20,6 +20,7 @@ import (
 	"github.com/pingcap/tidb/model"
 )
 
+// RowData is the struct of rows selected from mysql/tidb
 type RowData struct {
 	Data         map[string][]byte
 	Null         map[string]bool

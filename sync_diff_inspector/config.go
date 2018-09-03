@@ -30,6 +30,7 @@ const (
 	percent100 = 100
 )
 
+// DBConfig is the config of database, and keep the connection.
 type DBConfig struct {
 	dbutil.DBConfig
 
@@ -45,7 +46,7 @@ type TableCheckCfg struct {
 	// database's label
 	DBLabel string `toml:"label"`
 	// schema name
-	Schema string `toml:schema`
+	Schema string `toml:"schema"`
 	// table name
 	Table string `toml:"table"`
 	// field should be the primary key, unique key or field with index
@@ -184,7 +185,6 @@ func (c *Config) checkConfig() bool {
 		return false
 	}
 
-	// TODO: add some check here
 	if len(c.SourceDBCfg) == 0 {
 		log.Error("must have at least one source database")
 		return false
@@ -227,15 +227,16 @@ func (c *Config) checkConfig() bool {
 				Schema:  c.SourceDBCfg[0].Schema,
 				Table:   table.Table,
 			}}
+
 		} else {
 			for i := range table.SourceTables {
 				if table.SourceTables[i].DBLabel == "" {
 					if len(c.SourceDBCfg) > 1 {
 						log.Error("must specify the table's database label if have more than one source")
 						return false
-					} else {
-						table.SourceTables[i].DBLabel = c.SourceDBCfg[0].Label
 					}
+
+					table.SourceTables[i].DBLabel = c.SourceDBCfg[0].Label
 				}
 
 				if table.SourceTables[i].Schema == "" {
