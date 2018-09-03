@@ -338,3 +338,12 @@ func IsTiDB(ctx context.Context, db *sql.DB) (bool, error) {
 
 	return strings.Contains(strings.ToLower(version), "tidb"), nil
 }
+
+// TableName returns `schema`.`table`
+func TableName(schema, table string) string {
+	return fmt.Sprintf("`%s`.`%s`", escapeName(schema), escapeName(table))
+}
+
+func escapeName(name string) string {
+	return strings.Replace(name, "`", "``", -1)
+}
