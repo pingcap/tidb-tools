@@ -431,7 +431,7 @@ func partitionID(info *mappingInfo, vals []interface{}) ([]interface{}, error) {
 		}
 		isChars = true
 	default:
-		return nil, errors.NotValidf("type %T(%v)", vals[info.targetPosition])
+		return nil, errors.NotValidf("type %T(%v)", vals[info.targetPosition], vals[info.targetPosition])
 	}
 
 	if originID >= maxOriginID || originID < 0 {

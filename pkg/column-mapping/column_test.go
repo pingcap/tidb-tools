@@ -60,7 +60,7 @@ func (t *testColumnMappingSuit) TestHandle(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(m.cache.infos, HasLen, 0)
 
-	// test clone
+	// test add prefix, add suffix is similar
 	vals, poss, err := m.HandleRowValue("test", "xxx", []string{"age", "id"}, []interface{}{1, "1"})
 	c.Assert(err, IsNil)
 	c.Assert(vals, DeepEquals, []interface{}{1, "instance_id:1"})
