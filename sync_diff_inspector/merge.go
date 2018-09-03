@@ -14,7 +14,6 @@
 package main
 
 import (
-	//"container/heap"
 	"strconv"
 
 	"github.com/ngaut/log"
@@ -32,46 +31,45 @@ type RowDatas []RowData
 
 func (r RowDatas) Len() int { return len(r) }
 func (r RowDatas) Less(i, j int) bool {
-	var ok bool
 	var data1, data2 []byte
 
 	for _, col := range r[i].OrderKeyCols {
-		if data1, ok = r[i].Data[col.Name.O]; !ok {
-			log.Errorf("don't have key %s", col.Name.O)
-			return false
-		}
-		if data2, ok = r[j].Data[col.Name.O]; !ok {
-			log.Errorf("don't have key %s", col.Name.O)
-			return false
-		}
+		data1 = r[i].Data[col.Name.O]
+		data2 = r[j].Data[col.Name.O]
 		if needQuotes(col.FieldType) {
 			if string(data1) > string(data2) {
 				return false
 			} else if string(data1) < string(data2) {
 				return true
 			} else {
+				// `NULL` is less than ""
+				if r[i].Null[col.Name.O] {
+					return true
+				}
+				if r[j].Null[col.Name.O] {
+					return false
+				}
 				continue
 			}
 		} else {
 			num1, err1 := strconv.ParseFloat(string(data1), 64)
 			num2, err2 := strconv.ParseFloat(string(data2), 64)
 			if err1 != nil || err2 != nil {
+				// it will never happened
 				log.Errorf("convert %s, %s to float failed, err1: %v, err2: %v", string(data1), string(data2), err1, err2)
 				return false
 			}
 			if num1 > num2 {
 				return false
-				break
 			} else if num1 < num2 {
 				return true
-				break
 			} else {
 				continue
 			}
 		}
 	}
 
-	return false
+	return true
 }
 func (r RowDatas) Swap(i, j int) { r[i], r[j] = r[j], r[i] }
 

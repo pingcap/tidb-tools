@@ -209,6 +209,8 @@ func (c *Config) checkConfig() bool {
 			table.Schema = c.TargetDBCfg.Schema
 		}
 
+		// setting Range to "TRUE" can make the code more simple, no need to judge the Range's value.
+		// for example: sql will looks like "select * from itest where a > 10 AND TRUE" if don't set range in config.
 		if table.Range == "" {
 			table.Range = "TRUE"
 		}
@@ -218,7 +220,7 @@ func (c *Config) checkConfig() bool {
 				log.Error("must sepcify the source's information if have more than one source database")
 				return false
 			}
-			log.Infof("source config: %v", c.SourceDBCfg[0])
+
 			// create a default source
 			table.SourceTables = []TableCheckCfg{{
 				DBLabel: c.SourceDBCfg[0].Label,
@@ -226,14 +228,18 @@ func (c *Config) checkConfig() bool {
 				Table:   table.Table,
 			}}
 		} else {
-			for _, sourceTable := range table.SourceTables {
-				if sourceTable.DBLabel == "" {
+			for i := range table.SourceTables {
+				if table.SourceTables[i].DBLabel == "" {
 					if len(c.SourceDBCfg) > 1 {
 						log.Error("must specify the table's database label if have more than one source")
 						return false
 					} else {
-						sourceTable.DBLabel = table.SourceTables[0].DBLabel
+						table.SourceTables[i].DBLabel = c.SourceDBCfg[0].Label
 					}
+				}
+
+				if table.SourceTables[i].Schema == "" {
+					table.SourceTables[i].Schema = c.SourceDBCfg[0].Schema
 				}
 			}
 		}

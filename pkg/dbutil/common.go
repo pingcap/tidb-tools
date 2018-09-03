@@ -187,7 +187,7 @@ func GetTables(ctx context.Context, db *sql.DB, schemaName string) ([]string, er
 }
 
 // GetCRC32Checksum returns checksum code of some data by given condition
-func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (string, error) {
+func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, error) {
 	/*
 		calculate CRC32 checksum example:
 		mysql> SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',',id,name,age))AS UNSIGNED)) AS checksum FROM test.test WHERE id > 0 AND id < 10;
@@ -204,21 +204,21 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName string, tbInfo
 	}
 
 	query := fmt.Sprintf("SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',',%s))AS UNSIGNED)) AS checksum FROM `%s`.`%s` WHERE %s;",
-		strings.Join(columnNames, ", "), schemaName, tbInfo.Name.O, limitRange)
+		strings.Join(columnNames, ", "), schemaName, tableName, limitRange)
 	log.Debugf("checksum sql: %s, args: %v", query, args)
 
-	var checksum sql.NullString
+	var checksum sql.NullInt64
 	err := db.QueryRowContext(ctx, query, args...).Scan(&checksum)
 	if err != nil {
-		return "", errors.Trace(err)
+		return -1, errors.Trace(err)
 	}
 	if !checksum.Valid {
 		// if don't have any data, the checksum will be `NULL`
 		log.Warnf("get empty checksum by query %s, args %v", query, args)
-		return "", nil
+		return -1, nil
 	}
 
-	return checksum.String, nil
+	return checksum.Int64, nil
 }
 
 // GetTidbLatestTSO returns tidb's current TSO.

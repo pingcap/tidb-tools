@@ -213,6 +213,7 @@ func (df *Diff) CheckTableStruct(table *TableCheckCfg) (bool, error) {
 
 	for _, sourceTable := range table.SourceTables {
 		conn := df.sourceDBs[sourceTable.DBLabel].Conn
+		log.Infof("conn: %v, lable: %s", conn, sourceTable.DBLabel)
 		sourceTableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, conn, sourceTable.Schema, sourceTable.Table, df.useRowID)
 		if err != nil {
 			return false, errors.Trace(err)
@@ -271,8 +272,7 @@ func (df *Diff) EqualTableStruct(tableInfo1, tableInfo2 *model.TableInfo) (bool,
 
 // EqualTableData checks data is equal or not.
 func (df *Diff) EqualTableData(table *TableCheckCfg) (bool, error) {
-	// TODO: now only check data between source data's min and max, need check data less than min and greater than max.
-	allJobs, err := GenerateCheckJob(df.sourceDBs, df.targetDB, table, df.chunkSize, df.sample, df.useRowID)
+	allJobs, err := GenerateCheckJob(df.targetDB, table, df.chunkSize, df.sample, df.useRowID)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
@@ -555,7 +555,7 @@ func generateDML(tp string, data map[string][]byte, null map[string]bool, keys [
 				kvs = append(kvs, fmt.Sprintf("`%s` = %s", col.Name.O, string(data[col.Name.O])))
 			}
 		}
-		sql = fmt.Sprintf("DELETE FROM `%s`.`%s` where %s;", schema, table.Name, strings.Join(kvs, " AND "))
+		sql = fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE %s;", schema, table.Name, strings.Join(kvs, " AND "))
 	default:
 		log.Errorf("unknow sql type %s", tp)
 	}
