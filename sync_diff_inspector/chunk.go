@@ -85,6 +85,7 @@ func getChunksForTable(sources map[string]DBConfig, target DBConfig, table *Tabl
 	// fetch min, max
 	query := fmt.Sprintf("SELECT %s MIN(`%s`) as MIN, MAX(`%s`) as MAX FROM `%s`.`%s` where %s",
 		"/*!40001 SQL_NO_CACHE */", field, field, table.Schema, table.Table, table.Range)
+	log.Infof("select min and max by sql %s", query)
 
 	var chunk chunkRange
 	if dbutil.IsNumberType(column.Tp) {

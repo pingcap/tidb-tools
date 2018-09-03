@@ -185,20 +185,51 @@ func (c *Config) checkConfig() bool {
 	}
 
 	// TODO: add some check here
+	if len(c.SourceDBCfg) == 0 {
+		log.Error("must have at least one source database")
+		return false
+	}
+
 	if len(c.SourceDBCfg) > 1 {
 		if len(c.Tables) == 0 {
 			log.Error("must specify check tables if have more than one source")
 			return false
 		}
+	}
 
-		for _, table := range c.Tables {
+	for _, table := range c.Tables {
+		if table.Schema == "" {
+			table.Schema = c.TargetDBCfg.Schema
+		}
+
+		if table.Range == "" {
+			table.Range = "TRUE"
+		}
+
+		if len(table.SourceTables) == 0 {
+			if len(c.SourceDBCfg) > 1 {
+				log.Error("must sepcify the source's information if have more than one source database")
+				return false
+			}
+
+			// create a default source
+			table.SourceTables = []TableCheckCfg{TableCheckCfg{
+				DBLabel:   c.SourceDBCfg[0].Label,
+				Schema:    c.SourceDBCfg[0].Schema,
+				Table:     table.Table,
+			}}
+		} else {
 			for _, sourceTable := range table.SourceTables {
 				if sourceTable.DBLabel == "" {
-					log.Error("must specify the table's database label if have more than one source")
-					return false
+					if len(c.SourceDBCfg) > 1 {
+						log.Error("must specify the table's database label if have more than one source")
+						return false
+					} else {
+						sourceTable.DBLabel = table.SourceTables[0].DBLabel
+					}
 				}
 			}
-		}
+		}		
 	}
 
 	return true

@@ -52,6 +52,7 @@ type Diff struct {
 // NewDiff returns a Diff instance.
 func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 	diff = &Diff{
+		sourceDBs:        make(map[string]DBConfig),
 		chunkSize:        cfg.ChunkSize,
 		sample:           cfg.Sample,
 		checkThreadCount: cfg.CheckThreadCount,
@@ -64,7 +65,6 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 	}
 
 	// create connection for source.
-	diff.sourceDBs = make(map[string]DBConfig)
 	for _, source := range cfg.SourceDBCfg {
 		source.Conn, err = dbutil.OpenDB(source.DBConfig)
 		if err != nil {
@@ -102,6 +102,7 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 			log.Fatalf("set history snapshot %s for target db %+v error %v", cfg.TargetSnapshot, cfg.TargetDBCfg, err)
 		}
 	}
+	diff.targetDB = cfg.TargetDBCfg
 
 	for _, table := range diff.tables {
 		table.Info, err = dbutil.GetTableInfoWithRowID(ctx, diff.targetDB.Conn, diff.targetDB.Schema, table.Table, cfg.UseRowID)
@@ -351,7 +352,7 @@ func (df *Diff) getSourceTableChecksum(table *TableCheckCfg, job *CheckJob) (int
 	for _, sourceTable := range table.SourceTables {
 		source := df.sourceDBs[sourceTable.DBLabel]
 		// first check the checksum is equal or not
-		checksumTmp, err := dbutil.GetCRC32Checksum(df.ctx, source.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.Info, job.Where, job.Args)
+		checksumTmp, err := dbutil.GetCRC32Checksum(df.ctx, source.Conn, sourceTable.Schema, sourceTable.Table, table.Info, job.Where, job.Args)
 		if err != nil {
 			return -1, errors.Trace(err)
 		}

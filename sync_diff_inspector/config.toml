@@ -20,10 +20,6 @@ use-rowid = false
 # the name of the file which saves sqls used to fix different data
 fix-sql-file = "fix.sql"
 
-# use tidb's snapshot data, sql looks like set @@tidb_snapshot="2016-10-08 16:45:26"
-source-snapshot = "2016-10-08 16:45:26"
-target-snapshot = "2016-10-08 16:45:26"
-
 # if check-table is nil, all tables in the schema will be checked.
 [[check-table]]
 # config this variable if have more than one source database.
