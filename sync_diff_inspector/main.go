@@ -58,6 +58,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("create source db %+v error %v", cfg.SourceDBCfg, err)
 	}
+	sourceDB.SetMaxOpenConns(cfg.CheckThreadCount)
+	sourceDB.SetMaxIdleConns(cfg.CheckThreadCount)
 	defer dbutil.CloseDB(sourceDB)
 	if cfg.SourceSnapshot != "" {
 		err = dbutil.SetSnapshot(ctx, sourceDB, cfg.SourceSnapshot)
@@ -70,6 +72,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("create target db %+v error %v", cfg.TargetDBCfg, err)
 	}
+	targetDB.SetMaxOpenConns(cfg.CheckThreadCount)
+	targetDB.SetMaxIdleConns(cfg.CheckThreadCount)
 	defer dbutil.CloseDB(targetDB)
 	if cfg.TargetSnapshot != "" {
 		err = dbutil.SetSnapshot(ctx, targetDB, cfg.TargetSnapshot)

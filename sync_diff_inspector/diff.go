@@ -274,7 +274,7 @@ func (df *Diff) checkChunkDataEqual(checkJobs []*CheckJob, table *TableCheckCfg)
 		}
 
 		// if checksum is not equal, compare the data
-		log.Errorf("table: %s, range: %s, args: %v, checksum is not equal", job.Table, job.Args, job.Where)
+		log.Errorf("table: %s, range: %s, args: %v, checksum is not equal, one is %s, another is %s", job.Table, job.Args, job.Where, checksum1, checksum2)
 		rows1, orderKeyCols, err := getChunkRows(df.ctx, df.db1, df.schema, table, job.Where, job.Args, df.useRowID)
 		if err != nil {
 			return false, errors.Trace(err)
@@ -302,23 +302,29 @@ func (df *Diff) checkChunkDataEqual(checkJobs []*CheckJob, table *TableCheckCfg)
 }
 
 func (df *Diff) compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.ColumnInfo, table *TableCheckCfg) (bool, error) {
-	equal := true
-	rowsData1 := make([]map[string][]byte, 0, 100)
-	rowsData2 := make([]map[string][]byte, 0, 100)
+	var (
+		equal     = true
+		rowsData1 = make([]map[string][]byte, 0, 100)
+		rowsData2 = make([]map[string][]byte, 0, 100)
+		rowsNull1 = make([]map[string]bool, 0, 100)
+		rowsNull2 = make([]map[string]bool, 0, 100)
+	)
 
 	for rows1.Next() {
-		data1, err := dbutil.ScanRow(rows1)
+		data1, null1, err := dbutil.ScanRow(rows1)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
 		rowsData1 = append(rowsData1, data1)
+		rowsNull1 = append(rowsNull1, null1)
 	}
 	for rows2.Next() {
-		data2, err := dbutil.ScanRow(rows2)
+		data2, null2, err := dbutil.ScanRow(rows2)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
 		rowsData2 = append(rowsData2, data2)
+		rowsNull2 = append(rowsNull2, null2)
 	}
 
 	var index1, index2 int
@@ -326,7 +332,7 @@ func (df *Diff) compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.Column
 		if index1 == len(rowsData1) {
 			// all the rowsData2's data should be deleted
 			for ; index2 < len(rowsData2); index2++ {
-				sql := generateDML("delete", rowsData2[index2], orderKeyCols, table.Info, table.Schema)
+				sql := generateDML("delete", rowsData2[index2], rowsNull2[index2], orderKeyCols, table.Info, table.Schema)
 				log.Infof("[delete] sql: %v", sql)
 				df.wg.Add(1)
 				df.sqlCh <- sql
@@ -337,7 +343,7 @@ func (df *Diff) compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.Column
 		if index2 == len(rowsData2) {
 			// rowsData2 lack some data, should insert them
 			for ; index1 < len(rowsData1); index1++ {
-				sql := generateDML("replace", rowsData1[index1], orderKeyCols, table.Info, table.Schema)
+				sql := generateDML("replace", rowsData1[index1], rowsNull1[index1], orderKeyCols, table.Info, table.Schema)
 				log.Infof("[insert] sql: %v", sql)
 				df.wg.Add(1)
 				df.sqlCh <- sql
@@ -345,7 +351,7 @@ func (df *Diff) compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.Column
 			}
 			break
 		}
-		eq, cmp, err := compareData(rowsData1[index1], rowsData2[index2], orderKeyCols)
+		eq, cmp, err := compareData(rowsData1[index1], rowsData2[index2], rowsNull1[index1], rowsNull2[index2], orderKeyCols)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -358,21 +364,21 @@ func (df *Diff) compareRows(rows1, rows2 *sql.Rows, orderKeyCols []*model.Column
 		switch cmp {
 		case 1:
 			// delete
-			sql := generateDML("delete", rowsData2[index2], orderKeyCols, table.Info, table.Schema)
+			sql := generateDML("delete", rowsData2[index2], rowsNull2[index2], orderKeyCols, table.Info, table.Schema)
 			log.Infof("[delete] sql: %s", sql)
 			df.wg.Add(1)
 			df.sqlCh <- sql
 			index2++
 		case -1:
 			// insert
-			sql := generateDML("replace", rowsData1[index1], orderKeyCols, table.Info, table.Schema)
+			sql := generateDML("replace", rowsData1[index1], rowsNull1[index1], orderKeyCols, table.Info, table.Schema)
 			log.Infof("[insert] sql: %s", sql)
 			df.wg.Add(1)
 			df.sqlCh <- sql
 			index1++
 		case 0:
 			// update
-			sql := generateDML("replace", rowsData1[index1], orderKeyCols, table.Info, table.Schema)
+			sql := generateDML("replace", rowsData1[index1], rowsNull1[index1], orderKeyCols, table.Info, table.Schema)
 			log.Infof("[update] sql: %s", sql)
 			df.wg.Add(1)
 			df.sqlCh <- sql
@@ -404,14 +410,18 @@ func (df *Diff) WriteSqls() {
 	}
 }
 
-func generateDML(tp string, data map[string][]byte, keys []*model.ColumnInfo, table *model.TableInfo, schema string) (sql string) {
-	// TODO: can't distinguish NULL between ""
+func generateDML(tp string, data map[string][]byte, null map[string]bool, keys []*model.ColumnInfo, table *model.TableInfo, schema string) (sql string) {
 	switch tp {
 	case "replace":
 		colNames := make([]string, 0, len(table.Columns))
 		values := make([]string, 0, len(table.Columns))
 		for _, col := range table.Columns {
-			colNames = append(colNames, col.Name.O)
+			colNames = append(colNames, fmt.Sprintf("`%s`", col.Name.O))
+			if null[col.Name.O] {
+				values = append(values, "NULL")
+				continue
+			}
+
 			if needQuotes(col.FieldType) {
 				values = append(values, fmt.Sprintf("\"%s\"", string(data[col.Name.O])))
 			} else {
@@ -423,10 +433,15 @@ func generateDML(tp string, data map[string][]byte, keys []*model.ColumnInfo, ta
 	case "delete":
 		kvs := make([]string, 0, len(keys))
 		for _, col := range keys {
+			if null[col.Name.O] {
+				kvs = append(kvs, fmt.Sprintf("`%s` is NULL", col.Name.O))
+				continue
+			}
+
 			if needQuotes(col.FieldType) {
-				kvs = append(kvs, fmt.Sprintf("%s = \"%s\"", col.Name.O, string(data[col.Name.O])))
+				kvs = append(kvs, fmt.Sprintf("`%s` = \"%s\"", col.Name.O, string(data[col.Name.O])))
 			} else {
-				kvs = append(kvs, fmt.Sprintf("%s = %s", col.Name.O, string(data[col.Name.O])))
+				kvs = append(kvs, fmt.Sprintf("`%s` = %s", col.Name.O, string(data[col.Name.O])))
 			}
 		}
 		sql = fmt.Sprintf("DELETE FROM `%s`.`%s` where %s;", schema, table.Name, strings.Join(kvs, " AND "))
@@ -441,7 +456,7 @@ func needQuotes(ft types.FieldType) bool {
 	return !(dbutil.IsNumberType(ft.Tp) || dbutil.IsFloatType(ft.Tp))
 }
 
-func compareData(map1 map[string][]byte, map2 map[string][]byte, orderKeyCols []*model.ColumnInfo) (bool, int32, error) {
+func compareData(map1, map2 map[string][]byte, null1, null2 map[string]bool, orderKeyCols []*model.ColumnInfo) (bool, int32, error) {
 	var (
 		equal        = true
 		data1, data2 []byte
@@ -454,11 +469,15 @@ func compareData(map1 map[string][]byte, map2 map[string][]byte, orderKeyCols []
 		if data2, ok = map2[key]; !ok {
 			return false, 0, errors.Errorf("don't have key %s", key)
 		}
-		if string(data1) == string(data2) {
+		if (string(data1) == string(data2)) && (null1[key] == null2[key]) {
 			continue
 		}
 		equal = false
-		log.Errorf("find difference data, data1: %s, data2: %s", map1, map2)
+		if null1[key] == null2[key] {
+			log.Errorf("find difference data in column %s, data1: %s, data2: %s", key, map1, map2)
+		} else {
+			log.Errorf("find difference data in column %s, one of them is NULL, data1: %s, data2: %s", key, map1, map2)
+		}
 		break
 	}
 	if equal {
