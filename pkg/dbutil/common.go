@@ -140,6 +140,18 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 
 // GetRandomValues returns some random value of a column.
 func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int64, min, max interface{}, limitRange string) ([]interface{}, error) {
+	/*
+		example:
+		mysql> SELECT `id` FROM (SELECT `id` FROM `test`.`test` WHERE `id` > 0 AND `id` < 100 AND true ORDER BY RAND() LIMIT 3)rand_tmp ORDER BY `id`;
+		+----------+
+		| rand_tmp |
+		+----------+
+		|    15    |
+		|    58    |
+		|    67    |
+		+----------+
+	*/
+
 	if limitRange != "" {
 		limitRange = "true"
 	}
