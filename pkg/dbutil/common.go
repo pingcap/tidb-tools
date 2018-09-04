@@ -145,7 +145,7 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 	}
 
 	randomValue := make([]interface{}, 0, num)
-	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` >= ? AND `%s` <= ? AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
+	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` > ? AND `%s` < ? AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
 		column, column, schemaName, table, column, column, limitRange, num, column)
 	log.Debugf("get random values sql: %s, min: %v, max: %v", query, min, max)
 	rows, err := db.QueryContext(ctx, query, min, max)
@@ -190,7 +190,7 @@ func GetTables(ctx context.Context, db *sql.DB, schemaName string) ([]string, er
 func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, error) {
 	/*
 		calculate CRC32 checksum example:
-		mysql> SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',',id,name,age))AS UNSIGNED)) AS checksum FROM test.test WHERE id > 0 AND id < 10;
+		mysql> SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',', id, name, age, CONCAT(ISNULL(id), ISNULL(name), ISNULL(age))))AS UNSIGNED)) AS checksum FROM test.test WHERE id > 0 AND id < 10;
 		+------------+
 		| checksum   |
 		+------------+
@@ -199,12 +199,14 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName str
 	*/
 
 	columnNames := make([]string, 0, len(tbInfo.Columns))
+	columnIsNull := make([]string, 0, len(tbInfo.Columns))
 	for _, col := range tbInfo.Columns {
 		columnNames = append(columnNames, col.Name.O)
+		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", col.Name.O))
 	}
 
-	query := fmt.Sprintf("SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',',%s))AS UNSIGNED)) AS checksum FROM `%s`.`%s` WHERE %s;",
-		strings.Join(columnNames, ", "), schemaName, tableName, limitRange)
+	query := fmt.Sprintf("SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED)) AS checksum FROM `%s`.`%s` WHERE %s;",
+		strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), schemaName, tableName, limitRange)
 	log.Debugf("checksum sql: %s, args: %v", query, args)
 
 	var checksum sql.NullInt64

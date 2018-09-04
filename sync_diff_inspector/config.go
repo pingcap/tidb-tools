@@ -190,11 +190,13 @@ func (c *Config) checkConfig() bool {
 		return false
 	}
 
+	sourceDBMap := make(map[string]DBConfig)
 	for i := range c.SourceDBCfg {
 		if c.SourceDBCfg[i].Label == "" {
 			// add label for source database
 			c.SourceDBCfg[i].Label = fmt.Sprintf("%s:%d", c.SourceDBCfg[i].Host, c.SourceDBCfg[i].Port)
 		}
+		sourceDBMap[c.SourceDBCfg[i].Label] = c.SourceDBCfg[i]
 	}
 
 	if len(c.SourceDBCfg) > 1 {
@@ -240,7 +242,7 @@ func (c *Config) checkConfig() bool {
 				}
 
 				if table.SourceTables[i].Schema == "" {
-					table.SourceTables[i].Schema = c.SourceDBCfg[0].Schema
+					table.SourceTables[i].Schema = sourceDBMap[table.SourceTables[i].DBLabel].Schema
 				}
 			}
 		}
