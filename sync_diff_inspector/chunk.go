@@ -69,7 +69,7 @@ func getChunksForTable(db DBConfig, table *TableCheckCfg, column *model.ColumnIn
 	}
 
 	// get the chunk count
-	cnt, err := dbutil.GetRowCount(context.Background(), db.Conn, db.Schema, table.Table, table.Range)
+	cnt, err := dbutil.GetRowCount(context.Background(), db.Conn, table.Schema, table.Table, table.Range)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -135,6 +135,7 @@ func getChunksForTable(db DBConfig, table *TableCheckCfg, column *model.ColumnIn
 func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table string, column *model.ColumnInfo, limitRange string) ([]chunkRange, error) {
 	var chunks []chunkRange
 
+	// for example, the min and max value in target table is 2-9, but 1-10 in source table. so we need generate chunk for data < 2 and data > 10 
 	addOutRangeChunk := func() {
 		chunks = append(chunks, newChunkRange(struct{}{}, chunk.begin, false, false, true, false))
 		chunks = append(chunks, newChunkRange(chunk.end, struct{}{}, false, false, false, true))
@@ -242,7 +243,7 @@ func GenerateCheckJob(db DBConfig, table *TableCheckCfg, chunkSize int, sample i
 	var err error
 
 	if table.Field == "" {
-		column, err = findSuitableField(db.Conn, db.Schema, table.Info)
+		column, err = findSuitableField(db.Conn, table.Schema, table.Info)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}

@@ -21,38 +21,20 @@ use-rowid = false
 use-checksum = true
 
 // set true if compare sharding tables with target table
-is-sharding = false
+is-sharding = true
 
 # the name of the file which saves sqls used to fix different data
 fix-sql-file = "fix.sql"
 
-
-# if check-table is nil, all tables in the schema will be checked.
-# a example for comparing table with same schema and table name. 
-[[check-table]]
-# schema name.
-schema = "test"
-
-# table name.
-table = "test1"
-
-# field should be the primary key, unique key or field with index. 
-# if comment this, diff will find a suitable field.
-index-field = "id"
-
-# check data's range.
-range = "age > 10 AND age < 20"
-
-
-# a example for comparing table with different name.
+# a example for sharding tables.
 [[check-table]]
 # target schema name.
 schema = "test"
 
 # target table name.
-table = "test2"
+table = "test"
 
-# field should be the primary key, unique key or field with index.
+# field should be the primary key, unique key or field with index. 
 # if comment this, diff will find a suitable field.
 # index-field = "id"
 
@@ -61,7 +43,18 @@ table = "test2"
 
 # source tables.
 [[check-table.source-tables]]
-schema = "test2"
+label = "source-1"
+schema = "test"
+table  = "test1"
+
+[[check-table.source-tables]]
+label = "source-1"
+schema = "test"
+table  = "test2"
+
+[[check-table.source-tables]]
+label = "source-2"
+schema = "test"
 table  = "test3"
 
 [[source-db]]
@@ -69,6 +62,16 @@ host = "127.0.0.1"
 port = 3306
 user = "root"
 password = ""
+label = "source-1"
+# remove comment if use tidb's snapshot data
+# snapshot = "2016-10-08 16:45:26"
+
+[[source-db]]
+host = "127.0.0.2"
+port = 3306
+user = "root"
+password = ""
+label = "source-2"
 # remove comment if use tidb's snapshot data
 # snapshot = "2016-10-08 16:45:26"
 

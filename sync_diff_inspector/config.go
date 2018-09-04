@@ -208,7 +208,8 @@ func (c *Config) checkConfig() bool {
 
 	for _, table := range c.Tables {
 		if table.Schema == "" {
-			table.Schema = c.TargetDBCfg.Schema
+			log.Errorf("must specify the schema")
+			return false
 		}
 
 		// setting Range to "TRUE" can make the code more simple, no need to judge the Range's value.
@@ -226,7 +227,7 @@ func (c *Config) checkConfig() bool {
 			// create a default source
 			table.SourceTables = []TableCheckCfg{{
 				DBLabel: c.SourceDBCfg[0].Label,
-				Schema:  c.SourceDBCfg[0].Schema,
+				Schema:  table.Schema,
 				Table:   table.Table,
 			}}
 
@@ -239,10 +240,6 @@ func (c *Config) checkConfig() bool {
 					}
 
 					table.SourceTables[i].DBLabel = c.SourceDBCfg[0].Label
-				}
-
-				if table.SourceTables[i].Schema == "" {
-					table.SourceTables[i].Schema = sourceDBMap[table.SourceTables[i].DBLabel].Schema
 				}
 			}
 		}

@@ -36,7 +36,6 @@ type TableResult struct {
 type Report struct {
 	sync.RWMutex
 
-	Schema string
 	// Result is pass or fail
 	Result       string
 	PassNum      int32
@@ -45,9 +44,8 @@ type Report struct {
 }
 
 // NewReport returns a new Report.
-func NewReport(schema string) *Report {
+func NewReport() *Report {
 	return &Report{
-		Schema:       schema,
 		TableResults: make(map[string]*TableResult),
 		Result:       Pass,
 	}
@@ -59,7 +57,7 @@ func (r *Report) String() (report string) {
 	defer r.RUnlock()
 	/*
 		output example:
-		check result of schema test: fail!
+		check result: fail!
 		1 tables' check passed, 2 tables' check failed.
 
 		table: test1
@@ -74,7 +72,7 @@ func (r *Report) String() (report string) {
 		table's struct equal
 		table's data equal
 	*/
-	report = fmt.Sprintf("\ncheck result of schema %s: %s!\n", r.Schema, r.Result)
+	report = fmt.Sprintf("\ncheck result: %s!\n", r.Result)
 	report += fmt.Sprintf("%d tables' check passed, %d tables' check failed.\n", r.PassNum, r.FailedNum)
 
 	var failTableRsult, passTableResult string

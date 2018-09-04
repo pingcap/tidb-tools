@@ -60,7 +60,7 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 		useChecksum:      cfg.UseChecksum,
 		tables:           cfg.Tables,
 		sqlCh:            make(chan string),
-		report:           NewReport(cfg.TargetDBCfg.Schema),
+		report:           NewReport(),
 		ctx:              ctx,
 	}
 
@@ -99,11 +99,10 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 	diff.targetDB = cfg.TargetDBCfg
 
 	for _, table := range diff.tables {
-		table.Info, err = dbutil.GetTableInfoWithRowID(ctx, diff.targetDB.Conn, diff.targetDB.Schema, table.Table, cfg.UseRowID)
+		table.Info, err = dbutil.GetTableInfoWithRowID(ctx, diff.targetDB.Conn, table.Schema, table.Table, cfg.UseRowID)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		table.Schema = diff.targetDB.Schema
 	}
 
 	diff.fixSQLFile, err = os.Create(cfg.FixSQLFile)
@@ -130,12 +129,14 @@ func (df *Diff) Equal() (err error) {
 		df.wg.Done()
 	}()
 
-	targetTables, err := dbutil.GetTables(df.ctx, df.targetDB.Conn, df.targetDB.Schema)
+	// fix it
+	_, err = dbutil.GetTables(df.ctx, df.targetDB.Conn, "test")
 	if err != nil {
 		err = errors.Trace(err)
 		return
 	}
 
+	/*
 	// if only have one source, and don't specify the tables need to check, we need confirm the source and target have same tables.
 	if len(df.sourceDBs) == 1 && len(df.tables) == 0 {
 		for _, sourceDB := range df.sourceDBs {
@@ -152,7 +153,9 @@ func (df *Diff) Equal() (err error) {
 			}
 		}
 	}
+	*/
 
+	/*
 	if len(df.tables) == 0 {
 		// we need check all the tables
 		df.tables = make([]*TableCheckCfg, 0, len(targetTables))
@@ -166,6 +169,7 @@ func (df *Diff) Equal() (err error) {
 			df.tables = append(df.tables, table)
 		}
 	}
+	*/
 
 	reportResult := func(structEqual, dataEqual bool) {
 		if structEqual && dataEqual {

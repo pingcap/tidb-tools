@@ -47,8 +47,6 @@ type DBConfig struct {
 	User string `toml:"user" json:"user"`
 
 	Password string `toml:"password" json:"password"`
-
-	Schema string `toml:"schema" json:"schema"`
 }
 
 // String returns native format of database configuration
@@ -61,7 +59,7 @@ func (c *DBConfig) String() string {
 
 // OpenDB opens a mysql connection FD
 func OpenDB(cfg DBConfig) (*sql.DB, error) {
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Schema)
+	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4", cfg.User, cfg.Password, cfg.Host, cfg.Port)
 	dbConn, err := sql.Open("mysql", dbDSN)
 	if err != nil {
 		return nil, errors.Trace(err)
