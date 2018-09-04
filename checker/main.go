@@ -66,7 +66,6 @@ func checkTables(schema string, tables []string) {
 		Password: *password,
 		Host:     *host,
 		Port:     *port,
-		Schema:   schema,
 	})
 	if err != nil {
 		log.Fatal("create database connection failed:", err)

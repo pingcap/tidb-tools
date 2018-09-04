@@ -137,38 +137,38 @@ func (df *Diff) Equal() (err error) {
 	}
 
 	/*
-	// if only have one source, and don't specify the tables need to check, we need confirm the source and target have same tables.
-	if len(df.sourceDBs) == 1 && len(df.tables) == 0 {
-		for _, sourceDB := range df.sourceDBs {
-			sourceTables, err1 := dbutil.GetTables(df.ctx, sourceDB.Conn, sourceDB.Schema)
-			if err1 != nil {
-				err = errors.Trace(err)
-				return
-			}
-			eq := equalStrings(sourceTables, targetTables)
-			if !eq {
-				log.Errorf("show tables get different table. [source db tables] %v [target db tables] %v", sourceTables, targetTables)
-				df.report.Result = Fail
-				return
+		// if only have one source, and don't specify the tables need to check, we need confirm the source and target have same tables.
+		if len(df.sourceDBs) == 1 && len(df.tables) == 0 {
+			for _, sourceDB := range df.sourceDBs {
+				sourceTables, err1 := dbutil.GetTables(df.ctx, sourceDB.Conn, sourceDB.Schema)
+				if err1 != nil {
+					err = errors.Trace(err)
+					return
+				}
+				eq := equalStrings(sourceTables, targetTables)
+				if !eq {
+					log.Errorf("show tables get different table. [source db tables] %v [target db tables] %v", sourceTables, targetTables)
+					df.report.Result = Fail
+					return
+				}
 			}
 		}
-	}
 	*/
 
 	/*
-	if len(df.tables) == 0 {
-		// we need check all the tables
-		df.tables = make([]*TableCheckCfg, 0, len(targetTables))
-		for _, name := range targetTables {
-			table := &TableCheckCfg{Table: name, Schema: df.targetDB.Schema}
-			table.Info, err = dbutil.GetTableInfoWithRowID(df.ctx, df.targetDB.Conn, df.targetDB.Schema, name, df.useRowID)
-			if err != nil {
-				return errors.Trace(err)
+		if len(df.tables) == 0 {
+			// we need check all the tables
+			df.tables = make([]*TableCheckCfg, 0, len(targetTables))
+			for _, name := range targetTables {
+				table := &TableCheckCfg{Table: name, Schema: df.targetDB.Schema}
+				table.Info, err = dbutil.GetTableInfoWithRowID(df.ctx, df.targetDB.Conn, df.targetDB.Schema, name, df.useRowID)
+				if err != nil {
+					return errors.Trace(err)
+				}
+				table.Schema = df.targetDB.Schema
+				df.tables = append(df.tables, table)
 			}
-			table.Schema = df.targetDB.Schema
-			df.tables = append(df.tables, table)
 		}
-	}
 	*/
 
 	reportResult := func(structEqual, dataEqual bool) {

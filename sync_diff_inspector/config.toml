@@ -43,9 +43,12 @@ index-field = "id"
 # check data's range.
 range = "age > 10 AND age < 20"
 
+[[check-tables]]
+schema = "test"
+tables = ["test1", "test2", "test3"]
 
 # a example for comparing table with different name.
-[[check-table]]
+[[table-config]]
 # target schema name.
 schema = "test"
 
@@ -60,7 +63,7 @@ table = "test2"
 # range = "age > 10 AND age < 20"
 
 # source tables.
-[[check-table.source-tables]]
+[[table-config.source-tables]]
 schema = "test2"
 table  = "test3"
 

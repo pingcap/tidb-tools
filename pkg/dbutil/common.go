@@ -177,23 +177,45 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 }
 
 // GetTables returns name of all tables in the specified schema
-func GetTables(ctx context.Context, db *sql.DB, schemaName string) ([]string, error) {
-	rs, err := db.QueryContext(ctx, fmt.Sprintf("SHOW TABLES IN `%s`;", schemaName))
+func GetTables(ctx context.Context, db *sql.DB, schemaName string) (tables []string, err error) {
+	/*
+		show tables without view: https://dev.mysql.com/doc/refman/5.7/en/show-tables.html
+
+		example:
+		mysql> show full tables in test where Table_Type != 'VIEW';
+		+----------------+------------+
+		| Tables_in_test | Table_type |
+		+----------------+------------+
+		| NTEST          | BASE TABLE |
+		+----------------+------------+
+	*/
+
+	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type != 'VIEW';", schemaName)
+	rows, err := db.Query(query)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	defer rs.Close()
+	defer rows.Close()
 
-	var tbls []string
-	for rs.Next() {
-		var name string
-		err := rs.Scan(&name)
+	tables = make([]string, 0, 8)
+	for rows.Next() {
+		var table, tType sql.NullString
+		err = rows.Scan(&table, &tType)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		tbls = append(tbls, name)
+
+		if !table.Valid || !tType.Valid {
+			return tables, nil
+		}
+
+		tables = append(tables, table.String)
 	}
-	return tbls, nil
+	if rows.Err() != nil {
+		return nil, errors.Trace(rows.Err())
+	}
+
+	return tables, nil
 }
 
 // GetCRC32Checksum returns checksum code of some data by given condition
