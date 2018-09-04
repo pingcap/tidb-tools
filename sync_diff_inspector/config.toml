@@ -26,15 +26,26 @@ is-sharding = false
 # the name of the file which saves sqls used to fix different data
 fix-sql-file = "fix.sql"
 
+# tables need to check.
+[[check-tables]]
+# schema name in target database.
+schema = "test"
 
-# if check-table is nil, all tables in the schema will be checked.
+# table list which need check in target database.
+tables = ["test1", "test2", "test3"]
+
+# support regular expression.
+# tables = ["test*"]
+
+
+# schema and table in check-table must be contained in check-tables.
 # a example for comparing table with same schema and table name. 
 [[check-table]]
 # schema name.
 schema = "test"
 
 # table name.
-table = "test1"
+table = "test3"
 
 # field should be the primary key, unique key or field with index. 
 # if comment this, diff will find a suitable field.
@@ -43,9 +54,6 @@ index-field = "id"
 # check data's range.
 range = "age > 10 AND age < 20"
 
-[[check-tables]]
-schema = "test"
-tables = ["test1", "test2", "test3"]
 
 # a example for comparing table with different name.
 [[table-config]]
@@ -55,17 +63,11 @@ schema = "test"
 # target table name.
 table = "test2"
 
-# field should be the primary key, unique key or field with index.
-# if comment this, diff will find a suitable field.
-# index-field = "id"
-
-# check data's range.
-# range = "age > 10 AND age < 20"
-
-# source tables.
+# source table.
 [[table-config.source-tables]]
-schema = "test2"
-table  = "test3"
+schema = "test"
+table  = "test1"
+
 
 [[source-db]]
 host = "127.0.0.1"

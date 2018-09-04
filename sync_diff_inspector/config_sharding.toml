@@ -26,6 +26,17 @@ is-sharding = true
 # the name of the file which saves sqls used to fix different data
 fix-sql-file = "fix.sql"
 
+# tables need to check.
+[[check-tables]]
+# schema name in target database.
+schema = "test"
+
+# table list which need check in target database. 
+# in sharding mode, you must set config for every table in check-table, otherwise will not check the table.
+tables = ["test1"]
+
+
+# schema and table in check-table must be contained in check-tables.
 # a example for sharding tables.
 [[check-table]]
 # target schema name.
@@ -56,6 +67,7 @@ table  = "test2"
 label = "source-2"
 schema = "test"
 table  = "test3"
+
 
 [[source-db]]
 host = "127.0.0.1"
