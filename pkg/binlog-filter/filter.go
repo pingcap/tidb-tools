@@ -111,6 +111,10 @@ func NewBinlogEvent(rules []*BinlogEventRule) (*BinlogEvent, error) {
 
 // AddRule adds a rule into binlog event filter
 func (b *BinlogEvent) AddRule(rule *BinlogEventRule) error {
+	if b == nil || rule == nil {
+		return nil
+	}
+
 	err := rule.Valid()
 	if err != nil {
 		return errors.Trace(err)
@@ -126,6 +130,10 @@ func (b *BinlogEvent) AddRule(rule *BinlogEventRule) error {
 
 // UpdateRule updates binlog event filter rule
 func (b *BinlogEvent) UpdateRule(rule *BinlogEventRule) error {
+	if b == nil || rule == nil {
+		return nil
+	}
+
 	err := rule.Valid()
 	if err != nil {
 		return errors.Trace(err)
@@ -141,6 +149,10 @@ func (b *BinlogEvent) UpdateRule(rule *BinlogEventRule) error {
 
 // RemoveRule removes a rule from binlog event filter
 func (b *BinlogEvent) RemoveRule(rule *BinlogEventRule) error {
+	if b == nil || rule == nil {
+		return nil
+	}
+
 	err := b.Remove(rule.SchemaPattern, rule.TablePattern)
 	if err != nil {
 		return errors.Annotatef(err, "remove rule %+v", rule)
@@ -152,6 +164,10 @@ func (b *BinlogEvent) RemoveRule(rule *BinlogEventRule) error {
 // Filter filters events or queries by given rules
 // returns action and error
 func (b *BinlogEvent) Filter(schema, table string, dml, ddl EventType, rawQuery string) (ActionType, error) {
+	if b == nil {
+		return Do, nil
+	}
+
 	rules := b.Match(schema, table)
 	if len(rules) == 0 {
 		return Do, nil

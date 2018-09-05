@@ -4,11 +4,11 @@
 
 column mapping is a library to provide a simple and unified way to mapping columns of table:
 
-- add prefix for one column
+- add prefix for one char/varchar/text column
 
-- add suffix for one column
-    
-- clone one column
+- add suffix for one char/varchar/text column
+
+- partition ID (used for sharding schema/table, would partition these tables with a custom ID), only for id(int64)
 
 ## column mapping rule
 
@@ -29,11 +29,19 @@ type Rule struct {
 now we support following expressions
 
 ``` go
-addPrefix
-addSuffix
-clone
+add prefix, with arguments[prefix]
+
+add suffix, with arguments[suffix]
+
+partition id, with arguments [instance_id, prefix of schema, prefix of table]
+[1:1 bit][2:9 bits][3:10 bits][4:44 bits] int64  (using default bits length)
+- 1: useless, no reason
+- 2: schema ID (schema suffix)
+- 3: table ID (table suffix)
+- 4: origin ID (>= 0, <= 17592186044415)
+And schema = arguments[1] + schema suffix, table = arguments[2] + table suffix
 ```
 
 ## notice
-* only support some poor expressions, we would unify tableInfo later and support more
-* don't support modify DDL automatically, we would implement it later 
+* only support above poor expressions now
+* column mapping don't change column type and table structure now
