@@ -52,12 +52,9 @@ type CheckTables struct {
 
 // TableConfig is the config of table.
 type TableConfig struct {
-	// database's label
-	DBLabel string `toml:"label"`
-	// schema name
-	Schema string `toml:"schema"`
-	// table name
-	Table string `toml:"table"`
+	// table's origin information
+	TableInstance
+
 	// field should be the primary key, unique key or field with index
 	Field string `toml:"index-field"`
 	// select range, for example: "age > 10 AND age < 20"
@@ -68,8 +65,18 @@ type TableConfig struct {
 	// may have more than one source for sharding tables.
 	// or you want to compare table with different schema and table name.
 	// SourceTables can be nil when source and target is one-to-one correspondence.
-	SourceTables []TableConfig `toml:"source-table"`
+	SourceTables []TableInstance `toml:"source-table"`
 	Info         *model.TableInfo
+}
+
+// TableInstance saves the base information of table.
+type TableInstance struct {
+	// database's label
+	DBLabel string `toml:"label"`
+	// schema name
+	Schema string `toml:"schema"`
+	// table name
+	Table string `toml:"table"`
 }
 
 // Config is the configuration.

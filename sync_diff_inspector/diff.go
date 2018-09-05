@@ -129,11 +129,13 @@ func (df *Diff) init(cfg *Config) (err error) {
 						return errors.Errorf("get table %s.%s's inforamtion error %v", schemaTables.Schema, tableName, errors.Trace(err))
 					}
 					df.tables[schemaTables.Schema][tableName] = &TableConfig{
-						Schema: schemaTables.Schema,
-						Table:  tableName,
-						Info:   tableInfo,
-						Range:  "TRUE",
-						SourceTables: []TableConfig{{
+						TableInstance: TableInstance{
+							Schema: schemaTables.Schema,
+							Table:  tableName,
+						},
+						Info:  tableInfo,
+						Range: "TRUE",
+						SourceTables: []TableInstance{{
 							DBLabel: cfg.SourceDBCfg[0].Label,
 							Schema:  schemaTables.Schema,
 							Table:   tableName,
@@ -147,11 +149,13 @@ func (df *Diff) init(cfg *Config) (err error) {
 					return errors.Errorf("get table %s.%s's inforamtion error %v", schemaTables.Schema, table, errors.Trace(err))
 				}
 				df.tables[schemaTables.Schema][table] = &TableConfig{
-					Schema: schemaTables.Schema,
-					Table:  table,
-					Info:   tableInfo,
-					Range:  "TRUE",
-					SourceTables: []TableConfig{{
+					TableInstance: TableInstance{
+						Schema: schemaTables.Schema,
+						Table:  table,
+					},
+					Info:  tableInfo,
+					Range: "TRUE",
+					SourceTables: []TableInstance{{
 						DBLabel: cfg.SourceDBCfg[0].Label,
 						Schema:  schemaTables.Schema,
 						Table:   table,
@@ -169,7 +173,7 @@ func (df *Diff) init(cfg *Config) (err error) {
 			return errors.Errorf("table %s.%s not found in check tables", table.Schema, table.Table)
 		}
 
-		sourceTables := make([]TableConfig, 0, len(table.SourceTables))
+		sourceTables := make([]TableInstance, 0, len(table.SourceTables))
 		for _, sourceTable := range table.SourceTables {
 			if sourceTable.Table[0] == '~' {
 				allTables, err := dbutil.GetTables(df.ctx, df.sourceDBs[sourceTable.DBLabel].Conn, sourceTable.Schema)
@@ -184,14 +188,14 @@ func (df *Diff) init(cfg *Config) (err error) {
 						continue
 					}
 
-					sourceTables = append(sourceTables, TableConfig{
+					sourceTables = append(sourceTables, TableInstance{
 						DBLabel: sourceTable.DBLabel,
 						Schema:  sourceTable.Schema,
 						Table:   tableName,
 					})
 				}
 			} else {
-				sourceTables = append(sourceTables, TableConfig{
+				sourceTables = append(sourceTables, TableInstance{
 					DBLabel: sourceTable.DBLabel,
 					Schema:  sourceTable.Schema,
 					Table:   sourceTable.Table,
