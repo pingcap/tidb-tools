@@ -65,64 +65,74 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 		ctx:              ctx,
 	}
 
+	if err = diff.init(cfg); err != nil {
+		diff.Close()
+		return nil, errors.Trace(err)
+	}
+
+	return diff, nil
+}
+
+func (df *Diff) init(cfg *Config) (err error) {
 	// create connection for source.
 	for _, source := range cfg.SourceDBCfg {
 		source.Conn, err = dbutil.OpenDB(source.DBConfig)
 		if err != nil {
-			log.Fatalf("create source db %+v error %v", cfg.SourceDBCfg, err)
+			return errors.Errorf("create source db %+v error %v", cfg.SourceDBCfg, err)
 		}
 		source.Conn.SetMaxOpenConns(cfg.CheckThreadCount)
 		source.Conn.SetMaxIdleConns(cfg.CheckThreadCount)
 
 		if source.Snapshot != "" {
-			err = dbutil.SetSnapshot(ctx, source.Conn, source.Snapshot)
+			err = dbutil.SetSnapshot(df.ctx, source.Conn, source.Snapshot)
 			if err != nil {
-				log.Fatalf("set history snapshot %s for source db %+v error %v", source.Snapshot, cfg.SourceDBCfg, err)
+				return errors.Errorf("set history snapshot %s for source db %+v error %v", source.Snapshot, cfg.SourceDBCfg, err)
 			}
 		}
-		diff.sourceDBs[source.Label] = source
+		df.sourceDBs[source.Label] = source
 	}
 
 	// create connection for target.
 	cfg.TargetDBCfg.Conn, err = dbutil.OpenDB(cfg.TargetDBCfg.DBConfig)
 	if err != nil {
-		log.Fatalf("create target db %+v error %v", cfg.TargetDBCfg, err)
+		return errors.Errorf("create target db %+v error %v", cfg.TargetDBCfg, err)
 	}
 	cfg.TargetDBCfg.Conn.SetMaxOpenConns(cfg.CheckThreadCount)
 	cfg.TargetDBCfg.Conn.SetMaxIdleConns(cfg.CheckThreadCount)
 
 	if cfg.TargetDBCfg.Snapshot != "" {
-		err = dbutil.SetSnapshot(ctx, cfg.TargetDBCfg.Conn, cfg.TargetDBCfg.Snapshot)
+		err = dbutil.SetSnapshot(df.ctx, cfg.TargetDBCfg.Conn, cfg.TargetDBCfg.Snapshot)
 		if err != nil {
-			log.Fatalf("set history snapshot %s for target db %+v error %v", cfg.TargetDBCfg.Snapshot, cfg.TargetDBCfg, err)
+			return errors.Errorf("set history snapshot %s for target db %+v error %v", cfg.TargetDBCfg.Snapshot, cfg.TargetDBCfg, err)
 		}
 	}
-	diff.targetDB = cfg.TargetDBCfg
+	df.targetDB = cfg.TargetDBCfg
 
 	// fill the table information.
 	// will add default source information, don't worry, we will use table config's info replace this later.
 	for _, schemaTables := range cfg.Tables {
-		diff.tables[schemaTables.Schema] = make(map[string]*TableConfig)
-		allTables, err := dbutil.GetTables(diff.ctx, diff.targetDB.Conn, schemaTables.Schema)
+		df.tables[schemaTables.Schema] = make(map[string]*TableConfig)
+		allTables, err := dbutil.GetTables(df.ctx, df.targetDB.Conn, schemaTables.Schema)
 		if err != nil {
-			log.Fatalf("get tables from %s.%s error %v", diff.targetDB.Label, schemaTables.Schema, errors.Trace(err))
+			return errors.Errorf("get tables from %s.%s error %v", df.targetDB.Label, schemaTables.Schema, errors.Trace(err))
 		}
 
 		for _, table := range schemaTables.Tables {
 			if table[0] == '~' {
-				tableRegex := regexp.MustCompile(table[1:])
+				tableRegex := regexp.MustCompile(fmt.Sprintf("(?i)%s", table[1:]))
 				for _, tableName := range allTables {
 					if !tableRegex.MatchString(tableName) {
 						continue
 					}
-					tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, diff.targetDB.Conn, schemaTables.Schema, tableName, cfg.UseRowID)
+					tableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, df.targetDB.Conn, schemaTables.Schema, tableName, cfg.UseRowID)
 					if err != nil {
-						log.Fatalf("get table %s.%s's inforamtion error %v", schemaTables.Schema, tableName, errors.Trace(err))
+						return errors.Errorf("get table %s.%s's inforamtion error %v", schemaTables.Schema, tableName, errors.Trace(err))
 					}
-					diff.tables[schemaTables.Schema][tableName] = &TableConfig{
+					df.tables[schemaTables.Schema][tableName] = &TableConfig{
 						Schema: schemaTables.Schema,
 						Table:  tableName,
 						Info:   tableInfo,
+						Range:  "TRUE",
 						SourceTables: []TableConfig{{
 							DBLabel: cfg.SourceDBCfg[0].Label,
 							Schema:  schemaTables.Schema,
@@ -132,14 +142,15 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 				}
 
 			} else {
-				tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, diff.targetDB.Conn, schemaTables.Schema, table, cfg.UseRowID)
+				tableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, df.targetDB.Conn, schemaTables.Schema, table, cfg.UseRowID)
 				if err != nil {
-					log.Fatalf("get table %s.%s's inforamtion error %v", schemaTables.Schema, table, errors.Trace(err))
+					return errors.Errorf("get table %s.%s's inforamtion error %v", schemaTables.Schema, table, errors.Trace(err))
 				}
-				diff.tables[schemaTables.Schema][table] = &TableConfig{
+				df.tables[schemaTables.Schema][table] = &TableConfig{
 					Schema: schemaTables.Schema,
 					Table:  table,
 					Info:   tableInfo,
+					Range:  "TRUE",
 					SourceTables: []TableConfig{{
 						DBLabel: cfg.SourceDBCfg[0].Label,
 						Schema:  schemaTables.Schema,
@@ -151,22 +162,22 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 	}
 
 	for _, table := range cfg.TableCfgs {
-		if _, ok := diff.tables[table.Schema]; !ok {
-			log.Fatalf("schema %s not found in check tables", table.Schema)
+		if _, ok := df.tables[table.Schema]; !ok {
+			return errors.Errorf("schema %s not found in check tables", table.Schema)
 		}
-		if _, ok := diff.tables[table.Schema][table.Table]; !ok {
-			log.Fatalf("table %s.%s not found in check tables", table.Schema, table.Table)
+		if _, ok := df.tables[table.Schema][table.Table]; !ok {
+			return errors.Errorf("table %s.%s not found in check tables", table.Schema, table.Table)
 		}
 
 		sourceTables := make([]TableConfig, 0, len(table.SourceTables))
 		for _, sourceTable := range table.SourceTables {
 			if sourceTable.Table[0] == '~' {
-				allTables, err := dbutil.GetTables(diff.ctx, diff.sourceDBs[sourceTable.DBLabel].Conn, sourceTable.Schema)
+				allTables, err := dbutil.GetTables(df.ctx, df.sourceDBs[sourceTable.DBLabel].Conn, sourceTable.Schema)
 				if err != nil {
-					log.Fatalf("get tables from %s.%s error %v", diff.targetDB.Label, sourceTable.Schema, errors.Trace(err))
+					return errors.Errorf("get tables from %s.%s error %v", df.targetDB.Label, sourceTable.Schema, errors.Trace(err))
 				}
 
-				tableRegex := regexp.MustCompile(sourceTable.Table[1:])
+				tableRegex := regexp.MustCompile(fmt.Sprintf("(?i)%s", sourceTable.Table[1:]))
 
 				for _, tableName := range allTables {
 					if !tableRegex.MatchString(tableName) {
@@ -189,29 +200,42 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 		}
 
 		if len(sourceTables) != 0 {
-			diff.tables[table.Schema][table.Table].SourceTables = sourceTables
+			df.tables[table.Schema][table.Table].SourceTables = sourceTables
 		}
-		diff.tables[table.Schema][table.Table].Range = table.Range
-		diff.tables[table.Schema][table.Table].Field = table.Field
+		if table.Range != "" {
+			df.tables[table.Schema][table.Table].Range = table.Range
+		}
+		df.tables[table.Schema][table.Table].Field = table.Field
 	}
 
-	diff.fixSQLFile, err = os.Create(cfg.FixSQLFile)
+	df.fixSQLFile, err = os.Create(cfg.FixSQLFile)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return errors.Trace(err)
 	}
 
-	return diff, nil
+	return nil
+}
+
+// Close closes file and database connection.
+func (df *Diff) Close() {
+	if df.fixSQLFile != nil {
+		df.fixSQLFile.Close()
+	}
+
+	for _, db := range df.sourceDBs {
+		if db.Conn != nil {
+			db.Conn.Close()
+		}
+	}
+
+	if df.targetDB.Conn != nil {
+		df.targetDB.Conn.Close()
+	}
 }
 
 // Equal tests whether two database have same data and schema.
 func (df *Diff) Equal() (err error) {
-	defer func() {
-		df.fixSQLFile.Close()
-		for _, db := range df.sourceDBs {
-			db.Conn.Close()
-		}
-		df.targetDB.Conn.Close()
-	}()
+	defer df.Close()
 
 	df.wg.Add(1)
 	go func() {

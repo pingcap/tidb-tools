@@ -47,7 +47,7 @@ type CheckTables struct {
 	Schema string `toml:"schema" json:"schema"`
 
 	// table list
-	Tables []string `toml:"table" json:"table"`
+	Tables []string `toml:"tables" json:"tables"`
 }
 
 // TableConfig is the config of table.
@@ -68,7 +68,7 @@ type TableConfig struct {
 	// may have more than one source for sharding tables.
 	// or you want to compare table with different schema and table name.
 	// SourceTables can be nil when source and target is one-to-one correspondence.
-	SourceTables []TableConfig `toml:"source-tables"`
+	SourceTables []TableConfig `toml:"source-table"`
 	Info         *model.TableInfo
 }
 
@@ -201,8 +201,8 @@ func (c *Config) checkConfig() bool {
 
 	for i := range c.SourceDBCfg {
 		if c.SourceDBCfg[i].Label == "" {
-			// add default label for source database
-			c.SourceDBCfg[i].Label = fmt.Sprintf("%s:%d", c.SourceDBCfg[i].Host, c.SourceDBCfg[i].Port)
+			log.Error("must specify source database's label")
+			return false
 		}
 	}
 
@@ -222,20 +222,22 @@ func (c *Config) checkConfig() bool {
 				log.Error("must have more than one source tables if comparing sharding tables")
 				return false
 			}
-			for _, sourceTable := range tableCfg.SourceTables {
-				if sourceTable.DBLabel == "" {
-					log.Error("must specify the database label for source table if comparing sharding tables")
-					return false
-				}
 
-				if sourceTable.Schema == "" || sourceTable.Table == "" {
-					log.Error("schema and table's name can't be empty")
-					return false
-				}
-			}
 		} else {
 			if len(tableCfg.SourceTables) > 1 {
 				log.Error("have more than one source table in no sharding mode")
+				return false
+			}
+		}
+
+		for _, sourceTable := range tableCfg.SourceTables {
+			if sourceTable.DBLabel == "" {
+				log.Error("must specify the database label for source table")
+				return false
+			}
+
+			if sourceTable.Schema == "" || sourceTable.Table == "" {
+				log.Error("schema and table's name can't be empty")
 				return false
 			}
 		}
