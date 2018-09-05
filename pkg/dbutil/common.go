@@ -183,7 +183,7 @@ func GetTables(ctx context.Context, db *sql.DB, schemaName string) ([]string, er
 		}
 		tbls = append(tbls, name)
 	}
-	return tbls, rs.Err()
+	return tbls, errors.Trace(rs.Err())
 }
 
 // GetSchemas returns name of all schemas
@@ -217,7 +217,7 @@ func GetSchemas(ctx context.Context, db *sql.DB) ([]string, error) {
 		}
 		schemas = append(schemas, schema)
 	}
-	return schemas, rows.Err()
+	return schemas, errors.Trace(rows.Err())
 }
 
 // GetCRC32Checksum returns checksum code of some data by given condition
