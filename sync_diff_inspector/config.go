@@ -41,8 +41,17 @@ type DBConfig struct {
 	Conn *sql.DB
 }
 
-// TableCheckCfg is the config of table to be checked.
-type TableCheckCfg struct {
+// CheckTables saves the tables need to check.
+type CheckTables struct {
+	// schema name
+	Schema string `toml:"schema" json:"schema"`
+
+	// table list
+	Tables []string `toml:"table" json:"table"`
+}
+
+// TableConfig is the config of table.
+type TableConfig struct {
 	// database's label
 	DBLabel string `toml:"label"`
 	// schema name
@@ -53,11 +62,13 @@ type TableCheckCfg struct {
 	Field string `toml:"index-field"`
 	// select range, for example: "age > 10 AND age < 20"
 	Range string `toml:"range"`
+	// set true if comparing sharding tables with target table, should have more than one source tables.
+	IsSharding bool `toml:"is-sharding"`
 	// saves the source tables's info.
 	// may have more than one source for sharding tables.
 	// or you want to compare table with different schema and table name.
 	// SourceTables can be nil when source and target is one-to-one correspondence.
-	SourceTables []TableCheckCfg `toml:"source-tables"`
+	SourceTables []TableConfig `toml:"source-tables"`
 	Info         *model.TableInfo
 }
 
@@ -92,17 +103,17 @@ type Config struct {
 	// set false if want to comapre the data directly
 	UseChecksum bool `toml:"use-checksum" json:"use-checksum"`
 
+	// is sharding tables or not
+	//IsSharding bool `toml:"is-sharding" json:"is-sharding"`
+
 	// the name of the file which saves sqls used to fix different data
 	FixSQLFile string `toml:"fix-sql-file" json:"fix-sql-file"`
 
-	// the config of table to be checked
-	Tables []*TableCheckCfg `toml:"check-table" json:"check-table"`
+	// the tables to be checked
+	Tables []*CheckTables `toml:"check-table" json:"check-table"`
 
-	// the snapshot config of source database
-	SourceSnapshot string `toml:"source-snapshot" json:"source-snapshot"`
-
-	// the snapshot config of target database
-	TargetSnapshot string `toml:"target-snapshot" json:"target-snapshot"`
+	// the config of table
+	TableCfgs []*TableConfig `toml:"table-config" json:"table-config"`
 
 	// config file
 	ConfigFile string
@@ -125,8 +136,6 @@ func NewConfig() *Config {
 	fs.BoolVar(&cfg.UseRowID, "use-rowid", false, "set true if target-db and source-db all support tidb implicit column _tidb_rowid")
 	fs.BoolVar(&cfg.UseChecksum, "use-checksum", true, "set false if want to comapre the data directly")
 	fs.StringVar(&cfg.FixSQLFile, "fix-sql-file", "fix.sql", "the name of the file which saves sqls used to fix different data")
-	fs.StringVar(&cfg.SourceSnapshot, "source-snapshot", "", "source database's snapshot config")
-	fs.StringVar(&cfg.TargetSnapshot, "target-snapshot", "", "target database's snapshot config")
 	fs.BoolVar(&cfg.PrintVersion, "V", false, "print version of sync_diff_inspector")
 
 	return cfg
@@ -190,57 +199,44 @@ func (c *Config) checkConfig() bool {
 		return false
 	}
 
-	sourceDBMap := make(map[string]DBConfig)
 	for i := range c.SourceDBCfg {
 		if c.SourceDBCfg[i].Label == "" {
-			// add label for source database
+			// add default label for source database
 			c.SourceDBCfg[i].Label = fmt.Sprintf("%s:%d", c.SourceDBCfg[i].Host, c.SourceDBCfg[i].Port)
 		}
-		sourceDBMap[c.SourceDBCfg[i].Label] = c.SourceDBCfg[i]
 	}
 
-	if len(c.SourceDBCfg) > 1 {
-		if len(c.Tables) == 0 {
-			log.Error("must specify check tables if have more than one source")
-			return false
-		}
+	if len(c.Tables) == 0 {
+		log.Error("must specify check tables")
+		return false
 	}
 
-	for _, table := range c.Tables {
-		if table.Schema == "" {
-			log.Errorf("must specify the schema")
+	for _, tableCfg := range c.TableCfgs {
+		if tableCfg.Schema == "" || tableCfg.Table == "" {
+			log.Error("schema and table's name can't be empty")
 			return false
 		}
 
-		// setting Range to "TRUE" can make the code more simple, no need to judge the Range's value.
-		// for example: sql will looks like "select * from itest where a > 10 AND TRUE" if don't set range in config.
-		if table.Range == "" {
-			table.Range = "TRUE"
-		}
-
-		if len(table.SourceTables) == 0 {
-			if len(c.SourceDBCfg) > 1 {
-				log.Error("must sepcify the source's information if have more than one source database")
+		if tableCfg.IsSharding {
+			if len(tableCfg.SourceTables) <= 1 {
+				log.Error("must have more than one source tables if comparing sharding tables")
 				return false
 			}
-
-			// create a default source
-			table.SourceTables = []TableCheckCfg{{
-				DBLabel: c.SourceDBCfg[0].Label,
-				Schema:  table.Schema,
-				Table:   table.Table,
-			}}
-
-		} else {
-			for i := range table.SourceTables {
-				if table.SourceTables[i].DBLabel == "" {
-					if len(c.SourceDBCfg) > 1 {
-						log.Error("must specify the table's database label if have more than one source")
-						return false
-					}
-
-					table.SourceTables[i].DBLabel = c.SourceDBCfg[0].Label
+			for _, sourceTable := range tableCfg.SourceTables {
+				if sourceTable.DBLabel == "" {
+					log.Error("must specify the database label for source table if comparing sharding tables")
+					return false
 				}
+
+				if sourceTable.Schema == "" || sourceTable.Table == "" {
+					log.Error("schema and table's name can't be empty")
+					return false
+				}
+			}
+		} else {
+			if len(tableCfg.SourceTables) > 1 {
+				log.Error("have more than one source table in no sharding mode")
+				return false
 			}
 		}
 	}

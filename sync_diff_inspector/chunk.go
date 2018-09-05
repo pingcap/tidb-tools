@@ -62,7 +62,7 @@ func newChunkRange(begin, end interface{}, containBegin, containEnd, noBegin, no
 		noEnd:        noEnd,
 	}
 }
-func getChunksForTable(db DBConfig, table *TableCheckCfg, column *model.ColumnInfo, chunkSize, sample int) ([]chunkRange, error) {
+func getChunksForTable(db DBConfig, table *TableConfig, column *model.ColumnInfo, chunkSize, sample int) ([]chunkRange, error) {
 	if column == nil {
 		log.Warnf("no suitable index found for %s.%s", table.Schema, table.Table)
 		return nil, nil
@@ -236,7 +236,7 @@ func findSuitableField(db *sql.DB, Schema string, table *model.TableInfo) (*mode
 }
 
 // GenerateCheckJob generates some CheckJobs.
-func GenerateCheckJob(db DBConfig, table *TableCheckCfg, chunkSize int, sample int, useRowID bool) ([]*CheckJob, error) {
+func GenerateCheckJob(db DBConfig, table *TableConfig, chunkSize int, sample int, useRowID bool) ([]*CheckJob, error) {
 	jobBucket := make([]*CheckJob, 0, 10)
 	var jobCnt int
 	var column *model.ColumnInfo

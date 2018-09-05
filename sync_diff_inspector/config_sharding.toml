@@ -20,9 +20,6 @@ use-rowid = false
 # calculate the data's checksum, and compare data by checksum.
 use-checksum = true
 
-// set true if compare sharding tables with target table
-is-sharding = true
-
 # the name of the file which saves sqls used to fix different data
 fix-sql-file = "fix.sql"
 
@@ -32,13 +29,13 @@ fix-sql-file = "fix.sql"
 schema = "test"
 
 # table list which need check in target database. 
-# in sharding mode, you must set config for every table in check-table, otherwise will not check the table.
+# in sharding mode, you must set config for every table in table-config, otherwise will not check the table.
 tables = ["test1"]
 
 
 # schema and table in check-table must be contained in check-tables.
 # a example for sharding tables.
-[[check-table]]
+[[table-config]]
 # target schema name.
 schema = "test"
 
@@ -52,18 +49,21 @@ table = "test"
 # check data's range.
 # range = "age > 10 AND age < 20"
 
+# set true if comparing sharding tables with target table
+is-sharding = true
+
 # source tables.
-[[check-table.source-tables]]
+[[table-config.source-tables]]
 label = "source-1"
 schema = "test"
 table  = "test1"
 
-[[check-table.source-tables]]
+[[table-config.source-tables]]
 label = "source-1"
 schema = "test"
 table  = "test2"
 
-[[check-table.source-tables]]
+[[table-config.source-tables]]
 label = "source-2"
 schema = "test"
 table  = "test3"

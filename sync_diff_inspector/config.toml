@@ -20,9 +20,6 @@ use-rowid = false
 # calculate the data's checksum, and compare data by checksum.
 use-checksum = true
 
-// set true if compare sharding tables with target table
-is-sharding = false
-
 # the name of the file which saves sqls used to fix different data
 fix-sql-file = "fix.sql"
 
@@ -34,8 +31,11 @@ schema = "test"
 # table list which need check in target database.
 tables = ["test1", "test2", "test3"]
 
-# support regular expression.
-# tables = ["test*"]
+# support regular expression, must start with '~'.
+# for example, this config will check tables with prefix 'test'.
+# tables = ["~test*"]
+# for example, this config will chek all the tables in this schema.
+# tables = ["~*"]
 
 
 # schema and table in check-table must be contained in check-tables.
@@ -47,6 +47,9 @@ schema = "test"
 # table name.
 table = "test3"
 
+# set true if comparing sharding tables with target table
+is-sharding = false
+
 # field should be the primary key, unique key or field with index. 
 # if comment this, diff will find a suitable field.
 index-field = "id"
@@ -54,6 +57,8 @@ index-field = "id"
 # check data's range.
 range = "age > 10 AND age < 20"
 
+# set true if comparing sharding tables with target table
+is-sharding = false
 
 # a example for comparing table with different name.
 [[table-config]]
