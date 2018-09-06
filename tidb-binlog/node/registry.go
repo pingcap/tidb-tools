@@ -8,7 +8,6 @@ import (
 
 	"github.com/coreos/etcd/clientv3"
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/etcd"
 	"golang.org/x/net/context"
 )
@@ -79,7 +78,6 @@ func (r *EtcdRegistry) UpdateNode(pctx context.Context, prefix string, status *S
 		return errors.Trace(err)
 	} else if !exists {
 		// not found then create a new node
-		log.Infof("node %s dosen't exist, will create one", status.NodeID)
 		return r.createNode(ctx, prefix, status)
 	} else {
 		// found it, update status infomation of the node
@@ -161,12 +159,10 @@ func AnalyzeNodeID(key string) string {
 			nodeIDOffset = 2
 		}
 	} else {
-		log.Errorf("can't get nodeID or node type from key %s", key)
 		return ""
 	}
 
 	if len(paths) < nodeIDOffset+1 {
-		log.Errorf("can't get nodeID or node type from key %s", key)
 		return ""
 	}
 
