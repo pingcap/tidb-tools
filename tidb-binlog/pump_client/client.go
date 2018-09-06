@@ -101,8 +101,10 @@ type PumpsClient struct {
 }
 
 // NewPumpsClient returns a PumpsClient.
-func NewPumpsClient(etcdURLs string, algorithm string, securityOpt pd.SecurityOption) (*PumpsClient, error) {
-	selector := NewSelector(algorithm)
+func NewPumpsClient(etcdURLs string, securityOpt pd.SecurityOption) (*PumpsClient, error) {
+	// TODO: get strategy from etcd, and can update strategy in real-time. now use Range as default.
+	strategy := Range
+	selector := NewSelector(strategy)
 
 	ectdEndpoints, err := utils.ParseHostPortAddr(etcdURLs)
 	if err != nil {
