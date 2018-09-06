@@ -110,9 +110,6 @@ type Config struct {
 	// set false if want to comapre the data directly
 	UseChecksum bool `toml:"use-checksum" json:"use-checksum"`
 
-	// is sharding tables or not
-	//IsSharding bool `toml:"is-sharding" json:"is-sharding"`
-
 	// the name of the file which saves sqls used to fix different data
 	FixSQLFile string `toml:"fix-sql-file" json:"fix-sql-file"`
 
