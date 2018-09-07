@@ -1,0 +1,13 @@
+# the systemd restart value can be  no, on-success, on-failure, on-abnormal, on-watchdog, on-abort, or always. 
+# we choose no here.
+systemd_restart_policy: "no"
+
+master_host: "127.0.0.1"
+master_port: 3306
+master_user: "root"
+master_password: ""
+dump_dir: "{{ deploy_dir }}/data/mydumper_{{ job_name }}"
+chunk_size: 64  # in MB
+statement_size: 100000 # in byts
+long_query_guard: 100 # in seconds
+job_name: 1

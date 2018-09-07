@@ -1,0 +1,37 @@
+--- 
+
+
+- hosts: syncer_servers
+  tags: ['syncer', 'never']
+  tasks:
+    - name: start syncer by systemd
+      become: true
+      systemd: name=syncer-{{ job_name }}.service state=started enabled=no
+
+    - name: wait for syncer up
+      wait_for: |
+        host={{ ansible_host }} port={{ syncer_status_port }} state=present
+        send='GET /metrics HTTP/1.0\r\n\r\n' search_regex='200 OK'
+
+
+- hosts: mydumper_servers
+  tags: ['mydumper', 'never']
+  tasks:
+    - name: start mydumper by systemd
+      become: true
+      systemd: name=mydumper-{{ job_name }}.service state=started enabled=no
+
+
+- hosts: loader_servers
+  tags: ['loader', 'never']
+  tasks:
+    - name: start loader by systemd
+      become: true
+      systemd: name=loader-{{ job_name }}.service state=started enabled=no
+
+- hosts: integrated_servers
+  tasks:
+    - name: start integrated script by systemd
+      become: true
+      systemd: name=integrated-{{ job_name }}.service state=started enabled=no
+      when: integrated_mode|default(false)

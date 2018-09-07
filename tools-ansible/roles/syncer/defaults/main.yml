@@ -1,0 +1,8 @@
+# the systemd restart value can be  no, on-success, on-failure, on-abnormal, on-watchdog, on-abort, or always. 
+# we choose always here.
+systemd_restart_policy: "always"
+
+syncer_config_file: "syncer_{{ job_name }}.toml"
+
+syncer_status_port: 10081
+job_name: 1

@@ -1,0 +1,36 @@
+---
+# tasks file for syncer
+
+- name: deploy binary
+  copy: src="{{ resources_dir }}/bin/syncer" dest="{{ deploy_dir }}/bin/" mode=0755 backup=yes
+  register: "syncer"
+
+- name: backup binary file
+  command: mv "{{ syncer.backup_file }}" "{{ backup_dir }}"
+  when: syncer.changed and syncer.backup_file is defined
+
+- name: create configuration file 
+  copy: src="{{ conf_dir }}/{{ syncer_config_file }}" dest="{{ deploy_dir }}/conf" mode=0644
+
+- name: create run script
+  template:
+    src: "{{ item }}_{{ role_name }}_binary.sh.j2"
+    dest: "{{ deploy_dir }}/scripts/{{ item }}_{{ role_name }}_{{ job_name }}.sh"
+    mode: "0755"
+    backup: yes
+  with_items:
+    - run
+  vars:
+    role_status_dir: status/{{ role_name }}/{{ job_name }}
+  register: syncer_script
+
+- name: backup script file
+  command: mv "{{ syncer_script.backup_file }}" "{{ backup_dir }}"
+  when: syncer_script.changed and syncer_script.backup_file is defined
+
+- name: deploy systemd
+  include_role:
+    name: systemd
+  vars:
+    this_role_name: syncer_{{ job_name }}
+    service_name: syncer-{{ job_name }}
