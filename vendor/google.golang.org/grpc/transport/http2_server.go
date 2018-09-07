@@ -722,7 +722,7 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 	})
 	if t.stats != nil {
 		outHeader := &stats.OutHeader{
-			//WireLength: // TODO(mmukhi): Revisit this later, if needed.
+		//WireLength: // TODO(mmukhi): Revisit this later, if needed.
 		}
 		t.stats.HandleRPC(s.Context(), outHeader)
 	}

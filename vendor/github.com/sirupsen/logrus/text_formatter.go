@@ -14,20 +14,18 @@ const (
 	red     = 31
 	green   = 32
 	yellow  = 33
-	blue    = 36
+	blue    = 34
 	gray    = 37
 )
 
 var (
 	baseTimestamp time.Time
-	emptyFieldMap FieldMap
 )
 
 func init() {
 	baseTimestamp = time.Now()
 }
 
-// TextFormatter formats logs into text
 type TextFormatter struct {
 	// Set to true to bypass checking for a TTY before outputting colors.
 	ForceColors bool
@@ -51,11 +49,12 @@ type TextFormatter struct {
 	// be desired.
 	DisableSorting bool
 
-	// Disables the truncation of the level text to 4 characters.
-	DisableLevelTruncation bool
-
 	// QuoteEmptyFields will wrap empty fields in quotes if true
 	QuoteEmptyFields bool
+
+	// QuoteCharacter can be set to the override the default quoting character "
+	// with something else. For example: ', or `.
+	QuoteCharacter string
 
 	// Whether the logger's out is to a terminal
 	isTerminal bool
@@ -64,12 +63,14 @@ type TextFormatter struct {
 }
 
 func (f *TextFormatter) init(entry *Entry) {
+	if len(f.QuoteCharacter) == 0 {
+		f.QuoteCharacter = "\""
+	}
 	if entry.Logger != nil {
-		f.isTerminal = checkIfTerminal(entry.Logger.Out)
+		f.isTerminal = IsTerminal(entry.Logger.Out)
 	}
 }
 
-// Format renders a single log entry
 func (f *TextFormatter) Format(entry *Entry) ([]byte, error) {
 	var b *bytes.Buffer
 	keys := make([]string, 0, len(entry.Data))
@@ -86,7 +87,7 @@ func (f *TextFormatter) Format(entry *Entry) ([]byte, error) {
 		b = &bytes.Buffer{}
 	}
 
-	prefixFieldClashes(entry.Data, emptyFieldMap)
+	prefixFieldClashes(entry.Data)
 
 	f.Do(func() { f.init(entry) })
 
@@ -94,7 +95,7 @@ func (f *TextFormatter) Format(entry *Entry) ([]byte, error) {
 
 	timestampFormat := f.TimestampFormat
 	if timestampFormat == "" {
-		timestampFormat = defaultTimestampFormat
+		timestampFormat = DefaultTimestampFormat
 	}
 	if isColored {
 		f.printColored(b, entry, keys, timestampFormat)
@@ -128,10 +129,7 @@ func (f *TextFormatter) printColored(b *bytes.Buffer, entry *Entry, keys []strin
 		levelColor = blue
 	}
 
-	levelText := strings.ToUpper(entry.Level.String())
-	if !f.DisableLevelTruncation {
-		levelText = levelText[0:4]
-	}
+	levelText := strings.ToUpper(entry.Level.String())[0:4]
 
 	if f.DisableTimestamp {
 		fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m %-44s ", levelColor, levelText, entry.Message)
@@ -155,7 +153,7 @@ func (f *TextFormatter) needsQuoting(text string) bool {
 		if !((ch >= 'a' && ch <= 'z') ||
 			(ch >= 'A' && ch <= 'Z') ||
 			(ch >= '0' && ch <= '9') ||
-			ch == '-' || ch == '.' || ch == '_' || ch == '/' || ch == '@' || ch == '^' || ch == '+') {
+			ch == '-' || ch == '.') {
 			return true
 		}
 	}
@@ -163,23 +161,29 @@ func (f *TextFormatter) needsQuoting(text string) bool {
 }
 
 func (f *TextFormatter) appendKeyValue(b *bytes.Buffer, key string, value interface{}) {
-	if b.Len() > 0 {
-		b.WriteByte(' ')
-	}
+
 	b.WriteString(key)
 	b.WriteByte('=')
 	f.appendValue(b, value)
+	b.WriteByte(' ')
 }
 
 func (f *TextFormatter) appendValue(b *bytes.Buffer, value interface{}) {
-	stringVal, ok := value.(string)
-	if !ok {
-		stringVal = fmt.Sprint(value)
-	}
-
-	if !f.needsQuoting(stringVal) {
-		b.WriteString(stringVal)
-	} else {
-		b.WriteString(fmt.Sprintf("%q", stringVal))
+	switch value := value.(type) {
+	case string:
+		if !f.needsQuoting(value) {
+			b.WriteString(value)
+		} else {
+			fmt.Fprintf(b, "%s%v%s", f.QuoteCharacter, value, f.QuoteCharacter)
+		}
+	case error:
+		errmsg := value.Error()
+		if !f.needsQuoting(errmsg) {
+			b.WriteString(errmsg)
+		} else {
+			fmt.Fprintf(b, "%s%v%s", f.QuoteCharacter, errmsg, f.QuoteCharacter)
+		}
+	default:
+		fmt.Fprint(b, value)
 	}
 }

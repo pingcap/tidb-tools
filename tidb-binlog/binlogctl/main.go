@@ -18,8 +18,8 @@ import (
 	"os"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
+	log "github.com/sirupsen/logrus"
 )
 
 const (

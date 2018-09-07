@@ -6,8 +6,8 @@ import:
   version: 4ac31a97ccff97de60ba3c630bfb4733c1bb6d0e
 - package: github.com/juju/errors
   version: 6f54ff6318409d31ff16261533ce2c8381a4fd5d
-- package: github.com/ngaut/log
-  version: cec23d3e10b016363780d894a0eb732a12c06e02
+- package: github.com/sirupsen/logrus
+  version: 3bcb09397d6d88e7676a9bc8433ca11ba5304837
 - package: github.com/pingcap/check
   version: 9b266636177e249ec28b0aeffe8e86bc272bb481
 - package: github.com/pingcap/tidb
