@@ -29,27 +29,27 @@ type testRouterSuite struct{}
 
 func (t *testRouterSuite) TestRoute(c *C) {
 	rules := []*BinlogEventRule{
-		{"test_1_*", "abc*", []EventType{DeleteEvent, InsertEvent}, []EventType{CreateIndex, DropIndex}, []string{"^DROP\\s+PROCEDURE", "^CREATE\\s+PROCEDURE"}, nil, Ignore},
-		{"xxx_*", "abc_*", []EventType{AllEvent}, []EventType{NoneEvent}, nil, nil, Ignore},
+		{"test_1_*", "abc*", []EventType{DeleteEvent, InsertEvent, CreateIndex, DropIndex}, []string{"^DROP\\s+PROCEDURE", "^CREATE\\s+PROCEDURE"}, nil, Ignore},
+		{"xxx_*", "abc_*", []EventType{AllDML, NoneDDL}, nil, nil, Ignore},
 	}
 
 	cases := []struct {
 		schema, table string
-		dml, ddl      EventType
+		event         EventType
 		sql           string
 		action        ActionType
 	}{
-		{"test_1_a", "abc1", DeleteEvent, NullEvent, "", Ignore},
-		{"test_1_a", "abc1", InsertEvent, NullEvent, "", Ignore},
-		{"test_1_a", "abc1", UpdateEvent, NullEvent, "", Do},
-		{"test_1_a", "abc1", NullEvent, CreateIndex, "", Ignore},
-		{"test_1_a", "abc1", NullEvent, RenameTable, "", Do},
-		{"test_1_a", "abc1", NullEvent, NullEvent, "drop procedure abc", Ignore},
-		{"test_1_a", "abc1", NullEvent, NullEvent, "create procedure abc", Ignore},
-		{"test_1_a", "abc1", NullEvent, NullEvent, "create function abc", Do},
-		{"xxx_1", "abc_1", NullEvent, NullEvent, "create function abc", Do},
-		{"xxx_1", "abc_1", InsertEvent, NullEvent, "", Ignore},
-		{"xxx_1", "abc_1", NullEvent, CreateIndex, "", Do},
+		{"test_1_a", "abc1", DeleteEvent, "", Ignore},
+		{"test_1_a", "abc1", InsertEvent, "", Ignore},
+		{"test_1_a", "abc1", UpdateEvent, "", Do},
+		{"test_1_a", "abc1", CreateIndex, "", Ignore},
+		{"test_1_a", "abc1", RenameTable, "", Do},
+		{"test_1_a", "abc1", NullEvent, "drop procedure abc", Ignore},
+		{"test_1_a", "abc1", NullEvent, "create procedure abc", Ignore},
+		{"test_1_a", "abc1", NullEvent, "create function abc", Do},
+		{"xxx_1", "abc_1", NullEvent, "create function abc", Do},
+		{"xxx_1", "abc_1", InsertEvent, "", Ignore},
+		{"xxx_1", "abc_1", CreateIndex, "", Do},
 	}
 
 	// initial binlog event filter
@@ -62,13 +62,13 @@ func (t *testRouterSuite) TestRoute(c *C) {
 		c.Assert(err, NotNil)
 	}
 	for _, cs := range cases {
-		action, err := filter.Filter(cs.schema, cs.table, cs.dml, cs.ddl, cs.sql)
+		action, err := filter.Filter(cs.schema, cs.table, cs.event, cs.sql)
 		c.Assert(err, IsNil)
 		c.Assert(action, Equals, cs.action)
 	}
 
 	// update rules
-	rules[0].DMLEvent = []EventType{}
+	rules[0].Events = []EventType{}
 	rules[1].Action = Do
 	for _, rule := range rules {
 		err = filter.UpdateRule(rule)
@@ -77,24 +77,25 @@ func (t *testRouterSuite) TestRoute(c *C) {
 
 	cases[0].action = Do      // delete
 	cases[1].action = Do      // insert
+	cases[3].action = Do      // create index
 	cases[9].action = Do      // match all event and insert
 	cases[10].action = Ignore // match none event and create index
 	for _, cs := range cases {
-		action, err := filter.Filter(cs.schema, cs.table, cs.dml, cs.ddl, cs.sql)
+		action, err := filter.Filter(cs.schema, cs.table, cs.event, cs.sql)
 		c.Assert(err, IsNil)
 		c.Assert(action, Equals, cs.action)
 	}
 
 	// test multiple rules
-	rule := &BinlogEventRule{"test_*", "ab*", []EventType{InsertEvent}, []EventType{CreateIndex, TruncateTable}, []string{"^DROP\\s+PROCEDURE"}, nil, Do}
+	rule := &BinlogEventRule{"test_*", "ab*", []EventType{InsertEvent, AllDDL}, []string{"^DROP\\s+PROCEDURE"}, nil, Do}
 	err = filter.AddRule(rule)
 	c.Assert(err, IsNil)
 	cases[0].action = Ignore //delete
 	cases[2].action = Ignore // update
-	cases[4].action = Ignore // rename table
+	cases[4].action = Do     // rename table
 	cases[7].action = Ignore // create function
 	for _, cs := range cases {
-		action, err := filter.Filter(cs.schema, cs.table, cs.dml, cs.ddl, cs.sql)
+		action, err := filter.Filter(cs.schema, cs.table, cs.event, cs.sql)
 		c.Assert(err, IsNil)
 		c.Assert(action, Equals, cs.action)
 	}
@@ -108,18 +109,18 @@ func (t *testRouterSuite) TestRoute(c *C) {
 	cases[3].action = Do // create index
 	cases[5].action = Do // drop procedure
 	for _, cs := range cases {
-		action, err := filter.Filter(cs.schema, cs.table, cs.dml, cs.ddl, cs.sql)
+		action, err := filter.Filter(cs.schema, cs.table, cs.event, cs.sql)
 		c.Assert(err, IsNil)
 		c.Assert(action, Equals, cs.action)
 	}
 
 	// mismatched
-	action, err := filter.Filter("xxx_a", "", InsertEvent, NullEvent, "")
+	action, err := filter.Filter("xxx_a", "", InsertEvent, "")
 	c.Assert(action, Equals, Do)
 
 	// invalid rule
 	err = filter.Selector.Insert("test_1_*", "abc*", "error", false)
 	c.Assert(err, IsNil)
-	_, err = filter.Filter("test_1_a", "abc", InsertEvent, NullEvent, "")
+	_, err = filter.Filter("test_1_a", "abc", InsertEvent, "")
 	c.Assert(err, NotNil)
 }

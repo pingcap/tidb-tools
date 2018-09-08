@@ -4,19 +4,11 @@
 
 Binlog Filter is a libary to provide a simple and unified way to filter binlog events with the following features:
 
-- Do/Ignore databases
-
-    /Ignore replicated data from these databases.
-
-- Do/Ignore tables
-    
-    Synchronize/Ignore replicated data from these tables.
-
 - Do/Ignore binlog events
     
     Synchronize/Ignore some specified replicated `Binlog Events` from these specfied databases/tables by given rules.
 
-- Do/Ignore binlog queries
+- Do/Ignore queries
 
     Synchronize/Ignore some specified replicated queries that is in `Binog Query Event` from these specfied databases/tables by given rules.
 
@@ -26,15 +18,14 @@ we define a rule `BinlogEventRule` to filter specified `Binlog Events` and queri
 
 ```go
 type BinlogEventRule struct {
-	SchemaPattern string      `jsSynchronizeon:"schema-pattern" toml:"schema-pattern"`
-	TablePattern  string      `json:"table-pattern" toml:"table-pattern"`
-	DMLEvent      []EventType `json:"dml" toml:"dml"`                 
-	DDLEvent      []EventType `json:"ddl" toml:"ddl"`
-	SQLPattern    []string    `json:"sql-pattern" toml:"sql-pattern"` // regular expression
-	sqlRegularExp *regexp.Regexp
+	SchemaPattern string      `json:"schema-pattern" toml:"schema-pattern" yaml:"schema-pattern"`
+	TablePattern  string      `json:"table-pattern" toml:"table-pattern" yaml:"table-pattern"`
+	Events        []EventType `json:"events" toml:"events" yaml:"events"`
+	SQLPattern    []string    `json:"sql-pattern" toml:"sql-pattern" yaml:"sql-pattern"` // regular expression
 
-	Action ActionType `json:"action" toml:"action"`
+	Action ActionType `json:"action" toml:"action" yaml:"action"`
 }
+
 ```
 
 now we support following events 
@@ -42,10 +33,14 @@ now we support following events
 ``` go
 // it indicates all dml/ddl events in rule
 AllEvent
+AllDDL
+AllDML
     
 // it indicates no any dml/ddl events in rule,
 // and equals empty rule.DDLEvent/DMLEvent array
 NoneEvent
+NoneDDL
+NoneDML
 
 // DML events
 InsertEvent
