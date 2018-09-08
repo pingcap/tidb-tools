@@ -35,13 +35,13 @@ type EventType string
 
 // show DML/DDL Events
 const (
-	DDL EventType = "ddl"
-	DML EventType = "dml"
+	ddl EventType = "ddl"
+	dml EventType = "dml"
 
 	// it indicates all dml/ddl events in rule
 	AllEvent EventType = "all"
-	AllDDL   EventType = "all dml"
-	AllDML   EventType = "all ddl"
+	AllDDL   EventType = "all ddl"
+	AllDML   EventType = "all dml"
 
 	// it indicates no any dml/ddl events in rule,
 	// and equals empty rule.DDLEvent/DMLEvent
@@ -71,9 +71,9 @@ const (
 func ClassifyEevent(event EventType) (EventType, error) {
 	switch event {
 	case InsertEvent, UpdateEvent, DeleteEvent:
-		return DML, nil
+		return dml, nil
 	case CreateDatabase, DropDatabase, CreateTable, DropTable, TruncateTable, RenameTable, CreateIndex, DropIndex, AlertTable:
-		return DDL, nil
+		return ddl, nil
 	case NullEvent:
 		return NullEvent, nil
 	default:
@@ -253,7 +253,7 @@ func (b *BinlogEvent) matchEvent(tp, event EventType, rules []EventType) bool {
 			return false
 		}
 
-		if tp == DDL {
+		if tp == ddl {
 			if rule == AllDDL {
 				return true
 			}
@@ -263,12 +263,12 @@ func (b *BinlogEvent) matchEvent(tp, event EventType, rules []EventType) bool {
 			}
 		}
 
-		if tp == DML {
+		if tp == dml {
 			if rule == AllDML {
 				return true
 			}
 
-			if rule == NoneDDL {
+			if rule == NoneDML {
 				return false
 			}
 		}
