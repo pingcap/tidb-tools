@@ -177,7 +177,7 @@ type Config struct {
 	FixSQLFile string `toml:"fix-sql-file" json:"fix-sql-file"`
 
 	// the tables to be checked
-	Tables []*CheckTables `toml:"check-table" json:"check-table"`
+	Tables []*CheckTables `toml:"check-tables" json:"check-tables"`
 
 	// the config of table
 	TableCfgs []*TableConfig `toml:"table-config" json:"table-config"`

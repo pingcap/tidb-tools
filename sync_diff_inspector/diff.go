@@ -121,7 +121,7 @@ func (df *Diff) init(cfg *Config) (err error) {
 	return nil
 }
 
-// AdjustTableConfig adjusts the table's config by check-table and table-config.
+// AdjustTableConfig adjusts the table's config by check-tables and table-config.
 func (df *Diff) AdjustTableConfig(cfg *Config) error {
 	// fill the table information.
 	// will add default source information, don't worry, we will use table config's info replace this later.
@@ -446,14 +446,14 @@ func (df *Diff) checkChunkDataEqual(checkJobs []*CheckJob, table *TableConfig) (
 		}
 
 		// if checksum is not equal or don't need compare checksum, compare the data
-		sourceRows := make([]*sql.Rows, 0, len(table.SourceTables))
+		sourceRows := make(map[string]*sql.Rows)
 		for _, sourceTable := range table.SourceTables {
 			source := df.sourceDBs[sourceTable.DBLabel]
 			rows, _, err := getChunkRows(df.ctx, source.Conn, sourceTable.Schema, sourceTable.Table, table.Info, job.Where, job.Args, df.useRowID)
 			if err != nil {
 				return false, errors.Trace(err)
 			}
-			sourceRows = append(sourceRows, rows)
+			sourceRows[sourceTable.DBLabel] = rows
 		}
 
 		targetRows, orderKeyCols, err := getChunkRows(df.ctx, df.targetDB.Conn, table.Schema, table.Table, table.Info, job.Where, job.Args, df.useRowID)
@@ -475,7 +475,7 @@ func (df *Diff) checkChunkDataEqual(checkJobs []*CheckJob, table *TableConfig) (
 	return equal, nil
 }
 
-func (df *Diff) compareRows(sourceRows []*sql.Rows, targetRows *sql.Rows, orderKeyCols []*model.ColumnInfo, table *TableConfig) (bool, error) {
+func (df *Diff) compareRows(sourceRows map[string]*sql.Rows, targetRows *sql.Rows, orderKeyCols []*model.ColumnInfo, table *TableConfig) (bool, error) {
 	var (
 		equal     = true
 		rowsData1 = make([]map[string][]byte, 0, 100)

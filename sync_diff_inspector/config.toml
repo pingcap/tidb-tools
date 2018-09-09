@@ -38,17 +38,14 @@ tables = ["test1", "test2", "test3"]
 # tables = ["~*"]
 
 
-# schema and table in check-table must be contained in check-tables.
+# schema and table in table-config must be contained in check-tables.
 # a example for comparing table with same schema and table name. 
-[[check-table]]
+[[table-config]]
 # schema name.
 schema = "test"
 
 # table name.
 table = "test3"
-
-# set true if comparing sharding tables with target table
-is-sharding = false
 
 # field should be the primary key, unique key or field with index. 
 # if comment this, diff will find a suitable field.
@@ -67,6 +64,9 @@ schema = "test"
 
 # target table name.
 table = "test2"
+
+# set true if comparing sharding tables with target table
+is-sharding = false
 
 # source table.
 [[table-config.source-table]]

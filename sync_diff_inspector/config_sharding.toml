@@ -33,7 +33,7 @@ schema = "test"
 tables = ["test"]
 
 
-# schema and table in check-table must be contained in check-tables.
+# schema and table in check-tables must be contained in check-tables.
 # a example for sharding tables.
 [[table-config]]
 # target schema name.
