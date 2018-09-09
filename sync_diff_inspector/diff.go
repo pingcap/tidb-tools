@@ -405,7 +405,7 @@ CheckResult:
 }
 
 func (df *Diff) getSourceTableChecksum(table *TableConfig, job *CheckJob) (int64, error) {
-	var checksum int64 = -1
+	var checksum int64 = 0
 
 	for _, sourceTable := range table.SourceTables {
 		source := df.sourceDBs[sourceTable.DBLabel]
@@ -413,11 +413,8 @@ func (df *Diff) getSourceTableChecksum(table *TableConfig, job *CheckJob) (int64
 		if err != nil {
 			return -1, errors.Trace(err)
 		}
-		if checksum == -1 {
-			checksum = checksumTmp
-		} else {
-			checksum ^= checksumTmp
-		}
+
+		checksum ^= checksumTmp
 	}
 	return checksum, nil
 }

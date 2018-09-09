@@ -191,7 +191,7 @@ func GetTables(ctx context.Context, db *sql.DB, schemaName string) (tables []str
 	*/
 
 	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type != 'VIEW';", schemaName)
-	rows, err := db.Query(query)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
