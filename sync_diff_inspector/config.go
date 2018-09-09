@@ -41,6 +41,16 @@ type DBConfig struct {
 	Conn *sql.DB
 }
 
+// Valide returns true if database's config is valide.
+func (c *DBConfig) Valide() bool {
+	if c.Label == "" {
+		log.Error("must specify source database's label")
+		return false
+	}
+
+	return true
+}
+
 // CheckTables saves the tables need to check.
 type CheckTables struct {
 	// schema name
@@ -69,6 +79,35 @@ type TableConfig struct {
 	Info         *model.TableInfo
 }
 
+// Valide returns true if table's config is valide.
+func (t *TableConfig) Valide() bool {
+	if t.Schema == "" || t.Table == "" {
+		log.Error("schema and table's name can't be empty")
+		return false
+	}
+
+	if t.IsSharding {
+		if len(t.SourceTables) <= 1 {
+			log.Error("must have more than one source tables if comparing sharding tables")
+			return false
+		}
+
+	} else {
+		if len(t.SourceTables) > 1 {
+			log.Error("have more than one source table in no sharding mode")
+			return false
+		}
+	}
+
+	for _, sourceTable := range t.SourceTables {
+		if !sourceTable.Valide() {
+			return false
+		}
+	}
+
+	return true
+}
+
 // TableInstance saves the base information of table.
 type TableInstance struct {
 	// database's label
@@ -77,6 +116,20 @@ type TableInstance struct {
 	Schema string `toml:"schema"`
 	// table name
 	Table string `toml:"table"`
+}
+
+func (t *TableInstance) Valide() bool {
+	if t.DBLabel == "" {
+		log.Error("must specify the database label for source table")
+		return false
+	}
+
+	if t.Schema == "" || t.Table == "" {
+		log.Error("schema and table's name can't be empty")
+		return false
+	}
+
+	return true
 }
 
 // Config is the configuration.
@@ -204,8 +257,7 @@ func (c *Config) checkConfig() bool {
 	}
 
 	for i := range c.SourceDBCfg {
-		if c.SourceDBCfg[i].Label == "" {
-			log.Error("must specify source database's label")
+		if !c.SourceDBCfg[i].Valide() {
 			return false
 		}
 	}
@@ -216,34 +268,8 @@ func (c *Config) checkConfig() bool {
 	}
 
 	for _, tableCfg := range c.TableCfgs {
-		if tableCfg.Schema == "" || tableCfg.Table == "" {
-			log.Error("schema and table's name can't be empty")
+		if !tableCfg.Valide() {
 			return false
-		}
-
-		if tableCfg.IsSharding {
-			if len(tableCfg.SourceTables) <= 1 {
-				log.Error("must have more than one source tables if comparing sharding tables")
-				return false
-			}
-
-		} else {
-			if len(tableCfg.SourceTables) > 1 {
-				log.Error("have more than one source table in no sharding mode")
-				return false
-			}
-		}
-
-		for _, sourceTable := range tableCfg.SourceTables {
-			if sourceTable.DBLabel == "" {
-				log.Error("must specify the database label for source table")
-				return false
-			}
-
-			if sourceTable.Schema == "" || sourceTable.Table == "" {
-				log.Error("schema and table's name can't be empty")
-				return false
-			}
 		}
 	}
 
