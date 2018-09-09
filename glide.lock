@@ -1,5 +1,5 @@
-hash: 9febf27ef1bb7523f8610d1ea8c0fadbf195f994657059d4969c199552ed31d5
-updated: 2018-06-20T18:43:05.186780939+08:00
+hash: dbd94689f42784aea2a832ed00836eafd3d3d7512952180f62e0f7d744629c21
+updated: 2018-09-07T17:56:19.303065047+08:00
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
@@ -106,7 +106,7 @@ imports:
 - name: github.com/cznic/mathutil
   version: c90ba19bea8927552cef4560ab888231566f049d
 - name: github.com/davecgh/go-spew
-  version: 8991bc29aa16c548c550c7ff78260e27b9ab7c73
+  version: d8f796af33cc11cb798c1aaeb27a4ebc5099927d
   subpackages:
   - spew
 - name: github.com/dgrijalva/jwt-go
@@ -116,7 +116,7 @@ imports:
   subpackages:
   - breaker
 - name: github.com/eapache/go-xerial-snappy
-  version: bb955e01b9346ac19dc29eb16586c90ded99a98c
+  version: 776d5712da21bc4762676d614db1d8a64f4238b0
 - name: github.com/eapache/queue
   version: 093482f3f8ce946c05bcba64badd2c82369e084d
 - name: github.com/ghodss/yaml
@@ -250,7 +250,7 @@ imports:
   - pkg/metapb
   - pkg/pdpb
 - name: github.com/pingcap/pd
-  version: 0ec6ffcf94e8550175aeb43d4079487fcca9a384
+  version: 49ef99b6faa6d8cb6c797f74b118ded03253c898
   subpackages:
   - pd-client
 - name: github.com/pingcap/tidb
@@ -305,7 +305,7 @@ imports:
 - name: github.com/pkg/errors
   version: 645ef00459ed84a119197bfb8d8205042c6df63d
 - name: github.com/prometheus/client_golang
-  version: c5b7fccd204277076155f10851dad72b76a49317
+  version: 967789050ba94deca04a5e84cce8ad472ce313c1
   subpackages:
   - prometheus
   - prometheus/push
@@ -342,13 +342,13 @@ imports:
   - replication
   - schema
 - name: github.com/sirupsen/logrus
-  version: 75068beb13ada9c0ddde611f678523fda7352650
+  version: 3bcb09397d6d88e7676a9bc8433ca11ba5304837
 - name: github.com/spaolacci/murmur3
   version: f09979ecbc725b9e6d41a297405f65e7e8804acc
 - name: github.com/twinj/uuid
   version: 7bbe408d339787c56ec15568c947c0959db1b275
 - name: github.com/uber/jaeger-client-go
-  version: f7e0d4744fa6d5287c53b8ac8d4f83089ce07ce8
+  version: 12b4b58a7d8119c9f22db2745df843fca67a310a
   subpackages:
   - config
   - internal/baggage
@@ -364,6 +364,7 @@ imports:
   - thrift-gen/jaeger
   - thrift-gen/sampling
   - thrift-gen/zipkincore
+  - transport
   - utils
 - name: github.com/uber/jaeger-lib
   version: 34d9cc24e47ab70783050b52f79c06eb3ac850ba

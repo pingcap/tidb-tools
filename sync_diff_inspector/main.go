@@ -22,9 +22,9 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
+	log "github.com/sirupsen/logrus"
 )
 
 func main() {
@@ -44,7 +44,13 @@ func main() {
 		return
 	}
 
-	log.SetLevelByString(cfg.LogLevel)
+	logLevel, err := log.ParseLevel(cfg.LogLevel)
+	if err != nil {
+		log.Warnf("invalide log level %s", cfg.LogLevel)
+		log.SetLevel(log.InfoLevel)
+	} else {
+		log.SetLevel(logLevel)
+	}
 
 	ok := cfg.checkConfig()
 	if !ok {

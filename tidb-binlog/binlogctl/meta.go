@@ -21,10 +21,10 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
 	pd "github.com/pingcap/pd/pd-client"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/siddontang/go/ioutil2"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 
@@ -94,7 +94,7 @@ func saveMeta(metaFileName string, ts int64, timeZone string) error {
 	e := toml.NewEncoder(&buf)
 	err := e.Encode(meta)
 	if err != nil {
-		return errors.Annotatef(err, "save meta %s into %s", meta, metaFileName)
+		return errors.Annotatef(err, "save meta %v into %s", meta, metaFileName)
 	}
 
 	if timeZone != "" {
@@ -111,7 +111,7 @@ func saveMeta(metaFileName string, ts int64, timeZone string) error {
 
 	err = ioutil2.WriteFileAtomic(metaFileName, buf.Bytes(), 0644)
 	if err != nil {
-		return errors.Annotatef(err, "save meta %s into %s", meta, metaFileName)
+		return errors.Annotatef(err, "save meta %v into %s", meta, metaFileName)
 	}
 
 	log.Infof("meta: %+v", meta)

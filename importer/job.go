@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
+	log "github.com/sirupsen/logrus"
 )
 
 func addJobs(jobCount int, jobChan chan struct{}) {
