@@ -30,6 +30,8 @@ const (
 	percent100 = 100
 )
 
+var sourceLabelMap map[string]interface{} = make(map[string]interface{})
+
 // DBConfig is the config of database, and keep the connection.
 type DBConfig struct {
 	dbutil.DBConfig
@@ -47,6 +49,7 @@ func (c *DBConfig) Valide() bool {
 		log.Error("must specify source database's label")
 		return false
 	}
+	sourceLabelMap[c.Label] = struct{}{}
 
 	return true
 }
@@ -118,9 +121,16 @@ type TableInstance struct {
 	Table string `toml:"table"`
 }
 
+// Valide returns true if table instance's info is valide.
+// should be executed after source database's check.
 func (t *TableInstance) Valide() bool {
 	if t.DBLabel == "" {
 		log.Error("must specify the database label for source table")
+		return false
+	}
+
+	if _, ok := sourceLabelMap[t.DBLabel]; !ok {
+		log.Error("unknow database label %s", t.DBLabel)
 		return false
 	}
 

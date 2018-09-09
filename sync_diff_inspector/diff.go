@@ -108,59 +108,53 @@ func (df *Diff) init(cfg *Config) (err error) {
 	}
 	df.targetDB = cfg.TargetDBCfg
 
+	err = df.AdjustTableConfig(cfg)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	df.fixSQLFile, err = os.Create(cfg.FixSQLFile)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
+}
+
+// AdjustTableConfig adjusts the table's config by check-table and table-config.
+func (df *Diff) AdjustTableConfig(cfg *Config) error {
 	// fill the table information.
 	// will add default source information, don't worry, we will use table config's info replace this later.
 	for _, schemaTables := range cfg.Tables {
 		df.tables[schemaTables.Schema] = make(map[string]*TableConfig)
-		allTables, err := dbutil.GetTables(df.ctx, df.targetDB.Conn, schemaTables.Schema)
-		if err != nil {
-			return errors.Errorf("get tables from %s.%s error %v", df.targetDB.Label, schemaTables.Schema, errors.Trace(err))
+
+		tables := make([]string, 0, len(schemaTables.Tables))
+		for _, table := range schemaTables.Tables {
+			matchedTables, err := df.GetMatchTable(df.targetDB, schemaTables.Schema, table)
+			if err != nil {
+				return errors.Trace(err)
+			}
+			tables = append(tables, matchedTables...)
 		}
 
-		for _, table := range schemaTables.Tables {
-			if table[0] == '~' {
-				tableRegex := regexp.MustCompile(fmt.Sprintf("(?i)%s", table[1:]))
-				for _, tableName := range allTables {
-					if !tableRegex.MatchString(tableName) {
-						continue
-					}
-					tableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, df.targetDB.Conn, schemaTables.Schema, tableName, cfg.UseRowID)
-					if err != nil {
-						return errors.Errorf("get table %s.%s's inforamtion error %v", schemaTables.Schema, tableName, errors.Trace(err))
-					}
-					df.tables[schemaTables.Schema][tableName] = &TableConfig{
-						TableInstance: TableInstance{
-							Schema: schemaTables.Schema,
-							Table:  tableName,
-						},
-						Info:  tableInfo,
-						Range: "TRUE",
-						SourceTables: []TableInstance{{
-							DBLabel: cfg.SourceDBCfg[0].Label,
-							Schema:  schemaTables.Schema,
-							Table:   tableName,
-						}},
-					}
-				}
+		for _, tableName := range tables {
+			tableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, df.targetDB.Conn, schemaTables.Schema, tableName, cfg.UseRowID)
+			if err != nil {
+				return errors.Errorf("get table %s.%s's inforamtion error %v", schemaTables.Schema, tableName, errors.Trace(err))
+			}
 
-			} else {
-				tableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, df.targetDB.Conn, schemaTables.Schema, table, cfg.UseRowID)
-				if err != nil {
-					return errors.Errorf("get table %s.%s's inforamtion error %v", schemaTables.Schema, table, errors.Trace(err))
-				}
-				df.tables[schemaTables.Schema][table] = &TableConfig{
-					TableInstance: TableInstance{
-						Schema: schemaTables.Schema,
-						Table:  table,
-					},
-					Info:  tableInfo,
-					Range: "TRUE",
-					SourceTables: []TableInstance{{
-						DBLabel: cfg.SourceDBCfg[0].Label,
-						Schema:  schemaTables.Schema,
-						Table:   table,
-					}},
-				}
+			df.tables[schemaTables.Schema][tableName] = &TableConfig{
+				TableInstance: TableInstance{
+					Schema: schemaTables.Schema,
+					Table:  tableName,
+				},
+				Info:  tableInfo,
+				Range: "TRUE",
+				SourceTables: []TableInstance{{
+					DBLabel: cfg.SourceDBCfg[0].Label,
+					Schema:  schemaTables.Schema,
+					Table:   tableName,
+				}},
 			}
 		}
 	}
@@ -175,30 +169,20 @@ func (df *Diff) init(cfg *Config) (err error) {
 
 		sourceTables := make([]TableInstance, 0, len(table.SourceTables))
 		for _, sourceTable := range table.SourceTables {
-			if sourceTable.Table[0] == '~' {
-				allTables, err := dbutil.GetTables(df.ctx, df.sourceDBs[sourceTable.DBLabel].Conn, sourceTable.Schema)
-				if err != nil {
-					return errors.Errorf("get tables from %s.%s error %v", df.targetDB.Label, sourceTable.Schema, errors.Trace(err))
-				}
+			if _, ok := df.sourceDBs[sourceTable.DBLabel]; !ok {
+				return errors.Errorf("unkonw database label %s", sourceTable.DBLabel)
+			}
 
-				tableRegex := regexp.MustCompile(fmt.Sprintf("(?i)%s", sourceTable.Table[1:]))
+			tables, err := df.GetMatchTable(df.sourceDBs[sourceTable.DBLabel], sourceTable.Schema, sourceTable.Table)
+			if err != nil {
+				return errors.Trace(err)
+			}
 
-				for _, tableName := range allTables {
-					if !tableRegex.MatchString(tableName) {
-						continue
-					}
-
-					sourceTables = append(sourceTables, TableInstance{
-						DBLabel: sourceTable.DBLabel,
-						Schema:  sourceTable.Schema,
-						Table:   tableName,
-					})
-				}
-			} else {
+			for _, table := range tables {
 				sourceTables = append(sourceTables, TableInstance{
 					DBLabel: sourceTable.DBLabel,
 					Schema:  sourceTable.Schema,
-					Table:   sourceTable.Table,
+					Table:   table,
 				})
 			}
 		}
@@ -212,12 +196,31 @@ func (df *Diff) init(cfg *Config) (err error) {
 		df.tables[table.Schema][table.Table].Field = table.Field
 	}
 
-	df.fixSQLFile, err = os.Create(cfg.FixSQLFile)
+	return nil
+}
+
+// GetMatchTable returns all the matched table.
+func (df *Diff) GetMatchTable(db DBConfig, schema, table string) ([]string, error) {
+	allTables, err := dbutil.GetTables(df.ctx, db.Conn, schema)
 	if err != nil {
-		return errors.Trace(err)
+		return nil, errors.Errorf("get tables from %s.%s error %v", db.Label, schema, errors.Trace(err))
 	}
 
-	return nil
+	tableNames := make([]string, 0, 1)
+
+	if table[0] == '~' {
+		tableRegex := regexp.MustCompile(fmt.Sprintf("(?i)%s", table[1:]))
+		for _, tableName := range allTables {
+			if !tableRegex.MatchString(tableName) {
+				continue
+			}
+			tableNames = append(tableNames, tableName)
+		}
+	} else {
+		tableNames = append(tableNames, table)
+	}
+
+	return tableNames, nil
 }
 
 // Close closes file and database connection.

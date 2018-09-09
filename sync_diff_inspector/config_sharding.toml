@@ -30,7 +30,7 @@ schema = "test"
 
 # table list which need check in target database. 
 # in sharding mode, you must set config for every table in table-config, otherwise will not check the table.
-tables = ["test1"]
+tables = ["test"]
 
 
 # schema and table in check-table must be contained in check-tables.
