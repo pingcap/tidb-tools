@@ -309,11 +309,11 @@ func (df *Diff) CheckTableStruct(table *TableConfig) (bool, error) {
 		}
 
 		if !eq {
-			structEqual = false
+			return false, nil
 		}
 	}
 
-	return structEqual, nil
+	return true, nil
 }
 
 // EqualTableStruct tests whether two table's struct are same.

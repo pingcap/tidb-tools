@@ -73,9 +73,7 @@ func getChunksForTable(db DBConfig, table *TableConfig, column *model.ColumnInfo
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
+
 	if cnt == 0 {
 		log.Infof("no data found in %s.%s", table.Schema, table.Table)
 		return nil, nil
