@@ -294,7 +294,6 @@ func (df *Diff) Equal() (err error) {
 
 // CheckTableStruct checks table's struct is equal or not.
 func (df *Diff) CheckTableStruct(table *TableConfig) (bool, error) {
-	structEqual := true
 	targetTableInfo := table.Info
 
 	for _, sourceTable := range table.SourceTables {
