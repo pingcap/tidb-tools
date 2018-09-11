@@ -104,7 +104,7 @@ type PumpsClient struct {
 }
 
 // NewPumpsClient returns a PumpsClient.
-func NewPumpsClient(etcdURLs string, securityOpt pd.SecurityOption) (*PumpsClient, error) {
+func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.SecurityOption) (*PumpsClient, error) {
 	// TODO: get strategy from etcd, and can update strategy in real-time. now use Range as default.
 	strategy := Range
 	selector := NewSelector(strategy)
@@ -148,7 +148,7 @@ func NewPumpsClient(etcdURLs string, securityOpt pd.SecurityOption) (*PumpsClien
 		Pumps:              pumpInfos,
 		Selector:           selector,
 		RetryTime:          DefaultRetryTime,
-		BinlogWriteTimeout: DefaultBinlogWriteTimeout,
+		BinlogWriteTimeout: timeout,
 		Security:           security,
 	}
 
@@ -209,7 +209,8 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 		}
 
 		Logger.Errorf("[pumps client] write binlog error %v", err)
-		if isCriticalError(err) {
+		if !isRetryableError(err) {
+			// this kind of error is not retryable, return directly.
 			return err
 		}
 
@@ -420,9 +421,12 @@ func (c *PumpsClient) Close() {
 	Logger.Infof("[pumps client] is closed")
 }
 
-func isCriticalError(err error) bool {
-	// TODO: add some critical error.
-	return false
+func isRetryableError(err error) bool {
+	if strings.Contains(err.Error(), "received message larger than max") {
+		return false
+	}
+
+	return true
 }
 
 func copyPumps(pumps map[string]*PumpStatus) []*PumpStatus {
