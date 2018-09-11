@@ -39,9 +39,25 @@ func (t *testUrlsSuite) TestParseHostPortAddr(c *C) {
 		"unix:///home/tidb/tidb.sock",
 	}
 
-	for _, url := range urls {
-		_, err := ParseHostPortAddr(url)
+	expectUrls := [][]string{
+		{"127.0.0.1:2379"},
+		{"127.0.0.1:2379", "127.0.0.2:2379"},
+		{"localhost:2379"},
+		{"pump-1:8250", "pump-2:8250"},
+		{"http://127.0.0.1:2379"},
+		{"https://127.0.0.1:2379"},
+		{"http://127.0.0.1:2379", "http://127.0.0.2:2379"},
+		{"https://127.0.0.1:2379", "https://127.0.0.2:2379"},
+		{"unix:///home/tidb/tidb.sock"},
+	}
+
+	for i, url := range urls {
+		urlList, err := ParseHostPortAddr(url)
 		c.Assert(err, Equals, nil)
+		c.Assert(len(urlList), Equals, len(expectUrls[i]))
+		for j, u := range urlList {
+			c.Assert(u, Equals, expectUrls[i][j])
+		}
 	}
 
 	inValidUrls := []string{
