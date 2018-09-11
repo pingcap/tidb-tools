@@ -14,10 +14,9 @@
 package utils
 
 import (
-	"testing"
 	. "github.com/pingcap/check"
+	"testing"
 )
-
 
 func TestClient(t *testing.T) {
 	TestingT(t)
@@ -36,7 +35,7 @@ func (t *testUrlsSuite) TestParseHostPortAddr(c *C) {
 		"http://127.0.0.1:2379",
 		"https://127.0.0.1:2379",
 		"http://127.0.0.1:2379,http://127.0.0.2:2379",
-		"https://127.0.0.1:2379,https://127.0.0.2:2379", 
+		"https://127.0.0.1:2379,https://127.0.0.2:2379",
 		"unix:///home/tidb/tidb.sock",
 	}
 
