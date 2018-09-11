@@ -14,7 +14,6 @@
 package utils
 
 import (
-	"fmt"
 	"net"
 	"net/url"
 	"strings"
@@ -52,6 +51,5 @@ func ParseHostPortAddr(s string) ([]string, error) {
 		addrs = append(addrs, u.String())
 	}
 
-	fmt.Println(addrs)
 	return addrs, nil
 }
