@@ -403,9 +403,7 @@ func (c *PumpsClient) detect() {
 			}
 
 			for _, pump := range checkPassPumps {
-				c.Pumps.Lock()
 				c.setPumpAvaliable(pump, true)
-				c.Pumps.Unlock()
 			}
 
 			time.Sleep(CheckInterval)
