@@ -422,7 +422,11 @@ func (c *PumpsClient) Close() {
 }
 
 func isRetryableError(err error) bool {
-	if strings.Contains(err.Error(), "received message larger than max") {
+	// ResourceExhausted is a error code in grpc.
+	// ResourceExhausted indicates some resource has been exhausted, perhaps
+	// a per-user quota, or perhaps the entire file system is out of space.
+	// https://github.com/grpc/grpc-go/blob/9cc4fdbde2304827ffdbc7896f49db40c5536600/codes/codes.go#L76
+	if strings.Contains(err.Error(), "ResourceExhausted") {
 		return false
 	}
 
