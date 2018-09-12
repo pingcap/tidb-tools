@@ -55,9 +55,6 @@ var (
 
 	// ErrNoAvaliablePump means no avaliable pump to write binlog.
 	ErrNoAvaliablePump = errors.New("no avaliable pump to write binlog")
-
-	// ErrWriteBinlog means write binlog failed, and reach the max retry time.
-	ErrWriteBinlog = errors.New("write binlog failed")
 )
 
 // PumpInfos saves pumps' infomations in pumps client.
@@ -195,6 +192,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 	}
 	req := &pb.WriteBinlogReq{ClusterID: c.ClusterID, Payload: commitData}
 
+	var err1 error
 	// Retry many times because we may raise CRITICAL error here.
 	for i := 0; i < c.RetryTime; i++ {
 		if pump == nil {
@@ -214,6 +212,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 			// this kind of error is not retryable, return directly.
 			return err
 		}
+		err1 = err
 
 		// every pump can retry 5 times, if retry 5 times and still failed, set this pump unavaliable, and choose a new pump.
 		if (i+1)%5 == 0 {
@@ -224,7 +223,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 		time.Sleep(RetryInterval)
 	}
 
-	return ErrWriteBinlog
+	return err1
 }
 
 // setPumpAvaliable set pump's isAvaliable, and modify UnAvaliablePumps or AvaliablePumps.
