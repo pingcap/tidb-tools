@@ -212,6 +212,10 @@ func (r *RangeSelector) Next(pump *PumpStatus, binlog *pb.Binlog, retryTime int)
 		return nil
 	}
 
+	if r.Offset >= len(r.Pumps) {
+		r.Offset = 0
+	}
+
 	nextPump := r.Pumps[r.Offset]
 	if binlog.Tp == pb.BinlogType_Prewrite {
 		r.Offset++
