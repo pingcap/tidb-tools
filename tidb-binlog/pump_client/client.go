@@ -192,13 +192,15 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 	}
 	req := &pb.WriteBinlogReq{ClusterID: c.ClusterID, Payload: commitData}
 
-	// Retry many times because we may raise CRITICAL error here.
-	for i := 0; i < c.RetryTime; i++ {
+	retryTime := 0
+	startTime := time.Now()
+	var resp *pb.WriteBinlogResp
+
+	for {
 		if pump == nil {
 			return ErrNoAvaliablePump
 		}
 
-		var resp *pb.WriteBinlogResp
 		resp, err = pump.writeBinlog(req, c.BinlogWriteTimeout)
 		if err == nil && resp.Errmsg != "" {
 			err = errors.New(resp.Errmsg)
@@ -206,19 +208,32 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 		if err == nil {
 			return nil
 		}
-
 		Logger.Errorf("[pumps client] write binlog error %v", err)
-		if !isRetryableError(err) {
-			// this kind of error is not retryable, return directly.
-			return err
+
+		if binlog.Tp == pb.BinlogType_Commit {
+			// only use one pump to write commit binlog, util write success or blocked for ten minutes.
+			if time.Since(startTime) > 10*time.Minute {
+				break
+			}
+		} else {
+			if !isRetryableError(err) {
+				// this kind of error is not retryable, return directly.
+				return err
+			}
+
+			// every pump can retry 5 times, if retry 5 times and still failed, set this pump unavaliable, and choose a new pump.
+			if (retryTime+1)%5 == 0 {
+				c.setPumpAvaliable(pump, false)
+				pump = c.Selector.Next(pump, binlog, retryTime/5+1)
+				Logger.Debugf("[pumps client] avaliable pumps: %v, write binlog choose pump %v", c.Pumps.AvaliablePumps, pump)
+			}
+
+			retryTime++
+			if retryTime > c.RetryTime {
+				break
+			}
 		}
 
-		// every pump can retry 5 times, if retry 5 times and still failed, set this pump unavaliable, and choose a new pump.
-		if (i+1)%5 == 0 {
-			c.setPumpAvaliable(pump, false)
-			pump = c.Selector.Next(pump, binlog, i/5+1)
-			Logger.Debugf("[pumps client] avaliable pumps: %v, write binlog choose pump %v", c.Pumps.AvaliablePumps, pump)
-		}
 		time.Sleep(RetryInterval)
 	}
 
