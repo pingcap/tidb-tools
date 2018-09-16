@@ -485,24 +485,34 @@ func (df *Diff) compareRows(sourceRows map[string]*sql.Rows, targetRows *sql.Row
 
 	rowDatas := new(RowDatas)
 	heap.Init(rowDatas)
-	for _, rows := range sourceRows {
-		for rows.Next() {
-			data, null, err := dbutil.ScanRow(rows)
-			if err != nil {
-				return false, errors.Trace(err)
-			}
-			heap.Push(rowDatas, RowData{
-				Data:         data,
-				Null:         null,
-				OrderKeyCols: orderKeyCols,
-			})
-		}
-		rows.Close()
-	}
+	sourceMap := make(map[string]interface{})
 	for {
+		for source, rows := range sourceRows {
+			if _, ok := sourceMap[source]; ok {
+				continue
+			}
+
+			if rows.Next() {
+				data, null, err := dbutil.ScanRow(rows)
+				if err != nil {
+					return false, errors.Trace(err)
+				}
+				heap.Push(rowDatas, RowData{
+					Data:         data,
+					Null:         null,
+					OrderKeyCols: orderKeyCols,
+				})
+				sourceMap[source] = struct{}{}
+			} else {
+				rows.Close()
+				delete(sourceRows, source)
+			}
+		}
+
 		if rowDatas.Len() == 0 {
 			break
 		}
+
 		rowData := heap.Pop(rowDatas).(RowData)
 		rowsData1 = append(rowsData1, rowData.Data)
 		rowsNull1 = append(rowsNull1, rowData.Null)
