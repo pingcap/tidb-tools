@@ -53,17 +53,17 @@ table = "test"
 is-sharding = true
 
 # source tables.
-[[table-config.source-table]]
+[[table-config.source-tables]]
 label = "source-1"
 schema = "test"
 table  = "test1"
 
-[[table-config.source-table]]
+[[table-config.source-tables]]
 label = "source-1"
 schema = "test"
 table  = "test2"
 
-[[table-config.source-table]]
+[[table-config.source-tables]]
 label = "source-2"
 schema = "test"
 table  = "test3"

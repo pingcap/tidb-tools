@@ -75,6 +75,23 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 
 func (df *Diff) init(cfg *Config) (err error) {
 	// create connection for source.
+	if err = df.CreateDBConn(cfg); err != nil {
+		return errors.Trace(err)
+	}
+
+	if err = df.AdjustTableConfig(cfg); err != nil {
+		return errors.Trace(err)
+	}
+
+	df.fixSQLFile, err = os.Create(cfg.FixSQLFile)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	return nil
+}
+
+func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 	for _, source := range cfg.SourceDBCfg {
 		source.Conn, err = dbutil.OpenDB(source.DBConfig)
 		if err != nil {
@@ -107,16 +124,6 @@ func (df *Diff) init(cfg *Config) (err error) {
 		}
 	}
 	df.targetDB = cfg.TargetDBCfg
-
-	err = df.AdjustTableConfig(cfg)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	df.fixSQLFile, err = os.Create(cfg.FixSQLFile)
-	if err != nil {
-		return errors.Trace(err)
-	}
 
 	return nil
 }
