@@ -24,19 +24,23 @@ import (
 type RowData struct {
 	Data         map[string][]byte
 	Null         map[string]bool
-	OrderKeyCols []*model.ColumnInfo
+	//OrderKeyCols []*model.ColumnInfo
+	Source       string     
 }
 
 // RowDatas is a heap of MergeItems.
-type RowDatas []RowData
+type RowDatas struct {
+	Rows         []RowData
+	OrderKeyCols []*model.ColumnInfo
+}
 
-func (r RowDatas) Len() int { return len(r) }
+func (r RowDatas) Len() int { return len(r.Rows) }
 func (r RowDatas) Less(i, j int) bool {
 	var data1, data2 []byte
 
-	for _, col := range r[i].OrderKeyCols {
-		data1 = r[i].Data[col.Name.O]
-		data2 = r[j].Data[col.Name.O]
+	for _, col := range r.OrderKeyCols {
+		data1 = r.Rows[i].Data[col.Name.O]
+		data2 = r.Rows[j].Data[col.Name.O]
 		if needQuotes(col.FieldType) {
 			if string(data1) > string(data2) {
 				return false
@@ -44,10 +48,10 @@ func (r RowDatas) Less(i, j int) bool {
 				return true
 			} else {
 				// `NULL` is less than ""
-				if r[i].Null[col.Name.O] {
+				if r.Rows[i].Null[col.Name.O] {
 					return true
 				}
-				if r[j].Null[col.Name.O] {
+				if r.Rows[j].Null[col.Name.O] {
 					return false
 				}
 				continue
@@ -72,18 +76,18 @@ func (r RowDatas) Less(i, j int) bool {
 
 	return true
 }
-func (r RowDatas) Swap(i, j int) { r[i], r[j] = r[j], r[i] }
+func (r RowDatas) Swap(i, j int) { r.Rows[i], r.Rows[j] = r.Rows[j], r.Rows[i] }
 
 // Push implements heap.Interface's Push function
 func (r *RowDatas) Push(x interface{}) {
-	*r = append(*r, x.(RowData))
+	r.Rows = append(r.Rows, x.(RowData))
 }
 
 // Pop implements heap.Interface's Pop function
 func (r *RowDatas) Pop() interface{} {
-	old := *r
+	old := r.Rows
 	n := len(old)
 	x := old[n-1]
-	*r = old[0 : n-1]
+	r.Rows = old[0 : n-1]
 	return x
 }

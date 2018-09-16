@@ -44,6 +44,11 @@ func (s *testMergerSuite) TestMerge(c *C) {
 	expectNames := []string{"a", "b", "c", "d", "b"}
 
 	rowDatas := new(RowDatas)
+	rowData := &RowDatas {
+		Rows:  make([]RowData, 0, len(ids)),
+		OrderKeyCols: orderKeyCols,
+	}
+
 	heap.Init(rowDatas)
 	for i, id := range ids {
 		data := map[string][]byte{
@@ -54,7 +59,7 @@ func (s *testMergerSuite) TestMerge(c *C) {
 		heap.Push(rowDatas, RowData{
 			Data:         data,
 			Null:         null,
-			OrderKeyCols: orderKeyCols,
+			//OrderKeyCols: orderKeyCols,
 		})
 	}
 
