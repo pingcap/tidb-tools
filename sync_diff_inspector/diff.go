@@ -78,7 +78,7 @@ func (df *Diff) init(cfg *Config) (err error) {
 	for _, source := range cfg.SourceDBCfg {
 		source.Conn, err = dbutil.OpenDB(source.DBConfig)
 		if err != nil {
-			return errors.Errorf("create source db %+v error %v", cfg.SourceDBCfg, err)
+			return errors.Errorf("create source db %+v error %v", source.DBConfig, err)
 		}
 		source.Conn.SetMaxOpenConns(cfg.CheckThreadCount)
 		source.Conn.SetMaxIdleConns(cfg.CheckThreadCount)
@@ -86,7 +86,7 @@ func (df *Diff) init(cfg *Config) (err error) {
 		if source.Snapshot != "" {
 			err = dbutil.SetSnapshot(df.ctx, source.Conn, source.Snapshot)
 			if err != nil {
-				return errors.Errorf("set history snapshot %s for source db %+v error %v", source.Snapshot, cfg.SourceDBCfg, err)
+				return errors.Errorf("set history snapshot %s for source db %+v error %v", source.Snapshot, source.DBConfig, err)
 			}
 		}
 		df.sourceDBs[source.Label] = source

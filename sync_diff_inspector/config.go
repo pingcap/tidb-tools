@@ -43,8 +43,8 @@ type DBConfig struct {
 	Conn *sql.DB
 }
 
-// Valide returns true if database's config is valide.
-func (c *DBConfig) Valide() bool {
+// Valid returns true if database's config is valide.
+func (c *DBConfig) Valid() bool {
 	if c.Label == "" {
 		log.Error("must specify source database's label")
 		return false
@@ -82,8 +82,8 @@ type TableConfig struct {
 	Info         *model.TableInfo
 }
 
-// Valide returns true if table's config is valide.
-func (t *TableConfig) Valide() bool {
+// Valid returns true if table's config is valide.
+func (t *TableConfig) Valid() bool {
 	if t.Schema == "" || t.Table == "" {
 		log.Error("schema and table's name can't be empty")
 		return false
@@ -103,7 +103,7 @@ func (t *TableConfig) Valide() bool {
 	}
 
 	for _, sourceTable := range t.SourceTables {
-		if !sourceTable.Valide() {
+		if !sourceTable.Valid() {
 			return false
 		}
 	}
@@ -121,9 +121,9 @@ type TableInstance struct {
 	Table string `toml:"table"`
 }
 
-// Valide returns true if table instance's info is valide.
+// Valid returns true if table instance's info is valide.
 // should be executed after source database's check.
-func (t *TableInstance) Valide() bool {
+func (t *TableInstance) Valid() bool {
 	if t.DBLabel == "" {
 		log.Error("must specify the database label for source table")
 		return false
@@ -267,7 +267,7 @@ func (c *Config) checkConfig() bool {
 	}
 
 	for i := range c.SourceDBCfg {
-		if !c.SourceDBCfg[i].Valide() {
+		if !c.SourceDBCfg[i].Valid() {
 			return false
 		}
 	}
@@ -278,7 +278,7 @@ func (c *Config) checkConfig() bool {
 	}
 
 	for _, tableCfg := range c.TableCfgs {
-		if !tableCfg.Valide() {
+		if !tableCfg.Valid() {
 			return false
 		}
 	}

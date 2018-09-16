@@ -47,6 +47,8 @@ type DBConfig struct {
 	User string `toml:"user" json:"user"`
 
 	Password string `toml:"password" json:"password"`
+
+	Schema string `toml:"schema" json:"schema"`
 }
 
 // String returns native format of database configuration

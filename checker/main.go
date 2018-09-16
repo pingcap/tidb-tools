@@ -66,6 +66,7 @@ func checkTables(schema string, tables []string) {
 		Password: *password,
 		Host:     *host,
 		Port:     *port,
+		Schema:   schema,
 	}
 
 	db, err := dbutil.OpenDB(*dbInfo)
