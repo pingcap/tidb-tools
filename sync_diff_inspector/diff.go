@@ -483,9 +483,8 @@ func (df *Diff) compareRows(sourceRows map[string]*sql.Rows, targetRows *sql.Row
 		rowsNull2 = make([]map[string]bool, 0, 100)
 	)
 
-	//rowDatas := new(RowDatas)
-	rowDatas := &RowDatas {
-		Rows:  make([]RowData, 0, len(sourceRows)),
+	rowDatas := &RowDatas{
+		Rows:         make([]RowData, 0, len(sourceRows)),
 		OrderKeyCols: orderKeyCols,
 	}
 	heap.Init(rowDatas)
@@ -502,10 +501,9 @@ func (df *Diff) compareRows(sourceRows map[string]*sql.Rows, targetRows *sql.Row
 					return false, errors.Trace(err)
 				}
 				heap.Push(rowDatas, RowData{
-					Data:         data,
-					Null:         null,
-					Source:       source,
-					//OrderKeyCols: orderKeyCols,
+					Data:   data,
+					Null:   null,
+					Source: source,
 				})
 				sourceMap[source] = struct{}{}
 			} else {

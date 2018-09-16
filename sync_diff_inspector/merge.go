@@ -22,10 +22,9 @@ import (
 
 // RowData is the struct of rows selected from mysql/tidb
 type RowData struct {
-	Data         map[string][]byte
-	Null         map[string]bool
-	//OrderKeyCols []*model.ColumnInfo
-	Source       string     
+	Data   map[string][]byte
+	Null   map[string]bool
+	Source string
 }
 
 // RowDatas is a heap of MergeItems.

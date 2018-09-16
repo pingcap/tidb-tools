@@ -43,9 +43,8 @@ func (s *testMergerSuite) TestMerge(c *C) {
 	expectIDs := []int64{1, 2, 2, 3, 4}
 	expectNames := []string{"a", "b", "c", "d", "b"}
 
-	rowDatas := new(RowDatas)
-	rowData := &RowDatas {
-		Rows:  make([]RowData, 0, len(ids)),
+	rowDatas := &RowDatas{
+		Rows:         make([]RowData, 0, len(ids)),
 		OrderKeyCols: orderKeyCols,
 	}
 
@@ -57,9 +56,8 @@ func (s *testMergerSuite) TestMerge(c *C) {
 			"age":  []byte(strconv.Itoa(ages[i])),
 		}
 		heap.Push(rowDatas, RowData{
-			Data:         data,
-			Null:         null,
-			//OrderKeyCols: orderKeyCols,
+			Data: data,
+			Null: null,
 		})
 	}
 
