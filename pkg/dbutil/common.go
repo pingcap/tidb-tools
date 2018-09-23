@@ -208,7 +208,7 @@ func GetTables(ctx context.Context, db *sql.DB, schemaName string) (tables []str
 		}
 
 		if !table.Valid || !tType.Valid {
-			return tables, nil
+			continue
 		}
 
 		tables = append(tables, table.String)
