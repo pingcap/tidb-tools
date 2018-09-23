@@ -233,7 +233,7 @@ func findSuitableField(db *sql.DB, Schema string, table *model.TableInfo) (*mode
 }
 
 // GenerateCheckJob generates some CheckJobs.
-func GenerateCheckJob(db DBConfig, table *TableConfig, chunkSize int, sample int, useRowID bool) ([]*CheckJob, error) {
+func GenerateCheckJob(db DBConfig, table *TableConfig, chunkSize int, sample int) ([]*CheckJob, error) {
 	jobBucket := make([]*CheckJob, 0, 10)
 	var jobCnt int
 	var column *model.ColumnInfo

@@ -418,7 +418,7 @@ func (df *Diff) EqualTableStruct(tableInfo1, tableInfo2 *model.TableInfo) (bool,
 
 // EqualTableData checks data is equal or not.
 func (df *Diff) EqualTableData(table *TableConfig) (bool, error) {
-	allJobs, err := GenerateCheckJob(df.targetDB, table, df.chunkSize, df.sample, df.useRowID)
+	allJobs, err := GenerateCheckJob(df.targetDB, table, df.chunkSize, df.sample)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
