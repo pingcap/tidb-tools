@@ -68,7 +68,7 @@ is-sharding = false
 
 # source table.
 [[table-config.source-tables]]
-label = "source-1"
+instance-id = "source-1"
 schema = "test"
 table  = "test1"
 
@@ -78,7 +78,7 @@ host = "127.0.0.1"
 port = 3306
 user = "root"
 password = ""
-label = "source-1"
+instance-id = "source-1"
 # remove comment if use tidb's snapshot data
 # snapshot = "2016-10-08 16:45:26"
 

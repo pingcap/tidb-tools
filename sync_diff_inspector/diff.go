@@ -92,6 +92,8 @@ func (df *Diff) init(cfg *Config) (err error) {
 }
 
 func (df *Diff) CreateDBConn(cfg *Config) (err error) {
+	// SetMaxOpenConns and SetMaxIdleConns for connection to avoid error like
+	// `dial tcp 10.26.2.1:3306: connect: cannot assign requested address`
 	for _, source := range cfg.SourceDBCfg {
 		source.Conn, err = dbutil.OpenDB(source.DBConfig)
 		if err != nil {
@@ -106,7 +108,7 @@ func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 				return errors.Errorf("set history snapshot %s for source db %+v error %v", source.Snapshot, source.DBConfig, err)
 			}
 		}
-		df.sourceDBs[source.Label] = source
+		df.sourceDBs[source.InstanceID] = source
 	}
 
 	// create connection for target.
@@ -134,10 +136,15 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 	// will add default source information, don't worry, we will use table config's info replace this later.
 	for _, schemaTables := range cfg.Tables {
 		df.tables[schemaTables.Schema] = make(map[string]*TableConfig)
-
 		tables := make([]string, 0, len(schemaTables.Tables))
+
+		allTables, err := dbutil.GetTables(df.ctx, df.targetDB.Conn, schemaTables.Schema)
+		if err != nil {
+			return errors.Errorf("get tables from %s.%s error %v", df.targetDB.InstanceID, schemaTables.Schema, errors.Trace(err))
+		}
+
 		for _, table := range schemaTables.Tables {
-			matchedTables, err := df.GetMatchTable(df.targetDB, schemaTables.Schema, table)
+			matchedTables, err := df.GetMatchTable(df.targetDB, schemaTables.Schema, table, allTables)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -150,6 +157,11 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 				return errors.Errorf("get table %s.%s's inforamtion error %v", schemaTables.Schema, tableName, errors.Trace(err))
 			}
 
+			if _, ok := df.tables[schemaTables.Schema][tableName]; ok {
+				log.Errorf("duplicate config for %s.%s", schemaTables.Schema, tableName)
+				continue
+			}
+
 			df.tables[schemaTables.Schema][tableName] = &TableConfig{
 				TableInstance: TableInstance{
 					Schema: schemaTables.Schema,
@@ -158,9 +170,9 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 				Info:  tableInfo,
 				Range: "TRUE",
 				SourceTables: []TableInstance{{
-					DBLabel: cfg.SourceDBCfg[0].Label,
-					Schema:  schemaTables.Schema,
-					Table:   tableName,
+					InstanceID: cfg.SourceDBCfg[0].InstanceID,
+					Schema:     schemaTables.Schema,
+					Table:      tableName,
 				}},
 			}
 		}
@@ -176,20 +188,26 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 
 		sourceTables := make([]TableInstance, 0, len(table.SourceTables))
 		for _, sourceTable := range table.SourceTables {
-			if _, ok := df.sourceDBs[sourceTable.DBLabel]; !ok {
-				return errors.Errorf("unkonw database label %s", sourceTable.DBLabel)
+			if _, ok := df.sourceDBs[sourceTable.InstanceID]; !ok {
+				return errors.Errorf("unkonw database instance id %s", sourceTable.InstanceID)
 			}
 
-			tables, err := df.GetMatchTable(df.sourceDBs[sourceTable.DBLabel], sourceTable.Schema, sourceTable.Table)
+			allTables, err := dbutil.GetTables(df.ctx, df.sourceDBs[sourceTable.InstanceID].Conn, sourceTable.Schema)
+			if err != nil {
+				return errors.Errorf("get tables from %s.%s error %v",
+					df.sourceDBs[sourceTable.InstanceID].InstanceID, sourceTable.Schema, errors.Trace(err))
+			}
+
+			tables, err := df.GetMatchTable(df.sourceDBs[sourceTable.InstanceID], sourceTable.Schema, sourceTable.Table, allTables)
 			if err != nil {
 				return errors.Trace(err)
 			}
 
 			for _, table := range tables {
 				sourceTables = append(sourceTables, TableInstance{
-					DBLabel: sourceTable.DBLabel,
-					Schema:  sourceTable.Schema,
-					Table:   table,
+					InstanceID: sourceTable.InstanceID,
+					Schema:     sourceTable.Schema,
+					Table:      table,
 				})
 			}
 		}
@@ -207,12 +225,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 }
 
 // GetMatchTable returns all the matched table.
-func (df *Diff) GetMatchTable(db DBConfig, schema, table string) ([]string, error) {
-	allTables, err := dbutil.GetTables(df.ctx, db.Conn, schema)
-	if err != nil {
-		return nil, errors.Errorf("get tables from %s.%s error %v", db.Label, schema, errors.Trace(err))
-	}
-
+func (df *Diff) GetMatchTable(db DBConfig, schema, table string, allTables []string) ([]string, error) {
 	tableNames := make([]string, 0, 1)
 
 	if table[0] == '~' {
@@ -304,7 +317,7 @@ func (df *Diff) CheckTableStruct(table *TableConfig) (bool, error) {
 	targetTableInfo := table.Info
 
 	for _, sourceTable := range table.SourceTables {
-		conn := df.sourceDBs[sourceTable.DBLabel].Conn
+		conn := df.sourceDBs[sourceTable.InstanceID].Conn
 		sourceTableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, conn, sourceTable.Schema, sourceTable.Table, df.useRowID)
 		if err != nil {
 			return false, errors.Trace(err)
@@ -414,7 +427,7 @@ func (df *Diff) getSourceTableChecksum(table *TableConfig, job *CheckJob) (int64
 	var checksum int64 = 0
 
 	for _, sourceTable := range table.SourceTables {
-		source := df.sourceDBs[sourceTable.DBLabel]
+		source := df.sourceDBs[sourceTable.InstanceID]
 		checksumTmp, err := dbutil.GetCRC32Checksum(df.ctx, source.Conn, sourceTable.Schema, sourceTable.Table, table.Info, job.Where, job.Args)
 		if err != nil {
 			return -1, errors.Trace(err)
@@ -454,12 +467,12 @@ func (df *Diff) checkChunkDataEqual(checkJobs []*CheckJob, table *TableConfig) (
 		// if checksum is not equal or don't need compare checksum, compare the data
 		sourceRows := make(map[string]*sql.Rows)
 		for _, sourceTable := range table.SourceTables {
-			source := df.sourceDBs[sourceTable.DBLabel]
+			source := df.sourceDBs[sourceTable.InstanceID]
 			rows, _, err := getChunkRows(df.ctx, source.Conn, sourceTable.Schema, sourceTable.Table, table.Info, job.Where, job.Args, df.useRowID)
 			if err != nil {
 				return false, errors.Trace(err)
 			}
-			sourceRows[sourceTable.DBLabel] = rows
+			sourceRows[sourceTable.InstanceID] = rows
 		}
 
 		targetRows, orderKeyCols, err := getChunkRows(df.ctx, df.targetDB.Conn, table.Schema, table.Table, table.Info, job.Where, job.Args, df.useRowID)

@@ -30,13 +30,13 @@ const (
 	percent100 = 100
 )
 
-var sourceLabelMap map[string]interface{} = make(map[string]interface{})
+var sourceInstanceMap map[string]interface{} = make(map[string]interface{})
 
 // DBConfig is the config of database, and keep the connection.
 type DBConfig struct {
 	dbutil.DBConfig
 
-	Label string `toml:"label" json:"label"`
+	InstanceID string `toml:"instance-id" json:"instance-id"`
 
 	Snapshot string `toml:"snapshot" json:"snapshot"`
 
@@ -45,11 +45,11 @@ type DBConfig struct {
 
 // Valid returns true if database's config is valide.
 func (c *DBConfig) Valid() bool {
-	if c.Label == "" {
-		log.Error("must specify source database's label")
+	if c.InstanceID == "" {
+		log.Error("must specify source database's instance id")
 		return false
 	}
-	sourceLabelMap[c.Label] = struct{}{}
+	sourceInstanceMap[c.InstanceID] = struct{}{}
 
 	return true
 }
@@ -113,8 +113,8 @@ func (t *TableConfig) Valid() bool {
 
 // TableInstance saves the base information of table.
 type TableInstance struct {
-	// database's label
-	DBLabel string `toml:"label"`
+	// database's instance id
+	InstanceID string `toml:"instance-id" json:"instance-id"`
 	// schema name
 	Schema string `toml:"schema"`
 	// table name
@@ -124,13 +124,13 @@ type TableInstance struct {
 // Valid returns true if table instance's info is valide.
 // should be executed after source database's check.
 func (t *TableInstance) Valid() bool {
-	if t.DBLabel == "" {
-		log.Error("must specify the database label for source table")
+	if t.InstanceID == "" {
+		log.Error("must specify the database's instance id for source table")
 		return false
 	}
 
-	if _, ok := sourceLabelMap[t.DBLabel]; !ok {
-		log.Error("unknow database label %s", t.DBLabel)
+	if _, ok := sourceInstanceMap[t.InstanceID]; !ok {
+		log.Error("unknow database instance id %s", t.InstanceID)
 		return false
 	}
 
