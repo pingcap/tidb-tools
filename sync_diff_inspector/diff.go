@@ -228,9 +228,17 @@ func schemaStr(instanceID, schema string) string {
 	return fmt.Sprintf("%s|%s", instanceID, schema)
 }
 
+func scliceToMap(slice []string) map[string]interface{} {
+	sMap := make(map[string]interface{})
+	for _, str := range slice {
+		sMap[str] = struct{}{}
+	}
+	return sMap
+}
+
 // GetAllTables get all tables in all databases.
-func (df *Diff) GetAllTables(cfg *Config) (map[string][]string, error) {
-	allTablesMap := make(map[string][]string)
+func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]interface{}, error) {
+	allTablesMap := make(map[string]map[string]interface{})
 
 	for _, schemaTables := range cfg.Tables {
 		if _, ok := allTablesMap[schemaStr(cfg.TargetDBCfg.InstanceID, schemaTables.Schema)]; ok {
@@ -241,7 +249,7 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string][]string, error) {
 		if err != nil {
 			return nil, errors.Errorf("get tables from %s.%s error %v", cfg.TargetDBCfg.InstanceID, schemaTables.Schema, errors.Trace(err))
 		}
-		allTablesMap[schemaStr(cfg.TargetDBCfg.InstanceID, schemaTables.Schema)] = allTables
+		allTablesMap[schemaStr(cfg.TargetDBCfg.InstanceID, schemaTables.Schema)] = scliceToMap(allTables)
 	}
 
 	for _, table := range cfg.TableCfgs {
@@ -259,7 +267,7 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string][]string, error) {
 			if err != nil {
 				return nil, errors.Errorf("get tables from %s.%s error %v", db.InstanceID, sourceTable.Schema, errors.Trace(err))
 			}
-			allTablesMap[schemaStr(db.InstanceID, sourceTable.Schema)] = allTables
+			allTablesMap[schemaStr(db.InstanceID, sourceTable.Schema)] = scliceToMap(allTables)
 		}
 	}
 
@@ -267,19 +275,23 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string][]string, error) {
 }
 
 // GetMatchTable returns all the matched table.
-func (df *Diff) GetMatchTable(db DBConfig, schema, table string, allTables []string) ([]string, error) {
+func (df *Diff) GetMatchTable(db DBConfig, schema, table string, allTables map[string]interface{}) ([]string, error) {
 	tableNames := make([]string, 0, 1)
 
 	if table[0] == '~' {
 		tableRegex := regexp.MustCompile(fmt.Sprintf("(?i)%s", table[1:]))
-		for _, tableName := range allTables {
+		for tableName := range allTables {
 			if !tableRegex.MatchString(tableName) {
 				continue
 			}
 			tableNames = append(tableNames, tableName)
 		}
 	} else {
-		tableNames = append(tableNames, table)
+		if _, ok := allTables[table]; ok {
+			tableNames = append(tableNames, table)
+		} else {
+			return nil, errors.Errorf("%s.%s not found in %s", schema, table, db.InstanceID)
+		}
 	}
 
 	return tableNames, nil
@@ -326,7 +338,7 @@ func (df *Diff) Equal() (err error) {
 			if err != nil {
 				return errors.Trace(err)
 			}
-			df.report.SetTableStructCheckResult(table.Table, structEqual)
+			df.report.SetTableStructCheckResult(table.Schema, table.Table, structEqual)
 			if !structEqual {
 				log.Errorf("table have different struct: %s\n", table.Table)
 
@@ -340,7 +352,7 @@ func (df *Diff) Equal() (err error) {
 				log.Errorf("equal table error %v", err)
 				return errors.Trace(err)
 			}
-			df.report.SetTableDataCheckResult(table.Table, dataEqual)
+			df.report.SetTableDataCheckResult(table.Schema, table.Table, dataEqual)
 			if !dataEqual {
 				log.Errorf("table %s's data is not equal", table.Table)
 			}
@@ -435,13 +447,13 @@ func (df *Diff) EqualTableData(table *TableConfig) (bool, error) {
 		for j := len(checkNumArr) * i / df.checkThreadCount; j < len(checkNumArr)*(i+1)/df.checkThreadCount && j < len(checkNumArr); j++ {
 			checkJobs = append(checkJobs, allJobs[checkNumArr[j]])
 		}
-		go func() {
+		go func(checkJobs []*CheckJob) {
 			eq, err := df.checkChunkDataEqual(checkJobs, table)
 			if err != nil {
 				log.Errorf("check chunk data equal failed, error %v", errors.ErrorStack(err))
 			}
 			checkResultCh <- eq
-		}()
+		}(checkJobs)
 	}
 
 	num := 0

@@ -27,6 +27,7 @@ const (
 
 // TableResult saves the check result for every table.
 type TableResult struct {
+	Schema      string
 	Table       string
 	StructEqual bool
 	DataEqual   bool
@@ -40,13 +41,13 @@ type Report struct {
 	Result       string
 	PassNum      int32
 	FailedNum    int32
-	TableResults map[string]*TableResult
+	TableResults map[string]map[string]*TableResult
 }
 
 // NewReport returns a new Report.
 func NewReport() *Report {
 	return &Report{
-		TableResults: make(map[string]*TableResult),
+		TableResults: make(map[string]map[string]*TableResult),
 		Result:       Pass,
 	}
 }
@@ -76,24 +77,26 @@ func (r *Report) String() (report string) {
 	report += fmt.Sprintf("%d tables' check passed, %d tables' check failed.\n", r.PassNum, r.FailedNum)
 
 	var failTableRsult, passTableResult string
-	for table, result := range r.TableResults {
-		var structResult, dataResult string
-		if !result.StructEqual {
-			structResult = "table's struct not equal"
-		} else {
-			structResult = "table's struct equal"
-		}
+	for schema, tableMap := range r.TableResults {
+		for table, result := range tableMap {
+			var structResult, dataResult string
+			if !result.StructEqual {
+				structResult = "table's struct not equal"
+			} else {
+				structResult = "table's struct equal"
+			}
 
-		if !result.DataEqual {
-			dataResult = "table's data not equal"
-		} else {
-			dataResult = "table's data equal"
-		}
+			if !result.DataEqual {
+				dataResult = "table's data not equal"
+			} else {
+				dataResult = "table's data equal"
+			}
 
-		if !result.StructEqual || !result.DataEqual {
-			failTableRsult = fmt.Sprintf("%stable: %s\n%s\n%s\n\n", failTableRsult, table, structResult, dataResult)
-		} else {
-			passTableResult = fmt.Sprintf("%stable: %s\n%s\n%s\n\n", passTableResult, table, structResult, dataResult)
+			if !result.StructEqual || !result.DataEqual {
+				failTableRsult = fmt.Sprintf("%stable: %s.%s\n%s\n%s\n\n", failTableRsult, schema, table, structResult, dataResult)
+			} else {
+				passTableResult = fmt.Sprintf("%stable: %s.%s\n%s\n%s\n\n", passTableResult, schema, table, structResult, dataResult)
+			}
 		}
 	}
 
@@ -104,14 +107,18 @@ func (r *Report) String() (report string) {
 }
 
 // SetTableStructCheckResult sets the struct check result for table.
-func (r *Report) SetTableStructCheckResult(table string, equal bool) {
+func (r *Report) SetTableStructCheckResult(schema, table string, equal bool) {
 	r.Lock()
 	defer r.Unlock()
 
-	if tableResult, ok := r.TableResults[table]; ok {
+	if _, ok := r.TableResults[schema]; !ok {
+		r.TableResults[schema] = make(map[string]*TableResult)
+	}
+
+	if tableResult, ok := r.TableResults[schema][table]; ok {
 		tableResult.StructEqual = equal
 	} else {
-		r.TableResults[table] = &TableResult{
+		r.TableResults[schema][table] = &TableResult{
 			StructEqual: equal,
 		}
 	}
@@ -122,14 +129,18 @@ func (r *Report) SetTableStructCheckResult(table string, equal bool) {
 }
 
 // SetTableDataCheckResult sets the data check result for table.
-func (r *Report) SetTableDataCheckResult(table string, equal bool) {
+func (r *Report) SetTableDataCheckResult(schema, table string, equal bool) {
 	r.Lock()
 	defer r.Unlock()
 
-	if tableResult, ok := r.TableResults[table]; ok {
+	if _, ok := r.TableResults[schema]; !ok {
+		r.TableResults[schema] = make(map[string]*TableResult)
+	}
+
+	if tableResult, ok := r.TableResults[schema][table]; ok {
 		tableResult.DataEqual = equal
 	} else {
-		r.TableResults[table] = &TableResult{
+		r.TableResults[schema][table] = &TableResult{
 			DataEqual: equal,
 		}
 	}
