@@ -142,7 +142,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 	for _, schemaTables := range cfg.Tables {
 		df.tables[schemaTables.Schema] = make(map[string]*TableConfig)
 		tables := make([]string, 0, len(schemaTables.Tables))
-		allTables := allTablesMap[fmt.Sprintf("%s|%s", df.targetDB.InstanceID, schemaTables.Schema)]
+		allTables := allTablesMap[schemaStr(df.targetDB.InstanceID, schemaTables.Schema)]
 
 		for _, table := range schemaTables.Tables {
 			matchedTables, err := df.GetMatchTable(df.targetDB, schemaTables.Schema, table, allTables)
@@ -193,7 +193,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 				return errors.Errorf("unkonw database instance id %s", sourceTable.InstanceID)
 			}
 
-			allTables, ok := allTablesMap[fmt.Sprintf("%s|%s", df.sourceDBs[sourceTable.InstanceID].InstanceID, sourceTable.Schema)]
+			allTables, ok := allTablesMap[schemaStr(df.sourceDBs[sourceTable.InstanceID].InstanceID, sourceTable.Schema)]
 			if !ok {
 				return errors.Errorf("unknow schema %s in database %s", sourceTable.Schema, df.sourceDBs[sourceTable.InstanceID])
 			}
@@ -224,20 +224,45 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 	return nil
 }
 
+func schemaStr(instanceID, schema string) string {
+	return fmt.Sprintf("%s|%s", instanceID, schema)
+}
+
 // GetAllTables get all tables in all databases.
 func (df *Diff) GetAllTables(cfg *Config) (map[string][]string, error) {
 	allTablesMap := make(map[string][]string)
-	databases := append(cfg.SourceDBCfg, cfg.TargetDBCfg)
 
 	for _, schemaTables := range cfg.Tables {
-		for _, db := range databases {
-			allTables, err := dbutil.GetTables(df.ctx, db.Conn, schemaTables.Schema)
-			if err != nil {
-				return nil, errors.Errorf("get tables from %s.%s error %v", db.InstanceID, schemaTables.Schema, errors.Trace(err))
+		if _, ok := allTablesMap[schemaStr(cfg.TargetDBCfg.InstanceID, schemaTables.Schema)]; ok {
+			continue
+		}
+
+		allTables, err := dbutil.GetTables(df.ctx, cfg.TargetDBCfg.Conn, schemaTables.Schema)
+		if err != nil {
+			return nil, errors.Errorf("get tables from %s.%s error %v", cfg.TargetDBCfg.InstanceID, schemaTables.Schema, errors.Trace(err))
+		}
+		allTablesMap[schemaStr(cfg.TargetDBCfg.InstanceID, schemaTables.Schema)] = allTables
+	}
+
+	for _, table := range cfg.TableCfgs {
+		for _, sourceTable := range table.SourceTables {
+			if _, ok := allTablesMap[schemaStr(sourceTable.InstanceID, sourceTable.Schema)]; ok {
+				continue
 			}
-			allTablesMap[fmt.Sprintf("%s|%s", db.InstanceID, schemaTables.Schema)] = allTables
+
+			db, ok := df.sourceDBs[sourceTable.InstanceID]
+			if !ok {
+				return nil, errors.Errorf("unknow instance id %s", sourceTable.InstanceID)
+			}
+
+			allTables, err := dbutil.GetTables(df.ctx, db.Conn, table.Schema)
+			if err != nil {
+				return nil, errors.Errorf("get tables from %s.%s error %v", db.InstanceID, sourceTable.Schema, errors.Trace(err))
+			}
+			allTablesMap[schemaStr(db.InstanceID, sourceTable.Schema)] = allTables
 		}
 	}
+
 	return allTablesMap, nil
 }
 
