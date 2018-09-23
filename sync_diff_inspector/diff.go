@@ -255,7 +255,7 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string][]string, error) {
 				return nil, errors.Errorf("unknow instance id %s", sourceTable.InstanceID)
 			}
 
-			allTables, err := dbutil.GetTables(df.ctx, db.Conn, table.Schema)
+			allTables, err := dbutil.GetTables(df.ctx, db.Conn, sourceTable.Schema)
 			if err != nil {
 				return nil, errors.Errorf("get tables from %s.%s error %v", db.InstanceID, sourceTable.Schema, errors.Trace(err))
 			}
