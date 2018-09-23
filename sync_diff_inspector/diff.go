@@ -102,13 +102,13 @@ func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 		source.Conn.SetMaxOpenConns(cfg.CheckThreadCount)
 		source.Conn.SetMaxIdleConns(cfg.CheckThreadCount)
 
+		df.sourceDBs[source.InstanceID] = source
 		if source.Snapshot != "" {
 			err = dbutil.SetSnapshot(df.ctx, source.Conn, source.Snapshot)
 			if err != nil {
 				return errors.Errorf("set history snapshot %s for source db %+v error %v", source.Snapshot, source.DBConfig, err)
 			}
 		}
-		df.sourceDBs[source.InstanceID] = source
 	}
 
 	// create connection for target.
@@ -119,29 +119,30 @@ func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 	cfg.TargetDBCfg.Conn.SetMaxOpenConns(cfg.CheckThreadCount)
 	cfg.TargetDBCfg.Conn.SetMaxIdleConns(cfg.CheckThreadCount)
 
+	df.targetDB = cfg.TargetDBCfg
 	if cfg.TargetDBCfg.Snapshot != "" {
 		err = dbutil.SetSnapshot(df.ctx, cfg.TargetDBCfg.Conn, cfg.TargetDBCfg.Snapshot)
 		if err != nil {
 			return errors.Errorf("set history snapshot %s for target db %+v error %v", cfg.TargetDBCfg.Snapshot, cfg.TargetDBCfg, err)
 		}
 	}
-	df.targetDB = cfg.TargetDBCfg
 
 	return nil
 }
 
 // AdjustTableConfig adjusts the table's config by check-tables and table-config.
 func (df *Diff) AdjustTableConfig(cfg *Config) error {
+	allTablesMap, err := df.GetAllTables(cfg)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	// fill the table information.
 	// will add default source information, don't worry, we will use table config's info replace this later.
 	for _, schemaTables := range cfg.Tables {
 		df.tables[schemaTables.Schema] = make(map[string]*TableConfig)
 		tables := make([]string, 0, len(schemaTables.Tables))
-
-		allTables, err := dbutil.GetTables(df.ctx, df.targetDB.Conn, schemaTables.Schema)
-		if err != nil {
-			return errors.Errorf("get tables from %s.%s error %v", df.targetDB.InstanceID, schemaTables.Schema, errors.Trace(err))
-		}
+		allTables := allTablesMap[fmt.Sprintf("%s|%s", df.targetDB.InstanceID, schemaTables.Schema)]
 
 		for _, table := range schemaTables.Tables {
 			matchedTables, err := df.GetMatchTable(df.targetDB, schemaTables.Schema, table, allTables)
@@ -192,12 +193,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 				return errors.Errorf("unkonw database instance id %s", sourceTable.InstanceID)
 			}
 
-			allTables, err := dbutil.GetTables(df.ctx, df.sourceDBs[sourceTable.InstanceID].Conn, sourceTable.Schema)
-			if err != nil {
-				return errors.Errorf("get tables from %s.%s error %v",
-					df.sourceDBs[sourceTable.InstanceID].InstanceID, sourceTable.Schema, errors.Trace(err))
-			}
-
+			allTables := allTablesMap[fmt.Sprintf("%s|%s", df.sourceDBs[sourceTable.InstanceID].InstanceID, sourceTable.Schema)]
 			tables, err := df.GetMatchTable(df.sourceDBs[sourceTable.InstanceID], sourceTable.Schema, sourceTable.Table, allTables)
 			if err != nil {
 				return errors.Trace(err)
@@ -222,6 +218,23 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 	}
 
 	return nil
+}
+
+// GetAllTables get all tables in all databases.
+func (df *Diff) GetAllTables(cfg *Config) (map[string][]string, error) {
+	allTablesMap := make(map[string][]string)
+	databases := append(cfg.SourceDBCfg, cfg.TargetDBCfg)
+
+	for _, schemaTables := range cfg.Tables {
+		for _, db := range databases {
+			allTables, err := dbutil.GetTables(df.ctx, db.Conn, schemaTables.Schema)
+			if err != nil {
+				return nil, errors.Errorf("get tables from %s.%s error %v", db.InstanceID, schemaTables.Schema, errors.Trace(err))
+			}
+			allTablesMap[fmt.Sprintf("%s|%s", db.InstanceID, schemaTables.Schema)] = allTables
+		}
+	}
+	return allTablesMap, nil
 }
 
 // GetMatchTable returns all the matched table.

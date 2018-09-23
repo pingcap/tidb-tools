@@ -261,6 +261,10 @@ func (c *Config) checkConfig() bool {
 		return false
 	}
 
+	if c.TargetDBCfg.InstanceID == "" {
+		c.TargetDBCfg.InstanceID = "target"
+	}
+
 	if len(c.SourceDBCfg) == 0 {
 		log.Error("must have at least one source database")
 		return false
