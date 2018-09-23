@@ -240,12 +240,12 @@ func GenerateCheckJob(db DBConfig, table *TableConfig, chunkSize int, sample int
 	var err error
 
 	if table.Field == "" {
-		column, err = findSuitableField(db.Conn, table.Schema, table.Info)
+		column, err = findSuitableField(db.Conn, table.Schema, table.TargetTableInfo)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 	} else {
-		column = dbutil.FindColumnByName(table.Info.Columns, table.Field)
+		column = dbutil.FindColumnByName(table.TargetTableInfo.Columns, table.Field)
 		if column == nil {
 			return nil, errors.NotFoundf("column %s in table %s", table.Field, table.Table)
 		}

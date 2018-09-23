@@ -78,8 +78,8 @@ type TableConfig struct {
 	// may have more than one source for sharding tables.
 	// or you want to compare table with different schema and table name.
 	// SourceTables can be nil when source and target is one-to-one correspondence.
-	SourceTables []TableInstance `toml:"source-tables"`
-	Info         *model.TableInfo
+	SourceTables    []TableInstance `toml:"source-tables"`
+	TargetTableInfo *model.TableInfo
 }
 
 // Valid returns true if table's config is valide.

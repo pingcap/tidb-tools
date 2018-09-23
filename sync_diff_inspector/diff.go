@@ -167,8 +167,8 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 					Schema: schemaTables.Schema,
 					Table:  tableName,
 				},
-				Info:  tableInfo,
-				Range: "TRUE",
+				TargetTableInfo: tableInfo,
+				Range:           "TRUE",
 				SourceTables: []TableInstance{{
 					InstanceID: cfg.SourceDBCfg[0].InstanceID,
 					Schema:     schemaTables.Schema,
@@ -314,7 +314,7 @@ func (df *Diff) Equal() (err error) {
 
 // CheckTableStruct checks table's struct is equal or not.
 func (df *Diff) CheckTableStruct(table *TableConfig) (bool, error) {
-	targetTableInfo := table.Info
+	targetTableInfo := table.TargetTableInfo
 
 	for _, sourceTable := range table.SourceTables {
 		conn := df.sourceDBs[sourceTable.InstanceID].Conn
@@ -428,7 +428,7 @@ func (df *Diff) getSourceTableChecksum(table *TableConfig, job *CheckJob) (int64
 
 	for _, sourceTable := range table.SourceTables {
 		source := df.sourceDBs[sourceTable.InstanceID]
-		checksumTmp, err := dbutil.GetCRC32Checksum(df.ctx, source.Conn, sourceTable.Schema, sourceTable.Table, table.Info, job.Where, job.Args)
+		checksumTmp, err := dbutil.GetCRC32Checksum(df.ctx, source.Conn, sourceTable.Schema, sourceTable.Table, table.TargetTableInfo, job.Where, job.Args)
 		if err != nil {
 			return -1, errors.Trace(err)
 		}
@@ -452,7 +452,7 @@ func (df *Diff) checkChunkDataEqual(checkJobs []*CheckJob, table *TableConfig) (
 				return false, errors.Trace(err)
 			}
 
-			targetChecksum, err := dbutil.GetCRC32Checksum(df.ctx, df.targetDB.Conn, table.Schema, table.Table, table.Info, job.Where, job.Args)
+			targetChecksum, err := dbutil.GetCRC32Checksum(df.ctx, df.targetDB.Conn, table.Schema, table.Table, table.TargetTableInfo, job.Where, job.Args)
 			if err != nil {
 				return false, errors.Trace(err)
 			}
@@ -468,14 +468,14 @@ func (df *Diff) checkChunkDataEqual(checkJobs []*CheckJob, table *TableConfig) (
 		sourceRows := make(map[string]*sql.Rows)
 		for _, sourceTable := range table.SourceTables {
 			source := df.sourceDBs[sourceTable.InstanceID]
-			rows, _, err := getChunkRows(df.ctx, source.Conn, sourceTable.Schema, sourceTable.Table, table.Info, job.Where, job.Args, df.useRowID)
+			rows, _, err := getChunkRows(df.ctx, source.Conn, sourceTable.Schema, sourceTable.Table, table.TargetTableInfo, job.Where, job.Args, df.useRowID)
 			if err != nil {
 				return false, errors.Trace(err)
 			}
 			sourceRows[sourceTable.InstanceID] = rows
 		}
 
-		targetRows, orderKeyCols, err := getChunkRows(df.ctx, df.targetDB.Conn, table.Schema, table.Table, table.Info, job.Where, job.Args, df.useRowID)
+		targetRows, orderKeyCols, err := getChunkRows(df.ctx, df.targetDB.Conn, table.Schema, table.Table, table.TargetTableInfo, job.Where, job.Args, df.useRowID)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -557,7 +557,7 @@ func (df *Diff) compareRows(sourceRows map[string]*sql.Rows, targetRows *sql.Row
 		if index1 == len(rowsData1) {
 			// all the rowsData2's data should be deleted
 			for ; index2 < len(rowsData2); index2++ {
-				sql := generateDML("delete", rowsData2[index2], rowsNull2[index2], orderKeyCols, table.Info, table.Schema)
+				sql := generateDML("delete", rowsData2[index2], rowsNull2[index2], orderKeyCols, table.TargetTableInfo, table.Schema)
 				log.Infof("[delete] sql: %v", sql)
 				df.wg.Add(1)
 				df.sqlCh <- sql
@@ -568,7 +568,7 @@ func (df *Diff) compareRows(sourceRows map[string]*sql.Rows, targetRows *sql.Row
 		if index2 == len(rowsData2) {
 			// rowsData2 lack some data, should insert them
 			for ; index1 < len(rowsData1); index1++ {
-				sql := generateDML("replace", rowsData1[index1], rowsNull1[index1], orderKeyCols, table.Info, table.Schema)
+				sql := generateDML("replace", rowsData1[index1], rowsNull1[index1], orderKeyCols, table.TargetTableInfo, table.Schema)
 				log.Infof("[insert] sql: %v", sql)
 				df.wg.Add(1)
 				df.sqlCh <- sql
@@ -589,21 +589,21 @@ func (df *Diff) compareRows(sourceRows map[string]*sql.Rows, targetRows *sql.Row
 		switch cmp {
 		case 1:
 			// delete
-			sql := generateDML("delete", rowsData2[index2], rowsNull2[index2], orderKeyCols, table.Info, table.Schema)
+			sql := generateDML("delete", rowsData2[index2], rowsNull2[index2], orderKeyCols, table.TargetTableInfo, table.Schema)
 			log.Infof("[delete] sql: %s", sql)
 			df.wg.Add(1)
 			df.sqlCh <- sql
 			index2++
 		case -1:
 			// insert
-			sql := generateDML("replace", rowsData1[index1], rowsNull1[index1], orderKeyCols, table.Info, table.Schema)
+			sql := generateDML("replace", rowsData1[index1], rowsNull1[index1], orderKeyCols, table.TargetTableInfo, table.Schema)
 			log.Infof("[insert] sql: %s", sql)
 			df.wg.Add(1)
 			df.sqlCh <- sql
 			index1++
 		case 0:
 			// update
-			sql := generateDML("replace", rowsData1[index1], rowsNull1[index1], orderKeyCols, table.Info, table.Schema)
+			sql := generateDML("replace", rowsData1[index1], rowsNull1[index1], orderKeyCols, table.TargetTableInfo, table.Schema)
 			log.Infof("[update] sql: %s", sql)
 			df.wg.Add(1)
 			df.sqlCh <- sql
