@@ -193,7 +193,11 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 				return errors.Errorf("unkonw database instance id %s", sourceTable.InstanceID)
 			}
 
-			allTables := allTablesMap[fmt.Sprintf("%s|%s", df.sourceDBs[sourceTable.InstanceID].InstanceID, sourceTable.Schema)]
+			allTables, ok := allTablesMap[fmt.Sprintf("%s|%s", df.sourceDBs[sourceTable.InstanceID].InstanceID, sourceTable.Schema)]
+			if !ok {
+				return errors.Errorf("unknow schema %s in database %s", sourceTable.Schema, df.sourceDBs[sourceTable.InstanceID])
+			}
+
 			tables, err := df.GetMatchTable(df.sourceDBs[sourceTable.InstanceID], sourceTable.Schema, sourceTable.Table, allTables)
 			if err != nil {
 				return errors.Trace(err)
