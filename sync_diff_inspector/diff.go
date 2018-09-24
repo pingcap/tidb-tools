@@ -228,7 +228,7 @@ func schemaStr(instanceID, schema string) string {
 	return fmt.Sprintf("%s|%s", instanceID, schema)
 }
 
-func scliceToMap(slice []string) map[string]interface{} {
+func sliceToMap(slice []string) map[string]interface{} {
 	sMap := make(map[string]interface{})
 	for _, str := range slice {
 		sMap[str] = struct{}{}
@@ -249,7 +249,7 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]interface{}, er
 		if err != nil {
 			return nil, errors.Errorf("get tables from %s.%s error %v", cfg.TargetDBCfg.InstanceID, schemaTables.Schema, errors.Trace(err))
 		}
-		allTablesMap[schemaStr(cfg.TargetDBCfg.InstanceID, schemaTables.Schema)] = scliceToMap(allTables)
+		allTablesMap[schemaStr(cfg.TargetDBCfg.InstanceID, schemaTables.Schema)] = sliceToMap(allTables)
 	}
 
 	for _, table := range cfg.TableCfgs {
@@ -267,7 +267,7 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]interface{}, er
 			if err != nil {
 				return nil, errors.Errorf("get tables from %s.%s error %v", db.InstanceID, sourceTable.Schema, errors.Trace(err))
 			}
-			allTablesMap[schemaStr(db.InstanceID, sourceTable.Schema)] = scliceToMap(allTables)
+			allTablesMap[schemaStr(db.InstanceID, sourceTable.Schema)] = sliceToMap(allTables)
 		}
 	}
 
