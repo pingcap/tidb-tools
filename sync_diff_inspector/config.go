@@ -14,6 +14,7 @@
 package main
 
 import (
+	"database/sql"
 	"flag"
 	"fmt"
 
@@ -29,17 +30,116 @@ const (
 	percent100 = 100
 )
 
-// TableCheckCfg is the config of table to be checked.
-type TableCheckCfg struct {
-	// table name
-	Name string `toml:"name"`
-	// Schema is seted in SourceDBCfg
-	Schema string
+var sourceInstanceMap map[string]interface{} = make(map[string]interface{})
+
+// DBConfig is the config of database, and keep the connection.
+type DBConfig struct {
+	dbutil.DBConfig
+
+	InstanceID string `toml:"instance-id" json:"instance-id"`
+
+	Snapshot string `toml:"snapshot" json:"snapshot"`
+
+	Conn *sql.DB
+}
+
+// Valid returns true if database's config is valide.
+func (c *DBConfig) Valid() bool {
+	if c.InstanceID == "" {
+		log.Error("must specify source database's instance id")
+		return false
+	}
+	sourceInstanceMap[c.InstanceID] = struct{}{}
+
+	return true
+}
+
+// CheckTables saves the tables need to check.
+type CheckTables struct {
+	// schema name
+	Schema string `toml:"schema" json:"schema"`
+
+	// table list
+	Tables []string `toml:"tables" json:"tables"`
+}
+
+// TableConfig is the config of table.
+type TableConfig struct {
+	// table's origin information
+	TableInstance
+
 	// field should be the primary key, unique key or field with index
 	Field string `toml:"index-field"`
 	// select range, for example: "age > 10 AND age < 20"
 	Range string `toml:"range"`
-	Info  *model.TableInfo
+	// set true if comparing sharding tables with target table, should have more than one source tables.
+	IsSharding bool `toml:"is-sharding"`
+	// saves the source tables's info.
+	// may have more than one source for sharding tables.
+	// or you want to compare table with different schema and table name.
+	// SourceTables can be nil when source and target is one-to-one correspondence.
+	SourceTables    []TableInstance `toml:"source-tables"`
+	TargetTableInfo *model.TableInfo
+}
+
+// Valid returns true if table's config is valide.
+func (t *TableConfig) Valid() bool {
+	if t.Schema == "" || t.Table == "" {
+		log.Error("schema and table's name can't be empty")
+		return false
+	}
+
+	if t.IsSharding {
+		if len(t.SourceTables) <= 1 {
+			log.Error("must have more than one source tables if comparing sharding tables")
+			return false
+		}
+
+	} else {
+		if len(t.SourceTables) > 1 {
+			log.Error("have more than one source table in no sharding mode")
+			return false
+		}
+	}
+
+	for _, sourceTable := range t.SourceTables {
+		if !sourceTable.Valid() {
+			return false
+		}
+	}
+
+	return true
+}
+
+// TableInstance saves the base information of table.
+type TableInstance struct {
+	// database's instance id
+	InstanceID string `toml:"instance-id" json:"instance-id"`
+	// schema name
+	Schema string `toml:"schema"`
+	// table name
+	Table string `toml:"table"`
+}
+
+// Valid returns true if table instance's info is valide.
+// should be executed after source database's check.
+func (t *TableInstance) Valid() bool {
+	if t.InstanceID == "" {
+		log.Error("must specify the database's instance id for source table")
+		return false
+	}
+
+	if _, ok := sourceInstanceMap[t.InstanceID]; !ok {
+		log.Error("unknow database instance id %s", t.InstanceID)
+		return false
+	}
+
+	if t.Schema == "" || t.Table == "" {
+		log.Error("schema and table's name can't be empty")
+		return false
+	}
+
+	return true
 }
 
 // Config is the configuration.
@@ -50,10 +150,10 @@ type Config struct {
 	LogLevel string `toml:"log-level" json:"log-level"`
 
 	// source database's config
-	SourceDBCfg dbutil.DBConfig `toml:"source-db" json:"source-db"`
+	SourceDBCfg []DBConfig `toml:"source-db" json:"source-db"`
 
 	// target database's config
-	TargetDBCfg dbutil.DBConfig `toml:"target-db" json:"target-db"`
+	TargetDBCfg DBConfig `toml:"target-db" json:"target-db"`
 
 	// for example, the whole data is [1...100]
 	// we can split these data to [1...10], [11...20], ..., [91...100]
@@ -70,17 +170,17 @@ type Config struct {
 	// set true if target-db and source-db all support tidb implicit column "_tidb_rowid"
 	UseRowID bool `toml:"use-rowid" json:"use-rowid"`
 
+	// set false if want to comapre the data directly
+	UseChecksum bool `toml:"use-checksum" json:"use-checksum"`
+
 	// the name of the file which saves sqls used to fix different data
 	FixSQLFile string `toml:"fix-sql-file" json:"fix-sql-file"`
 
-	// the config of table to be checked
-	Tables []*TableCheckCfg `toml:"check-table" json:"check-table"`
+	// the tables to be checked
+	Tables []*CheckTables `toml:"check-tables" json:"check-tables"`
 
-	// the snapshot config of source database
-	SourceSnapshot string `toml:"source-snapshot" json:"source-snapshot"`
-
-	// the snapshot config of target database
-	TargetSnapshot string `toml:"target-snapshot" json:"target-snapshot"`
+	// the config of table
+	TableCfgs []*TableConfig `toml:"table-config" json:"table-config"`
 
 	// config file
 	ConfigFile string
@@ -101,9 +201,8 @@ func NewConfig() *Config {
 	fs.IntVar(&cfg.Sample, "sample", 100, "the percent of sampling check")
 	fs.IntVar(&cfg.CheckThreadCount, "check-thread-count", 1, "how many goroutines are created to check data")
 	fs.BoolVar(&cfg.UseRowID, "use-rowid", false, "set true if target-db and source-db all support tidb implicit column _tidb_rowid")
+	fs.BoolVar(&cfg.UseChecksum, "use-checksum", true, "set false if want to comapre the data directly")
 	fs.StringVar(&cfg.FixSQLFile, "fix-sql-file", "fix.sql", "the name of the file which saves sqls used to fix different data")
-	fs.StringVar(&cfg.SourceSnapshot, "source-snapshot", "", "source database's snapshot config")
-	fs.StringVar(&cfg.TargetSnapshot, "target-snapshot", "", "target database's snapshot config")
 	fs.BoolVar(&cfg.PrintVersion, "V", false, "print version of sync_diff_inspector")
 
 	return cfg
@@ -160,6 +259,32 @@ func (c *Config) checkConfig() bool {
 	if c.CheckThreadCount <= 0 {
 		log.Errorf("check-thcount must greater than 0!")
 		return false
+	}
+
+	if c.TargetDBCfg.InstanceID == "" {
+		c.TargetDBCfg.InstanceID = "target"
+	}
+
+	if len(c.SourceDBCfg) == 0 {
+		log.Error("must have at least one source database")
+		return false
+	}
+
+	for i := range c.SourceDBCfg {
+		if !c.SourceDBCfg[i].Valid() {
+			return false
+		}
+	}
+
+	if len(c.Tables) == 0 {
+		log.Error("must specify check tables")
+		return false
+	}
+
+	for _, tableCfg := range c.TableCfgs {
+		if !tableCfg.Valid() {
+			return false
+		}
 	}
 
 	return true
