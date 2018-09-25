@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package diff
 
 import (
 	"context"
@@ -62,14 +62,14 @@ func newChunkRange(begin, end interface{}, containBegin, containEnd, noBegin, no
 		noEnd:        noEnd,
 	}
 }
-func getChunksForTable(db DBConfig, table *TableConfig, column *model.ColumnInfo, chunkSize, sample int) ([]chunkRange, error) {
+func getChunksForTable(table *TableInstance, column *model.ColumnInfo, chunkSize, sample int, limits string) ([]chunkRange, error) {
 	if column == nil {
 		log.Warnf("no suitable index found for %s.%s", table.Schema, table.Table)
 		return nil, nil
 	}
 
 	// get the chunk count
-	cnt, err := dbutil.GetRowCount(context.Background(), db.Conn, table.Schema, table.Table, table.Range)
+	cnt, err := dbutil.GetRowCount(context.Background(), table.Conn, table.Schema, table.Table, limits)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -233,25 +233,25 @@ func findSuitableField(db *sql.DB, Schema string, table *model.TableInfo) (*mode
 }
 
 // GenerateCheckJob generates some CheckJobs.
-func GenerateCheckJob(db DBConfig, table *TableConfig, chunkSize int, sample int) ([]*CheckJob, error) {
+func GenerateCheckJob(table *TableInstance, splitField, limits string, chunkSize, sample int) ([]*CheckJob, error) {
 	jobBucket := make([]*CheckJob, 0, 10)
 	var jobCnt int
 	var column *model.ColumnInfo
 	var err error
 
-	if table.Field == "" {
-		column, err = findSuitableField(db.Conn, table.Schema, table.TargetTableInfo)
+	if splitField == "" {
+		column, err = findSuitableField(table.Conn, table.Schema, table.Info)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 	} else {
-		column = dbutil.FindColumnByName(table.TargetTableInfo.Columns, table.Field)
+		column = dbutil.FindColumnByName(table.TargetTableInfo.Columns, splitField)
 		if column == nil {
-			return nil, errors.NotFoundf("column %s in table %s", table.Field, table.Table)
+			return nil, errors.NotFoundf("column %s in table %s", splitField, table.Table)
 		}
 	}
 
-	chunks, err := getChunksForTable(db, table, column, chunkSize, sample)
+	chunks, err := getChunksForTable(table, column, chunkSize, sample, limits)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

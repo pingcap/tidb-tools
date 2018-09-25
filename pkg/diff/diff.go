@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package diff
 
 import (
 	"container/heap"
@@ -50,6 +50,77 @@ type Diff struct {
 	ctx context.Context
 }
 
+// TableInstance record a table instance
+type TableInstance struct {
+	Conn   *sql.DB
+	Schema string
+	Table  string
+	Info   *model.TableInfo
+}
+
+// TableDiff saves config for diff table
+type TableDiff struct {
+	// source tables
+	SourceTables []*TableInstance
+	// target table
+	TargetTable  *TableInstance
+
+	// columns be ignored
+	ignoreColumns []string
+
+	// field should be the primary key, unique key or field with index
+	Field string
+
+	// select range, for example: "age > 10 AND age < 20"
+	Range string
+
+	// for example, the whole data is [1...100]
+	// we can split these data to [1...10], [11...20], ..., [91...100]
+	// the [1...10] is a chunk, and it's chunk size is 10
+	// size of the split chunk
+	ChunkSize int
+
+	// sampling check percent, for example 10 means only check 10% data
+	Sample int
+
+	// how many goroutines are created to check data
+	CheckThreadCount int
+
+	// set true if target-db and source-db all support tidb implicit column "_tidb_rowid"
+	UseRowID bool
+
+	// set false if want to comapre the data directly
+	UseChecksum bool
+
+	// ignore check table's struct
+	IgnoreStructCheck bool
+
+	// ignore check table's data
+	IgnoreDataCheck bool
+}
+
+// CompareTable compare table, return diff result, and write fix sql if data is not equal.
+func (t *TableDiff) CompareTable(ctx context.Context, writeFixSql func() error) (bool, bool, error) {
+	structEqual := true
+	dataEqual := true
+	var err error
+
+	if !t.IgnoreStructCheck {
+		structEqual, err = t.CheckTableStruct(ctx)
+		if err != nil {
+			return false, false, errors.Trace(err)
+		}
+	}
+
+	if !t.IgnoreDataCheck {
+		structEqual, err = t.CheckTableData(ctx)
+		if err != nil {
+			return false, false, errors.Trace(err) 
+		}
+	}
+}
+
+/*
 // NewDiff returns a Diff instance.
 func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 	diff = &Diff{
@@ -72,7 +143,9 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 
 	return diff, nil
 }
+*/
 
+/*
 func (df *Diff) init(cfg *Config) (err error) {
 	// create connection for source.
 	if err = df.CreateDBConn(cfg); err != nil {
@@ -90,7 +163,9 @@ func (df *Diff) init(cfg *Config) (err error) {
 
 	return nil
 }
+*/
 
+/*
 func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 	// SetMaxOpenConns and SetMaxIdleConns for connection to avoid error like
 	// `dial tcp 10.26.2.1:3306: connect: cannot assign requested address`
@@ -223,6 +298,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 
 	return nil
 }
+*/
 
 func schemaStr(instanceID, schema string) string {
 	return fmt.Sprintf("%s|%s", instanceID, schema)
@@ -236,6 +312,7 @@ func sliceToMap(slice []string) map[string]interface{} {
 	return sMap
 }
 
+/*
 // GetAllTables get all tables in all databases.
 func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]interface{}, error) {
 	allTablesMap := make(map[string]map[string]interface{})
@@ -313,6 +390,7 @@ func (df *Diff) Close() {
 		df.targetDB.Conn.Close()
 	}
 }
+*/
 
 // Equal tests whether two database have same data and schema.
 func (df *Diff) Equal() (err error) {
@@ -364,6 +442,59 @@ func (df *Diff) Equal() (err error) {
 	df.sqlCh <- "end"
 	df.wg.Wait()
 	return
+}
+
+// CheckTableStruct checks table's struct
+func (t *TableDiff)CheckTableStruct(ctx context.Context) (bool, error) {
+	t.TargetTable.Info = dbutil.GetTableInfoWithRowID(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.UseRowID)
+	for _, sourceTable := range t.SourceTables {
+		sourceTable.Info = dbutil.GetTableInfoWithRowID(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.UseRowID)
+		eq, err := df.EqualTableStruct(sourceTable.Info, t.TargetTable.Info)
+		if err != nil {
+			return false, errors.Trace(err)
+		}
+
+		if !eq {
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
+// CheckTableData checks table's data
+func (t *TableDiff)CheckTableData() (bool, error) {
+	// remove columns ignored
+	ignoreColumns(t.TargetTable.Info)
+	for _, sourceTable := range t.SourceTables {
+		ignoreColumns(sourceTable.Info)
+	}
+
+
+	return true, nil
+}
+
+func ignoreColumns(tableInfo *model.TableInfo, ignoreColumns []string) {
+	if len(ignoreColumns) == 0 {
+		return
+	}
+	ignoreColMap := sliceToMap(ignoreColumns)
+	for i, index := range tableInfo.Indices {
+		for j, col := range index.Columns {
+			if _, ok := ignoreColMap[col.Name.O]; ok {
+				index.Columns = append(index.Columns[:j], index.Columns[j+1:]...)
+				if len(index.Columns) == 0 {
+					tableInfo.Indices = append(tableInfo.Indices[:i], tableInfo.Indices[i+1:]...)
+				}
+			}
+		}
+	}
+
+	for j, col := range tbInfo.Columns {
+		if _, ok := ignoreColMap[col.Name.O]; ok {
+			tbInfo.Columns = append(tbInfo.Columns[:j], tbInfo.Columns[j+1:]...)
+		}
+	}
 }
 
 // CheckTableStruct checks table's struct is equal or not.
@@ -429,8 +560,8 @@ func (df *Diff) EqualTableStruct(tableInfo1, tableInfo2 *model.TableInfo) (bool,
 }
 
 // EqualTableData checks data is equal or not.
-func (df *Diff) EqualTableData(table *TableConfig) (bool, error) {
-	allJobs, err := GenerateCheckJob(df.targetDB, table, df.chunkSize, df.sample)
+func (t *TableDiff) EqualTableData(ctx context.Context) (bool, error) {
+	allJobs, err := GenerateCheckJob(t.TargetTable.Conn, t.TargetTable, t.ChunkSize, t.Sample, t.Range)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
@@ -477,12 +608,12 @@ CheckResult:
 	return equal, nil
 }
 
-func (df *Diff) getSourceTableChecksum(table *TableConfig, job *CheckJob) (int64, error) {
-	var checksum int64 = 0
+func (t *TableDiff) getSourceTableChecksum(ctx context.Context, job *CheckJob) (int64, error) {
+	var checksum int64
 
-	for _, sourceTable := range table.SourceTables {
+	for _, sourceTable := range t.SourceTables {
 		source := df.sourceDBs[sourceTable.InstanceID]
-		checksumTmp, err := dbutil.GetCRC32Checksum(df.ctx, source.Conn, sourceTable.Schema, sourceTable.Table, table.TargetTableInfo, job.Where, job.Args)
+		checksumTmp, err := dbutil.GetCRC32Checksum(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.Info, job.Where, job.Args)
 		if err != nil {
 			return -1, errors.Trace(err)
 		}
@@ -492,7 +623,7 @@ func (df *Diff) getSourceTableChecksum(table *TableConfig, job *CheckJob) (int64
 	return checksum, nil
 }
 
-func (df *Diff) checkChunkDataEqual(checkJobs []*CheckJob, table *TableConfig) (bool, error) {
+func (t *TableDiff) checkChunkDataEqual(ctx context.Context, checkJobs []*CheckJob) (bool, error) {
 	equal := true
 	if len(checkJobs) == 0 {
 		return true, nil
@@ -501,12 +632,12 @@ func (df *Diff) checkChunkDataEqual(checkJobs []*CheckJob, table *TableConfig) (
 	for _, job := range checkJobs {
 		if df.useChecksum {
 			// first check the checksum is equal or not
-			sourceChecksum, err := df.getSourceTableChecksum(table, job)
+			sourceChecksum, err := df.getSourceTableChecksum(ctx, job)
 			if err != nil {
 				return false, errors.Trace(err)
 			}
 
-			targetChecksum, err := dbutil.GetCRC32Checksum(df.ctx, df.targetDB.Conn, table.Schema, table.Table, table.TargetTableInfo, job.Where, job.Args)
+			targetChecksum, err := dbutil.GetCRC32Checksum(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.Info, job.Where, job.Args)
 			if err != nil {
 				return false, errors.Trace(err)
 			}
@@ -520,16 +651,15 @@ func (df *Diff) checkChunkDataEqual(checkJobs []*CheckJob, table *TableConfig) (
 
 		// if checksum is not equal or don't need compare checksum, compare the data
 		sourceRows := make(map[string]*sql.Rows)
-		for _, sourceTable := range table.SourceTables {
-			source := df.sourceDBs[sourceTable.InstanceID]
-			rows, _, err := getChunkRows(df.ctx, source.Conn, sourceTable.Schema, sourceTable.Table, table.TargetTableInfo, job.Where, job.Args, df.useRowID)
+		for _, sourceTable := range t.SourceTables {
+			rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, table.Info, job.Where, job.Args)
 			if err != nil {
 				return false, errors.Trace(err)
 			}
 			sourceRows[sourceTable.InstanceID] = rows
 		}
 
-		targetRows, orderKeyCols, err := getChunkRows(df.ctx, df.targetDB.Conn, table.Schema, table.Table, table.TargetTableInfo, job.Where, job.Args, df.useRowID)
+		targetRows, orderKeyCols, err := getChunkRows(df.ctx, df.targetDB.Conn, table.Schema, table.Table, table.TargetTableInfo, job.Where, job.Args)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -548,7 +678,7 @@ func (df *Diff) checkChunkDataEqual(checkJobs []*CheckJob, table *TableConfig) (
 	return equal, nil
 }
 
-func (df *Diff) compareRows(sourceRows map[string]*sql.Rows, targetRows *sql.Rows, orderKeyCols []*model.ColumnInfo, table *TableConfig) (bool, error) {
+func (t *TableDiff) compareRows(sourceRows map[string]*sql.Rows, targetRows *sql.Rows, orderKeyCols []*model.ColumnInfo) (bool, error) {
 	var (
 		equal     = true
 		rowsData1 = make([]map[string][]byte, 0, 100)
@@ -678,6 +808,7 @@ func (df *Diff) WriteSqls() {
 				return
 			}
 
+			_, err := 
 			_, err := df.fixSQLFile.WriteString(fmt.Sprintf("%s\n", dml))
 			if err != nil {
 				log.Errorf("write sql: %s failed, error: %v", dml, err)
@@ -802,7 +933,7 @@ func compareData(map1, map2 map[string][]byte, null1, null2 map[string]bool, ord
 }
 
 func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo, where string,
-	args []interface{}, useRowID bool) (*sql.Rows, []*model.ColumnInfo, error) {
+	args []interface{}) (*sql.Rows, []*model.ColumnInfo, error) {
 	orderKeys, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
 	columns := "*"
 	if orderKeys[0] == dbutil.ImplicitColName {
