@@ -80,8 +80,6 @@ func (*testDiffSuite) TestGenerateSQLs(c *C) {
 }
 
 func (*testDiffSuite) TestTableStructEqual(c *C) {
-	df := &Diff{}
-
 	createTableSQL1 := "CREATE TABLE `test`.`atest` (`id` int(24), `name` varchar(24), `birthday` datetime, `update_time` time, `money` decimal(20,2), primary key(`id`))"
 	tableInfo1, err := dbutil.GetTableInfoBySQL(createTableSQL1)
 	c.Assert(err, IsNil)
@@ -94,11 +92,11 @@ func (*testDiffSuite) TestTableStructEqual(c *C) {
 	tableInfo3, err := dbutil.GetTableInfoBySQL(createTableSQL3)
 	c.Assert(err, IsNil)
 
-	equal, err := df.EqualTableStruct(tableInfo1, tableInfo2)
+	equal, err := equalTableInfo(tableInfo1, tableInfo2)
 	c.Assert(err, IsNil)
 	c.Assert(equal, Equals, true)
 
-	equal, err = df.EqualTableStruct(tableInfo1, tableInfo3)
+	equal, err = equalTableInfo(tableInfo1, tableInfo3)
 	c.Assert(err, IsNil)
 	c.Assert(equal, Equals, false)
 }

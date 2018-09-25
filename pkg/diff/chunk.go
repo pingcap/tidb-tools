@@ -89,12 +89,12 @@ func getChunksForTable(table *TableInstance, column *model.ColumnInfo, chunkSize
 
 	// fetch min, max
 	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ MIN(`%s`) as MIN, MAX(`%s`) as MAX FROM `%s`.`%s` WHERE %s",
-		field, field, table.Schema, table.Table, table.Range)
+		field, field, table.Schema, table.Table, limits)
 
 	var chunk chunkRange
 	if dbutil.IsNumberType(column.Tp) {
 		var min, max sql.NullInt64
-		err := db.Conn.QueryRow(query).Scan(&min, &max)
+		err := table.Conn.QueryRow(query).Scan(&min, &max)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -105,7 +105,7 @@ func getChunksForTable(table *TableInstance, column *model.ColumnInfo, chunkSize
 		chunk = newChunkRange(min.Int64, max.Int64, true, true, false, false)
 	} else if dbutil.IsFloatType(column.Tp) {
 		var min, max sql.NullFloat64
-		err := db.Conn.QueryRow(query).Scan(&min, &max)
+		err := table.Conn.QueryRow(query).Scan(&min, &max)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -116,7 +116,7 @@ func getChunksForTable(table *TableInstance, column *model.ColumnInfo, chunkSize
 		chunk = newChunkRange(min.Float64, max.Float64, true, true, false, false)
 	} else {
 		var min, max sql.NullString
-		err := db.Conn.QueryRow(query).Scan(&min, &max)
+		err := table.Conn.QueryRow(query).Scan(&min, &max)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -126,7 +126,7 @@ func getChunksForTable(table *TableInstance, column *model.ColumnInfo, chunkSize
 		chunk = newChunkRange(min.String, max.String, true, true, false, false)
 	}
 
-	return splitRange(db.Conn, &chunk, chunkCnt, table.Schema, table.Table, column, table.Range)
+	return splitRange(table.Conn, &chunk, chunkCnt, table.Schema, table.Table, column, limits)
 }
 
 func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table string, column *model.ColumnInfo, limitRange string) ([]chunkRange, error) {
@@ -245,7 +245,7 @@ func GenerateCheckJob(table *TableInstance, splitField, limits string, chunkSize
 			return nil, errors.Trace(err)
 		}
 	} else {
-		column = dbutil.FindColumnByName(table.TargetTableInfo.Columns, splitField)
+		column = dbutil.FindColumnByName(table.Info.Columns, splitField)
 		if column == nil {
 			return nil, errors.NotFoundf("column %s in table %s", splitField, table.Table)
 		}
@@ -293,7 +293,7 @@ func GenerateCheckJob(table *TableInstance, splitField, limits string, chunkSize
 		} else {
 			condition2 = "TRUE"
 		}
-		where := fmt.Sprintf("(%s AND %s AND %s)", condition1, condition2, table.Range)
+		where := fmt.Sprintf("(%s AND %s AND %s)", condition1, condition2, limits)
 
 		log.Debugf("%s.%s create dump job, where: %s, begin: %v, end: %v", table.Schema, table.Table, where, chunk.begin, chunk.end)
 		jobBucket = append(jobBucket, &CheckJob{

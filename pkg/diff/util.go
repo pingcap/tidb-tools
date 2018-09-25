@@ -1,0 +1,96 @@
+// Copyright 2018 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package diff
+
+import (
+	"math/rand"
+
+	"github.com/ngaut/log"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb/model"
+	"github.com/pingcap/tidb/types"
+)
+
+func equalStrings(str1, str2 []string) bool {
+	if len(str1) != len(str2) {
+		return false
+	}
+	for i := 0; i < len(str1); i++ {
+		if str1[i] != str2[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func equalTableInfo(tableInfo1, tableInfo2 *model.TableInfo) (bool, error) {
+	// check columns
+	if len(tableInfo1.Columns) != len(tableInfo2.Columns) {
+		return false, nil
+	}
+
+	for j, col := range tableInfo1.Columns {
+		if col.Name.O != tableInfo2.Columns[j].Name.O {
+			return false, nil
+		}
+		if col.Tp != tableInfo2.Columns[j].Tp {
+			return false, nil
+		}
+	}
+
+	// check index
+	if len(tableInfo1.Indices) != len(tableInfo2.Indices) {
+		return false, nil
+	}
+
+	for i, index := range tableInfo1.Indices {
+		index2 := tableInfo2.Indices[i]
+		if index.Name.O != index2.Name.O {
+			return false, nil
+		}
+		if len(index.Columns) != len(index2.Columns) {
+			return false, nil
+		}
+		for j, col := range index.Columns {
+			if col.Name.O != index2.Columns[j].Name.O {
+				return false, nil
+			}
+		}
+	}
+
+	return true, nil
+}
+
+func getRandomN(total, num int) []int {
+	if num > total {
+		log.Warnf("the num %d is greater than total %d", num, total)
+		num = total
+	}
+
+	totalArray := make([]int, 0, total)
+	for i := 0; i < total; i++ {
+		totalArray = append(totalArray, i)
+	}
+
+	for j := 0; j < num; j++ {
+		r := j + rand.Intn(total-j)
+		totalArray[j], totalArray[r] = totalArray[r], totalArray[j]
+	}
+
+	return totalArray[:num]
+}
+
+func needQuotes(ft types.FieldType) bool {
+	return !(dbutil.IsNumberType(ft.Tp) || dbutil.IsFloatType(ft.Tp))
+}

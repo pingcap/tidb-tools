@@ -18,9 +18,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"math/rand"
-	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,26 +26,7 @@ import (
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/model"
-	"github.com/pingcap/tidb/types"
 )
-
-// Diff contains two sql DB, used for comparing.
-type Diff struct {
-	sourceDBs        map[string]DBConfig
-	targetDB         DBConfig
-	chunkSize        int
-	sample           int
-	checkThreadCount int
-	useRowID         bool
-	useChecksum      bool
-	tables           map[string]map[string]*TableConfig
-	fixSQLFile       *os.File
-	sqlCh            chan string
-	wg               sync.WaitGroup
-	report           *Report
-
-	ctx context.Context
-}
 
 // TableInstance record a table instance
 type TableInstance struct {
@@ -63,10 +41,10 @@ type TableDiff struct {
 	// source tables
 	SourceTables []*TableInstance
 	// target table
-	TargetTable  *TableInstance
+	TargetTable *TableInstance
 
 	// columns be ignored
-	ignoreColumns []string
+	IgnoreColumns []string
 
 	// field should be the primary key, unique key or field with index
 	Field string
@@ -97,10 +75,28 @@ type TableDiff struct {
 
 	// ignore check table's data
 	IgnoreDataCheck bool
+
+	sqlCh chan string
+
+	wg sync.WaitGroup
 }
 
-// CompareTable compare table, return diff result, and write fix sql if data is not equal.
-func (t *TableDiff) CompareTable(ctx context.Context, writeFixSql func() error) (bool, bool, error) {
+func sliceToMap(slice []string) map[string]interface{} {
+	sMap := make(map[string]interface{})
+	for _, str := range slice {
+		sMap[str] = struct{}{}
+	}
+	return sMap
+}
+
+// Equal tests whether two database have same data and schema.
+func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (bool, bool, error) {
+	t.wg.Add(1)
+	go func() {
+		t.WriteSqls(ctx, writeFixSQL)
+		t.wg.Done()
+	}()
+
 	structEqual := true
 	dataEqual := true
 	var err error
@@ -115,341 +111,30 @@ func (t *TableDiff) CompareTable(ctx context.Context, writeFixSql func() error) 
 	if !t.IgnoreDataCheck {
 		structEqual, err = t.CheckTableData(ctx)
 		if err != nil {
-			return false, false, errors.Trace(err) 
-		}
-	}
-}
-
-/*
-// NewDiff returns a Diff instance.
-func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
-	diff = &Diff{
-		sourceDBs:        make(map[string]DBConfig),
-		chunkSize:        cfg.ChunkSize,
-		sample:           cfg.Sample,
-		checkThreadCount: cfg.CheckThreadCount,
-		useRowID:         cfg.UseRowID,
-		useChecksum:      cfg.UseChecksum,
-		tables:           make(map[string]map[string]*TableConfig),
-		sqlCh:            make(chan string),
-		report:           NewReport(),
-		ctx:              ctx,
-	}
-
-	if err = diff.init(cfg); err != nil {
-		diff.Close()
-		return nil, errors.Trace(err)
-	}
-
-	return diff, nil
-}
-*/
-
-/*
-func (df *Diff) init(cfg *Config) (err error) {
-	// create connection for source.
-	if err = df.CreateDBConn(cfg); err != nil {
-		return errors.Trace(err)
-	}
-
-	if err = df.AdjustTableConfig(cfg); err != nil {
-		return errors.Trace(err)
-	}
-
-	df.fixSQLFile, err = os.Create(cfg.FixSQLFile)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	return nil
-}
-*/
-
-/*
-func (df *Diff) CreateDBConn(cfg *Config) (err error) {
-	// SetMaxOpenConns and SetMaxIdleConns for connection to avoid error like
-	// `dial tcp 10.26.2.1:3306: connect: cannot assign requested address`
-	for _, source := range cfg.SourceDBCfg {
-		source.Conn, err = dbutil.OpenDB(source.DBConfig)
-		if err != nil {
-			return errors.Errorf("create source db %+v error %v", source.DBConfig, err)
-		}
-		source.Conn.SetMaxOpenConns(cfg.CheckThreadCount)
-		source.Conn.SetMaxIdleConns(cfg.CheckThreadCount)
-
-		df.sourceDBs[source.InstanceID] = source
-		if source.Snapshot != "" {
-			err = dbutil.SetSnapshot(df.ctx, source.Conn, source.Snapshot)
-			if err != nil {
-				return errors.Errorf("set history snapshot %s for source db %+v error %v", source.Snapshot, source.DBConfig, err)
-			}
+			return false, false, errors.Trace(err)
 		}
 	}
 
-	// create connection for target.
-	cfg.TargetDBCfg.Conn, err = dbutil.OpenDB(cfg.TargetDBCfg.DBConfig)
-	if err != nil {
-		return errors.Errorf("create target db %+v error %v", cfg.TargetDBCfg, err)
-	}
-	cfg.TargetDBCfg.Conn.SetMaxOpenConns(cfg.CheckThreadCount)
-	cfg.TargetDBCfg.Conn.SetMaxIdleConns(cfg.CheckThreadCount)
-
-	df.targetDB = cfg.TargetDBCfg
-	if cfg.TargetDBCfg.Snapshot != "" {
-		err = dbutil.SetSnapshot(df.ctx, cfg.TargetDBCfg.Conn, cfg.TargetDBCfg.Snapshot)
-		if err != nil {
-			return errors.Errorf("set history snapshot %s for target db %+v error %v", cfg.TargetDBCfg.Snapshot, cfg.TargetDBCfg, err)
-		}
-	}
-
-	return nil
-}
-
-// AdjustTableConfig adjusts the table's config by check-tables and table-config.
-func (df *Diff) AdjustTableConfig(cfg *Config) error {
-	allTablesMap, err := df.GetAllTables(cfg)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	// fill the table information.
-	// will add default source information, don't worry, we will use table config's info replace this later.
-	for _, schemaTables := range cfg.Tables {
-		df.tables[schemaTables.Schema] = make(map[string]*TableConfig)
-		tables := make([]string, 0, len(schemaTables.Tables))
-		allTables := allTablesMap[schemaStr(df.targetDB.InstanceID, schemaTables.Schema)]
-
-		for _, table := range schemaTables.Tables {
-			matchedTables, err := df.GetMatchTable(df.targetDB, schemaTables.Schema, table, allTables)
-			if err != nil {
-				return errors.Trace(err)
-			}
-			tables = append(tables, matchedTables...)
-		}
-
-		for _, tableName := range tables {
-			tableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, df.targetDB.Conn, schemaTables.Schema, tableName, cfg.UseRowID)
-			if err != nil {
-				return errors.Errorf("get table %s.%s's inforamtion error %v", schemaTables.Schema, tableName, errors.Trace(err))
-			}
-
-			if _, ok := df.tables[schemaTables.Schema][tableName]; ok {
-				log.Errorf("duplicate config for %s.%s", schemaTables.Schema, tableName)
-				continue
-			}
-
-			df.tables[schemaTables.Schema][tableName] = &TableConfig{
-				TableInstance: TableInstance{
-					Schema: schemaTables.Schema,
-					Table:  tableName,
-				},
-				TargetTableInfo: tableInfo,
-				Range:           "TRUE",
-				SourceTables: []TableInstance{{
-					InstanceID: cfg.SourceDBCfg[0].InstanceID,
-					Schema:     schemaTables.Schema,
-					Table:      tableName,
-				}},
-			}
-		}
-	}
-
-	for _, table := range cfg.TableCfgs {
-		if _, ok := df.tables[table.Schema]; !ok {
-			return errors.Errorf("schema %s not found in check tables", table.Schema)
-		}
-		if _, ok := df.tables[table.Schema][table.Table]; !ok {
-			return errors.Errorf("table %s.%s not found in check tables", table.Schema, table.Table)
-		}
-
-		sourceTables := make([]TableInstance, 0, len(table.SourceTables))
-		for _, sourceTable := range table.SourceTables {
-			if _, ok := df.sourceDBs[sourceTable.InstanceID]; !ok {
-				return errors.Errorf("unkonw database instance id %s", sourceTable.InstanceID)
-			}
-
-			allTables, ok := allTablesMap[schemaStr(df.sourceDBs[sourceTable.InstanceID].InstanceID, sourceTable.Schema)]
-			if !ok {
-				return errors.Errorf("unknow schema %s in database %s", sourceTable.Schema, df.sourceDBs[sourceTable.InstanceID])
-			}
-
-			tables, err := df.GetMatchTable(df.sourceDBs[sourceTable.InstanceID], sourceTable.Schema, sourceTable.Table, allTables)
-			if err != nil {
-				return errors.Trace(err)
-			}
-
-			for _, table := range tables {
-				sourceTables = append(sourceTables, TableInstance{
-					InstanceID: sourceTable.InstanceID,
-					Schema:     sourceTable.Schema,
-					Table:      table,
-				})
-			}
-		}
-
-		if len(sourceTables) != 0 {
-			df.tables[table.Schema][table.Table].SourceTables = sourceTables
-		}
-		if table.Range != "" {
-			df.tables[table.Schema][table.Table].Range = table.Range
-		}
-		df.tables[table.Schema][table.Table].Field = table.Field
-	}
-
-	return nil
-}
-*/
-
-func schemaStr(instanceID, schema string) string {
-	return fmt.Sprintf("%s|%s", instanceID, schema)
-}
-
-func sliceToMap(slice []string) map[string]interface{} {
-	sMap := make(map[string]interface{})
-	for _, str := range slice {
-		sMap[str] = struct{}{}
-	}
-	return sMap
-}
-
-/*
-// GetAllTables get all tables in all databases.
-func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]interface{}, error) {
-	allTablesMap := make(map[string]map[string]interface{})
-
-	for _, schemaTables := range cfg.Tables {
-		if _, ok := allTablesMap[schemaStr(cfg.TargetDBCfg.InstanceID, schemaTables.Schema)]; ok {
-			continue
-		}
-
-		allTables, err := dbutil.GetTables(df.ctx, cfg.TargetDBCfg.Conn, schemaTables.Schema)
-		if err != nil {
-			return nil, errors.Errorf("get tables from %s.%s error %v", cfg.TargetDBCfg.InstanceID, schemaTables.Schema, errors.Trace(err))
-		}
-		allTablesMap[schemaStr(cfg.TargetDBCfg.InstanceID, schemaTables.Schema)] = sliceToMap(allTables)
-	}
-
-	for _, table := range cfg.TableCfgs {
-		for _, sourceTable := range table.SourceTables {
-			if _, ok := allTablesMap[schemaStr(sourceTable.InstanceID, sourceTable.Schema)]; ok {
-				continue
-			}
-
-			db, ok := df.sourceDBs[sourceTable.InstanceID]
-			if !ok {
-				return nil, errors.Errorf("unknow instance id %s", sourceTable.InstanceID)
-			}
-
-			allTables, err := dbutil.GetTables(df.ctx, db.Conn, sourceTable.Schema)
-			if err != nil {
-				return nil, errors.Errorf("get tables from %s.%s error %v", db.InstanceID, sourceTable.Schema, errors.Trace(err))
-			}
-			allTablesMap[schemaStr(db.InstanceID, sourceTable.Schema)] = sliceToMap(allTables)
-		}
-	}
-
-	return allTablesMap, nil
-}
-
-// GetMatchTable returns all the matched table.
-func (df *Diff) GetMatchTable(db DBConfig, schema, table string, allTables map[string]interface{}) ([]string, error) {
-	tableNames := make([]string, 0, 1)
-
-	if table[0] == '~' {
-		tableRegex := regexp.MustCompile(fmt.Sprintf("(?i)%s", table[1:]))
-		for tableName := range allTables {
-			if !tableRegex.MatchString(tableName) {
-				continue
-			}
-			tableNames = append(tableNames, tableName)
-		}
-	} else {
-		if _, ok := allTables[table]; ok {
-			tableNames = append(tableNames, table)
-		} else {
-			return nil, errors.Errorf("%s.%s not found in %s", schema, table, db.InstanceID)
-		}
-	}
-
-	return tableNames, nil
-}
-
-// Close closes file and database connection.
-func (df *Diff) Close() {
-	if df.fixSQLFile != nil {
-		df.fixSQLFile.Close()
-	}
-
-	for _, db := range df.sourceDBs {
-		if db.Conn != nil {
-			db.Conn.Close()
-		}
-	}
-
-	if df.targetDB.Conn != nil {
-		df.targetDB.Conn.Close()
-	}
-}
-*/
-
-// Equal tests whether two database have same data and schema.
-func (df *Diff) Equal() (err error) {
-	defer df.Close()
-
-	df.wg.Add(1)
-	go func() {
-		df.WriteSqls()
-		df.wg.Done()
-	}()
-
-	reportResult := func(structEqual, dataEqual bool) {
-		if structEqual && dataEqual {
-			df.report.PassNum++
-		} else {
-			df.report.FailedNum++
-		}
-	}
-
-	for _, schema := range df.tables {
-		for _, table := range schema {
-			structEqual, err := df.CheckTableStruct(table)
-			if err != nil {
-				return errors.Trace(err)
-			}
-			df.report.SetTableStructCheckResult(table.Schema, table.Table, structEqual)
-			if !structEqual {
-				log.Errorf("table have different struct: %s\n", table.Table)
-
-				// if table struct not equal, we skip check data.
-				reportResult(false, false)
-				continue
-			}
-
-			dataEqual, err := df.EqualTableData(table)
-			if err != nil {
-				log.Errorf("equal table error %v", err)
-				return errors.Trace(err)
-			}
-			df.report.SetTableDataCheckResult(table.Schema, table.Table, dataEqual)
-			if !dataEqual {
-				log.Errorf("table %s's data is not equal", table.Table)
-			}
-
-			reportResult(structEqual, dataEqual)
-		}
-	}
-
-	df.sqlCh <- "end"
-	df.wg.Wait()
-	return
+	t.sqlCh <- "end"
+	t.wg.Wait()
+	return structEqual, dataEqual, nil
 }
 
 // CheckTableStruct checks table's struct
-func (t *TableDiff)CheckTableStruct(ctx context.Context) (bool, error) {
-	t.TargetTable.Info = dbutil.GetTableInfoWithRowID(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.UseRowID)
+func (t *TableDiff) CheckTableStruct(ctx context.Context) (bool, error) {
+	tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.UseRowID)
+	if err != nil {
+		return false, errors.Trace(err)
+	}
+	t.TargetTable.Info = ignoreColumns(tableInfo, t.IgnoreColumns)
+
 	for _, sourceTable := range t.SourceTables {
-		sourceTable.Info = dbutil.GetTableInfoWithRowID(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.UseRowID)
-		eq, err := df.EqualTableStruct(sourceTable.Info, t.TargetTable.Info)
+		tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.UseRowID)
+		if err != nil {
+			return false, errors.Trace(err)
+		}
+		sourceTable.Info = ignoreColumns(tableInfo, t.IgnoreColumns)
+		eq, err := equalTableInfo(sourceTable.Info, t.TargetTable.Info)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -463,22 +148,16 @@ func (t *TableDiff)CheckTableStruct(ctx context.Context) (bool, error) {
 }
 
 // CheckTableData checks table's data
-func (t *TableDiff)CheckTableData() (bool, error) {
-	// remove columns ignored
-	ignoreColumns(t.TargetTable.Info)
-	for _, sourceTable := range t.SourceTables {
-		ignoreColumns(sourceTable.Info)
-	}
-
+func (t *TableDiff) CheckTableData(ctx context.Context) (bool, error) {
 
 	return true, nil
 }
 
-func ignoreColumns(tableInfo *model.TableInfo, ignoreColumns []string) {
-	if len(ignoreColumns) == 0 {
-		return
+func ignoreColumns(tableInfo *model.TableInfo, columns []string) *model.TableInfo {
+	if len(columns) == 0 {
+		return tableInfo
 	}
-	ignoreColMap := sliceToMap(ignoreColumns)
+	ignoreColMap := sliceToMap(columns)
 	for i, index := range tableInfo.Indices {
 		for j, col := range index.Columns {
 			if _, ok := ignoreColMap[col.Name.O]; ok {
@@ -490,96 +169,36 @@ func ignoreColumns(tableInfo *model.TableInfo, ignoreColumns []string) {
 		}
 	}
 
-	for j, col := range tbInfo.Columns {
+	for j, col := range tableInfo.Columns {
 		if _, ok := ignoreColMap[col.Name.O]; ok {
-			tbInfo.Columns = append(tbInfo.Columns[:j], tbInfo.Columns[j+1:]...)
-		}
-	}
-}
-
-// CheckTableStruct checks table's struct is equal or not.
-func (df *Diff) CheckTableStruct(table *TableConfig) (bool, error) {
-	targetTableInfo := table.TargetTableInfo
-
-	for _, sourceTable := range table.SourceTables {
-		conn := df.sourceDBs[sourceTable.InstanceID].Conn
-		sourceTableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, conn, sourceTable.Schema, sourceTable.Table, df.useRowID)
-		if err != nil {
-			return false, errors.Trace(err)
-		}
-		eq, err := df.EqualTableStruct(sourceTableInfo, targetTableInfo)
-		if err != nil {
-			return false, errors.Trace(err)
-		}
-
-		if !eq {
-			return false, nil
+			tableInfo.Columns = append(tableInfo.Columns[:j], tableInfo.Columns[j+1:]...)
 		}
 	}
 
-	return true, nil
-}
-
-// EqualTableStruct tests whether two table's struct are same.
-func (df *Diff) EqualTableStruct(tableInfo1, tableInfo2 *model.TableInfo) (bool, error) {
-	// check columns
-	if len(tableInfo1.Columns) != len(tableInfo2.Columns) {
-		return false, nil
-	}
-
-	for j, col := range tableInfo1.Columns {
-		if col.Name.O != tableInfo2.Columns[j].Name.O {
-			return false, nil
-		}
-		if col.Tp != tableInfo2.Columns[j].Tp {
-			return false, nil
-		}
-	}
-
-	// check index
-	if len(tableInfo1.Indices) != len(tableInfo2.Indices) {
-		return false, nil
-	}
-
-	for i, index := range tableInfo1.Indices {
-		index2 := tableInfo2.Indices[i]
-		if index.Name.O != index2.Name.O {
-			return false, nil
-		}
-		if len(index.Columns) != len(index2.Columns) {
-			return false, nil
-		}
-		for j, col := range index.Columns {
-			if col.Name.O != index2.Columns[j].Name.O {
-				return false, nil
-			}
-		}
-	}
-
-	return true, nil
+	return tableInfo
 }
 
 // EqualTableData checks data is equal or not.
 func (t *TableDiff) EqualTableData(ctx context.Context) (bool, error) {
-	allJobs, err := GenerateCheckJob(t.TargetTable.Conn, t.TargetTable, t.ChunkSize, t.Sample, t.Range)
+	allJobs, err := GenerateCheckJob(t.TargetTable, t.Field, t.Range, t.ChunkSize, t.Sample)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
 
-	checkNums := len(allJobs) * df.sample / 100
+	checkNums := len(allJobs) * t.Sample / 100
 	checkNumArr := getRandomN(len(allJobs), checkNums)
 	log.Infof("total has %d check jobs, check %d of them", len(allJobs), len(checkNumArr))
 
-	checkResultCh := make(chan bool, df.checkThreadCount)
+	checkResultCh := make(chan bool, t.CheckThreadCount)
 	defer close(checkResultCh)
 
-	for i := 0; i < df.checkThreadCount; i++ {
+	for i := 0; i < t.CheckThreadCount; i++ {
 		checkJobs := make([]*CheckJob, 0, len(checkNumArr))
-		for j := len(checkNumArr) * i / df.checkThreadCount; j < len(checkNumArr)*(i+1)/df.checkThreadCount && j < len(checkNumArr); j++ {
+		for j := len(checkNumArr) * i / t.CheckThreadCount; j < len(checkNumArr)*(i+1)/t.CheckThreadCount && j < len(checkNumArr); j++ {
 			checkJobs = append(checkJobs, allJobs[checkNumArr[j]])
 		}
 		go func(checkJobs []*CheckJob) {
-			eq, err := df.checkChunkDataEqual(checkJobs, table)
+			eq, err := t.checkChunkDataEqual(ctx, checkJobs)
 			if err != nil {
 				log.Errorf("check chunk data equal failed, error %v", errors.ErrorStack(err))
 			}
@@ -598,10 +217,10 @@ CheckResult:
 			if !eq {
 				equal = false
 			}
-			if num == df.checkThreadCount {
+			if num == t.CheckThreadCount {
 				break CheckResult
 			}
-		case <-df.ctx.Done():
+		case <-ctx.Done():
 			return equal, nil
 		}
 	}
@@ -612,7 +231,6 @@ func (t *TableDiff) getSourceTableChecksum(ctx context.Context, job *CheckJob) (
 	var checksum int64
 
 	for _, sourceTable := range t.SourceTables {
-		source := df.sourceDBs[sourceTable.InstanceID]
 		checksumTmp, err := dbutil.GetCRC32Checksum(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.Info, job.Where, job.Args)
 		if err != nil {
 			return -1, errors.Trace(err)
@@ -630,9 +248,9 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, checkJobs []*CheckJ
 	}
 
 	for _, job := range checkJobs {
-		if df.useChecksum {
+		if t.UseChecksum {
 			// first check the checksum is equal or not
-			sourceChecksum, err := df.getSourceTableChecksum(ctx, job)
+			sourceChecksum, err := t.getSourceTableChecksum(ctx, job)
 			if err != nil {
 				return false, errors.Trace(err)
 			}
@@ -651,20 +269,20 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, checkJobs []*CheckJ
 
 		// if checksum is not equal or don't need compare checksum, compare the data
 		sourceRows := make(map[string]*sql.Rows)
-		for _, sourceTable := range t.SourceTables {
-			rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, table.Info, job.Where, job.Args)
+		for i, sourceTable := range t.SourceTables {
+			rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.Info, job.Where, job.Args)
 			if err != nil {
 				return false, errors.Trace(err)
 			}
-			sourceRows[sourceTable.InstanceID] = rows
+			sourceRows[fmt.Sprintf("source-%d", i)] = rows
 		}
 
-		targetRows, orderKeyCols, err := getChunkRows(df.ctx, df.targetDB.Conn, table.Schema, table.Table, table.TargetTableInfo, job.Where, job.Args)
+		targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.Info, job.Where, job.Args)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
 
-		eq, err := df.compareRows(sourceRows, targetRows, orderKeyCols, table)
+		eq, err := t.compareRows(sourceRows, targetRows, orderKeyCols)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -741,10 +359,10 @@ func (t *TableDiff) compareRows(sourceRows map[string]*sql.Rows, targetRows *sql
 		if index1 == len(rowsData1) {
 			// all the rowsData2's data should be deleted
 			for ; index2 < len(rowsData2); index2++ {
-				sql := generateDML("delete", rowsData2[index2], rowsNull2[index2], orderKeyCols, table.TargetTableInfo, table.Schema)
+				sql := generateDML("delete", rowsData2[index2], rowsNull2[index2], orderKeyCols, t.TargetTable.Info, t.TargetTable.Schema)
 				log.Infof("[delete] sql: %v", sql)
-				df.wg.Add(1)
-				df.sqlCh <- sql
+				t.wg.Add(1)
+				t.sqlCh <- sql
 				equal = false
 			}
 			break
@@ -752,10 +370,10 @@ func (t *TableDiff) compareRows(sourceRows map[string]*sql.Rows, targetRows *sql
 		if index2 == len(rowsData2) {
 			// rowsData2 lack some data, should insert them
 			for ; index1 < len(rowsData1); index1++ {
-				sql := generateDML("replace", rowsData1[index1], rowsNull1[index1], orderKeyCols, table.TargetTableInfo, table.Schema)
+				sql := generateDML("replace", rowsData1[index1], rowsNull1[index1], orderKeyCols, t.TargetTable.Info, t.TargetTable.Schema)
 				log.Infof("[insert] sql: %v", sql)
-				df.wg.Add(1)
-				df.sqlCh <- sql
+				t.wg.Add(1)
+				t.sqlCh <- sql
 				equal = false
 			}
 			break
@@ -773,24 +391,24 @@ func (t *TableDiff) compareRows(sourceRows map[string]*sql.Rows, targetRows *sql
 		switch cmp {
 		case 1:
 			// delete
-			sql := generateDML("delete", rowsData2[index2], rowsNull2[index2], orderKeyCols, table.TargetTableInfo, table.Schema)
+			sql := generateDML("delete", rowsData2[index2], rowsNull2[index2], orderKeyCols, t.TargetTable.Info, t.TargetTable.Schema)
 			log.Infof("[delete] sql: %s", sql)
-			df.wg.Add(1)
-			df.sqlCh <- sql
+			t.wg.Add(1)
+			t.sqlCh <- sql
 			index2++
 		case -1:
 			// insert
-			sql := generateDML("replace", rowsData1[index1], rowsNull1[index1], orderKeyCols, table.TargetTableInfo, table.Schema)
+			sql := generateDML("replace", rowsData1[index1], rowsNull1[index1], orderKeyCols, t.TargetTable.Info, t.TargetTable.Schema)
 			log.Infof("[insert] sql: %s", sql)
-			df.wg.Add(1)
-			df.sqlCh <- sql
+			t.wg.Add(1)
+			t.sqlCh <- sql
 			index1++
 		case 0:
 			// update
-			sql := generateDML("replace", rowsData1[index1], rowsNull1[index1], orderKeyCols, table.TargetTableInfo, table.Schema)
+			sql := generateDML("replace", rowsData1[index1], rowsNull1[index1], orderKeyCols, t.TargetTable.Info, t.TargetTable.Schema)
 			log.Infof("[update] sql: %s", sql)
-			df.wg.Add(1)
-			df.sqlCh <- sql
+			t.wg.Add(1)
+			t.sqlCh <- sql
 			index1++
 			index2++
 		}
@@ -800,21 +418,20 @@ func (t *TableDiff) compareRows(sourceRows map[string]*sql.Rows, targetRows *sql
 }
 
 // WriteSqls write sqls to file
-func (df *Diff) WriteSqls() {
+func (t *TableDiff) WriteSqls(ctx context.Context, writeFixSQL func(string) error) {
 	for {
 		select {
-		case dml, ok := <-df.sqlCh:
+		case dml, ok := <-t.sqlCh:
 			if !ok || dml == "end" {
 				return
 			}
 
-			_, err := 
-			_, err := df.fixSQLFile.WriteString(fmt.Sprintf("%s\n", dml))
+			err := writeFixSQL(fmt.Sprintf("%s\n", dml))
 			if err != nil {
 				log.Errorf("write sql: %s failed, error: %v", dml, err)
 			}
-			df.wg.Done()
-		case <-df.ctx.Done():
+			t.wg.Done()
+		case <-ctx.Done():
 			return
 		}
 	}
@@ -860,10 +477,6 @@ func generateDML(tp string, data map[string][]byte, null map[string]bool, keys [
 	}
 
 	return
-}
-
-func needQuotes(ft types.FieldType) bool {
-	return !(dbutil.IsNumberType(ft.Tp) || dbutil.IsFloatType(ft.Tp))
 }
 
 func compareData(map1, map2 map[string][]byte, null1, null2 map[string]bool, orderKeyCols []*model.ColumnInfo) (bool, int32, error) {
@@ -947,35 +560,4 @@ func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableIn
 		return nil, nil, errors.Trace(err)
 	}
 	return rows, orderKeyCols, nil
-}
-
-func equalStrings(str1, str2 []string) bool {
-	if len(str1) != len(str2) {
-		return false
-	}
-	for i := 0; i < len(str1); i++ {
-		if str1[i] != str2[i] {
-			return false
-		}
-	}
-	return true
-}
-
-func getRandomN(total, num int) []int {
-	if num > total {
-		log.Warnf("the num %d is greater than total %d", num, total)
-		num = total
-	}
-
-	totalArray := make([]int, 0, total)
-	for i := 0; i < total; i++ {
-		totalArray = append(totalArray, i)
-	}
-
-	for j := 0; j < num; j++ {
-		r := j + rand.Intn(total-j)
-		totalArray[j], totalArray[r] = totalArray[r], totalArray[j]
-	}
-
-	return totalArray[:num]
 }
