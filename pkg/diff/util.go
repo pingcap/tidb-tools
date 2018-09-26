@@ -72,6 +72,31 @@ func equalTableInfo(tableInfo1, tableInfo2 *model.TableInfo) (bool, error) {
 	return true, nil
 }
 
+func ignoreColumns(tableInfo *model.TableInfo, columns []string) *model.TableInfo {
+	if len(columns) == 0 {
+		return tableInfo
+	}
+	ignoreColMap := sliceToMap(columns)
+	for i, index := range tableInfo.Indices {
+		for j, col := range index.Columns {
+			if _, ok := ignoreColMap[col.Name.O]; ok {
+				index.Columns = append(index.Columns[:j], index.Columns[j+1:]...)
+				if len(index.Columns) == 0 {
+					tableInfo.Indices = append(tableInfo.Indices[:i], tableInfo.Indices[i+1:]...)
+				}
+			}
+		}
+	}
+
+	for j, col := range tableInfo.Columns {
+		if _, ok := ignoreColMap[col.Name.O]; ok {
+			tableInfo.Columns = append(tableInfo.Columns[:j], tableInfo.Columns[j+1:]...)
+		}
+	}
+
+	return tableInfo
+}
+
 func getRandomN(total, num int) []int {
 	if num > total {
 		log.Warnf("the num %d is greater than total %d", num, total)
@@ -93,4 +118,12 @@ func getRandomN(total, num int) []int {
 
 func needQuotes(ft types.FieldType) bool {
 	return !(dbutil.IsNumberType(ft.Tp) || dbutil.IsFloatType(ft.Tp))
+}
+
+func sliceToMap(slice []string) map[string]interface{} {
+	sMap := make(map[string]interface{})
+	for _, str := range slice {
+		sMap[str] = struct{}{}
+	}
+	return sMap
 }

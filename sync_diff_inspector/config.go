@@ -67,7 +67,8 @@ type CheckTables struct {
 type TableConfig struct {
 	// table's origin information
 	TableInstance
-
+	// columns be ignored
+	IgnoreColumns []string `toml:"ignore-columns"`
 	// field should be the primary key, unique key or field with index
 	Field string `toml:"index-field"`
 	// select range, for example: "age > 10 AND age < 20"
@@ -181,6 +182,12 @@ type Config struct {
 
 	// the config of table
 	TableCfgs []*TableConfig `toml:"table-config" json:"table-config"`
+
+	// ignore check table's struct
+	IgnoreStructCheck bool `toml:"ignore-struct-check" json:"ignore-struct-check"`
+
+	// ignore check table's data
+	IgnoreDataCheck bool `toml:"ignore-data-check" json:"ignore-data-check"`
 
 	// config file
 	ConfigFile string

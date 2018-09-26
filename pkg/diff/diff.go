@@ -33,7 +33,7 @@ type TableInstance struct {
 	Conn   *sql.DB
 	Schema string
 	Table  string
-	Info   *model.TableInfo
+	info   *model.TableInfo
 }
 
 // TableDiff saves config for diff table
@@ -81,16 +81,9 @@ type TableDiff struct {
 	wg sync.WaitGroup
 }
 
-func sliceToMap(slice []string) map[string]interface{} {
-	sMap := make(map[string]interface{})
-	for _, str := range slice {
-		sMap[str] = struct{}{}
-	}
-	return sMap
-}
-
 // Equal tests whether two database have same data and schema.
 func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (bool, bool, error) {
+	t.sqlCh = make(chan string)
 	t.wg.Add(1)
 	go func() {
 		t.WriteSqls(ctx, writeFixSQL)
@@ -126,15 +119,15 @@ func (t *TableDiff) CheckTableStruct(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, errors.Trace(err)
 	}
-	t.TargetTable.Info = ignoreColumns(tableInfo, t.IgnoreColumns)
+	t.TargetTable.info = ignoreColumns(tableInfo, t.IgnoreColumns)
 
 	for _, sourceTable := range t.SourceTables {
 		tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.UseRowID)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
-		sourceTable.Info = ignoreColumns(tableInfo, t.IgnoreColumns)
-		eq, err := equalTableInfo(sourceTable.Info, t.TargetTable.Info)
+		sourceTable.info = ignoreColumns(tableInfo, t.IgnoreColumns)
+		eq, err := equalTableInfo(sourceTable.info, t.TargetTable.info)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -149,33 +142,7 @@ func (t *TableDiff) CheckTableStruct(ctx context.Context) (bool, error) {
 
 // CheckTableData checks table's data
 func (t *TableDiff) CheckTableData(ctx context.Context) (bool, error) {
-
-	return true, nil
-}
-
-func ignoreColumns(tableInfo *model.TableInfo, columns []string) *model.TableInfo {
-	if len(columns) == 0 {
-		return tableInfo
-	}
-	ignoreColMap := sliceToMap(columns)
-	for i, index := range tableInfo.Indices {
-		for j, col := range index.Columns {
-			if _, ok := ignoreColMap[col.Name.O]; ok {
-				index.Columns = append(index.Columns[:j], index.Columns[j+1:]...)
-				if len(index.Columns) == 0 {
-					tableInfo.Indices = append(tableInfo.Indices[:i], tableInfo.Indices[i+1:]...)
-				}
-			}
-		}
-	}
-
-	for j, col := range tableInfo.Columns {
-		if _, ok := ignoreColMap[col.Name.O]; ok {
-			tableInfo.Columns = append(tableInfo.Columns[:j], tableInfo.Columns[j+1:]...)
-		}
-	}
-
-	return tableInfo
+	return t.EqualTableData(ctx)
 }
 
 // EqualTableData checks data is equal or not.
@@ -187,7 +154,7 @@ func (t *TableDiff) EqualTableData(ctx context.Context) (bool, error) {
 
 	checkNums := len(allJobs) * t.Sample / 100
 	checkNumArr := getRandomN(len(allJobs), checkNums)
-	log.Infof("total has %d check jobs, check %d of them", len(allJobs), len(checkNumArr))
+	log.infof("total has %d check jobs, check %d of them", len(allJobs), len(checkNumArr))
 
 	checkResultCh := make(chan bool, t.CheckThreadCount)
 	defer close(checkResultCh)
@@ -231,7 +198,7 @@ func (t *TableDiff) getSourceTableChecksum(ctx context.Context, job *CheckJob) (
 	var checksum int64
 
 	for _, sourceTable := range t.SourceTables {
-		checksumTmp, err := dbutil.GetCRC32Checksum(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.Info, job.Where, job.Args)
+		checksumTmp, err := dbutil.GetCRC32Checksum(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.info, job.Where, job.Args)
 		if err != nil {
 			return -1, errors.Trace(err)
 		}
@@ -255,12 +222,12 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, checkJobs []*CheckJ
 				return false, errors.Trace(err)
 			}
 
-			targetChecksum, err := dbutil.GetCRC32Checksum(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.Info, job.Where, job.Args)
+			targetChecksum, err := dbutil.GetCRC32Checksum(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, job.Where, job.Args)
 			if err != nil {
 				return false, errors.Trace(err)
 			}
 			if sourceChecksum == targetChecksum {
-				log.Infof("table: %s, range: %s, args: %v, checksum is equal, checksum: %d", job.Table, job.Where, job.Args, sourceChecksum)
+				log.infof("table: %s, range: %s, args: %v, checksum is equal, checksum: %d", job.Table, job.Where, job.Args, sourceChecksum)
 				continue
 			}
 
@@ -270,14 +237,14 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, checkJobs []*CheckJ
 		// if checksum is not equal or don't need compare checksum, compare the data
 		sourceRows := make(map[string]*sql.Rows)
 		for i, sourceTable := range t.SourceTables {
-			rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.Info, job.Where, job.Args)
+			rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, job.Where, job.Args)
 			if err != nil {
 				return false, errors.Trace(err)
 			}
 			sourceRows[fmt.Sprintf("source-%d", i)] = rows
 		}
 
-		targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.Info, job.Where, job.Args)
+		targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, job.Where, job.Args)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -359,8 +326,8 @@ func (t *TableDiff) compareRows(sourceRows map[string]*sql.Rows, targetRows *sql
 		if index1 == len(rowsData1) {
 			// all the rowsData2's data should be deleted
 			for ; index2 < len(rowsData2); index2++ {
-				sql := generateDML("delete", rowsData2[index2], rowsNull2[index2], orderKeyCols, t.TargetTable.Info, t.TargetTable.Schema)
-				log.Infof("[delete] sql: %v", sql)
+				sql := generateDML("delete", rowsData2[index2], rowsNull2[index2], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
+				log.infof("[delete] sql: %v", sql)
 				t.wg.Add(1)
 				t.sqlCh <- sql
 				equal = false
@@ -370,8 +337,8 @@ func (t *TableDiff) compareRows(sourceRows map[string]*sql.Rows, targetRows *sql
 		if index2 == len(rowsData2) {
 			// rowsData2 lack some data, should insert them
 			for ; index1 < len(rowsData1); index1++ {
-				sql := generateDML("replace", rowsData1[index1], rowsNull1[index1], orderKeyCols, t.TargetTable.Info, t.TargetTable.Schema)
-				log.Infof("[insert] sql: %v", sql)
+				sql := generateDML("replace", rowsData1[index1], rowsNull1[index1], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
+				log.infof("[insert] sql: %v", sql)
 				t.wg.Add(1)
 				t.sqlCh <- sql
 				equal = false
@@ -391,22 +358,22 @@ func (t *TableDiff) compareRows(sourceRows map[string]*sql.Rows, targetRows *sql
 		switch cmp {
 		case 1:
 			// delete
-			sql := generateDML("delete", rowsData2[index2], rowsNull2[index2], orderKeyCols, t.TargetTable.Info, t.TargetTable.Schema)
-			log.Infof("[delete] sql: %s", sql)
+			sql := generateDML("delete", rowsData2[index2], rowsNull2[index2], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
+			log.infof("[delete] sql: %s", sql)
 			t.wg.Add(1)
 			t.sqlCh <- sql
 			index2++
 		case -1:
 			// insert
-			sql := generateDML("replace", rowsData1[index1], rowsNull1[index1], orderKeyCols, t.TargetTable.Info, t.TargetTable.Schema)
-			log.Infof("[insert] sql: %s", sql)
+			sql := generateDML("replace", rowsData1[index1], rowsNull1[index1], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
+			log.infof("[insert] sql: %s", sql)
 			t.wg.Add(1)
 			t.sqlCh <- sql
 			index1++
 		case 0:
 			// update
-			sql := generateDML("replace", rowsData1[index1], rowsNull1[index1], orderKeyCols, t.TargetTable.Info, t.TargetTable.Schema)
-			log.Infof("[update] sql: %s", sql)
+			sql := generateDML("replace", rowsData1[index1], rowsNull1[index1], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
+			log.infof("[update] sql: %s", sql)
 			t.wg.Add(1)
 			t.sqlCh <- sql
 			index1++
