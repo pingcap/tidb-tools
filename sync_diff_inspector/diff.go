@@ -195,7 +195,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 
 			allTables, ok := allTablesMap[schemaStr(df.sourceDBs[sourceTable.InstanceID].InstanceID, sourceTable.Schema)]
 			if !ok {
-				return errors.Errorf("unknow schema %s in database %s", sourceTable.Schema, df.sourceDBs[sourceTable.InstanceID])
+				return errors.Errorf("unknow schema %s in database %+v", sourceTable.Schema, df.sourceDBs[sourceTable.InstanceID])
 			}
 
 			tables, err := df.GetMatchTable(df.sourceDBs[sourceTable.InstanceID], sourceTable.Schema, sourceTable.Table, allTables)
