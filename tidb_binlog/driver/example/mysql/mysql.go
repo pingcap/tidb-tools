@@ -273,7 +273,7 @@ func toSQL(binlog *pb.Binlog) ([]string, [][]interface{}) {
 		}
 
 	default:
-		log.Fatal("unknow type: ", binlog.GetType())
+		log.Fatal("unknown type: ", binlog.GetType())
 	}
 
 	return allSQL, allArgs

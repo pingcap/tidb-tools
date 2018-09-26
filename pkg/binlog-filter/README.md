@@ -58,7 +58,7 @@ CreateIndex
 DropIndex
 AlertTable
 
-// unknow event
+// unknown event
 NullEvent EventType = ""
 ```
 
