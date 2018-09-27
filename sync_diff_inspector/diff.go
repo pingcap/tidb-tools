@@ -185,12 +185,12 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 		sourceTables := make([]TableInstance, 0, len(table.SourceTables))
 		for _, sourceTable := range table.SourceTables {
 			if _, ok := df.sourceDBs[sourceTable.InstanceID]; !ok {
-				return errors.Errorf("unkonw database instance id %s", sourceTable.InstanceID)
+				return errors.Errorf("unkonwn database instance id %s", sourceTable.InstanceID)
 			}
 
 			allTables, ok := allTablesMap[schemaStr(df.sourceDBs[sourceTable.InstanceID].InstanceID, sourceTable.Schema)]
 			if !ok {
-				return errors.Errorf("unknow schema %s in database %s", sourceTable.Schema, df.sourceDBs[sourceTable.InstanceID])
+				return errors.Errorf("unknown schema %s in database %+v", sourceTable.Schema, df.sourceDBs[sourceTable.InstanceID])
 			}
 
 			tables, err := df.GetMatchTable(df.sourceDBs[sourceTable.InstanceID], sourceTable.Schema, sourceTable.Table, allTables)
@@ -244,7 +244,7 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]interface{}, er
 
 			db, ok := df.sourceDBs[sourceTable.InstanceID]
 			if !ok {
-				return nil, errors.Errorf("unknow instance id %s", sourceTable.InstanceID)
+				return nil, errors.Errorf("unknown instance id %s", sourceTable.InstanceID)
 			}
 
 			allTables, err := dbutil.GetTables(df.ctx, db.Conn, sourceTable.Schema)
