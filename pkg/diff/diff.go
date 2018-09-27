@@ -102,7 +102,7 @@ func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (
 	}
 
 	if !t.IgnoreDataCheck {
-		structEqual, err = t.CheckTableData(ctx)
+		dataEqual, err = t.CheckTableData(ctx)
 		if err != nil {
 			return false, false, errors.Trace(err)
 		}
@@ -119,14 +119,16 @@ func (t *TableDiff) CheckTableStruct(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, errors.Trace(err)
 	}
+	log.Infof("")
 	t.TargetTable.info = ignoreColumns(tableInfo, t.IgnoreColumns)
-
+	log.Infof("info: %v, ignore columns: %v", t.TargetTable.info, t.IgnoreColumns)
 	for _, sourceTable := range t.SourceTables {
 		tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.UseRowID)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
 		sourceTable.info = ignoreColumns(tableInfo, t.IgnoreColumns)
+		log.Infof("info: %v, ignore columns: %v", sourceTable.info, t.IgnoreColumns)
 		eq, err := equalTableInfo(sourceTable.info, t.TargetTable.info)
 		if err != nil {
 			return false, errors.Trace(err)

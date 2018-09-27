@@ -162,6 +162,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 					Schema: schemaTables.Schema,
 					Table:  tableName,
 				},
+				IgnoreColumns:   make([]string, 0, 1),
 				TargetTableInfo: tableInfo,
 				Range:           "TRUE",
 				SourceTables: []TableInstance{{
@@ -212,6 +213,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 		if table.Range != "" {
 			df.tables[table.Schema][table.Table].Range = table.Range
 		}
+		df.tables[table.Schema][table.Table].IgnoreColumns = table.IgnoreColumns
 		df.tables[table.Schema][table.Table].Field = table.Field
 	}
 
