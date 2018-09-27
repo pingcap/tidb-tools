@@ -442,7 +442,7 @@ func generateDML(tp string, data map[string][]byte, null map[string]bool, keys [
 		}
 		sql = fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE %s;", schema, table.Name, strings.Join(kvs, " AND "))
 	default:
-		log.Errorf("unknow sql type %s", tp)
+		log.Errorf("unknown sql type %s", tp)
 	}
 
 	return
