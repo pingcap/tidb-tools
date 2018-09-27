@@ -154,7 +154,7 @@ func (t *TableDiff) EqualTableData(ctx context.Context) (bool, error) {
 
 	checkNums := len(allJobs) * t.Sample / 100
 	checkNumArr := getRandomN(len(allJobs), checkNums)
-	log.infof("total has %d check jobs, check %d of them", len(allJobs), len(checkNumArr))
+	log.Infof("total has %d check jobs, check %d of them", len(allJobs), len(checkNumArr))
 
 	checkResultCh := make(chan bool, t.CheckThreadCount)
 	defer close(checkResultCh)
@@ -227,7 +227,7 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, checkJobs []*CheckJ
 				return false, errors.Trace(err)
 			}
 			if sourceChecksum == targetChecksum {
-				log.infof("table: %s, range: %s, args: %v, checksum is equal, checksum: %d", job.Table, job.Where, job.Args, sourceChecksum)
+				log.Infof("table: %s, range: %s, args: %v, checksum is equal, checksum: %d", job.Table, job.Where, job.Args, sourceChecksum)
 				continue
 			}
 
@@ -327,7 +327,7 @@ func (t *TableDiff) compareRows(sourceRows map[string]*sql.Rows, targetRows *sql
 			// all the rowsData2's data should be deleted
 			for ; index2 < len(rowsData2); index2++ {
 				sql := generateDML("delete", rowsData2[index2], rowsNull2[index2], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
-				log.infof("[delete] sql: %v", sql)
+				log.Infof("[delete] sql: %v", sql)
 				t.wg.Add(1)
 				t.sqlCh <- sql
 				equal = false
@@ -338,7 +338,7 @@ func (t *TableDiff) compareRows(sourceRows map[string]*sql.Rows, targetRows *sql
 			// rowsData2 lack some data, should insert them
 			for ; index1 < len(rowsData1); index1++ {
 				sql := generateDML("replace", rowsData1[index1], rowsNull1[index1], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
-				log.infof("[insert] sql: %v", sql)
+				log.Infof("[insert] sql: %v", sql)
 				t.wg.Add(1)
 				t.sqlCh <- sql
 				equal = false
@@ -359,21 +359,21 @@ func (t *TableDiff) compareRows(sourceRows map[string]*sql.Rows, targetRows *sql
 		case 1:
 			// delete
 			sql := generateDML("delete", rowsData2[index2], rowsNull2[index2], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
-			log.infof("[delete] sql: %s", sql)
+			log.Infof("[delete] sql: %s", sql)
 			t.wg.Add(1)
 			t.sqlCh <- sql
 			index2++
 		case -1:
 			// insert
 			sql := generateDML("replace", rowsData1[index1], rowsNull1[index1], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
-			log.infof("[insert] sql: %s", sql)
+			log.Infof("[insert] sql: %s", sql)
 			t.wg.Add(1)
 			t.sqlCh <- sql
 			index1++
 		case 0:
 			// update
 			sql := generateDML("replace", rowsData1[index1], rowsNull1[index1], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
-			log.infof("[update] sql: %s", sql)
+			log.Infof("[update] sql: %s", sql)
 			t.wg.Add(1)
 			t.sqlCh <- sql
 			index1++
