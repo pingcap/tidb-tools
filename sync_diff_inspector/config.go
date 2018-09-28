@@ -80,6 +80,9 @@ type TableConfig struct {
 	// SourceTables can be nil when source and target is one-to-one correspondence.
 	SourceTables    []TableInstance `toml:"source-tables"`
 	TargetTableInfo *model.TableInfo
+
+	// collation config in mysql/tidb
+	Collation string `toml:"collation"`
 }
 
 // Valid returns true if table's config is valide.

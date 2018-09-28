@@ -61,12 +61,14 @@ func (c *DBConfig) String() string {
 
 // OpenDB opens a mysql connection FD
 func OpenDB(cfg DBConfig) (*sql.DB, error) {
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4", cfg.User, cfg.Password, cfg.Host, cfg.Port)
+	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8", cfg.User, cfg.Password, cfg.Host, cfg.Port)
 	dbConn, err := sql.Open("mysql", dbDSN)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
+	//query := "SET NAMES 'latin1'"
+	//_, err = dbConn.Exec(query)
 	err = dbConn.Ping()
 	return dbConn, errors.Trace(err)
 }
@@ -139,7 +141,7 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 }
 
 // GetRandomValues returns some random value of a column.
-func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int64, min, max interface{}, limitRange string) ([]interface{}, error) {
+func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int64, min, max interface{}, limitRange string, collation string) ([]interface{}, error) {
 	/*
 		example:
 		mysql> SELECT `id` FROM (SELECT `id` FROM `test`.`test` WHERE `id` > 0 AND `id` < 100 AND true ORDER BY RAND() LIMIT 3)rand_tmp ORDER BY `id`;
@@ -156,9 +158,13 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 		limitRange = "true"
 	}
 
+	if collation != "" {
+		collation = fmt.Sprintf("COLLATE \"%s\"", collation)
+	}
+
 	randomValue := make([]interface{}, 0, num)
-	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` > ? AND `%s` < ? AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
-		column, column, schemaName, table, column, column, limitRange, num, column)
+	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` > ? %s AND `%s` < ? %s AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
+		column, column, schemaName, table, column, collation, column, collation, limitRange, num, column)
 	log.Debugf("get random values sql: %s, min: %v, max: %v", query, min, max)
 	rows, err := db.QueryContext(ctx, query, min, max)
 	if err != nil {
@@ -272,7 +278,7 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName str
 
 	query := fmt.Sprintf("SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED)) AS checksum FROM `%s`.`%s` WHERE %s;",
 		strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), schemaName, tableName, limitRange)
-	log.Debugf("checksum sql: %s, args: %v", query, args)
+	log.Infof("checksum sql: %s, args: %v", query, args)
 
 	var checksum sql.NullInt64
 	err := db.QueryRowContext(ctx, query, args...).Scan(&checksum)

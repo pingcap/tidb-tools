@@ -87,9 +87,15 @@ func getChunksForTable(db DBConfig, table *TableConfig, column *model.ColumnInfo
 
 	field := column.Name.O
 
+	collation := ""
+	if table.Collation != "" {
+		collation = fmt.Sprintf(" COLLATE \"%s\"", table.Collation)
+	}
+
 	// fetch min, max
-	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ MIN(`%s`) as MIN, MAX(`%s`) as MAX FROM `%s`.`%s` WHERE %s",
-		field, field, table.Schema, table.Table, table.Range)
+	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ MIN(`%s`%s) as MIN, MAX(`%s`%s) as MAX FROM `%s`.`%s` WHERE %s",
+		field, collation, field, collation, table.Schema, table.Table, table.Range)
+	log.Infof("query %s", query)
 
 	var chunk chunkRange
 	if dbutil.IsNumberType(column.Tp) {
@@ -126,10 +132,10 @@ func getChunksForTable(db DBConfig, table *TableConfig, column *model.ColumnInfo
 		chunk = newChunkRange(min.String, max.String, true, true, false, false)
 	}
 
-	return splitRange(db.Conn, &chunk, chunkCnt, table.Schema, table.Table, column, table.Range)
+	return splitRange(db.Conn, &chunk, chunkCnt, table.Schema, table.Table, column, table.Range, table.Collation)
 }
 
-func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table string, column *model.ColumnInfo, limitRange string) ([]chunkRange, error) {
+func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table string, column *model.ColumnInfo, limitRange string, collation string) ([]chunkRange, error) {
 	var chunks []chunkRange
 
 	// for example, the min and max value in target table is 2-9, but 1-10 in source table. so we need generate chunk for data < 2 and data > 10
@@ -183,7 +189,7 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 		}
 
 		// get random value as split value
-		splitValues, err := dbutil.GetRandomValues(context.Background(), db, Schema, table, column.Name.O, count-1, min, max, limitRange)
+		splitValues, err := dbutil.GetRandomValues(context.Background(), db, Schema, table, column.Name.O, count-1, min, max, limitRange, collation)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -262,6 +268,11 @@ func GenerateCheckJob(db DBConfig, table *TableConfig, chunkSize int, sample int
 
 	jobCnt += len(chunks)
 
+	collation := ""
+	if table.Collation != "" {
+		collation = fmt.Sprintf(" COLLATE \"%s\" ", table.Collation)
+	}
+
 	for {
 		length := len(chunks)
 		if length == 0 {
@@ -275,9 +286,9 @@ func GenerateCheckJob(db DBConfig, table *TableConfig, chunkSize int, sample int
 		var condition1, condition2 string
 		if !chunk.noBegin {
 			if chunk.containBegin {
-				condition1 = fmt.Sprintf("`%s` >= ? ", column.Name)
+				condition1 = fmt.Sprintf("`%s` >= ? %s", column.Name, collation)
 			} else {
-				condition1 = fmt.Sprintf("`%s` > ? ", column.Name)
+				condition1 = fmt.Sprintf("`%s` > ? %s", column.Name, collation)
 			}
 			args = append(args, chunk.begin)
 		} else {
@@ -285,9 +296,9 @@ func GenerateCheckJob(db DBConfig, table *TableConfig, chunkSize int, sample int
 		}
 		if !chunk.noEnd {
 			if chunk.containEnd {
-				condition2 = fmt.Sprintf("`%s` <= ? ", column.Name)
+				condition2 = fmt.Sprintf("`%s` <= ? %s", column.Name, collation)
 			} else {
-				condition2 = fmt.Sprintf("`%s` < ? ", column.Name)
+				condition2 = fmt.Sprintf("`%s` < ? %s", column.Name, collation)
 			}
 			args = append(args, chunk.end)
 		} else {
