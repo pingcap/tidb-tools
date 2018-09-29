@@ -78,25 +78,3 @@ func (*testDiffSuite) TestGenerateSQLs(c *C) {
 	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (NULL,NULL,\"2018-01-01 00:00:00\",\"10:10:10\",11.1111);")
 	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` WHERE `id` is NULL;")
 }
-
-func (*testDiffSuite) TestTableStructEqual(c *C) {
-	createTableSQL1 := "CREATE TABLE `test`.`atest` (`id` int(24), `name` varchar(24), `birthday` datetime, `update_time` time, `money` decimal(20,2), primary key(`id`))"
-	tableInfo1, err := dbutil.GetTableInfoBySQL(createTableSQL1)
-	c.Assert(err, IsNil)
-
-	createTableSQL2 := "CREATE TABLE `test`.`atest` (`id` int(24) NOT NULL, `name` varchar(24), `birthday` datetime, `update_time` time, `money` decimal(20,2), primary key(`id`))"
-	tableInfo2, err := dbutil.GetTableInfoBySQL(createTableSQL2)
-	c.Assert(err, IsNil)
-
-	createTableSQL3 := "CREATE TABLE `test`.`atest` (`id` int(24), `name` varchar(24), `birthday` datetime, `update_time` time, `money` decimal(20,2), unique key(`id`))"
-	tableInfo3, err := dbutil.GetTableInfoBySQL(createTableSQL3)
-	c.Assert(err, IsNil)
-
-	equal, err := equalTableInfo(tableInfo1, tableInfo2)
-	c.Assert(err, IsNil)
-	c.Assert(equal, Equals, true)
-
-	equal, err = equalTableInfo(tableInfo1, tableInfo3)
-	c.Assert(err, IsNil)
-	c.Assert(equal, Equals, false)
-}

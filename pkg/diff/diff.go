@@ -127,7 +127,7 @@ func (t *TableDiff) CheckTableStruct(ctx context.Context) (bool, error) {
 			return false, errors.Trace(err)
 		}
 		sourceTable.info = ignoreColumns(tableInfo, t.IgnoreColumns)
-		eq, err := equalTableInfo(sourceTable.info, t.TargetTable.info)
+		eq, err := dbutil.EqualTableInfo(sourceTable.info, t.TargetTable.info)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
