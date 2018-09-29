@@ -17,14 +17,6 @@ import (
 	"fmt"
 )
 
-func schemaStr(instanceID, schema string) string {
+func schemaName(instanceID, schema string) string {
 	return fmt.Sprintf("%s|%s", instanceID, schema)
-}
-
-func sliceToMap(slice []string) map[string]interface{} {
-	sMap := make(map[string]interface{})
-	for _, str := range slice {
-		sMap[str] = struct{}{}
-	}
-	return sMap
 }

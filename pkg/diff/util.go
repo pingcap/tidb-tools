@@ -76,7 +76,7 @@ func ignoreColumns(tableInfo *model.TableInfo, columns []string) *model.TableInf
 	if len(columns) == 0 {
 		return tableInfo
 	}
-	ignoreColMap := sliceToMap(columns)
+	ignoreColMap := SliceToMap(columns)
 	for i, index := range tableInfo.Indices {
 		for j, col := range index.Columns {
 			if _, ok := ignoreColMap[col.Name.O]; ok {
@@ -120,7 +120,7 @@ func needQuotes(ft types.FieldType) bool {
 	return !(dbutil.IsNumberType(ft.Tp) || dbutil.IsFloatType(ft.Tp))
 }
 
-func sliceToMap(slice []string) map[string]interface{} {
+func SliceToMap(slice []string) map[string]interface{} {
 	sMap := make(map[string]interface{})
 	for _, str := range slice {
 		sMap[str] = struct{}{}

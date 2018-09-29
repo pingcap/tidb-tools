@@ -136,7 +136,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 	for _, schemaTables := range cfg.Tables {
 		df.tables[schemaTables.Schema] = make(map[string]*TableConfig)
 		tables := make([]string, 0, len(schemaTables.Tables))
-		allTables := allTablesMap[schemaStr(df.targetDB.InstanceID, schemaTables.Schema)]
+		allTables := allTablesMap[schemaName(df.targetDB.InstanceID, schemaTables.Schema)]
 
 		for _, table := range schemaTables.Tables {
 			matchedTables, err := df.GetMatchTable(df.targetDB, schemaTables.Schema, table, allTables)
@@ -188,7 +188,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 				return errors.Errorf("unkonwn database instance id %s", sourceTable.InstanceID)
 			}
 
-			allTables, ok := allTablesMap[schemaStr(df.sourceDBs[sourceTable.InstanceID].InstanceID, sourceTable.Schema)]
+			allTables, ok := allTablesMap[schemaName(df.sourceDBs[sourceTable.InstanceID].InstanceID, sourceTable.Schema)]
 			if !ok {
 				return errors.Errorf("unknown schema %s in database %+v", sourceTable.Schema, df.sourceDBs[sourceTable.InstanceID])
 			}
@@ -225,7 +225,7 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]interface{}, er
 	allTablesMap := make(map[string]map[string]interface{})
 
 	for _, schemaTables := range cfg.Tables {
-		if _, ok := allTablesMap[schemaStr(cfg.TargetDBCfg.InstanceID, schemaTables.Schema)]; ok {
+		if _, ok := allTablesMap[schemaName(cfg.TargetDBCfg.InstanceID, schemaTables.Schema)]; ok {
 			continue
 		}
 
@@ -233,12 +233,12 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]interface{}, er
 		if err != nil {
 			return nil, errors.Errorf("get tables from %s.%s error %v", cfg.TargetDBCfg.InstanceID, schemaTables.Schema, errors.Trace(err))
 		}
-		allTablesMap[schemaStr(cfg.TargetDBCfg.InstanceID, schemaTables.Schema)] = sliceToMap(allTables)
+		allTablesMap[schemaName(cfg.TargetDBCfg.InstanceID, schemaTables.Schema)] = diff.SliceToMap(allTables)
 	}
 
 	for _, table := range cfg.TableCfgs {
 		for _, sourceTable := range table.SourceTables {
-			if _, ok := allTablesMap[schemaStr(sourceTable.InstanceID, sourceTable.Schema)]; ok {
+			if _, ok := allTablesMap[schemaName(sourceTable.InstanceID, sourceTable.Schema)]; ok {
 				continue
 			}
 
@@ -251,7 +251,7 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]interface{}, er
 			if err != nil {
 				return nil, errors.Errorf("get tables from %s.%s error %v", db.InstanceID, sourceTable.Schema, errors.Trace(err))
 			}
-			allTablesMap[schemaStr(db.InstanceID, sourceTable.Schema)] = sliceToMap(allTables)
+			allTablesMap[schemaName(db.InstanceID, sourceTable.Schema)] = diff.SliceToMap(allTables)
 		}
 	}
 
