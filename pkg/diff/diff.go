@@ -46,6 +46,9 @@ type TableDiff struct {
 	// columns be ignored
 	IgnoreColumns []string
 
+	// columns be removed
+	RemoveColumns []string
+
 	// field should be the primary key, unique key or field with index
 	Field string
 
@@ -119,14 +122,14 @@ func (t *TableDiff) CheckTableStruct(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, errors.Trace(err)
 	}
-	t.TargetTable.info = ignoreColumns(tableInfo, t.IgnoreColumns)
+	t.TargetTable.info = removeColumns(tableInfo, t.RemoveColumns)
 
 	for _, sourceTable := range t.SourceTables {
 		tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.UseRowID)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
-		sourceTable.info = ignoreColumns(tableInfo, t.IgnoreColumns)
+		sourceTable.info = removeColumns(tableInfo, t.RemoveColumns)
 		eq, err := dbutil.EqualTableInfo(sourceTable.info, t.TargetTable.info)
 		if err != nil {
 			return false, errors.Trace(err)
@@ -198,7 +201,7 @@ func (t *TableDiff) getSourceTableChecksum(ctx context.Context, job *CheckJob) (
 	var checksum int64
 
 	for _, sourceTable := range t.SourceTables {
-		checksumTmp, err := dbutil.GetCRC32Checksum(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.info, job.Where, job.Args)
+		checksumTmp, err := dbutil.GetCRC32Checksum(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.info, job.Where, job.Args, SliceToMap(t.IgnoreColumns))
 		if err != nil {
 			return -1, errors.Trace(err)
 		}
@@ -222,7 +225,7 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, checkJobs []*CheckJ
 				return false, errors.Trace(err)
 			}
 
-			targetChecksum, err := dbutil.GetCRC32Checksum(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, job.Where, job.Args)
+			targetChecksum, err := dbutil.GetCRC32Checksum(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, job.Where, job.Args, SliceToMap(t.IgnoreColumns))
 			if err != nil {
 				return false, errors.Trace(err)
 			}
@@ -237,14 +240,14 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, checkJobs []*CheckJ
 		// if checksum is not equal or don't need compare checksum, compare the data
 		sourceRows := make(map[string]*sql.Rows)
 		for i, sourceTable := range t.SourceTables {
-			rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, job.Where, job.Args)
+			rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, job.Where, job.Args, SliceToMap(t.IgnoreColumns))
 			if err != nil {
 				return false, errors.Trace(err)
 			}
 			sourceRows[fmt.Sprintf("source-%d", i)] = rows
 		}
 
-		targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, job.Where, job.Args)
+		targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, job.Where, job.Args, SliceToMap(t.IgnoreColumns))
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -513,11 +516,23 @@ func compareData(map1, map2 map[string][]byte, null1, null2 map[string]bool, ord
 }
 
 func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo, where string,
-	args []interface{}) (*sql.Rows, []*model.ColumnInfo, error) {
+	args []interface{}, ignoreColumns map[string]interface{}) (*sql.Rows, []*model.ColumnInfo, error) {
 	orderKeys, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
 	columns := "*"
+
+	if len(ignoreColumns) != 0 {
+		columnNames := make([]string, 0, len(tableInfo.Columns))
+		for _, col := range tableInfo.Columns {
+			if _, ok := ignoreColumns[col.Name.O]; ok {
+				continue
+			}
+			columnNames = append(columnNames, col.Name.O)
+		}
+		columns = strings.Join(columnNames, ", ")
+	}
+
 	if orderKeys[0] == dbutil.ImplicitColName {
-		columns = fmt.Sprintf("*, %s", dbutil.ImplicitColName)
+		columns = fmt.Sprintf("%s, %s", columns, dbutil.ImplicitColName)
 	}
 	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ %s FROM `%s`.`%s` WHERE %s ORDER BY %s",
 		columns, schema, table, where, strings.Join(orderKeys, ","))

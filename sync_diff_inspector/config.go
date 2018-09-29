@@ -67,8 +67,10 @@ type CheckTables struct {
 type TableConfig struct {
 	// table's origin information
 	TableInstance
-	// columns be ignored
+	// columns be ignored, will not check this column's data, but may use these columns as split field or order by key.
 	IgnoreColumns []string `toml:"ignore-columns"`
+	// columns be removed, will remove these columns from table info, and will not check these columns' data.
+	RemoveColumns []string `toml:"remove-columns"`
 	// field should be the primary key, unique key or field with index
 	Field string `toml:"index-field"`
 	// select range, for example: "age > 10 AND age < 20"

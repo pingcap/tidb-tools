@@ -34,14 +34,14 @@ func equalStrings(str1, str2 []string) bool {
 	return true
 }
 
-func ignoreColumns(tableInfo *model.TableInfo, columns []string) *model.TableInfo {
+func removeColumns(tableInfo *model.TableInfo, columns []string) *model.TableInfo {
 	if len(columns) == 0 {
 		return tableInfo
 	}
-	ignoreColMap := SliceToMap(columns)
+	removeColMap := SliceToMap(columns)
 	for i, index := range tableInfo.Indices {
 		for j, col := range index.Columns {
-			if _, ok := ignoreColMap[col.Name.O]; ok {
+			if _, ok := removeColMap[col.Name.O]; ok {
 				index.Columns = append(index.Columns[:j], index.Columns[j+1:]...)
 				if len(index.Columns) == 0 {
 					tableInfo.Indices = append(tableInfo.Indices[:i], tableInfo.Indices[i+1:]...)
@@ -51,7 +51,7 @@ func ignoreColumns(tableInfo *model.TableInfo, columns []string) *model.TableInf
 	}
 
 	for j, col := range tableInfo.Columns {
-		if _, ok := ignoreColMap[col.Name.O]; ok {
+		if _, ok := removeColMap[col.Name.O]; ok {
 			tableInfo.Columns = append(tableInfo.Columns[:j], tableInfo.Columns[j+1:]...)
 		}
 	}
@@ -82,6 +82,7 @@ func needQuotes(ft types.FieldType) bool {
 	return !(dbutil.IsNumberType(ft.Tp) || dbutil.IsFloatType(ft.Tp))
 }
 
+// SliceToMap converts slice to map
 func SliceToMap(slice []string) map[string]interface{} {
 	sMap := make(map[string]interface{})
 	for _, str := range slice {

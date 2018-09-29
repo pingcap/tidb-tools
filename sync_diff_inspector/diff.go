@@ -214,6 +214,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 			df.tables[table.Schema][table.Table].Range = table.Range
 		}
 		df.tables[table.Schema][table.Table].IgnoreColumns = table.IgnoreColumns
+		df.tables[table.Schema][table.Table].RemoveColumns = table.RemoveColumns
 		df.tables[table.Schema][table.Table].Field = table.Field
 	}
 
@@ -322,6 +323,7 @@ func (df *Diff) Equal() (err error) {
 				},
 
 				IgnoreColumns: table.IgnoreColumns,
+				RemoveColumns: table.RemoveColumns,
 
 				Field:             table.Field,
 				Range:             table.Range,
