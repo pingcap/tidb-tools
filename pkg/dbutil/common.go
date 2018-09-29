@@ -61,14 +61,12 @@ func (c *DBConfig) String() string {
 
 // OpenDB opens a mysql connection FD
 func OpenDB(cfg DBConfig) (*sql.DB, error) {
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8", cfg.User, cfg.Password, cfg.Host, cfg.Port)
+	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4", cfg.User, cfg.Password, cfg.Host, cfg.Port)
 	dbConn, err := sql.Open("mysql", dbDSN)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	//query := "SET NAMES 'latin1'"
-	//_, err = dbConn.Exec(query)
 	err = dbConn.Ping()
 	return dbConn, errors.Trace(err)
 }
@@ -163,7 +161,7 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 	}
 
 	randomValue := make([]interface{}, 0, num)
-	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` > ? %s AND `%s` < ? %s AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
+	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` %s > ? AND `%s` %s < ? AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
 		column, column, schemaName, table, column, collation, column, collation, limitRange, num, column)
 	log.Debugf("get random values sql: %s, min: %v, max: %v", query, min, max)
 	rows, err := db.QueryContext(ctx, query, min, max)

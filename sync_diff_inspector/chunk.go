@@ -270,7 +270,7 @@ func GenerateCheckJob(db DBConfig, table *TableConfig, chunkSize int, sample int
 
 	collation := ""
 	if table.Collation != "" {
-		collation = fmt.Sprintf(" COLLATE \"%s\" ", table.Collation)
+		collation = fmt.Sprintf(" COLLATE \"%s\"", table.Collation)
 	}
 
 	for {
@@ -286,9 +286,9 @@ func GenerateCheckJob(db DBConfig, table *TableConfig, chunkSize int, sample int
 		var condition1, condition2 string
 		if !chunk.noBegin {
 			if chunk.containBegin {
-				condition1 = fmt.Sprintf("`%s` >= ? %s", column.Name, collation)
+				condition1 = fmt.Sprintf("`%s`%s >= ?", column.Name, collation)
 			} else {
-				condition1 = fmt.Sprintf("`%s` > ? %s", column.Name, collation)
+				condition1 = fmt.Sprintf("`%s` %s > ?", column.Name, collation)
 			}
 			args = append(args, chunk.begin)
 		} else {
@@ -296,9 +296,9 @@ func GenerateCheckJob(db DBConfig, table *TableConfig, chunkSize int, sample int
 		}
 		if !chunk.noEnd {
 			if chunk.containEnd {
-				condition2 = fmt.Sprintf("`%s` <= ? %s", column.Name, collation)
+				condition2 = fmt.Sprintf("`%s` %s <= ?", column.Name, collation)
 			} else {
-				condition2 = fmt.Sprintf("`%s` < ? %s", column.Name, collation)
+				condition2 = fmt.Sprintf("`%s` %s < ?", column.Name, collation)
 			}
 			args = append(args, chunk.end)
 		} else {
