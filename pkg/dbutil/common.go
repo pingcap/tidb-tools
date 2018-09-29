@@ -142,7 +142,7 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int64, min, max interface{}, limitRange string, collation string) ([]interface{}, error) {
 	/*
 		example:
-		mysql> SELECT `id` FROM (SELECT `id` FROM `test`.`test` WHERE `id` > 0 AND `id` < 100 AND true ORDER BY RAND() LIMIT 3)rand_tmp ORDER BY `id`;
+		mysql> SELECT `id` FROM (SELECT `id` FROM `test`.`test` WHERE `id` COLLATE "latin1_bin" > 0 AND `id` COLLATE "latin1_bin" < 100 AND true ORDER BY RAND() LIMIT 3)rand_tmp ORDER BY `id`;
 		+----------+
 		| rand_tmp |
 		+----------+
@@ -157,11 +157,11 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 	}
 
 	if collation != "" {
-		collation = fmt.Sprintf("COLLATE \"%s\"", collation)
+		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
 	}
 
 	randomValue := make([]interface{}, 0, num)
-	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s` %s > ? AND `%s` %s < ? AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
+	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s`%s > ? AND `%s`%s < ? AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`",
 		column, column, schemaName, table, column, collation, column, collation, limitRange, num, column)
 	log.Debugf("get random values sql: %s, min: %v, max: %v", query, min, max)
 	rows, err := db.QueryContext(ctx, query, min, max)
@@ -276,7 +276,7 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName str
 
 	query := fmt.Sprintf("SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED)) AS checksum FROM `%s`.`%s` WHERE %s;",
 		strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), schemaName, tableName, limitRange)
-	log.Infof("checksum sql: %s, args: %v", query, args)
+	log.Debugf("checksum sql: %s, args: %v", query, args)
 
 	var checksum sql.NullInt64
 	err := db.QueryRowContext(ctx, query, args...).Scan(&checksum)
