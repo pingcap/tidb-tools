@@ -20,6 +20,12 @@ use-rowid = false
 # calculate the data's checksum, and compare data by checksum.
 use-checksum = true
 
+# ignore check table's data
+ignore-data-check = false
+
+# ignore check table's struct
+ignore-struct-check = false
+
 # the name of the file which saves sqls used to fix different data
 fix-sql-file = "fix.sql"
 
@@ -68,6 +74,14 @@ table = "test2"
 
 # set true if comparing sharding tables with target table
 is-sharding = false
+
+# columns be ignored, will not check this column's data, 
+# but may use these columns as split field or order by key.
+# ignore-columns = ["name"]
+
+# columns be removed, will remove these columns from table info, 
+# and will not check these columns' data, will not use these columns as split field or order by key too.
+# remove-columns = ["name"]
 
 # source table.
 [[table-config.source-tables]]

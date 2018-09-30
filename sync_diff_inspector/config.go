@@ -67,7 +67,10 @@ type CheckTables struct {
 type TableConfig struct {
 	// table's origin information
 	TableInstance
-
+	// columns be ignored, will not check this column's data, but may use these columns as split field or order by key.
+	IgnoreColumns []string `toml:"ignore-columns"`
+	// columns be removed, will remove these columns from table info, and will not check these columns' data.
+	RemoveColumns []string `toml:"remove-columns"`
 	// field should be the primary key, unique key or field with index
 	Field string `toml:"index-field"`
 	// select range, for example: "age > 10 AND age < 20"
@@ -185,6 +188,12 @@ type Config struct {
 	// the config of table
 	TableCfgs []*TableConfig `toml:"table-config" json:"table-config"`
 
+	// ignore check table's struct
+	IgnoreStructCheck bool `toml:"ignore-struct-check" json:"ignore-struct-check"`
+
+	// ignore check table's data
+	IgnoreDataCheck bool `toml:"ignore-data-check" json:"ignore-data-check"`
+
 	// config file
 	ConfigFile string
 
@@ -207,6 +216,8 @@ func NewConfig() *Config {
 	fs.BoolVar(&cfg.UseChecksum, "use-checksum", true, "set false if want to comapre the data directly")
 	fs.StringVar(&cfg.FixSQLFile, "fix-sql-file", "fix.sql", "the name of the file which saves sqls used to fix different data")
 	fs.BoolVar(&cfg.PrintVersion, "V", false, "print version of sync_diff_inspector")
+	fs.BoolVar(&cfg.IgnoreDataCheck, "ignore-data-check", false, "ignore check table's data")
+	fs.BoolVar(&cfg.IgnoreStructCheck, "ignore-struct-check", false, "ignore check table's struct")
 
 	return cfg
 }
