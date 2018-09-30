@@ -282,24 +282,24 @@ func setImplicitColumn(table *model.TableInfo) {
 }
 
 // EqualTableInfo returns true if this two table info have same columns and indices
-func EqualTableInfo(tableInfo1, tableInfo2 *model.TableInfo) (bool, error) {
+func EqualTableInfo(tableInfo1, tableInfo2 *model.TableInfo) bool {
 	// check columns
 	if len(tableInfo1.Columns) != len(tableInfo2.Columns) {
-		return false, nil
+		return false
 	}
 
 	for j, col := range tableInfo1.Columns {
 		if col.Name.O != tableInfo2.Columns[j].Name.O {
-			return false, nil
+			return false
 		}
 		if col.Tp != tableInfo2.Columns[j].Tp {
-			return false, nil
+			return false
 		}
 	}
 
 	// check index
 	if len(tableInfo1.Indices) != len(tableInfo2.Indices) {
-		return false, nil
+		return false
 	}
 
 	index2Map := make(map[string]*model.IndexInfo)
@@ -310,18 +310,18 @@ func EqualTableInfo(tableInfo1, tableInfo2 *model.TableInfo) (bool, error) {
 	for _, index1 := range tableInfo1.Indices {
 		index2, ok := index2Map[index1.Name.O]
 		if !ok {
-			return false, nil
+			return false
 		}
 
 		if len(index1.Columns) != len(index2.Columns) {
-			return false, nil
+			return false
 		}
 		for j, col := range index1.Columns {
 			if col.Name.O != index2.Columns[j].Name.O {
-				return false, nil
+				return false
 			}
 		}
 	}
 
-	return true, nil
+	return true
 }

@@ -130,11 +130,7 @@ func (t *TableDiff) CheckTableStruct(ctx context.Context) (bool, error) {
 			return false, errors.Trace(err)
 		}
 		sourceTable.info = removeColumns(tableInfo, t.RemoveColumns)
-		eq, err := dbutil.EqualTableInfo(sourceTable.info, t.TargetTable.info)
-		if err != nil {
-			return false, errors.Trace(err)
-		}
-
+		eq := dbutil.EqualTableInfo(sourceTable.info, t.TargetTable.info)
 		if !eq {
 			return false, nil
 		}
