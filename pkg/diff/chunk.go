@@ -132,7 +132,7 @@ func getChunksForTable(table *TableInstance, column *model.ColumnInfo, chunkSize
 func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table string, column *model.ColumnInfo, limitRange string) ([]chunkRange, error) {
 	var chunks []chunkRange
 
-	// for example, the min and max value in target table is 2-9, but 1-10 in source table. so we need generate chunk for data < 2 and data > 10
+	// for example, the min and max value in target table is 2-9, but 1-10 in source table. so we need generate chunk for data < 2 and data > 9
 	addOutRangeChunk := func() {
 		chunks = append(chunks, newChunkRange(struct{}{}, chunk.begin, false, false, true, false))
 		chunks = append(chunks, newChunkRange(chunk.end, struct{}{}, false, false, false, true))
