@@ -219,6 +219,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 			df.tables[table.Schema][table.Table].Range = table.Range
 		}
 		df.tables[table.Schema][table.Table].Field = table.Field
+		df.tables[table.Schema][table.Table].Collation = table.Collation
 	}
 
 	return nil
@@ -349,7 +350,7 @@ func (df *Diff) Equal() (err error) {
 
 			dataEqual, err := df.EqualTableData(table)
 			if err != nil {
-				log.Errorf("equal table error %v", err)
+				log.Errorf("equal table error %v", errors.ErrorStack(err))
 				return errors.Trace(err)
 			}
 			df.report.SetTableDataCheckResult(table.Schema, table.Table, dataEqual)
