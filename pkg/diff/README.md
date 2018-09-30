@@ -38,7 +38,10 @@ type TableDiff struct {
 	UseRowID bool
 
 	// set false if want to comapre the data directly
-	UseChecksum bool
+    UseChecksum bool
+    
+    // collation config in mysql/tidb, should corresponding to charset.
+	Collation string
 
 	// ignore check table's struct
 	IgnoreStructCheck bool

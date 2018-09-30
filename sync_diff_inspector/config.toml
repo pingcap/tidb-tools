@@ -61,6 +61,9 @@ range = "age > 10 AND age < 20"
 # set true if comparing sharding tables with target table
 is-sharding = false
 
+# collation config in mysql/tidb, should corresponding to charset.
+# collation = "latin1_bin"
+
 # a example for comparing table with different name.
 [[table-config]]
 # target schema name.

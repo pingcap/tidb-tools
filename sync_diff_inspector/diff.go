@@ -216,6 +216,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 		df.tables[table.Schema][table.Table].IgnoreColumns = table.IgnoreColumns
 		df.tables[table.Schema][table.Table].RemoveColumns = table.RemoveColumns
 		df.tables[table.Schema][table.Table].Field = table.Field
+		df.tables[table.Schema][table.Table].Collation = table.Collation
 	}
 
 	return nil
@@ -327,6 +328,7 @@ func (df *Diff) Equal() (err error) {
 
 				Field:             table.Field,
 				Range:             table.Range,
+				Collation:         table.Collation,
 				ChunkSize:         df.chunkSize,
 				Sample:            df.sample,
 				CheckThreadCount:  df.checkThreadCount,

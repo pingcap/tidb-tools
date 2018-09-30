@@ -135,7 +135,7 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 	}
 
 	for _, testCase := range testCases {
-		chunks, err := splitRange(nil, testCase.chunk, testCase.chunkCnt, "", "", nil, "")
+		chunks, err := splitRange(nil, testCase.chunk, testCase.chunkCnt, "", "", nil, "", "")
 		c.Assert(err, IsNil)
 
 		for i, chunk := range chunks {

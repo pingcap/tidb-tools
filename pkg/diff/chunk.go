@@ -62,7 +62,7 @@ func newChunkRange(begin, end interface{}, containBegin, containEnd, noBegin, no
 		noEnd:        noEnd,
 	}
 }
-func getChunksForTable(table *TableInstance, column *model.ColumnInfo, chunkSize, sample int, limits string) ([]chunkRange, error) {
+func getChunksForTable(table *TableInstance, column *model.ColumnInfo, chunkSize, sample int, limits string, collation string) ([]chunkRange, error) {
 	if column == nil {
 		log.Warnf("no suitable index found for %s.%s", table.Schema, table.Table)
 		return nil, nil
@@ -87,9 +87,13 @@ func getChunksForTable(table *TableInstance, column *model.ColumnInfo, chunkSize
 
 	field := column.Name.O
 
+	if collation != "" {
+		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
+	}
+
 	// fetch min, max
-	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ MIN(`%s`) as MIN, MAX(`%s`) as MAX FROM `%s`.`%s` WHERE %s",
-		field, field, table.Schema, table.Table, limits)
+	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ MIN(`%s`%s) as MIN, MAX(`%s`%s) as MAX FROM `%s`.`%s` WHERE %s",
+		field, collation, field, collation, table.Schema, table.Table, limits)
 
 	var chunk chunkRange
 	if dbutil.IsNumberType(column.Tp) {
@@ -126,10 +130,10 @@ func getChunksForTable(table *TableInstance, column *model.ColumnInfo, chunkSize
 		chunk = newChunkRange(min.String, max.String, true, true, false, false)
 	}
 
-	return splitRange(table.Conn, &chunk, chunkCnt, table.Schema, table.Table, column, limits)
+	return splitRange(table.Conn, &chunk, chunkCnt, table.Schema, table.Table, column, limits, collation)
 }
 
-func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table string, column *model.ColumnInfo, limitRange string) ([]chunkRange, error) {
+func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table string, column *model.ColumnInfo, limitRange string, collation string) ([]chunkRange, error) {
 	var chunks []chunkRange
 
 	// for example, the min and max value in target table is 2-9, but 1-10 in source table. so we need generate chunk for data < 2 and data > 9
@@ -183,7 +187,7 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 		}
 
 		// get random value as split value
-		splitValues, err := dbutil.GetRandomValues(context.Background(), db, Schema, table, column.Name.O, count-1, min, max, limitRange)
+		splitValues, err := dbutil.GetRandomValues(context.Background(), db, Schema, table, column.Name.O, count-1, min, max, limitRange, collation)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -233,7 +237,7 @@ func findSuitableField(db *sql.DB, Schema string, table *model.TableInfo) (*mode
 }
 
 // GenerateCheckJob generates some CheckJobs.
-func GenerateCheckJob(table *TableInstance, splitField, limits string, chunkSize, sample int) ([]*CheckJob, error) {
+func GenerateCheckJob(table *TableInstance, splitField, limits string, chunkSize, sample int, collation string) ([]*CheckJob, error) {
 	jobBucket := make([]*CheckJob, 0, 10)
 	var jobCnt int
 	var column *model.ColumnInfo
@@ -251,7 +255,7 @@ func GenerateCheckJob(table *TableInstance, splitField, limits string, chunkSize
 		}
 	}
 
-	chunks, err := getChunksForTable(table, column, chunkSize, sample, limits)
+	chunks, err := getChunksForTable(table, column, chunkSize, sample, limits, collation)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -261,6 +265,10 @@ func GenerateCheckJob(table *TableInstance, splitField, limits string, chunkSize
 	log.Debugf("chunks: %+v", chunks)
 
 	jobCnt += len(chunks)
+
+	if collation != "" {
+		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
+	}
 
 	for {
 		length := len(chunks)
@@ -275,9 +283,9 @@ func GenerateCheckJob(table *TableInstance, splitField, limits string, chunkSize
 		var condition1, condition2 string
 		if !chunk.noBegin {
 			if chunk.containBegin {
-				condition1 = fmt.Sprintf("`%s` >= ? ", column.Name)
+				condition1 = fmt.Sprintf("`%s`%s >= ?", column.Name, collation)
 			} else {
-				condition1 = fmt.Sprintf("`%s` > ? ", column.Name)
+				condition1 = fmt.Sprintf("`%s`%s > ?", column.Name, collation)
 			}
 			args = append(args, chunk.begin)
 		} else {
@@ -285,9 +293,9 @@ func GenerateCheckJob(table *TableInstance, splitField, limits string, chunkSize
 		}
 		if !chunk.noEnd {
 			if chunk.containEnd {
-				condition2 = fmt.Sprintf("`%s` <= ? ", column.Name)
+				condition2 = fmt.Sprintf("`%s`%s <= ?", column.Name, collation)
 			} else {
-				condition2 = fmt.Sprintf("`%s` < ? ", column.Name)
+				condition2 = fmt.Sprintf("`%s`%s < ?", column.Name, collation)
 			}
 			args = append(args, chunk.end)
 		} else {
