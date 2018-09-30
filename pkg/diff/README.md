@@ -1,6 +1,12 @@
 # diff
 ## introduction
-diff is a library to provide a function to compare tables.
+diff is a library to provide a function to compare tables:
+- support comapre table's data and struct
+- can generate sql for target table to fix data
+- support compare tables with different name
+- support compare one target table with multipe source tables
+
+
 To comapre tables, you should construct a TableDiff struct:
 ```go
 // TableDiff saves config for diff table
@@ -10,10 +16,12 @@ type TableDiff struct {
 	// target table
 	TargetTable *TableInstance
 
-	// columns be ignored
+	// columns be ignored, will not check this column's data, 
+	// but may use these columns as split field or order by key.
 	IgnoreColumns []string
 
-	// columns be removed
+	// columns be removed, will remove these columns from table info,
+	// and will not check these columns' data, will not use these columns as split field or order by key too.
 	RemoveColumns []string
 
 	// field should be the primary key, unique key or field with index
@@ -48,4 +56,7 @@ type TableDiff struct {
 }
 ```
 
-
+Then call TableDiff's function Equal to get the compare result. The Equal function define as:
+```go
+func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (structEqual bool, dataEqual bool, err error)
+```
