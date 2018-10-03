@@ -343,7 +343,7 @@ func (df *Diff) Equal() (err error) {
 				return err
 			})
 			if err != nil {
-				log.Errorf("check %s.%s equal failed, error %v", schema, table, errors.ErrorStack(err))
+				log.Errorf("check %s.%s equal failed, error %v", table.Schema, table.Table, errors.ErrorStack(err))
 				return err
 			}
 
