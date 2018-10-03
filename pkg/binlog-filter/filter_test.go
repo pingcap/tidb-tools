@@ -27,9 +27,9 @@ var _ = Suite(&testRouterSuite{})
 
 type testRouterSuite struct{}
 
-func (t *testRouterSuite) TestRoute(c *C) {
+func (t *testRouterSuite) TestFilter(c *C) {
 	rules := []*BinlogEventRule{
-		{"test_1_*", "abc*", []EventType{DeleteEvent, InsertEvent, CreateIndex, DropIndex}, []string{"^DROP\\s+PROCEDURE", "^CREATE\\s+PROCEDURE"}, nil, Ignore},
+		{"Test_1_*", "abc*", []EventType{DeleteEvent, InsertEvent, CreateIndex, DropIndex}, []string{"^DROP\\s+PROCEDURE", "^CREATE\\s+PROCEDURE"}, nil, Ignore},
 		{"xxx_*", "abc_*", []EventType{AllDML, NoneDDL}, nil, nil, Ignore},
 	}
 
@@ -53,7 +53,7 @@ func (t *testRouterSuite) TestRoute(c *C) {
 	}
 
 	// initial binlog event filter
-	filter, err := NewBinlogEvent(rules)
+	filter, err := NewBinlogEvent(false, rules)
 	c.Assert(err, IsNil)
 
 	// insert duplicate rules
@@ -123,4 +123,46 @@ func (t *testRouterSuite) TestRoute(c *C) {
 	c.Assert(err, IsNil)
 	_, err = filter.Filter("test_1_a", "abc", InsertEvent, "")
 	c.Assert(err, NotNil)
+}
+
+func (t *testRouterSuite) TestCaseSensitivetC(c *C) {
+	// we test case insensitive in TestFilter
+	rules := []*BinlogEventRule{
+		{"Test_1_*", "abc*", []EventType{DeleteEvent, InsertEvent, CreateIndex, DropIndex}, []string{"^DROP\\s+PROCEDURE", "^CREATE\\s+PROCEDURE"}, nil, Ignore},
+		{"xxx_*", "abc_*", []EventType{AllDML, NoneDDL}, nil, nil, Ignore},
+	}
+
+	cases := []struct {
+		schema, table string
+		event         EventType
+		sql           string
+		action        ActionType
+	}{
+		{"test_1_a", "abc1", DeleteEvent, "", Do},
+		{"test_1_a", "abc1", InsertEvent, "", Do},
+		{"test_1_a", "abc1", UpdateEvent, "", Do},
+		{"test_1_a", "abc1", CreateIndex, "", Do},
+		{"test_1_a", "abc1", RenameTable, "", Do},
+		{"test_1_a", "abc1", NullEvent, "drop procedure abc", Do},
+		{"test_1_a", "abc1", NullEvent, "create procedure abc", Do},
+		{"test_1_a", "abc1", NullEvent, "create function abc", Do},
+		{"xxx_1", "abc_1", NullEvent, "create function abc", Do},
+		{"xxx_1", "abc_1", InsertEvent, "", Ignore},
+		{"xxx_1", "abc_1", CreateIndex, "", Do},
+	}
+
+	// initial binlog event filter
+	filter, err := NewBinlogEvent(true, rules)
+	c.Assert(err, IsNil)
+
+	// insert duplicate rules
+	for _, rule := range rules {
+		err = filter.AddRule(rule)
+		c.Assert(err, NotNil)
+	}
+	for _, cs := range cases {
+		action, err := filter.Filter(cs.schema, cs.table, cs.event, cs.sql)
+		c.Assert(err, IsNil)
+		c.Assert(action, Equals, cs.action)
+	}
 }

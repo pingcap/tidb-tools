@@ -29,7 +29,7 @@ type testRouterSuite struct{}
 
 func (t *testRouterSuite) TestRoute(c *C) {
 	rules := []*TableRule{
-		{"test_1_*", "abc*", "t1", "abc"},
+		{"Test_1_*", "abc*", "t1", "abc"},
 		{"test_1_*", "test*", "t2", "test"},
 		{"test_1_*", "", "test", ""},
 		{"test_2_*", "abc*", "t1", "abc"},
@@ -45,7 +45,7 @@ func (t *testRouterSuite) TestRoute(c *C) {
 	}
 
 	// initial table router
-	router, err := NewTableRouter(rules)
+	router, err := NewTableRouter(false, rules)
 	c.Assert(err, IsNil)
 
 	// insert duplicate rules
@@ -115,4 +115,39 @@ func (t *testRouterSuite) TestRoute(c *C) {
 	c.Assert(err, NotNil)
 	err = router.UpdateRule(inValidRule)
 	c.Assert(err, NotNil)
+}
+
+func (t *testRouterSuite) TestCaseSensitive(c *C) {
+	// we test case insensitive in TestRoute
+	rules := []*TableRule{
+		{"Test_1_*", "abc*", "t1", "abc"},
+		{"test_1_*", "test*", "t2", "test"},
+		{"test_1_*", "", "test", ""},
+		{"test_2_*", "abc*", "t1", "abc"},
+		{"test_2_*", "test*", "t2", "test"},
+	}
+
+	cases := [][]string{
+		{"test_1_a", "abc1", "test", "abc1"},
+		{"test_2_a", "abc2", "t1", "abc"},
+		{"test_1_a", "test1", "t2", "test"},
+		{"test_2_a", "test2", "t2", "test"},
+		{"test_1_a", "xyz", "test", "xyz"},
+	}
+
+	// initial table router
+	router, err := NewTableRouter(true, rules)
+	c.Assert(err, IsNil)
+
+	// insert duplicate rules
+	for _, rule := range rules {
+		err = router.AddRule(rule)
+		c.Assert(err, NotNil)
+	}
+	for _, cs := range cases {
+		schema, table, err := router.Route(cs[0], cs[1])
+		c.Assert(err, IsNil)
+		c.Assert(schema, Equals, cs[2])
+		c.Assert(table, Equals, cs[3])
+	}
 }
