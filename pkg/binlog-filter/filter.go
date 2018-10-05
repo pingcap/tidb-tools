@@ -67,8 +67,8 @@ const (
 	NullEvent EventType = ""
 )
 
-// ClassifyEevent classify event into dml/ddl
-func ClassifyEevent(event EventType) (EventType, error) {
+// ClassifyEvent classify event into dml/ddl
+func ClassifyEvent(event EventType) (EventType, error) {
 	switch event {
 	case InsertEvent, UpdateEvent, DeleteEvent:
 		return dml, nil
@@ -92,7 +92,7 @@ type BinlogEventRule struct {
 	Action ActionType `json:"action" toml:"action" yaml:"action"`
 }
 
-// ToLower covert schema/table parttern to lower case
+// ToLower covert schema/table pattern to lower case
 func (b *BinlogEventRule) ToLower() {
 	b.SchemaPattern = strings.ToLower(b.SchemaPattern)
 	b.TablePattern = strings.ToLower(b.TablePattern)
@@ -205,7 +205,7 @@ func (b *BinlogEvent) Filter(schema, table string, event EventType, rawQuery str
 		return Do, nil
 	}
 
-	tp, err := ClassifyEevent(event)
+	tp, err := ClassifyEvent(event)
 	if err != nil {
 		return Ignore, errors.Trace(err)
 	}

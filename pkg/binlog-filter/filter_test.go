@@ -23,11 +23,11 @@ func TestClient(t *testing.T) {
 	TestingT(t)
 }
 
-var _ = Suite(&testRouterSuite{})
+var _ = Suite(&testFilterSuite{})
 
-type testRouterSuite struct{}
+type testFilterSuite struct{}
 
-func (t *testRouterSuite) TestFilter(c *C) {
+func (t *testFilterSuite) TestFilter(c *C) {
 	rules := []*BinlogEventRule{
 		{"Test_1_*", "abc*", []EventType{DeleteEvent, InsertEvent, CreateIndex, DropIndex}, []string{"^DROP\\s+PROCEDURE", "^CREATE\\s+PROCEDURE"}, nil, Ignore},
 		{"xxx_*", "abc_*", []EventType{AllDML, NoneDDL}, nil, nil, Ignore},
@@ -125,7 +125,7 @@ func (t *testRouterSuite) TestFilter(c *C) {
 	c.Assert(err, NotNil)
 }
 
-func (t *testRouterSuite) TestCaseSensitivetC(c *C) {
+func (t *testFilterSuite) TestCaseSensitive(c *C) {
 	// we test case insensitive in TestFilter
 	rules := []*BinlogEventRule{
 		{"Test_1_*", "abc*", []EventType{DeleteEvent, InsertEvent, CreateIndex, DropIndex}, []string{"^DROP\\s+PROCEDURE", "^CREATE\\s+PROCEDURE"}, nil, Ignore},

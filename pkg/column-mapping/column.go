@@ -234,7 +234,12 @@ func (m *Mapping) HandleRowValue(schema, table string, columns []string, vals []
 		return vals, nil, nil
 	}
 
-	info, err := m.queryColumnInfo(schema, table, columns)
+	schemaL, tableL := schema, table
+	if !m.caseSensitive {
+		schemaL, tableL = strings.ToLower(schema), strings.ToLower(table)
+	}
+
+	info, err := m.queryColumnInfo(schemaL, tableL, columns)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
