@@ -52,11 +52,11 @@ func (t *testColumnMappingSuit) TestRule(c *C) {
 
 func (t *testColumnMappingSuit) TestHandle(c *C) {
 	rules := []*Rule{
-		{"test*", "xxx*", "", "id", AddPrefix, []string{"instance_id:"}, "xx"},
+		{"Test*", "xxx*", "", "id", AddPrefix, []string{"instance_id:"}, "xx"},
 	}
 
 	// initial column mapping
-	m, err := NewMapping(rules)
+	m, err := NewMapping(false, rules)
 	c.Assert(err, IsNil)
 	c.Assert(m.cache.infos, HasLen, 0)
 
@@ -94,7 +94,7 @@ func (t *testColumnMappingSuit) TestQueryColumnInfo(c *C) {
 	}
 
 	// initial column mapping
-	m, err := NewMapping(rules)
+	m, err := NewMapping(false, rules)
 	c.Assert(err, IsNil)
 
 	// test mismatch
@@ -197,4 +197,23 @@ func (t *testColumnMappingSuit) TestPartitionID(c *C) {
 	vals, err = partitionID(info, []interface{}{"ha", "123"})
 	c.Assert(err, IsNil)
 	c.Assert(vals, DeepEquals, []interface{}{"ha", fmt.Sprintf("%d", int64(1<<52|1<<44|123))})
+}
+
+func (t *testColumnMappingSuit) TestCaseSensitive(c *C) {
+	// we test case insensitive in TestHandle
+	rules := []*Rule{
+		{"Test*", "xxx*", "", "id", AddPrefix, []string{"instance_id:"}, "xx"},
+	}
+
+	// case sensitive
+	// initial column mapping
+	m, err := NewMapping(true, rules)
+	c.Assert(err, IsNil)
+	c.Assert(m.cache.infos, HasLen, 0)
+
+	// test add prefix, add suffix is similar
+	vals, poss, err := m.HandleRowValue("test", "xxx", []string{"age", "id"}, []interface{}{1, "1"})
+	c.Assert(err, IsNil)
+	c.Assert(vals, DeepEquals, []interface{}{1, "1"})
+	c.Assert(poss, IsNil)
 }
