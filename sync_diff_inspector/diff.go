@@ -149,7 +149,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 		for _, tableName := range tables {
 			tableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, df.targetDB.Conn, schemaTables.Schema, tableName, cfg.UseRowID)
 			if err != nil {
-				return errors.Errorf("get table %s.%s's inforamtion error %v", schemaTables.Schema, tableName, errors.Trace(err))
+				return errors.Errorf("get table %s.%s's inforamtion error %v", schemaTables.Schema, tableName, errors.ErrorStack(err))
 			}
 
 			if _, ok := df.tables[schemaTables.Schema][tableName]; ok {
