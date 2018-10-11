@@ -233,7 +233,7 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, checkJobs []*CheckJ
 				continue
 			}
 
-			log.Errorf("table: %s, range: %s, args: %v, checksum is not equal, one is %d, another is %d", job.Table, job.Args, job.Where, sourceChecksum, targetChecksum)
+			log.Errorf("table: %s, range: %s, args: %v, checksum is not equal, one is %d, another is %d", job.Table, job.Where, job.Args, sourceChecksum, targetChecksum)
 		}
 
 		// if checksum is not equal or don't need compare checksum, compare the data
