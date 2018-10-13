@@ -218,8 +218,7 @@ func (r *RangeSelector) Next(pump *PumpStatus, binlog *pb.Binlog, retryTime int)
 
 	nextPump := r.Pumps[r.Offset]
 	if binlog.Tp == pb.BinlogType_Prewrite {
-		r.Offset++
-		r.TsMap[binlog.StartTs] = pump
+		r.TsMap[binlog.StartTs] = nextPump
 	}
 
 	return nextPump
