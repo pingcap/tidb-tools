@@ -116,7 +116,7 @@ func (h *HashSelector) Next(pump *PumpStatus, binlog *pb.Binlog, retryTime int) 
 
 	nextPump := h.Pumps[(hashTs(binlog.StartTs)+int(retryTime))%len(h.Pumps)]
 	if binlog.Tp == pb.BinlogType_Prewrite {
-		h.TsMap[binlog.StartTs] = pump
+		h.TsMap[binlog.StartTs] = nextPump
 	}
 
 	return nextPump

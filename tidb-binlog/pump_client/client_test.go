@@ -15,7 +15,9 @@ package client
 
 import (
 	"fmt"
+	"sync"
 	"testing"
+	"time"
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
@@ -110,4 +112,71 @@ func (*testClientSuite) testPumpsClient(c *C, algorithm string) {
 		pump := pumpsClient.Selector.Select(tCase.binlogs[i])
 		c.Assert(pump, Equals, tCase.choosePumps[i])
 	}
+
+	finish := false
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// set pump is avaliable or not
+	go func() {
+		defer wg.Done()
+
+		setAvaliable := true
+		for i := 0; ; i++ {
+			if finish {
+				return
+			}
+
+			if i%3 == 0 {
+				setAvaliable = !setAvaliable
+			}
+
+			//fmt.Printf("pump %d set avaliable %v", i%3, setAvaliable)
+			pumpsClient.setPumpAvaliable(pumpsClient.Pumps.Pumps[fmt.Sprintf("pump%d", i%3)], setAvaliable)
+
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+
+		for j := 0; j < 100; j++ {
+			var pump1, pump2 *PumpStatus
+			prewriteBinlog := &pb.Binlog{
+				Tp:      pb.BinlogType_Prewrite,
+				StartTs: int64(j),
+			}
+			pump1 = pumpsClient.Selector.Select(prewriteBinlog)
+			for k := 0; ; k++ {
+				if pump1 != nil {
+					break
+				}
+
+				pump1 = pumpsClient.Selector.Next(pump1, prewriteBinlog, k)
+			}
+
+			time.Sleep(10 * time.Millisecond)
+
+			commitBinlog := &pb.Binlog{
+				Tp:      pb.BinlogType_Commit,
+				StartTs: int64(j),
+			}
+			pump2 = pumpsClient.Selector.Select(commitBinlog)
+			for k := 0; ; k++ {
+				if pump2 != nil {
+					break
+				}
+
+				pump2 = pumpsClient.Selector.Select(commitBinlog)
+			}
+
+			// same start ts's prewrite binlog and commit binlog should choose same pump
+			c.Assert(pump1.NodeID, Equals, pump2.NodeID)
+		}
+
+		finish = true
+	}()
+
+	wg.Wait()
 }
