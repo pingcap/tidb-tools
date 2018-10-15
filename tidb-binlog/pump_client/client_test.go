@@ -131,7 +131,6 @@ func (*testClientSuite) testPumpsClient(c *C, algorithm string) {
 				setAvaliable = !setAvaliable
 			}
 
-			//fmt.Printf("pump %d set avaliable %v", i%3, setAvaliable)
 			pumpsClient.setPumpAvaliable(pumpsClient.Pumps.Pumps[fmt.Sprintf("pump%d", i%3)], setAvaliable)
 
 			time.Sleep(10 * time.Millisecond)
