@@ -153,6 +153,7 @@ func (*testClientSuite) testPumpsClient(c *C, algorithm string) {
 				}
 
 				pump1 = pumpsClient.Selector.Next(pump1, prewriteBinlog, k)
+				time.Sleep(time.Millisecond)
 			}
 
 			time.Sleep(10 * time.Millisecond)
@@ -168,6 +169,7 @@ func (*testClientSuite) testPumpsClient(c *C, algorithm string) {
 				}
 
 				pump2 = pumpsClient.Selector.Select(commitBinlog)
+				time.Sleep(time.Millisecond)
 			}
 
 			// same start ts's prewrite binlog and commit binlog should choose same pump
