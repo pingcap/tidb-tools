@@ -129,11 +129,10 @@ func (*testClientSuite) testPumpsClient(c *C, algorithm string) {
 		pumpsClient.setPumpAvaliable(pump1, false)
 		pump2 := pumpsClient.Selector.Select(commitBinlog)
 		c.Assert(pump2.IsAvaliable, Equals, false)
+		// prewrite binlog and commit binlog with same start ts should choose same pump
+		c.Assert(pump1.NodeID, Equals, pump2.NodeID)
 
 		pumpsClient.setPumpAvaliable(pump1, true)
 		c.Assert(pump2.IsAvaliable, Equals, true)
-
-		// same start ts's prewrite binlog and commit binlog should choose same pump
-		c.Assert(pump1.NodeID, Equals, pump2.NodeID)
 	}
 }
