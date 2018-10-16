@@ -1,7 +1,6 @@
-## tidb-tools
+# tidb-tools
 
 tidb-tools are some useful tool collections for [TiDB](https://github.com/pingcap/tidb).
-
 
 ## How to build
 
@@ -17,25 +16,27 @@ make sync_diff_inspector # build sync_diff_inspector
 make binlogctl  # build binlogctl
 ```
 
-When build successfully, you can find the binary in bin directory.
+When tidb-tools are built successfully, you can find the binary in the `bin` directory.
 
 ## Tool list
 
-[importer](./importer)
+- [importer](./importer)
 
-A tool for generating and inserting datas to database which is compatible with MySQL protocol, like MySQL, TiDB.
+    A tool for generating and inserting data to any database which is compatible with the MySQL protocol, like MySQL and TiDB.
 
-[checker](./checker)
+- [checker](./checker)
 
-A tool for checking the compatibility of an existed MySQL database with TiDB.
+    A tool for checking the compatibility of an existing MySQL database with TiDB.
 
-[sync_diff_inspector](./sync_diff_inspector)
+- [sync_diff_inspector](./sync_diff_inspector)
 
-A tool for comparing two database's data and outputs a brief report about differences.
+    A tool for comparing two databases' data and outputting a brief report about the differences.
 
-[binlogctl](./tidb-binlog/binlogctl)
+- [binlogctl](./tidb_binlog/binlogctl)
 
-A tool for performing some tidb-binlog related operations, like query status pump/drainer and unregister someone pump/drainer.
+    A tool for performing some tidb-binlog related operations, like querying the status of Pump/Drainer and pause/offline some Pump/Drainer.
+
 
 ## License
+
 Apache 2.0 license. See the [LICENSE](./LICENSE) file for details.

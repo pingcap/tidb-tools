@@ -15,14 +15,12 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"flag"
 	"os"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	log "github.com/sirupsen/logrus"
 )
@@ -60,43 +58,19 @@ func main() {
 
 	ctx := context.Background()
 
-	sourceDB, err := dbutil.OpenDB(cfg.SourceDBCfg)
-	if err != nil {
-		log.Fatalf("create source db %+v error %v", cfg.SourceDBCfg, err)
-	}
-	defer dbutil.CloseDB(sourceDB)
-	if cfg.SourceSnapshot != "" {
-		err = dbutil.SetSnapshot(ctx, sourceDB, cfg.SourceSnapshot)
-		if err != nil {
-			log.Fatalf("set history snapshot %s for source db %+v error %v", cfg.SourceSnapshot, cfg.SourceDBCfg, err)
-		}
-	}
-
-	targetDB, err := dbutil.OpenDB(cfg.TargetDBCfg)
-	if err != nil {
-		log.Fatalf("create target db %+v error %v", cfg.TargetDBCfg, err)
-	}
-	defer dbutil.CloseDB(targetDB)
-	if cfg.TargetSnapshot != "" {
-		err = dbutil.SetSnapshot(ctx, targetDB, cfg.TargetSnapshot)
-		if err != nil {
-			log.Fatalf("set history snapshot %s for target db %+v error %v", cfg.TargetSnapshot, cfg.TargetDBCfg, err)
-		}
-	}
-
-	if !checkSyncState(ctx, sourceDB, targetDB, cfg) {
+	if !checkSyncState(ctx, cfg) {
 		log.Fatal("sourceDB don't equal targetDB")
 	}
 	log.Info("test pass!!!")
 }
 
-func checkSyncState(ctx context.Context, sourceDB, targetDB *sql.DB, cfg *Config) bool {
+func checkSyncState(ctx context.Context, cfg *Config) bool {
 	beginTime := time.Now()
 	defer func() {
 		log.Infof("check data finished, all cost %v", time.Since(beginTime))
 	}()
 
-	d, err := NewDiff(ctx, sourceDB, targetDB, cfg)
+	d, err := NewDiff(ctx, cfg)
 	if err != nil {
 		log.Fatalf("fail to initialize diff process %v", errors.ErrorStack(err))
 	}

@@ -61,7 +61,7 @@ func NewConfig() *Config {
 	cfg := &Config{}
 	cfg.FlagSet = flag.NewFlagSet("binlogctl", flag.ContinueOnError)
 
-	cfg.FlagSet.StringVar(&cfg.Command, "cmd", "pumps", "operator: \"generate_meta\", \"pumps\", \"drainers\", \"delete-pump\", \"delete-drainer\"")
+	cfg.FlagSet.StringVar(&cfg.Command, "cmd", "pumps", "operator: \"generate_meta\", \"pumps\", \"drainers\", \"update-pump\", \"update-drainer\", \"pause-pump\", \"pause-drainer\", \"offline-pump\", \"offline-drainer\"")
 	cfg.FlagSet.StringVar(&cfg.NodeID, "node-id", "", "id of node, use to delete some node with operation delete-pump and delete-drainer")
 	cfg.FlagSet.StringVar(&cfg.DataDir, "data-dir", defaultDataDir, "meta directory path")
 	cfg.FlagSet.StringVar(&cfg.EtcdURLs, "pd-urls", defaultEtcdURLs, "a comma separated list of PD endpoints")

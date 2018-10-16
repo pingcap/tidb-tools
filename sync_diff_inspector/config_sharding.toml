@@ -20,12 +20,6 @@ use-rowid = false
 # calculate the data's checksum, and compare data by checksum.
 use-checksum = true
 
-# ignore check table's data
-ignore-data-check = false
-
-# ignore check table's struct
-ignore-struct-check = false
-
 # the name of the file which saves sqls used to fix different data
 fix-sql-file = "fix.sql"
 
@@ -34,60 +28,45 @@ fix-sql-file = "fix.sql"
 # schema name in target database.
 schema = "test"
 
-# table list which need check in target database.
-tables = ["test1", "test2", "test3"]
-
-# support regular expression, must start with '~'.
-# for example, this config will check tables with prefix 'test'.
-# tables = ["~test*"]
+# table list which need check in target database. 
+# in sharding mode, you must set config for every table in table-config, otherwise will not check the table.
+tables = ["test"]
 
 
-# schema and table in table-config must be contained in check-tables.
-# a example for comparing table with same schema and table name. 
-[[table-config]]
-# schema name.
-schema = "test"
-
-# table name.
-table = "test3"
-
-# field should be the primary key, unique key or field with index. 
-# if comment this, diff will find a suitable field.
-index-field = "id"
-
-# check data's range.
-range = "age > 10 AND age < 20"
-
-# set true if comparing sharding tables with target table
-is-sharding = false
-
-# collation config in mysql/tidb, should corresponding to charset.
-# collation = "latin1_bin"
-
-# a example for comparing table with different name.
+# schema and table in check-tables must be contained in check-tables.
+# a example for sharding tables.
 [[table-config]]
 # target schema name.
 schema = "test"
 
 # target table name.
-table = "test2"
+table = "test"
+
+# field should be the primary key, unique key or field with index. 
+# if comment this, diff will find a suitable field.
+# index-field = "id"
+
+# check data's range.
+# range = "age > 10 AND age < 20"
 
 # set true if comparing sharding tables with target table
-is-sharding = false
+is-sharding = true
 
-# columns be ignored, will not check this column's data, 
-# but may use these columns as split field or order by key.
-# ignore-columns = ["name"]
-
-# columns be removed, will remove these columns from table info, 
-# and will not check these columns' data, will not use these columns as split field or order by key too.
-# remove-columns = ["name"]
-
-# source table.
+# source tables.
 [[table-config.source-tables]]
 instance-id = "source-1"
 schema = "test"
 table  = "test1"
+
+[[table-config.source-tables]]
+instance-id = "source-1"
+schema = "test"
+table  = "test2"
+
+[[table-config.source-tables]]
+instance-id = "source-2"
+schema = "test"
+table  = "test3"
 
 
 [[source-db]]
@@ -96,6 +75,15 @@ port = 3306
 user = "root"
 password = ""
 instance-id = "source-1"
+# remove comment if use tidb's snapshot data
+# snapshot = "2016-10-08 16:45:26"
+
+[[source-db]]
+host = "127.0.0.2"
+port = 3306
+user = "root"
+password = ""
+instance-id = "source-2"
 # remove comment if use tidb's snapshot data
 # snapshot = "2016-10-08 16:45:26"
 

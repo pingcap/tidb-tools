@@ -61,19 +61,21 @@ func main() {
 }
 
 func checkTables(schema string, tables []string) {
-	db, err := dbutil.OpenDB(dbutil.DBConfig{
+	dbInfo := &dbutil.DBConfig{
 		User:     *username,
 		Password: *password,
 		Host:     *host,
 		Port:     *port,
 		Schema:   schema,
-	})
+	}
+
+	db, err := dbutil.OpenDB(*dbInfo)
 	if err != nil {
 		log.Fatal("create database connection failed:", err)
 	}
 	defer dbutil.CloseDB(db)
 
-	result := check.NewTablesChecker(db, map[string][]string{schema: tables}).Check(context.Background())
+	result := check.NewTablesChecker(db, dbInfo, map[string][]string{schema: tables}).Check(context.Background())
 	if result.State == check.StateSuccess {
 		log.Infof("check schema %s successfully!", schema)
 	} else if result.State == check.StateWarning {

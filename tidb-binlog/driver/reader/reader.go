@@ -27,7 +27,7 @@ func init() {
 
 // Config for Reader
 type Config struct {
-	KafakaAddr []string
+	KafkaAddr []string
 	// the CommitTs of binlog return by reader will bigger than the config CommitTs
 	CommitTS  int64
 	Offset    int64 // start at kafka offset
@@ -63,7 +63,7 @@ func NewReader(cfg *Config) (r *Reader, err error) {
 		clusterID: cfg.ClusterID,
 	}
 
-	r.client, err = sarama.NewClient(r.cfg.KafakaAddr, nil)
+	r.client, err = sarama.NewClient(r.cfg.KafkaAddr, nil)
 	if err != nil {
 		err = errors.Trace(err)
 		r = nil
@@ -98,7 +98,7 @@ func (r *Reader) Messages() (msgs <-chan *Message) {
 }
 
 func (r *Reader) getOffsetByTS(ts int64) (offset int64, err error) {
-	seeker, err := NewKafkaSeeker(r.cfg.KafakaAddr, nil)
+	seeker, err := NewKafkaSeeker(r.cfg.KafkaAddr, nil)
 	if err != nil {
 		err = errors.Trace(err)
 		return

@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package diff
 
 import (
 	. "github.com/pingcap/check"
@@ -44,6 +44,20 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 					containBegin: true,
 					containEnd:   true,
 				},
+				{
+					begin:        struct{}{},
+					end:          int64(1),
+					containBegin: false,
+					containEnd:   false,
+					noBegin:      true,
+				},
+				{
+					begin:        int64(1000),
+					end:          struct{}{},
+					containBegin: false,
+					containEnd:   false,
+					noEnd:        true,
+				},
 			},
 		}, {
 			&chunkRange{
@@ -65,6 +79,20 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 					end:          int64(1000),
 					containBegin: true,
 					containEnd:   false,
+				},
+				{
+					begin:        struct{}{},
+					end:          int64(1),
+					containBegin: false,
+					containEnd:   false,
+					noBegin:      true,
+				},
+				{
+					begin:        int64(1000),
+					end:          struct{}{},
+					containBegin: false,
+					containEnd:   false,
+					noEnd:        true,
 				},
 			},
 		}, {
@@ -88,13 +116,28 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 					containBegin: true,
 					containEnd:   false,
 				},
+				{
+					begin:        struct{}{},
+					end:          float64(1.1),
+					containBegin: false,
+					containEnd:   false,
+					noBegin:      true,
+				},
+				{
+					begin:        float64(1000.1),
+					end:          struct{}{},
+					containBegin: false,
+					containEnd:   false,
+					noEnd:        true,
+				},
 			},
 		},
 	}
 
 	for _, testCase := range testCases {
-		chunks, err := splitRange(nil, testCase.chunk, testCase.chunkCnt, "", "", nil, "")
+		chunks, err := splitRange(nil, testCase.chunk, testCase.chunkCnt, "", "", nil, "", "")
 		c.Assert(err, IsNil)
+
 		for i, chunk := range chunks {
 			c.Assert(chunk.begin, Equals, testCase.expectChunks[i].begin)
 			c.Assert(chunk.end, Equals, testCase.expectChunks[i].end)
