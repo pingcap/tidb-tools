@@ -110,4 +110,29 @@ func (*testClientSuite) testPumpsClient(c *C, algorithm string) {
 		pump := pumpsClient.Selector.Select(tCase.binlogs[i])
 		c.Assert(pump, Equals, tCase.choosePumps[i])
 	}
+
+	for j := 0; j < 10; j++ {
+		prewriteBinlog := &pb.Binlog{
+			Tp:      pb.BinlogType_Prewrite,
+			StartTs: int64(j),
+		}
+		commitBinlog := &pb.Binlog{
+			Tp:      pb.BinlogType_Commit,
+			StartTs: int64(j),
+		}
+
+		pump1 := pumpsClient.Selector.Select(prewriteBinlog)
+		if j%2 == 0 {
+			pump1 = pumpsClient.Selector.Next(prewriteBinlog, 0)
+		}
+
+		pumpsClient.setPumpAvaliable(pump1, false)
+		pump2 := pumpsClient.Selector.Select(commitBinlog)
+		c.Assert(pump2.IsAvaliable, Equals, false)
+		// prewrite binlog and commit binlog with same start ts should choose same pump
+		c.Assert(pump1.NodeID, Equals, pump2.NodeID)
+
+		pumpsClient.setPumpAvaliable(pump1, true)
+		c.Assert(pump2.IsAvaliable, Equals, true)
+	}
 }
