@@ -1,5 +1,5 @@
-hash: dbd94689f42784aea2a832ed00836eafd3d3d7512952180f62e0f7d744629c21
-updated: 2018-09-07T17:56:19.303065047+08:00
+hash: 1c0ee7958c58d6a060a93d6954e9877f902f30d9a956811869431950ba4f50be
+updated: 2018-10-17T15:14:22.765974047+08:00
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
@@ -223,13 +223,13 @@ imports:
   subpackages:
   - llrb
 - name: github.com/pierrec/lz4
-  version: 6b9367c9ff401dbc54fabce3fb8d972e799b702d
+  version: ea731401f5c95a8ba30f15787e5e0fb77c60c66b
   subpackages:
   - internal/xxh32
 - name: github.com/pingcap/check
   version: 9b266636177e249ec28b0aeffe8e86bc272bb481
 - name: github.com/pingcap/goleveldb
-  version: b9ff6c35079e0b7925a4028005fc2dbc37aec69a
+  version: 158edde5a354460121af007d02a00b01c8d03443
   subpackages:
   - leveldb
   - leveldb/cache
@@ -250,9 +250,9 @@ imports:
   - pkg/metapb
   - pkg/pdpb
 - name: github.com/pingcap/pd
-  version: 49ef99b6faa6d8cb6c797f74b118ded03253c898
+  version: eb892dda1e33a0b76191d39894ad4a806f313f6e
   subpackages:
-  - pd-client
+  - client
 - name: github.com/pingcap/tidb
   version: e4878329f0c69d7b810b8b40fb3b8071c69b5e02
   subpackages:
@@ -305,9 +305,10 @@ imports:
 - name: github.com/pkg/errors
   version: 645ef00459ed84a119197bfb8d8205042c6df63d
 - name: github.com/prometheus/client_golang
-  version: 967789050ba94deca04a5e84cce8ad472ce313c1
+  version: 1cafe34db7fdec6022e17e00e1c1ea501022f3e4
   subpackages:
   - prometheus
+  - prometheus/internal
   - prometheus/push
 - name: github.com/prometheus/client_model
   version: fa8ad6fec33561be4280a8f0514318c79d7f6cb6
@@ -346,7 +347,7 @@ imports:
 - name: github.com/spaolacci/murmur3
   version: f09979ecbc725b9e6d41a297405f65e7e8804acc
 - name: github.com/twinj/uuid
-  version: 7bbe408d339787c56ec15568c947c0959db1b275
+  version: 70cac2bcd273ef6a371bb96cde363d28b68734c3
 - name: github.com/uber/jaeger-client-go
   version: 12b4b58a7d8119c9f22db2745df843fca67a310a
   subpackages:

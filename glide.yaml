@@ -131,3 +131,7 @@ import:
   version: fb5cd6f1c72c2b98e0c4453444cdfba306da867b
 - package: github.com/Shopify/sarama
   version: v1.16.0
+- package: github.com/pingcap/pd
+  version: eb892dda1e33a0b76191d39894ad4a806f313f6e
+  subpackages:
+  - client
