@@ -1,5 +1,5 @@
-hash: 1c0ee7958c58d6a060a93d6954e9877f902f30d9a956811869431950ba4f50be
-updated: 2018-10-17T15:14:22.765974047+08:00
+hash: ddb9ba0456b462d3427886d88feee8569d48c1faf6738770772c0d0c9d2fc0c4
+updated: 2018-10-25T10:32:24.234101021+08:00
 imports:
 - name: github.com/beorn7/perks
   version: 4c0e84591b9aa9e6dcfdf3e020114cd81f89d5f9
@@ -244,7 +244,7 @@ imports:
   - leveldb/table
   - leveldb/util
 - name: github.com/pingcap/kvproto
-  version: 7b013aefd7210f4f4dbfca3330b462ddce5dd496
+  version: 529c652955d8fa74faf56f91b2f428d5779fd7d5
   subpackages:
   - pkg/eraftpb
   - pkg/metapb
@@ -303,7 +303,9 @@ imports:
   - go-tipb
   - sharedbytes
 - name: github.com/pkg/errors
-  version: 645ef00459ed84a119197bfb8d8205042c6df63d
+  version: 1176802fff62540cc87d289bd40c52a2d6b2ea16
+  repo: https://github.com/pingcap/errors.git
+  vcs: git
 - name: github.com/prometheus/client_golang
   version: 1cafe34db7fdec6022e17e00e1c1ea501022f3e4
   subpackages:

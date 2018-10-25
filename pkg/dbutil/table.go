@@ -18,7 +18,6 @@ import (
 	"database/sql"
 	"strings"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/tidb/ast"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/model"
@@ -26,6 +25,7 @@ import (
 	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/table"
 	"github.com/pingcap/tidb/types"
+	"github.com/pkg/errors"
 )
 
 // GetTableInfoWithRowID returns table information with _tidb_rowid column if useRowID is true

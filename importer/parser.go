@@ -18,10 +18,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/tidb/ast"
 	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/types"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 

@@ -20,9 +20,9 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/juju/errors"
 	pd "github.com/pingcap/pd/client"
 	"github.com/pingcap/tidb-tools/pkg/utils"
+	"github.com/pkg/errors"
 	"github.com/siddontang/go/ioutil2"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"

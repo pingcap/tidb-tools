@@ -20,8 +20,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/tidb/model"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 

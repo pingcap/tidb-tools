@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/juju/errors"
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/ast"
 	"github.com/pingcap/tidb/parser"
+	"github.com/pkg/errors"
 )
 
 /*****************************************************/

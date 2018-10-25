@@ -21,9 +21,9 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/juju/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 

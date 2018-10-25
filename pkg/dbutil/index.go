@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/tidb/model"
+	"github.com/pkg/errors"
 )
 
 // IndexInfo contains information of table index.

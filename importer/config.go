@@ -18,8 +18,8 @@ import (
 	"fmt"
 
 	"github.com/BurntSushi/toml"
-	"github.com/juju/errors"
 	"github.com/pingcap/tidb-tools/pkg/utils"
+	"github.com/pkg/errors"
 )
 
 // NewConfig creates a new config.

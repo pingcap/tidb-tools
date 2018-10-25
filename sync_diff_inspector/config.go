@@ -18,9 +18,9 @@ import (
 	"fmt"
 
 	"github.com/BurntSushi/toml"
-	"github.com/juju/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/model"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 
