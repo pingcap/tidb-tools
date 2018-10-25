@@ -19,9 +19,9 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/model"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 

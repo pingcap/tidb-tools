@@ -4,8 +4,10 @@ import:
   version: 99064174e013895bbd9b025c31100bd1d9b590ca
 - package: github.com/go-sql-driver/mysql
   version: 4ac31a97ccff97de60ba3c630bfb4733c1bb6d0e
-- package: github.com/juju/errors
-  version: 6f54ff6318409d31ff16261533ce2c8381a4fd5d
+- package: github.com/pkg/errors
+  version: 1176802fff62540cc87d289bd40c52a2d6b2ea16
+  repo: https://github.com/pingcap/errors.git
+  vcs: git
 - package: github.com/sirupsen/logrus
   version: 3bcb09397d6d88e7676a9bc8433ca11ba5304837
 - package: github.com/pingcap/check
@@ -108,7 +110,7 @@ import:
 - package: github.com/pingcap/tipb
   version: 07ff5b094233a557a3ac11b1e4d8714d8c6ff406
 - package: github.com/pingcap/kvproto
-  version: 7b013aefd7210f4f4dbfca3330b462ddce5dd496
+  version: 529c652955d8fa74faf56f91b2f428d5779fd7d5
 - package: github.com/uber/jaeger-lib
   version: 34d9cc24e47ab70783050b52f79c06eb3ac850ba
 - package: google.golang.org/genproto

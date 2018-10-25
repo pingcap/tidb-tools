@@ -5,11 +5,11 @@ import (
 	"database/sql"
 	"strings"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/ast"
 	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/util/charset"
+	"github.com/pkg/errors"
 )
 
 // TablesChecker checks compatibility of table structures, there are differents between MySQL and TiDB.

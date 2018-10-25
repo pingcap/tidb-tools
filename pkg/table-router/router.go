@@ -14,8 +14,8 @@
 package router
 
 import (
-	"github.com/juju/errors"
 	"github.com/pingcap/tidb-tools/pkg/table-rule-selector"
+	"github.com/pkg/errors"
 )
 
 // TableRule is a rule to route schema/table to target schema/table

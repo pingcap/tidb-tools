@@ -23,10 +23,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/model"
 	"github.com/pingcap/tidb/types"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 )
 

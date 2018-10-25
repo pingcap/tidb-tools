@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 )
 
 // ShowVersion queries variable 'version' and returns its value.

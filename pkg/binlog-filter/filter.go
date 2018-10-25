@@ -17,8 +17,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/tidb-tools/pkg/table-rule-selector"
+	"github.com/pkg/errors"
 )
 
 // ActionType indicates how to handle matched items

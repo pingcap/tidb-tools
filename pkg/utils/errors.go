@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 )
 
 //OriginError return original err

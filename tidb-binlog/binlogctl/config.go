@@ -18,8 +18,8 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/juju/errors"
 	"github.com/pingcap/tidb-tools/pkg/utils"
+	"github.com/pkg/errors"
 )
 
 const (
