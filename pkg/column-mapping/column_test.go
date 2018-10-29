@@ -170,6 +170,37 @@ func (t *testColumnMappingSuit) TestComputePartitionID(c *C) {
 	c.Assert(instanceID, Equals, int64(2<<59))
 	c.Assert(schemaID, Equals, int64(0))
 	c.Assert(tableID, Equals, int64(1<<51))
+
+	// test ignore instance ID
+	SetPartitionRule(4, 7, 8)
+	rule = &Rule{
+		Arguments: []string{"", "test_", "t_"},
+	}
+	instanceID, schemaID, tableID, err = computePartitionID("test_1", "t_1", rule)
+	c.Assert(err, IsNil)
+	c.Assert(instanceID, Equals, int64(0))
+	c.Assert(schemaID, Equals, int64(1<<56))
+	c.Assert(tableID, Equals, int64(1<<48))
+
+	// test ignore schema ID
+	rule = &Rule{
+		Arguments: []string{"2", "", "t_"},
+	}
+	instanceID, schemaID, tableID, err = computePartitionID("test_1", "t_1", rule)
+	c.Assert(err, IsNil)
+	c.Assert(instanceID, Equals, int64(2<<59))
+	c.Assert(schemaID, Equals, int64(0))
+	c.Assert(tableID, Equals, int64(1<<51))
+
+	// test ignore schema ID
+	rule = &Rule{
+		Arguments: []string{"2", "test_", ""},
+	}
+	instanceID, schemaID, tableID, err = computePartitionID("test_1", "t_1", rule)
+	c.Assert(err, IsNil)
+	c.Assert(instanceID, Equals, int64(2<<59))
+	c.Assert(schemaID, Equals, int64(1<<52))
+	c.Assert(tableID, Equals, int64(0))
 }
 
 func (t *testColumnMappingSuit) TestPartitionID(c *C) {
