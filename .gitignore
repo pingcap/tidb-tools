@@ -2,4 +2,3 @@
 */*.iml
 */.idea
 deps.sh
-/vendor

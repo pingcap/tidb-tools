@@ -1,4 +1,4 @@
-module tidb-tools
+module github.com/pingcap/tidb-tools
 
 require (
 	github.com/BurntSushi/toml v0.0.0-20160717150709-99064174e013
@@ -59,7 +59,6 @@ require (
 	github.com/pingcap/kvproto v0.0.0-20180123023251-7b013aefd721
 	github.com/pingcap/pd v0.0.0-20180619050643-0ec6ffcf94e8
 	github.com/pingcap/tidb v2.0.8+incompatible
-	github.com/pingcap/tidb-tools v0.0.0-20181011071128-224e3c29d23a
 	github.com/pingcap/tipb v0.0.0-20171213095807-07ff5b094233
 	github.com/pkg/errors v0.8.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
