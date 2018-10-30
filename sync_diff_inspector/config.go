@@ -136,7 +136,7 @@ func (t *TableInstance) Valid() bool {
 	}
 
 	if _, ok := sourceInstanceMap[t.InstanceID]; !ok {
-		log.Error("unknown database instance id %s", t.InstanceID)
+		log.Errorf("unknown database instance id %s", t.InstanceID)
 		return false
 	}
 

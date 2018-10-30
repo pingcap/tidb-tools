@@ -27,7 +27,6 @@ import (
 	"github.com/uber/jaeger-client-go/internal/baggage/remote"
 	throttler "github.com/uber/jaeger-client-go/internal/throttler/remote"
 	"github.com/uber/jaeger-client-go/rpcmetrics"
-	"github.com/uber/jaeger-client-go/transport"
 )
 
 const defaultSamplingProbability = 0.001
@@ -109,18 +108,6 @@ type ReporterConfig struct {
 	// LocalAgentHostPort instructs reporter to send spans to jaeger-agent at this address
 	// Can be set by exporting an environment variable named JAEGER_AGENT_HOST / JAEGER_AGENT_PORT
 	LocalAgentHostPort string `yaml:"localAgentHostPort"`
-
-	// CollectorEndpoint instructs reporter to send spans to jaeger-collector at this URL
-	// Can be set by exporting an environment variable named JAEGER_ENDPOINT
-	CollectorEndpoint string `yaml:"collectorEndpoint"`
-
-	// User instructs reporter to include a user for basic http authentication when sending spans to jaeger-collector.
-	// Can be set by exporting an environment variable named JAEGER_USER
-	User string `yaml:"user"`
-
-	// Password instructs reporter to include a password for basic http authentication when sending spans to
-	// jaeger-collector. Can be set by exporting an environment variable named JAEGER_PASSWORD
-	Password string `yaml:"password"`
 }
 
 // BaggageRestrictionsConfig configures the baggage restrictions manager which can be used to whitelist
@@ -358,7 +345,7 @@ func (sc *SamplerConfig) NewSampler(
 	return nil, fmt.Errorf("Unknown sampler type %v", sc.Type)
 }
 
-// NewReporter instantiates a new reporter that submits spans to the collector
+// NewReporter instantiates a new reporter that submits spans to tcollector
 func (rc *ReporterConfig) NewReporter(
 	serviceName string,
 	metrics *jaeger.Metrics,
@@ -382,13 +369,5 @@ func (rc *ReporterConfig) NewReporter(
 }
 
 func (rc *ReporterConfig) newTransport() (jaeger.Transport, error) {
-	switch {
-	case rc.CollectorEndpoint != "" && rc.User != "" && rc.Password != "":
-		return transport.NewHTTPTransport(rc.CollectorEndpoint, transport.HTTPBatchSize(1),
-			transport.HTTPBasicAuth(rc.User, rc.Password)), nil
-	case rc.CollectorEndpoint != "":
-		return transport.NewHTTPTransport(rc.CollectorEndpoint, transport.HTTPBatchSize(1)), nil
-	default:
-		return jaeger.NewUDPTransport(rc.LocalAgentHostPort, 0)
-	}
+	return jaeger.NewUDPTransport(rc.LocalAgentHostPort, 0)
 }
