@@ -2,6 +2,8 @@ package uuid
 
 import "fmt"
 
+import ()
+
 // an iterated value to help ensure unique UUID generations values
 // across the same domain, server restarts and clock issues
 type Sequence uint16

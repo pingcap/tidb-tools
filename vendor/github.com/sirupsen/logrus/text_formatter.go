@@ -51,6 +51,7 @@ type TextFormatter struct {
 	// be desired.
 	DisableSorting bool
 
+
 	// Disables the truncation of the level text to 4 characters.
 	DisableLevelTruncation bool
 
