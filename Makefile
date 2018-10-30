@@ -90,3 +90,4 @@ $(VENDOR_TIDB)/parser/parser.y: vendor
 
 vendor:
 	$(GO) mod vendor
+	sh ./hack/clean_vendor.sh
