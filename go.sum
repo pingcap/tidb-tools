@@ -121,6 +121,8 @@ github.com/pingcap/kvproto v0.0.0-20180123023251-7b013aefd721 h1:GxpB3vKLDZvRs6Z
 github.com/pingcap/kvproto v0.0.0-20180123023251-7b013aefd721/go.mod h1:0gwbe1F2iBIjuQ9AH0DbQhL+Dpr5GofU8fgYyXk+ykk=
 github.com/pingcap/pd v0.0.0-20180619050643-0ec6ffcf94e8 h1:gaQBEv0OV6VWYakNRi8ZlT9fnkInHdwMSQkxQmUGeQ4=
 github.com/pingcap/pd v0.0.0-20180619050643-0ec6ffcf94e8/go.mod h1:nD3+EoYes4+aNNODO99ES59V83MZSI+dFbhyr667a0E=
+github.com/pingcap/pd v2.0.5+incompatible h1:nUTetzzM/tLbd03DoMB76AAvI57oYftNib9sUE3KPFk=
+github.com/pingcap/pd v2.0.5+incompatible/go.mod h1:nD3+EoYes4+aNNODO99ES59V83MZSI+dFbhyr667a0E=
 github.com/pingcap/tidb v2.0.8+incompatible h1:4G85C71eFTQRJ0Icwul/z3gJfR0u0aWXq1t/f4O8R40=
 github.com/pingcap/tidb v2.0.8+incompatible/go.mod h1:I8C6jrPINP2rrVunTRd7C9fRRhQrtR43S1/CL5ix/yQ=
 github.com/pingcap/tidb-tools v0.0.0-20181011071128-224e3c29d23a h1:Z0zyuxGu+QEddUbD0aEsavqPx8aLZ1ykabG4M23u660=
