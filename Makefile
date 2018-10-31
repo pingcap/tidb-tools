@@ -35,7 +35,7 @@ dump_region: parserlib
 	$(GO) build -ldflags '$(LDFLAGS)' -mod=vendor -o bin/dump_region ./dump_region
 
 binlogctl: parserlib
-	$(GO) build -ldflags '$(LDFLAGS)' -mod=vendor -o bin/binlogctl ./tidb_binlog/binlogctl
+	$(GO) build -ldflags '$(LDFLAGS)' -mod=vendor -o bin/binlogctl ./tidb-binlog/binlogctl
 
 sync_diff_inspector: parserlib
 	$(GO) build -ldflags '$(LDFLAGS)' -mod=vendor -o bin/sync_diff_inspector ./sync_diff_inspector
@@ -49,7 +49,7 @@ fmt:
 	@goimports -w $(FILES)
 
 check:
-	go get github.com/golang/lint/golint
+	#go get github.com/golang/lint/golint
 	@echo "vet"
 	@ go tool vet $(FILES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
 	@echo "vet --shadow"

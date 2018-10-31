@@ -20,9 +20,9 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/model"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -136,7 +136,7 @@ func (t *TableInstance) Valid() bool {
 	}
 
 	if _, ok := sourceInstanceMap[t.InstanceID]; !ok {
-		log.Error("unknown database instance id %s", t.InstanceID)
+		log.Errorf("unknown database instance id %s", t.InstanceID)
 		return false
 	}
 

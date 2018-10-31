@@ -20,14 +20,8 @@ import (
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
-	_ "github.com/coreos/etcd/integration" // for update vendor
 	"github.com/juju/errors"
 	"golang.org/x/net/context"
-)
-
-const (
-	// DefaultRootPath is the root path of the keys stored in etcd
-	DefaultRootPath = "/tidb-binlog"
 )
 
 // Node organizes the ectd query result as a Trie tree
@@ -203,6 +197,11 @@ func (e *Client) Delete(ctx context.Context, key string, withPrefix bool) error 
 	}
 
 	return nil
+}
+
+// Watch watchs the events of key with prefix.
+func (e *Client) Watch(ctx context.Context, prefix string) clientv3.WatchChan {
+	return e.client.Watch(ctx, prefix, clientv3.WithPrefix())
 }
 
 func parseToDirTree(root *Node, path string) *Node {
