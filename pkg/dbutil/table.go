@@ -19,11 +19,11 @@ import (
 	"strings"
 
 	"github.com/juju/errors"
-	"github.com/pingcap/tidb/ast"
+	"github.com/pingcap/parser"
+	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/parser/model"
+	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb/infoschema"
-	"github.com/pingcap/tidb/model"
-	"github.com/pingcap/tidb/mysql"
-	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/table"
 	"github.com/pingcap/tidb/types"
 )
@@ -172,7 +172,7 @@ func BuildTableInfo(tableName model.CIStr, columns []*model.ColumnInfo, constrai
 				fk.RefCols = append(fk.RefCols, key.Column.Name)
 			}
 			if len(fk.Cols) != len(fk.RefCols) {
-				return nil, infoschema.ErrForeignKeyNotMatch.GenByArgs(tbInfo.Name.O)
+				return nil, infoschema.ErrForeignKeyNotMatch.GenWithStackByArgs(tbInfo.Name.O)
 			}
 			if len(fk.Cols) == 0 {
 				// TODO: In MySQL, this case will report a parse error.

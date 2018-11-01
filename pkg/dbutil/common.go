@@ -21,7 +21,7 @@ import (
 	"strings"
 
 	"github.com/juju/errors"
-	"github.com/pingcap/tidb/model"
+	"github.com/pingcap/parser/model"
 	log "github.com/sirupsen/logrus"
 )
 

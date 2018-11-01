@@ -21,10 +21,10 @@ import (
 
 	"github.com/Shopify/sarama"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/pingcap/parser"
+	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/tidb-binlog/driver/reader"
 	pb "github.com/pingcap/tidb-tools/tidb-binlog/slave_binlog_proto/go-binlog"
-	"github.com/pingcap/tidb/ast"
-	"github.com/pingcap/tidb/parser"
 	log "github.com/sirupsen/logrus"
 )
 

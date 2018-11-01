@@ -17,7 +17,7 @@ import (
 	"strconv"
 
 	"github.com/ngaut/log"
-	"github.com/pingcap/tidb/model"
+	"github.com/pingcap/parser/model"
 )
 
 // RowData is the struct of rows selected from mysql/tidb
