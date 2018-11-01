@@ -63,7 +63,7 @@ update:
 	make vendor
 
 goyacc:
-	$(GO) get github.com/pingcap/tidb/parser/goyacc
+	go get github.com/pingcap/tidb/parser/goyacc
 
 parser: goyacc
 	goyacc -o /dev/null $(VENDOR_TIDB)/parser/parser.y
