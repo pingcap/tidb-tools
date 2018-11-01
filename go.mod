@@ -57,7 +57,7 @@ require (
 	github.com/pingcap/check v0.0.0-20161122095354-9b266636177e
 	github.com/pingcap/goleveldb v0.0.0-20171020122428-b9ff6c35079e
 	github.com/pingcap/kvproto v0.0.0-20180123023251-7b013aefd721
-	github.com/pingcap/pd v0.0.0-20180619050643-0ec6ffcf94e8
+	github.com/pingcap/pd v2.0.5+incompatible
 	github.com/pingcap/tidb v2.0.8+incompatible
 	github.com/pingcap/tipb v0.0.0-20171213095807-07ff5b094233
 	github.com/pkg/errors v0.8.0
