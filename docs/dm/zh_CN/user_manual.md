@@ -11,7 +11,7 @@ DM (Data Migration) 是基于 mydumper / loader / syncer 的调度管理一体�
 
 ### 架构图
 
-   ![DM structure](./dm-structure.png)
+   ![DM structure](./architecture.png)
 
 ### 组件功能
 
@@ -42,7 +42,7 @@ DM (Data Migration) 是基于 mydumper / loader / syncer 的调度管理一体�
 
 ### 快速开始
 
-1. 阅读并且了解 [使用限制](./使用限制.md) 文档
+1. 阅读并且了解 [使用限制](./limits.md) 文档
 2. 阅读并且了解 [[配置文件](https://docs.google.com/document/d/1D5qaUNcaxr441adZKyo7QzXo1J_dDlPl1N5ITlnHIQc/edit#heading=h.m7nrdrxv91e3)] 章节
 3. 阅读并且了解 [[同步功能介绍](https://docs.google.com/document/d/1D5qaUNcaxr441adZKyo7QzXo1J_dDlPl1N5ITlnHIQc/edit#heading=h.kb6bkf32ww8v)] 章节
 4. 根据 [运维管理/DM Ansible 运维手册] 文档部署和管理 DM 集群
