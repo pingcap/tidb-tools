@@ -23,7 +23,12 @@ FILES     := $$(find . -name '*.go' -type f | grep -vE 'vendor')
 VENDOR_TIDB := vendor/github.com/pingcap/tidb
 
 
-build: check test importer checker dump_region binlogctl sync_diff_inspector
+build: prepare check test importer checker dump_region binlogctl sync_diff_inspector
+
+prepare:
+	mv go.mod1 go.mod
+	mv go.sum1 go.sum
+	GO111MODULE=on go mod vendor
 
 importer:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/importer ./importer
