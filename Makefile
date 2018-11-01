@@ -16,7 +16,7 @@ LDFLAGS += -X "github.com/pingcap/tidb-tools/pkg/utils.BuildTS=$(shell date -u '
 LDFLAGS += -X "github.com/pingcap/tidb-tools/pkg/utils.GitHash=$(shell git rev-parse HEAD)"
 
 CURDIR   := $(shell pwd)
-GO       := GO15VENDOREXPERIMENT="1" GO111MODULE=on go
+GO       := GO15VENDOREXPERIMENT="1" go
 GOTEST   := CGO_ENABLED=1 $(GO) test -p 3
 PACKAGES := $$(go list ./... | grep -vE 'vendor')
 FILES     := $$(find . -name '*.go' -type f | grep -vE 'vendor')
@@ -26,23 +26,23 @@ VENDOR_TIDB := vendor/github.com/pingcap/tidb
 build: check test importer checker dump_region binlogctl sync_diff_inspector
 
 importer: parserlib
-	$(GO) build -ldflags '$(LDFLAGS)' -mod=vendor -o bin/importer ./importer
+	$(GO) build -ldflags '$(LDFLAGS)' -o bin/importer ./importer
 
 checker: parserlib
-	$(GO) build -ldflags '$(LDFLAGS)' -mod=vendor -o bin/checker ./checker
+	$(GO) build -ldflags '$(LDFLAGS)' -o bin/checker ./checker
 
 dump_region: parserlib
-	$(GO) build -ldflags '$(LDFLAGS)' -mod=vendor -o bin/dump_region ./dump_region
+	$(GO) build -ldflags '$(LDFLAGS)' -o bin/dump_region ./dump_region
 
 binlogctl: parserlib
-	$(GO) build -ldflags '$(LDFLAGS)' -mod=vendor -o bin/binlogctl ./tidb-binlog/binlogctl
+	$(GO) build -ldflags '$(LDFLAGS)' -o bin/binlogctl ./tidb-binlog/binlogctl
 
 sync_diff_inspector: parserlib
-	$(GO) build -ldflags '$(LDFLAGS)' -mod=vendor -o bin/sync_diff_inspector ./sync_diff_inspector
+	$(GO) build -ldflags '$(LDFLAGS)' -o bin/sync_diff_inspector ./sync_diff_inspector
 
 test: parserlib
 	@export log_level=error; \
-	$(GOTEST) -cover $(PACKAGES) -mod=vendor
+	$(GOTEST) -cover $(PACKAGES)
 
 fmt:
 	go fmt ./...
