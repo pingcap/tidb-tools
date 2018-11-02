@@ -15,4 +15,4 @@ TiDB-Binlog 支持以下功能场景:
 
 ### [slave client 用户文档](./binlog-slave-client.md)
 
-### [问题反馈及排查流程](./tidb-binlog-issue.md)
+### [问题反馈及排查流程](../tidb-binlog-issue.md)
