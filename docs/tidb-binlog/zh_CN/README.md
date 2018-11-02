@@ -9,10 +9,16 @@ TiDB-Binlog 支持以下功能场景:
 
 ## 文档目录
 
-### [用户文档](./tidb-binlog-cluster.md)
+### 1. 用户文档
 
-### [监控及告警说明](./tidb-binlog-monitor.md)
+* [cluster 版本用户文档](./tidb-binlog-cluster.md)
 
-### [slave client 用户文档](./binlog-slave-client.md)
+* [kafka 版本用户文档](./kafka/tidb-binlog-kafka.md)
 
-### [问题反馈及排查流程](./tidb-binlog-issue.md)
+* [local 版本用户文档](./local/tidb-binlog-local.md)
+
+### [2. 监控及告警说明](./tidb-binlog-monitor.md)
+
+### [3. slave client 用户文档](./binlog-slave-client.md)
+
+### [4. 问题反馈及排查流程](./tidb-binlog-issue.md)
