@@ -15,9 +15,9 @@ category: tools
 * 查看 Pump、Drainer 的监控
     * 是否有指标异常。
 * 查看所有的 Pump、Drainer 状态是否正常
-    * 使用 binlogctl 工具查看，需要检查的事项包括：
+    * 使用 binlogctl 工具查看，需要检查的事项包括：
         * 状态是否符合预期，正常工作时 offline 为 false。
-        * Pump 的 kafka offset 位置是否正常（大于0，且与业务的数据量相符）。
+        * Pump 的 kafka offset 位置是否正常（大于0，且与业务的数据量相符）。
         * Pump 的 latest local file pos 纪录的文件是否被 gc 处理。
         * 是否有部署列表之外的 Pump／Drainer。
 * 查看 Pump 和 Drainer 的日志
@@ -29,7 +29,7 @@ category: tools
 * 查看 Pump、Drainer 的监控
     * 是否有指标异常，参考 [监控指标说明](./tidb-binlog-monitor.md)
 * 查看所有的 Pump、Drainer 状态是否正常
-    * 使用 binlogctl 工具查看，需要检查的事项包括：
+    * 使用 binlogctl 工具查看，需要检查的事项包括：
         * 状态是否符合预期，状态的详细说明参考 [Pump／Drainer 状态](./tidb-binlog-cluster.md#pumpdrainer-状态)。
         * 是否有部署列表之外的 Pump／Drainer。
         * Pump 的 commit ts 是否正常（大于0，且 ts 符合预期）。
