@@ -5,7 +5,7 @@ category: advanced
 
 # TiDB-Binlog 部署方案
 
-本文档介绍如何部署 Kafka 版本的 TiDB-Binlog。如需部署 local 版本的 TiDB-Binlog，可参考 [local 版本的 TiDB-Binlog 部署文档](../locaL/tidb-binlog-local.md)。
+本文档介绍如何部署 Kafka 版本的 TiDB-Binlog。如需部署 local 版本的 TiDB-Binlog，可参考 [local 版本的 TiDB-Binlog 部署文档](../local/tidb-binlog-local.md)。
 
 ## TiDB-Binlog 简介
 
