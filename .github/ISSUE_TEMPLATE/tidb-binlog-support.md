@@ -6,7 +6,7 @@ category: tools
 ## TiDB-Binlog Support
 
 Before create a issue, please read this document first:
-* [问题排查及反馈流程](../../docs/tidb-binlog/zh_CN/tidb-binlog-issue.md)
+* [问题排查及反馈流程](../../docs/tidb-binlog/zh_cn/tidb-binlog-issue.md)
 * Problem feedback and troubleshooting process
 
 Please describe your problem here:
