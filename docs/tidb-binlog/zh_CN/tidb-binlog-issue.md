@@ -27,7 +27,7 @@ category: tools
 * TiDB 是否开启了 Binlog
     * 查看 TiDB 启动脚本及配置，或者直接查看 TiDB 的日志中记录的配置参数，开启 binlog 的命令行参数为 enable-binlog，在配置文件中为 [binlog] 中的 enable。
 * 查看 Pump、Drainer 的监控
-    * 是否有指标异常，参考 [监控指标说明](./tidb-binlog-monitor.md)
+    * 是否有指标异常，参考 [监控指标说明](./tidb-binlog-monitor.md)
 * 查看所有的 Pump、Drainer 状态是否正常
     * 使用 binlogctl 工具查看，需要检查的事项包括：
         * 状态是否符合预期，状态的详细说明参考 [Pump／Drainer 状态](./tidb-binlog-cluster.md#pumpdrainer-状态)。
