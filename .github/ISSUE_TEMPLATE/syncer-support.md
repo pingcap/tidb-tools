@@ -1,5 +1,5 @@
 ---
-name: "⚡️ syncer Support"
+name: "syncer Support"
 about: "Requesting support for syncer Tool"
 
 ---
