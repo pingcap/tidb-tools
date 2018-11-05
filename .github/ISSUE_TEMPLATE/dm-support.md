@@ -46,7 +46,7 @@ Additionally, please provide the following info before submitting your issue. Th
         >
         >
 
-2. current status of DM cluster (execute `query-status` in dmctl).
+2. current status of DM cluster (execute `query-status` in dmctl)
 
 3. Operation logs
 
@@ -62,3 +62,4 @@ Additionally, please provide the following info before submitting your issue. Th
     - [ ] task config, like `task.yaml` if possible.
     - [ ] `inventory.ini` if deployed by dm-ansible.
 
+5. Screenshot of Grafana dashboard or metrics' graph in Prometheus for DM if possible
