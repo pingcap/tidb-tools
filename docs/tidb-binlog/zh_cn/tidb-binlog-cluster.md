@@ -610,3 +610,19 @@ Usage of binlogctl:
 使用 Ansible 部署成功后，可以进入 Grafana Web 界面（默认地址: <http://grafana_ip:3000>，默认账号：admin，密码：admin）查看 Pump 和 Drainer 的运行状态。
 
 监控指标说明：[TiDB Binlog 监控指标说明](./tidb-binlog-monitor.md)
+
+### 老版本升级
+
+新版本不兼容老版本，TiDB 如果需要升级到新版（latest，以及 2.1GA 后的版本），只能使用新版本 Binlog；如果在使用老版本 Binlog, 必须同时升级到新版。
+
+如果能接受重新导全量数据的话直接废弃老版本，按新版本部署流程部署使用就可以了。
+
+如果想从原来的 checkpoint 继续同步, 升级流程：
+
+* 部署新版本 pump
+* 停 TiDB 集群业务
+* 更新 TiDB 以及配置，写 binlog 到新 pump cluster
+* 重新接入业务
+* 确认 old drainer 已经将 old pump 的数据完全同步到下游
+* 启动新版本 drainer
+* 下线无用的老版本 pump, 依赖的 kafka, zookeeper。

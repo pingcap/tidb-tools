@@ -22,6 +22,7 @@ category: tools
         * 是否有部署列表之外的 Pump／Drainer。
 * 查看 Pump 和 Drainer 的日志
     * 查看 Pump 和 Drainer 日志有没有 error、warning。
+* 检查同步的表是否有 primary key 或者 unique key。
 
 ### cluster 版本
 * TiDB 是否开启了 Binlog
@@ -35,6 +36,7 @@ category: tools
         * Pump 的 commit ts 是否正常（大于0，且 ts 符合预期）。
 * 查看 Pump 和 Drainer 的日志
     * 查看 Pump 和 Drainer 日志有没有 error、warning。
+* 检查同步的表是否有 primary key 或者 unique key。
 
 ## 收集信息
 
@@ -62,8 +64,12 @@ Drainer 开启 debug 日志，运行一段时间（10分钟以上）提供日志
 目前写入速度大约有多少
 提供 drainer 监控截图，主要为 event 的监控图
 提供 drainer 的配置文件
-用户的业务场景，比如：load 数据中／在批量插入数据／会修改主键／业务每秒大约多少条写入
-服务器配置、部署相关信息，例如：下游与主在不在同一个机房，网络延迟情况，下游的服务器配置
+确定用户的业务场景，包括：
+    * 检查同步的表是否有 primary key 或者 unique key。
+    * TiDB 是否在 load 数据／批量插入数据。
+    * 是否会修改主键，如果是的话，确定修改主键的行为是否频繁。
+    * 业务每秒大约多少条写入
+    * 服务器配置、部署相关信息，包括是否在一个机房，网络延迟情况，下游的服务器配置
 
 #### case 4: 待补充
 
