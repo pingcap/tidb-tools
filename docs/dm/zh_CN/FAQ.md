@@ -7,7 +7,7 @@ FAQ
 
 TiDB 对部分 DDL 并不支持（或者 DML 执行出错），需要用户根据业务具体情况选择跳过或者改造同步的 DDL。
 
-具体操作方法见 [错误处理/skip/replace 异常 SQL]
+具体操作方法见 [skip 或 replace 异常 SQL](./exception-handling/skip-replace-sqls.md)
 
 #### Sharding DDL 同步出错
 
@@ -15,16 +15,16 @@ TiDB 对部分 DDL 并不支持（或者 DML 执行出错），需要用户根�
 
 主要需要使用的命令包括 `show-ddl-locks`, `unlock-ddl-lock`, `break-ddl-lock`。
 
-但使用上述命令人为干预 sharding DDL 同步前，请确保已了解 sharding DDL 同步的原理及当前支持人为干预处理的错误类型及可能造成的影响。
+但使用上述命令人为干预 sharding DDL 同步前，请确保已了解 sharding DDL 同步的原理、当前支持人为干预处理的错误类型及可能造成的影响。
 
-具体操作见 [分库分表/分库分表数据同步]
+具体操作见 [分库分表数据同步](./shard-table/data-synchronization.md) 与 [手动处理 sharding DDL lock](./shard-table/handle-DDL-lock.md)
 
 #### 重置数据同步任务
 
-某些情况下需要重新重置数据同步任务，一般情况是上游数据库 binlog 损坏或者丢失，包括：
-- 人为执行了 `RESET MASTER`
-- binlog 损坏或者丢失
+某些情况下可能需要重新重置整个数据同步任务，相关情况包括：
+- 上游人为执行了 `RESET MASTER`，造成 relay log 同步出错
+- relay log 或上游 binlog 损坏或者丢失
 
-一般这时候 relay unit 会发生错误而退出，且无法优雅地自动恢复（后续会完善 relay 的错误处理、恢复机制）时，目前需要通过手动全量恢复数据同步。
+一般这时候 relay unit 会发生错误而退出，且无法优雅地自动恢复，需要通过手动方式恢复数据同步。
 
-具体操作方法见 [错误处理/重置数据同步任务]
+具体操作方法见 [重置数据同步任务](./exception-handling/reset-task.md)
