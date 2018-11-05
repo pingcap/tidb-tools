@@ -1,6 +1,13 @@
 Change Log
 ===
 
+### 2018-11-04
+
+#### 功能改进
+
+- syncer 在没有数据同步时定时 flush checkpoint，[PR-405]
+- 在 syncer 的 status 中增加输出上下游是否已经同步的标识 `synced`，[PR-405]
+
 ### 2018-11-02
 
 #### 功能改进
