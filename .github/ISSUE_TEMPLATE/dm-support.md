@@ -62,4 +62,4 @@ Additionally, please provide the following info before submitting your issue. Th
     - [ ] task config, like `task.yaml` if possible.
     - [ ] `inventory.ini` if deployed by dm-ansible.
 
-5. Screenshot of Grafana dashboard or metrics' graph in Prometheus for DM if possible
+5. Screenshot / exported-PDF of Grafana dashboard or metrics' graph in Prometheus for DM if possible
