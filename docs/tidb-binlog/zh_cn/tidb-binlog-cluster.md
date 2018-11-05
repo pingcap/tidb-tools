@@ -619,10 +619,10 @@ Usage of binlogctl:
 
 如果想从原来的 checkpoint 继续同步, 升级流程：
 
-* 部署新版本 pump
-* 停 TiDB 集群业务
-* 更新 TiDB 以及配置，写 binlog 到新 pump cluster
-* 重新接入业务
-* 确认 old drainer 已经将 old pump 的数据完全同步到下游
-* 启动新版本 drainer
+* 部署新版本 pump；
+* 停 TiDB 集群业务；
+* 更新 TiDB 以及配置，写 binlog 到新 pump cluster；
+* 重新接入业务;
+* 确认 old drainer 已经将 old pump 的数据完全同步到下游；
+* 启动新版本 drainer；
 * 下线无用的老版本 pump, 依赖的 kafka, zookeeper。
