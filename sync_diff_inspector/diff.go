@@ -20,9 +20,9 @@ import (
 	"regexp"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/diff"
+	log "github.com/sirupsen/logrus"
 )
 
 // Diff contains two sql DB, used for comparing.

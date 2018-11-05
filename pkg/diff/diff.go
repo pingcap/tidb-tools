@@ -24,8 +24,8 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pingcap/tidb/model"
 )
 
 // TableInstance record a table instance
@@ -239,14 +239,14 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, checkJobs []*CheckJ
 		// if checksum is not equal or don't need compare checksum, compare the data
 		sourceRows := make(map[string]*sql.Rows)
 		for i, sourceTable := range t.SourceTables {
-			rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, job.Where, job.Args, SliceToMap(t.IgnoreColumns))
+			rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, job.Where, job.Args, SliceToMap(t.IgnoreColumns), t.Collation)
 			if err != nil {
 				return false, errors.Trace(err)
 			}
 			sourceRows[fmt.Sprintf("source-%d", i)] = rows
 		}
 
-		targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, job.Where, job.Args, SliceToMap(t.IgnoreColumns))
+		targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, job.Where, job.Args, SliceToMap(t.IgnoreColumns), t.Collation)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -515,7 +515,7 @@ func compareData(map1, map2 map[string][]byte, null1, null2 map[string]bool, ord
 }
 
 func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo, where string,
-	args []interface{}, ignoreColumns map[string]interface{}) (*sql.Rows, []*model.ColumnInfo, error) {
+	args []interface{}, ignoreColumns map[string]interface{}, collation string) (*sql.Rows, []*model.ColumnInfo, error) {
 	orderKeys, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
 	columns := "*"
 
@@ -533,8 +533,13 @@ func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableIn
 	if orderKeys[0] == dbutil.ImplicitColName {
 		columns = fmt.Sprintf("%s, %s", columns, dbutil.ImplicitColName)
 	}
-	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ %s FROM `%s`.`%s` WHERE %s ORDER BY %s",
-		columns, schema, table, where, strings.Join(orderKeys, ","))
+
+	if collation != "" {
+		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
+	}
+
+	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ %s FROM `%s`.`%s` WHERE %s ORDER BY %s%s",
+		columns, schema, table, where, strings.Join(orderKeys, ","), collation)
 
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {

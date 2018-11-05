@@ -21,7 +21,7 @@ import (
 	"os"
 
 	"github.com/pingcap/kvproto/pkg/metapb"
-	pd "github.com/pingcap/pd/pd-client"
+	pd "github.com/pingcap/pd/client"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb/tablecodec"
 	"github.com/pingcap/tidb/util/codec"

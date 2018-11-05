@@ -19,10 +19,10 @@ import (
 	"strings"
 
 	"github.com/juju/errors"
-	"github.com/ngaut/log"
-	"github.com/pingcap/tidb/ast"
-	"github.com/pingcap/tidb/parser"
-	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/parser"
+	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/parser/types"
+	log "github.com/sirupsen/logrus"
 )
 
 type column struct {
@@ -111,7 +111,7 @@ func (col *column) parseColumnOptions(ops []*ast.ColumnOption) {
 		case ast.ColumnOptionPrimaryKey, ast.ColumnOptionAutoIncrement, ast.ColumnOptionUniqKey:
 			col.table.uniqIndices[col.name] = col
 		case ast.ColumnOptionComment:
-			col.comment = op.Expr.GetDatum().GetString()
+			col.comment = op.Expr.(ast.ValueExpr).GetDatumString()
 		}
 	}
 }

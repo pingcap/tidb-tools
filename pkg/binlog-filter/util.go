@@ -13,7 +13,7 @@
 
 package filter
 
-import "github.com/pingcap/tidb/ast"
+import "github.com/pingcap/parser/ast"
 
 // AstToDDLEvent returns filter.DDLEvent
 func AstToDDLEvent(node ast.StmtNode) EventType {

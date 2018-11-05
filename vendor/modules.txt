@@ -13,38 +13,36 @@ github.com/coreos/bbolt
 # github.com/coreos/etcd v3.2.14+incompatible
 github.com/coreos/etcd/clientv3
 github.com/coreos/etcd/integration
-github.com/coreos/etcd/auth/authpb
-github.com/coreos/etcd/etcdserver/api/v3rpc/rpctypes
-github.com/coreos/etcd/etcdserver/etcdserverpb
 github.com/coreos/etcd/mvcc/mvccpb
+github.com/coreos/etcd/etcdserver/etcdserverpb
+github.com/coreos/etcd/mvcc/backend
+github.com/coreos/etcd/pkg/types
+github.com/coreos/etcd/auth/authpb
+github.com/coreos/etcd/pkg/adt
+github.com/coreos/etcd/pkg/pathutil
+github.com/coreos/etcd/pkg/srv
+github.com/coreos/etcd/version
+github.com/coreos/etcd/etcdserver/api/v3rpc/rpctypes
+github.com/coreos/etcd/mvcc
 github.com/coreos/etcd/client
-github.com/coreos/etcd/clientv3/namespace
-github.com/coreos/etcd/embed
+github.com/coreos/etcd/pkg/transport
 github.com/coreos/etcd/etcdserver
 github.com/coreos/etcd/etcdserver/api/etcdhttp
 github.com/coreos/etcd/etcdserver/api/v2http
 github.com/coreos/etcd/etcdserver/api/v3client
 github.com/coreos/etcd/etcdserver/api/v3election
 github.com/coreos/etcd/etcdserver/api/v3election/v3electionpb
+github.com/coreos/etcd/etcdserver/api/v3election/v3electionpb/gw
 github.com/coreos/etcd/etcdserver/api/v3lock
 github.com/coreos/etcd/etcdserver/api/v3lock/v3lockpb
-github.com/coreos/etcd/etcdserver/api/v3rpc
-github.com/coreos/etcd/pkg/testutil
-github.com/coreos/etcd/pkg/transport
-github.com/coreos/etcd/pkg/types
-github.com/coreos/etcd/proxy/grpcproxy
-github.com/coreos/etcd/proxy/grpcproxy/adapter
-github.com/coreos/etcd/rafthttp
-github.com/coreos/etcd/pkg/pathutil
-github.com/coreos/etcd/pkg/srv
-github.com/coreos/etcd/version
-github.com/coreos/etcd/etcdserver/api/v3election/v3electionpb/gw
 github.com/coreos/etcd/etcdserver/api/v3lock/v3lockpb/gw
+github.com/coreos/etcd/etcdserver/api/v3rpc
 github.com/coreos/etcd/etcdserver/etcdserverpb/gw
 github.com/coreos/etcd/pkg/cors
 github.com/coreos/etcd/pkg/debugutil
 github.com/coreos/etcd/pkg/netutil
 github.com/coreos/etcd/pkg/runtime
+github.com/coreos/etcd/rafthttp
 github.com/coreos/etcd/wal
 github.com/coreos/etcd/alarm
 github.com/coreos/etcd/auth
@@ -56,8 +54,6 @@ github.com/coreos/etcd/etcdserver/membership
 github.com/coreos/etcd/etcdserver/stats
 github.com/coreos/etcd/lease
 github.com/coreos/etcd/lease/leasehttp
-github.com/coreos/etcd/mvcc
-github.com/coreos/etcd/mvcc/backend
 github.com/coreos/etcd/pkg/contention
 github.com/coreos/etcd/pkg/fileutil
 github.com/coreos/etcd/pkg/idutil
@@ -72,18 +68,22 @@ github.com/coreos/etcd/wal/walpb
 github.com/coreos/etcd/error
 github.com/coreos/etcd/pkg/logutil
 github.com/coreos/etcd/etcdserver/auth
+github.com/coreos/etcd/proxy/grpcproxy/adapter
 github.com/coreos/etcd/clientv3/concurrency
+github.com/coreos/etcd/clientv3/namespace
+github.com/coreos/etcd/embed
+github.com/coreos/etcd/pkg/testutil
+github.com/coreos/etcd/proxy/grpcproxy
+github.com/coreos/etcd/lease/leasepb
+github.com/coreos/etcd/pkg/monotime
+github.com/coreos/etcd/pkg/httputil
+github.com/coreos/etcd/pkg/cpuutil
 github.com/coreos/etcd/pkg/tlsutil
 github.com/coreos/etcd/clientv3/naming
 github.com/coreos/etcd/proxy/grpcproxy/cache
-github.com/coreos/etcd/pkg/httputil
 github.com/coreos/etcd/pkg/ioutil
-github.com/coreos/etcd/pkg/cpuutil
-github.com/coreos/etcd/pkg/crc
-github.com/coreos/etcd/pkg/adt
-github.com/coreos/etcd/lease/leasepb
-github.com/coreos/etcd/pkg/monotime
 github.com/coreos/etcd/snap/snappb
+github.com/coreos/etcd/pkg/crc
 # github.com/coreos/go-semver v0.2.0
 github.com/coreos/go-semver/semver
 # github.com/coreos/go-systemd v0.0.0-20161114122254-48702e0da86b
@@ -108,17 +108,21 @@ github.com/ghodss/yaml
 github.com/go-sql-driver/mysql
 # github.com/gogo/protobuf v0.0.0-20161210182026-06ec6c31ff1b
 github.com/gogo/protobuf/proto
+github.com/gogo/protobuf/protoc-gen-gogo/descriptor
+github.com/gogo/protobuf/protoc-gen-gogo/generator
+github.com/gogo/protobuf/gogoproto
+github.com/gogo/protobuf/protoc-gen-gogo/plugin
 # github.com/golang/groupcache v0.0.0-20160516000752-02826c3e7903
 github.com/golang/groupcache/lru
 # github.com/golang/protobuf v1.2.0
 github.com/golang/protobuf/proto
-github.com/golang/protobuf/ptypes
-github.com/golang/protobuf/protoc-gen-go/descriptor
+github.com/golang/protobuf/ptypes/struct
 github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/duration
 github.com/golang/protobuf/ptypes/timestamp
 github.com/golang/protobuf/jsonpb
-github.com/golang/protobuf/ptypes/struct
+github.com/golang/protobuf/protoc-gen-go/descriptor
+github.com/golang/protobuf/ptypes
 # github.com/golang/snappy v0.0.0-20150730031844-723cc1e459b8
 github.com/golang/snappy
 # github.com/google/btree v0.0.0-20161217183710-316fb6d3f031
@@ -138,8 +142,8 @@ github.com/matttproud/golang_protobuf_extensions/pbutil
 # github.com/ngaut/log v0.0.0-20160810023011-cec23d3e10b0
 github.com/ngaut/log
 # github.com/opentracing/opentracing-go v1.0.2
-github.com/opentracing/opentracing-go
 github.com/opentracing/opentracing-go/log
+github.com/opentracing/opentracing-go
 github.com/opentracing/opentracing-go/ext
 # github.com/pierrec/lz4 v2.0.2+incompatible
 github.com/pierrec/lz4
@@ -147,22 +151,22 @@ github.com/pierrec/lz4/internal/xxh32
 # github.com/pingcap/check v0.0.0-20161122095354-9b266636177e
 github.com/pingcap/check
 # github.com/pingcap/goleveldb v0.0.0-20171020122428-b9ff6c35079e
-github.com/pingcap/goleveldb/leveldb
-github.com/pingcap/goleveldb/leveldb/comparer
-github.com/pingcap/goleveldb/leveldb/iterator
-github.com/pingcap/goleveldb/leveldb/memdb
-github.com/pingcap/goleveldb/leveldb/util
 github.com/pingcap/goleveldb/leveldb/cache
+github.com/pingcap/goleveldb/leveldb/comparer
 github.com/pingcap/goleveldb/leveldb/errors
 github.com/pingcap/goleveldb/leveldb/filter
+github.com/pingcap/goleveldb/leveldb/iterator
 github.com/pingcap/goleveldb/leveldb/journal
+github.com/pingcap/goleveldb/leveldb/memdb
 github.com/pingcap/goleveldb/leveldb/opt
 github.com/pingcap/goleveldb/leveldb/storage
 github.com/pingcap/goleveldb/leveldb/table
+github.com/pingcap/goleveldb/leveldb/util
+github.com/pingcap/goleveldb/leveldb
 # github.com/pingcap/kvproto v0.0.0-20180123023251-7b013aefd721
 github.com/pingcap/kvproto/pkg/metapb
-github.com/pingcap/kvproto/pkg/pdpb
 github.com/pingcap/kvproto/pkg/eraftpb
+github.com/pingcap/kvproto/pkg/pdpb
 # github.com/pingcap/pd v0.0.0-20180619050643-0ec6ffcf94e8
 github.com/pingcap/pd/pd-client
 # github.com/pingcap/tidb v2.0.8+incompatible
@@ -176,37 +180,37 @@ github.com/pingcap/tidb/model
 github.com/pingcap/tidb/util/charset
 github.com/pingcap/tidb/infoschema
 github.com/pingcap/tidb/table
-github.com/pingcap/tidb/kv
-github.com/pingcap/tidb/sessionctx/stmtctx
-github.com/pingcap/tidb/terror
-github.com/pingcap/tidb/types/json
-github.com/pingcap/tidb/util/chunk
 github.com/pingcap/tidb/parser/opcode
 github.com/pingcap/tidb/sessionctx
 github.com/pingcap/tidb/util/auth
+github.com/pingcap/tidb/util/chunk
+github.com/pingcap/tidb/util/logutil
+github.com/pingcap/tidb/kv
+github.com/pingcap/tidb/sessionctx/stmtctx
+github.com/pingcap/tidb/sessionctx/variable
+github.com/pingcap/tidb/terror
+github.com/pingcap/tidb/types/json
+github.com/pingcap/tidb/util/encrypt
 github.com/pingcap/tidb/util/hack
-github.com/pingcap/tidb/util/format
+github.com/pingcap/tidb/util/mock
+github.com/pingcap/tidb/util/printer
+github.com/pingcap/tidb/util/stringutil
 github.com/pingcap/tidb/meta
 github.com/pingcap/tidb/meta/autoid
 github.com/pingcap/tidb/perfschema
 github.com/pingcap/tidb/privilege
-github.com/pingcap/tidb/sessionctx/variable
 github.com/pingcap/tidb/table/tables
 github.com/pingcap/tidb/util/sqlexec
-github.com/pingcap/tidb/expression
 github.com/pingcap/tidb/store/tikv/oracle
 github.com/pingcap/tidb/util/execdetails
-github.com/pingcap/tidb/util/memory
-github.com/pingcap/tidb/util
-github.com/pingcap/tidb/util/kvcache
 github.com/pingcap/tidb/metrics
 github.com/pingcap/tidb/structure
+github.com/pingcap/tidb/util
+github.com/pingcap/tidb/util/kvcache
+github.com/pingcap/tidb/util/memory
 github.com/pingcap/tidb/config
-github.com/pingcap/tidb/util/encrypt
-github.com/pingcap/tidb/util/mock
-github.com/pingcap/tidb/util/printer
-github.com/pingcap/tidb/util/stringutil
-github.com/pingcap/tidb/util/logutil
+github.com/pingcap/tidb/expression
+github.com/pingcap/tidb/util/format
 # github.com/pingcap/tipb v0.0.0-20171213095807-07ff5b094233
 github.com/pingcap/tipb/go-binlog
 github.com/pingcap/tipb/go-tipb
@@ -225,8 +229,11 @@ github.com/prometheus/common/internal/bitbucket.org/ww/goautoneg
 github.com/prometheus/procfs
 # github.com/rcrowley/go-metrics v0.0.0-20180503174638-e2704e165165
 github.com/rcrowley/go-metrics
+# github.com/satori/go.uuid v1.2.0
+github.com/satori/go.uuid
 # github.com/siddontang/go v0.0.0-20170517070808-cb568a3e5cc0
 github.com/siddontang/go/ioutil2
+github.com/siddontang/go/hack
 # github.com/sirupsen/logrus v0.0.0-20180618111419-75068beb13ad
 github.com/sirupsen/logrus
 # github.com/spaolacci/murmur3 v0.0.0-20180118202830-f09979ecbc72
@@ -235,10 +242,6 @@ github.com/spaolacci/murmur3
 github.com/twinj/uuid
 # github.com/uber/jaeger-client-go v0.0.0-20180607151842-f7e0d4744fa6
 github.com/uber/jaeger-client-go/config
-github.com/uber/jaeger-client-go
-github.com/uber/jaeger-client-go/internal/baggage/remote
-github.com/uber/jaeger-client-go/internal/throttler/remote
-github.com/uber/jaeger-client-go/rpcmetrics
 github.com/uber/jaeger-client-go/internal/baggage
 github.com/uber/jaeger-client-go/internal/spanlog
 github.com/uber/jaeger-client-go/internal/throttler
@@ -248,6 +251,11 @@ github.com/uber/jaeger-client-go/thrift-gen/jaeger
 github.com/uber/jaeger-client-go/thrift-gen/sampling
 github.com/uber/jaeger-client-go/thrift-gen/zipkincore
 github.com/uber/jaeger-client-go/utils
+github.com/uber/jaeger-client-go
+github.com/uber/jaeger-client-go/internal/baggage/remote
+github.com/uber/jaeger-client-go/internal/throttler/remote
+github.com/uber/jaeger-client-go/rpcmetrics
+github.com/uber/jaeger-client-go/transport
 github.com/uber/jaeger-client-go/thrift-gen/baggage
 github.com/uber/jaeger-client-go/thrift-gen/agent
 # github.com/uber/jaeger-lib v0.0.0-20180112221534-34d9cc24e47a
@@ -257,20 +265,21 @@ github.com/ugorji/go/codec
 # github.com/xiang90/probing v0.0.0-20160813154853-07dd2e8dfe18
 github.com/xiang90/probing
 # golang.org/x/crypto v0.0.0-20150218234220-1351f936d976
-golang.org/x/crypto/ssh/terminal
 golang.org/x/crypto/bcrypt
 golang.org/x/crypto/blowfish
+golang.org/x/crypto/ssh/terminal
 # golang.org/x/net v0.0.0-20180906233101-161cd47e91fd
 golang.org/x/net/context
 golang.org/x/net/http2
-golang.org/x/net/trace
-golang.org/x/net/http/httpguts
 golang.org/x/net/http2/hpack
+golang.org/x/net/trace
 golang.org/x/net/idna
+golang.org/x/net/http/httpguts
 golang.org/x/net/internal/timeseries
 # golang.org/x/sys v0.0.0-20180909124046-d0be0721c37e
 golang.org/x/sys/unix
 # golang.org/x/text v0.3.0
+golang.org/x/text/transform
 golang.org/x/text/encoding
 golang.org/x/text/encoding/charmap
 golang.org/x/text/encoding/japanese
@@ -278,14 +287,13 @@ golang.org/x/text/encoding/korean
 golang.org/x/text/encoding/simplifiedchinese
 golang.org/x/text/encoding/traditionalchinese
 golang.org/x/text/encoding/unicode
-golang.org/x/text/encoding/internal/identifier
-golang.org/x/text/transform
-golang.org/x/text/encoding/internal
-golang.org/x/text/internal/utf8internal
-golang.org/x/text/runes
 golang.org/x/text/secure/bidirule
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
+golang.org/x/text/encoding/internal/identifier
+golang.org/x/text/encoding/internal
+golang.org/x/text/internal/utf8internal
+golang.org/x/text/runes
 # golang.org/x/time v0.0.0-20170420181420-c06e80d9300e
 golang.org/x/time/rate
 # google.golang.org/genproto v0.0.0-20170711235230-b0a3dcfcd1a9
@@ -294,18 +302,18 @@ google.golang.org/genproto/googleapis/rpc/status
 # google.golang.org/grpc v1.7.5
 google.golang.org/grpc
 google.golang.org/grpc/credentials
+google.golang.org/grpc/metadata
+google.golang.org/grpc/peer
 google.golang.org/grpc/codes
 google.golang.org/grpc/grpclog
 google.golang.org/grpc/health/grpc_health_v1
 google.golang.org/grpc/keepalive
-google.golang.org/grpc/metadata
 google.golang.org/grpc/status
+google.golang.org/grpc/naming
 google.golang.org/grpc/balancer
 google.golang.org/grpc/connectivity
 google.golang.org/grpc/grpclb/grpc_lb_v1/messages
 google.golang.org/grpc/internal
-google.golang.org/grpc/naming
-google.golang.org/grpc/peer
 google.golang.org/grpc/resolver
 google.golang.org/grpc/stats
 google.golang.org/grpc/tap

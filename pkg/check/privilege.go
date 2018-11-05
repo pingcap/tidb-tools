@@ -20,9 +20,9 @@ import (
 	"strings"
 
 	"github.com/juju/errors"
+	"github.com/pingcap/parser"
+	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pingcap/tidb/ast"
-	"github.com/pingcap/tidb/parser"
 )
 
 /*****************************************************/

@@ -17,8 +17,8 @@ import (
 	"math/rand"
 
 	"github.com/ngaut/log"
+	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pingcap/tidb/model"
 	"github.com/pingcap/tidb/types"
 )
 
