@@ -19,7 +19,7 @@ skip 或 replace 异常 SQL
 6. 使用 `resume-task` 并指定 dm-worker, task name 恢复由于出错而 paused 的 dm-worker 上的任务
 7. 使用 `query-status` 查看 SQL 跳过是否成功
 
-#### 如何找到参数中需要使用的 binlog pos
+#### 如何找到参数中需要指定的 binlog pos
 
 在 `dm-worker.log` 中查找对应于出错 SQL 的 `current pos`
 
