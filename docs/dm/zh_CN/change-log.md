@@ -1,6 +1,14 @@
 Change Log
 ===
 
+### 2018-11-06
+
+#### bug 修复
+
+- 修复下游 PD, TiKV 等 timeout 时 syncer 未 retry 的问题
+- 修复 loader 导入大量 SQL 文件遇到错误后未能正确 pause 的问题
+- 修复部分 DDL statement 内包含注释造成 route rename 出错的问题
+
 ### 2018-11-05
 
 ### bug 修复
