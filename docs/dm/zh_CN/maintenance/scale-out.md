@@ -7,7 +7,7 @@
 
 #### 已有任务不需要扩展到新增加的 dm-worker 运行
 
-1. 参考 [DM Ansible 部署](https://internal.pingcap.net/confluence/pages/viewpage.action?pageId=14457441) 中的 增加 dm-worker 实例
+1. 参考 [DM Ansible 运维手册](./dm-ansible.md) 中的 增加 dm-worker 实例
 
 #### 已有任务需要扩展到新增加的 dm-worker 运行
 
