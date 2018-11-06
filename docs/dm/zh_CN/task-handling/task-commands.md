@@ -3,8 +3,8 @@
 
 ### 创建数据同步任务
 
-创建任务的时候，会对上游的实例的权限，以及表结构进行检查，对于分库分表同步任务的所有分表的表结构行如下的检查
-- 表中是否存在自增并且唯一的 column，并且是否存在对应的 partition id 类型 column mapping rule 且是否存在冲突
+创建任务的时候，会对上游数据库实例的权限，以及表结构进行检查，对于分库分表同步任务的所有分表的表结构行如下的检查
+- 表中是否存在自增并且唯一的 column，并且是否存在对应的 `partition id` 类型 column mapping rule 且是否存在冲突
 - 上下游待同步表结构是否一致
 
 ```
@@ -23,13 +23,13 @@ Global Flags:
 
 #### 命令样例
 
-`start-task [ -w "127.0.0.1:10181"] ./task.yaml`
+`start-task [ -w "172.16.30.15:10081"] ./task.yaml`
 
 #### 参数解释
 
-`-w`: 指定在特定的一组 dm-workers 执行上 `task.yaml`（可选），如果设置，则只启动指定任务在该 dm-workers 上面的子任务
+`-w`: 指定在特定的一组 dm-workers 执行上 `task.yaml`，可选。如果设置，则只启动指定任务在该 dm-workers 上面的子任务
 
-`config_file`: `task.yaml` 文件路径（必选）
+`config_file`: `task.yaml` 文件路径，必选
 
 #### 返回结果
 
@@ -75,9 +75,9 @@ Global Flags:
 
 #### 参数解释
 
-`-w`: 查询在特定的一组 `dm-works` 上运行的数据同步任务的子任务（可选）
+`-w`: 查询在特定的一组 `dm-works` 上运行的数据同步任务的子任务，可选
 
-`task_name`: task 任务名称 （可选，如果不填写则返回全部数据同步任务）
+`task_name`: task 任务名称，可选，如果不填写则返回全部数据同步任务
 
 #### 返回结果
 
@@ -187,9 +187,9 @@ Global Flags:
 
 #### 参数解释
 
-`-w`: 指定在特定的一组 dm-workers 暂停数据同步任务的子任务（可选）; 如果指定，只暂停该任务在指定 dm-workers 上面的子任务
+`-w`: 指定在特定的一组 dm-workers 暂停数据同步任务的子任务，可选。如果指定，则只暂停该任务在指定 dm-workers 上面的子任务
 
-`task-name`: task 的名字（必选）
+`task-name`: task 的名字，必选
 
 #### 返回结果
 
@@ -238,9 +238,9 @@ Global Flags:
 
 #### 参数解释
 
-`-w`: 指定在特定的一组 dm-workers 重启数据同步任务的子任务（可选）; 如果指定，则只重启该任务在指定 dm-workers 的子任务
+`-w`: 指定在特定的一组 dm-workers 重启数据同步任务的子任务，可选。如果指定，则只重启该任务在指定 dm-workers 的子任务
 
-`task-name`: task 任务名称（必选）
+`task-name`: task 任务名称，必选
 
 #### 返回结果
 
@@ -289,9 +289,9 @@ Global Flags:
 
 #### 参数解释
 
-`-w`: 指定在特定的一组 dm-workers 停止数据同步任务的子任务（可选）; 如果指定，则只停止指定任务在该 dm-workers 上面的子任务
+`-w`: 指定在特定的一组 dm-workers 停止数据同步任务的子任务，可选。如果指定，则只停止指定任务在该 dm-workers 上面的子任务
 
-`task-name`: task 任务名称（必选）
+`task-name`: task 任务名称，必选
 
 #### 返回结果
 
@@ -322,7 +322,7 @@ Global Flags:
 
 #### 注意
 
-##### 支持更新
+##### 支持的更新项
 
 - table route rules
 - black white list
@@ -340,11 +340,9 @@ Global Flags:
 ##### 不支持更新项更新步骤
 
 - 通过 `query-status <task-name>` 查看对应的数据同步任务状态
-    - `stage` 不为 `Stopped`，则通过 `stop-task <task-name>` 停止任务
-    - 记录任务的 unit， SyncerBinlog 和 SyncerBinlogGtid 信息
+    - 如果任务存在，则通过 `stop-task <task-name>` 停止任务
 - 更新数据同步任务配置 `task.yaml`, 包含
     - 用户需要修改的自定义配置或者错误配置
-    - 如果 unit == Syncer，则设置 `task-mode` 为 `incremental`, 并且设置 `meta` 信息为对应的 `SyncerBinlog`
 - `start-task <task-name>` 重新开启任务
 
 #### 命令 help
@@ -369,9 +367,9 @@ Global Flags:
 
 #### 参数解释
 
-`-w`: 指定在特定的一组 dm-workers 更新数据同步任务的子任务（可选）; 如果指定, 则只更新指定 dm-workers 上的子任务配置
+`-w`: 指定在特定的一组 dm-workers 更新数据同步任务的子任务，可选。如果指定, 则只更新指定 dm-workers 上的子任务配置
 
-`config file`: `task.yaml` 文件路径（必选）
+`config file`: `task.yaml` 文件路径，必选
 
 #### 返回结果
 
@@ -393,4 +391,4 @@ Global Flags:
 ​        }
 ​    ]
 }
-```                        
+```
