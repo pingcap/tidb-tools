@@ -3,6 +3,8 @@
 
 DM 的 sharding DDL lock 同步在绝大多数情况下能自动完成，但在部分异常情况发生时，需要使用 `unlock-ddl-lock` / `break-ddl-lock` 手动解除异常的 DDL lock。
 
+**注意**：绝大多数时候，不应该使用 `unlock-ddl-lock` / `break-ddl-lock` 命令，除非完全明确当前场景下，使用这些命令可能会造成的影响，并能接受这些影响。
+
 
 ### 部分 dm-worker 下线
 
@@ -27,6 +29,12 @@ DM 的 sharding DDL lock 同步在绝大多数情况下能自动完成，但在�
 
 因此，在手动解除 dm-worker 后，应该使用 `stop-task` / `start-task` 及不包含已下线 dm-worker 的新任务配置重启任务。
 
+**注意**：如果 `unlock-ddl-lock` 之后，之前下线的 dm-worker 又重新上线，则
+1. 这些 dm-worker 会重新同步已经被 unlock 的 DDL
+2. 但其它未下线过的 dm-worker 已经同步完成了这些 DDL
+3. 这些重新上线的 dm-worker 的 DDL 将尝试匹配上其它未下线过的 dm-worker 后续同步的其它 DDL
+4. 不同 dm-worker 的 sharding DDL 同步匹配错误
+
 
 ### 部分 dm-worker 重启 （或临时不可达）
 
@@ -45,7 +53,7 @@ DM 的 sharding DDL lock 同步在绝大多数情况下能自动完成，但在�
 
 #### 手动处理后影响
 
-手动打破 lock 后，后续 sharding DDL 将可以自动正常同步
+手动打破 lock 后，后续 sharding DDL 将可以自动正常同步。
 
 
 ### dm-master 重启
@@ -69,6 +77,25 @@ DM 的 sharding DDL lock 同步在绝大多数情况下能自动完成，但在�
 
 手动暂停、恢复任务后，dm-worker 会重新开始 sharding DDL lock 同步并将之前丢失的 lock 信息重新发送给 dm-master，后续 sharding DDL 将可以自动正常同步。
 
+
 ### sharding DDL lock 相关命令说明
 
-参见 [分库分表数据同步](./data-synchronization.md)
+#### show-ddl-locks
+
+- `task-name`: 非 flag 参数，string，可选；不指定时不限定查询的 task，指定时仅查询该 task
+- `worker`: flag 参数，string array，`--worker`，可选，可重复多次指定；如果指定，仅查询与这些 dm-workers 相关的 DDL lock 信息
+
+#### unlock-ddl-lock
+
+- `lock-ID`: 非 flag 参数，string，必须指定；指定要尝试 unlock 的 DDL lock 的 ID（可通过 `show-ddl-locks` 获得）
+- `owner`: flag 参数，string，`--owner`，可选；如果指定时，应该对应某一个 dm-worker，该 dm-worker 将替代默认的 owner 来执行这个 lock 对应的 DDL
+- `force-remove`: flag 参数，boolean，`--force-remove`，可选；如果指定时，即使 owner 执行 DDL 失败，lock 信息也将被移除，将失去后续重试或进行其它操作的机会
+- `worker`: flag 参数，string array，`--worker`，可选，可重复多次指定；如果不指定，将尝试对所有已经在等待该 lock 的 dm-worker 执行 / 跳过 DDL 操作，如果指定，将仅对指定的这些 dm-workers 执行 / 跳过 DDL
+
+#### break-ddl-lock
+
+- `task-name`: 非 flag 参数，string，必须指定；指定要 break 的 lock 所在的 task 名称
+- `worker`: flag 参数，string，`--worker`，必须指定且只能指定一个；指定要执行 break 操作的 dm-worker
+- `remove-id`: flag 参数，string，`--remove-id`，可选；如果指定，应该为某个 DDL lock 的 ID，指定后 dm-worker 上记录的关于这个 DDL lock 的信息将被移除
+- `exec`: flag 参数，boolean，`--exec`，可选；如果指定，将尝试在该 dm-worker 上执行这个 lock 对应的 DDL，不可与 `skip` 参数同时指定
+- `skip`: flag 参数，boolean，`--skip`，可选；如果指定，将尝试在该 dm-worker 上跳过这个 lock 对应的 DDL，不可与 `exec` 参数同时指定

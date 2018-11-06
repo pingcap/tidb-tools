@@ -12,7 +12,7 @@ DM 使用 TiDB parser 解析处理 DDL statement，所以仅支持 TiDB parser �
 
 ### 分库分表
 
-参阅 [分库分表数据同步](./shard-table/data-synchronization.md)
+参见 [sharding DDL 使用限制](./shard-table/restrictions.md)
 
 ### 操作限制
 

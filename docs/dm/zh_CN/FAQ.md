@@ -15,9 +15,9 @@ TiDB 对部分 DDL 并不支持（或者 DML 执行出错），需要用户根�
 
 主要需要使用的命令包括 `show-ddl-locks`, `unlock-ddl-lock`, `break-ddl-lock`。
 
-但使用上述命令人为干预 sharding DDL 同步前，请确保已了解 sharding DDL 同步的原理、当前支持人为干预处理的错误类型及可能造成的影响。
+但使用上述命令人为干预 sharding DDL 同步前，先阅读 [sharding DDL 使用限制](./shard-table/restrictions.md)。
 
-具体操作见 [分库分表数据同步](./shard-table/data-synchronization.md) 与 [手动处理 sharding DDL lock](./shard-table/handle-DDL-lock.md)
+具体操作见 [手动处理 sharding DDL lock](./shard-table/handle-DDL-lock.md)
 
 #### 重置数据同步任务
 
