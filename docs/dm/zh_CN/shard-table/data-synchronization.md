@@ -13,11 +13,11 @@
     - 一个 `RENAME TABLE` 语句只能有一个 `RENAME` 操作 （online DDL 有别的方案支持）
 - 各表任务开始时的同步位置点应当在需要同步的所有 sharding DDL 之前（或之后）
     - 如果开始同步位置点时有部分 sharding DDL 已经执行，则该 sharding DDL 将永远不能同步匹配成功
-- 如果需要变更 router-rules，需要先等所有 sharding DDL 同步完成
+- 如果需要变更 `router-rules`，需要先等所有 sharding DDL 同步完成
     - 当 sharding DDL 在同步过程中时，使用 dmctl 尝试变更 `router-rules` 会报错
 - 如果需要 `CREATE` 新表加入到已有的 sharding group 中，需要保持和最新更改的表结构一致
     - 比如原 table_a, table_b 初始时有 (a, b) 两列，sharding DDL 后有 (a, b, c) 三列，则同步完成后新 `CREATE` 的表应当有 (a, b, c) 三列
-- sharding DDL lock 等待同步时，如果重启了 dm-master，信息会丢失
+- sharding DDL lock 等待同步时，如果重启了 dm-master，会由于 lock 信息丢失而造成同步过程 block
 
 ### 同步过程人为干预流程
 
@@ -60,7 +60,7 @@
 - **注意**：如果 `unlock-ddl-lock` 之后，之前下线的 dm-worker 又重新上线
     1. 这些 dm-worker 会重新同步已经被 unlock 的 DDL
     2. 但其它未下线过的 dm-worker 已经同步完了这些 DDL
-    3. 这些重新上线的 dm-worker 的 DDL 将匹配上其它未下线过的 dm-worker 后续同表的其它 DDL
+    3. 这些重新上线的 dm-worker 的 DDL 将匹配上其它未下线过的 dm-worker 后续同步的其它 DDL
     4. 不同 dm-worker 的 sharding DDL 同步匹配错误
 
 ##### 以错误的不同的顺序在不同库、表上执行了不同的 DDL
@@ -69,8 +69,8 @@
     1. 可先通过 `--worker` 参数指定 dm-worker2 完成 db2-table2 的同步
     2. db2-table2 同步完成后，dm-worker2 的 db1-table1 DDL 到达并正常自动同步成功
     3. dm-worker1 的 db2-table2 的 DDL 到达，但不能再与 dm-worker2 的 db2-table2 匹配
-    4. 需要再此通过指定 `--worker` 参数让 dm-worker1 完成 db2-table2 的同步
-- 如果有较多数量的表、或有超过 2 条的 DDL 发生了乱序，很难通过这种方式处理成功
+    4. 需要再次通过指定 `--worker` 参数让 dm-worker1 完成 db2-table2 的同步
+- **注意**：如果有较多数量的表、或有超过 2 条的 DDL 发生了乱序，很难通过这种方式处理成功
 
 #### break-ddl-lock
 
