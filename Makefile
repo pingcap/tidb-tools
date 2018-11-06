@@ -16,19 +16,14 @@ LDFLAGS += -X "github.com/pingcap/tidb-tools/pkg/utils.BuildTS=$(shell date -u '
 LDFLAGS += -X "github.com/pingcap/tidb-tools/pkg/utils.GitHash=$(shell git rev-parse HEAD)"
 
 CURDIR   := $(shell pwd)
-GO       := GO15VENDOREXPERIMENT="1" go
+GO       := GO111MODULE=on go
 GOTEST   := CGO_ENABLED=1 $(GO) test -p 3
 PACKAGES := $$(go list ./... | grep -vE 'vendor')
 FILES     := $$(find . -name '*.go' -type f | grep -vE 'vendor')
 VENDOR_TIDB := vendor/github.com/pingcap/tidb
 
 
-build: prepare check test importer checker dump_region binlogctl sync_diff_inspector
-
-prepare:
-	mv go.mod1 go.mod
-	mv go.sum1 go.sum
-	GO111MODULE=on go mod vendor
+build: check test importer checker dump_region binlogctl sync_diff_inspector
 
 importer:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/importer ./importer
@@ -63,10 +58,3 @@ check:
 	#@ golint ./... 2>&1 | grep -vE '\.pb\.go' | grep -vE 'vendor' | awk '{print} END{if(NR>0) {exit 1}}'
 	@echo "gofmt (simplify)"
 	@ gofmt -s -l -w $(FILES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
-
-update:
-	make vendor
-
-vendor:
-	$(GO) mod vendor
-	sh ./hack/clean_vendor.sh

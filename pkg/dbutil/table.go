@@ -26,6 +26,7 @@ import (
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/table"
 	"github.com/pingcap/tidb/types"
+	_ "github.com/pingcap/tidb/types/parser_driver" // for parser driver
 )
 
 // GetTableInfoWithRowID returns table information with _tidb_rowid column if useRowID is true

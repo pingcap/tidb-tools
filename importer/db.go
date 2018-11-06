@@ -19,7 +19,7 @@ import (
 	"math"
 	"strconv"
 
-	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/go-sql-driver/mysql" // for mysql driver
 	"github.com/juju/errors"
 	"github.com/pingcap/parser/mysql"
 	log "github.com/sirupsen/logrus"
