@@ -6,6 +6,8 @@
 - 5.5 < MySQL version < 5.8
 - MariaDB version >= 10.1.2
 
+另外，在使用 dmctl 启动任务时，DM 会对任务上下游数据库的配置、权限等进行检查，具体见 [上游数据库实例检查](./task-handling/check-mysql.md)
+
 ### DDL 语法
 
 DM 使用 TiDB parser 解析处理 DDL statement，所以仅支持 TiDB parser 支持的 DDL 语法, 详情请参阅 [TiDB DDL 语法支持](https://github.com/pingcap/docs-cn/blob/master/sql/ddl.md)
