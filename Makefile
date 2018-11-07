@@ -1,4 +1,4 @@
-.PHONY: build importer checker dump_region binlogctl sync_diff_inspector test check deps
+.PHONY: build importer checker dump_region binlogctl sync_diff_inspector ddl_checker test check deps
 
 # Ensure GOPATH is set before running build process.
 ifeq "$(GOPATH)" ""
