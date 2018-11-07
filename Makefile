@@ -23,7 +23,7 @@ FILES     := $$(find . -name '*.go' -type f | grep -vE 'vendor')
 VENDOR_TIDB := vendor/github.com/pingcap/tidb
 
 
-build: check test importer checker dump_region binlogctl sync_diff_inspector
+build: check test importer checker dump_region binlogctl sync_diff_inspector ddl_checker
 
 importer:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/importer ./importer
@@ -39,6 +39,9 @@ binlogctl:
 
 sync_diff_inspector:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/sync_diff_inspector ./sync_diff_inspector
+
+ddl_checker:
+	$(GO) build -ldflags '$(LDFLAGS)' -o bin/ddl_checker ./ddl_checker
 
 test:
 	@export log_level=error; \
