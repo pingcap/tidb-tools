@@ -25,10 +25,10 @@ go build
 ## Modes
 
 You can switch modes using the `SETMOD` command.  
-Auto mode: The program will automatically synchronize the dependent table structure from MYSQL and delete the conflict table.   
-Query mode: The program will ask you before synchronizing the dependent table structure from MYSQL.  
-Manual mode: This program does not perform anything other than executing the input SQL.  
-SETMOD Usage: SETMOD <MODCODE>; MODCODE = [0(Auto), 1(Query), 2(Manual)] 
+Auto mode: The program will automatically synchronize the dependent table structure from MySQL and delete the conflict table.   
+Prompt mode: The program will ask you before synchronizing the dependent table structure from MySQL.  
+Manual mode: The program does not perform anything other than executing the input SQL.  
+SETMOD Usage: SETMOD <MODCODE>; MODCODE = ["Auto", "Prompt", "Manual"] (case insensitive).
 
 
 ## Example

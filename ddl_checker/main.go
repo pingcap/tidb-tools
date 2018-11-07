@@ -21,8 +21,8 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/pingcap/tidb-tools/pkg/ddl-checker"
 	"os"
-	"strconv"
 	"strings"
+	"unicode"
 )
 
 var (
@@ -44,9 +44,9 @@ const (
 		"You can switch modes using the `SETMOD` command.\n" +
 		"Auto mode: The program will automatically synchronize the dependent table structure from MYSQL " +
 		"and delete the conflict table\n" +
-		"Query mode: The program will ask you before synchronizing the dependent table structure from MYSQL\n" +
-		"Manual mode: This program does not perform anything other than executing the input SQL.\n" +
-		"SETMOD Usage: SETMOD <MODCODE>; MODCODE = [0(Auto), 1(Query), 2(Manual)]\n\n"
+		"Prompt mode: The program will ask you before synchronizing the dependent table structure from MYSQL\n" +
+		"Manual mode: This program does not perform anything other than executing the input SQL.\n\n" +
+		"SETMOD usage: SETMOD <MODCODE>; MODCODE = [\"Auto\", \"Prompt\", \"Manual\"] (case insensitive).\n\n"
 )
 
 func main() {
@@ -57,6 +57,7 @@ func main() {
 }
 
 func initialise() {
+	flag.Parse()
 	var err error
 	reader = bufio.NewReader(os.Stdin)
 	executableChecker, err = ddl_checker.NewExecutableChecker()
@@ -93,17 +94,23 @@ func mainLoop() {
 }
 func handler(input string) bool {
 	// cmd exit
-	lowerTrimInput := strings.ToLower(strings.TrimSpace(input[:len(input)-1]))
+	lowerTrimInput := strings.ToLower(strings.TrimFunc(input, func(r rune) bool {
+		return unicode.IsSpace(r) || r == ';'
+	}))
 	if lowerTrimInput == "exit" {
 		return false
 	}
 	// cmd setmod
 	if strings.HasPrefix(lowerTrimInput, "setmod") {
-		modCodeTmp, err := strconv.Atoi(strings.TrimSpace(lowerTrimInput[6:]))
-		if err != nil || modCodeTmp > 2 || modCodeTmp < 0 {
-			fmt.Printf("[DDLChecker] SETMOD usage: SETMOD <MODCODE>; MODCODE = [0(Auto), 1(Query), 2(Manual)]\n")
-		} else {
-			modCode = modCodeTmp
+		switch strings.TrimSpace(lowerTrimInput[6:]) {
+		case "auto":
+			modCode = 0
+		case "prompt":
+			modCode = 1
+		case "manual":
+			modCode = 2
+		default:
+			fmt.Println("SETMOD usage: SETMOD <MODCODE>; MODCODE = [\"Auto\", \"Prompt\", \"Manual\"] (case insensitive).")
 		}
 		return true
 	}
@@ -168,11 +175,11 @@ func queryAutoSync(neededTable []string, nonNeededTable []string) bool {
 	for {
 		fmt.Printf("[DDLChecker] Do you want to synchronize table %v from MySQL "+
 			"and drop table %v in DDLChecker?(Y/N)", neededTable, nonNeededTable)
-		result, err := reader.ReadString('\n')
-		if err != nil {
-			return false
-		}
 		for {
+			result, err := reader.ReadString('\n')
+			if err != nil {
+				return false
+			}
 			switch strings.ToLower(strings.TrimSpace(result)) {
 			case "y":
 				return true
@@ -194,9 +201,9 @@ func printWelcome() {
 func modeName() string {
 	switch modCode {
 	case 0:
-		return "Auto"
+		return " Auto "
 	case 1:
-		return "Query"
+		return "Prompt"
 	case 2:
 		return "Manual"
 	default:
