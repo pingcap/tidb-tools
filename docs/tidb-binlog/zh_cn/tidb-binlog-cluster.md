@@ -60,6 +60,8 @@ Pump && Drainer 支持部署和运行在 Intel x86-64 架构的 64 位通用硬�
 | Pump | 3 | 8核+   | SSD, 200 GB+ | 16G |
 | Drainer | 1 | 8核+ | SAS, 100 GB+（如果输出为本地文件，则使用 SSD，并增加磁盘大小） | 16G |
 
+[pump 参考性能测试](../media/pump_ssd_test.pdf)
+
 ### 使用 tidb-ansible 部署 TiDB-Binlog
 
 #### 下载 tidb-ansible
