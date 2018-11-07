@@ -35,7 +35,7 @@ var (
 	port     = flag.Int("port", 3306, "MySQL port")
 	username = flag.String("user", "root", "User name")
 	password = flag.String("password", "", "Password")
-	schema   = flag.String("schema", "test", "Schema")
+	schema   = flag.String("schema", "", "Schema")
 )
 
 const (
@@ -46,14 +46,13 @@ const (
 		"and delete the conflict table\n" +
 		"Query mode: The program will ask you before synchronizing the dependent table structure from MYSQL\n" +
 		"Manual mode: This program does not perform anything other than executing the input SQL.\n" +
-		"SETMOD Usage: SETMOD <MODCODE>; MODCODE = [0(Auto), 1(Query), 2(Manual)]\n"
+		"SETMOD Usage: SETMOD <MODCODE>; MODCODE = [0(Auto), 1(Query), 2(Manual)]\n\n"
 )
 
 func main() {
 	initialise()
 	printWelcome()
 	mainLoop()
-	//handler("ALTER TABLE table_name MODIFY column_1 int(11) NOT NULL;")
 	destroy()
 }
 
@@ -62,14 +61,14 @@ func initialise() {
 	reader = bufio.NewReader(os.Stdin)
 	executableChecker, err = ddl_checker.NewExecutableChecker()
 	if err != nil {
-		fmt.Printf("[DDLChecker]Init failed,Can't create ExecutableChecker: %s\n", err.Error())
+		fmt.Printf("[DDLChecker] Init failed, can't create ExecutableChecker: %s\n", err.Error())
 		os.Exit(1)
 	}
 	executableChecker.Execute("use test;")
 	db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s",
 		*username, *password, *host, *port, *schema))
 	if err != nil {
-		fmt.Printf("[DDLChecker]Init failed,Can't open mysql database: %s\n", err.Error())
+		fmt.Printf("[DDLChecker] Init failed, can't open mysql database: %s\n", err.Error())
 		os.Exit(1)
 	}
 
@@ -87,7 +86,7 @@ func mainLoop() {
 		fmt.Printf("[%s] > ", modeName())
 		input, err = reader.ReadString(';')
 		if err != nil {
-			fmt.Printf("[DDLChecker]Read Stdin Error: %s\n", err.Error())
+			fmt.Printf("[DDLChecker] Read stdin error: %s\n", err.Error())
 			os.Exit(1)
 		}
 	}
@@ -102,7 +101,7 @@ func handler(input string) bool {
 	if strings.HasPrefix(lowerTrimInput, "setmod") {
 		modCodeTmp, err := strconv.Atoi(strings.TrimSpace(lowerTrimInput[6:]))
 		if err != nil || modCodeTmp > 2 || modCodeTmp < 0 {
-			fmt.Printf("[DDLChecker]SETMOD Usage: SETMOD <MODCODE>; MODCODE = [0(Auto), 1(Query), 2(Manual)]\n")
+			fmt.Printf("[DDLChecker] SETMOD usage: SETMOD <MODCODE>; MODCODE = [0(Auto), 1(Query), 2(Manual)]\n")
 		} else {
 			modCode = modCodeTmp
 		}
@@ -112,19 +111,16 @@ func handler(input string) bool {
 		// auto and query mod
 		stmt, err := executableChecker.Parse(input)
 		if err != nil {
-			fmt.Printf("[DDLChecker]SQL Parse Error: %s\n", err.Error())
+			fmt.Printf("[DDLChecker] SQL parse error: %s\n", err.Error())
 			return true
 		}
 		neededTable := ddl_checker.GetTableNeededExist(stmt)
 		nonNeededTable := ddl_checker.GetTableNeededNonExist(stmt)
-		// query mod
-		if modCode == 1 && !queryAutoSync(neededTable, nonNeededTable) {
-			goto EXECUTE
+		if modCode == 0 || (modCode == 1 && queryAutoSync(neededTable, nonNeededTable)) {
+			syncTablesFromMysql(neededTable)
+			dropTables(nonNeededTable)
 		}
-		syncTablesFromMysql(neededTable)
-		dropTables(nonNeededTable)
 	}
-EXECUTE:
 	err := executableChecker.Execute(input)
 	if err == nil {
 		fmt.Println("[DDLChecker] SQL execution succeeded")
@@ -142,21 +138,12 @@ func syncTablesFromMysql(tableNames []string) {
 			fmt.Println("[DDLChecker] Table", tableName, "is exist,Skip")
 			continue
 		}
-		rows, err := db.Query("show create table " + tableName)
-		if err != nil {
-			fmt.Println("[DDLChecker] Sync Error:", err.Error())
-			continue
-		}
+		row := db.QueryRow("show create table `" + tableName + "`")
 		var table string
 		var createTableDDL string
-		if rows.Next() {
-			err = rows.Scan(&table, &createTableDDL)
-			if err != nil {
-				fmt.Println("[DDLChecker] SQL Execute Error:", err.Error())
-				continue
-			}
-		} else {
-			fmt.Println("[DDLChecker] Can't get", tableName, "DDL")
+		err := row.Scan(&table, &createTableDDL)
+		if err != nil {
+			fmt.Println("[DDLChecker] SQL Execute Error:", err.Error())
 			continue
 		}
 		err = executableChecker.Execute(createTableDDL)
@@ -169,7 +156,7 @@ func syncTablesFromMysql(tableNames []string) {
 
 func dropTables(tableNames []string) {
 	for _, tableName := range tableNames {
-		fmt.Println("[DDLChecker] Dropping Table", tableName)
+		fmt.Println("[DDLChecker] Dropping table", tableName)
 		err := executableChecker.Execute(fmt.Sprintf("drop table if exists %s", tableName))
 		if err != nil {
 			fmt.Println("[DDLChecker] DROP TABLE", tableName, "Error:", err.Error())
@@ -180,25 +167,28 @@ func dropTables(tableNames []string) {
 func queryAutoSync(neededTable []string, nonNeededTable []string) bool {
 	for {
 		fmt.Printf("[DDLChecker] Do you want to synchronize table %v from MySQL "+
-			"and drop table %v in ExecutableChecker?(Y/N)", neededTable, nonNeededTable)
-		QUERY:
+			"and drop table %v in DDLChecker?(Y/N)", neededTable, nonNeededTable)
 		result, err := reader.ReadString('\n')
 		if err != nil {
 			return false
 		}
-		switch strings.ToLower(strings.TrimSpace(result)) {
-		case "y":
-			return true
-		case "n":
-			return false
-		case "":
-			goto QUERY
+		for {
+			switch strings.ToLower(strings.TrimSpace(result)) {
+			case "y":
+				return true
+			case "n":
+				return false
+			case "":
+				continue
+			default:
+				break
+			}
 		}
 	}
 }
 
 func printWelcome() {
-	fmt.Println(WelcomeInfo)
+	fmt.Print(WelcomeInfo)
 }
 
 func modeName() string {
@@ -213,4 +203,3 @@ func modeName() string {
 		return "Unknown"
 	}
 }
-

@@ -19,7 +19,7 @@ Usage of checker:
 
 cd ddl_checker
 go build
-./ddl_checker --host [host] --port [port] --user [user] --password [password] --schema [schrma]
+./ddl_checker --host [host] --port [port] --user [user] --password [password] --schema [schema]
 ```
 
 ## Modes

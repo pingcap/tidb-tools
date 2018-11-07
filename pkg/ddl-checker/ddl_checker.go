@@ -60,7 +60,7 @@ func (ec *ExecutableChecker) Execute(sql string) error {
 
 func (ec *ExecutableChecker) IsTableExist(tableName string) bool {
 	_, err := ec.session.Execute(ec.context,
-		fmt.Sprintf("select 0 from %s limit 1", tableName))
+		fmt.Sprintf("select 0 from `%s` limit 1", tableName))
 	return err == nil
 }
 
@@ -111,13 +111,12 @@ func GetTableNeededNonExist(stmt ast.StmtNode) []string {
 func IsDDL(stmt ast.StmtNode) bool {
 	switch stmt.(type) {
 	case *ast.TruncateTableStmt, *ast.CreateDatabaseStmt,
-	*ast.CreateTableStmt, *ast.CreateIndexStmt,
-	*ast.DropDatabaseStmt, *ast.DropTableStmt,
-	*ast.DropIndexStmt, *ast.AlterTableStmt,
-	*ast.RenameTableStmt:
+		*ast.CreateTableStmt, *ast.CreateIndexStmt,
+		*ast.DropDatabaseStmt, *ast.DropTableStmt,
+		*ast.DropIndexStmt, *ast.AlterTableStmt,
+		*ast.RenameTableStmt:
 		return true
 	default:
 		return false
 	}
 }
-

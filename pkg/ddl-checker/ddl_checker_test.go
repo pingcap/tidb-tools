@@ -16,7 +16,6 @@ package ddl_checker
 import (
 	"container/list"
 	. "github.com/pingcap/check"
-	"reflect"
 	"testing"
 )
 
@@ -76,8 +75,8 @@ func (s *testSuite) TestParse(c *C) {
 		tableNeededExist := GetTableNeededExist(stmt)
 		tableNeededNonExist := GetTableNeededNonExist(stmt)
 		c.Assert(data.parseSucceeded, IsTrue)
-		c.Assert(reflect.DeepEqual(data.tableNeededExist, tableNeededExist), IsTrue)
-		c.Assert(reflect.DeepEqual(tableNeededNonExist, tableNeededNonExist), IsTrue)
+		c.Assert(tableNeededExist, DeepEquals, data.tableNeededExist)
+		c.Assert(tableNeededNonExist, DeepEquals, data.tableNeededNonExist)
 	}
 }
 
@@ -90,4 +89,3 @@ func (s *testSuite) TestExecute(c *C) {
 		c.Assert(err == nil, Equals, data.executeSucceeded)
 	}
 }
-
