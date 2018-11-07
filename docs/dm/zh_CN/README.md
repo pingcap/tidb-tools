@@ -5,7 +5,7 @@ DM (Data Migration) 用户文档
 
 如果想更详细地了解 DM 的使用、限制甚至是原理，可以参考以下 index 直接阅读感兴趣的部分。
 
-### DM 用户文档 index
+### DM 用户文档索引
 
 - [Get Started](./get-started.md)
 - [用户使用手册](./user-manual.md)

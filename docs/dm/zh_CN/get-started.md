@@ -1,2 +1,152 @@
 Get Started
 ===
+
+### 1. 部署 DM 集群
+
+目前，推荐使用 dm-ansible 来部署 DM 集群，具体部署方法请参考 [DM Ansible 运维手册](./maintenance/dm-ansible.md)。 
+
+#### 注意事项
+
+在 DM 的相关配置文件中，数据库相关的密码需要使用 dmctl 加密后的密文（如果数据库密码为空，则不需要加密）。
+
+了解如何使用 dmctl 加密明文密码，可以参考 [dmctl 加密上游 MySQL 用户密码](./maintenance/dm-ansible.md#dmctl-加密上游-mysql-用户密码)。
+
+
+### 2. 启动 task 同步任务
+
+#### 2.1 集群信息
+
+假设按上述步骤使用 dm-ansible 部署 DM 集群后，DM 集群中相关组件配置信息如下：
+
+| 组件 | IP | 服务端口 |
+|------| ---- | ---- |
+| dm-worker | 172.16.10.72 | 10081 |
+| dm-worker | 172.16.10.73 | 10081 |
+| dm-master | 172.16.10.71 | 11080 |
+
+上下游数据库实例相关信息如下：
+
+| 数据库实例 | IP | 端口 | 用户名 | 加密后密码 |
+| -------- | --- | --- | --- | --- |
+| 上游 MySQL-1 | 172.16.10.81 | 3306 | root | VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU= |
+| 上游 MySQL-2 | 172.16.10.82 | 3306 | root | VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU= |
+| 下游 TiDB | 172.16.10.83 | 4000 | root | |
+
+
+使用 dm-ansible 部署完成后，dm-master 进程配置文件 `{ansible deploy}/conf/dm-master.toml` 内容应该如下：
+
+```toml
+# Master Configuration.
+
+[[deploy]]
+mysql-instance = "172.16.10.81:3306"
+dm-worker = "172.16.10.72:10081"
+
+[[deploy]]
+mysql-instance = "172.16.10.82:3306"
+dm-worker = "172.16.10.73:10081"
+```
+
+#### 2.2 任务配置
+
+假设需要将 MySQL-1 和 MySQL-2 的 `test_db` 库的 `test_table` 表都以 **全量+增量** 的模式同步到下游 TiDB 的 `test_db` 库的 `test_table` 表。
+
+编辑如下任务配置文件 `task.yaml`
+
+```yaml
+name: "test"                  # 任务名，多个同时运行的任务不能重名
+task-mode: "all"              # 全量+增量 (all) 同步模式
+disable-heartbeat: true       # 禁用 heartbeat 同步延迟计算
+
+target-database:              # 下游 TiDB 配置信息
+  host: "172.16.10.83"
+  port: 4000
+  user: "root"
+  password: ""
+
+mysql-instances:                                  # 当前任务需要使用的全部上游 MySQL 实例
+-
+  config:                                         # MySQL-1 配置
+    host: "172.16.10.81"
+    port: 3306
+    user: "root"
+    password: "VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU="  # 明文 `123456` 某次加密后的密文，每次加密产生的密文会不同
+  instance-id: "172.16.10.81:3306"                # MySQL-1 的实例 ID，与 dm-master.toml 中的 `mysql-instance` 对应
+  black-white-list: "global"                      # 需要同步的库名/表名黑白名单的配置项名称，用于引用全局的黑白名单配置
+  mydumper-config-name: "global"                  # mydumper 的配置项名称，用于引用全局的 mydumper 配置
+
+-
+  config:                                         # MySQL-2 配置
+    host: "172.16.10.82"
+    port: 3306
+    user: "root"
+    password: "VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU="
+  instance-id: "172.16.10.82:3306"
+  black-white-list: "global"
+  mydumper-config-name: "global"
+
+# 黑白名单全局配置，各实例通过配置项名引用
+black-white-list:
+  global:
+    do-tables:                                    # 需要同步的上游表
+    - db-name: "test_db"                          # 需要同步的表的库名
+      tbl-name: "test_table"                      # 需要同步的表的表名
+
+# mydumper 全局配置，各实例通过配置项名引用
+mydumpers:
+  global:
+    mydumper-path: "./bin/mydumper"               # mydumper binary 的路径
+    extra-args: "-B test_db -T test_table"        # 只 dump test_db 库中的 test_table 表
+```
+
+#### 2.3 启动任务
+
+进入 dmctl 目录（`/home/tidb/dm-ansible/resource/bin/`），使用以下命令启动 dmctl：
+```bash
+./dmctl --master-addr 172.16.10.71:11080
+```
+
+在 dmctl 命令行内，使用以下命令启动同步任务：
+```bash
+start-task task.yaml            # task.yaml 为上一步编辑的配置文件路径
+```
+
+如果启动任务成功，将返回以下信息：
+```json
+{
+    "result": true,
+    "msg": "",
+    "workers": [
+        {
+            "result": true,
+            "worker": "172.16.10.72:10081",
+            "msg": ""
+        },
+        {
+            "result": true,
+            "worker": "172.16.10.73:10081",
+            "msg": ""
+        }
+    ]
+}
+```
+
+如果返回其他信息，可根据其中的提示进行配置变更后使用 `start-task task.yaml` 重启任务。
+
+#### 2.4 查询任务
+
+如果需要了解 DM 集群中是否运行有同步任务及任务状态等信息，可以在 dmctl 命令行内使用以下命令进行查询：
+```bash
+query-status
+```
+
+#### 2.5 停止任务
+
+如果不再需要进行数据同步，可以在 dmctl 命令行内使用以下命令停止同步任务
+```bash
+stop-task test              # 其中的 `test` 是 `task.yaml` 配置文件中 `name` 配置项设置的任务名
+```
+
+### 下一步
+
+接下来，可以阅读 [用户使用手册](./user-manual.md) 更详细地了解 DM，也可以从 [DM 用户文档索引](./README.md#DM-用户文档索引) 开始阅读感兴趣的内容。
