@@ -175,20 +175,22 @@ func queryAutoSync(neededTable []string, nonNeededTable []string) bool {
 	for {
 		fmt.Printf("[DDLChecker] Do you want to synchronize table %v from MySQL "+
 			"and drop table %v in DDLChecker?(Y/N)", neededTable, nonNeededTable)
+	innerLoop:
 		for {
 			result, err := reader.ReadString('\n')
 			if err != nil {
+				fmt.Printf("[DDLChecker] Read stdin error: %s\n", err.Error())
 				return false
 			}
 			switch strings.ToLower(strings.TrimSpace(result)) {
-			case "y":
+			case "y", "yes":
 				return true
-			case "n":
+			case "n", "no":
 				return false
 			case "":
-				continue
+				continue innerLoop
 			default:
-				break
+				break innerLoop
 			}
 		}
 	}
