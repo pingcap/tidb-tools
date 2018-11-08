@@ -26,10 +26,10 @@ import (
 )
 
 var (
-	modCode                                          = 0
-	executableChecker *ddl_checker.ExecutableChecker = nil
-	reader            *bufio.Reader                  = nil
-	db                *sql.DB                        = nil
+	modCode           uint8
+	executableChecker *ddl_checker.ExecutableChecker
+	reader            *bufio.Reader
+	db                *sql.DB
 
 	host     = flag.String("host", "127.0.0.1", "MySQL host")
 	port     = flag.Int("port", 3306, "MySQL port")
@@ -93,10 +93,10 @@ func mainLoop() {
 	}
 }
 func handler(input string) bool {
-	// cmd exit
 	lowerTrimInput := strings.ToLower(strings.TrimFunc(input, func(r rune) bool {
 		return unicode.IsSpace(r) || r == ';'
 	}))
+	// cmd exit
 	if lowerTrimInput == "exit" {
 		return false
 	}
@@ -121,8 +121,8 @@ func handler(input string) bool {
 			fmt.Printf("[DDLChecker] SQL parse error: %s\n", err.Error())
 			return true
 		}
-		neededTable := ddl_checker.GetTableNeededExist(stmt)
-		nonNeededTable := ddl_checker.GetTableNeededNonExist(stmt)
+		neededTable := ddl_checker.GetTablesNeededExist(stmt)
+		nonNeededTable := ddl_checker.GetTablesNeededNonExist(stmt)
 		if modCode == 0 || (modCode == 1 && queryAutoSync(neededTable, nonNeededTable)) {
 			syncTablesFromMysql(neededTable)
 			dropTables(nonNeededTable)

@@ -74,7 +74,7 @@ func (ec *ExecutableChecker) Parse(sql string) (stmt ast.StmtNode, err error) {
 	return
 }
 
-func GetTableNeededExist(stmt ast.StmtNode) []string {
+func GetTablesNeededExist(stmt ast.StmtNode) []string {
 	switch x := stmt.(type) {
 	case *ast.TruncateTableStmt:
 		return []string{x.Table.Name.String()}
@@ -97,7 +97,7 @@ func GetTableNeededExist(stmt ast.StmtNode) []string {
 	}
 }
 
-func GetTableNeededNonExist(stmt ast.StmtNode) []string {
+func GetTablesNeededNonExist(stmt ast.StmtNode) []string {
 	switch x := stmt.(type) {
 	case *ast.CreateTableStmt:
 		return []string{x.Table.Name.String()}
@@ -109,14 +109,6 @@ func GetTableNeededNonExist(stmt ast.StmtNode) []string {
 }
 
 func IsDDL(stmt ast.StmtNode) bool {
-	switch stmt.(type) {
-	case *ast.TruncateTableStmt, *ast.CreateDatabaseStmt,
-		*ast.CreateTableStmt, *ast.CreateIndexStmt,
-		*ast.DropDatabaseStmt, *ast.DropTableStmt,
-		*ast.DropIndexStmt, *ast.AlterTableStmt,
-		*ast.RenameTableStmt:
-		return true
-	default:
-		return false
-	}
+	_, isDDL := stmt.(ast.DDLNode)
+	return isDDL
 }

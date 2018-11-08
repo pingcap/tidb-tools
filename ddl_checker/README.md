@@ -5,17 +5,18 @@ DDLChecker is a tool for checking if DDL SQL can be successfully executed by TiD
 ## How to use
 
 ```
-Usage of checker:
-  --host string
+Usage of ./ddl_checker:
+  -host string
         MySQL host (default "127.0.0.1")
-  --port int
+  -password string
+        Password
+  -port int
         MySQL port (default 3306)
-  --user string
-        MySQL username (default "root")
-  --password string
-        MySQL password (default "")
-  --schema string
-        MySQL schema (default "")
+  -schema string
+        Schema
+  -user string
+        User name (default "root")
+
 
 cd ddl_checker
 go build

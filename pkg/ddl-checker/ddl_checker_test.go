@@ -72,8 +72,8 @@ func (s *testSuite) TestParse(c *C) {
 			c.Assert(data.parseSucceeded, IsFalse)
 			continue
 		}
-		tableNeededExist := GetTableNeededExist(stmt)
-		tableNeededNonExist := GetTableNeededNonExist(stmt)
+		tableNeededExist := GetTablesNeededExist(stmt)
+		tableNeededNonExist := GetTablesNeededNonExist(stmt)
 		c.Assert(data.parseSucceeded, IsTrue)
 		c.Assert(tableNeededExist, DeepEquals, data.tableNeededExist)
 		c.Assert(tableNeededNonExist, DeepEquals, data.tableNeededNonExist)
