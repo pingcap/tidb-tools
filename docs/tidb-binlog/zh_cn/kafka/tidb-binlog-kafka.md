@@ -353,6 +353,9 @@ ZK3="192.168.0.11"
     user = "root"
     password = ""
     port = 3306
+	[syncer.to.checkpoint]
+	# 配置保存 checkpoint 的 schema
+	#schema = "tidb_binlog"
 
     # db-type 设置为 pb 时，存放 binlog 文件的目录
     # [syncer.to]

@@ -214,6 +214,8 @@ port = 3306
 # Time and size limits for flash batch write
 # time-limit = "30s"
 # size-limit = "100000"
+[syncer.to.checkpoint]
+# schema = "tidb_binlog"
 ```
 
 2. 以下游为 pb 为例
