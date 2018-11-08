@@ -142,7 +142,7 @@ func syncTablesFromMysql(tableNames []string) {
 		fmt.Println("[DDLChecker] Syncing Table", tableName)
 		isExist := executableChecker.IsTableExist(tableName)
 		if isExist {
-			fmt.Println("[DDLChecker] Table", tableName, "is exist,Skip")
+			fmt.Println("[DDLChecker] Table", tableName, "exist, skipping")
 			continue
 		}
 		row := db.QueryRow("show create table `" + tableName + "`")
@@ -164,7 +164,7 @@ func syncTablesFromMysql(tableNames []string) {
 func dropTables(tableNames []string) {
 	for _, tableName := range tableNames {
 		fmt.Println("[DDLChecker] Dropping table", tableName)
-		err := executableChecker.Execute(fmt.Sprintf("drop table if exists %s", tableName))
+		err := executableChecker.Execute(fmt.Sprintf("drop table if exists `%s`", tableName))
 		if err != nil {
 			fmt.Println("[DDLChecker] DROP TABLE", tableName, "Error:", err.Error())
 		}
@@ -203,7 +203,7 @@ func printWelcome() {
 func modeName() string {
 	switch modCode {
 	case 0:
-		return " Auto "
+		return "Auto"
 	case 1:
 		return "Prompt"
 	case 2:

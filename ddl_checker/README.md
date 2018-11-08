@@ -40,14 +40,14 @@ SETMOD Usage: SETMOD <MODCODE>; MODCODE = ["Auto", "Prompt", "Manual"] (case ins
 [DDLChecker] Syncing Table table_name
 [DDLChecker] SQL execution succeeded
 
-[Auto] > SETMOD 1;
+[Auto] > SETMOD PROMPT;
 [Query] > ALTER TABLE table_name MODIFY column_1 int(11) NOT NULL;
 [DDLChecker] Do you want to synchronize table [table_name] from MySQL and drop table [] in ExecutableChecker?(Y/N)y
 [DDLChecker] Syncing Table table_name
-[DDLChecker] Table table_name is exist,Skip
+[DDLChecker] Table table_name exist, skipping
 [DDLChecker] SQL execution succeeded
 
-[Query] > setmod 2;
+[Query] > setmod manual;
 [Manual] > ALTER TABLE table_name MODIFY column_1 int(11) NOT NULL;
 [DDLChecker] SQL execution failed: [schema:1146]Table 'test.table_name' doesn't exist
 
