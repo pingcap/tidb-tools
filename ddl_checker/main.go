@@ -121,11 +121,11 @@ func handler(input string) bool {
 			fmt.Printf("[DDLChecker] SQL parse error: %s\n", err.Error())
 			return true
 		}
-		neededTable := ddl_checker.GetTablesNeededExist(stmt)
-		nonNeededTable := ddl_checker.GetTablesNeededNonExist(stmt)
-		if modCode == 0 || (modCode == 1 && queryAutoSync(neededTable, nonNeededTable)) {
-			syncTablesFromMysql(neededTable)
-			dropTables(nonNeededTable)
+		neededTables := ddl_checker.GetTablesNeededExist(stmt)
+		nonNeededTables := ddl_checker.GetTablesNeededNonExist(stmt)
+		if modCode == 0 || (modCode == 1 && promptAutoSync(neededTables, nonNeededTables)) {
+			syncTablesFromMysql(neededTables)
+			dropTables(nonNeededTables)
 		}
 	}
 	err := executableChecker.Execute(input)
@@ -171,7 +171,7 @@ func dropTables(tableNames []string) {
 	}
 }
 
-func queryAutoSync(neededTable []string, nonNeededTable []string) bool {
+func promptAutoSync(neededTable []string, nonNeededTable []string) bool {
 	for {
 		fmt.Printf("[DDLChecker] Do you want to synchronize table %v from MySQL "+
 			"and drop table %v in DDLChecker?(Y/N)", neededTable, nonNeededTable)
