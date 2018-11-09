@@ -58,6 +58,7 @@ func (s *testSuite) setUpTestData() {
 	s.testData.PushBack(parseTestData{sql: "insert into t1 values (''),(null);", parseSucceeded: true, tableNeededExist: nil, tableNeededNonExist: nil, executeSucceeded: false})
 	s.testData.PushBack(parseTestData{sql: "select * from t1;", parseSucceeded: true, tableNeededExist: nil, tableNeededNonExist: nil, executeSucceeded: true})
 	s.testData.PushBack(parseTestData{sql: "drop table t1;", parseSucceeded: true, tableNeededExist: []string{"t1"}, tableNeededNonExist: []string{}, executeSucceeded: true})
+	s.testData.PushBack(parseTestData{sql: "create table t(a int comment '[[range=1,10]]');", parseSucceeded: true, tableNeededExist: []string{}, tableNeededNonExist: []string{"t"}, executeSucceeded: true})
 
 }
 

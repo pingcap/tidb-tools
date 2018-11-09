@@ -124,7 +124,7 @@ func handler(input string) bool {
 		neededTables, _ := ddl_checker.GetTablesNeededExist(stmt)
 		nonNeededTables, err := ddl_checker.GetTablesNeededNonExist(stmt)
 		// skip when stmt isn't a DDLNode
-		if err != nil && (modCode == 0 || (modCode == 1 && promptAutoSync(neededTables, nonNeededTables))) {
+		if err == nil && (modCode == 0 || (modCode == 1 && promptAutoSync(neededTables, nonNeededTables))) {
 			syncTablesFromMysql(neededTables)
 			dropTables(nonNeededTables)
 		}
