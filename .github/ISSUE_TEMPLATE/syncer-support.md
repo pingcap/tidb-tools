@@ -48,3 +48,4 @@ Additionally, please provide the following info before submitting your issue. Th
 3. Common issues
     - [ ] Is the `worker-count` set to a reasonable value (suggest-32)?
     - [ ] Is the `batch` set to a reasonable value (suggest 100-1000)?
+    - [ ] Is the downstream server mysql and using multiStatements or not utf8mb4 charset (syncer can only provide limited support for MySQL as a downstream server)?
