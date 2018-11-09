@@ -50,13 +50,13 @@ func (s *testSuite) setUpTestData() {
 	s.testData.PushBack(parseTestData{sql: "drop table if exists t1,t2,t3,t4,t5;", parseSucceeded: true, tableNeededExist: []string{"t1", "t2", "t3", "t4", "t5"}, tableNeededNonExist: []string{}, executeSucceeded: true})
 	s.testData.PushBack(parseTestData{sql: "drop database if exists mysqltest;", parseSucceeded: true, tableNeededExist: []string{}, tableNeededNonExist: []string{}, executeSucceeded: true})
 	s.testData.PushBack(parseTestData{sql: "create table t1 (b char(0));", parseSucceeded: true, tableNeededExist: []string{}, tableNeededNonExist: []string{"t1"}, executeSucceeded: true})
-	s.testData.PushBack(parseTestData{sql: "insert into t1 values (''),(null);", parseSucceeded: true, tableNeededExist: []string{}, tableNeededNonExist: []string{}, executeSucceeded: true})
-	s.testData.PushBack(parseTestData{sql: "select * from t1;", parseSucceeded: true, tableNeededExist: []string{}, tableNeededNonExist: []string{}, executeSucceeded: true})
+	s.testData.PushBack(parseTestData{sql: "insert into t1 values (''),(null);", parseSucceeded: true, tableNeededExist: nil, tableNeededNonExist: nil, executeSucceeded: true})
+	s.testData.PushBack(parseTestData{sql: "select * from t1;", parseSucceeded: true, tableNeededExist: nil, tableNeededNonExist: nil, executeSucceeded: true})
 	s.testData.PushBack(parseTestData{sql: "drop table if exists t1;", parseSucceeded: true, tableNeededExist: []string{"t1"}, tableNeededNonExist: []string{}, executeSucceeded: true})
 	s.testData.PushBack(parseTestData{sql: "create table t1 (b char(0) not null);", parseSucceeded: true, tableNeededExist: []string{}, tableNeededNonExist: []string{"t1"}, executeSucceeded: true})
 	s.testData.PushBack(parseTestData{sql: "create table if not exists t1 (b char(0) not null);", parseSucceeded: true, tableNeededExist: []string{}, tableNeededNonExist: []string{"t1"}, executeSucceeded: true})
-	s.testData.PushBack(parseTestData{sql: "insert into t1 values (''),(null);", parseSucceeded: true, tableNeededExist: []string{}, tableNeededNonExist: []string{}, executeSucceeded: false})
-	s.testData.PushBack(parseTestData{sql: "select * from t1;", parseSucceeded: true, tableNeededExist: []string{}, tableNeededNonExist: []string{}, executeSucceeded: true})
+	s.testData.PushBack(parseTestData{sql: "insert into t1 values (''),(null);", parseSucceeded: true, tableNeededExist: nil, tableNeededNonExist: nil, executeSucceeded: false})
+	s.testData.PushBack(parseTestData{sql: "select * from t1;", parseSucceeded: true, tableNeededExist: nil, tableNeededNonExist: nil, executeSucceeded: true})
 	s.testData.PushBack(parseTestData{sql: "drop table t1;", parseSucceeded: true, tableNeededExist: []string{"t1"}, tableNeededNonExist: []string{}, executeSucceeded: true})
 
 }
@@ -72,8 +72,8 @@ func (s *testSuite) TestParse(c *C) {
 			c.Assert(data.parseSucceeded, IsFalse)
 			continue
 		}
-		tableNeededExist := GetTablesNeededExist(stmt)
-		tableNeededNonExist := GetTablesNeededNonExist(stmt)
+		tableNeededExist, _ := GetTablesNeededExist(stmt)
+		tableNeededNonExist, _ := GetTablesNeededNonExist(stmt)
 		c.Assert(data.parseSucceeded, IsTrue)
 		c.Assert(tableNeededExist, DeepEquals, data.tableNeededExist)
 		c.Assert(tableNeededNonExist, DeepEquals, data.tableNeededNonExist)

@@ -42,11 +42,11 @@ const (
 	WelcomeInfo = "ExecutableChecker: Check if SQL can be successfully executed by TiDB\n" +
 		"Copyright 2018 PingCAP, Inc.\n\n" +
 		"You can switch modes using the `SETMOD` command.\n" +
-		"Auto mode: The program will automatically synchronize the dependent table structure from MYSQL " +
+		"Auto mode: The program will automatically synchronize the dependent table structure from MySQL " +
 		"and delete the conflict table\n" +
 		"Prompt mode: The program will ask you before synchronizing the dependent table structure from MYSQL\n" +
-		"Manual mode: This program does not perform anything other than executing the input SQL.\n\n" +
-		"SETMOD usage: SETMOD <MODCODE>; MODCODE = [\"Auto\", \"Prompt\", \"Manual\"] (case insensitive).\n\n"
+		"Offline mode: This program doesn't need to connect to MySQL, and doesn't perform anything other than executing the input SQL.\n\n" +
+		"SETMOD usage: SETMOD <MODCODE>; MODCODE = [\"Auto\", \"Prompt\", \"Offline\"] (case insensitive).\n\n"
 )
 
 func main() {
@@ -107,10 +107,10 @@ func handler(input string) bool {
 			modCode = 0
 		case "prompt":
 			modCode = 1
-		case "manual":
+		case "offline":
 			modCode = 2
 		default:
-			fmt.Println("SETMOD usage: SETMOD <MODCODE>; MODCODE = [\"Auto\", \"Prompt\", \"Manual\"] (case insensitive).")
+			fmt.Println("SETMOD usage: SETMOD <MODCODE>; MODCODE = [\"Auto\", \"Prompt\", \"Offline\"] (case insensitive).")
 		}
 		return true
 	}
@@ -121,9 +121,10 @@ func handler(input string) bool {
 			fmt.Printf("[DDLChecker] SQL parse error: %s\n", err.Error())
 			return true
 		}
-		neededTables := ddl_checker.GetTablesNeededExist(stmt)
-		nonNeededTables := ddl_checker.GetTablesNeededNonExist(stmt)
-		if modCode == 0 || (modCode == 1 && promptAutoSync(neededTables, nonNeededTables)) {
+		neededTables, _ := ddl_checker.GetTablesNeededExist(stmt)
+		nonNeededTables, err := ddl_checker.GetTablesNeededNonExist(stmt)
+		// skip when stmt isn't a DDLNode
+		if err != nil && (modCode == 0 || (modCode == 1 && promptAutoSync(neededTables, nonNeededTables))) {
 			syncTablesFromMysql(neededTables)
 			dropTables(nonNeededTables)
 		}
@@ -140,11 +141,6 @@ func handler(input string) bool {
 func syncTablesFromMysql(tableNames []string) {
 	for _, tableName := range tableNames {
 		fmt.Println("[DDLChecker] Syncing Table", tableName)
-		isExist := executableChecker.IsTableExist(tableName)
-		if isExist {
-			fmt.Println("[DDLChecker] Table", tableName, "exist, skipping")
-			continue
-		}
 		row := db.QueryRow("show create table `" + tableName + "`")
 		var table string
 		var createTableDDL string
@@ -152,6 +148,14 @@ func syncTablesFromMysql(tableNames []string) {
 		if err != nil {
 			fmt.Println("[DDLChecker] SQL Execute Error:", err.Error())
 			continue
+		}
+		isExist := executableChecker.IsTableExist(tableName)
+		if isExist && promptYorN(fmt.Sprintf("[DDLChecker] Table %s exist, "+
+			"do you want to override it to be synchronized from MySQL?(Y/N)", tableName)) {
+			err := executableChecker.Execute(fmt.Sprintf("drop table if exists `%s`", tableName))
+			if err != nil {
+				fmt.Println("[DDLChecker] DROP TABLE", tableName, "Error:", err.Error())
+			}
 		}
 		err = executableChecker.Execute(createTableDDL)
 		if err != nil {
@@ -172,9 +176,13 @@ func dropTables(tableNames []string) {
 }
 
 func promptAutoSync(neededTable []string, nonNeededTable []string) bool {
+	return promptYorN(fmt.Sprintf("[DDLChecker] Do you want to synchronize table %v from MySQL "+
+		"and drop table %v in DDLChecker?(Y/N)", neededTable, nonNeededTable))
+}
+
+func promptYorN(info string) bool {
 	for {
-		fmt.Printf("[DDLChecker] Do you want to synchronize table %v from MySQL "+
-			"and drop table %v in DDLChecker?(Y/N)", neededTable, nonNeededTable)
+		fmt.Print(info)
 	innerLoop:
 		for {
 			result, err := reader.ReadString('\n')
@@ -207,7 +215,7 @@ func modeName() string {
 	case 1:
 		return "Prompt"
 	case 2:
-		return "Manual"
+		return "Offline"
 	default:
 		return "Unknown"
 	}

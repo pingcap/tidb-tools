@@ -69,42 +69,47 @@ func (ec *ExecutableChecker) Close() {
 }
 
 func (ec *ExecutableChecker) Parse(sql string) (stmt ast.StmtNode, err error) {
+
 	charset, collation := ec.session.GetSessionVars().GetCharsetInfo()
 	stmt, err = ec.parser.ParseOneStmt(sql, charset, collation)
 	return
 }
 
-func GetTablesNeededExist(stmt ast.StmtNode) []string {
+func GetTablesNeededExist(stmt ast.StmtNode) ([]string, error) {
 	switch x := stmt.(type) {
 	case *ast.TruncateTableStmt:
-		return []string{x.Table.Name.String()}
+		return []string{x.Table.Name.String()}, nil
 	case *ast.CreateIndexStmt:
-		return []string{x.Table.Name.String()}
+		return []string{x.Table.Name.String()}, nil
 	case *ast.DropTableStmt:
 		tablesName := make([]string, len(x.Tables))
 		for i, table := range x.Tables {
 			tablesName[i] = table.Name.String()
 		}
-		return tablesName
+		return tablesName, nil
 	case *ast.DropIndexStmt:
-		return []string{x.Table.Name.String()}
+		return []string{x.Table.Name.String()}, nil
 	case *ast.AlterTableStmt:
-		return []string{x.Table.Name.String()}
+		return []string{x.Table.Name.String()}, nil
 	case *ast.RenameTableStmt:
-		return []string{x.OldTable.Name.String()}
+		return []string{x.OldTable.Name.String()}, nil
+	case ast.DDLNode:
+		return []string{}, nil
 	default:
-		return []string{}
+		return nil, errors.New("stmt is not a DDLNode")
 	}
 }
 
-func GetTablesNeededNonExist(stmt ast.StmtNode) []string {
+func GetTablesNeededNonExist(stmt ast.StmtNode) ([]string, error) {
 	switch x := stmt.(type) {
 	case *ast.CreateTableStmt:
-		return []string{x.Table.Name.String()}
+		return []string{x.Table.Name.String()}, nil
 	case *ast.RenameTableStmt:
-		return []string{x.NewTable.Name.String()}
+		return []string{x.NewTable.Name.String()}, nil
+	case ast.DDLNode:
+		return []string{}, nil
 	default:
-		return []string{}
+		return nil, errors.New("stmt is not a DDLNode")
 	}
 }
 
