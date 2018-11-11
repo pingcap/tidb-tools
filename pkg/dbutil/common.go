@@ -20,7 +20,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/model"
 	log "github.com/sirupsen/logrus"
 )
