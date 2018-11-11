@@ -23,7 +23,7 @@ import (
 
 	"github.com/coreos/etcd/mvcc/mvccpb"
 	"github.com/juju/errors"
-	"github.com/pingcap/pd/client"
+	pd "github.com/pingcap/pd/client"
 	"github.com/pingcap/tidb-tools/pkg/etcd"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
@@ -125,8 +125,7 @@ func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.Secur
 		return nil, errors.Trace(err)
 	}
 
-	rootPath := path.Join(node.DefaultRootPath, node.NodePrefix[node.PumpNode])
-	cli, err := etcd.NewClientFromCfg(ectdEndpoints, DefaultEtcdTimeout, rootPath, security)
+	cli, err := etcd.NewClientFromCfg(ectdEndpoints, DefaultEtcdTimeout, node.DefaultRootPath, security)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -165,7 +164,7 @@ func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.Secur
 
 // getPumpStatus retruns all the pumps status in the etcd.
 func (c *PumpsClient) getPumpStatus(pctx context.Context) error {
-	nodesStatus, err := c.EtcdRegistry.Nodes(pctx, node.DefaultRootPath)
+	nodesStatus, err := c.EtcdRegistry.Nodes(pctx, node.NodePrefix[node.PumpNode])
 	if err != nil {
 		return errors.Trace(err)
 	}
