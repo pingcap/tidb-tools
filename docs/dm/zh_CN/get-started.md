@@ -11,6 +11,8 @@ Get Started
 
 了解如何使用 dmctl 加密明文密码，可以参考 [dmctl 加密上游 MySQL 用户密码](./maintenance/dm-ansible.md#dmctl-加密上游-mysql-用户密码)。
 
+此外，DM 在运行过程中，相关的上下游数据库用户需要具备相应的读写权限。DM 在启动任务过程中，也会自动进行部分权限检查，具体见 [上游 MySQL 实例权限](./task-handling/check-mysql.md)。
+
 
 ### 2. 启动 task 同步任务
 
@@ -146,6 +148,22 @@ query-status
 ```bash
 stop-task test              # 其中的 `test` 是 `task.yaml` 配置文件中 `name` 配置项设置的任务名
 ```
+
+
+### 3. 监控与 log
+
+#### 3.1 DM 监控 dashboard
+
+假设参考 [1. 部署 DM 集群](#1-部署-dm-集群) 部署 DM 集群时，正确部署了 prometheus 与 grafana，且 grafana 的地址为 `172.16.10.71`。
+
+在浏览器中打开 <http://172.16.10.71:3000> 进入 grafana，选择 DM 的 dashboard 即可看到 DM 相关监控项，具体各监控项的解释参见 [DM 监控与告警](./maintenance/metrics-alert.md)。
+
+#### 3.2 DM log
+
+DM 在运行过程中，dm-worker, dm-master 及 dmctl 都会通过 log 输出相关信息。
+
+其中，dm-worker, dm-master 的 log 文件输出目录参见 [部署目录结构](./maintenance/directory-structure.md)，dmctl 的 log 文件与其 binary 同目录。
+
 
 ### 下一步
 

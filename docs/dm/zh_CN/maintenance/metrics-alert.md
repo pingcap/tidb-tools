@@ -16,6 +16,8 @@ query: `dm_worker_task_state{task="$task",instance="$instance"}`
 
 ### Relay Log
 
+DM 中的 relay log 的原理和功能与 MySQL slave relay log 类似，参见 <https://dev.mysql.com/doc/refman/5.7/en/slave-logs-relaylog.html>。
+
 #### storage capacity
 
 query: `dm_relay_space{instance="$instance", type="capacity"}`
