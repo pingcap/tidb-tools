@@ -23,11 +23,11 @@ FILES     := $$(find . -name '*.go' -type f | grep -vE 'vendor')
 VENDOR_TIDB := vendor/github.com/pingcap/tidb
 
 
-build: prepare check test importer checker dump_region binlogctl sync_diff_inspector
+build: prepare check test importer checker dump_region binlogctl sync_diff_inspector finish
 
 prepare:		
- 	mv go.mod1 go.mod		
- 	mv go.sum1 go.sum
+	mv go.mod1 go.mod
+	mv go.sum1 go.sum
 
 importer:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/importer ./importer
@@ -62,3 +62,7 @@ check:
 	#@ golint ./... 2>&1 | grep -vE '\.pb\.go' | grep -vE 'vendor' | awk '{print} END{if(NR>0) {exit 1}}'
 	@echo "gofmt (simplify)"
 	@ gofmt -s -l -w $(FILES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
+
+finish:
+	mv go.mod go.mod1
+	mv go.sum go.sum1
