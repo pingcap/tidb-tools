@@ -64,5 +64,5 @@ check:
 	@ gofmt -s -l -w $(FILES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
 
 finish:
-	mv go.mod go.mod1
-	mv go.sum go.sum1
+	cp go.mod go.mod1
+	cp go.sum go.sum1
