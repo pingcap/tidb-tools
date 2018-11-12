@@ -26,8 +26,8 @@ VENDOR_TIDB := vendor/github.com/pingcap/tidb
 build: prepare check test importer checker dump_region binlogctl sync_diff_inspector finish
 
 prepare:		
-	mv go.mod1 go.mod
-	mv go.sum1 go.sum
+	cp go.mod1 go.mod
+	cp go.sum1 go.sum
 
 importer:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/importer ./importer
