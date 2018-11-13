@@ -156,18 +156,21 @@ func syncTablesFromMysql(tableNames []string) error {
 			return err
 		}
 		isExist := executableChecker.IsTableExist(tableName)
-		if isExist && promptYorN(fmt.Sprintf("[DDLChecker] Table `%s` exist, "+
-			"do you want to override it to be synchronized from MySQL?(Y/N)", tableName)) {
+		if isExist {
+			if !promptYorN(fmt.Sprintf("[DDLChecker] Table `%s` exist, "+
+				"do you want to override it to be synchronized from MySQL?(Y/N)", tableName)) {
+				continue
+			}
 			err = executableChecker.Execute(fmt.Sprintf("drop table if exists `%s`", tableName))
 			if err != nil {
 				fmt.Println("[DDLChecker] Drop table", tableName, "Error:", err.Error())
 				return err
 			}
-			err = executableChecker.Execute(createTableDDL)
-			if err != nil {
-				fmt.Println("[DDLChecker] Create table failure:", err.Error())
-				return err
-			}
+		}
+		err = executableChecker.Execute(createTableDDL)
+		if err != nil {
+			fmt.Println("[DDLChecker] Create table failure:", err.Error())
+			return err
 		}
 	}
 	return nil
@@ -178,7 +181,7 @@ func dropTables(tableNames []string) error {
 		fmt.Println("[DDLChecker] Dropping table", tableName)
 		err := executableChecker.Execute(fmt.Sprintf("drop table if exists `%s`", tableName))
 		if err != nil {
-			fmt.Println("[DDLChecker] DROP TABLE", tableName, "Error:", err.Error())
+			fmt.Println("[DDLChecker] Drop table", tableName, "Error:", err.Error())
 			return err
 		}
 	}
