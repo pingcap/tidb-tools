@@ -179,9 +179,10 @@ func dropTables(tableNames []string) error {
 		err := executableChecker.Execute(fmt.Sprintf("drop table if exists `%s`", tableName))
 		if err != nil {
 			fmt.Println("[DDLChecker] DROP TABLE", tableName, "Error:", err.Error())
+			return err
 		}
-		return err
 	}
+	return nil
 }
 
 func promptAutoSync(neededTable []string, nonNeededTable []string) bool {
