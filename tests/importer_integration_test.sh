@@ -6,25 +6,15 @@ MYSQL_EXEC="mysql -h ${MYSQL_HOST} -P ${MYSQL_PORT} -u root"
 
 init(){
     ${MYSQL_EXEC} -e "drop database if exists ${TEST_DATABASE_NAME};"
-    checkExit
     ${MYSQL_EXEC} -e "create database ${TEST_DATABASE_NAME};"
-    checkExit
 }
 
 destroy(){
     ${MYSQL_EXEC} -e "drop database if exists ${TEST_DATABASE_NAME};"
-    checkExit
-}
-
-checkExit(){
-    if [[ $? -ne 0 ]]; then
-        exit 1
-    fi
 }
 
 testImporter(){
     ${IMPORT_EXEC} -c 1 -n 10 -t "$1" -i "$2"
-    checkExit
     RESULT=`${MYSQL_EXEC} -e "$3" | sed -n '2p'`
     if [[ "${RESULT}" != "$4" ]]; then
         echo "Test importer failed: $1"
@@ -32,6 +22,7 @@ testImporter(){
     fi
 }
 
+set -e
 init
 testImporter "create table ta(a int primary key, b double, c varchar(10), d date unique, e time unique, f timestamp unique, g date unique, h datetime unique, i year unique);" "create unique index u_b on ta(b);" "select count(*) as result from ${TEST_DATABASE_NAME}.ta" "10"
 testImporter "create table tb(a int comment '[[range=1,10]]');" "" "select count(*) as result from ${TEST_DATABASE_NAME}.tb where a <= 10 and a >= 1" "10"
