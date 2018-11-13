@@ -125,8 +125,14 @@ func handler(input string) bool {
 		nonNeededTables, err := ddl_checker.GetTablesNeededNonExist(stmt)
 		// skip when stmt isn't a DDLNode
 		if err == nil && (modCode == 0 || (modCode == 1 && promptAutoSync(neededTables, nonNeededTables))) {
-			syncTablesFromMysql(neededTables)
-			dropTables(nonNeededTables)
+			err := syncTablesFromMysql(neededTables)
+			if err != nil {
+				return true
+			}
+			err = dropTables(nonNeededTables)
+			if err != nil {
+				return true
+			}
 		}
 	}
 	err := executableChecker.Execute(input)
@@ -138,7 +144,7 @@ func handler(input string) bool {
 	return true
 }
 
-func syncTablesFromMysql(tableNames []string) {
+func syncTablesFromMysql(tableNames []string) error {
 	for _, tableName := range tableNames {
 		fmt.Println("[DDLChecker] Syncing Table", tableName)
 		row := db.QueryRow("show create table `" + tableName + "`")
@@ -147,31 +153,34 @@ func syncTablesFromMysql(tableNames []string) {
 		err := row.Scan(&table, &createTableDDL)
 		if err != nil {
 			fmt.Println("[DDLChecker] SQL Execute Error:", err.Error())
-			continue
+			return err
 		}
 		isExist := executableChecker.IsTableExist(tableName)
-		if isExist && promptYorN(fmt.Sprintf("[DDLChecker] Table %s exist, "+
+		if isExist && promptYorN(fmt.Sprintf("[DDLChecker] Table `%s` exist, "+
 			"do you want to override it to be synchronized from MySQL?(Y/N)", tableName)) {
-			err := executableChecker.Execute(fmt.Sprintf("drop table if exists `%s`", tableName))
+			err = executableChecker.Execute(fmt.Sprintf("drop table if exists `%s`", tableName))
 			if err != nil {
-				fmt.Println("[DDLChecker] DROP TABLE", tableName, "Error:", err.Error())
+				fmt.Println("[DDLChecker] Drop table", tableName, "Error:", err.Error())
+				return err
+			}
+			err = executableChecker.Execute(createTableDDL)
+			if err != nil {
+				fmt.Println("[DDLChecker] Create table failure:", err.Error())
+				return err
 			}
 		}
-		err = executableChecker.Execute(createTableDDL)
-		if err != nil {
-			fmt.Println("[DDLChecker] Create table failure:", err.Error())
-			continue
-		}
 	}
+	return nil
 }
 
-func dropTables(tableNames []string) {
+func dropTables(tableNames []string) error {
 	for _, tableName := range tableNames {
 		fmt.Println("[DDLChecker] Dropping table", tableName)
 		err := executableChecker.Execute(fmt.Sprintf("drop table if exists `%s`", tableName))
 		if err != nil {
 			fmt.Println("[DDLChecker] DROP TABLE", tableName, "Error:", err.Error())
 		}
+		return err
 	}
 }
 
