@@ -25,9 +25,10 @@ import (
 )
 
 type ExecutableChecker struct {
-	session session.Session
-	context context.Context
-	parser  *parser.Parser
+	session  session.Session
+	context  context.Context
+	parser   *parser.Parser
+	isClosed bool
 }
 
 func NewExecutableChecker() (*ExecutableChecker, error) {
@@ -47,9 +48,10 @@ func NewExecutableChecker() (*ExecutableChecker, error) {
 		return nil, errors.Trace(err)
 	}
 	return &ExecutableChecker{
-		session: session,
-		context: context.Background(),
-		parser:  parser.New(),
+		session:  session,
+		context:  context.Background(),
+		parser:   parser.New(),
+		isClosed: false,
 	}, nil
 }
 
@@ -64,8 +66,21 @@ func (ec *ExecutableChecker) IsTableExist(tableName string) bool {
 	return err == nil
 }
 
-func (ec *ExecutableChecker) Close() {
+func (ec *ExecutableChecker) DropTable(tableName string) error {
+	err := ec.Execute(fmt.Sprintf("drop table if exists `%s`", tableName))
+	if err != nil {
+		return errors.Trace(err)
+	}
+	return nil
+}
+
+func (ec *ExecutableChecker) Close() error {
+	if ec.isClosed {
+		return errors.New("ExecutableChecker is already closed")
+	}
+	ec.isClosed = true
 	ec.session.Close()
+	return nil
 }
 
 func (ec *ExecutableChecker) Parse(sql string) (stmt ast.StmtNode, err error) {
@@ -111,9 +126,4 @@ func GetTablesNeededNonExist(stmt ast.StmtNode) ([]string, error) {
 	default:
 		return nil, errors.New("stmt is not a DDLNode")
 	}
-}
-
-func IsDDL(stmt ast.StmtNode) bool {
-	_, isDDL := stmt.(ast.DDLNode)
-	return isDDL
 }

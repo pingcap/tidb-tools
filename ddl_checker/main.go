@@ -15,10 +15,11 @@ package main
 
 import (
 	"bufio"
-	"database/sql"
 	"flag"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/ddl-checker"
 	"os"
 	"strings"
@@ -26,10 +27,10 @@ import (
 )
 
 var (
-	modCode           uint8
+	mode              = Auto
 	executableChecker *ddl_checker.ExecutableChecker
+	ddlSyncer         *ddl_checker.DDLSyncer
 	reader            *bufio.Reader
-	db                *sql.DB
 
 	host     = flag.String("host", "127.0.0.1", "MySQL host")
 	port     = flag.Int("port", 3306, "MySQL port")
@@ -46,12 +47,18 @@ const (
 		"and delete the conflict table\n" +
 		"Prompt mode: The program will ask you before synchronizing the dependent table structure from MYSQL\n" +
 		"Offline mode: This program doesn't need to connect to MySQL, and doesn't perform anything other than executing the input SQL.\n\n" +
-		"SETMOD usage: SETMOD <MODCODE>; MODCODE = [\"Auto\", \"Prompt\", \"Offline\"] (case insensitive).\n\n"
+		SetmodUsage + "\n"
+
+	SetmodUsage = "SETMOD usage: SETMOD <MODCODE>; MODCODE = [\"Auto\", \"Prompt\", \"Offline\"] (case insensitive).\n"
+
+	Auto    = "auto"
+	Prompt  = "prompt"
+	Offline = "offline"
 )
 
 func main() {
+	fmt.Print(WelcomeInfo)
 	initialise()
-	printWelcome()
 	mainLoop()
 	destroy()
 }
@@ -66,25 +73,30 @@ func initialise() {
 		os.Exit(1)
 	}
 	executableChecker.Execute("use test;")
-	db, err = sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s",
-		*username, *password, *host, *port, *schema))
+	dbInfo := &dbutil.DBConfig{
+		User:     *username,
+		Password: *password,
+		Host:     *host,
+		Port:     *port,
+		Schema:   *schema,
+	}
+	ddlSyncer, err = ddl_checker.NewDDLSyncer(dbInfo, executableChecker)
 	if err != nil {
 		fmt.Printf("[DDLChecker] Init failed, can't open mysql database: %s\n", err.Error())
 		os.Exit(1)
 	}
-
 }
 
 func destroy() {
 	executableChecker.Close()
-	db.Close()
+	ddlSyncer.Close()
 }
 
 func mainLoop() {
 	var input string
 	var err error
-	for cont := true; cont; cont = handler(input) {
-		fmt.Printf("[%s] > ", modeName())
+	for isContinue := true; isContinue; isContinue = handler(input) {
+		fmt.Printf("[%s] > ", strings.ToTitle(mode))
 		input, err = reader.ReadString(';')
 		if err != nil {
 			fmt.Printf("[DDLChecker] Read stdin error: %s\n", err.Error())
@@ -102,19 +114,16 @@ func handler(input string) bool {
 	}
 	// cmd setmod
 	if strings.HasPrefix(lowerTrimInput, "setmod") {
-		switch strings.TrimSpace(lowerTrimInput[6:]) {
-		case "auto":
-			modCode = 0
-		case "prompt":
-			modCode = 1
-		case "offline":
-			modCode = 2
+		x := strings.TrimSpace(lowerTrimInput[6:])
+		switch x {
+		case Auto, Prompt, Offline:
+			mode = x
 		default:
-			fmt.Println("SETMOD usage: SETMOD <MODCODE>; MODCODE = [\"Auto\", \"Prompt\", \"Offline\"] (case insensitive).")
+			fmt.Print(SetmodUsage)
 		}
 		return true
 	}
-	if modCode != 2 {
+	if mode != Offline {
 		// auto and query mod
 		stmt, err := executableChecker.Parse(input)
 		if err != nil {
@@ -124,7 +133,7 @@ func handler(input string) bool {
 		neededTables, _ := ddl_checker.GetTablesNeededExist(stmt)
 		nonNeededTables, err := ddl_checker.GetTablesNeededNonExist(stmt)
 		// skip when stmt isn't a DDLNode
-		if err == nil && (modCode == 0 || (modCode == 1 && promptAutoSync(neededTables, nonNeededTables))) {
+		if err == nil && (mode == Auto || (mode == Prompt && promptAutoSync(neededTables, nonNeededTables))) {
 			err := syncTablesFromMysql(neededTables)
 			if err != nil {
 				return true
@@ -147,30 +156,10 @@ func handler(input string) bool {
 func syncTablesFromMysql(tableNames []string) error {
 	for _, tableName := range tableNames {
 		fmt.Println("[DDLChecker] Syncing Table", tableName)
-		row := db.QueryRow("show create table `" + tableName + "`")
-		var table string
-		var createTableDDL string
-		err := row.Scan(&table, &createTableDDL)
+		err := ddlSyncer.SyncTable(*schema, tableName)
 		if err != nil {
-			fmt.Println("[DDLChecker] SQL Execute Error:", err.Error())
-			return err
-		}
-		isExist := executableChecker.IsTableExist(tableName)
-		if isExist {
-			if !promptYorN(fmt.Sprintf("[DDLChecker] Table `%s` exist, "+
-				"do you want to override it to be synchronized from MySQL?(Y/N)", tableName)) {
-				continue
-			}
-			err = executableChecker.Execute(fmt.Sprintf("drop table if exists `%s`", tableName))
-			if err != nil {
-				fmt.Println("[DDLChecker] Drop table", tableName, "Error:", err.Error())
-				return err
-			}
-		}
-		err = executableChecker.Execute(createTableDDL)
-		if err != nil {
-			fmt.Println("[DDLChecker] Create table failure:", err.Error())
-			return err
+			fmt.Println("[DDLChecker] Sync table failure:", err.Error())
+			return errors.Trace(err)
 		}
 	}
 	return nil
@@ -179,23 +168,23 @@ func syncTablesFromMysql(tableNames []string) error {
 func dropTables(tableNames []string) error {
 	for _, tableName := range tableNames {
 		fmt.Println("[DDLChecker] Dropping table", tableName)
-		err := executableChecker.Execute(fmt.Sprintf("drop table if exists `%s`", tableName))
+		err := executableChecker.DropTable(tableName)
 		if err != nil {
 			fmt.Println("[DDLChecker] Drop table", tableName, "Error:", err.Error())
-			return err
+			return errors.Trace(err)
 		}
 	}
 	return nil
 }
 
 func promptAutoSync(neededTable []string, nonNeededTable []string) bool {
-	return promptYorN(fmt.Sprintf("[DDLChecker] Do you want to synchronize table %v from MySQL "+
-		"and drop table %v in DDLChecker?(Y/N)", neededTable, nonNeededTable))
+	return promptYorN("[DDLChecker] Do you want to synchronize table %v from MySQL "+
+		"and drop table %v in DDLChecker?(Y/N)", neededTable, nonNeededTable)
 }
 
-func promptYorN(info string) bool {
+func promptYorN(format string, a ...interface{}) bool {
 	for {
-		fmt.Print(info)
+		fmt.Printf(format, a...)
 	innerLoop:
 		for {
 			result, err := reader.ReadString('\n')
@@ -214,22 +203,5 @@ func promptYorN(info string) bool {
 				break innerLoop
 			}
 		}
-	}
-}
-
-func printWelcome() {
-	fmt.Print(WelcomeInfo)
-}
-
-func modeName() string {
-	switch modCode {
-	case 0:
-		return "Auto"
-	case 1:
-		return "Prompt"
-	case 2:
-		return "Offline"
-	default:
-		return "Unknown"
 	}
 }
