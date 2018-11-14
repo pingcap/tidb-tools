@@ -134,7 +134,42 @@ func getChunksForTable(table *TableInstance, column *model.ColumnInfo, chunkSize
 	return splitRange(table.Conn, &chunk, chunkCnt, table.Schema, table.Table, column, limits, collation)
 }
 
+func getChunksByBucketsInfo(db *sql.DB, schema string, table string, tableInfo *model.TableInfo, chunkSize int) ([]chunkRange, error) {
+	buckets, err := dbutil.GetBucketsInfo(context.Background(), db, schema, table)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	log.Infof("buckets: %v", buckets)
+
+	var indexName string
+	for _, index := range tableInfo.Indices {
+		if index.Primary {
+			indexName = index.Name.O
+			break
+		} else if index.Unique {
+			indexName = index.Name.O
+		} else {
+			// TODO: choose a situable index if without pk/uk.
+			if indexName == "" {
+				indexName = index.Name.O
+			}
+		}
+	}
+
+	if indexName == "" {
+		return nil, nil
+	}
+
+	return nil, nil
+}
+
 func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table string, column *model.ColumnInfo, limitRange string, collation string) ([]chunkRange, error) {
+	buckets, err := dbutil.GetBucketsInfo(context.Background(), db, Schema, table)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	log.Infof("buckets: %v", buckets)
+
 	var chunks []chunkRange
 
 	// for example, the min and max value in target table is 2-9, but 1-10 in source table. so we need generate chunk for data < 2 and data > 9

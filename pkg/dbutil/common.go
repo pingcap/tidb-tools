@@ -294,6 +294,83 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName str
 	return checksum.Int64, nil
 }
 
+// Bucket ...
+type Bucket struct {
+	Count      int64
+	LowerBound string
+	UpperBound string
+}
+
+// SHOW STATS_BUCKETS in TiDB.
+func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string) (map[string][]Bucket, error) {
+	/*
+		example in tidb:
+		mysql> SHOW STATS_BUCKETS WHERE db_name= "test" AND table_name="testa";
+		+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
+		| Db_name | Table_name | Partition_name | Column_name | Is_index | Bucket_id | Count | Repeats | Lower_Bound         | Upper_Bound         |
+		+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
+		| test    | testa      |                | PRIMARY     |        1 |         0 |    64 |       1 | 1846693550524203008 | 1846838686059069440 |
+		| test    | testa      |                | PRIMARY     |        1 |         1 |   128 |       1 | 1846840885082324992 | 1847056389361369088 |
+		+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
+	*/
+	buckets := make(map[string][]Bucket)
+	query := fmt.Sprintf("SHOW STATS_BUCKETS WHERE db_name= \"%s\" AND table_name=\"%s\";", schema, table)
+	log.Infof("GetBucketsInfo query: %s", query)
+	rows, err := db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var dbName, tableName, partitionName, columnName, lowerBound, upperBound sql.NullString
+		var isIndex, bucketID, count, repeats sql.NullInt64
+
+		//var columnName, lowerBound, UpperBound sql.NullString
+		//var count sql.NullInt64
+
+		cols, err := rows.Columns()
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		
+		if len(cols) == 9 {
+			err = rows.Scan(&dbName, &tableName, &columnName, &isIndex, &bucketID, &count, &repeats, &lowerBound, &upperBound)
+		} else if len(cols) == 10 {
+			err = rows.Scan(&dbName, &tableName, &partitionName, &columnName, &isIndex, &bucketID, &count, &repeats, &lowerBound, &upperBound)
+		}
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+
+		/*
+			data, _, err := ScanRow(&dbName, &tableName, &partitionName, &columnName, )
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+			columnName, ok1 := data["Column_name"]
+			bucketID, ok2 := data["Bucket_id"]
+			count, ok3 := data["Count"]
+			lowerBound, ok4 := data["Lower_Bound"]
+			upperBound, ok5 := data["Upper_Bound"]
+			if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 {
+				return nil, errors.New("lack some fields in STATS_BUCKETS")
+			}
+		*/
+
+		if _, ok := buckets[columnName.String]; !ok {
+			buckets[columnName.String] = make([]Bucket, 0, 100)
+		}
+		buckets[columnName.String] = append(buckets[columnName.String], Bucket{
+			Count:      count.Int64,
+			LowerBound: lowerBound.String,
+			UpperBound: upperBound.String,
+		})
+	}
+
+	return buckets, nil
+}
+
 // GetTidbLatestTSO returns tidb's current TSO.
 func GetTidbLatestTSO(ctx context.Context, db *sql.DB) (int64, error) {
 	/*
