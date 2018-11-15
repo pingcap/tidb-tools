@@ -27,7 +27,7 @@ import (
 )
 
 var (
-	equal        = "="
+	equal string = "="
 	lt    string = "<"
 	lte   string = "<="
 	gt    string = ">"
@@ -36,7 +36,10 @@ var (
 
 // chunkRange represents chunk range
 type chunkRange struct {
-	cols  []string
+	columns []string
+	//bound 	[][]interface{}
+	//symbol  []string
+
 	begin []interface{}
 	end   []interface{}
 	// for example:
@@ -55,7 +58,7 @@ func (c *chunkRange) toString(collation string) (string, []interface{}) {
 	condition := make([]string, 0, 2)
 	args := make([]interface{}, 0, 2)
 
-	for i, col := range c.cols {
+	for i, col := range c.columns {
 		if !c.noBegin[i] {
 			if c.containBegin[i] {
 				condition = append(condition, fmt.Sprintf("`%s`%s >= ?", col, collation))
@@ -90,7 +93,7 @@ type CheckJob struct {
 // newChunkRange return a range struct
 func newChunkRange(col string, begin, end interface{}, containBegin, containEnd, noBegin, noEnd bool) chunkRange {
 	return chunkRange{
-		cols:         []string{col},
+		columns:      []string{col},
 		begin:        []interface{}{begin},
 		end:          []interface{}{end},
 		containEnd:   []bool{containEnd},
@@ -134,7 +137,7 @@ func getChunksForTable(table *TableInstance, column *model.ColumnInfo, chunkSize
 		field, collationStr, field, collationStr, table.Schema, table.Table, limits)
 
 	var chunk chunkRange
-	if dbutil.IsNumberType(column.Tp) {
+	if dbutil.IsNumberType(column.Tp) && false {
 		var min, max sql.NullInt64
 		err := table.Conn.QueryRow(query).Scan(&min, &max)
 		if err != nil {
@@ -145,7 +148,7 @@ func getChunksForTable(table *TableInstance, column *model.ColumnInfo, chunkSize
 			return nil, nil
 		}
 		chunk = newChunkRange(field, min.Int64, max.Int64, true, true, false, false)
-	} else if dbutil.IsFloatType(column.Tp) {
+	} else if dbutil.IsFloatType(column.Tp) && false {
 		var min, max sql.NullFloat64
 		err := table.Conn.QueryRow(query).Scan(&min, &max)
 		if err != nil {
@@ -179,26 +182,60 @@ func getChunksByBucketsInfo(db *sql.DB, schema string, table string, tableInfo *
 	log.Infof("buckets: %v", buckets)
 
 	var indexName string
+	var columns []string
+
 	for _, index := range tableInfo.Indices {
-		if index.Primary {
-			indexName = index.Name.O
-			break
-		} else if index.Unique {
+		if index.Primary || index.Unique {
 			indexName = index.Name.O
 		} else {
 			// TODO: choose a situable index if without pk/uk.
 			if indexName == "" {
 				indexName = index.Name.O
+			} else {
+				continue
 			}
+		}
+
+		columns := make([]string, 0, len(index.Columns))
+		for _, column := range index.Columns {
+			columns = append(columns, column.Name.O)
+		}
+		if index.Primary {
+			break
 		}
 	}
 
 	if indexName == "" {
 		return nil, nil
 	}
+	log.Infof("columns: %v", columns)
 
 	return nil, nil
 }
+
+/*
+func bucketsToChunks(buckets []dbutil.Bucket, columns []string, count, chunkSize int) []chunkRange {
+	chunks := make([]chunkRange, 0, count/chunkSize)
+	var lower, upper string
+	var num int
+
+	// add chunk for data < min and data >= max
+	chunks = append(chunks, newChunkRange(columns, nil, upper, true, false, false, false))
+	chunks = append(chunks, newChunkRange(columns, lower, upper, true, false, false, false))
+
+	for _, bucket := range buckets {
+		if lower == "" {
+			lower = bucket.LowerBound
+		}
+		upper = bucket.UpperBound
+		num += bucket.Count
+		if count - num > chunkSize {
+			chunks = append(chunks, newChunkRange(columns, lower, upper, true, false, false, false))
+			lower = upper
+		}
+	}
+}
+*/
 
 func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table string, column *model.ColumnInfo, limitRange string, collation string) ([]chunkRange, error) {
 	buckets, err := dbutil.GetBucketsInfo(context.Background(), db, Schema, table)
@@ -211,8 +248,8 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 
 	// for example, the min and max value in target table is 2-9, but 1-10 in source table. so we need generate chunk for data < 2 and data > 9
 	addOutRangeChunk := func() {
-		chunks = append(chunks, newChunkRange(chunk.cols[0], struct{}{}, chunk.begin[0], false, false, true, false))
-		chunks = append(chunks, newChunkRange(chunk.cols[0], chunk.end[0], struct{}{}, false, false, false, true))
+		chunks = append(chunks, newChunkRange(chunk.columns[0], struct{}{}, chunk.begin[0], false, false, true, false))
+		chunks = append(chunks, newChunkRange(chunk.columns[0], chunk.end[0], struct{}{}, false, false, false, true))
 	}
 
 	if count <= 1 {
@@ -221,7 +258,7 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 		return chunks, nil
 	}
 
-	if reflect.TypeOf(chunk.begin).Kind() == reflect.Int64 {
+	if reflect.TypeOf(chunk.begin).Kind() == reflect.Int64 && false {
 		min, ok1 := chunk.begin[0].(int64)
 		max, ok2 := chunk.end[0].(int64)
 		if !ok1 || !ok2 {
@@ -230,13 +267,13 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 		step := (max - min + count - 1) / count
 		cutoff := min
 		for cutoff <= max {
-			r := newChunkRange(chunk.cols[0], cutoff, cutoff+step, true, false, false, false)
+			r := newChunkRange(chunk.columns[0], cutoff, cutoff+step, true, false, false, false)
 			chunks = append(chunks, r)
 			cutoff += step
 		}
 
 		log.Debugf("getChunksForTable cut table: cnt=%d min=%v max=%v step=%v chunk=%d", count, min, max, step, len(chunks))
-	} else if reflect.TypeOf(chunk.begin).Kind() == reflect.Float64 {
+	} else if reflect.TypeOf(chunk.begin).Kind() == reflect.Float64 && false {
 		min, ok1 := chunk.begin[0].(float64)
 		max, ok2 := chunk.end[0].(float64)
 		if !ok1 || !ok2 {
@@ -245,7 +282,7 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 		step := (max - min + float64(count-1)) / float64(count)
 		cutoff := min
 		for cutoff <= max {
-			r := newChunkRange(chunk.cols[0], cutoff, cutoff+step, true, false, false, false)
+			r := newChunkRange(chunk.columns[0], cutoff, cutoff+step, true, false, false, false)
 			chunks = append(chunks, r)
 			cutoff += step
 		}
@@ -278,7 +315,7 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 			} else {
 				maxTmp = fmt.Sprintf("%s", splitValues[i])
 			}
-			r := newChunkRange(chunk.cols[0], minTmp, maxTmp, true, false, false, false)
+			r := newChunkRange(chunk.columns[0], minTmp, maxTmp, true, false, false, false)
 			chunks = append(chunks, r)
 		}
 
