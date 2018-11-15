@@ -326,14 +326,12 @@ func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string) (map[
 		var dbName, tableName, partitionName, columnName, lowerBound, upperBound sql.NullString
 		var isIndex, bucketID, count, repeats sql.NullInt64
 
-		//var columnName, lowerBound, UpperBound sql.NullString
-		//var count sql.NullInt64
-
 		cols, err := rows.Columns()
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 		
+		// add partiton_name in new version
 		if len(cols) == 9 {
 			err = rows.Scan(&dbName, &tableName, &columnName, &isIndex, &bucketID, &count, &repeats, &lowerBound, &upperBound)
 		} else if len(cols) == 10 {
@@ -342,21 +340,6 @@ func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string) (map[
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-
-		/*
-			data, _, err := ScanRow(&dbName, &tableName, &partitionName, &columnName, )
-			if err != nil {
-				return nil, errors.Trace(err)
-			}
-			columnName, ok1 := data["Column_name"]
-			bucketID, ok2 := data["Bucket_id"]
-			count, ok3 := data["Count"]
-			lowerBound, ok4 := data["Lower_Bound"]
-			upperBound, ok5 := data["Upper_Bound"]
-			if !ok1 || !ok2 || !ok3 || !ok4 || !ok5 {
-				return nil, errors.New("lack some fields in STATS_BUCKETS")
-			}
-		*/
 
 		if _, ok := buckets[columnName.String]; !ok {
 			buckets[columnName.String] = make([]Bucket, 0, 100)
