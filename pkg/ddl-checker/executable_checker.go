@@ -92,7 +92,7 @@ func (ec *ExecutableChecker) DropTable(context context.Context, tableName string
 
 // Close closes the ExecutableChecker
 func (ec *ExecutableChecker) Close() error {
-	if ec.isClosed.Load() || !ec.isClosed.CAS(false, true) {
+	if !ec.isClosed.CAS(false, true) {
 		return errors.New("ExecutableChecker is already closed")
 	}
 	ec.session.Close()
