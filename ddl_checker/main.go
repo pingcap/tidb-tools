@@ -15,6 +15,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
@@ -27,10 +28,11 @@ import (
 )
 
 var (
-	mode              = Auto
-	executableChecker *ddl_checker.ExecutableChecker
-	ddlSyncer         *ddl_checker.DDLSyncer
+	mode              = auto
+	executableChecker *checker.ExecutableChecker
+	ddlSyncer         *checker.DDLSyncer
 	reader            *bufio.Reader
+	tidbContext       = context.Background()
 
 	host     = flag.String("host", "127.0.0.1", "MySQL host")
 	port     = flag.Int("port", 3306, "MySQL port")
@@ -40,24 +42,24 @@ var (
 )
 
 const (
-	WelcomeInfo = "ExecutableChecker: Check if SQL can be successfully executed by TiDB\n" +
+	welcomeInfo = "ExecutableChecker: Check if SQL can be successfully executed by TiDB\n" +
 		"Copyright 2018 PingCAP, Inc.\n\n" +
 		"You can switch modes using the `SETMOD` command.\n" +
 		"Auto mode: The program will automatically synchronize the dependent table structure from MySQL " +
 		"and delete the conflict table\n" +
 		"Prompt mode: The program will ask you before synchronizing the dependent table structure from MYSQL\n" +
 		"Offline mode: This program doesn't need to connect to MySQL, and doesn't perform anything other than executing the input SQL.\n\n" +
-		SetmodUsage + "\n"
+		setmodUsage + "\n"
 
-	SetmodUsage = "SETMOD usage: SETMOD <MODCODE>; MODCODE = [\"Auto\", \"Prompt\", \"Offline\"] (case insensitive).\n"
+	setmodUsage = "SETMOD usage: SETMOD <MODCODE>; MODCODE = [\"Auto\", \"Prompt\", \"Offline\"] (case insensitive).\n"
 
-	Auto    = "auto"
-	Prompt  = "prompt"
-	Offline = "offline"
+	auto    = "auto"
+	prompt  = "prompt"
+	offline = "offline"
 )
 
 func main() {
-	fmt.Print(WelcomeInfo)
+	fmt.Print(welcomeInfo)
 	initialise()
 	mainLoop()
 	destroy()
@@ -67,12 +69,12 @@ func initialise() {
 	flag.Parse()
 	var err error
 	reader = bufio.NewReader(os.Stdin)
-	executableChecker, err = ddl_checker.NewExecutableChecker()
+	executableChecker, err = checker.NewExecutableChecker()
 	if err != nil {
 		fmt.Printf("[DDLChecker] Init failed, can't create ExecutableChecker: %s\n", err.Error())
 		os.Exit(1)
 	}
-	executableChecker.Execute("use test;")
+	executableChecker.Execute(tidbContext, "use test;")
 	dbInfo := &dbutil.DBConfig{
 		User:     *username,
 		Password: *password,
@@ -80,7 +82,7 @@ func initialise() {
 		Port:     *port,
 		Schema:   *schema,
 	}
-	ddlSyncer, err = ddl_checker.NewDDLSyncer(dbInfo, executableChecker)
+	ddlSyncer, err = checker.NewDDLSyncer(dbInfo, executableChecker)
 	if err != nil {
 		fmt.Printf("[DDLChecker] Init failed, can't open mysql database: %s\n", err.Error())
 		os.Exit(1)
@@ -116,24 +118,24 @@ func handler(input string) bool {
 	if strings.HasPrefix(lowerTrimInput, "setmod") {
 		x := strings.TrimSpace(lowerTrimInput[6:])
 		switch x {
-		case Auto, Prompt, Offline:
+		case auto, prompt, offline:
 			mode = x
 		default:
-			fmt.Print(SetmodUsage)
+			fmt.Print(setmodUsage)
 		}
 		return true
 	}
-	if mode != Offline {
+	if mode != offline {
 		// auto and query mod
 		stmt, err := executableChecker.Parse(input)
 		if err != nil {
 			fmt.Printf("[DDLChecker] SQL parse error: %s\n", err.Error())
 			return true
 		}
-		neededTables, _ := ddl_checker.GetTablesNeededExist(stmt)
-		nonNeededTables, err := ddl_checker.GetTablesNeededNonExist(stmt)
+		neededTables, _ := checker.GetTablesNeededExist(stmt)
+		nonNeededTables, err := checker.GetTablesNeededNonExist(stmt)
 		// skip when stmt isn't a DDLNode
-		if err == nil && (mode == Auto || (mode == Prompt && promptAutoSync(neededTables, nonNeededTables))) {
+		if err == nil && (mode == auto || (mode == prompt && promptAutoSync(neededTables, nonNeededTables))) {
 			err := syncTablesFromMysql(neededTables)
 			if err != nil {
 				return true
@@ -144,7 +146,7 @@ func handler(input string) bool {
 			}
 		}
 	}
-	err := executableChecker.Execute(input)
+	err := executableChecker.Execute(tidbContext, input)
 	if err == nil {
 		fmt.Println("[DDLChecker] SQL execution succeeded")
 	} else {
@@ -156,7 +158,7 @@ func handler(input string) bool {
 func syncTablesFromMysql(tableNames []string) error {
 	for _, tableName := range tableNames {
 		fmt.Println("[DDLChecker] Syncing Table", tableName)
-		err := ddlSyncer.SyncTable(*schema, tableName)
+		err := ddlSyncer.SyncTable(tidbContext, *schema, tableName)
 		if err != nil {
 			fmt.Println("[DDLChecker] Sync table failure:", err.Error())
 			return errors.Trace(err)
@@ -168,7 +170,7 @@ func syncTablesFromMysql(tableNames []string) error {
 func dropTables(tableNames []string) error {
 	for _, tableName := range tableNames {
 		fmt.Println("[DDLChecker] Dropping table", tableName)
-		err := executableChecker.DropTable(tableName)
+		err := executableChecker.DropTable(tidbContext, tableName)
 		if err != nil {
 			fmt.Println("[DDLChecker] Drop table", tableName, "Error:", err.Error())
 			return errors.Trace(err)

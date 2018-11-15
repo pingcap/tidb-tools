@@ -45,7 +45,6 @@ SETMOD usage: SETMOD <MODCODE>; MODCODE = ["Auto", "Prompt", "Offline"] (case in
 [Query] > ALTER TABLE table_name MODIFY column_1 int(11) NOT NULL;
 [DDLChecker] Do you want to synchronize table [table_name] from MySQL and drop table [] in ExecutableChecker?(Y/N)y
 [DDLChecker] Syncing Table table_name
-[DDLChecker] Table table_name exist, skipping
 [DDLChecker] SQL execution succeeded
 
 [Query] > setmod manual;

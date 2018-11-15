@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ddl_checker
+package checker
 
 import (
 	"context"
@@ -22,15 +22,17 @@ import (
 	"github.com/pingcap/tidb/session"
 	"github.com/pingcap/tidb/store/mockstore"
 	"github.com/pingcap/tidb/util/logutil"
+	"go.uber.org/atomic"
 )
 
+// ExecutableChecker is a part of TiDB to check the sql's executability
 type ExecutableChecker struct {
 	session  session.Session
-	context  context.Context
 	parser   *parser.Parser
-	isClosed bool
+	isClosed *atomic.Bool
 }
 
+// NewExecutableChecker creates a new ExecutableChecker
 func NewExecutableChecker() (*ExecutableChecker, error) {
 	logutil.InitLogger(&logutil.LogConfig{
 		Level: "error",
@@ -49,40 +51,55 @@ func NewExecutableChecker() (*ExecutableChecker, error) {
 	}
 	return &ExecutableChecker{
 		session:  session,
-		context:  context.Background(),
 		parser:   parser.New(),
-		isClosed: false,
+		isClosed: atomic.NewBool(false),
 	}, nil
 }
 
-func (ec *ExecutableChecker) Execute(sql string) error {
-	_, err := ec.session.Execute(ec.context, sql)
-	return err
-}
-
-func (ec *ExecutableChecker) IsTableExist(tableName string) bool {
-	_, err := ec.session.Execute(ec.context,
-		fmt.Sprintf("select 0 from `%s` limit 1", tableName))
-	return err == nil
-}
-
-func (ec *ExecutableChecker) DropTable(tableName string) error {
-	err := ec.Execute(fmt.Sprintf("drop table if exists `%s`", tableName))
+// Execute executes the sql to check it's executability
+func (ec *ExecutableChecker) Execute(context context.Context, sql string) error {
+	_, err := ec.session.Execute(context, sql)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	return nil
 }
 
+// IsTableExist returns whether the table with the specified name exists
+func (ec *ExecutableChecker) IsTableExist(context *context.Context, tableName string) bool {
+	_, err := ec.session.Execute(*context,
+		fmt.Sprintf("select 0 from `%s` limit 1", tableName))
+	return err == nil
+}
+
+// CreateTable creates a new table with the specified sql
+func (ec *ExecutableChecker) CreateTable(context context.Context, sql string) error {
+	err := ec.Execute(context, sql)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	return nil
+}
+
+// DropTable drops the the specified table
+func (ec *ExecutableChecker) DropTable(context context.Context, tableName string) error {
+	err := ec.Execute(context, fmt.Sprintf("drop table if exists `%s`", tableName))
+	if err != nil {
+		return errors.Trace(err)
+	}
+	return nil
+}
+
+// Close closes the ExecutableChecker
 func (ec *ExecutableChecker) Close() error {
-	if ec.isClosed {
+	if ec.isClosed.Load() || !ec.isClosed.CAS(false, true) {
 		return errors.New("ExecutableChecker is already closed")
 	}
-	ec.isClosed = true
 	ec.session.Close()
 	return nil
 }
 
+// Parse parses a query and returns an ast.StmtNode.
 func (ec *ExecutableChecker) Parse(sql string) (stmt ast.StmtNode, err error) {
 
 	charset, collation := ec.session.GetSessionVars().GetCharsetInfo()
@@ -90,6 +107,8 @@ func (ec *ExecutableChecker) Parse(sql string) (stmt ast.StmtNode, err error) {
 	return
 }
 
+// GetTablesNeededExist reports the table name needed to execute ast.StmtNode
+// the specified ast.StmtNode must a DDLNode
 func GetTablesNeededExist(stmt ast.StmtNode) ([]string, error) {
 	switch x := stmt.(type) {
 	case *ast.TruncateTableStmt:
@@ -115,6 +134,8 @@ func GetTablesNeededExist(stmt ast.StmtNode) ([]string, error) {
 	}
 }
 
+// GetTablesNeededNonExist reports the table name that conflicts with ast.StmtNode
+// the specified ast.StmtNode must a DDLNode
 func GetTablesNeededNonExist(stmt ast.StmtNode) ([]string, error) {
 	switch x := stmt.(type) {
 	case *ast.CreateTableStmt:

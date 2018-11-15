@@ -11,10 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ddl_checker
+package checker
 
 import (
 	"container/list"
+	"context"
 	. "github.com/pingcap/check"
 	"testing"
 )
@@ -82,11 +83,12 @@ func (s *testSuite) TestParse(c *C) {
 }
 
 func (s *testSuite) TestExecute(c *C) {
-	err := s.ec.Execute("use test;")
+	tidbContext := context.Background()
+	err := s.ec.Execute(tidbContext, "use test;")
 	c.Assert(err, IsNil)
 	for e := s.testData.Front(); e != nil; e = e.Next() {
 		data := e.Value.(parseTestData)
-		err := s.ec.Execute(data.sql)
+		err := s.ec.Execute(tidbContext, data.sql)
 		c.Assert(err == nil, Equals, data.executeSucceeded)
 	}
 }
