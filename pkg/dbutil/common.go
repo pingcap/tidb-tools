@@ -330,7 +330,7 @@ func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string) (map[
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		
+
 		// add partiton_name in new version
 		if len(cols) == 9 {
 			err = rows.Scan(&dbName, &tableName, &columnName, &isIndex, &bucketID, &count, &repeats, &lowerBound, &upperBound)

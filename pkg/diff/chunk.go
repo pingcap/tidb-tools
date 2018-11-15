@@ -18,11 +18,20 @@ import (
 	"database/sql"
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	log "github.com/sirupsen/logrus"
+)
+
+var (
+	equal        = "="
+	lt    string = "<"
+	lte   string = "<="
+	gt    string = ">"
+	gte   string = ">="
 )
 
 // chunkRange represents chunk range
@@ -42,40 +51,30 @@ type chunkRange struct {
 	noEnd   []bool
 }
 
-func(c *chunkRange) String() string {
+func (c *chunkRange) toString(collation string) (string, []interface{}) {
 	condition := make([]string, 0, 2)
 	args := make([]interface{}, 0, 2)
 
-	
-	for i, col := range cols {
-		if c.
-
+	for i, col := range c.cols {
+		if !c.noBegin[i] {
+			if c.containBegin[i] {
+				condition = append(condition, fmt.Sprintf("`%s`%s >= ?", col, collation))
+			} else {
+				condition = append(condition, fmt.Sprintf("`%s`%s > ?", col, collation))
+			}
+			args = append(args, c.begin[i])
+		}
+		if !c.noEnd[i] {
+			if c.containEnd[i] {
+				condition = append(condition, fmt.Sprintf("`%s`%s <= ?", col, collation))
+			} else {
+				condition = append(condition, fmt.Sprintf("`%s`%s < ?", col, collation))
+			}
+			args = append(args, c.end[i])
+		}
 	}
 
-	args := make([]interface{}, 0, 2)
-		var condition1, condition2 string
-		if !chunk.noBegin {
-			if chunk.containBegin {
-				condition1 = fmt.Sprintf("`%s`%s >= ?", column.Name, collation)
-			} else {
-				condition1 = fmt.Sprintf("`%s`%s > ?", column.Name, collation)
-			}
-			args = append(args, chunk.begin)
-		} else {
-			condition1 = "TRUE"
-		}
-		if !chunk.noEnd {
-			if chunk.containEnd {
-				condition2 = fmt.Sprintf("`%s`%s <= ?", column.Name, collation)
-			} else {
-				condition2 = fmt.Sprintf("`%s`%s < ?", column.Name, collation)
-			}
-			args = append(args, chunk.end)
-		} else {
-			condition2 = "TRUE"
-		}
-		where := fmt.Sprintf("(%s AND %s AND %s)", condition1, condition2, limits)
-	return ""
+	return strings.Join(condition, " AND "), args
 }
 
 // CheckJob is the struct of job for check
@@ -91,7 +90,7 @@ type CheckJob struct {
 // newChunkRange return a range struct
 func newChunkRange(col string, begin, end interface{}, containBegin, containEnd, noBegin, noEnd bool) chunkRange {
 	return chunkRange{
-		cols:         []string{col}
+		cols:         []string{col},
 		begin:        []interface{}{begin},
 		end:          []interface{}{end},
 		containEnd:   []bool{containEnd},
@@ -213,7 +212,7 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 	// for example, the min and max value in target table is 2-9, but 1-10 in source table. so we need generate chunk for data < 2 and data > 9
 	addOutRangeChunk := func() {
 		chunks = append(chunks, newChunkRange(chunk.cols[0], struct{}{}, chunk.begin[0], false, false, true, false))
-		chunks = append(chunks, newChunkRange(chunk.end[0], struct{}{}, false, false, false, true))
+		chunks = append(chunks, newChunkRange(chunk.cols[0], chunk.end[0], struct{}{}, false, false, false, true))
 	}
 
 	if count <= 1 {
@@ -231,22 +230,22 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 		step := (max - min + count - 1) / count
 		cutoff := min
 		for cutoff <= max {
-			r := newChunkRange(cutoff, cutoff+step, true, false, false, false)
+			r := newChunkRange(chunk.cols[0], cutoff, cutoff+step, true, false, false, false)
 			chunks = append(chunks, r)
 			cutoff += step
 		}
 
 		log.Debugf("getChunksForTable cut table: cnt=%d min=%v max=%v step=%v chunk=%d", count, min, max, step, len(chunks))
 	} else if reflect.TypeOf(chunk.begin).Kind() == reflect.Float64 {
-		min, ok1 := chunk.begin.(float64)
-		max, ok2 := chunk.end.(float64)
+		min, ok1 := chunk.begin[0].(float64)
+		max, ok2 := chunk.end[0].(float64)
 		if !ok1 || !ok2 {
-			return nil, errors.Errorf("can't parse chunk's begin: %v, end: %v", chunk.begin, chunk.end)
+			return nil, errors.Errorf("can't parse chunk's begin: %v, end: %v", chunk.begin[0], chunk.end[0])
 		}
 		step := (max - min + float64(count-1)) / float64(count)
 		cutoff := min
 		for cutoff <= max {
-			r := newChunkRange(cutoff, cutoff+step, true, false, false, false)
+			r := newChunkRange(chunk.cols[0], cutoff, cutoff+step, true, false, false, false)
 			chunks = append(chunks, r)
 			cutoff += step
 		}
@@ -254,8 +253,8 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 		log.Debugf("getChunksForTable cut table: cnt=%d min=%v max=%v step=%v chunk=%d",
 			count, min, max, step, len(chunks))
 	} else {
-		max, ok1 := chunk.end.(string)
-		min, ok2 := chunk.begin.(string)
+		max, ok1 := chunk.end[0].(string)
+		min, ok2 := chunk.begin[0].(string)
 		if !ok1 || !ok2 {
 			return nil, errors.Errorf("can't parse chunk's begin: %v, end: %v", chunk.begin, chunk.end)
 		}
@@ -279,7 +278,7 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 			} else {
 				maxTmp = fmt.Sprintf("%s", splitValues[i])
 			}
-			r := newChunkRange(minTmp, maxTmp, true, false, false, false)
+			r := newChunkRange(chunk.cols[0], minTmp, maxTmp, true, false, false, false)
 			chunks = append(chunks, r)
 		}
 
@@ -353,29 +352,8 @@ func GenerateCheckJob(table *TableInstance, splitField, limits string, chunkSize
 		chunk := chunks[0]
 		chunks = chunks[1:]
 
-		args := make([]interface{}, 0, 2)
-		var condition1, condition2 string
-		if !chunk.noBegin {
-			if chunk.containBegin {
-				condition1 = fmt.Sprintf("`%s`%s >= ?", column.Name, collation)
-			} else {
-				condition1 = fmt.Sprintf("`%s`%s > ?", column.Name, collation)
-			}
-			args = append(args, chunk.begin)
-		} else {
-			condition1 = "TRUE"
-		}
-		if !chunk.noEnd {
-			if chunk.containEnd {
-				condition2 = fmt.Sprintf("`%s`%s <= ?", column.Name, collation)
-			} else {
-				condition2 = fmt.Sprintf("`%s`%s < ?", column.Name, collation)
-			}
-			args = append(args, chunk.end)
-		} else {
-			condition2 = "TRUE"
-		}
-		where := fmt.Sprintf("(%s AND %s AND %s)", condition1, condition2, limits)
+		conditions, args := chunk.toString(collation)
+		where := fmt.Sprintf("(%s AND %s)", conditions, limits)
 
 		log.Debugf("%s.%s create dump job, where: %s, begin: %v, end: %v", table.Schema, table.Table, where, chunk.begin, chunk.end)
 		jobBucket = append(jobBucket, &CheckJob{
