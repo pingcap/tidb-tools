@@ -9,6 +9,6 @@ DM (Data Migration) 问题处理手册
 
 3. 当你处理完错误后，一般情况下只要利用 `dmctl` 重启任务即可
 ```bash
-query-status
+resume-task ${task name}
 ```
-   但是在一些情况下，你不得不重置数据同步任务，可以按照[重制任务](./reset-task.md) 操作
+   但是在一些情况下，你不得不重置数据同步任务，可以按照[重制任务](./reset-task.md)操作
