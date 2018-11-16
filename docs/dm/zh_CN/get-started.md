@@ -186,9 +186,9 @@ stop-task test              # 其中的 `test` 是 `task.yaml` 配置文件中 `
 
 ### 监控与日志
 
-#### 3DM 监控 dashboard
+#### DM 监控 dashboard
 
-假设参考 [1. 部署 DM 集群](#1-部署-dm-集群) 部署 DM 集群时，正确部署了 prometheus 与 grafana，且 grafana 的地址为 `172.16.10.71`。
+假设参考 [部署 DM 集群](#部署-dm-集群) 部署 DM 集群时，正确部署了 prometheus 与 grafana，且 grafana 的地址为 `172.16.10.71`。
 
 在浏览器中打开 <http://172.16.10.71:3000> 进入 grafana，选择 DM 的 dashboard 即可看到 DM 相关监控项，具体各监控项的解释参见 [DM 监控与告警](./maintenance/metrics-alert.md)。
 
