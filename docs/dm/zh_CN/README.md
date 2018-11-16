@@ -5,6 +5,15 @@ DM (Data Migration) 用户文档
 
 如果想更详细地了解 DM 的使用、限制甚至是原理，可以参考以下 index 直接阅读感兴趣的部分。
 
+
+### 简介
+
+DM (Data Migration) 是基于 mydumper / loader / syncer 的调度管理一体化数据同步平台，设计的主要目的是
+   - 标准化 （e.g. 工具运行，错误定义）
+   - 降低运维使用成本
+   - 简化错误处理流程
+   - 提升产品使用体验
+
 ### 用户指引
 
 - [Get Started](./get-started.md)
