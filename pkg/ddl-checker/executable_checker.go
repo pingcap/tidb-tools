@@ -108,7 +108,7 @@ func (ec *ExecutableChecker) Parse(sql string) (stmt ast.StmtNode, err error) {
 }
 
 // GetTablesNeededExist reports the table name needed to execute ast.StmtNode
-// the specified ast.StmtNode must a DDLNode
+// the specified ast.StmtNode must be a DDLNode
 func GetTablesNeededExist(stmt ast.StmtNode) ([]string, error) {
 	switch x := stmt.(type) {
 	case *ast.TruncateTableStmt:
@@ -135,7 +135,7 @@ func GetTablesNeededExist(stmt ast.StmtNode) ([]string, error) {
 }
 
 // GetTablesNeededNonExist reports the table name that conflicts with ast.StmtNode
-// the specified ast.StmtNode must a DDLNode
+// the specified ast.StmtNode must be a DDLNode
 func GetTablesNeededNonExist(stmt ast.StmtNode) ([]string, error) {
 	switch x := stmt.(type) {
 	case *ast.CreateTableStmt:
@@ -147,4 +147,10 @@ func GetTablesNeededNonExist(stmt ast.StmtNode) ([]string, error) {
 	default:
 		return nil, errors.New("stmt is not a DDLNode")
 	}
+}
+
+// IsDDL reports weather the table DDLNode
+func IsDDL(stmt ast.StmtNode) bool {
+	_, isDDL := stmt.(ast.DDLNode)
+	return isDDL
 }

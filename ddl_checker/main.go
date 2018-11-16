@@ -125,13 +125,16 @@ func handler(input string) bool {
 		}
 		return true
 	}
+	stmt, err := executableChecker.Parse(input)
+	if err != nil {
+		fmt.Println("[DDLChecker] SQL parse error: ", err.Error())
+		return true
+	}
+	if !checker.IsDDL(stmt) {
+		fmt.Println("[DDLChecker] Warning: The input SQL isn't a DDL")
+	}
 	if mode != offline {
 		// auto and query mod
-		stmt, err := executableChecker.Parse(input)
-		if err != nil {
-			fmt.Printf("[DDLChecker] SQL parse error: %s\n", err.Error())
-			return true
-		}
 		neededTables, _ := checker.GetTablesNeededExist(stmt)
 		nonNeededTables, err := checker.GetTablesNeededNonExist(stmt)
 		// skip when stmt isn't a DDLNode
@@ -146,7 +149,7 @@ func handler(input string) bool {
 			}
 		}
 	}
-	err := executableChecker.Execute(tidbContext, input)
+	err = executableChecker.Execute(tidbContext, input)
 	if err == nil {
 		fmt.Println("[DDLChecker] SQL execution succeeded")
 	} else {
