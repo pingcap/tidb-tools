@@ -132,7 +132,6 @@ black-white-list:
 # mydumper 全局配置，各实例通过配置项名引用
 mydumpers:
   global:
-    mydumper-path: "./bin/mydumper"               # mydumper binary 的路径
     extra-args: "-B test_db -T test_table"        # 只 dump test_db 库中的 test_table 表
 ```
 

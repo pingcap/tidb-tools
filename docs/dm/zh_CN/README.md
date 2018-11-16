@@ -5,15 +5,13 @@ DM (Data Migration) 用户文档
 
 如果想更详细地了解 DM 的使用、限制甚至是原理，可以参考以下 index 直接阅读感兴趣的部分。
 
-### DM 用户文档索引
-
-#### 用户指引
+### 用户指引
 
 - [Get Started](./get-started.md)
 - [syncer/loader 升级](./upgrade-to-dm)
-- [Troubleshoot](./trouble-shoot.md)
+- [Troubleshoot](./troubleshoot)
 
-#### 使用手册
+### 使用手册
 
 - [用户使用手册](./user-manual.md)
 - [使用限制](./restrictions.md)
@@ -36,9 +34,9 @@ DM (Data Migration) 用户文档
     - [分库分表支持方案](./shard-table/merge-solution.md)
     - [sharding DDL 使用限制](./shard-table/restrictions.md)
     - [手动处理 sharding DDL lock](./shard-table/handle-DDL-lock.md)
-- [错误处理](./exception-handling)
-    - [skip 或 replace 异常 SQL](./exception-handling/skip-replace-sqls.md)
-    - [重置数据同步任务](./exception-handling/reset-task.md)
+- [错误处理](./troubleshoot)
+    - [skip 或 replace 异常 SQL](./troubleshoot/skip-replace-sqls.md)
+    - [重置数据同步任务](./troubleshoot/reset-task.md)
 - [数据流过程](./data-interaction-details.md)
 - [FAQ](./FAQ.md)
 - [Change Log](./change-log.md)
