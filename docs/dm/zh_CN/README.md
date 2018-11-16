@@ -17,7 +17,7 @@ DM (Data Migration) 是基于 mydumper / loader / syncer 的调度管理一体�
 ### 用户指引
 
 - [Get Started](./get-started.md)
-- [syncer/loader 升级](./upgrade-to-dm)
+- [从 syncer/loader 升级](./upgrade-to-dm)
 - [Troubleshoot](./troubleshoot)
 
 ### 使用手册
