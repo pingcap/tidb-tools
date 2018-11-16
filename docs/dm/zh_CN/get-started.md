@@ -1,22 +1,70 @@
 Get Started
 ===
 
-### 1. 部署 DM 集群
+### 内容索引
+- [介绍](#介绍 DM)
+- [安装](#部署 DM 集群)
+- [启动同步任务](#启动同步任务)
+- [监控与日志](#监控与日志)
 
-目前，推荐使用 dm-ansible 来部署 DM 集群，具体部署方法请参考 [DM Ansible 运维手册](./maintenance/dm-ansible.md)。 
+### 介绍 DM
+
+DM (Data Migration) 是基于 mydumper / loader / syncer 的调度管理一体化工具产品，设计的主要目的是
+   - 标准化 （e.g. 工具运行，错误定义）
+   - 降低运维使用成本
+   - 简化错误处理流程
+   - 提升产品使用体验
+
+
+#### 架构图
+
+   ![DM structure](./architecture.png)
+
+
+#### 组件介绍
+
+##### dm-master
+
+- 保存 DM 集群的拓扑信息
+- 监控 dm-worker 进程的运行
+- 监控数据同步任务的运行状态
+- 提供数据同步任务管理的统一入口
+- 协调 sharding 场景下各个实例的分表 DDL 同步
+
+##### dm-worker
+
+- binlog 的本地持久化保存
+- 保存数据同步子任务的配置信息
+- 编排数据同步子任务的运行
+- 监控数据同步子任务的运行状态
+
+##### dmctl
+
+- 创建 / 更新 / 删除数据同步任务
+- 查看数据同步任务状态
+- 处理数据同步任务错误
+- 校验数据同步任务配置的正确性
+
+##### 同步任务
+
+- 用户通过 yaml 配置文件创建的从 MySQL/MariaDB 同步数据到 TiDB 的任务
+
+### 部署 DM 集群
+
+目前，推荐使用 dm-ansible 来部署 DM 集群，具体部署方法请参考 [DM Ansible 部署安装](./maintenance/dm-ansible.md)。
 
 #### 注意事项
 
-在 DM 的相关配置文件中，数据库相关的密码需要使用 dmctl 加密后的密文（如果数据库密码为空，则不需要加密）。
+在 DM 的所有相关配置文件中，数据库相关的密码需要使用 dmctl 加密后的密文（如果数据库密码为空，则不需要加密）。
 
 了解如何使用 dmctl 加密明文密码，可以参考 [dmctl 加密上游 MySQL 用户密码](./maintenance/dm-ansible.md#dmctl-加密上游-mysql-用户密码)。
 
 此外，DM 在运行过程中，相关的上下游数据库用户需要具备相应的读写权限。DM 在启动任务过程中，也会自动进行部分权限检查，具体见 [上游 MySQL 实例权限](./task-handling/check-mysql.md)。
 
 
-### 2. 启动 task 同步任务
+### 启动同步任务
 
-#### 2.1 集群信息
+#### 1 检查集群信息
 
 假设按上述步骤使用 dm-ansible 部署 DM 集群后，DM 集群中相关组件配置信息如下：
 
@@ -49,11 +97,12 @@ mysql-instance = "172.16.10.82:3306"
 dm-worker = "172.16.10.73:10081"
 ```
 
-#### 2.2 任务配置
+#### 2 任务配置
 
 假设需要将 MySQL-1 和 MySQL-2 的 `test_db` 库的 `test_table` 表都以 **全量+增量** 的模式同步到下游 TiDB 的 `test_db` 库的 `test_table` 表。
 
-编辑如下任务配置文件 `task.yaml`
+任务配置示例模版位置 `{ansible deploy}/conf/task.yaml.example`
+COPY `{ansible deploy}/conf/task.yaml.example` 并且编辑，生成如下任务配置文件 `task.yaml`
 
 ```yaml
 name: "test"                  # 任务名，多个同时运行的任务不能重名
@@ -101,7 +150,7 @@ mydumpers:
     extra-args: "-B test_db -T test_table"        # 只 dump test_db 库中的 test_table 表
 ```
 
-#### 2.3 启动任务
+#### 3 启动任务
 
 进入 dmctl 目录（`/home/tidb/dm-ansible/resource/bin/`），使用以下命令启动 dmctl：
 ```bash
@@ -135,14 +184,14 @@ start-task task.yaml            # task.yaml 为上一步编辑的配置文件路
 
 如果返回其他信息，可根据其中的提示进行配置变更后使用 `start-task task.yaml` 重启任务。
 
-#### 2.4 查询任务
+#### 4 查询任务
 
 如果需要了解 DM 集群中是否运行有同步任务及任务状态等信息，可以在 dmctl 命令行内使用以下命令进行查询：
 ```bash
 query-status
 ```
 
-#### 2.5 停止任务
+#### 5 停止任务
 
 如果不再需要进行数据同步，可以在 dmctl 命令行内使用以下命令停止同步任务
 ```bash
@@ -150,15 +199,15 @@ stop-task test              # 其中的 `test` 是 `task.yaml` 配置文件中 `
 ```
 
 
-### 3. 监控与 log
+### 监控与日志
 
-#### 3.1 DM 监控 dashboard
+#### 3DM 监控 dashboard
 
 假设参考 [1. 部署 DM 集群](#1-部署-dm-集群) 部署 DM 集群时，正确部署了 prometheus 与 grafana，且 grafana 的地址为 `172.16.10.71`。
 
 在浏览器中打开 <http://172.16.10.71:3000> 进入 grafana，选择 DM 的 dashboard 即可看到 DM 相关监控项，具体各监控项的解释参见 [DM 监控与告警](./maintenance/metrics-alert.md)。
 
-#### 3.2 DM log
+#### DM log
 
 DM 在运行过程中，dm-worker, dm-master 及 dmctl 都会通过 log 输出相关信息。
 
