@@ -2,13 +2,13 @@ Get Started
 ===
 
 ### 内容索引
-- [介绍](#介绍DM)
-- [安装](#部署DM集群)
+- [介绍](#介绍)
+- [安装](#部署)
 - [启动同步任务](#启动同步任务)
 - [监控与日志](#监控与日志)
 - [下一步](#下一步)
 
-### 介绍 DM
+### 介绍
 
 DM (Data Migration) 是基于 mydumper / loader / syncer 的调度管理一体化工具产品，设计的主要目的是
    - 标准化 （e.g. 工具运行，错误定义）
@@ -23,23 +23,20 @@ DM (Data Migration) 是基于 mydumper / loader / syncer 的调度管理一体�
 
 
 ##### dm-master
-
 - 管理调度任务的运行
 
 ##### dm-worker
-
 - 执行具体的任务
 
 ##### dmctl
-
 - DM 集群的访问入口
 
 ##### 同步任务
-
 - 用户通过 yaml 配置文件创建的从 MySQL/MariaDB 同步数据到 TiDB 的任务
 
 
-### 部署 DM 集群
+
+### 部署
 
 目前，推荐使用 dm-ansible 来部署 DM 集群，具体部署方法请参考 [DM Ansible 部署安装](./maintenance/dm-ansible.md)。
 
