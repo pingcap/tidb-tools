@@ -87,8 +87,8 @@ dm-worker = "172.16.10.73:10081"
 
 假设需要将 MySQL-1 和 MySQL-2 的 `test_db` 库的 `test_table` 表都以 **全量+增量** 的模式同步到下游 TiDB 的 `test_db` 库的 `test_table` 表。
 
-任务配置示例模版位置 `{ansible deploy}/conf/task.yaml.example`
-COPY `{ansible deploy}/conf/task.yaml.example` 并且编辑，生成如下任务配置文件 `task.yaml`
+
+COPY 并且编辑，生成如下任务配置文件 `task.yaml` （任务配置示例模版 `{ansible deploy}/conf/task.yaml.example`）
 
 ```yaml
 name: "test"                  # 任务名，多个同时运行的任务不能重名
