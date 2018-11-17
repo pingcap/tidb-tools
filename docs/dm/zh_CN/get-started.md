@@ -10,7 +10,7 @@ Get Started
 
 ### 简介
 
-DM (Data Migration) 是基于 mydumper / loader / syncer 的调度管理一体化工具产品，设计的主要目的是
+DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备份和增量 binlog 同步，设计的主要目的是
    - 标准化 （e.g. 工具运行，错误定义）
    - 降低运维使用成本
    - 简化错误处理流程

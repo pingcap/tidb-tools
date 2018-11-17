@@ -7,7 +7,7 @@ FAQ
 
 TiDB 对部分 DDL 并不支持（或者 DML 执行出错），需要用户根据业务具体情况选择跳过或者改造同步的 DDL。
 
-具体操作方法见 [skip 或 replace 异常 SQL](./exception-handling/skip-replace-sqls.md)
+具体操作方法见 [skip 或 replace 异常 SQL](./troubleshoot/skip-replace-sqls.md)
 
 #### Sharding DDL 同步出错
 
@@ -27,4 +27,4 @@ TiDB 对部分 DDL 并不支持（或者 DML 执行出错），需要用户根�
 
 一般这时候 relay unit 会发生错误而退出，且无法优雅地自动恢复，需要通过手动方式恢复数据同步。
 
-具体操作方法见 [重置数据同步任务](./exception-handling/reset-task.md)
+具体操作方法见 [重置数据同步任务](./troubleshoot/reset-task.md)

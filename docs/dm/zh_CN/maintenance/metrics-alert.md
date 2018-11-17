@@ -8,7 +8,7 @@ DM 监控与告警
 - [Relay Log Unit 监控项](#Relay-Log-Unit)
 - [Mydumper Unit 监控项](#Mydumper-Unit)
 - [Load Unit 监控项](#Load-Unit)
-- [Binlog-Replication-Unit 监控项](#Binlog-Replication-Unit)
+- [Sync/Binlog Replication Unit 监控项](#Binlog-Replication-Unit)
 
 
 ### Task

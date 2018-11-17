@@ -3,7 +3,7 @@
 
 ### 介绍
 
-DM (Data Migration) 是基于 mydumper / loader / syncer 的调度管理一体化工具产品，设计的主要目的是
+DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备份和增量 binlog 同步，设计的主要目的是
    - 标准化 （e.g. 工具运行，错误定义）
    - 降低运维使用成本
    - 简化错误处理流程
@@ -120,7 +120,7 @@ DM 支持对原分库分表进行合库合表操作，但需要满足一些限�
 
 TiDB 当前并不兼容 MySQL 支持的所有 DDL，已支持的 DDL 信息可参见: <https://github.com/pingcap/docs-cn/blob/master/sql/ddl.md>
 
-当遇到不兼容的 DDL 时，DM 会同步报错，此时需要使用 dmctl 手动处理该错误（包括 跳过该 DDL 或 使用用户指定的 DDL 替代原 DDL），具体操作方式参见 [skip 或 replace 异常 SQL](./exception-handling/skip-replace-sqls.md)
+当遇到不兼容的 DDL 时，DM 会同步报错，此时需要使用 dmctl 手动处理该错误（包括 跳过该 DDL 或 使用用户指定的 DDL 替代原 DDL），具体操作方式参见 [skip 或 replace 异常 SQL](./troubleshoot/skip-replace-sqls.md)
 
 ### 运维管理
 
