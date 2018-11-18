@@ -3,6 +3,14 @@ DM 监控与告警
 
 目前只有 dm-worker 提供了 metrics， dm-master 暂未提供。
 
+### 内容索引
+- [任务监控项](#Task)
+- [Relay Log Unit 监控项](#Relay-Log-Unit)
+- [Mydumper Unit 监控项](#Mydumper-Unit)
+- [Load Unit 监控项](#Load-Unit)
+- [Sync/Binlog Replication Unit 监控项](#Binlog-Replication-Unit)
+
+
 ### Task
 
 #### task state
@@ -14,31 +22,9 @@ query: `dm_worker_task_state{task="$task",instance="$instance"}`
 告警：当子任务状态处于 paused 超过 10 分钟时
 
 
-### Relay Log
+### Relay Log Unit
 
 DM 中的 relay log 的原理和功能与 MySQL slave relay log 类似，参见 <https://dev.mysql.com/doc/refman/5.7/en/slave-logs-relaylog.html>。
-
-#### storage capacity
-
-query: `dm_relay_space{instance="$instance", type="capacity"}`
-
-说明：relay log 组件占有的磁盘的总容量。
-
-#### storage remain
-
-query: `dm_relay_space{instance="$instance", type="available"}`
-
-说明：relay log 组件占有的磁盘的剩余可用容量。
-
-告警：当小于 10G 的时候需要告警
-
-#### process exits with error
-
-query: `changes(dm_relay_exit_with_error_count{instance="$instance"}[1m])`
-
-说明：relay log 模块 在 dm-worker 内部遇到错误并且退出了。
-
-告警：需要告警
 
 #### relay log data corruption
 
@@ -64,11 +50,21 @@ query: `changes(dm_relay_write_error_count{instance="$instance"}[1m])`
 
 告警：需要告警
 
-#### binlog file index
+#### storage remain
 
-query: `dm_relay_binlog_file{instance="$instance"}`
+query: `dm_relay_space{instance="$instance", type="available"}`
 
-说明：relay log 最新的文件序列号。如 value = 1 表示 relay-log.000001，也代表已经从上游 MySQL 拉取的最大 binlog 文件序号。
+说明：relay log 组件占有的磁盘的剩余可用容量。
+
+告警：当小于 10G 的时候需要告警
+
+#### process exits with error
+
+query: `changes(dm_relay_exit_with_error_count{instance="$instance"}[1m])`
+
+说明：relay log 模块 在 dm-worker 内部遇到错误并且退出了。
+
+告警：需要告警
 
 #### binlog file gap between master and relay
 
@@ -77,6 +73,18 @@ query: `dm_relay_binlog_file{instance="$instance", node="master"} - ON(instance,
 说明：relay 与上游 master 相比落后的 binlog file 个数。
 
 告警：当落后 binlog file 个数超过 1 个（不含 1 个）且持续 10 分钟时
+
+#### storage capacity
+
+query: `dm_relay_space{instance="$instance", type="capacity"}`
+
+说明：relay log 组件占有的磁盘的总容量。
+
+#### binlog file index
+
+query: `dm_relay_binlog_file{instance="$instance"}`
+
+说明：relay log 最新的文件序列号。如 value = 1 表示 relay-log.000001，也代表已经从上游 MySQL 拉取的最大 binlog 文件序号。
 
 #### binlog pos 
 
@@ -119,6 +127,9 @@ query: `dm_loader_data_size_count{task="$task",instance="$instance"}`
 
 说明：loader 导入的全量数据中数据文件（内含 `INSERT INTO` 语句）的总大小。
 
+
+### Mydumper Unit
+
 #### dump process exits with error
 
 query: `changes(dm_mydumper_exit_with_error_count{task="$task",instance="$instance"}[1m])`
@@ -126,6 +137,9 @@ query: `changes(dm_mydumper_exit_with_error_count{task="$task",instance="$instan
 说明：mydumper 模块 在 dm-worker 内部遇到错误并且退出了。
 
 告警：需要告警
+
+
+### load Unit
 
 #### load process exits with error
 
@@ -160,19 +174,7 @@ query: `histogram_quantile(0.90, sum(rate(dm_loader_query_duration_time_bucket{t
 说明：loader 执行 query 的耗时，单位：秒。
 
 
-### binlog replication
-
-#### remaining time to sync
-
-query: `dm_syncer_remaining_time{task="$task", instance="$instance"}`
-
-说明：预计 syncer 还需要多少分钟可以和 master 完全同步，单位: 分钟。
-
-#### replicate lag
-
-query: `dm_syncer_replication_lag{task="$task", instance="$instance"}`
-
-说明：master 到 syncer 的 binlog 复制延迟时间，单位：秒。
+### Binlog Replication Unit
 
 #### process exist with error
 
@@ -197,6 +199,18 @@ query：`dm_relay_binlog_file{instance="$instance", node="relay"} - ON(instance,
 说明：syncer 与 relay 相比落后的 binlog file 个数。
 
 告警：当落后 binlog file 个数超过 1 个（不含 1 个）且持续 10 分钟时
+
+#### remaining time to sync
+
+query: `dm_syncer_remaining_time{task="$task", instance="$instance"}`
+
+说明：预计 syncer 还需要多少分钟可以和 master 完全同步，单位: 分钟。
+
+#### replicate lag
+
+query: `dm_syncer_replication_lag{task="$task", instance="$instance"}`
+
+说明：master 到 syncer 的 binlog 复制延迟时间，单位：秒。
 
 #### binlog event qps 
 

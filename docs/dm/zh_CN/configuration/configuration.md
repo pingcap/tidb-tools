@@ -122,7 +122,7 @@ mysql-instances:
     ​    instance-id: "instance118-5306"
 
     ​    mydumper:                                                          # mydumper 相关配置（不能和 mydumper-config-name 同时设置）
-    ​        mydumper-path: "./mydumper"                                    # 见上文 mydumpers 配置项说明
+    ​        mydumper-path: "./mydumper"                                    # mydumper binary 文件地址，这个无需设置，会由 ansible 部署程序自动生成
       ​      threads: 4
     ​        chunk-filesize: 8
     ​        skip-tz-utc: true
