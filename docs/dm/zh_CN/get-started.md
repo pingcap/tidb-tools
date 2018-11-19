@@ -2,54 +2,11 @@ Get Started
 ===
 
 ### 内容索引
-- [简介](#简介)
+- [简介](./overview.md)
 - [部署 DM 集群](#部署-dm-集群)
 - [启动同步任务](#启动同步任务)
 - [监控与日志](#监控与日志)
 - [下一步](#下一步)
-
-### 简介
-
-DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备份和 MariaDB/MySQL binlog 增量同步，设计的主要目的是
-   - 标准化 （e.g. 工具运行，错误定义）
-   - 降低运维使用成本
-   - 简化错误处理流程
-   - 提升产品使用体验
-
-
-#### 架构图
-
-   ![DM structure](./architecture.png)
-
-
-##### dm-master
-- 管理调度任务的运行
-
-##### dm-worker
-- 执行具体的任务
-
-##### dmctl
-- DM 集群的访问入口
-
-##### 同步任务
-- 用户通过 yaml 配置文件创建的从 MySQL/MariaDB 同步数据到 TiDB 的任务
-
-#### DM-Worker 处理单元
-
-##### relay log
-持久化保存从上游 MySQL/MariaDB 读取的 Binlog，并且对 binlogreplication unit 提供读取 Binlog events 的功能
-
-##### dump
-从上游 MySQL/MariaDB dump 全量数据到本地磁盘
-
-##### load
-读取 dump unit 的数据文件，然后加载到下游 TiDB
-
-##### binlog replication
-读取 relay log unit 的 Binlog events，转化为 SQLs，然后应用到下游 TiDB
-
-##### 权限要求
-参考[权限说明文档](./privileges.md)
 
 
 ### 部署 DM 集群
