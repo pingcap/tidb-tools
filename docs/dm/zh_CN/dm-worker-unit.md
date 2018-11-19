@@ -13,15 +13,15 @@ DM-Worker 详细介绍
 DM-Worker 包含多个任务处理逻辑单元
 
 #### relay log
-持久化保存从上游 MySQL/MariaDB 读取的 Binlog，并且对 binlogreplication unit 提供读取 Binlog events 的功能
+持久化保存从上游 MySQL/MariaDB 读取的 Binlog，并且对 binlog replication unit 提供读取 Binlog events 的功能
 
-#### dump
+#### dumper
 从上游 MySQL/MariaDB dump 全量数据到本地磁盘
 
-#### load
+#### loader
 读取 dump unit 的数据文件，然后加载到下游 TiDB
 
-#### binlog replication
+#### binlog replication/syncer
 读取 relay log unit 的 Binlog events，转化为 SQLs，然后应用到下游 TiDB
 
 
@@ -69,7 +69,7 @@ REPLICATION CLIENT (show master status, show slave status)
 
 
 
-#### dump
+#### dumper
 
 ###### 上游（mysql/mariadb）
 SELECT 
@@ -83,7 +83,7 @@ RELOAD (flush tables with read lock, unlock tables)
 
 
 
-#### load
+#### loader
 
 ###### 上游（mysql/mariadb）
 无
@@ -99,7 +99,7 @@ INSERT (插入 ddump 数据)
 
 
 
-#### binlog replication
+#### binlog replication/syncer
 
 ###### 上游（mysql/mariadb）
 SELECT （查询上游的一些环境变量，比如 binlog_format）
