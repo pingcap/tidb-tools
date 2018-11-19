@@ -3,19 +3,17 @@ Tools Documents
 
 **Tools Documents** is a documenet set about tools
 * TiDB-Binlog document
-  * [user manual](./tidb-binlog)
-  * issue templates
-  * system knowledges and operation manual
+  * [用户手册](./tidb-binlog/zh_CN)
+  * issue cheklist templates
   * FAQ
 
 * TiDB-Lightning document
-  * [user manual](./lightning)
-  * issue templates
-  * system knowledges and operation manual
+  * [user manual](./lightning/en_US/)
+  * [用户手册](./lightning/zh_CN)
+  * issue cheklist templates
   * FAQ
 
 * DM document
-  * [user manual](./dm)
-  * issue templates
-  * system knowledges and operation manual
+  * [用户手册](./dm/zh_CN)
+  * issue cheklist templates
   * FAQ
