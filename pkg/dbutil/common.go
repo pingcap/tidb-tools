@@ -304,6 +304,7 @@ type Bucket struct {
 // SHOW STATS_BUCKETS in TiDB.
 func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string) (map[string][]Bucket, error) {
 	/*
+	mysql.stats_buckets
 		example in tidb:
 		mysql> SHOW STATS_BUCKETS WHERE db_name= "test" AND table_name="testa";
 		+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+

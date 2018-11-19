@@ -37,22 +37,54 @@ var (
 // chunkRange represents chunk range
 type chunkRange struct {
 	columns []string
-	//bound 	[][]interface{}
-	//symbol  []string
-
-	begin []interface{}
-	end   []interface{}
-	// for example:
-	// containBegin and containEnd is true, means [begin, end]
-	// containBegin is true, containEnd is false, means [begin, end)
-	containBegin []bool
-	containEnd   []bool
-
-	// if noBegin is true, means there is no lower limit
-	// if noEnd is true, means there is no upper limit
-	noBegin []bool
-	noEnd   []bool
+	bounds 	[][]string
+	symbols  [][]string
 }
+
+// newChunkRange return a range struct
+func newChunkRange() chunkRange {
+	return chunkRange {
+		columns: make([]string, 0, 2),
+		bounds:  make([][]string, 0, 2),
+		symbols: make([][]string, 0, 2),
+	}
+}
+
+type Spliter interface {
+	// Split splits a table's data to several chunks.
+	Split(table *TableInstance, chunkSize int, limits string, collation string) ([]chunkRange, error)
+}
+
+type NormalSpliter struct {
+	table     *TableInstance
+	chunkSize int
+	limits    string
+	collation string
+}
+
+func (s *NormalSpliter) Split(table *TableInstance, chunkSize int, limits string, collation string) {
+	s.table = table
+	s.chunkSzie = chunkSize
+	s.limits = limits
+	s.collation = collation
+
+	
+}
+
+
+/*
+func newChunkRange(col string, begin, end interface{}, containBegin, containEnd, noBegin, noEnd bool) chunkRange {
+	return chunkRange{
+		columns:      []string{col},
+		begin:        []interface{}{begin},
+		end:          []interface{}{end},
+		containEnd:   []bool{containEnd},
+		containBegin: []bool{containBegin},
+		noBegin:      []bool{noBegin},
+		noEnd:        []bool{noEnd},
+	}
+}
+*/
 
 func (c *chunkRange) toString(collation string) (string, []interface{}) {
 	condition := make([]string, 0, 2)
@@ -90,18 +122,6 @@ type CheckJob struct {
 	Chunk  chunkRange
 }
 
-// newChunkRange return a range struct
-func newChunkRange(col string, begin, end interface{}, containBegin, containEnd, noBegin, noEnd bool) chunkRange {
-	return chunkRange{
-		columns:      []string{col},
-		begin:        []interface{}{begin},
-		end:          []interface{}{end},
-		containEnd:   []bool{containEnd},
-		containBegin: []bool{containBegin},
-		noBegin:      []bool{noBegin},
-		noEnd:        []bool{noEnd},
-	}
-}
 func getChunksForTable(table *TableInstance, column *model.ColumnInfo, chunkSize, sample int, limits string, collation string) ([]chunkRange, error) {
 	if column == nil {
 		log.Warnf("no suitable index found for %s.%s", table.Schema, table.Table)
@@ -136,40 +156,19 @@ func getChunksForTable(table *TableInstance, column *model.ColumnInfo, chunkSize
 	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ MIN(`%s`%s) as MIN, MAX(`%s`%s) as MAX FROM `%s`.`%s` WHERE %s",
 		field, collationStr, field, collationStr, table.Schema, table.Table, limits)
 
-	var chunk chunkRange
-	if dbutil.IsNumberType(column.Tp) && false {
-		var min, max sql.NullInt64
-		err := table.Conn.QueryRow(query).Scan(&min, &max)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		if !min.Valid {
-			// min is NULL, means that no table data.
-			return nil, nil
-		}
-		chunk = newChunkRange(field, min.Int64, max.Int64, true, true, false, false)
-	} else if dbutil.IsFloatType(column.Tp) && false {
-		var min, max sql.NullFloat64
-		err := table.Conn.QueryRow(query).Scan(&min, &max)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		if !min.Valid {
-			// min is NULL, means that no table data.
-			return nil, nil
-		}
-		chunk = newChunkRange(field, min.Float64, max.Float64, true, true, false, false)
-	} else {
-		var min, max sql.NullString
-		err := table.Conn.QueryRow(query).Scan(&min, &max)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		if !min.Valid || !max.Valid {
-			return nil, nil
-		}
-		chunk = newChunkRange(field, min.String, max.String, true, true, false, false)
+	var min, max sql.NullString
+	err := table.Conn.QueryRow(query).Scan(&min, &max)
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
+	if !min.Valid || !max.Valid {
+		return nil, nil
+	}
+	chunk := newChunkRange()
+	chunk.columns = append(chunk.columns, field)
+	chunk.bounds = append(chunk.bounds, []string{min.String, max.String})
+	chunk.symbols = append(chunk.symbols, []string(gte, lte))
+	chunk = newChunkRange(field, min.String, max.String, true, true, false, false)
 
 	return splitRange(table.Conn, &chunk, chunkCnt, table.Schema, table.Table, column, limits, collation)
 }
