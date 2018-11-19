@@ -19,12 +19,10 @@ init(){
 
 destroy(){
     ${MYSQL_EXEC} -e "drop database if exists ${TEST_DATABASE_NAME};"
-    checkExit
 }
 
 set -e
 init
 ${CHECKER_EXEC}
-checkExit
 destroy
 
