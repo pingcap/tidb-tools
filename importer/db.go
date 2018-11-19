@@ -19,8 +19,8 @@ import (
 	"math"
 	"strconv"
 
-	_ "github.com/go-sql-driver/mysql"
-	"github.com/juju/errors"
+	_ "github.com/go-sql-driver/mysql" // for mysql driver
+	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/mysql"
 	log "github.com/sirupsen/logrus"
 )
