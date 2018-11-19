@@ -125,9 +125,9 @@ func handler(input string) bool {
 		}
 		return true
 	}
-	stmt, err := executableChecker.Parse(input)
-	if err != nil {
-		fmt.Println("[DDLChecker] SQL parse error: ", err.Error())
+	stmt, err1 := executableChecker.Parse(input)
+	if err1 != nil {
+		fmt.Println("[DDLChecker] SQL parse error: ", err1.Error())
 		return true
 	}
 	if !checker.IsDDL(stmt) {
@@ -149,7 +149,7 @@ func handler(input string) bool {
 			}
 		}
 	}
-	err = executableChecker.Execute(tidbContext, input)
+	err := executableChecker.Execute(tidbContext, input)
 	if err == nil {
 		fmt.Println("[DDLChecker] SQL execution succeeded")
 	} else {
