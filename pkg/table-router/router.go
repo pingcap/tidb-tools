@@ -16,7 +16,7 @@ package router
 import (
 	"strings"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/table-rule-selector"
 )
 

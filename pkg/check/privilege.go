@@ -19,10 +19,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	_ "github.com/pingcap/tidb/types/parser_driver" // for parser driver
 )
 
 /*****************************************************/

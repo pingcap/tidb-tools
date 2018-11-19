@@ -22,8 +22,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/juju/errors"
 	"github.com/ngaut/log"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 )
@@ -128,7 +128,7 @@ func (t *TableDiff) CheckTableStruct(ctx context.Context) (bool, error) {
 	t.TargetTable.info = removeColumns(tableInfo, t.RemoveColumns)
 
 	for _, sourceTable := range t.SourceTables {
-		tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.UseRowID)
+		tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.UseRowID)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
