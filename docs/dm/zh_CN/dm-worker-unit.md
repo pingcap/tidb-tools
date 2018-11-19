@@ -1,5 +1,11 @@
-DM 任务处理单元说明
+DM-Worker 详细介绍
 ===
+
+### 简介
+- DM-Worker 可以链接到一台 MySQL/MariDB，并且注册为该实例的 Slave
+- 支持读取 MySQL/MariaDB Binlog 持久化保存再本地（relay log）
+- 支持同步到多个下游 TiDB
+- 支持多个 DM-Worker 同步多个 MySQL/MariaDB 到一个下游 TiDB （此外如果需要合并多个表到一张表请参考 [分库分表](./shard-table))
 
 ### DM-Worker 处理单元
 DM-Worker 包含多个任务处理逻辑单元

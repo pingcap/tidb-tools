@@ -27,12 +27,12 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 
 #### dm-worker
 
-- 链接到一台 MySQL/MariDB，并且注册为该实例的 Slave
-- 读取 MySQL/MariaDB Binlog 持久化保存再本地（relay log）
-- 支持同步到多个下游 TiDB
+- 支持 binlog 本地持久化
 - 保存数据同步子任务的配置信息
 - 编排数据同步子任务的运行
 - 监控数据同步子任务的运行状态
+
+参考 [DM-Worker 详细介绍](./dm-worker-unit.md)
 
 #### dmctl
 
@@ -40,7 +40,3 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 - 查看数据同步任务状态
 - 处理数据同步任务错误
 - 校验数据同步任务配置的正确性
-
-
-### DM-Worker 处理单元
-参考[DM-Worker 介绍文档](./dm-worker-unit.md)
