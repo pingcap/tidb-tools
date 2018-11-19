@@ -95,3 +95,4 @@ Additionally, please provide the following info before submitting your issue. Th
     - [ ] Is the `worker-count` set to a reasonable value (suggest-32)?
     - [ ] Is the `batch` set to a reasonable value (suggest 100-1000)?
     - [ ] Is the downstream server MySQL and does not use the `utf8mb4` charset (syncer only allows the downstream server's charset to be `utf8mb4`)?
+    - [ ] Do not some tables have primary/unique keys and slow synchronization? Syncer is not friendly for tables don't have priamry/unique key.
