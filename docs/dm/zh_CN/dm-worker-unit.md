@@ -1,8 +1,25 @@
-DM 使用权限说明
+DM 任务处理单元说明
 ===
 
+### DM-Worker 处理单元
+DM-Worker 包含多个任务处理逻辑单元
+
+#### relay log
+持久化保存从上游 MySQL/MariaDB 读取的 Binlog，并且对 binlogreplication unit 提供读取 Binlog events 的功能
+
+#### dump
+从上游 MySQL/MariaDB dump 全量数据到本地磁盘
+
+#### load
+读取 dump unit 的数据文件，然后加载到下游 TiDB
+
+#### binlog replication
+读取 relay log unit 的 Binlog events，转化为 SQLs，然后应用到下游 TiDB
+
+
+
 ### DM-Worker 需要的权限
-包含 relay log，dump，load，replicate binlog 等 units， 这里先总体说下 上下游分别需要什么权限；
+包含 relay log，dump，load，replicate binlog 等任务运行单元， 这里先总体说下 上下游分别需要什么权限；
 
 #### 上游（mysql/mariadb）
 SELECT
@@ -23,13 +40,13 @@ ALTER
 INDEX
 即：GRANT SELECT,INSERT,UPDATE,DELETE,CREATE,DROP,ALTER,INDEX  ON *.* TO 'your_user'@'your_wildcard_of_host';
 
-因为 DM 包含 dump，load，replicate binlog events 等组件，下面会对各组件进行权限的细分，方便大家深入理解（注意，随着需求的变化，这些权限也会跟着变化，并非一成不变）
+因为 DM 包含 dump，load，replicate binlog events 等组件，下面会对各组件进行权限的细分（注意，随着需求的变化，这些权限也会跟着变化，并非一成不变）
 
 
 
 ### units 需要的最小权限
 
-#### relay log unit
+#### relay log
 
 ###### 上游（mysql/mariadb）
 SELECT （查询上游的一些环境变量，比如 binlog_format）
@@ -44,7 +61,7 @@ REPLICATION CLIENT (show master status, show slave status)
 
 
 
-#### dump unit
+#### dump
 
 ###### 上游（mysql/mariadb）
 SELECT 
@@ -58,7 +75,7 @@ RELOAD (flush tables with read lock, unlock tables)
 
 
 
-#### load unit
+#### load
 
 ###### 上游（mysql/mariadb）
 无
@@ -74,7 +91,7 @@ INSERT (插入 ddump 数据)
 
 
 
-#### binlog replication unit
+#### binlog replication
 
 ###### 上游（mysql/mariadb）
 SELECT （查询上游的一些环境变量，比如 binlog_format）

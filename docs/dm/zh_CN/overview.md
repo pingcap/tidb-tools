@@ -43,18 +43,4 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 
 
 ### DM-Worker 处理单元
-
-#### relay log
-持久化保存从上游 MySQL/MariaDB 读取的 Binlog，并且对 binlogreplication unit 提供读取 Binlog events 的功能
-
-#### dump
-从上游 MySQL/MariaDB dump 全量数据到本地磁盘
-
-#### load
-读取 dump unit 的数据文件，然后加载到下游 TiDB
-
-#### binlog replication
-读取 relay log unit 的 Binlog events，转化为 SQLs，然后应用到下游 TiDB
-
-#### 权限要求
-参考[权限说明文档](./privileges.md)
+参考[DM-Worker 介绍文档](./dm-worker-unit.md)
