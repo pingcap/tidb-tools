@@ -44,7 +44,7 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 
 ### DM-Worker 处理单元
 
-#### relay log 
+#### relay log
 持久化保存从上游 MySQL/MariaDB 读取的 Binlog，并且对 binlogreplication unit 提供读取 Binlog events 的功能
 
 #### dump

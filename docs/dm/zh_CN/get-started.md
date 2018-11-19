@@ -34,6 +34,23 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 ##### 同步任务
 - 用户通过 yaml 配置文件创建的从 MySQL/MariaDB 同步数据到 TiDB 的任务
 
+#### DM-Worker 处理单元
+
+##### relay log
+持久化保存从上游 MySQL/MariaDB 读取的 Binlog，并且对 binlogreplication unit 提供读取 Binlog events 的功能
+
+##### dump
+从上游 MySQL/MariaDB dump 全量数据到本地磁盘
+
+##### load
+读取 dump unit 的数据文件，然后加载到下游 TiDB
+
+##### binlog replication
+读取 relay log unit 的 Binlog events，转化为 SQLs，然后应用到下游 TiDB
+
+##### 权限要求
+参考[权限说明文档](./privileges.md)
+
 
 ### 部署 DM 集群
 
@@ -44,8 +61,6 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 在 DM 的所有相关配置文件中，数据库相关的密码需要使用 dmctl 加密后的密文（如果数据库密码为空，则不需要加密）。
 
 了解如何使用 dmctl 加密明文密码，可以参考 [dmctl 加密上游 MySQL 用户密码](./maintenance/dm-ansible.md#dmctl-加密上游-mysql-用户密码)。
-
-此外，DM 在运行过程中，相关的上下游数据库用户需要具备相应的读写权限。DM 在启动任务过程中，也会自动进行部分权限检查，具体见 [上游 MySQL 实例权限](./task-handling/check-mysql.md)。
 
 
 ### 启动同步任务
