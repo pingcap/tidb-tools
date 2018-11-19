@@ -3,7 +3,7 @@ Tools Documents
 
 **Tools Documents** is a documenet set about tools
 * TiDB-Binlog document
-  * [用户手册](./tidb-binlog/zh_CN)
+  * [用户手册](./tidb-binlog/zh_cn)
   * issue cheklist templates
   * FAQ
 
