@@ -27,8 +27,9 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 
 #### dm-worker
 
-- 链接到一台 MySQL/MariDB，注册为该实例的 Slave
-- 拉取 MySQL/MariaDB Binlog 持久化保存再本地（relay log）
+- 链接到一台 MySQL/MariDB，并且注册为该实例的 Slave
+- 读取 MySQL/MariaDB Binlog 持久化保存再本地（relay log）
+- 支持同步到多个下游 TiDB
 - 保存数据同步子任务的配置信息
 - 编排数据同步子任务的运行
 - 监控数据同步子任务的运行状态
@@ -41,7 +42,22 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 - 校验数据同步任务配置的正确性
 
 
-下面从各个方面详细介绍这个工具的使用方式。
+### DM-Worker 处理单元
+
+#### relay log 
+持久化保存从上游 MySQL/MariaDB 读取的 Binlog，并且对 binlogreplication unit 提供读取 Binlog events 的功能
+
+#### dump
+从上游 MySQL/MariaDB dump 全量数据到本地磁盘
+
+#### load
+读取 dump unit 的数据文件，然后加载到下游 TiDB
+
+#### binlog replication
+读取 relay log unit 的 Binlog events，转化为 SQLs，然后应用到下游 TiDB
+
+#### 权限要求
+参考[权限说明文档](./privileges.md)
 
 ### 快速开始
 
