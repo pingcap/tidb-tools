@@ -1,4 +1,4 @@
-.PHONY: build importer checker dump_region binlogctl sync_diff_inspector test check deps
+.PHONY: build importer checker dump_region binlogctl sync_diff_inspector ddl_checker test check deps
 
 # Ensure GOPATH is set before running build process.
 ifeq "$(GOPATH)" ""
@@ -16,19 +16,18 @@ LDFLAGS += -X "github.com/pingcap/tidb-tools/pkg/utils.BuildTS=$(shell date -u '
 LDFLAGS += -X "github.com/pingcap/tidb-tools/pkg/utils.GitHash=$(shell git rev-parse HEAD)"
 
 CURDIR   := $(shell pwd)
-GO       := GO15VENDOREXPERIMENT="1" go
+GO       := GO111MODULE=on go
 GOTEST   := CGO_ENABLED=1 $(GO) test -p 3
 PACKAGES := $$(go list ./... | grep -vE 'vendor')
 FILES     := $$(find . -name '*.go' -type f | grep -vE 'vendor')
 VENDOR_TIDB := vendor/github.com/pingcap/tidb
 
 
-build: prepare check test importer checker dump_region binlogctl sync_diff_inspector
+build: prepare check test importer checker dump_region binlogctl sync_diff_inspector ddl_checker finish
 
-prepare:
-	mv go.mod1 go.mod
-	mv go.sum1 go.sum
-	GO111MODULE=on go mod vendor
+prepare:		
+	cp go.mod1 go.mod
+	cp go.sum1 go.sum
 
 importer:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/importer ./importer
@@ -44,6 +43,9 @@ binlogctl:
 
 sync_diff_inspector:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/sync_diff_inspector ./sync_diff_inspector
+
+ddl_checker:
+	$(GO) build -ldflags '$(LDFLAGS)' -o bin/ddl_checker ./ddl_checker
 
 test:
 	@export log_level=error; \
@@ -64,9 +66,6 @@ check:
 	@echo "gofmt (simplify)"
 	@ gofmt -s -l -w $(FILES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
 
-update:
-	make vendor
-
-vendor:
-	$(GO) mod vendor
-	sh ./hack/clean_vendor.sh
+finish:
+	cp go.mod go.mod1
+	cp go.sum go.sum1

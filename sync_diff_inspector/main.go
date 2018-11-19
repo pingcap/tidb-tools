@@ -20,7 +20,7 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	log "github.com/sirupsen/logrus"
 )

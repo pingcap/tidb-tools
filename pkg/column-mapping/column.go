@@ -19,7 +19,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/table-rule-selector"
 )
 
@@ -283,7 +283,7 @@ func (m *Mapping) HandleDDL(schema, table string, columns []string, statement st
 
 	m.resetCache()
 	// only output erro now, wait fix it manually
-	return statement, nil, errors.NotImplementedf("ddl %s @ column mapping rule %s/%s:%+v", statement, schema, table, info.rule)
+	return statement, nil, errors.Errorf("ddl %s @ column mapping rule %s/%s:%+v not implemented", statement, schema, table, info.rule)
 }
 
 func (m *Mapping) queryColumnInfo(schema, table string, columns []string) (*mappingInfo, error) {
