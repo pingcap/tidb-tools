@@ -61,7 +61,7 @@ GRANT SELECT,INSERT,UPDATE,DELETE,CREATE,DROP,ALTER,INDEX  ON *.* TO 'your_user'
 
 | 处理单元 | 上游 (MySQL/MariaDB) | 下游 (TiDB) | 系統 |
 |----:|:--------------------|:------------|:----|
-| relay log |SELECT（查询上游的一些环境变量，比如 binlog_format）<br>REPLICATION SLAVE（读取 binlog）<br>REPLICATION CLIENT（show master status, show slave status）| 无 | 本地读/写磁盘权限 |
-| dumper |SELECT<br>RELOAD（flush tables with read lock, unlock tables）| 无 | 本地写磁盘权限 |
-| loader | 无 |SELECT（查询 checkpoint 记录）<br>CREATE（create database/create table）<br>DELETE（delete checkpoint）<br>INSERT（插入 dump 数据）| 本地读/写磁盘权限 |
-| binlog replication |SELECT（查询上游的一些环境变量，比如 binlog_format）<br>REPLICATION SLAVE（读取 binlog）<br>REPLICATION CLIENT（show master status, show slave status）| SELECT（show index, show column）<br>INSERT（dml）<br>UPDATE（dml）<br>DELETE（dml）<br>CREATE（databases, tables）<br>DROP （databases, tables）<br>ALTER（alter table）<br>INDEX（create/drop index）| 本地读/写磁盘权限
+|relay log |SELECT（查询上游的一些环境变量，比如 binlog_format）<br>REPLICATION SLAVE（读取 binlog）<br>REPLICATION CLIENT（show master status, show slave status）| 无 | 本地读/写磁盘 |
+|dumper |SELECT<br>RELOAD（flush tables with read lock, unlock tables）| 无 | 本地写磁盘 |
+|loader | 无 |SELECT（查询 checkpoint 记录）<br>CREATE（create database/create table）<br>DELETE（delete checkpoint）<br>INSERT（插入 dump 数据）| 本地读/写磁盘 |
+|binlog replication |SELECT（查询上游的一些环境变量，比如 binlog_format）<br>REPLICATION SLAVE（读取 binlog）<br>REPLICATION CLIENT（show master status, show slave status）| SELECT（show index, show column）<br>INSERT（dml）<br>UPDATE（dml）<br>DELETE（dml）<br>CREATE（databases, tables）<br>DROP （databases, tables）<br>ALTER（alter table）<br>INDEX（create/drop index）| 本地读/写磁盘 |
