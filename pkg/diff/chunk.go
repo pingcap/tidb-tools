@@ -165,6 +165,7 @@ func (s *RandomSpliter) Split(table *TableInstance, columns []*model.ColumnInfo,
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+	log.Infof("split chunk %v, after split: %+v", chunk, chunks)
 
 	// for example, the min and max value in target table is 2-9, but 1-10 in source table. so we need generate chunk for data < 2 and data > 9
 	maxChunk := chunk.update(field, []string{max}, []string{gt})
@@ -175,6 +176,7 @@ func (s *RandomSpliter) Split(table *TableInstance, columns []*model.ColumnInfo,
 	return chunks, nil
 }
 
+// splitRange splits a chunk to multiple chunks. Notice: can only split chunks have max and min value or equal to a value, otherwise will panic.
 func (s *RandomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, schema string, table string, columns []*model.ColumnInfo) ([]*chunkRange, error) {
 	var chunks []*chunkRange
 
@@ -183,8 +185,14 @@ func (s *RandomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 		return chunks, nil
 	}
 
-	var splitCol, min, max string
-	var err error
+	var (
+		splitCol, min, max, symbolMin, symbolMax string
+		err                                      error
+		useNewColumn                             bool
+	)
+
+	chunkLimits, args := chunk.toString(s.collation)
+	limitRange := fmt.Sprintf("%s AND %s", chunkLimits, s.limits)
 
 	// if the last column's condition is not '=', continue use this column split data.
 	colNum := len(chunk.columns)
@@ -192,14 +200,14 @@ func (s *RandomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 		splitCol = chunk.columns[colNum-1]
 		min = chunk.bounds[colNum-1][0]
 		max = chunk.bounds[colNum-1][1]
-	}
 
-	if splitCol == "" {
+		symbolMin = chunk.symbols[colNum-1][0]
+		symbolMax = chunk.symbols[colNum-1][1]
+	} else {
 		// choose the next column to split data
 		if len(columns) > colNum {
+			useNewColumn = true
 			splitCol = columns[colNum].Name.O
-			chunkLimits, args := chunk.toString(s.collation)
-			limitRange := fmt.Sprintf("%s AND %s", chunkLimits, s.limits)
 
 			min, max, err = dbutil.GetMinMaxValue(context.Background(), db, schema, table, splitCol, limitRange, s.collation, args)
 			if err != nil {
@@ -210,61 +218,126 @@ func (s *RandomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 				return nil, errors.Trace(err)
 			}
 
+			symbolMin = gte
+			symbolMax = lte
 		} else {
 			log.Warnf("chunk %v can't be splited", chunk)
 			return append(chunks, chunk), nil
 		}
 	}
 
-	chunkLimits, args := chunk.toString(s.collation)
-	limitRange := fmt.Sprintf("%s AND %s", chunkLimits, s.limits)
+	splitValues := make([]string, 0, count)
+	valueCounts := make([]int, 0, count)
 
 	// get random value as split value
-	splitValues, valueCount, err := dbutil.GetRandomValues(context.Background(), db, schema, table, splitCol, count-1, limitRange, s.collation, args)
+	randomValues, randomValueCount, err := dbutil.GetRandomValues(context.Background(), db, schema, table, splitCol, count-1, limitRange, s.collation, args)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+	log.Infof("split chunk %v, get split values from GetRandomValues: %v", chunk, splitValues)
 
-	var minTmp, maxTmp string
-	var i int64
-	for i = 0; i < int64(len(splitValues)+1); i++ {
-		if i == 0 {
-			minTmp = min
-		} else {
-			minTmp = fmt.Sprintf("%s", splitValues[i-1])
-		}
-		if i == int64(len(splitValues)) {
-			maxTmp = max
-		} else {
-			maxTmp = fmt.Sprintf("%s", splitValues[i])
-		}
+	if len(randomValues) > 0 && randomValues[0] == min {
+		splitValues = append(splitValues, randomValues...)
+		valueCounts = append(valueCounts, randomValueCount...)
+		valueCounts[0]++
+	} else {
+		splitValues = append(append(splitValues, min), randomValues...)
+		valueCounts = append(append(valueCounts, 1), randomValueCount...)
+	}
 
-		if minTmp != maxTmp {
-			gtTmp := gte
-			ltTmp := lt
-			if minTmp == min {
-				gtTmp = gt
+	if len(randomValues) > 0 && randomValues[len(randomValues)-1] == max {
+		valueCounts[len(valueCounts)-1]++
+	} else {
+		splitValues = append(splitValues, max)
+		valueCounts = append(valueCounts, 1)
+	}
+
+	var symbols []string
+	for i := 0; i < len(splitValues); i++ {
+		if valueCounts[i] > 1 {
+			// means should split it
+			newChunk := chunk.update(splitCol, []string{splitValues[i]}, []string{equal})
+			splitChunks, err := s.splitRange(db, newChunk, valueCounts[i], schema, table, columns)
+			if err != nil {
+				return nil, errors.Trace(err)
 			}
-			if maxTmp == max {
-				ltTmp = lte
-			}
-			newChunk := chunk.update(splitCol, []string{minTmp, maxTmp}, []string{gtTmp, ltTmp})
-			chunks = append(chunks, newChunk)
-		} else {
-			// valueCount > 1 means should split it
-			if valueCount[i] > 1 {
-				newChunk := chunk.update(splitCol, []string{splitValues[i]}, []string{equal})
-				splitChunks, err := s.splitRange(db, newChunk, valueCount[i], schema, table, columns)
-				if err != nil {
-					return nil, errors.Trace(err)
-				}
+			log.Infof("split chunk %v, after split: %-v", newChunk, splitChunks)
+			chunks = append(chunks, splitChunks...)
 
-				chunks = append(chunks, splitChunks...)
+			symbols = []string{gt, lt}
+		} else {
+			if i == 0 {
+				symbols = []string{symbolMin, lt}
 			} else {
-				newChunk := chunk.update(splitCol, []string{minTmp}, []string{equal})
-				chunks = append(chunks, newChunk)
+				symbols = []string{gte, lt}
 			}
 		}
+
+		if i == len(splitValues)-2 && valueCounts[len(valueCounts)-1] == 1 {
+			symbols[1] = symbolMax
+		}
+
+		if i < len(splitValues)-1 {
+			newChunk := chunk.update(splitCol, []string{splitValues[i], splitValues[i+1]}, symbols)
+			chunks = append(chunks, newChunk)
+		}
+	}
+
+	/*
+		var minTmp, maxTmp string
+		var i int
+		for i = 0; i < len(splitValues)+1; i++ {
+			if i == 0 {
+				minTmp = min
+			} else {
+				minTmp = fmt.Sprintf("%s", splitValues[i-1])
+			}
+			if i == len(splitValues) {
+				maxTmp = max
+			} else {
+				maxTmp = fmt.Sprintf("%s", splitValues[i])
+			}
+
+			if minTmp != maxTmp {
+				symbols := make([]string, 0, 2)
+
+				if i == 0 && !containMin {
+					symbols = append(symbols, gt)
+				} else {
+					symbols = append(symbols, gte)
+				}
+				if i == len(splitValues) && containMax {
+					symbols = append(symbols, lte)
+				} else {
+					symbols = append(symbols, lt)
+				}
+				newChunk := chunk.update(splitCol, []string{minTmp, maxTmp}, symbols)
+				chunks = append(chunks, newChunk)
+			} else {
+				// valueCount > 1 means should split it
+				if i > 1 && valueCount[i-1] > 1 {
+					newChunk := chunk.update(splitCol, []string{splitValues[i-1]}, []string{equal})
+					splitChunks, err := s.splitRange(db, newChunk, valueCount[i-1], schema, table, columns)
+					if err != nil {
+						return nil, errors.Trace(err)
+					}
+					log.Infof("split chunk %v, after split: %-v", newChunk, splitChunks)
+
+					chunks = append(chunks, splitChunks...)
+				} else {
+					newChunk := chunk.update(splitCol, []string{minTmp}, []string{equal})
+					log.Infof("279 create newChunk withe equal: %v", newChunk)
+					chunks = append(chunks, newChunk)
+				}
+			}
+		}
+	*/
+	if useNewColumn {
+		// add chunk > max and < min
+		maxChunk := chunk.update(splitCol, []string{max}, []string{gt})
+		minChunk := chunk.update(splitCol, []string{min}, []string{lt})
+		chunks = append(chunks, maxChunk)
+		chunks = append(chunks, minChunk)
 	}
 
 	log.Debugf("getChunksForTable cut table: cnt=%d min=%s max=%s chunk=%d", count, min, max, len(chunks))
@@ -281,6 +354,7 @@ type CheckJob struct {
 }
 
 func getChunksForTable(table *TableInstance, columns []*model.ColumnInfo, chunkSize, sample int, limits string, collation string) ([]*chunkRange, error) {
+	// TODO: use buckets info from tidb to split chunks.
 	var spliter RandomSpliter
 	return spliter.Split(table, columns, chunkSize, sample, limits, collation)
 }

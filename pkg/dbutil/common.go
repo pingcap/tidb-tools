@@ -192,8 +192,14 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 
 func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column string, limitRange string, collation string, args []interface{}) (string, string, error) {
 	/*
-
-	 */
+		example:
+		mysql> SELECT MIN(`id`) as MIN, MAX(`id`) as MAX FROM `test`.`testa` WHERE id > 0 AND id < 10;
+		+------+------+
+		| MIN  | MAX  |
+		+------+------+
+		|    1 |    2 |
+		+------+------+
+	*/
 
 	if collation != "" {
 		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
