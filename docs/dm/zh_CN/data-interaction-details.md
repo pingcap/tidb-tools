@@ -10,8 +10,8 @@
 
 #### 增量数据
 
-1. relay unit 从上游 MySQL / MariaDB 获取 binlog 并以相同的格式存储在指定目录
-2. sync unit（syncer）读取 relay binlog 并转换成 SQL 导入到下游 TiDB
+1. relay log 处理单元从上游 MySQL / MariaDB 获取 binlog 并以相同的格式存储在指定目录
+2. binlog replication/syncer 处理单元读取 relay binlog 并转换成 SQL 导入到下游 TiDB
 - 此过程与 MySQL slave relay log 的读写及执行类似，参见 <https://dev.mysql.com/doc/refman/5.7/en/slave-logs-relaylog.html>。
 
 ### 控制信息数据流过程

@@ -65,7 +65,7 @@ column-mappings:                                    # 上游数据库实例的�
     ​    target-column: "id"
     ​    arguments: ["1", "test_", "t_"]
 
-mydumpers:                                          # mydumper 组件运行配置参数
+mydumpers:                                          # mydumper 处理单元运行配置参数
     global:
     ​    mydumper-path: "./mydumper"                 # mydumper binary 文件地址，这个无需设置，会由 ansible 部署程序自动生成
     ​    threads: 16                                 # mydumper 从上游数据库实例 dump 数据的线程数量
@@ -73,12 +73,12 @@ mydumpers:                                          # mydumper 组件运行配�
     ​    skip-tz-utc: true						
     ​    extra-args: "-B test -T t1,t2 --no-locks"
 
-loaders:                                            # loader 组件运行配置参数
+loaders:                                            # loader 处理单元运行配置参数
     global:
     ​    pool-size: 16                               # loader 并发执行 mydumper 的 SQLs file 的线程数量
     ​    dir: "./dumped_data"                        # loader 读取 mydumper 输出文件的地址，同实例对应的不同任务应该不同 （mydumper 会根据这个地址输出 SQLs 文件）
 
-syncers:                                            # syncer 组件运行配置参数
+syncers:                                            # syncer 处理单元运行配置参数
     global:
     ​    worker-count: 16                            # syncer 并发同步 binlog events 的线程数量
     ​    batch: 1000                                 # syncer 同步到下游数据库的一个事务批次 SQL 数

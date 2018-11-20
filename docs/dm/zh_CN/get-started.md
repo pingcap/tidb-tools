@@ -2,37 +2,11 @@ Get Started
 ===
 
 ### 内容索引
-- [简介](#简介)
+- [简介](./overview.md)
 - [部署 DM 集群](#部署-dm-集群)
 - [启动同步任务](#启动同步任务)
 - [监控与日志](#监控与日志)
 - [下一步](#下一步)
-
-### 简介
-
-DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备份和 MariaDB/MySQL binlog 增量同步，设计的主要目的是
-   - 标准化 （e.g. 工具运行，错误定义）
-   - 降低运维使用成本
-   - 简化错误处理流程
-   - 提升产品使用体验
-
-
-#### 架构图
-
-   ![DM structure](./architecture.png)
-
-
-##### dm-master
-- 管理调度任务的运行
-
-##### dm-worker
-- 执行具体的任务
-
-##### dmctl
-- DM 集群的访问入口
-
-##### 同步任务
-- 用户通过 yaml 配置文件创建的从 MySQL/MariaDB 同步数据到 TiDB 的任务
 
 
 ### 部署 DM 集群
@@ -44,8 +18,6 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 在 DM 的所有相关配置文件中，数据库相关的密码需要使用 dmctl 加密后的密文（如果数据库密码为空，则不需要加密）。
 
 了解如何使用 dmctl 加密明文密码，可以参考 [dmctl 加密上游 MySQL 用户密码](./maintenance/dm-ansible.md#dmctl-加密上游-mysql-用户密码)。
-
-此外，DM 在运行过程中，相关的上下游数据库用户需要具备相应的读写权限。DM 在启动任务过程中，也会自动进行部分权限检查，具体见 [上游 MySQL 实例权限](./task-handling/check-mysql.md)。
 
 
 ### 启动同步任务
