@@ -60,7 +60,7 @@ GRANT SELECT,INSERT,UPDATE,DELETE,CREATE,DROP,ALTER,INDEX  ON *.* TO 'your_user'
 
 #### relay log
 
-###### 上游（mysql/mariadb）
+##### 上游（MySQL/MariaDB）
 SELECT （查询上游的一些环境变量，比如 binlog_format）
 REPLICATION SLAVE (拉取 binlog)
 REPLICATION CLIENT (show master status, show slave status)
