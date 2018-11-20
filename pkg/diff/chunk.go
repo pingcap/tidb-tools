@@ -172,18 +172,15 @@ func (s *RandomSpliter) Split(table *TableInstance, column *model.ColumnInfo, ch
 	}
 
 	// for example, the min and max value in target table is 2-9, but 1-10 in source table. so we need generate chunk for data < 2 and data > 9
-	// TODO: addOutRangeChunk
-	/*
-		addOutRangeChunk := func() {
-			chunks = append(chunks, newChunkRange(chunk.columns[0], struct{}{}, chunk.begin[0], false, false, true, false))
-			chunks = append(chunks, newChunkRange(chunk.columns[0], chunk.end[0], struct{}{}, false, false, false, true))
-		}
-	*/
+	maxChunk := c.update(field, []string{max}, []string{gt})
+	minChunk := c.update(field, []string{min}, []string{lt})
+	chunks = append(chunks, maxChunk)
+	chunks = append(chunks, minChunk)
 
 	return chunks, nil
 }
 
-func (s *RandomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table string, column *model.ColumnInfo) ([]chunkRange, error) {
+func (s *RandomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table string) ([]chunkRange, error) {
 	var chunks []chunkRange
 
 	if count <= 1 {
@@ -228,6 +225,15 @@ func (s *RandomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int64, S
 		} else {
 			maxTmp = fmt.Sprintf("%s", splitValues[i])
 		}
+		newChunk := chunk.update(splitCol, []string{minTmp, maxTmp}, []string{gt, lt})
+		chunks = append(chunks, newChunk)
+
+		// valueCount > 1 means should split it
+		if valueCount[i] > 1 {
+			newChunk := chunk.update(splitCol, []string{splitValues[i], []string{eq}})
+			splitChunks, err := s.splitRange(db, newChunk, valueCount[i], Schema, table)
+		}
+
 		r := newChunkRange(chunk.columns[0], minTmp, maxTmp, true, false, false, false)
 		chunks = append(chunks, r)
 	}
