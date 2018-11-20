@@ -53,7 +53,10 @@ table = "test3"
 
 # field should be the primary key, unique key or field with index. 
 # if comment this, diff will find a suitable field.
-index-field = "id"
+index-fields = "id"
+
+# can set multiple fields split by ','.
+index-fields = "id,age"
 
 # check data's range.
 range = "age > 10 AND age < 20"

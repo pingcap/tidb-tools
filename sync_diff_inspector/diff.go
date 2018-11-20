@@ -215,7 +215,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 		}
 		df.tables[table.Schema][table.Table].IgnoreColumns = table.IgnoreColumns
 		df.tables[table.Schema][table.Table].RemoveColumns = table.RemoveColumns
-		df.tables[table.Schema][table.Table].Field = table.Field
+		df.tables[table.Schema][table.Table].Fields = table.Fields
 		df.tables[table.Schema][table.Table].Collation = table.Collation
 	}
 
@@ -326,7 +326,7 @@ func (df *Diff) Equal() (err error) {
 				IgnoreColumns: table.IgnoreColumns,
 				RemoveColumns: table.RemoveColumns,
 
-				Field:             table.Field,
+				Fields:            table.Fields,
 				Range:             table.Range,
 				Collation:         table.Collation,
 				ChunkSize:         df.chunkSize,

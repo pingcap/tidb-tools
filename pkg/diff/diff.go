@@ -50,7 +50,7 @@ type TableDiff struct {
 	RemoveColumns []string
 
 	// field should be the primary key, unique key or field with index
-	Field string
+	Fields string
 
 	// select range, for example: "age > 10 AND age < 20"
 	Range string
@@ -149,7 +149,7 @@ func (t *TableDiff) CheckTableData(ctx context.Context) (bool, error) {
 
 // EqualTableData checks data is equal or not.
 func (t *TableDiff) EqualTableData(ctx context.Context) (bool, error) {
-	allJobs, err := GenerateCheckJob(t.TargetTable, t.Field, t.Range, t.ChunkSize, t.Sample, t.Collation)
+	allJobs, err := GenerateCheckJob(t.TargetTable, t.Fields, t.Range, t.ChunkSize, t.Sample, t.Collation)
 	if err != nil {
 		return false, errors.Trace(err)
 	}

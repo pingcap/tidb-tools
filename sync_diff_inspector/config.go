@@ -72,7 +72,7 @@ type TableConfig struct {
 	// columns be removed, will remove these columns from table info, and will not check these columns' data.
 	RemoveColumns []string `toml:"remove-columns"`
 	// field should be the primary key, unique key or field with index
-	Field string `toml:"index-field"`
+	Fields string `toml:"index-fields"`
 	// select range, for example: "age > 10 AND age < 20"
 	Range string `toml:"range"`
 	// set true if comparing sharding tables with target table, should have more than one source tables.
