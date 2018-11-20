@@ -102,12 +102,12 @@ func (c *chunkRange) copy() *chunkRange {
 	return newChunk
 }
 
-type Spliter interface {
+type spliter interface {
 	// Split splits a table's data to several chunks.
-	Split(table *TableInstance, chunkSize int, limits string, collation string) ([]chunkRange, error)
+	split(table *TableInstance, chunkSize int, limits string, collation string) ([]chunkRange, error)
 }
 
-type RandomSpliter struct {
+type randomSpliter struct {
 	table     *TableInstance
 	chunkSize int
 	limits    string
@@ -115,7 +115,7 @@ type RandomSpliter struct {
 	sample    int
 }
 
-func (s *RandomSpliter) Split(table *TableInstance, columns []*model.ColumnInfo, chunkSize, sample int, limits string, collation string) ([]*chunkRange, error) {
+func (s *randomSpliter) split(table *TableInstance, columns []*model.ColumnInfo, chunkSize, sample int, limits string, collation string) ([]*chunkRange, error) {
 	s.table = table
 	s.chunkSize = chunkSize
 	s.limits = limits
@@ -165,7 +165,6 @@ func (s *RandomSpliter) Split(table *TableInstance, columns []*model.ColumnInfo,
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	log.Infof("split chunk %v, after split: %+v", chunk, chunks)
 
 	// for example, the min and max value in target table is 2-9, but 1-10 in source table. so we need generate chunk for data < 2 and data > 9
 	maxChunk := chunk.update(field, []string{max}, []string{gt})
@@ -177,7 +176,7 @@ func (s *RandomSpliter) Split(table *TableInstance, columns []*model.ColumnInfo,
 }
 
 // splitRange splits a chunk to multiple chunks. Notice: can only split chunks have max and min value or equal to a value, otherwise will panic.
-func (s *RandomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, schema string, table string, columns []*model.ColumnInfo) ([]*chunkRange, error) {
+func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, schema string, table string, columns []*model.ColumnInfo) ([]*chunkRange, error) {
 	var chunks []*chunkRange
 
 	if count <= 1 {
@@ -261,7 +260,6 @@ func (s *RandomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 			if err != nil {
 				return nil, errors.Trace(err)
 			}
-			log.Infof("split chunk %v, after split: %-v", newChunk, splitChunks)
 			chunks = append(chunks, splitChunks...)
 
 			symbols = []string{gt, lt}
@@ -283,55 +281,6 @@ func (s *RandomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 		}
 	}
 
-	/*
-		var minTmp, maxTmp string
-		var i int
-		for i = 0; i < len(splitValues)+1; i++ {
-			if i == 0 {
-				minTmp = min
-			} else {
-				minTmp = fmt.Sprintf("%s", splitValues[i-1])
-			}
-			if i == len(splitValues) {
-				maxTmp = max
-			} else {
-				maxTmp = fmt.Sprintf("%s", splitValues[i])
-			}
-
-			if minTmp != maxTmp {
-				symbols := make([]string, 0, 2)
-
-				if i == 0 && !containMin {
-					symbols = append(symbols, gt)
-				} else {
-					symbols = append(symbols, gte)
-				}
-				if i == len(splitValues) && containMax {
-					symbols = append(symbols, lte)
-				} else {
-					symbols = append(symbols, lt)
-				}
-				newChunk := chunk.update(splitCol, []string{minTmp, maxTmp}, symbols)
-				chunks = append(chunks, newChunk)
-			} else {
-				// valueCount > 1 means should split it
-				if i > 1 && valueCount[i-1] > 1 {
-					newChunk := chunk.update(splitCol, []string{splitValues[i-1]}, []string{equal})
-					splitChunks, err := s.splitRange(db, newChunk, valueCount[i-1], schema, table, columns)
-					if err != nil {
-						return nil, errors.Trace(err)
-					}
-					log.Infof("split chunk %v, after split: %-v", newChunk, splitChunks)
-
-					chunks = append(chunks, splitChunks...)
-				} else {
-					newChunk := chunk.update(splitCol, []string{minTmp}, []string{equal})
-					log.Infof("279 create newChunk withe equal: %v", newChunk)
-					chunks = append(chunks, newChunk)
-				}
-			}
-		}
-	*/
 	if useNewColumn {
 		// add chunk > max and < min
 		maxChunk := chunk.update(splitCol, []string{max}, []string{gt})
@@ -355,74 +304,11 @@ type CheckJob struct {
 
 func getChunksForTable(table *TableInstance, columns []*model.ColumnInfo, chunkSize, sample int, limits string, collation string) ([]*chunkRange, error) {
 	// TODO: use buckets info from tidb to split chunks.
-	var spliter RandomSpliter
-	return spliter.Split(table, columns, chunkSize, sample, limits, collation)
+	var spliter randomSpliter
+	return spliter.split(table, columns, chunkSize, sample, limits, collation)
 }
 
-func getChunksByBucketsInfo(db *sql.DB, schema string, table string, tableInfo *model.TableInfo, chunkSize int) ([]chunkRange, error) {
-	buckets, err := dbutil.GetBucketsInfo(context.Background(), db, schema, table)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	log.Infof("buckets: %v", buckets)
-
-	var indexName string
-	var columns []string
-
-	for _, index := range tableInfo.Indices {
-		if index.Primary || index.Unique {
-			indexName = index.Name.O
-		} else {
-			// TODO: choose a situable index if without pk/uk.
-			if indexName == "" {
-				indexName = index.Name.O
-			} else {
-				continue
-			}
-		}
-
-		columns := make([]string, 0, len(index.Columns))
-		for _, column := range index.Columns {
-			columns = append(columns, column.Name.O)
-		}
-		if index.Primary {
-			break
-		}
-	}
-
-	if indexName == "" {
-		return nil, nil
-	}
-	log.Infof("columns: %v", columns)
-
-	return nil, nil
-}
-
-/*
-func bucketsToChunks(buckets []dbutil.Bucket, columns []string, count, chunkSize int) []chunkRange {
-	chunks := make([]chunkRange, 0, count/chunkSize)
-	var lower, upper string
-	var num int
-
-	// add chunk for data < min and data >= max
-	chunks = append(chunks, newChunkRange(columns, nil, upper, true, false, false, false))
-	chunks = append(chunks, newChunkRange(columns, lower, upper, true, false, false, false))
-
-	for _, bucket := range buckets {
-		if lower == "" {
-			lower = bucket.LowerBound
-		}
-		upper = bucket.UpperBound
-		num += bucket.Count
-		if count - num > chunkSize {
-			chunks = append(chunks, newChunkRange(columns, lower, upper, true, false, false, false))
-			lower = upper
-		}
-	}
-}
-*/
-
-//
+// getSplitFields returns fields to split chunks, order by pk, uk, index, columns.
 func getSplitFields(db *sql.DB, schema string, table *model.TableInfo, splitFields []string) ([]*model.ColumnInfo, error) {
 	cols := make([]*model.ColumnInfo, 0, len(table.Columns))
 	colsMap := make(map[string]interface{})
