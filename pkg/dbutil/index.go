@@ -114,7 +114,7 @@ func FindSuitableIndex(ctx context.Context, db *sql.DB, schemaName string, table
 }
 
 // FindAllColumnWithIndex returns columns with index, order is pk, uk and normal index.
-func FindAllColumnWithIndex(ctx context.Context, db *sql.DB, schemaName string, tableInfo *model.TableInfo) ([]*model.ColumnInfo, error) {
+func FindAllColumnWithIndex(ctx context.Context, db *sql.DB, schemaName string, tableInfo *model.TableInfo) []*model.ColumnInfo {
 	colsMap := make(map[string]interface{})
 	cols := make([]*model.ColumnInfo, 0, 2)
 
@@ -123,13 +123,13 @@ func FindAllColumnWithIndex(ctx context.Context, db *sql.DB, schemaName string, 
 	indexKeys := make([]*model.ColumnInfo, 0, 2)
 
 	for _, index := range tableInfo.Indices {
-		for i, col := range index.Columns {
+		for _, col := range index.Columns {
 			if index.Primary {
-				primaryKeys = append(primaryKeys, FindColumnByName(tableInfo.Columns, index.Columns[i].Name.O))
-			} else index.Unique {
-				uniqueKeys = append(uniqueKeys, FindColumnByName(tableInfo.Columns, index.Columns[i].Name.O))
+				primaryKeys = append(primaryKeys, FindColumnByName(tableInfo.Columns, col.Name.O))
+			} else if index.Unique {
+				uniqueKeys = append(uniqueKeys, FindColumnByName(tableInfo.Columns, col.Name.O))
 			} else {
-				indexKeys = append(indexKeys, FindColumnByName(tableInfo.Columns, index.Columns[i].Name.O))
+				indexKeys = append(indexKeys, FindColumnByName(tableInfo.Columns, col.Name.O))
 			}
 		}
 	}

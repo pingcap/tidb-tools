@@ -139,7 +139,7 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 }
 
 // GetRandomValues returns some random value of a column.
-func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int64, limitRange string, collation string, args []interface{}) ([]interface{}, []int, error) {
+func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int, limitRange string, collation string, args []interface{}) ([]string, []int, error) {
 	/*
 		example:
 		mysql> SELECT `id`, count(*) count FROM (SELECT `id` FROM `test`.`test` ORDER BY RAND() LIMIT 10) rand_tmp GROUP BY `id` ORDER BY `id`;
@@ -169,8 +169,8 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
 	}
 
-	randomValue := make([]interface{}, 0, num)
-	valueCount := make(int, 0, num)
+	randomValue := make([]string, 0, num)
+	valueCount := make([]int, 0, num)
 
 	query := fmt.Sprintf("SELECT `%s`, COUNT(*) count FROM (SELECT `%s` FROM `%s`.`%s` WHERE %s ORDER BY RAND() LIMIT %d)rand_tmp GROUP BY `%s` ORDER BY `%s`%s",
 		column, column, schemaName, table, limitRange, num, column, column, collation)
@@ -183,7 +183,7 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 	defer rows.Close()
 
 	for rows.Next() {
-		var value interface{}
+		var value string
 		var count int
 		err = rows.Scan(&value, &count)
 		if err != nil {
