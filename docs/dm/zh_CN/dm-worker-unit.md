@@ -46,7 +46,11 @@ CREATE
 DROP
 ALTER
 INDEX
-即：GRANT SELECT,INSERT,UPDATE,DELETE,CREATE,DROP,ALTER,INDEX  ON *.* TO 'your_user'@'your_wildcard_of_host';
+即：
+
+```sql
+GRANT SELECT,INSERT,UPDATE,DELETE,CREATE,DROP,ALTER,INDEX  ON *.* TO 'your_user'@'your_wildcard_of_host';
+```
 
 因为 DM 包含 dump，load，replicate binlog events 等组件，下面会对各组件进行权限的细分（注意，随着需求的变化，这些权限也会跟着变化，并非一成不变）
 
