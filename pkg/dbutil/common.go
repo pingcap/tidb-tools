@@ -139,10 +139,19 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 }
 
 // GetRandomValues returns some random value of a column.
-func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int64, min, max interface{}, limitRange string, collation string) ([]interface{}, error) {
+func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int64, limitRange string, collation string, args []interface{}) ([]interface{}, []int, error) {
 	/*
 		example:
-		mysql> SELECT `id` FROM (SELECT `id` FROM `test`.`test` WHERE `id` COLLATE "latin1_bin" > 0 AND `id` COLLATE "latin1_bin" < 100 AND true ORDER BY RAND() LIMIT 3)rand_tmp ORDER BY `id` COLLATE "latin1_bin";
+		mysql> SELECT `id`, count(*) count FROM (SELECT `id` FROM `test`.`test` ORDER BY RAND() LIMIT 10) rand_tmp GROUP BY `id` ORDER BY `id`;
+		+------+-------+
+		| id   | count |
+		+------+-------+
+		|    1 |     2 |
+		|    2 |     2 |
+		|    3 |     1 |
+		+------+-------+
+
+		mysql> SELECT DISTINCT(`id`) FROM (SELECT `id` FROM `test`.`test` WHERE `id` COLLATE "latin1_bin" > 0 AND `id` COLLATE "latin1_bin" < 100 AND true ORDER BY RAND() LIMIT 3)rand_tmp ORDER BY `id` COLLATE "latin1_bin";
 		+----------+
 		| rand_tmp |
 		+----------+
@@ -161,25 +170,30 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 	}
 
 	randomValue := make([]interface{}, 0, num)
-	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s`%s > ? AND `%s`%s < ? AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`%s",
-		column, column, schemaName, table, column, collation, column, collation, limitRange, num, column, collation)
-	log.Debugf("get random values sql: %s, min: %v, max: %v", query, min, max)
-	rows, err := db.QueryContext(ctx, query, min, max)
+	valueCount := make(int, 0, num)
+
+	query := fmt.Sprintf("SELECT `%s`, COUNT(*) count FROM (SELECT `%s` FROM `%s`.`%s` WHERE %s ORDER BY RAND() LIMIT %d)rand_tmp GROUP BY `%s` ORDER BY `%s`%s",
+		column, column, schemaName, table, limitRange, num, column, column, collation)
+	log.Debugf("get random values sql: %s, args: %v", query, args)
+
+	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var value interface{}
-		err = rows.Scan(&value)
+		var count int
+		err = rows.Scan(&value, &count)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, nil, errors.Trace(err)
 		}
 		randomValue = append(randomValue, value)
+		valueCount = append(valueCount, count)
 	}
 
-	return randomValue, nil
+	return randomValue, valueCount, nil
 }
 
 // GetTables returns name of all tables in the specified schema
@@ -304,15 +318,15 @@ type Bucket struct {
 // SHOW STATS_BUCKETS in TiDB.
 func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string) (map[string][]Bucket, error) {
 	/*
-	mysql.stats_buckets
-		example in tidb:
-		mysql> SHOW STATS_BUCKETS WHERE db_name= "test" AND table_name="testa";
-		+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
-		| Db_name | Table_name | Partition_name | Column_name | Is_index | Bucket_id | Count | Repeats | Lower_Bound         | Upper_Bound         |
-		+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
-		| test    | testa      |                | PRIMARY     |        1 |         0 |    64 |       1 | 1846693550524203008 | 1846838686059069440 |
-		| test    | testa      |                | PRIMARY     |        1 |         1 |   128 |       1 | 1846840885082324992 | 1847056389361369088 |
-		+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
+		mysql.stats_buckets
+			example in tidb:
+			mysql> SHOW STATS_BUCKETS WHERE db_name= "test" AND table_name="testa";
+			+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
+			| Db_name | Table_name | Partition_name | Column_name | Is_index | Bucket_id | Count | Repeats | Lower_Bound         | Upper_Bound         |
+			+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
+			| test    | testa      |                | PRIMARY     |        1 |         0 |    64 |       1 | 1846693550524203008 | 1846838686059069440 |
+			| test    | testa      |                | PRIMARY     |        1 |         1 |   128 |       1 | 1846840885082324992 | 1847056389361369088 |
+			+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
 	*/
 	buckets := make(map[string][]Bucket)
 	query := fmt.Sprintf("SHOW STATS_BUCKETS WHERE db_name= \"%s\" AND table_name=\"%s\";", schema, table)
