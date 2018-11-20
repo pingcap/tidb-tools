@@ -37,7 +37,7 @@ REPLICATION CLIENT
 
 即 GRANT SELECT,RELOAD,REPLICATION SLAVE, REPLICATION CLIENT  ON *.* TO 'your_user'@'your_wildcard_of_host';
 
-#### 下游 (tidb)
+#### 下游 (TiDB)
 SELECT 
 INSERT
 UPDATE
