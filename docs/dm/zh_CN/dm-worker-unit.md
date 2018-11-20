@@ -27,7 +27,7 @@ DM-Worker 包含多个任务处理逻辑单元
 
 
 ### DM-Worker 需要的权限
-包含 relay log，dump，load，replicate binlog 等任务运行单元， 这里先总体说下 上下游分别需要什么权限；
+包含 relay log、dump、load、replicate binlog 等任务运行单元， 这里先总体说下 上下游分别需要什么权限；
 
 #### 上游（mysql/mariadb）
 SELECT
