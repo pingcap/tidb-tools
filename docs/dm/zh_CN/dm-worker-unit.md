@@ -10,7 +10,7 @@ DM-Worker 详细介绍
 注意：如果需要合并多个上游 MySQL/MariaDB 的表到一张下游 TiDB 的表请参考 [分库分表](./shard-table))
 
 ### DM-Worker 处理单元
-DM-Worker 包含多个任务处理逻辑单元
+DM-Worker 任务运行过程包含多个任务处理逻辑单元
 
 #### relay log
 持久化保存从上游 MySQL/MariaDB 读取的 Binlog，并且对 binlog replication 处理单元提供读取 Binlog events 的功能
@@ -59,7 +59,7 @@ GRANT SELECT,INSERT,UPDATE,DELETE,CREATE,DROP,ALTER,INDEX  ON *.* TO 'your_user'
 下面会对各处理单元进行权限的细分（注意，随着需求的变化，这些权限也会跟着变化，并非一成不变）
 
 
-### units 需要的最小权限
+### 处理单元需要的最小权限
 
 | 处理单元 | 上游 (MySQL/MariaDB) | 下游 (TiDB) | 系統 |
 |----:|:--------------------|:------------|:----|

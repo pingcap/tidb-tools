@@ -16,14 +16,14 @@ DM 监控与告警
 #### task state
 
 | metric 名称 | 说明 | 告警说明 |
-|----:|:--------------------|:------------|:----|
+|----:|:------------|:----|
 | task state | 同步子任务的状态 | 当子任务状态处于 paused 超过 10 分钟时|
 
 
 ### relay log
 
 | metric 名称 | 说明 | 报警说明 |
-|----:|:--------------------|:------------|:----|
+|----:|:------------|:----|
 | relay log data corruption | 对应 instance 上面 relay log 文件损坏的个数 | 立即告警 |
 | fail to read binlog from master | relay 模块从上游的 mysql 读取 binlog 时遇到的错误数 | 立即告警 |
 | fail to write relay log | relay 模块写 binlog 到磁盘时遇到的错误数 | 立即告警 |
@@ -45,7 +45,7 @@ DM 监控与告警
 下面 metrics 仅在 `task-mode` 为 `full` 或者 `all` 模式下会有值。
 
 | metric 名称 | 说明 | 报警说明 |
-|----:|:--------------------|:------------|:----|
+|----:|:------------|:----|
 | dump process exits with error | dumper 模块 在 dm-worker 内部遇到错误并且退出了 | 立即告警 |
 
 
@@ -54,7 +54,7 @@ DM 监控与告警
 下面 metrics 仅在 `task-mode` 为 `full` 或者 `all` 模式下会有值。
 
 | metric 名称 | 说明 | 报警说明 |
-|----:|:--------------------|:------------|:----|
+|----:|:------------|:----|
 | load process exits with error | loader 模块在 dm-worker 内部遇到错误并且退出了  | 立即告警 |
 | load progress | loader 导入过程的进度百分比，值变化范围为：0 %- 100 %  | N/A |
 | data file size | loader 导入的全量数据中数据文件（内含 `INSERT INTO` 语句）的总大小 | N/A |
@@ -66,7 +66,7 @@ DM 监控与告警
 ### binlog replication
 
 | metric 名称 | 说明  | 报警说明 |
-|----:|:--------------------|:------------|:----|
+|----:|:------------|:----|
 | process exist with error | binlog replication 模块 在 dm-worker 内部遇到错误并且退出了 | 立即告警 |
 | binlog file gap between master and syncer | 与上游 master 相比落后的 binlog file 个数。| 落后 binlog file 个数超过 1 个（不含 1 个）且持续 10 分钟时 |
 | binlog file gap between relay and syncer | 与 relay 相比落后的 binlog file 个数 | 落后 binlog file 个数超过 1 个（不含 1 个）且持续 10 分钟时 |
