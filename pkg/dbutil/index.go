@@ -139,7 +139,7 @@ func FindAllColumnWithIndex(ctx context.Context, db *sql.DB, schemaName string, 
 			continue
 		}
 
-		colsMap[col.Name.O] = col
+		colsMap[col.Name.O] = struct{}{}
 		cols = append(cols, col)
 	}
 

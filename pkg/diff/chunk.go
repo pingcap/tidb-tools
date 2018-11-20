@@ -113,7 +113,7 @@ type RandomSpliter struct {
 	sample    int
 }
 
-func (s *RandomSpliter) Split(table *TableInstance, column *model.ColumnInfo, chunkSize, sample int, limits string, collation string) {
+func (s *RandomSpliter) Split(table *TableInstance, columns []*model.ColumnInfo, chunkSize, sample int, limits string, collation string) {
 	s.table = table
 	s.chunkSzie = chunkSize
 	s.limits = limits
@@ -137,7 +137,7 @@ func (s *RandomSpliter) Split(table *TableInstance, column *model.ColumnInfo, ch
 		chunkCnt *= 10
 	}
 
-	field := column.Name.O
+	field := columns[0].Name.O
 
 	collationStr := ""
 	if collation != "" {
@@ -166,7 +166,7 @@ func (s *RandomSpliter) Split(table *TableInstance, column *model.ColumnInfo, ch
 		chunk.symbols = append(chunk.symbols, []string(gte, lte))
 	}
 
-	chunks, err := splitRange(table.Conn, &chunk, chunkCnt, table.Schema, table.Table, column)
+	chunks, err := splitRange(table.Conn, &chunk, chunkCnt, table.Schema, table.Table, columns)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -180,11 +180,11 @@ func (s *RandomSpliter) Split(table *TableInstance, column *model.ColumnInfo, ch
 	return chunks, nil
 }
 
-func (s *RandomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table string) ([]chunkRange, error) {
-	var chunks []chunkRange
+func (s *RandomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table string, columns []*model.ColumnInfo) ([]*chunkRange, error) {
+	var chunks []*chunkRange
 
 	if count <= 1 {
-		chunks = append(chunks, *chunk)
+		chunks = append(chunks, chunk)
 		return chunks, nil
 	}
 
@@ -200,7 +200,13 @@ func (s *RandomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int64, S
 	}
 
 	if splitCol == "" {
-		// choose another column to split data
+		// choose the next column to split data
+		if len(columns) > len(chunk.columns) {
+			splitCol = columns[len(chunk.columns)]
+		} else {
+			log.Warnf("chunk %v can't be splited", chunk)
+			return append(chunks, chunk), nil
+		}
 	}
 
 	chunkLimits, args := chunk.toString()
@@ -257,11 +263,13 @@ type CheckJob struct {
 	Chunk  chunkRange
 }
 
-func getChunksForTable(table *TableInstance, column *model.ColumnInfo, chunkSize, sample int, limits string, collation string) ([]chunkRange, error) {
+func getChunksForTable(table *TableInstance, columns []*model.ColumnInfo, chunkSize, sample int, limits string, collation string) ([]chunkRange, error) {
+	/*
 	if column == nil {
 		log.Warnf("no suitable index found for %s.%s", table.Schema, table.Table)
 		return nil, nil
 	}
+	*/
 
 	// get the chunk count
 	cnt, err := dbutil.GetRowCount(context.Background(), table.Conn, table.Schema, table.Table, limits)
@@ -305,7 +313,7 @@ func getChunksForTable(table *TableInstance, column *model.ColumnInfo, chunkSize
 	chunk.symbols = append(chunk.symbols, []string(gte, lte))
 	chunk = newChunkRange(field, min.String, max.String, true, true, false, false)
 
-	return splitRange(table.Conn, &chunk, chunkCnt, table.Schema, table.Table, column, limits, collation)
+	return splitRange(table.Conn, &chunk, chunkCnt, table.Schema, table.Table, columns, limits, collation)
 }
 
 func getChunksByBucketsInfo(db *sql.DB, schema string, table string, tableInfo *model.TableInfo, chunkSize int) ([]chunkRange, error) {
@@ -371,6 +379,37 @@ func bucketsToChunks(buckets []dbutil.Bucket, columns []string, count, chunkSize
 }
 */
 
+//
+func getSplitFields(db *sql.DB, schema string, table *model.TableInfo, splitFields []string) ([]*model.ColumnInfo, error) {
+	cols := make([]*model.ColumnInfo, 0, len(table.info.Columns))
+	colsMap := make(map[string]interface{})
+
+	splitCols := make([]*model.ColumnInfo, 0, 2)
+	for _, splitField := range splitFields {
+		col := dbutil.FindColumnByName(table.info.Columns, splitField)
+		if col == nil {
+			return nil, errors.NotFoundf("column %s in table %s", splitField, table.Table)
+			
+		}
+		splitCols = append(splitCols, dbutil.FindColumnByName(table.info.Columns, splitField))
+	}
+
+	indexColumns := dbutil.FindAllColumnWithIndex(context.Background(), db, Schema, table)
+
+	// user's config had higher priorities
+	for _, col := range append(append(splitCols, indexColumns...), table.info.Columns) {
+		if _, ok := colsMap[col.Name.O]; ok {
+			continue
+		}
+
+		colsMap[col.Name.O] = struct{}{}
+		cols = append(cols, col)
+	}
+
+	return cols, nil
+}
+
+/*
 func findSuitableField(db *sql.DB, Schema string, table *model.TableInfo) (*model.ColumnInfo, error) {
 	// first select the index, and number type index first
 	column, err := dbutil.FindSuitableIndex(context.Background(), db, Schema, table)
@@ -385,27 +424,20 @@ func findSuitableField(db *sql.DB, Schema string, table *model.TableInfo) (*mode
 	log.Infof("%s.%s don't have index, will use the first column as split field", Schema, table.Name.O)
 	return table.Columns[0], nil
 }
+*/
 
 // GenerateCheckJob generates some CheckJobs.
-func GenerateCheckJob(table *TableInstance, splitField, limits string, chunkSize, sample int, collation string) ([]*CheckJob, error) {
+func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSize, sample int, collation string) ([]*CheckJob, error) {
 	jobBucket := make([]*CheckJob, 0, 10)
 	var jobCnt int
-	var column *model.ColumnInfo
 	var err error
 
-	if splitField == "" {
-		column, err = findSuitableField(table.Conn, table.Schema, table.info)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-	} else {
-		column = dbutil.FindColumnByName(table.info.Columns, splitField)
-		if column == nil {
-			return nil, errors.NotFoundf("column %s in table %s", splitField, table.Table)
-		}
+	fields, err := getSplitFields(table.Conn, table.Schema,, table.info, strings.Split(splitFields, ","))
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
 
-	chunks, err := getChunksForTable(table, column, chunkSize, sample, limits, collation)
+	chunks, err := getChunksForTable(table, fields, chunkSize, sample, limits, collation)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
