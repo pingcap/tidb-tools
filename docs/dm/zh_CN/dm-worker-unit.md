@@ -3,7 +3,7 @@ DM-Worker 详细介绍
 
 ### 简介
 - DM-Worker 可以链接到一台 MySQL/MariaDB，并且注册为该实例的 Slave
-- 支持读取 MySQL/MariaDB Binlog 持久化保存再本地（relay log）
+- 支持读取 MySQL/MariaDB Binlog 持久化保存在本地（relay log）
 - 单个 DM-worker 支持同步一个上游 MySQL/MariaDB 到多个下游 TiDB
 - 多个 DM-Worker 支持同步多个 MySQL/MariaDB 到一个下游 TiDB 
 
