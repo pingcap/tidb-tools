@@ -22,7 +22,7 @@ DM 监控与告警
 
 ### relay log
 
-| metric 名称 | 说明 | 报警说明 |
+| metric 名称 | 说明 | 告警说明 |
 |----:|:------------|:----|
 | storage capacity | relay log 占有的磁盘的总容量  | N/A |
 | storage remain | relay log 占有的磁盘的剩余可用容量  | 小于 10G 的时候需要告警 |
@@ -42,7 +42,7 @@ DM 监控与告警
 
 下面 metrics 仅在 `task-mode` 为 `full` 或者 `all` 模式下会有值。
 
-| metric 名称 | 说明 | 报警说明 |
+| metric 名称 | 说明 | 告警说明 |
 |----:|:------------|:----|
 | dump process exits with error | dumper 在 dm-worker 内部遇到错误并且退出了 | 立即告警 |
 
@@ -51,7 +51,7 @@ DM 监控与告警
 
 下面 metrics 仅在 `task-mode` 为 `full` 或者 `all` 模式下会有值。
 
-| metric 名称 | 说明 | 报警说明 |
+| metric 名称 | 说明 | 告警说明 |
 |----:|:------------|:----|
 | load progress | loader 导入过程的进度百分比，值变化范围为：0 %- 100 %  | N/A |
 | data file size | loader 导入的全量数据中数据文件（内含 `INSERT INTO` 语句）的总大小 | N/A |
@@ -63,7 +63,7 @@ DM 监控与告警
 
 ### binlog replication
 
-| metric 名称 | 说明  | 报警说明 |
+| metric 名称 | 说明  | 告警说明 |
 |----:|:------------|:----|
 | remaining time to sync | 预计 syncer 还需要多少分钟可以和 master 完全同步，单位: 分钟 | N/A |
 | replicate lag | master 到 syncer 的 binlog 复制延迟时间，单位：秒 | N/A |
