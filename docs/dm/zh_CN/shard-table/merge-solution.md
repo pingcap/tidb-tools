@@ -40,7 +40,7 @@ syncer 目前采用 `ROW` 模式的 binlog，binlog 中不包含 column name 信
     - 第一层：dm-worker 内先进行 DDL 同步（同步相关信息由 dm-worker 保存），同步完成后才尝试进行第二层同步
     - 第二层：dm-worker 间通过 global DDL lock 协调各 dm-workers 进行同步（同步相关信息由 dm-master 与 dm-worker 共同保存）
 
-1. dm-worker 内（原 syncer）为合并到同一个 target table 的所有上游 tables 建立一个 sharding group （第一层同步，成员为各上游 table）
+1. dm-worker 内为合并到同一个 target table 的所有上游 tables 建立一个 sharding group （第一层同步，成员为各上游 table）
 2. dm-master 内为执行 target table 合并任务的所有 dm-workers 建立一个 sharding group（第二层同步, 成员为各 dm-worker）
 3. 当 dm-worker 内的 sharding group 内有上游 table 遇到 DDL 时，该 dm-worker 内对这个 target table 的同步将部分暂停（DDL 结构变更前的 DML 继续同步，DDL 结构变更后的 DML 及后续 DDL 将被忽略），但对该任务其它 target table 的同步仍将继续
 4. 当该 dm-worker 内的 sharding group 内的所有上游 tables 都遇到了这个 DDL 时，该 dm-worker 暂停此任务的执行（该任务其它 target table 的同步也将暂停，以方便后续 step.8 新创建的同步流追上全局同步流）

@@ -1,7 +1,7 @@
 skip 或 replace 异常 SQL
 ===
 
-当 sync unit 在执行 SQL (DDL / DML) 出错时，DM 支持通过 dmctl 手动选择跳过该条 SQL 或以其他用户指定的 SQL 替代本次执行。
+当 binlog replication/syncer 在执行 SQL (DDL / DML) 出错时，DM 支持通过 dmctl 手动选择跳过该条 SQL 或以其他用户指定的 SQL 替代本次执行。
 
 手动处理出错 SQL 时，使用的主要命令包括 `query-status`, `sql-skip`, `sql-replace`。
 

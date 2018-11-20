@@ -21,10 +21,10 @@ DM-Worker 任务运行过程包含多个任务处理逻辑单元
 从上游 MySQL/MariaDB dump 全量数据到本地磁盘
 
 #### loader
-读取 dump unit 的数据文件，然后加载到下游 TiDB
+读取 dumper 处理单元的数据文件，然后加载到下游 TiDB
 
 #### binlog replication/syncer
-读取 relay log unit 的 Binlog events，转化为 SQLs，然后应用到下游 TiDB
+读取 relay log 处理单元的 binlog events，转化为 SQLs，然后应用到下游 TiDB
 
 
 
