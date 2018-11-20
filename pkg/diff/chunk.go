@@ -55,7 +55,7 @@ func (c *chunkRange) toString(collation string) (string, []interface{}) {
 
 	for i, col := range c.columns {
 		for j, bound := range c.bounds[i] {
-			conditions = append(conditions, fmt.Sprintf("`%s`%s %s ?"), col, collation, c.symbols[i][j])
+			conditions = append(conditions, fmt.Sprintf("`%s`%s %s ?", col, collation, c.symbols[i][j]))
 			args = append(args, bound)
 		}
 	}
@@ -141,30 +141,23 @@ func (s *RandomSpliter) Split(table *TableInstance, columns []*model.ColumnInfo,
 
 	field := columns[0].Name.O
 
-	collationStr := ""
-	if collation != "" {
-		collationStr = fmt.Sprintf(" COLLATE \"%s\"", collation)
-	}
-
 	// fetch min, max
-	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ MIN(`%s`%s) as MIN, MAX(`%s`%s) as MAX FROM `%s`.`%s` WHERE %s",
-		field, collationStr, field, collationStr, table.Schema, table.Table, limits)
-
-	var min, max sql.NullString
-	err = table.Conn.QueryRow(query).Scan(&min, &max)
+	min, max, err := dbutil.GetMinMaxValue(context.Background(), table.Conn, table.Schema, table.Table, field, limits, collation, nil)
 	if err != nil {
+		if errors.Cause(err) == dbutil.ErrNoData {
+			log.Infof("no data found in %s.%s", table.Schema, table.Table)
+			return nil, nil
+		}
 		return nil, errors.Trace(err)
 	}
-	if !min.Valid || !max.Valid {
-		return nil, nil
-	}
+
 	chunk := newChunkRange()
 	chunk.columns = append(chunk.columns, field)
-	if min.String == max.String {
-		chunk.bounds = append(chunk.bounds, []string{min.String})
+	if min == max {
+		chunk.bounds = append(chunk.bounds, []string{min})
 		chunk.symbols = append(chunk.symbols, []string{equal})
 	} else {
-		chunk.bounds = append(chunk.bounds, []string{min.String, max.String})
+		chunk.bounds = append(chunk.bounds, []string{min, max})
 		chunk.symbols = append(chunk.symbols, []string{gte, lte})
 	}
 
@@ -174,15 +167,15 @@ func (s *RandomSpliter) Split(table *TableInstance, columns []*model.ColumnInfo,
 	}
 
 	// for example, the min and max value in target table is 2-9, but 1-10 in source table. so we need generate chunk for data < 2 and data > 9
-	maxChunk := chunk.update(field, []string{max.String}, []string{gt})
-	minChunk := chunk.update(field, []string{min.String}, []string{lt})
+	maxChunk := chunk.update(field, []string{max}, []string{gt})
+	minChunk := chunk.update(field, []string{min}, []string{lt})
 	chunks = append(chunks, maxChunk)
 	chunks = append(chunks, minChunk)
 
 	return chunks, nil
 }
 
-func (s *RandomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, Schema string, table string, columns []*model.ColumnInfo) ([]*chunkRange, error) {
+func (s *RandomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, schema string, table string, columns []*model.ColumnInfo) ([]*chunkRange, error) {
 	var chunks []*chunkRange
 
 	if count <= 1 {
@@ -191,6 +184,7 @@ func (s *RandomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, Sch
 	}
 
 	var splitCol, min, max string
+	var err error
 
 	// if the last column's condition is not '=', continue use this column split data.
 	colNum := len(chunk.columns)
@@ -204,6 +198,18 @@ func (s *RandomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, Sch
 		// choose the next column to split data
 		if len(columns) > colNum {
 			splitCol = columns[colNum].Name.O
+			chunkLimits, args := chunk.toString(s.collation)
+			limitRange := fmt.Sprintf("%s AND %s", chunkLimits, s.limits)
+
+			min, max, err = dbutil.GetMinMaxValue(context.Background(), db, schema, table, splitCol, limitRange, s.collation, args)
+			if err != nil {
+				if errors.Cause(err) == dbutil.ErrNoData {
+					log.Infof("no data found in %s.%s", schema, table)
+					return append(chunks, chunk), nil
+				}
+				return nil, errors.Trace(err)
+			}
+
 		} else {
 			log.Warnf("chunk %v can't be splited", chunk)
 			return append(chunks, chunk), nil
@@ -214,7 +220,7 @@ func (s *RandomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, Sch
 	limitRange := fmt.Sprintf("%s AND %s", chunkLimits, s.limits)
 
 	// get random value as split value
-	splitValues, valueCount, err := dbutil.GetRandomValues(context.Background(), db, Schema, table, splitCol, count-1, limitRange, s.collation, args)
+	splitValues, valueCount, err := dbutil.GetRandomValues(context.Background(), db, schema, table, splitCol, count-1, limitRange, s.collation, args)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -234,10 +240,10 @@ func (s *RandomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, Sch
 		}
 
 		if minTmp != maxTmp {
-			gtTmp := gt
+			gtTmp := gte
 			ltTmp := lt
 			if minTmp == min {
-				gtTmp = gte
+				gtTmp = gt
 			}
 			if maxTmp == max {
 				ltTmp = lte
@@ -248,7 +254,7 @@ func (s *RandomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, Sch
 			// valueCount > 1 means should split it
 			if valueCount[i] > 1 {
 				newChunk := chunk.update(splitCol, []string{splitValues[i]}, []string{equal})
-				splitChunks, err := s.splitRange(db, newChunk, valueCount[i], Schema, table, columns)
+				splitChunks, err := s.splitRange(db, newChunk, valueCount[i], schema, table, columns)
 				if err != nil {
 					return nil, errors.Trace(err)
 				}
@@ -270,20 +276,11 @@ func (s *RandomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, Sch
 type CheckJob struct {
 	Schema string
 	Table  string
-	Column *model.ColumnInfo
 	Where  string
 	Args   []interface{}
-	Chunk  *chunkRange
 }
 
 func getChunksForTable(table *TableInstance, columns []*model.ColumnInfo, chunkSize, sample int, limits string, collation string) ([]*chunkRange, error) {
-	/*
-		if column == nil {
-			log.Warnf("no suitable index found for %s.%s", table.Schema, table.Table)
-			return nil, nil
-		}
-	*/
-
 	var spliter RandomSpliter
 	return spliter.Split(table, columns, chunkSize, sample, limits, collation)
 }
@@ -381,30 +378,18 @@ func getSplitFields(db *sql.DB, schema string, table *model.TableInfo, splitFiel
 	return cols, nil
 }
 
-/*
-func findSuitableField(db *sql.DB, Schema string, table *model.TableInfo) (*model.ColumnInfo, error) {
-	// first select the index, and number type index first
-	column, err := dbutil.FindSuitableIndex(context.Background(), db, Schema, table)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	if column != nil {
-		return column, nil
-	}
-
-	// use the first column
-	log.Infof("%s.%s don't have index, will use the first column as split field", Schema, table.Name.O)
-	return table.Columns[0], nil
-}
-*/
-
 // GenerateCheckJob generates some CheckJobs.
 func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSize, sample int, collation string) ([]*CheckJob, error) {
 	jobBucket := make([]*CheckJob, 0, 10)
 	var jobCnt int
 	var err error
 
-	fields, err := getSplitFields(table.Conn, table.Schema, table.info, strings.Split(splitFields, ","))
+	var splitFieldArr []string
+	if len(splitFields) != 0 {
+		splitFieldArr = strings.Split(splitFields, ",")
+	}
+
+	fields, err := getSplitFields(table.Conn, table.Schema, table.info, splitFieldArr)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -416,7 +401,6 @@ func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSiz
 	if chunks == nil {
 		return nil, nil
 	}
-	log.Debugf("chunks: %+v", chunks)
 
 	jobCnt += len(chunks)
 
@@ -436,14 +420,12 @@ func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSiz
 		conditions, args := chunk.toString(collation)
 		where := fmt.Sprintf("(%s AND %s)", conditions, limits)
 
-		//log.Debugf("%s.%s create dump job, where: %s, begin: %v, end: %v", table.Schema, table.Table, where, chunk.begin, chunk.end)
+		log.Debugf("%s.%s create check job, where: %s, args: %v", table.Schema, table.Table, where, args)
 		jobBucket = append(jobBucket, &CheckJob{
 			Schema: table.Schema,
 			Table:  table.Table,
-			//Column: column,
-			Where: where,
-			Args:  args,
-			Chunk: chunk,
+			Where:  where,
+			Args:   args,
 		})
 	}
 

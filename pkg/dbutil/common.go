@@ -36,6 +36,9 @@ const (
 var (
 	// ErrVersionNotFound means can't get the database's version
 	ErrVersionNotFound = errors.New("can't get the database's version")
+
+	// ErrNoData means no data in table
+	ErrNoData = errors.New("no data found")
 )
 
 // DBConfig is database configuration.
@@ -150,18 +153,9 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 		|    2 |     2 |
 		|    3 |     1 |
 		+------+-------+
-
-		mysql> SELECT DISTINCT(`id`) FROM (SELECT `id` FROM `test`.`test` WHERE `id` COLLATE "latin1_bin" > 0 AND `id` COLLATE "latin1_bin" < 100 AND true ORDER BY RAND() LIMIT 3)rand_tmp ORDER BY `id` COLLATE "latin1_bin";
-		+----------+
-		| rand_tmp |
-		+----------+
-		|    15    |
-		|    58    |
-		|    67    |
-		+----------+
 	*/
 
-	if limitRange != "" {
+	if limitRange == "" {
 		limitRange = "true"
 	}
 
@@ -194,6 +188,40 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 	}
 
 	return randomValue, valueCount, nil
+}
+
+func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column string, limitRange string, collation string, args []interface{}) (string, string, error) {
+	/*
+
+	 */
+
+	if collation != "" {
+		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
+	}
+
+	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ MIN(`%s`%s) as MIN, MAX(`%s`%s) as MAX FROM `%s`.`%s` WHERE %s",
+		column, collation, column, collation, schema, table, limitRange)
+
+	var min, max sql.NullString
+	rows, err := db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return "", "", errors.Trace(err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		err = rows.Scan(&min, &max)
+		if err != nil {
+			return "", "", errors.Trace(err)
+		}
+	}
+
+	if !min.Valid || !max.Valid {
+		// don't have any data
+		return "", "", ErrNoData
+	}
+
+	return min.String, max.String, nil
 }
 
 // GetTables returns name of all tables in the specified schema
