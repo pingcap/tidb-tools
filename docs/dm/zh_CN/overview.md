@@ -3,7 +3,7 @@ DM 简介
 
 ### 介绍
 
-DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备份和 Mariadb/MySQL binlog 增量同步，设计的主要目的是
+DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备份和 MariaDB/MySQL binlog 增量同步，设计的主要目的是
    - 标准化 （e.g. 工具运行，错误定义）
    - 降低运维使用成本
    - 简化错误处理流程
