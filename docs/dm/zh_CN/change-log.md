@@ -5,7 +5,7 @@ Change Log
 
 #### bug 修复
 
-- 修复下游 PD, TiKV 等 timeout 时 binlog replication unit 未 retry 的问题
+- 修复下游 PD, TiKV 等 timeout 时 binlog replication 处理单元未 retry 的问题
 - 修复 loader 导入大量 SQL 文件遇到错误后未能正确 pause 的问题
 - 修复部分 DDL statement 内包含注释造成 route rename 出错的问题
 
@@ -19,14 +19,14 @@ Change Log
 
 #### 功能改进
 
-- binlog replication unit 在没有数据同步时定时 flush checkpoint
-- 在 binlog replication 的 status 中增加输出上下游是否已经同步的标识 `synced`
+- binlog replication 处理单元在没有数据同步时定时 flush checkpoint
+- 在 binlog replication 处理单元的 status 中增加输出上下游是否已经同步的标识 `synced`
 
 ### 2018-11-02
 
 #### 功能改进
 
-- 完善了 binlog replication 读取 relay log 的逻辑
+- 完善了 binlog replication 处理单元读取 relay log 的逻辑
 
 #### bug 修复
 
@@ -126,7 +126,7 @@ Change Log
 
 #### bug 修复
 
-- 修复 binlog replication unit 在非 sharding DDL 模式时 query status 会导致 panic 的问题
+- 修复 binlog replication 处理单元在非 sharding DDL 模式时 query status 会导致 panic 的问题
 
 ### 2018-10-15
 

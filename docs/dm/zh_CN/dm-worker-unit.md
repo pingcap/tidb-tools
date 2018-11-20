@@ -13,7 +13,7 @@ DM-Worker 详细介绍
 DM-Worker 包含多个任务处理逻辑单元
 
 #### relay log
-持久化保存从上游 MySQL/MariaDB 读取的 Binlog，并且对 binlog replication unit 提供读取 Binlog events 的功能
+持久化保存从上游 MySQL/MariaDB 读取的 Binlog，并且对 binlog replication 处理单元提供读取 Binlog events 的功能
 
 #### dumper
 从上游 MySQL/MariaDB dump 全量数据到本地磁盘
@@ -27,15 +27,17 @@ DM-Worker 包含多个任务处理逻辑单元
 
 
 ### DM-Worker 需要的权限
-包含 relay log、dump、load、replicate binlog 等任务运行单元， 这里先总体说下 上下游分别需要什么权限；
+包含 relay log、dump、load、replicate binlog 等处理单元， 这里先总体说下 上下游分别需要什么权限；
 
-#### 上游（mysql/mariadb）
+#### 上游（MySQL/mariaDB)
 SELECT
 RELOAD
 RELICATION SLAVE
 REPLICATION CLIENT
 
-即 GRANT SELECT,RELOAD,REPLICATION SLAVE, REPLICATION CLIENT  ON *.* TO 'your_user'@'your_wildcard_of_host';
+```sql
+GRANT SELECT,RELOAD,REPLICATION SLAVE, REPLICATION CLIENT  ON *.* TO 'your_user'@'your_wildcard_of_host';
+```
 
 #### 下游 (TiDB)
 SELECT 
@@ -52,73 +54,14 @@ INDEX
 GRANT SELECT,INSERT,UPDATE,DELETE,CREATE,DROP,ALTER,INDEX  ON *.* TO 'your_user'@'your_wildcard_of_host';
 ```
 
-因为 DM 包含 dump，load，replicate binlog events 等组件，下面会对各组件进行权限的细分（注意，随着需求的变化，这些权限也会跟着变化，并非一成不变）
-
+下面会对各处理单元进行权限的细分（注意，随着需求的变化，这些权限也会跟着变化，并非一成不变）
 
 
 ### units 需要的最小权限
 
-#### relay log
-
-##### 上游（MySQL/MariaDB）
-SELECT （查询上游的一些环境变量，比如 binlog_format）
-REPLICATION SLAVE (拉取 binlog)
-REPLICATION CLIENT (show master status, show slave status)
-
-###### 下游 (tidb)
-无
-
-###### 系统
-本地读写磁盘权限
-
-
-
-#### dumper
-
-###### 上游（mysql/mariadb）
-SELECT 
-RELOAD (flush tables with read lock, unlock tables)
-
-###### 下游 (tidb)
-无
-
-###### 系统
-本地写磁盘权限
-
-
-
-#### loader
-
-###### 上游（mysql/mariadb）
-无
-
-###### 下游 (tidb)
-SELECT （查询 checkpoint 记录）
-CREATE (create database/create table)
-DELETE （delete checkpoint）
-INSERT (插入 ddump 数据)
-
-###### 系统
-本地读/写磁盘权限
-
-
-
-#### binlog replication/syncer
-
-###### 上游（mysql/mariadb）
-SELECT （查询上游的一些环境变量，比如 binlog_format）
-REPLICATION SLAVE (拉取 binlog)
-REPLICATION CLIENT (show master status, show slave status)
-
-###### 下游 (tidb)
-SELECT (show index, show column）
-INSERT (dml)
-UPDATE (dml)
-DELETE (dml)
-CREATE （databases, tables, indexes）
-DROP (databases, tables, )
-ALTER (alter table)
-INDEX (create/drop index)
-
-###### 系统
-本地读/写磁盘权限
+| 处理单元 | 上游 (MySQL/MariaDB) | 下游 (TiDB) | 系統 |
+|----:|:--------------------|:------------|:----|
+| relay log |SELECT（查询上游的一些环境变量，比如 binlog_format）<br>REPLICATION SLAVE（读取 binlog）<br>REPLICATION CLIENT（show master status, show slave status）| 无 | 本地读/写磁盘权限 |
+| dumper |SELECT<br>RELOAD（flush tables with read lock, unlock tables）| 无 | 本地写磁盘权限 |
+| loader | 无 |SELECT（查询 checkpoint 记录）<br>CREATE（create database/create table）<br>DELETE（delete checkpoint）<br>INSERT（插入 dump 数据）| 本地读/写磁盘权限 |
+| binlog replication |SELECT（查询上游的一些环境变量，比如 binlog_format）<br>REPLICATION SLAVE（读取 binlog）<br>REPLICATION CLIENT（show master status, show slave status）| SELECT（show index, show column）<br>INSERT（dml）<br>UPDATE（dml）<br>DELETE（dml）<br>CREATE（databases, tables）<br>DROP （databases, tables）<br>ALTER（alter table）<br>INDEX（create/drop index）| 本地读/写磁盘权限
