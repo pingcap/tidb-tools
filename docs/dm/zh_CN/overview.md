@@ -45,17 +45,16 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 
 #### schema / table 同步黑白名单
 
-上游数据库实例表的黑白名过滤名单规则。过滤规则类似于 MySQL replication-rules-db / tables, 可以用来过滤或者只同步某些 database 或者某些 table 的所有操作。详情见 [Task 配置项介绍](./configuration/argument-explanation.md)
+上游数据库实例表的黑白名过滤名单规则。过滤规则类似于 MySQL replicarion-rules-db / tables, 可以用来设置过滤或者只同步某些 database 或者 table 的所有操作。详情见 [Task 配置项介绍](./configuration/argument-explanation.md)
 
 #### binlog Event 过滤
 
-比 schema / table 同步黑白名单更加细粒度的过滤规则，可以指定只同步或者过滤掉某些 database 或者某些 table 的具体的操作，比如 `INSERT`，`TRUNCATE TABLE`。详情见 [Task 配置项介绍](./configuration/argument-explanation.md)
+比 `schema / table 同步黑白名单` 更加细粒度的过滤规则，可以指定只同步或者过滤掉某些 database 或者 table 的具体的 Binlog events，比如 `INSERT`，`TRUNCATE TABLE`。详情见 [Task 配置项介绍](./configuration/argument-explanation.md)
 
 #### column mapping 过滤
 
-可以用来解决分库分表自增主键 ID 的冲突，根据用户配置的 instance-id 以及 schema / table 的名字编号来对自增主键 ID 的值进行改造。详情见 [Task 配置项介绍](./configuration/argument-explanation.md)
+用来解决分库分表存在自增主键 ID 的冲突，根据用户配置的 instance-id 以及 schema / table 的 ID 来对自增主键 ID 的值进行转换。详情见 [Task 配置项介绍](./configuration/argument-explanation.md)
 
 #### 分库分表支持
 
-DM 支持对原分库分表进行合库合表操作，但需要满足一些限制，详情见 [分库分表](shard-table)
-
+DM 支持对分库分表进行合并到下游 TiDB 一张表需求，但需要满足一些限制，详情见 [分库分表](shard-table)
