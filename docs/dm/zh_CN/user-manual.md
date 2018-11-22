@@ -57,12 +57,6 @@ mysql-instance 和 DM-worker 必须一一对应
 使用 dmctl 可以完成数据同步任务的日常管理功能，详细解释见 [dmctl 使用手册](./task-handling/dmctl-manual.md)
 
 
-####  TiDB 不兼容 DDL 处理
-
-TiDB 当前并不兼容 MySQL 支持的所有 DDL，已支持的 DDL 信息可参见: <https://github.com/pingcap/docs-cn/blob/master/sql/ddl.md>
-
-当遇到不兼容的 DDL 时，DM 会同步报错，此时需要使用 dmctl 手动处理该错误（包括 跳过该 DDL 或 使用用户指定的 DDL 替代原 DDL），具体操作方式参见 [skip 或 replace 异常 SQL](./troubleshoot/skip-replace-sqls.md)
-
 ### 运维管理
 
 - DM 监控项介绍 - [DM 监控与告警](./maintenance/metrics-alert.md)

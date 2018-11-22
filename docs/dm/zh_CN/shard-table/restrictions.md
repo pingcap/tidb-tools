@@ -2,7 +2,7 @@ sharding DDL 使用限制
 ===
 
 - 在一个 sharding group 内的所有表都必须以相同的顺序执行相同的 DDL
-    - 暂时不支持 sharding DDL 乱序交叉同步
+    - 暂时不支持 sharding DDL 乱序交叉执行
     - 只要有任意一个表的 DDL 未执行，同步过程都会被挂起
 - 一个 sharding group 必须等待一个 DDL 完全执行完毕后，才能执行下一个 DDL
 - sharding group 数据同步任务不支持 `DROP DATABASE / TABLE`
