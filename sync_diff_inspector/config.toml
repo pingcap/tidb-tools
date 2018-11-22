@@ -55,8 +55,8 @@ table = "test3"
 # if comment this, diff will find a suitable field.
 index-fields = "id"
 
-# can set multiple fields split by ','.
-index-fields = "id,age"
+# can set multiple fields split by ','
+# index-fields = "id,age"
 
 # check data's range.
 range = "age > 10 AND age < 20"

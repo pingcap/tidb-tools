@@ -145,7 +145,7 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int, limitRange string, collation string, args []interface{}) ([]string, []int, error) {
 	/*
 		example:
-		mysql> SELECT `id`, count(*) count FROM (SELECT `id` FROM `test`.`test` ORDER BY RAND() LIMIT 10) rand_tmp GROUP BY `id` ORDER BY `id`;
+		mysql> SELECT `id`, count(*) count FROM (SELECT `id` FROM `test`.`test` ORDER BY RAND() LIMIT 5) rand_tmp GROUP BY `id` ORDER BY `id`;
 		+------+-------+
 		| id   | count |
 		+------+-------+

@@ -103,7 +103,7 @@ func (c *chunkRange) copy() *chunkRange {
 }
 
 type spliter interface {
-	// Split splits a table's data to several chunks.
+	// split splits a table's data to several chunks.
 	split(table *TableInstance, chunkSize int, limits string, collation string) ([]chunkRange, error)
 }
 
@@ -199,7 +199,6 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 		splitCol = chunk.columns[colNum-1]
 		min = chunk.bounds[colNum-1][0]
 		max = chunk.bounds[colNum-1][1]
-
 		symbolMin = chunk.symbols[colNum-1][0]
 		symbolMax = chunk.symbols[colNum-1][1]
 	} else {
@@ -234,6 +233,24 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 		return nil, errors.Trace(err)
 	}
 	log.Infof("split chunk %v, get split values from GetRandomValues: %v", chunk, splitValues)
+
+	/*
+		for examples:
+		the result of GetRandomValues is:
+		mysql> SELECT `id`, count(*) count FROM (SELECT `id` FROM `test`.`test` ORDER BY RAND() LIMIT 100) rand_tmp GROUP BY `id` ORDER BY `id`;
+		+------+-------+
+		| id   | count |
+		+------+-------+
+		|    1 |     1 |
+		|    2 |     1 |
+		|    3 |    96 |
+		|    4 |     1 |
+		|    5 |     1 |
+		+------+-------+
+
+		We can assume that the 96% of this table's data is in range [id = 3], so we should use another column to split range `id = 3`,
+		just like [id = 3 AND cid > 10], [id = 3 AND cid >= 5 AND cid <= 10], [id = 3 AND cid < 5]...
+	*/
 
 	if len(randomValues) > 0 && randomValues[0] == min {
 		splitValues = append(splitValues, randomValues...)
