@@ -3,7 +3,7 @@ DM Ansible 运维手册
 
 ## 概述
 
-Ansible 是一款自动化运维工具，DM-Ansible 是 PingCAP 基于 Ansible Playbook 功能编写的集群部署工具。使用 DM-Ansible 可以快速部署一个完整的 DM 集群。
+Ansible 是一款自动化运维工具，DM-ansible 是 PingCAP 基于 Ansible Playbook 功能编写的集群部署工具。使用 DM-Ansible 可以快速部署一个完整的 DM 集群。
 
 本部署工具可以通过配置文件设置集群拓扑，完成以下各项运维工作：
 
