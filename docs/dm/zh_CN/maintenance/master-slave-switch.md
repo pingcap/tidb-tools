@@ -15,6 +15,6 @@
 
 1. 使用 `query-status` 确认 relay 已经追上切换前的 master（`relayCatchUpMaster`）
 2. `stop-task` 停止运行中的任务
-3. 变更 dm-worker 配置，使用 ansible 滚动升级 dm-worker
+3. 变更 DM-worker 配置，使用 ansible 滚动升级 DM-worker
 4. 更新 `task.yaml` 配置，更新 `mysql-instances / config` 配置
 5. `start-task` 重新启动任务

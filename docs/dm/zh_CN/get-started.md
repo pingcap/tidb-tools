@@ -166,9 +166,9 @@ stop-task test              # 其中的 `test` 是 `task.yaml` 配置文件中 `
 
 #### DM log
 
-DM 在运行过程中，dm-worker, dm-master 及 dmctl 都会通过 log 输出相关信息。
+DM 在运行过程中，DM-worker, DM-master 及 dmctl 都会通过 log 输出相关信息。
 
-其中，dm-worker, dm-master 的 log 文件输出目录参见 [部署目录结构](./maintenance/directory-structure.md)，dmctl 的 log 文件与其 binary 同目录。
+其中，DM-worker, DM-master 的 log 文件输出目录参见 [部署目录结构](./maintenance/directory-structure.md)，dmctl 的 log 文件与其 binary 同目录。
 
 
 ### 下一步

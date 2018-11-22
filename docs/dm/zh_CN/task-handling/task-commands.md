@@ -27,7 +27,7 @@ Global Flags:
 
 #### 参数解释
 
-`-w`: 指定在特定的一组 dm-workers 执行上 `task.yaml`，可选。如果设置，则只启动指定任务在该 dm-workers 上面的子任务
+`-w`: 指定在特定的一组 DM-workers 执行上 `task.yaml`，可选。如果设置，则只启动指定任务在该 DM-workers 上面的子任务
 
 `config_file`: `task.yaml` 文件路径，必选
 
@@ -75,7 +75,7 @@ Global Flags:
 
 #### 参数解释
 
-`-w`: 查询在特定的一组 `dm-works` 上运行的数据同步任务的子任务，可选
+`-w`: 查询在特定的一组 `DM-works` 上运行的数据同步任务的子任务，可选
 
 `task_name`: task 任务名称，可选，如果不填写则返回全部数据同步任务
 
@@ -178,7 +178,7 @@ Flags:
  -h, --help   help for pause-task
 
 Global Flags:
- -w, --worker strings   dm-worker ID
+ -w, --worker strings   DM-worker ID
 ```
 
 #### 命令样例
@@ -187,7 +187,7 @@ Global Flags:
 
 #### 参数解释
 
-`-w`: 指定在特定的一组 dm-workers 暂停数据同步任务的子任务，可选。如果指定，则只暂停该任务在指定 dm-workers 上面的子任务
+`-w`: 指定在特定的一组 DM-workers 暂停数据同步任务的子任务，可选。如果指定，则只暂停该任务在指定 DM-workers 上面的子任务
 
 `task-name`: task 的名字，必选
 
@@ -238,7 +238,7 @@ Global Flags:
 
 #### 参数解释
 
-`-w`: 指定在特定的一组 dm-workers 重启数据同步任务的子任务，可选。如果指定，则只重启该任务在指定 dm-workers 的子任务
+`-w`: 指定在特定的一组 DM-workers 重启数据同步任务的子任务，可选。如果指定，则只重启该任务在指定 DM-workers 的子任务
 
 `task-name`: task 任务名称，必选
 
@@ -289,7 +289,7 @@ Global Flags:
 
 #### 参数解释
 
-`-w`: 指定在特定的一组 dm-workers 停止数据同步任务的子任务，可选。如果指定，则只停止指定任务在该 dm-workers 上面的子任务
+`-w`: 指定在特定的一组 DM-workers 停止数据同步任务的子任务，可选。如果指定，则只停止指定任务在该 DM-workers 上面的子任务
 
 `task-name`: task 任务名称，必选
 
@@ -367,7 +367,7 @@ Global Flags:
 
 #### 参数解释
 
-`-w`: 指定在特定的一组 dm-workers 更新数据同步任务的子任务，可选。如果指定, 则只更新指定 dm-workers 上的子任务配置
+`-w`: 指定在特定的一组 DM-workers 更新数据同步任务的子任务，可选。如果指定, 则只更新指定 DM-workers 上的子任务配置
 
 `config file`: `task.yaml` 文件路径，必选
 

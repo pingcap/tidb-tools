@@ -15,4 +15,4 @@ sharding DDL 使用限制
     - 当 sharding DDL 在同步过程中时，使用 dmctl 尝试变更 `router-rules` 会报错
 - 如果需要 `CREATE` 新表加入到已有的 sharding group 中，需要保持和最新更改的表结构一致
     - 比如原 table_a, table_b 初始时有 (a, b) 两列，sharding DDL 后有 (a, b, c) 三列，则同步完成后新 `CREATE` 的表应当有 (a, b, c) 三列
-- sharding DDL lock 等待同步时，如果重启了 dm-master，会由于 lock 信息丢失而造成同步过程 block
+- sharding DDL lock 等待同步时，如果重启了 DM-master，会由于 lock 信息丢失而造成同步过程 block

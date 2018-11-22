@@ -1,7 +1,7 @@
 DM 监控与告警
 ===
 
-目前只有 dm-worker 提供了 metrics， dm-master 暂未提供。
+目前只有 DM-worker 提供了 metrics， DM-master 暂未提供。
 
 ### 内容索引
 - [任务监控项](#Task)
@@ -26,7 +26,7 @@ DM 监控与告警
 |----:|:------------|:----|
 | storage capacity | relay log 占有的磁盘的总容量  | N/A |
 | storage remain | relay log 占有的磁盘的剩余可用容量  | 小于 10G 的时候需要告警 |
-| process exits with error | relay log 在 dm-worker 内部遇到错误并且退出了  | 立即告警 |
+| process exits with error | relay log 在 DM-worker 内部遇到错误并且退出了  | 立即告警 |
 | relay log data corruption | relay log 文件损坏的个数 | 立即告警 |
 | fail to read binlog from master | relay 从上游的 mysql 读取 binlog 时遇到的错误数 | 立即告警 |
 | fail to write relay log | relay 写 binlog 到磁盘时遇到的错误数 | 立即告警 |
@@ -44,7 +44,7 @@ DM 监控与告警
 
 | metric 名称 | 说明 | 告警说明 |
 |----:|:------------|:----|
-| dump process exits with error | dumper 在 dm-worker 内部遇到错误并且退出了 | 立即告警 |
+| dump process exits with error | dumper 在 DM-worker 内部遇到错误并且退出了 | 立即告警 |
 
 
 ### loader
@@ -55,7 +55,7 @@ DM 监控与告警
 |----:|:------------|:----|
 | load progress | loader 导入过程的进度百分比，值变化范围为：0 %- 100 %  | N/A |
 | data file size | loader 导入的全量数据中数据文件（内含 `INSERT INTO` 语句）的总大小 | N/A |
-| load process exits with error | loader 在 dm-worker 内部遇到错误并且退出了  | 立即告警 |
+| load process exits with error | loader 在 DM-worker 内部遇到错误并且退出了  | 立即告警 |
 | table count | loader 导入的全量数据中 table 的数量总和  | N/A |
 | data file count | loader 导入的全量数据中数据文件（内含 `INSERT INTO` 语句）的数量总和| N/A |
 | latency of execute transaction | loader 在执行事务的时延，单位：秒 | N/A |
@@ -67,7 +67,7 @@ DM 监控与告警
 |----:|:------------|:----|
 | remaining time to sync | 预计 syncer 还需要多少分钟可以和 master 完全同步，单位: 分钟 | N/A |
 | replicate lag | master 到 syncer 的 binlog 复制延迟时间，单位：秒 | N/A |
-| process exist with error | binlog replication 在 dm-worker 内部遇到错误并且退出了 | 立即告警 |
+| process exist with error | binlog replication 在 DM-worker 内部遇到错误并且退出了 | 立即告警 |
 | binlog file gap between master and syncer | 与上游 master 相比落后的 binlog file 个数。| 落后 binlog file 个数超过 1 个（不含 1 个）且持续 10 分钟时 |
 | binlog file gap between relay and syncer | 与 relay 相比落后的 binlog file 个数 | 落后 binlog file 个数超过 1 个（不含 1 个）且持续 10 分钟时 |
 | binlog event qps | 单位时间内接收到的 binlog event 数量 (不包含需要跳过的 event) | N/A |
