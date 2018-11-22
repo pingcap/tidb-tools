@@ -141,8 +141,8 @@ instance-2:
     - `partition id`
         需要用户设置 `arguments` 为 `[instance_id, prefix of schema, prefix of table]`。如果 `instance_id` / `prefix of schema` / `prefix of table` 任意为空，则其对应的值不参与下面的 `partition id` 运算。
 
-        ![partition ID](./partition-id.jpeg)
-        
+        ![partition ID](../partition-id.jpeg)
+
         限制如下：
         - 只能适用于 bigint 的数据列
         - origin ID value 满足 (>= 0, <= 17592186044415)（默认 44 bits）
