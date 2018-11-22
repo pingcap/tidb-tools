@@ -10,6 +10,7 @@
    此外，DM 在运行过程中，相关的上下游数据库用户需要具备相应的读写权限。DM 在启动任务过程中，也会自动进行部分权限检查，具体见 [上游 MySQL 实例权限](../task-handling/check-mysql.md)
 
 2. 不兼容 DDL 处理
+
 遇到下面的错误的时候，需要使用 dmctl 手动处理该错误（包括 跳过该 DDL 或 使用用户指定的 DDL 替代原 DDL），具体操作方式参见 [skip 或 replace 异常 SQL](./troubleshoot/skip-replace-sqls.md)
 ```sql
 encountered incompatible DDL in TiDB: %s
