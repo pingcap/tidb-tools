@@ -1,16 +1,16 @@
-dm-worker 详细介绍
+DM-worker 详细介绍
 ===
 
 ### 简介
-- dm-Worker 可以连接到一台 MySQL/MariaDB，并且注册为该实例的 Slave
+- DM-worker 可以连接到一台 MySQL/MariaDB，并且注册为该实例的 Slave
 - 支持读取 MySQL/MariaDB Binlog 持久化保存在本地（relay log）
-- 单个 dm-worker 支持同步一个上游 MySQL/MariaDB 到多个下游 TiDB
-- 多个 dm-Worker 支持同步多个 MySQL/MariaDB 到一个下游 TiDB
+- 单个 DM-worker 支持同步一个上游 MySQL/MariaDB 到多个下游 TiDB
+- 多个 DM-Worker 支持同步多个 MySQL/MariaDB 到一个下游 TiDB
 
 注意：如果需要合并多个上游 MySQL/MariaDB 的表到一张下游 TiDB 的表请参考 [分库分表](./shard-table))
 
-### dm-worker 处理单元
-dm-worker 任务运行过程包含多个任务处理逻辑单元
+### DM-worker 处理单元
+DM-worker 任务运行过程包含多个任务处理逻辑单元
 
 #### relay log
 持久化保存从上游 MySQL/MariaDB 读取的 Binlog，并且对 binlog replication 处理单元提供读取 Binlog events 的功能
@@ -28,7 +28,7 @@ dm-worker 任务运行过程包含多个任务处理逻辑单元
 
 
 
-### dm-worker 需要的权限
+### DM-worker 需要的权限
 包含 relay log、dump、load、replicate binlog 等处理单元， 这里先总体说下 上下游分别需要什么权限；
 
 #### 上游（MySQL/mariaDB)

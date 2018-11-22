@@ -29,7 +29,7 @@ VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=
 #### 任务管理
 
 ```
-$ ./dmctl -master-addr 172.16.30.14                    # 进入与 dm-master 交互命令行模式
+$ ./dmctl -master-addr 172.16.30.14                    # 进入与 DM-master 交互命令行模式
 Welcome to dmctl
 Release Version: v1.0.0-100-g2bef6f8b
 Git Commit Hash: 2bef6f8beda34c0dff57377005c71589b48aa3c5
@@ -44,14 +44,14 @@ Usage:
   dmctl [command]
 
 Available Commands:
-  break-ddl-lock       force to break dm-worker's DDL lock
+  break-ddl-lock       force to break DM-worker's DDL lock
   generate-task-config generate a task config with config file
   help                 Help about any command
-  pause-relay          pause dm-worker's relay unit
+  pause-relay          pause DM-worker's relay unit
   pause-task           pause a running task with name
   query-status         query task's status
   refresh-worker-tasks refresh worker -> tasks mapper
-  resume-relay         resume dm-worker's relay unit
+  resume-relay         resume DM-worker's relay unit
   resume-task          resume a paused task with name
   show-ddl-locks       show un-resolved DDL locks
   sql-inject           sql-inject injects (limited) sqls into syncer as binlog event
@@ -59,14 +59,14 @@ Available Commands:
   sql-skip             sql-skip skips specified binlog position
   start-task           start a task with config file
   stop-task            stop a task with name
-  switch-relay-master  switch master server of dm-worker's relay unit
+  switch-relay-master  switch master server of DM-worker's relay unit
   unlock-ddl-lock      force to unlock DDL lock
-  update-master-config update configure of dm-master
+  update-master-config update configure of DM-master
   update-task          update a task's config for routes, filters, column-mappings, black-white-list
 
 Flags:
   -h, --help             help for dmctl
-  -w, --worker strings   dm-worker ID
+  -w, --worker strings   DM-worker ID
 
 Use "dmctl [command] --help" for more information about a command.
 ```
@@ -87,4 +87,4 @@ Use "dmctl [command] --help" for more information about a command.
 
 #### refresh-worker-tasks
 
-强制刷新 dm-master 内存中维护的 task => dm-workers 映射关系，一般不需要主动使用。只需要在确定 task => dm-workers 映射关系存在，但执行其它命令时仍提示需要刷新时使用
+强制刷新 DM-master 内存中维护的 task => DM-workers 映射关系，一般不需要主动使用。只需要在确定 task => DM-workers 映射关系存在，但执行其它命令时仍提示需要刷新时使用

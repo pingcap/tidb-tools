@@ -28,7 +28,7 @@ syncer 目前采用 `ROW` 模式的 binlog，binlog 中不包含 column name 信
 
 #### Constraints
 
-- 部署支持 sharding 数据同步任务的 dm-workers
+- 部署支持 sharding 数据同步任务的 DM-workers
 - 一次只能对一张表做一个 DDL
 - 将要合并到同一个下游表的所有上游表都应该执行这个 DDL
 
@@ -37,20 +37,20 @@ syncer 目前采用 `ROW` 模式的 binlog，binlog 中不包含 column name 信
 对一个 sharding 数据迁移任务实现一个 global DDL lock
 
 - 两层 DDL 同步
-    - 第一层：dm-worker 内先进行 DDL 同步（同步相关信息由 dm-worker 保存），同步完成后才尝试进行第二层同步
-    - 第二层：dm-worker 间通过 global DDL lock 协调各 dm-workers 进行同步（同步相关信息由 dm-master 与 dm-worker 共同保存）
+    - 第一层：DM-worker 内先进行 DDL 同步（同步相关信息由 DM-worker 保存），同步完成后才尝试进行第二层同步
+    - 第二层：DM-worker 间通过 global DDL lock 协调各 DM-workers 进行同步（同步相关信息由 DM-master 与 DM-worker 共同保存）
 
-1. dm-worker 内为合并到同一个 target table 的所有上游 tables 建立一个 sharding group （第一层同步，成员为各上游 table）
-2. dm-master 内为执行 target table 合并任务的所有 dm-workers 建立一个 sharding group（第二层同步, 成员为各 dm-worker）
-3. 当 dm-worker 内的 sharding group 内有上游 table 遇到 DDL 时，该 dm-worker 内对这个 target table 的同步将部分暂停（DDL 结构变更前的 DML 继续同步，DDL 结构变更后的 DML 及后续 DDL 将被忽略），但对该任务其它 target table 的同步仍将继续
-4. 当该 dm-worker 内的 sharding group 内的所有上游 tables 都遇到了这个 DDL 时，该 dm-worker 暂停此任务的执行（该任务其它 target table 的同步也将暂停，以方便后续 step.8 新创建的同步流追上全局同步流）
-5. dm-worker 请求 dm-master 申请创建该任务上该 target table 对应的 DDL lock。如果已经存在，就注册自己信息；如果不存在，就创建 DDL lock，注册自己的信息，并且成为 DDL lock owner。DDL lock 由 _<任务, DDL>_ 相关信息一起进行标识
-6. dm-master 在 dm-worker 来注册信息时根据任务的 sharding group （第二层同步）信息判断所有的 DDL 是否已经全部同步；如果已经全部同步，则通知 DDL lock owner 执行该 DDL（假设此过程中 owner 发生了 crash，则如果 owner 重启，那它会重做第一层的同步，并在第一层同步完成时触发重做第二层的同步，即会自动恢复；如果 owner 不重启，需要使用 `unlock-ddl-lock` 命令手动指定其他某个 dm-worker 代替 owner 执行该 DDL 以完成同步）
-7. 判断 DDL lock owner 是否执行 DDL 成功；如果执行成功则通知正在等待该 DDL 的所有 dm-worker 开始从 DDL 之后继续同步
-8. dm-worker 在从 DDL lock 恢复后开始继续同步时，新创建一条任务同步流，将原来在 step.3 时被忽略的 DML / DDL 重新执行一次，补全之前被跳过的数据
-9. dm-worker 将 DML 都补全完后，重新开始正常的同步
+1. DM-worker 内为合并到同一个 target table 的所有上游 tables 建立一个 sharding group （第一层同步，成员为各上游 table）
+2. DM-master 内为执行 target table 合并任务的所有 DM-workers 建立一个 sharding group（第二层同步, 成员为各 DM-worker）
+3. 当 DM-worker 内的 sharding group 内有上游 table 遇到 DDL 时，该 DM-worker 内对这个 target table 的同步将部分暂停（DDL 结构变更前的 DML 继续同步，DDL 结构变更后的 DML 及后续 DDL 将被忽略），但对该任务其它 target table 的同步仍将继续
+4. 当该 DM-worker 内的 sharding group 内的所有上游 tables 都遇到了这个 DDL 时，该 DM-worker 暂停此任务的执行（该任务其它 target table 的同步也将暂停，以方便后续 step.8 新创建的同步流追上全局同步流）
+5. DM-worker 请求 DM-master 申请创建该任务上该 target table 对应的 DDL lock。如果已经存在，就注册自己信息；如果不存在，就创建 DDL lock，注册自己的信息，并且成为 DDL lock owner。DDL lock 由 _<任务, DDL>_ 相关信息一起进行标识
+6. DM-master 在 DM-worker 来注册信息时根据任务的 sharding group （第二层同步）信息判断所有的 DDL 是否已经全部同步；如果已经全部同步，则通知 DDL lock owner 执行该 DDL（假设此过程中 owner 发生了 crash，则如果 owner 重启，那它会重做第一层的同步，并在第一层同步完成时触发重做第二层的同步，即会自动恢复；如果 owner 不重启，需要使用 `unlock-ddl-lock` 命令手动指定其他某个 DM-worker 代替 owner 执行该 DDL 以完成同步）
+7. 判断 DDL lock owner 是否执行 DDL 成功；如果执行成功则通知正在等待该 DDL 的所有 DM-worker 开始从 DDL 之后继续同步
+8. DM-worker 在从 DDL lock 恢复后开始继续同步时，新创建一条任务同步流，将原来在 step.3 时被忽略的 DML / DDL 重新执行一次，补全之前被跳过的数据
+9. DM-worker 将 DML 都补全完后，重新开始正常的同步
 
 上面简述了 normal 流程，下面说一下现实中还需要解决的两个问题
 
-- 如果 sharding DDLs 一次没有全部执行成功，或者别的原因需要回滚，设置 DDL 并不是一样的，这样子就无法正确变更状态，此时通过提供一个单独操作 DDL lock 的接口并通过 dmctl 经 dm-master 中转来调用该接口，强制进行 DDL lock 状态变更
+- 如果 sharding DDLs 一次没有全部执行成功，或者别的原因需要回滚，设置 DDL 并不是一样的，这样子就无法正确变更状态，此时通过提供一个单独操作 DDL lock 的接口并通过 dmctl 经 DM-master 中转来调用该接口，强制进行 DDL lock 状态变更
 - 如果只有部分 sharding table 需要进行 DDL（不考虑更复杂的兼容情况），可以支持这部分表形成一个 sharding group（一个独立的任务），需要在部署的拓扑里面引入这个概念

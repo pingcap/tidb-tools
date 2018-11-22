@@ -50,7 +50,7 @@ Change Log
 #### 功能新增
 
 - pre-check 增加检查上游数据库是否存在大小写同名的表
-- 支持使用 dmctl 热更新 dm-master 配置
+- 支持使用 dmctl 热更新 DM-master 配置
 
 #### 功能改进
 
@@ -100,7 +100,7 @@ Change Log
 
 #### 功能改进
 
-- task 与 dm-worker 重合的配置信息完善
+- task 与 DM-worker 重合的配置信息完善
 
 ### 2018-10-19
 

@@ -17,22 +17,22 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 
 ### 组件功能
 
-#### dm-master
+#### DM-master
 
 - 保存 DM 集群的拓扑信息
-- 监控 dm-worker 进程的运行
+- 监控 DM-worker 进程的运行
 - 监控数据同步任务的运行状态
 - 提供数据同步任务管理的统一入口
 - 协调 sharding 场景下各个实例的分表 DDL 同步
 
-#### dm-worker
+#### DM-worker
 
 - 支持 binlog 本地持久化
 - 保存数据同步子任务的配置信息
 - 编排数据同步子任务的运行
 - 监控数据同步子任务的运行状态
 
-参考 [DM-Worker 详细介绍](./dm-worker-unit.md)
+参考 [DM-worker 详细介绍](./dm-worker-unit.md)
 
 #### dmctl
 

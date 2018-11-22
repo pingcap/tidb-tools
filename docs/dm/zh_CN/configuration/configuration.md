@@ -8,7 +8,7 @@ task 配置文件 [task.yaml](./task.yaml) 主要包含下面 [全局配置](#�
 
 ### 关键概念
 
-instance-id，dm-worker ID 等关键概念参见 [关键概念](../user-manual.md#关键概念) 
+instance-id，DM-worker ID 等关键概念参见 [关键概念](../user-manual.md#关键概念) 
 
 
 ### 全局配置
@@ -98,7 +98,7 @@ mysql-instances:
     ​        port: 4306
     ​        user: "root"
     ​        password: "1234"                       # 需要使用 dmctl 加密的密码，具体说明见 [dmctl 使用手册]
-    ​    instance-id: "instance118-4306"            # MySQL Instance ID，对应上游 MySQL 实例，不允许配置 dm-master 的集群拓扑配置外的 mysql-instance 
+    ​    instance-id: "instance118-4306"            # MySQL Instance ID，对应上游 MySQL 实例，不允许配置 DM-master 的集群拓扑配置外的 mysql-instance 
 
     ​    meta:                                      # 下游数据库的 checkpoint 不存在时 binlog 同步开始的位置; 如果 checkpoint 存在则没有作用 
     ​        binlog-name: binlog-00001
