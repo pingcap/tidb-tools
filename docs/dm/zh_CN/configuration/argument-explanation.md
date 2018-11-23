@@ -141,7 +141,7 @@ instance-2:
     - `partition id`
         需要用户设置 `arguments` 为 `[instance_id, prefix of schema, prefix of table]`。
 
-        e.g. schema name = arguments[1] + suffix of schema; table name = argument[2] + suffix of table; suffix of schema 和 suffix of table 需要是数字，用于下面的 partition ID 计算
+        例如 schema name = arguments[1] + suffix of schema; table name = argument[2] + suffix of table; suffix of schema 和 suffix of table 需要是数字，用于下面的 partition ID 计算
 
         ![partition ID](../media/partition-id.png)
 
