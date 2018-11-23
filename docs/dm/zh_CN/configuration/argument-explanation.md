@@ -147,6 +147,7 @@ instance-2:
         - 如果 argument[0] == "", 则 partition ID 在下图占 0 个 bit, 否则占 4 个 bits （默认情况下）
         - 如果 argument[1] == "", 则 schema ID 在下面占 0 个 bit, 否则占 7 个 bits （默认情况下）
         - 如果 argument[2] == "", 则 table ID 在下图占 0 个 bit， 否则占 8 个 bits （默认情况下）
+        - origin ID 是表中一行的自增 ID 列的值
 
  
         ![partition ID](../media/partition-id.png)
