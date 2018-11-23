@@ -31,7 +31,7 @@ skip-sqls                       # 已废弃，请使用 filters
 skip-events                     # 已废弃，请使用 filters
 skip-dmls                       # 已废弃，请使用 filters
 route-rules                     =>	route-rules                           # pattern-schema / pattern-table 已分别更名为 schema-pattern / table-pattern
-from                            =>	mysql-instances / config              # # Task 的 instance 配置项 config， 应与 DM-worker 部署时的上游 MySQL 信息一致
+from                            =>	mysql-instances / config              # Task 的 instance 配置项 config， 应与 DM-worker 部署时的上游 MySQL 信息一致
 to                              =>	target-database
 disable-detect                  =>	syncer / disable-detect
 safe-mode                       =>	syncer / safe-mode
