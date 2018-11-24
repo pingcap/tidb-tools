@@ -89,6 +89,8 @@ type TableDiff struct {
 
 // Equal tests whether two database have same data and schema.
 func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (bool, bool, error) {
+	t.adjustConfig()
+
 	t.sqlCh = make(chan string)
 	t.wg.Add(1)
 	go func() {
@@ -142,6 +144,23 @@ func (t *TableDiff) CheckTableStruct(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
+func (t *TableDiff) adjustConfig() {
+	if t.ChunkSize <= 0 {
+		t.ChunkSize = 100
+	}
+
+	if len(t.Range) == 0 {
+		t.Range = "true"
+	}
+	if t.Sample <= 0 {
+		t.Sample = 100
+	}
+
+	if t.CheckThreadCount <= 0 {
+		t.CheckThreadCount = 4
+	}
+}
+
 // CheckTableData checks table's data
 func (t *TableDiff) CheckTableData(ctx context.Context) (bool, error) {
 	return t.EqualTableData(ctx)
@@ -157,6 +176,9 @@ func (t *TableDiff) EqualTableData(ctx context.Context) (bool, error) {
 	checkNums := len(allJobs) * t.Sample / 100
 	checkNumArr := getRandomN(len(allJobs), checkNums)
 	log.Infof("total has %d check jobs, check %d of them", len(allJobs), len(checkNumArr))
+	if checkNums == 0 {
+		return true, nil
+	}
 
 	checkResultCh := make(chan bool, t.CheckThreadCount)
 	defer close(checkResultCh)
