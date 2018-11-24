@@ -72,7 +72,7 @@ func ShowIndex(ctx context.Context, db *sql.DB, schemaName string, table string)
 // * primary key
 // * unique key
 // * normal index which has max cardinality
-func FindSuitableIndex(ctx context.Context, db *sql.DB, schemaName string, tableInfo *model.TableInfo) (*model.ColumnInfo, error) {
+func FindSuitableColumnWithIndex(ctx context.Context, db *sql.DB, schemaName string, tableInfo *model.TableInfo) (*model.ColumnInfo, error) {
 	// find primary key
 	for _, index := range tableInfo.Indices {
 		if index.Primary {
@@ -111,6 +111,25 @@ func FindSuitableIndex(ctx context.Context, db *sql.DB, schemaName string, table
 	}
 
 	return c, nil
+}
+
+// FindAllIndex returns all index, order is pk, uk, and normal index.
+func FindAllIndex(ctx context.Context, db *sql.DB, schemaName string, tableInfo *model.TableInfo) []*model.IndexInfo {
+	var primaryIndex *model.IndexInfo
+	uniqueIndices := make([]*model.IndexInfo, 0, 1)
+	normalIndices := make([]*model.IndexInfo, 0, 1)
+
+	for i, index := range tableInfo.Indices {
+		if index.Primary {
+			primaryIndex = tableInfo.Indices[i]
+		} else if index.Unique {
+			uniqueIndices = append(uniqueIndices, tableInfo.Indices[i])
+		} else {
+			normalIndices = append(normalIndices, tableInfo.Indices[i])
+		}
+	}
+
+	return append(append([]*model.IndexInfo{primaryIndex}, uniqueIndices...), normalIndices...)
 }
 
 // FindAllColumnWithIndex returns columns with index, order is pk, uk and normal index.
