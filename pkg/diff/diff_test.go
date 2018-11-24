@@ -24,7 +24,6 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
-	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 )
 
