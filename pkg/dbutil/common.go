@@ -190,6 +190,7 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 	return randomValue, valueCount, nil
 }
 
+// GetMinMaxValue get min and max value.
 func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column string, limitRange string, collation string, args []interface{}) (string, string, error) {
 	/*
 		example:
@@ -201,12 +202,17 @@ func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column strin
 		+------+------+
 	*/
 
+	if limitRange == "" {
+		limitRange = "true"
+	}
+
 	if collation != "" {
 		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
 	}
 
 	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ MIN(`%s`%s) as MIN, MAX(`%s`%s) as MAX FROM `%s`.`%s` WHERE %s",
 		column, collation, column, collation, schema, table, limitRange)
+	log.Debugf("GetMinMaxValue query: %v, args: %v", query, args)
 
 	var min, max sql.NullString
 	rows, err := db.QueryContext(ctx, query, args...)
