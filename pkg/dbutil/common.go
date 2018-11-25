@@ -348,7 +348,7 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName str
 	return checksum.Int64, nil
 }
 
-// Bucket ...
+// Bucket saves the bucket information from TiDB.
 type Bucket struct {
 	Count      int64
 	LowerBound string

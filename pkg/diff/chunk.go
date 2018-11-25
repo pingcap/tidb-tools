@@ -104,7 +104,7 @@ func (c *chunkRange) copy() *chunkRange {
 
 type spliter interface {
 	// split splits a table's data to several chunks.
-	split(table *TableInstance, chunkSize int, limits string, collation string) ([]chunkRange, error)
+	split(table *TableInstance, columns []*model.ColumnInfo, chunkSize, sample int, limits string, collation string) ([]*chunkRange, error)
 }
 
 type randomSpliter struct {
@@ -311,6 +311,84 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 	return chunks, nil
 }
 
+type bucketSpliter struct {
+	table     *TableInstance
+	chunkSize int
+	limits    string
+	collation string
+	sample    int
+	buckets   map[string][]dbutil.Bucket
+}
+
+func (s *bucketSpliter) split(table *TableInstance, columns []*model.ColumnInfo, chunkSize, sample int, limits string, collation string) ([]*chunkRange, error) {
+	s.table = table
+	s.chunkSize = chunkSize
+	s.limits = limits
+	s.collation = collation
+	s.sample = sample
+
+	buckets, err := dbutil.GetBucketsInfo(context.Background(), s.table.Conn, s.table.Schema, s.table.Table)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	s.buckets = buckets
+
+	return s.getChunksByBuckets()
+}
+
+func (s *bucketSpliter) getChunksByBuckets() ([]*chunkRange, error) {
+	chunks := make([]*chunkRange, 0, 1000)
+
+	indices := dbutil.FindAllIndex(s.table.info)
+	for _, index := range indices {
+		if index == nil {
+			continue
+		}
+		buckets, ok := s.buckets[index.Name.O]
+		if !ok {
+			return nil, errors.NotFoundf("index %s in buckets info", index.Name.O)
+		}
+
+		var (
+			chunkNum    int64
+			lowerValues []string
+			upperValues []string
+		)
+
+		for i, bucket := range buckets {
+			upperValues = s.getValues(bucket.UpperBound)
+			if int(bucket.Count) > (int(chunkNum)+1)*s.chunkSize || i == len(buckets)-1 {
+				// create a new chunk
+				chunk := newChunkRange()
+				for j, col := range index.Columns {
+					values := make([]string, 0, 2)
+					symbols := make([]string, 0, 2)
+					if len(lowerValues) != 0 {
+						values = append(values, lowerValues[j])
+						symbols = append(symbols, gt)
+					}
+					if i != len(buckets)-1 {
+						values = append(values, upperValues[j])
+						symbols = append(symbols, lte)
+					}
+					chunk = chunk.update(col.Name.O, values, symbols)
+				}
+				chunks = append(chunks, chunk)
+				lowerValues = upperValues
+				chunkNum++
+			}
+		}
+	}
+
+	return chunks, nil
+}
+
+// upperBound and lowerBound are looks like '(123, abc)' for multiple fields, or '123' for one field.
+func (s *bucketSpliter) getValues(valueString string) []string {
+	vStr := strings.Trim(strings.Trim(valueString, "("), ")")
+	return strings.Split(vStr, ",")
+}
+
 // CheckJob is the struct of job for check
 type CheckJob struct {
 	Schema string
@@ -320,9 +398,15 @@ type CheckJob struct {
 }
 
 func getChunksForTable(table *TableInstance, columns []*model.ColumnInfo, chunkSize, sample int, limits string, collation string) ([]*chunkRange, error) {
-	// TODO: use buckets info from tidb to split chunks.
-	var spliter randomSpliter
-	return spliter.split(table, columns, chunkSize, sample, limits, collation)
+	s := bucketSpliter{}
+	chunks, err := s.split(table, columns, chunkSize, sample, limits, collation)
+	if err != nil || len(chunks) == 0 {
+		log.Warnf("use bucket information to get chunks error: %v, chunks num: %d", errors.Trace(err), len(chunks))
+		s := randomSpliter{}
+		return s.split(table, columns, chunkSize, sample, limits, collation)
+	}
+
+	return chunks, nil
 }
 
 // getSplitFields returns fields to split chunks, order by pk, uk, index, columns.

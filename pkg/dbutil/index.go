@@ -114,7 +114,7 @@ func FindSuitableColumnWithIndex(ctx context.Context, db *sql.DB, schemaName str
 }
 
 // FindAllIndex returns all index, order is pk, uk, and normal index.
-func FindAllIndex(ctx context.Context, db *sql.DB, schemaName string, tableInfo *model.TableInfo) []*model.IndexInfo {
+func FindAllIndex(tableInfo *model.TableInfo) []*model.IndexInfo {
 	var primaryIndex *model.IndexInfo
 	uniqueIndices := make([]*model.IndexInfo, 0, 1)
 	normalIndices := make([]*model.IndexInfo, 0, 1)
@@ -129,7 +129,20 @@ func FindAllIndex(ctx context.Context, db *sql.DB, schemaName string, tableInfo 
 		}
 	}
 
-	return append(append([]*model.IndexInfo{primaryIndex}, uniqueIndices...), normalIndices...)
+	indices := make([]*model.IndexInfo, 0, 2)
+	if primaryIndex != nil {
+		indices = append(indices, primaryIndex)
+	}
+
+	if len(uniqueIndices) != 0 {
+		indices = append(indices, uniqueIndices...)
+	}
+
+	if len(normalIndices) != 0 {
+		indices = append(indices, normalIndices...)
+	}
+
+	return indices
 }
 
 // FindAllColumnWithIndex returns columns with index, order is pk, uk and normal index.
