@@ -15,6 +15,8 @@
 
 1. 使用 `query-status` 确认 relay 已经追上切换前的 master（`relayCatchUpMaster`）
 2. `stop-task` 停止运行中的任务
-3. 变更 DM-worker 配置，使用 ansible 滚动升级 DM-worker
-4. 更新 `task.yaml` 配置，更新 `mysql-instances / config` 配置
-5. `start-task` 重新启动任务
+3. 上游 master-slave 执行切换
+4. 如果 DM-master 配置的 mysql-instance 为 `ip:port` 形式，更新 `dm-master.toml` 的 `deploy / mysql-instance` 配置，然后使用 `update-master-config` 更新 DM-master
+5. 变更 DM-worker 配置，使用 ansible 滚动升级 DM-worker
+6. 更新 `task.yaml` 配置，更新 `mysql-instances / config` 配置
+7. `start-task` 重新启动任务
