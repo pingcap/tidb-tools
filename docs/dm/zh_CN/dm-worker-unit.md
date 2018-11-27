@@ -37,7 +37,7 @@ DM-worker 任务运行过程包含多个任务处理逻辑单元
 |----:|:----|
 | SELECT | Tables |
 | RELOAD | Global |
-| RELICATION SLAVE | Global |
+| REPLICATION SLAVE | Global |
 | REPLICATION CLIENT | Global |
 
 如果你想同步 `db1` 到 TiDB，你可以执行下面的 GRANT 语句

@@ -45,7 +45,7 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 
 #### schema / table 同步黑白名单
 
-上游数据库实例表的黑白名过滤名单规则。过滤规则类似于 MySQL replicarion-rules-db / tables, 可以用来设置过滤或者只同步某些 database 或者 table 的所有操作。详情见 [Task 配置项介绍](./configuration/argument-explanation.md#同步表的黑白名单---black-white-list-rule)
+上游数据库实例表的黑白名单过滤规则。过滤规则类似于 MySQL replicarion-rules-db / tables, 可以用来设置过滤或者只同步某些 database 或者 table 的所有操作。详情见 [Task 配置项介绍](./configuration/argument-explanation.md#同步表的黑白名单---black-white-list-rule)
 
 #### binlog Event 过滤
 
@@ -57,4 +57,4 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 
 #### 分库分表支持
 
-DM 支持对分库分表进行合并到下游 TiDB 一张表需求，但需要满足一些限制，详情见 [分库分表](shard-table)
+DM 支持对上游分库分表进行合并同步到下游 TiDB 的同一张表，但需要满足一些限制，详情见 [分库分表](./shard-table/merge-solution.md)
