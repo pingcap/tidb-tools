@@ -138,14 +138,23 @@ instance-2:
 
 - source-column, target-column: 把 `source-column` 的数据通过 `expression` 的计算覆盖到 `target-column` 的数据
 - expression: 对 column 数据进行转换的表达式，目前只支持下面内置计算表达式
-    - `partition id` 
-        需要用户设置 `arguments` 为 `[instance_id, prefix of schema, prefix of table]` 
-        如果 `instance_id` / `prefix of schema` / `prefix of table` 任意为空，则其对应的值不与下面的 `partition id` 运算  
-        e.g. `schema name = arguments[1] +  prefix of schema`; `table name = argument[2] + prefix of table`; `prefix of schema` 和 `prefix of table` 需要是数字，用于下面的 express 计算  
-        e.g. `schema name = test_2`, `table name = t_3`, `arguments = ["1," "test_","t_2"]`; 下面以例来说明  
-        `partition id` expression 会计算出来一个 int64 类型的值， 64 bits 格式如 `[1:1 bit] [2:4 bits] [3：7 bits] [4:8 bits] [5: 44 bits]` (使用默认各 field 的 bit 数) (instance ID, schema ID, table ID 作为前缀来区分分表)  
-        - 1： 符号位，保留
-        - 2： instance ID，默认 4 bits
-        - 3： schema ID（prefix of schema），默认 7 bits
-        - 4： table ID（prefix of table），默认 8 bits
-        - 5： 原始数据 ID (>= 0, <= 17592186044415)，默认 44 bits
+    - `partition id`
+        需要用户设置 `arguments` 为 `[instance_id, prefix of schema, prefix of table]`。
+
+        参数解释例 
+        - schema name = arguments[1] + schema ID（suffix of schema）; schema ID == suffix of schema
+        - table name = argument[2] + table ID（suffix of table）; table ID == suffix of table
+        - 如果 argument[0] == "", 则 partition ID 在下图占 0 个 bit, 否则占 4 个 bits （默认情况下）
+        - 如果 argument[1] == "", 则 schema ID 在下面占 0 个 bit, 否则占 7 个 bits （默认情况下）
+        - 如果 argument[2] == "", 则 table ID 在下图占 0 个 bit， 否则占 8 个 bits （默认情况下）
+        - origin ID 是表中一行的自增 ID 列的值
+
+ 
+        ![partition ID](../media/partition-id.png)
+
+        限制如下：
+        - 只能适用于 bigint 的数据列
+        - instance ID 满足（>= 0, <= 15）（默认 4 bits）
+        - schema ID 满足（>= 0, <= 127）（默认 7 bits）
+        - table ID 满足（>= 0, <= 255）（默认 8 bits）
+        - origin ID value 满足（>= 0, <= 17592186044415）（默认 44 bits）

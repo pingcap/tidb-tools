@@ -47,12 +47,12 @@ Get Started
 # Master Configuration.
 
 [[deploy]]
-mysql-instance = "172.16.10.81:3306"
-dm-worker = "172.16.10.72:10081"
+mysql-instance = "172.16.10.81:3306"   // instance id
+dm-worker = "172.16.10.72:10081"       // worker id
 
 [[deploy]]
-mysql-instance = "172.16.10.82:3306"
-dm-worker = "172.16.10.73:10081"
+mysql-instance = "172.16.10.82:3306"   // instance id
+dm-worker = "172.16.10.73:10081"       // worker id
 ```
 
 #### 2 任务配置

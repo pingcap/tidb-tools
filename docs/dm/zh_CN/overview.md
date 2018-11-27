@@ -12,7 +12,7 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 
 ### 架构图
 
-   ![DM structure](./architecture.png)
+   ![DM structure](./media/architecture.png)
 
 
 ### 组件功能
@@ -40,3 +40,21 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 - 查看数据同步任务状态
 - 处理数据同步任务错误
 - 校验数据同步任务配置的正确性
+
+### 同步功能介绍
+
+#### schema / table 同步黑白名单
+
+上游数据库实例表的黑白名单过滤规则。过滤规则类似于 MySQL replicarion-rules-db / tables, 可以用来设置过滤或者只同步某些 database 或者 table 的所有操作。详情见 [Task 配置项介绍](./configuration/argument-explanation.md#同步表的黑白名单---black-white-list-rule)
+
+#### binlog Event 过滤
+
+比 `schema / table 同步黑白名单` 更加细粒度的过滤规则，可以指定只同步或者过滤掉某些 database 或者 table 的具体的 Binlog events，比如 `INSERT`，`TRUNCATE TABLE`。详情见 [Task 配置项介绍](./configuration/argument-explanation.md#binlog-event-过滤规则---filter-rule)
+
+#### column mapping
+
+解决分库分表存在自增主键 ID 的冲突，根据用户配置的 instance-id 以及 schema / table 的 ID 来对自增主键 ID 的值进行转换。详情见 [Task 配置项介绍](./configuration/argument-explanation.md#column-修改映射---column-mapping-rule)
+
+#### 分库分表支持
+
+DM 支持对上游分库分表进行合并同步到下游 TiDB 的同一张表，但需要满足一些限制，详情见 [分库分表](./shard-table/merge-solution.md)
