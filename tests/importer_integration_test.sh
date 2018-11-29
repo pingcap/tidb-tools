@@ -1,10 +1,13 @@
 #!/bin/bash
 
+source ./util.sh
+
 TEST_DATABASE_NAME=checker_test
-IMPORT_EXEC="../bin/importer -c 1  -P ${MYSQL_PORT} -D ${TEST_DATABASE_NAME}"
+IMPORT_EXEC="../bin/importer -c 1 -h ${MYSQL_HOST} -P ${MYSQL_PORT} -D ${TEST_DATABASE_NAME}"
 MYSQL_EXEC="mysql -h ${MYSQL_HOST} -P ${MYSQL_PORT} -u root"
 
 init(){
+    check_db_status "${MYSQL_HOST}" "${MYSQL_PORT}" mysql
     ${MYSQL_EXEC} -e "drop database if exists ${TEST_DATABASE_NAME};"
     ${MYSQL_EXEC} -e "create database ${TEST_DATABASE_NAME};"
 }
