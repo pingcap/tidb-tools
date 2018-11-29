@@ -4,3 +4,4 @@
 deps.sh
 go.sum
 go.mod
+vendor

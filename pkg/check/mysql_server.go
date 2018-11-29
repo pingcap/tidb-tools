@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
@@ -119,4 +120,70 @@ func (pc *MySQLServerIDChecker) Check(ctx context.Context) *Result {
 // Name implements the Checker interface.
 func (pc *MySQLServerIDChecker) Name() string {
 	return "mysql_server_id"
+}
+
+// MySQLServerTimezoneChecker checks two instances whether in same timezone
+type MySQLServerTimezoneChecker struct {
+	source *sql.DB
+	target *sql.DB
+}
+
+// NewMySQLServerTimezoneChecker returns a Checker
+func NewMySQLServerTimezoneChecker(source, target *sql.DB) Checker {
+	return &MySQLServerTimezoneChecker{source: source, target: target}
+}
+
+// Check implements the Checker interface.
+func (tc *MySQLServerTimezoneChecker) Check(ctx context.Context) *Result {
+	setErrorMsg := func(r *Result, dbOrigin, tzName string) {
+		r.ErrorMsg = fmt.Sprintf("%s server %s not found", dbOrigin, tzName)
+		r.Instruction = fmt.Sprintf("please set %s in your database", tzName)
+	}
+
+	result := &Result{
+		Name:  tc.Name(),
+		Desc:  "check whether two mysql instances in same timezone",
+		State: StateWarning,
+		Extra: fmt.Sprintf(""),
+	}
+
+	var sourceTZ, targetTZ string
+	var err error
+	sourceTZ, err = dbutil.GetDBTimezone(ctx, tc.source)
+	if err != nil {
+		setErrorMsg(result, "source", "global.time_zone")
+		return result
+	}
+	if strings.ToLower(sourceTZ) == "system" {
+		sourceTZ, err = dbutil.GetSystemTimezone(ctx, tc.source)
+		if err != nil {
+			setErrorMsg(result, "source", "system_time_zone")
+			return result
+		}
+	}
+
+	targetTZ, err = dbutil.GetDBTimezone(ctx, tc.target)
+	if err != nil {
+		setErrorMsg(result, "target", "global.time_zone")
+		return result
+	}
+	if strings.ToLower(targetTZ) == "system" {
+		targetTZ, err = dbutil.GetSystemTimezone(ctx, tc.target)
+		if err != nil {
+			setErrorMsg(result, "target", "system_time_zone")
+			return result
+		}
+	}
+
+	result.Extra = fmt.Sprintf("source db time_zone: %s, target db time_zone: %s", sourceTZ, targetTZ)
+	if sourceTZ == targetTZ {
+		result.State = StateSuccess
+	}
+
+	return result
+}
+
+// Name implements the Checker interface.
+func (tc *MySQLServerTimezoneChecker) Name() string {
+	return "mysql_server_timezone"
 }

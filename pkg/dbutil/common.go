@@ -376,6 +376,86 @@ func GetDBVersion(ctx context.Context, db *sql.DB) (string, error) {
 	return "", ErrVersionNotFound
 }
 
+// GetSystemTimezone returns the system time_zone
+func GetSystemTimezone(ctx context.Context, db *sql.DB) (string, error) {
+	/*
+		example in TiDB:
+		mysql> select @@global.system_time_zone;
+		+---------------------------+
+		| @@global.system_time_zone |
+		+---------------------------+
+		| CST                       |
+		+---------------------------+
+
+		example in MySQL:
+		mysql> select @@global.system_time_zone;
+		+---------------------------+
+		| @@global.system_time_zone |
+		+---------------------------+
+		| UTC                       |
+		+---------------------------+
+	*/
+	query := "SELECT @@global.system_time_zone"
+	result, err := db.QueryContext(ctx, query)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	defer result.Close()
+
+	var systemTZ sql.NullString
+	for result.Next() {
+		err := result.Scan(&systemTZ)
+		if err != nil {
+			return "", errors.Trace(err)
+		}
+		break
+	}
+	if systemTZ.Valid {
+		return systemTZ.String, nil
+	}
+	return "", errors.NotFoundf("system_time_zone")
+}
+
+// GetDBTimezone returns the database's global time_zone
+func GetDBTimezone(ctx context.Context, db *sql.DB) (string, error) {
+	/*
+		example in TiDB:
+		mysql> select @@global.time_zone;
+		+--------------------+
+		| @@global.time_zone |
+		+--------------------+
+		| SYSTEM             |
+		+--------------------+
+
+		example in MySQL:
+		mysql> select @@global.time_zone;
+		+--------------------+
+		| @@global.time_zone |
+		+--------------------+
+		| Asia/Shanghai      |
+		+--------------------+
+	*/
+	query := "SELECT @@global.time_zone"
+	result, err := db.QueryContext(ctx, query)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	defer result.Close()
+
+	var globalTZ sql.NullString
+	for result.Next() {
+		err := result.Scan(&globalTZ)
+		if err != nil {
+			return "", errors.Trace(err)
+		}
+		break
+	}
+	if globalTZ.Valid {
+		return globalTZ.String, nil
+	}
+	return "", errors.NotFoundf("global.time_zone")
+}
+
 // IsTiDB returns true if this database is tidb
 func IsTiDB(ctx context.Context, db *sql.DB) (bool, error) {
 	version, err := GetDBVersion(ctx, db)
