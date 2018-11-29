@@ -441,7 +441,7 @@ func generateDML(tp string, data map[string][]byte, null map[string]bool, keys [
 			}
 
 			if needQuotes(col.FieldType) {
-				values = append(values, fmt.Sprintf("\"%s\"", string(data[col.Name.O])))
+				values = append(values, fmt.Sprintf("'%s'", string(data[col.Name.O])))
 			} else {
 				values = append(values, string(data[col.Name.O]))
 			}
@@ -457,7 +457,7 @@ func generateDML(tp string, data map[string][]byte, null map[string]bool, keys [
 			}
 
 			if needQuotes(col.FieldType) {
-				kvs = append(kvs, fmt.Sprintf("`%s` = \"%s\"", col.Name.O, string(data[col.Name.O])))
+				kvs = append(kvs, fmt.Sprintf("`%s` = '%s'", col.Name.O, string(data[col.Name.O])))
 			} else {
 				kvs = append(kvs, fmt.Sprintf("`%s` = %s", col.Name.O, string(data[col.Name.O])))
 			}
