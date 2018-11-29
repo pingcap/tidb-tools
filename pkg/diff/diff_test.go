@@ -57,7 +57,7 @@ func (*testDiffSuite) TestGenerateSQLs(c *C) {
 	_, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
 	replaceSQL := generateDML("replace", rowsData, null, orderKeyCols, tableInfo, "test")
 	deleteSQL := generateDML("delete", rowsData, null, orderKeyCols, tableInfo, "test")
-	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (1,\"xxx\",\"2018-01-01 00:00:00\",\"10:10:10\",11.1111);")
+	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (1,'xxx','2018-01-01 00:00:00','10:10:10',11.1111);")
 	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` WHERE `id` = 1;")
 
 	// test the unique key
@@ -67,22 +67,22 @@ func (*testDiffSuite) TestGenerateSQLs(c *C) {
 	_, orderKeyCols2 := dbutil.SelectUniqueOrderKey(tableInfo2)
 	replaceSQL = generateDML("replace", rowsData, null, orderKeyCols2, tableInfo2, "test")
 	deleteSQL = generateDML("delete", rowsData, null, orderKeyCols2, tableInfo2, "test")
-	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (1,\"xxx\",\"2018-01-01 00:00:00\",\"10:10:10\",11.1111);")
-	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` WHERE `id` = 1 AND `name` = \"xxx\";")
+	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (1,'xxx','2018-01-01 00:00:00','10:10:10',11.1111);")
+	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` WHERE `id` = 1 AND `name` = 'xxx';")
 
 	// test value is nil
 	rowsData["name"] = []byte("")
 	null["name"] = true
 	replaceSQL = generateDML("replace", rowsData, null, orderKeyCols, tableInfo, "test")
 	deleteSQL = generateDML("delete", rowsData, null, orderKeyCols, tableInfo, "test")
-	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (1,NULL,\"2018-01-01 00:00:00\",\"10:10:10\",11.1111);")
+	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (1,NULL,'2018-01-01 00:00:00','10:10:10',11.1111);")
 	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` WHERE `id` = 1;")
 
 	rowsData["id"] = []byte("")
 	null["id"] = true
 	replaceSQL = generateDML("replace", rowsData, null, orderKeyCols, tableInfo, "test")
 	deleteSQL = generateDML("delete", rowsData, null, orderKeyCols, tableInfo, "test")
-	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (NULL,NULL,\"2018-01-01 00:00:00\",\"10:10:10\",11.1111);")
+	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (NULL,NULL,'2018-01-01 00:00:00','10:10:10',11.1111);")
 	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` WHERE `id` is NULL;")
 }
 
@@ -200,11 +200,11 @@ func testDataEqual(dbConn *sql.DB, c *C) {
 	c.Assert(dataEqual, Equals, true)
 
 	// update data and then compare data
-	_, err = dbConn.Exec("update test.testb set d = \"abc\" where a = \"2045-12-29\"")
+	_, err = dbConn.Exec("update test.testb set d = 'abc' where a = '2045-12-29'")
 	c.Assert(err, IsNil)
-	_, err = dbConn.Exec("delete from test.testb where a= \"2044-03-23\"")
+	_, err = dbConn.Exec("delete from test.testb where a= '2044-03-23'")
 	c.Assert(err, IsNil)
-	_, err = dbConn.Exec("insert into test.testb values(\"1992-09-27\",\"2018-09-03 16:26:27\",\"14:45:33\",\"i\",2048790075,2008)")
+	_, err = dbConn.Exec("insert into test.testb values('1992-09-27','2018-09-03 16:26:27','14:45:33','i',2048790075,2008)")
 	c.Assert(err, IsNil)
 
 	structEqual, dataEqual, err = tableDiff.Equal(context.Background(), writeSqls)
