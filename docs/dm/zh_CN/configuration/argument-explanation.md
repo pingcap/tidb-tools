@@ -92,7 +92,7 @@ user-filter-2:
 | --------------- | ---- | ----------------------------- |
 | all             |      | 代表包含下面所有的 events        |
 | all dml         |      | 代表包含下面所有 DML events     |
-| all ddl         |      | 代表包含下面所有 DML events     |
+| all ddl         |      | 代表包含下面所有 DDL events     |
 | none            |      | 代表不包含下面所有 events        |
 | none ddl        |      | 代表不包含下面所有 DDL events    |
 | none dml        |      | 代表不包含下面所有 DML events    |
