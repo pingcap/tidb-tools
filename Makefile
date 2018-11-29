@@ -23,7 +23,7 @@ FILES     := $$(find . -name '*.go' -type f | grep -vE 'vendor')
 VENDOR_TIDB := vendor/github.com/pingcap/tidb
 
 
-build: prepare check test importer checker dump_region binlogctl sync_diff_inspector finish
+build: prepare check importer checker dump_region binlogctl sync_diff_inspector finish
 
 prepare:		
 	cp go.mod1 go.mod
