@@ -17,14 +17,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"io/ioutil"
-	"os"
-	"strconv"
+	"math"
 	"testing"
 
 	_ "github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/pkg/importer"
 )
 
 func TestClient(t *testing.T) {
@@ -87,7 +86,7 @@ func (*testDiffSuite) TestGenerateSQLs(c *C) {
 }
 
 func (t *testDiffSuite) TestDiff(c *C) {
-	dbConn, err := getConn()
+	dbConn, err := createConn()
 	c.Assert(err, IsNil)
 
 	_, err = dbConn.Query("create database if not exists test")
@@ -153,40 +152,18 @@ func testStructEqual(conn *sql.DB, c *C) {
 }
 
 func testDataEqual(dbConn *sql.DB, c *C) {
-	_, err := dbConn.Query(`
-		CREATE TABLE test.testa (
-			a date NOT NULL,
-			b datetime DEFAULT NULL,
-			c time DEFAULT NULL,
-			d varchar(10) COLLATE latin1_bin DEFAULT NULL,
-			e int(10) DEFAULT NULL,
-			h year(4) DEFAULT NULL,
-			PRIMARY KEY (a))
-	`)
+	sourceTable := "testa"
+	targetTable := "testb"
+
+	defer func() {
+		_, _ = dbConn.Query(fmt.Sprintf("drop table test.%s", sourceTable))
+		_, _ = dbConn.Query(fmt.Sprintf("drop table test.%s", targetTable))
+	}()
+
+	err := generateData(dbConn, dbutil.GetDBConfigFromEnv("test"), sourceTable, targetTable)
 	c.Assert(err, IsNil)
 
-	_, err = dbConn.Query(`
-		CREATE TABLE test.testb (
-			a date NOT NULL,
-			b datetime DEFAULT NULL,
-			c time DEFAULT NULL,
-			d varchar(10) COLLATE latin1_bin DEFAULT NULL,
-			e int(10) DEFAULT NULL,
-			h year(4) DEFAULT NULL,
-			PRIMARY KEY (a))
-	`)
-	c.Assert(err, IsNil)
-
-	sql, err := ioutil.ReadFile("./test.sql")
-	c.Assert(err, IsNil)
-
-	_, err = dbConn.Exec(string(sql))
-	c.Assert(err, IsNil)
-
-	// load data to testb
-	_, err = dbConn.Exec("insert into test.testb (a, b, c, d, e, h) select a, b, c, d, e, h from test.testa")
-	c.Assert(err, IsNil)
-
+	// compare data, should be equal
 	fixSqls := make([]string, 0, 10)
 	writeSqls := func(sql string) error {
 		fixSqls = append(fixSqls, sql)
@@ -199,12 +176,8 @@ func testDataEqual(dbConn *sql.DB, c *C) {
 	c.Assert(structEqual, Equals, true)
 	c.Assert(dataEqual, Equals, true)
 
-	// update data and then compare data
-	_, err = dbConn.Exec("update test.testb set d = 'abc' where a = '2045-12-29'")
-	c.Assert(err, IsNil)
-	_, err = dbConn.Exec("delete from test.testb where a= '2044-03-23'")
-	c.Assert(err, IsNil)
-	_, err = dbConn.Exec("insert into test.testb values('1992-09-27','2018-09-03 16:26:27','14:45:33','i',2048790075,2008)")
+	// update data and then compare data, dataEqual should be false
+	err = updateData(dbConn, targetTable)
 	c.Assert(err, IsNil)
 
 	structEqual, dataEqual, err = tableDiff.Equal(context.Background(), writeSqls)
@@ -243,27 +216,65 @@ func createTableDiff(db *sql.DB) *TableDiff {
 	}
 }
 
-func getConn() (*sql.DB, error) {
-	host := os.Getenv("MYSQL_HOST")
-	if host == "" {
-		host = "127.0.0.1"
-	}
-	port, _ := strconv.Atoi(os.Getenv("MYSQL_PORT"))
-	if port == 0 {
-		port = 3306
-	}
-	user := os.Getenv("MYSQL_USER")
-	if user == "" {
-		user = "root"
-	}
-	pswd := os.Getenv("MYSQL_PSWD")
+func createConn() (*sql.DB, error) {
+	return dbutil.OpenDB(dbutil.GetDBConfigFromEnv("test"))
+}
 
-	dbConfig := dbutil.DBConfig{
-		Host:     host,
-		Port:     port,
-		User:     user,
-		Password: pswd,
+func generateData(dbConn *sql.DB, dbCfg dbutil.DBConfig, sourceTable, targetTable string) error {
+	createTableSQL := fmt.Sprintf(`CREATE TABLE test.%s (
+		a date NOT NULL,
+		b datetime DEFAULT NULL,
+		c time DEFAULT NULL,
+		d varchar(10) COLLATE latin1_bin DEFAULT NULL,
+		e int(10) DEFAULT NULL,
+		h year(4) DEFAULT NULL,
+		PRIMARY KEY (a))`, sourceTable)
+
+	cfg := &importer.Config{
+		TableSQL:    createTableSQL,
+		WorkerCount: 1,
+		JobCount:    10000,
+		Batch:       100,
+		DBCfg:       dbCfg,
 	}
 
-	return dbutil.OpenDB(dbConfig)
+	// generate data for source table
+	importer.DoProcess(cfg)
+
+	// generate data for target table
+	_, err := dbConn.Query(fmt.Sprintf("create table test.%s like test.%s", targetTable, sourceTable))
+	if err != nil {
+		return err
+	}
+
+	_, err = dbConn.Query(fmt.Sprintf("insert into test.%s (a, b, c, d, e, h) select a, b, c, d, e, h from test.%s", targetTable, sourceTable))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func updateData(dbConn *sql.DB, table string) error {
+	values, err := dbutil.GetRandomValues(context.Background(), dbConn, "test", table, "e", 3, math.MinInt64, math.MaxInt64, "true", "")
+	if err != nil {
+		return err
+	}
+
+	_, err = dbConn.Exec(fmt.Sprintf("update test.%s set e = e+1 where e = %v", table, values[0]))
+	if err != nil {
+		return err
+	}
+
+	_, err = dbConn.Exec(fmt.Sprintf("delete from test.%s where e = %v", table, values[1]))
+	if err != nil {
+		return err
+	}
+
+	_, err = dbConn.Exec(fmt.Sprintf("replace into test.%s values('1992-09-27','2018-09-03 16:26:27','14:45:33','i',2048790075,2008)", table))
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

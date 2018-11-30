@@ -19,7 +19,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/pkg/importer"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 )
 
@@ -52,21 +52,9 @@ func NewConfig() *Config {
 
 // Config is the configuration.
 type Config struct {
+	*importer.Config
+
 	*flag.FlagSet `json:"-"`
-
-	TableSQL string `toml:"table-sql" json:"table-sql"`
-
-	IndexSQL string `toml:"index-sql" json:"index-sql"`
-
-	LogLevel string `toml:"log-level" json:"log-level"`
-
-	WorkerCount int `toml:"worker-count" json:"worker-count"`
-
-	JobCount int `toml:"job-count" json:"job-count"`
-
-	Batch int `toml:"batch" json:"batch"`
-
-	DBCfg dbutil.DBConfig `toml:"db" json:"db"`
 
 	printVersion bool
 	configFile   string
