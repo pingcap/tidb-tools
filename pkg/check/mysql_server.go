@@ -124,19 +124,36 @@ func (pc *MySQLServerIDChecker) Name() string {
 
 // MySQLServerTimezoneChecker checks two instances whether in same timezone
 type MySQLServerTimezoneChecker struct {
-	source *sql.DB
-	target *sql.DB
+	source     *sql.DB
+	target     *sql.DB
+	sourceInfo *dbutil.DBConfig
+	targetInfo *dbutil.DBConfig
 }
 
 // NewMySQLServerTimezoneChecker returns a Checker
-func NewMySQLServerTimezoneChecker(source, target *sql.DB) Checker {
-	return &MySQLServerTimezoneChecker{source: source, target: target}
+func NewMySQLServerTimezoneChecker(source, target *sql.DB, sourceInfo, targetInfo *dbutil.DBConfig) Checker {
+	return &MySQLServerTimezoneChecker{
+		source:     source,
+		target:     target,
+		sourceInfo: sourceInfo,
+		targetInfo: targetInfo,
+	}
 }
 
 // Check implements the Checker interface.
 func (tc *MySQLServerTimezoneChecker) Check(ctx context.Context) *Result {
+
+	sourceAddr := fmt.Sprintf("%s:%d", tc.sourceInfo.Host, tc.sourceInfo.Port)
+	targetAddr := fmt.Sprintf("%s:%d", tc.targetInfo.Host, tc.targetInfo.Port)
+
 	setErrorMsg := func(r *Result, dbOrigin, tzName string) {
-		r.ErrorMsg = fmt.Sprintf("%s server %s not found", dbOrigin, tzName)
+		var dbAddr string
+		if dbOrigin == "source" {
+			dbAddr = sourceAddr
+		} else {
+			dbAddr = targetAddr
+		}
+		r.ErrorMsg = fmt.Sprintf("%s server - %s %s not found", dbOrigin, dbAddr, tzName)
 		r.Instruction = fmt.Sprintf("please set %s in your database", tzName)
 	}
 
@@ -175,7 +192,9 @@ func (tc *MySQLServerTimezoneChecker) Check(ctx context.Context) *Result {
 		}
 	}
 
-	result.Extra = fmt.Sprintf("source db time_zone: %s, target db time_zone: %s", sourceTZ, targetTZ)
+	result.Extra = fmt.Sprintf(
+		"source db - %s time_zone: %s, target db - %s time_zone: %s",
+		sourceAddr, sourceTZ, targetAddr, targetTZ)
 	if sourceTZ == targetTZ {
 		result.State = StateSuccess
 	}
