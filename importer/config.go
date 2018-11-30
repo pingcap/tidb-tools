@@ -26,6 +26,7 @@ import (
 // NewConfig creates a new config.
 func NewConfig() *Config {
 	cfg := &Config{}
+	cfg.Config = &importer.Config{}
 	cfg.FlagSet = flag.NewFlagSet("importer", flag.ContinueOnError)
 	fs := cfg.FlagSet
 
