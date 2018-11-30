@@ -128,6 +128,12 @@ func testStructEqual(conn *sql.DB, c *C) {
 			"DROP TABLE `test`.`testa`",
 			"DROP TABLE `test`.`testb`",
 			true,
+		}, {
+			"CREATE TABLE `test`.`testa`(`id` int, `name` varchar(24))",
+			"CREATE TABLE `test`.`testb`(`id` varchar(24), name varchar(24))",
+			"DROP TABLE `test`.`testa`",
+			"DROP TABLE `test`.`testb`",
+			false,
 		},
 	}
 
@@ -212,7 +218,6 @@ func createTableDiff(db *sql.DB) *TableDiff {
 	return &TableDiff{
 		SourceTables: []*TableInstance{sourceTableInstance},
 		TargetTable:  targetTableInstance,
-		ChunkSize:    100,
 	}
 }
 
