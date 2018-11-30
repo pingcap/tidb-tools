@@ -22,6 +22,7 @@ import (
 	_ "github.com/go-sql-driver/mysql" // for mysql driver
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -224,8 +225,8 @@ func execSQL(db *sql.DB, sql string) error {
 	return nil
 }
 
-func createDB(cfg DBConfig) (*sql.DB, error) {
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Name)
+func createDB(cfg dbutil.DBConfig) (*sql.DB, error) {
+	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Schema)
 	db, err := sql.Open("mysql", dbDSN)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -238,7 +239,7 @@ func closeDB(db *sql.DB) error {
 	return errors.Trace(db.Close())
 }
 
-func createDBs(cfg DBConfig, count int) ([]*sql.DB, error) {
+func createDBs(cfg dbutil.DBConfig, count int) ([]*sql.DB, error) {
 	dbs := make([]*sql.DB, 0, count)
 	for i := 0; i < count; i++ {
 		db, err := createDB(cfg)

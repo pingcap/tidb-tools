@@ -33,8 +33,13 @@ func main() {
 		os.Exit(2)
 	}
 
+	DoProcess(cfg)
+}
+
+// DoProcess generates data
+func DoProcess(cfg *Config) {
 	table := newTable()
-	err = parseTableSQL(table, cfg.TableSQL)
+	err := parseTableSQL(table, cfg.TableSQL)
 	if err != nil {
 		log.Fatal(err)
 	}
