@@ -29,9 +29,19 @@ func init() {
 type Config struct {
 	KafkaAddr []string
 	// the CommitTs of binlog return by reader will bigger than the config CommitTs
-	CommitTS  int64
-	Offset    int64 // start at kafka offset
+	CommitTS int64
+	Offset   int64 // start at kafka offset
+	// if Topic is empty, use the default name in drainer <ClusterID>_obinlog
+	Topic     string
 	ClusterID string
+}
+
+func (c *Config) valid() error {
+	if len(c.Topic) == 0 && len(c.ClusterID) == 0 {
+		return errors.New("Topic or ClusterID must be set")
+	}
+
+	return nil
 }
 
 // Message read from reader
@@ -51,11 +61,20 @@ type Reader struct {
 }
 
 func (r *Reader) getTopic() (string, int32) {
+	if r.cfg.Topic != "" {
+		return r.cfg.Topic, 0
+	}
+
 	return r.cfg.ClusterID + "_obinlog", 0
 }
 
 // NewReader creates an instance of Reader
 func NewReader(cfg *Config) (r *Reader, err error) {
+	err = cfg.valid()
+	if err != nil {
+		errors.Trace(err)
+	}
+
 	r = &Reader{
 		cfg:       cfg,
 		stop:      make(chan struct{}),
