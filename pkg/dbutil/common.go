@@ -141,11 +141,11 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 	return cnt.Int64, nil
 }
 
-// GetRandomValues returns some random value of a column.
+// GetRandomValues returns some random value and these value's count of a column, just like sampling. Tips: args is the value in limitRange.
 func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int, limitRange string, collation string, args []interface{}) ([]string, []int, error) {
 	/*
 		example:
-		mysql> SELECT `id`, count(*) count FROM (SELECT `id` FROM `test`.`test` ORDER BY RAND() LIMIT 5) rand_tmp GROUP BY `id` ORDER BY `id`;
+		mysql> SELECT `id`, COUNT(*) count FROM (SELECT `id` FROM `test`.`test`  WHERE `id` COLLATE "latin1_bin" > 0 AND `id` COLLATE "latin1_bin" < 100 ORDER BY RAND() LIMIT 5) rand_tmp GROUP BY `id` ORDER BY `id` COLLATE "latin1_bin";
 		+------+-------+
 		| id   | count |
 		+------+-------+
@@ -153,6 +153,8 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 		|    2 |     2 |
 		|    3 |     1 |
 		+------+-------+
+
+		FIXME: TiDB now don't return rand value when use `ORDER BY RAND()`
 	*/
 
 	if limitRange == "" {
@@ -166,8 +168,8 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 	randomValue := make([]string, 0, num)
 	valueCount := make([]int, 0, num)
 
-	query := fmt.Sprintf("SELECT `%s`, COUNT(*) count FROM (SELECT `%s` FROM `%s`.`%s` WHERE %s ORDER BY RAND() LIMIT %d)rand_tmp GROUP BY `%s` ORDER BY `%s`%s",
-		column, column, schemaName, table, limitRange, num, column, column, collation)
+	query := fmt.Sprintf("SELECT %[1]s, COUNT(*) count FROM (SELECT %[1]s FROM %[2]s WHERE %[3]s ORDER BY RAND() LIMIT %[4]d)rand_tmp GROUP BY %[1]s ORDER BY %[1]s%[5]s",
+		escapeName(column), TableName(schemaName, table), limitRange, num, collation)
 	log.Debugf("get random values sql: %s, args: %v", query, args)
 
 	rows, err := db.QueryContext(ctx, query, args...)
@@ -187,7 +189,7 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 		valueCount = append(valueCount, count)
 	}
 
-	return randomValue, valueCount, nil
+	return randomValue, valueCount, errors.Trace(rows.Err())
 }
 
 // GetMinMaxValue get min and max value.
@@ -233,7 +235,7 @@ func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column strin
 		return "", "", ErrNoData
 	}
 
-	return min.String, max.String, nil
+	return min.String, max.String, errors.Trace(rows.Err())
 }
 
 // GetTables returns name of all tables in the specified schema
@@ -355,7 +357,7 @@ type Bucket struct {
 	UpperBound string
 }
 
-// SHOW STATS_BUCKETS in TiDB.
+// GetBucketsInfo SHOW STATS_BUCKETS in TiDB.
 func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string) (map[string][]Bucket, error) {
 	/*
 		mysql.stats_buckets
@@ -370,7 +372,7 @@ func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string) (map[
 	*/
 	buckets := make(map[string][]Bucket)
 	query := fmt.Sprintf("SHOW STATS_BUCKETS WHERE db_name= \"%s\" AND table_name=\"%s\";", schema, table)
-	log.Infof("GetBucketsInfo query: %s", query)
+	log.Debugf("GetBucketsInfo query: %s", query)
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -406,7 +408,7 @@ func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string) (map[
 		})
 	}
 
-	return buckets, nil
+	return buckets, errors.Trace(rows.Err())
 }
 
 // GetTidbLatestTSO returns tidb's current TSO.
@@ -504,9 +506,9 @@ func IsTiDB(ctx context.Context, db *sql.DB) (bool, error) {
 
 // TableName returns `schema`.`table`
 func TableName(schema, table string) string {
-	return fmt.Sprintf("`%s`.`%s`", escapeName(schema), escapeName(table))
+	return fmt.Sprintf("%s.%s", escapeName(schema), escapeName(table))
 }
 
 func escapeName(name string) string {
-	return strings.Replace(name, "`", "``", -1)
+	return fmt.Sprintf("`%s`", name)
 }
