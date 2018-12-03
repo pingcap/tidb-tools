@@ -19,12 +19,14 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb-tools/pkg/importer"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 // NewConfig creates a new config.
 func NewConfig() *Config {
 	cfg := &Config{}
+	cfg.Config = &importer.Config{}
 	cfg.FlagSet = flag.NewFlagSet("importer", flag.ContinueOnError)
 	fs := cfg.FlagSet
 
@@ -40,7 +42,7 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.DBCfg.Host, "h", "127.0.0.1", "set the database host ip")
 	fs.StringVar(&cfg.DBCfg.User, "u", "root", "set the database user")
 	fs.StringVar(&cfg.DBCfg.Password, "p", "", "set the database password")
-	fs.StringVar(&cfg.DBCfg.Name, "D", "test", "set the database name")
+	fs.StringVar(&cfg.DBCfg.Schema, "D", "test", "set the database name")
 	fs.IntVar(&cfg.DBCfg.Port, "P", 3306, "set the database host port")
 
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
@@ -49,43 +51,11 @@ func NewConfig() *Config {
 	return cfg
 }
 
-// DBConfig is the DB configuration.
-type DBConfig struct {
-	Host string `toml:"host" json:"host"`
-
-	User string `toml:"user" json:"user"`
-
-	Password string `toml:"password" json:"password"`
-
-	Name string `toml:"name" json:"name"`
-
-	Port int `toml:"port" json:"port"`
-}
-
-func (c *DBConfig) String() string {
-	if c == nil {
-		return "<nil>"
-	}
-	return fmt.Sprintf("DBConfig(%+v)", *c)
-}
-
 // Config is the configuration.
 type Config struct {
+	*importer.Config
+
 	*flag.FlagSet `json:"-"`
-
-	TableSQL string `toml:"table-sql" json:"table-sql"`
-
-	IndexSQL string `toml:"index-sql" json:"index-sql"`
-
-	LogLevel string `toml:"log-level" json:"log-level"`
-
-	WorkerCount int `toml:"worker-count" json:"worker-count"`
-
-	JobCount int `toml:"job-count" json:"job-count"`
-
-	Batch int `toml:"batch" json:"batch"`
-
-	DBCfg DBConfig `toml:"db" json:"db"`
 
 	printVersion bool
 	configFile   string
