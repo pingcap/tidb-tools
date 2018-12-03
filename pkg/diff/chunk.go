@@ -424,7 +424,7 @@ func getSplitFields(db *sql.DB, schema string, table *model.TableInfo, splitFiel
 		splitCols = append(splitCols, dbutil.FindColumnByName(table.Columns, splitField))
 	}
 
-	indexColumns := dbutil.FindAllColumnWithIndex(context.Background(), db, schema, table)
+	indexColumns := dbutil.FindAllColumnWithIndex(table)
 
 	// user's config had higher priorities
 	for _, col := range append(append(splitCols, indexColumns...), table.Columns...) {

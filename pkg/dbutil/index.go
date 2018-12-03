@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"strconv"
 
 	"github.com/pingcap/errors"
@@ -115,64 +116,42 @@ func FindSuitableColumnWithIndex(ctx context.Context, db *sql.DB, schemaName str
 
 // FindAllIndex returns all index, order is pk, uk, and normal index.
 func FindAllIndex(tableInfo *model.TableInfo) []*model.IndexInfo {
-	var primaryIndex *model.IndexInfo
-	uniqueIndices := make([]*model.IndexInfo, 0, 1)
-	normalIndices := make([]*model.IndexInfo, 0, 1)
-
-	for i, index := range tableInfo.Indices {
-		if index.Primary {
-			primaryIndex = tableInfo.Indices[i]
-		} else if index.Unique {
-			uniqueIndices = append(uniqueIndices, tableInfo.Indices[i])
-		} else {
-			normalIndices = append(normalIndices, tableInfo.Indices[i])
+	indices := make([]*model.IndexInfo, len(tableInfo.Indices))
+	copy(indices, tableInfo.Indices)
+	sort.SliceStable(indices, func(i, j int) bool {
+		a := indices[i]
+		b := indices[j]
+		switch {
+		case b.Primary:
+			return false
+		case a.Primary:
+			return true
+		case b.Unique:
+			return false
+		case a.Unique:
+			return true
+		default:
+			return false
 		}
-	}
-
-	indices := make([]*model.IndexInfo, 0, 2)
-	if primaryIndex != nil {
-		indices = append(indices, primaryIndex)
-	}
-
-	if len(uniqueIndices) != 0 {
-		indices = append(indices, uniqueIndices...)
-	}
-
-	if len(normalIndices) != 0 {
-		indices = append(indices, normalIndices...)
-	}
-
+	})
 	return indices
 }
 
 // FindAllColumnWithIndex returns columns with index, order is pk, uk and normal index.
-func FindAllColumnWithIndex(ctx context.Context, db *sql.DB, schemaName string, tableInfo *model.TableInfo) []*model.ColumnInfo {
+func FindAllColumnWithIndex(tableInfo *model.TableInfo) []*model.ColumnInfo {
 	colsMap := make(map[string]interface{})
 	cols := make([]*model.ColumnInfo, 0, 2)
 
-	primaryKeys := make([]*model.ColumnInfo, 0, 2)
-	uniqueKeys := make([]*model.ColumnInfo, 0, 2)
-	indexKeys := make([]*model.ColumnInfo, 0, 2)
-
-	for _, index := range tableInfo.Indices {
-		for _, col := range index.Columns {
-			if index.Primary {
-				primaryKeys = append(primaryKeys, FindColumnByName(tableInfo.Columns, col.Name.O))
-			} else if index.Unique {
-				uniqueKeys = append(uniqueKeys, FindColumnByName(tableInfo.Columns, col.Name.O))
-			} else {
-				indexKeys = append(indexKeys, FindColumnByName(tableInfo.Columns, col.Name.O))
+	for _, index := range FindAllIndex(tableInfo) {
+		// index will be guaranteed to be visited in order PK -> UK -> IK
+		for _, indexCol := range index.Columns {
+			col := FindColumnByName(tableInfo.Columns, indexCol.Name.O)
+			if _, ok := colsMap[col.Name.O]; ok {
+				continue
 			}
+			colsMap[col.Name.O] = struct{}{}
+			cols = append(cols, col)
 		}
-	}
-
-	for _, col := range append(append(primaryKeys, uniqueKeys...), indexKeys...) {
-		if _, ok := colsMap[col.Name.O]; ok {
-			continue
-		}
-
-		colsMap[col.Name.O] = struct{}{}
-		cols = append(cols, col)
 	}
 
 	return cols

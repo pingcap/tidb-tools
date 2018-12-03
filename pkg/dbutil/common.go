@@ -332,8 +332,8 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName str
 		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(`%s`)", col.Name.O))
 	}
 
-	query := fmt.Sprintf("SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED)) AS checksum FROM `%s`.`%s` WHERE %s;",
-		strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), schemaName, tableName, limitRange)
+	query := fmt.Sprintf("SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED)) AS checksum FROM %s WHERE %s;",
+		strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), TableName(schemaName, tableName), limitRange)
 	log.Debugf("checksum sql: %s, args: %v", query, args)
 
 	var checksum sql.NullInt64
@@ -371,29 +371,34 @@ func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string) (map[
 			+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
 	*/
 	buckets := make(map[string][]Bucket)
-	query := fmt.Sprintf("SHOW STATS_BUCKETS WHERE db_name= \"%s\" AND table_name=\"%s\";", schema, table)
+	query := "SHOW STATS_BUCKETS WHERE db_name= ? AND table_name= ?;"
 	log.Debugf("GetBucketsInfo query: %s", query)
-	rows, err := db.QueryContext(ctx, query)
+
+	rows, err := db.QueryContext(ctx, query, schema, table)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	defer rows.Close()
 
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
 	for rows.Next() {
 		var dbName, tableName, partitionName, columnName, lowerBound, upperBound sql.NullString
 		var isIndex, bucketID, count, repeats sql.NullInt64
 
-		cols, err := rows.Columns()
-		if err != nil {
-			return nil, errors.Trace(err)
+		// add partiton_name in new version
+		switch len(cols) {
+		case 9:
+			err = rows.Scan(&dbName, &tableName, &columnName, &isIndex, &bucketID, &count, &repeats, &lowerBound, &upperBound)
+		case 10:
+			err = rows.Scan(&dbName, &tableName, &partitionName, &columnName, &isIndex, &bucketID, &count, &repeats, &lowerBound, &upperBound)
+		default:
+			return nil, errors.New("Unknown struct for buckets info")
 		}
 
-		// add partiton_name in new version
-		if len(cols) == 9 {
-			err = rows.Scan(&dbName, &tableName, &columnName, &isIndex, &bucketID, &count, &repeats, &lowerBound, &upperBound)
-		} else if len(cols) == 10 {
-			err = rows.Scan(&dbName, &tableName, &partitionName, &columnName, &isIndex, &bucketID, &count, &repeats, &lowerBound, &upperBound)
-		}
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
