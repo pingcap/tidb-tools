@@ -38,7 +38,8 @@ var (
 	host     = flag.String("h", "localhost", "host")
 
 	kafkaAddr = flag.String("kafkaAddr", "127.0.0.1:9092", "kafkaAddr like 127.0.0.1:9092,127.0.0.1:9093")
-	clusterID = flag.String("clusterID", "6561373978432450126", "clusterID")
+	clusterID = flag.String("clusterID", "", "clusterID")
+	topic     = flag.String("topic", "", "topic name to consume binlog, one of topic or clusterID must be set")
 	offset    = flag.Int64("offset", sarama.OffsetNewest, "offset")
 	commitTS  = flag.Int64("commitTS", 0, "commitTS")
 )
@@ -59,6 +60,7 @@ func main() {
 		KafkaAddr: strings.Split(*kafkaAddr, ","),
 		Offset:    *offset,
 		CommitTS:  *commitTS,
+		Topic:     *topic,
 		ClusterID: *clusterID,
 	}
 

@@ -24,7 +24,8 @@ import (
 var (
 	offset    = flag.Int64("offset", sarama.OffsetNewest, "offset")
 	commitTS  = flag.Int64("commitTS", 0, "commitTS")
-	clusterID = flag.String("clusterID", "6561373978432450126", "clusterID")
+	clusterID = flag.String("clusterID", "", "clusterID")
+	topic     = flag.String("topic", "", "topic name to consume binlog, one of topic or clusterID must be set")
 )
 
 func main() {
@@ -35,6 +36,7 @@ func main() {
 		Offset:    *offset,
 		CommitTS:  *commitTS,
 		ClusterID: *clusterID,
+		Topic:     *topic,
 	}
 
 	breader, err := reader.NewReader(cfg)
