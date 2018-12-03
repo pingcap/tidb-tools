@@ -104,7 +104,7 @@ func (c *chunkRange) copy() *chunkRange {
 
 type spliter interface {
 	// split splits a table's data to several chunks.
-	split(table *TableInstance, columns []*model.ColumnInfo, chunkSize, sample int, limits string, collation string) ([]*chunkRange, error)
+	split(table *TableInstance, columns []*model.ColumnInfo, chunkSize int, limits string, collation string) ([]*chunkRange, error)
 }
 
 type randomSpliter struct {
@@ -112,15 +112,13 @@ type randomSpliter struct {
 	chunkSize int
 	limits    string
 	collation string
-	sample    int
 }
 
-func (s *randomSpliter) split(table *TableInstance, columns []*model.ColumnInfo, chunkSize, sample int, limits string, collation string) ([]*chunkRange, error) {
+func (s *randomSpliter) split(table *TableInstance, columns []*model.ColumnInfo, chunkSize int, limits string, collation string) ([]*chunkRange, error) {
 	s.table = table
 	s.chunkSize = chunkSize
 	s.limits = limits
 	s.collation = collation
-	s.sample = sample
 
 	// get the chunk count
 	cnt, err := dbutil.GetRowCount(context.Background(), table.Conn, table.Schema, table.Table, limits)
@@ -134,11 +132,6 @@ func (s *randomSpliter) split(table *TableInstance, columns []*model.ColumnInfo,
 	}
 
 	chunkCnt := (int(cnt) + chunkSize - 1) / chunkSize
-	if sample != 100 {
-		// use sampling check, can check more fragmented by split to more chunk
-		chunkCnt *= 10
-	}
-
 	field := columns[0].Name.O
 
 	// fetch min, max
@@ -316,16 +309,14 @@ type bucketSpliter struct {
 	chunkSize int
 	limits    string
 	collation string
-	sample    int
 	buckets   map[string][]dbutil.Bucket
 }
 
-func (s *bucketSpliter) split(table *TableInstance, columns []*model.ColumnInfo, chunkSize, sample int, limits string, collation string) ([]*chunkRange, error) {
+func (s *bucketSpliter) split(table *TableInstance, columns []*model.ColumnInfo, chunkSize int, limits string, collation string) ([]*chunkRange, error) {
 	s.table = table
 	s.chunkSize = chunkSize
 	s.limits = limits
 	s.collation = collation
-	s.sample = sample
 
 	buckets, err := dbutil.GetBucketsInfo(context.Background(), s.table.Conn, s.table.Schema, s.table.Table)
 	if err != nil {
@@ -397,13 +388,13 @@ type CheckJob struct {
 	Args   []interface{}
 }
 
-func getChunksForTable(table *TableInstance, columns []*model.ColumnInfo, chunkSize, sample int, limits string, collation string) ([]*chunkRange, error) {
+func getChunksForTable(table *TableInstance, columns []*model.ColumnInfo, chunkSize int, limits string, collation string) ([]*chunkRange, error) {
 	s := bucketSpliter{}
-	chunks, err := s.split(table, columns, chunkSize, sample, limits, collation)
+	chunks, err := s.split(table, columns, chunkSize, limits, collation)
 	if err != nil || len(chunks) == 0 {
 		log.Warnf("use bucket information to get chunks error: %v, chunks num: %d", errors.Trace(err), len(chunks))
 		s := randomSpliter{}
-		return s.split(table, columns, chunkSize, sample, limits, collation)
+		return s.split(table, columns, chunkSize, limits, collation)
 	}
 
 	return chunks, nil
@@ -440,7 +431,7 @@ func getSplitFields(db *sql.DB, schema string, table *model.TableInfo, splitFiel
 }
 
 // GenerateCheckJob generates some CheckJobs.
-func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSize, sample int, collation string) ([]*CheckJob, error) {
+func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSize int, collation string) ([]*CheckJob, error) {
 	jobBucket := make([]*CheckJob, 0, 10)
 	var jobCnt int
 	var err error
@@ -455,7 +446,7 @@ func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSiz
 		return nil, errors.Trace(err)
 	}
 
-	chunks, err := getChunksForTable(table, fields, chunkSize, sample, limits, collation)
+	chunks, err := getChunksForTable(table, fields, chunkSize, limits, collation)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

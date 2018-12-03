@@ -168,7 +168,7 @@ func (t *TableDiff) CheckTableData(ctx context.Context) (bool, error) {
 
 // EqualTableData checks data is equal or not.
 func (t *TableDiff) EqualTableData(ctx context.Context) (bool, error) {
-	allJobs, err := GenerateCheckJob(t.TargetTable, t.Fields, t.Range, t.ChunkSize, t.Sample, t.Collation)
+	allJobs, err := GenerateCheckJob(t.TargetTable, t.Fields, t.Range, t.ChunkSize, t.Collation)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
