@@ -16,7 +16,7 @@ package diff
 import (
 	"strconv"
 
-	"github.com/ngaut/log"
+	log "github.com/sirupsen/logrus"
 	"github.com/pingcap/parser/model"
 )
 

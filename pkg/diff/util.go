@@ -16,7 +16,7 @@ package diff
 import (
 	"math/rand"
 
-	"github.com/ngaut/log"
+	log "github.com/sirupsen/logrus"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/types"
