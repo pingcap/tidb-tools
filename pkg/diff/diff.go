@@ -22,11 +22,10 @@ import (
 	"strings"
 	"sync"
 
-	
-	log "github.com/sirupsen/logrus"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	log "github.com/sirupsen/logrus"
 )
 
 // TableInstance record a table instance
