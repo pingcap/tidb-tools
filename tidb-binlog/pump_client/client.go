@@ -172,7 +172,7 @@ func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.Secur
 func (c *PumpsClient) getPumpStatus(pctx context.Context, binlogSocket string) error {
 	if len(binlogSocket) != 0 {
 		nodeStatus := &node.Status{
-			NodeID:  "localPump",
+			NodeID:  localPump,
 			Addr:    binlogSocket,
 			IsAlive: true,
 			State:   node.Online,

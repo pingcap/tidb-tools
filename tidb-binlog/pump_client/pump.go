@@ -26,6 +26,8 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
+var localPump string = "localPump"
+
 // PumpStatus saves pump's status.
 type PumpStatus struct {
 	/*
@@ -78,9 +80,16 @@ func (p *PumpStatus) createGrpcClient(security *tls.Config) error {
 		p.grpcConn.Close()
 	}
 
-	dialerOpt := grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
-		return net.DialTimeout("tcp", addr, timeout)
-	})
+	var dialerOpt 
+	if p.NodeID == localPump {
+		dialerOpt = grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
+			return net.DialTimeout("unix", addr, timeout)
+		})
+	} else {
+		dialerOpt = grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
+			return net.DialTimeout("tcp", addr, timeout)
+		})
+	}
 	Logger.Debugf("[pumps client] create gcpc client at %s", p.Addr)
 	var clientConn *grpc.ClientConn
 	var err error

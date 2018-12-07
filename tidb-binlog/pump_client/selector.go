@@ -240,7 +240,11 @@ func NewUniqueSelector() PumpSelector {
 
 // SetPumps implement PumpSelector.SetPumps.
 func (u *UniqueSelector) SetPumps(pumps []*PumpStatus) {
-	u.Pump = pumps[0]
+	if len(pumps) == 0 {
+		u.Pump = nil
+	} else {
+		u.Pump = pumps[0]
+	}
 }
 
 // Select implement PumpSelector.Select.
