@@ -102,9 +102,13 @@ type PumpsClient struct {
 }
 
 // NewPumpsClient returns a PumpsClient.
-func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.SecurityOption) (*PumpsClient, error) {
-	// TODO: get strategy from etcd, and can update strategy in real-time. now use Range as default.
+func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.SecurityOption, binlogSocket string) (*PumpsClient, error) {
+	// TODO: get strategy from etcd, and can update strategy in real-time.
+	// use Range as default. and if binlogSocket is not empty, will use Unique strategy.
 	strategy := Range
+	if len(binlogSocket) != 0 {
+		strategy = Unique
+	}
 	selector := NewSelector(strategy)
 
 	ectdEndpoints, err := utils.ParseHostPortAddr(etcdURLs)
@@ -149,21 +153,34 @@ func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.Secur
 		Security:           security,
 	}
 
-	err = newPumpsClient.getPumpStatus(ctx)
+	err = newPumpsClient.getPumpStatus(ctx, binlogSocket)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	newPumpsClient.Selector.SetPumps(copyPumps(newPumpsClient.Pumps.AvaliablePumps))
 
-	newPumpsClient.wg.Add(2)
-	go newPumpsClient.watchStatus()
-	go newPumpsClient.detect()
+	if strategy != Unique {
+		newPumpsClient.wg.Add(2)
+		go newPumpsClient.watchStatus()
+		go newPumpsClient.detect()
+	}
 
 	return newPumpsClient, nil
 }
 
 // getPumpStatus retruns all the pumps status in the etcd.
-func (c *PumpsClient) getPumpStatus(pctx context.Context) error {
+func (c *PumpsClient) getPumpStatus(pctx context.Context, binlogSocket string) error {
+	if len(binlogSocket) != 0 {
+		nodeStatus := &node.Status{
+			NodeID:  "localPump",
+			Addr:    binlogSocket,
+			IsAlive: true,
+		}
+		c.addPump(NewPumpStatus(nodeStatus, c.Security), false)
+
+		return nil
+	}
+
 	nodesStatus, err := c.EtcdRegistry.Nodes(pctx, node.NodePrefix[node.PumpNode])
 	if err != nil {
 		return errors.Trace(err)

@@ -30,6 +30,9 @@ const (
 
 	// Score means choose pump by it's score.
 	Score = "score"
+
+	// Unique means will only use one pump.
+	Unique = "unique"
 )
 
 // PumpSelector selects pump for sending binlog.
@@ -224,6 +227,32 @@ func (r *RangeSelector) Next(binlog *pb.Binlog, retryTime int) *PumpStatus {
 	return nextPump
 }
 
+// UniqueSelector will always select a same pump, used for compatible with kafka version tidb-binlog.
+type UniqueSelector struct {
+	// the pump to be selected.
+	Pump *PumpStatus
+}
+
+// NewUniqueSelector returns a UniqueSelector.
+func NewUniqueSelector() PumpSelector {
+	return &UniqueSelector{}
+}
+
+// SetPumps implement PumpSelector.SetPumps.
+func (u *UniqueSelector) SetPumps(pumps []*PumpStatus) {
+	u.Pump = pumps[0]
+}
+
+// Select implement PumpSelector.Select.
+func (u *UniqueSelector) Select(binlog *pb.Binlog) *PumpStatus {
+	return u.Pump
+}
+
+// Next implement PumpSelector.Next. Only for Prewrite binlog.
+func (u *UniqueSelector) Next(binlog *pb.Binlog, retryTime int) *PumpStatus {
+	return u.Pump
+}
+
 // ScoreSelector select a pump by pump's score.
 type ScoreSelector struct{}
 
@@ -259,6 +288,8 @@ func NewSelector(algorithm string) PumpSelector {
 		selector = NewHashSelector()
 	case Score:
 		selector = NewScoreSelector()
+	case Unique:
+		selector = NewUniqueSelector()
 	default:
 		Logger.Warnf("unknow algorithm %s, use range as default", algorithm)
 		selector = NewRangeSelector()
