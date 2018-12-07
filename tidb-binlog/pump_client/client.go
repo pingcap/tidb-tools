@@ -175,6 +175,7 @@ func (c *PumpsClient) getPumpStatus(pctx context.Context, binlogSocket string) e
 			NodeID:  "localPump",
 			Addr:    binlogSocket,
 			IsAlive: true,
+			State:   node.Online,
 		}
 		c.addPump(NewPumpStatus(nodeStatus, c.Security), false)
 
