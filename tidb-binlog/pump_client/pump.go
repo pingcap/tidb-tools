@@ -80,7 +80,7 @@ func (p *PumpStatus) createGrpcClient(security *tls.Config) error {
 		p.grpcConn.Close()
 	}
 
-	var dialerOpt 
+	var dialerOpt grpc.DialOption
 	if p.NodeID == localPump {
 		dialerOpt = grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
 			return net.DialTimeout("unix", addr, timeout)
