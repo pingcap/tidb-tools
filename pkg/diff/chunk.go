@@ -412,7 +412,7 @@ func getSplitFields(db *sql.DB, schema string, table *model.TableInfo, splitFiel
 			return nil, errors.NotFoundf("column %s in table %s", splitField, table.Name)
 
 		}
-		splitCols = append(splitCols, dbutil.FindColumnByName(table.Columns, splitField))
+		splitCols = append(splitCols, col)
 	}
 
 	indexColumns := dbutil.FindAllColumnWithIndex(table)
