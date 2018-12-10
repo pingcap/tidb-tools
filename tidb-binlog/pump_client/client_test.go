@@ -200,6 +200,7 @@ type mockPumpServer struct {
 	server *grpc.Server
 }
 
+// WriteBinlog implements PumpServer interface.
 func (p *mockPumpServer) WriteBinlog(ctx context.Context, req *binlog.WriteBinlogReq) (*binlog.WriteBinlogResp, error) {
 	return &binlog.WriteBinlogResp{}, nil
 }
