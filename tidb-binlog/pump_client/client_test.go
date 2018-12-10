@@ -225,7 +225,7 @@ func createMockPumpServer(addr string, mode string) (*mockPumpServer, error) {
 	if err != nil {
 		return nil, err
 	}
-	serv := grpc.NewServer(grpc.MaxRecvMsgSize(1024))
+	serv := grpc.NewServer(grpc.MaxRecvMsgSize(testMaxRecvMsgSize))
 	pump := &mockPumpServer{
 		mode:   mode,
 		addr:   addr,
