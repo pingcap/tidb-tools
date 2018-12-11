@@ -66,6 +66,19 @@ func removeColumns(tableInfo *model.TableInfo, columns []string) *model.TableInf
 	return tableInfo
 }
 
+func getColumnsFromIndex(index *model.IndexInfo, tableInfo *model.TableInfo) []*model.ColumnInfo {
+	indexColumns := make([]*model.ColumnInfo, 0, len(index.Columns))
+	for _, indexColumn := range index.Columns {
+		for _, column := range tableInfo.Columns {
+			if column.Name.O == indexColumn.Name.O {
+				indexColumns = append(indexColumns, column)
+			}
+		}
+	}
+
+	return indexColumns
+}
+
 func getRandomN(total, num int) []int {
 	if num > total {
 		log.Warnf("the num %d is greater than total %d", num, total)

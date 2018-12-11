@@ -23,6 +23,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/tidb/types"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -440,6 +441,58 @@ func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string) (map[
 	}
 
 	return buckets, errors.Trace(rows.Err())
+}
+
+// AnalyzeValuesFromBuckets analyze upperBound or lowerBound to string for each column.
+// upperBound and lowerBound are looks like '(123, abc)' for multiple fields, or '123' for one field.
+func AnalyzeValuesFromBuckets(valueString string, cols []*model.ColumnInfo) ([]string, error) {
+	// FIXME: maybe some values contains '(', ')' or ', '
+	vStr := strings.Trim(strings.Trim(valueString, "("), ")")
+	values := strings.Split(vStr, ", ")
+
+	for i, col := range cols {
+		if IsTimeType(col.Tp) {
+			value, err := DecodeTimeInBucket(values[i], col.Tp)
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+
+			values[i] = value
+		}
+	}
+
+	return values, nil
+}
+
+// DecodeTimeInBucket decodes Time from a packed uint64 value.
+// reference: https://github.com/pingcap/tidb/blob/08f0168a6caea0280d6157e5be69f2dc6fd0d5b3/types/time.go#L449
+func DecodeTimeInBucket(packedStr string, tp byte) (string, error) {
+	var t types.Time
+
+	packed, err := strconv.ParseUint(packedStr, 10, 64)
+	if err != nil {
+		return "", err
+	}
+
+	if packed == 0 {
+		t.Time = types.ZeroTime
+		return "", nil
+	}
+	ymdhms := packed >> 24
+	ymd := ymdhms >> 17
+	day := int(ymd & (1<<5 - 1))
+	ym := ymd >> 5
+	month := int(ym % 13)
+	year := int(ym / 13)
+
+	hms := ymdhms & (1<<17 - 1)
+	second := int(hms & (1<<6 - 1))
+	minute := int((hms >> 6) & (1<<6 - 1))
+	hour := int(hms >> 12)
+	microsec := int(packed % (1 << 24))
+
+	t.Time = types.FromDate(year, month, day, hour, minute, second, microsec)
+	return t.String(), nil
 }
 
 // GetTidbLatestTSO returns tidb's current TSO.

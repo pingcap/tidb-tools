@@ -57,11 +57,9 @@ func newChunkRange() *chunkRange {
 }
 
 func (c *chunkRange) toString(mode string, collation string) (string, []string) {
-	//if len(c.conditions) != 0 {
-	//	return c.conditions, c.conditionsArgs
-	//}
-
-	//TODO: need pay attention to collation
+	if collation != "" {
+		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
+	}
 
 	if mode != "bucket" {
 		conditions := make([]string, 0, 2)
@@ -83,20 +81,15 @@ func (c *chunkRange) toString(mode string, collation string) (string, []string) 
 		}
 
 		return strings.Join(conditions, " AND "), args
-		//c.conditions = strings.Join(conditions, " AND ")
-		//c.conditionsArgs = args
-
-		//return c.conditions, c.conditionsArgs
 	}
 
 	/* for example:
 	there is a bucket in TiDB, and the lowerbound and upperbound are (v1, v3), (v2, v4), and the columns are `a` and `b`, this buceket's data range is (a > v1 or (a == v1 and b >= v2)) and (a < v3 or (a == v3 and a <= v4)), not (a >= v1 and a <= v3 and b >= v2 and b <= v4)
 	*/
 
-	// TODO: need use collate
 	lowerCondition := make([]string, 0, 1)
-	lowerArgs := make([]string, 0, 1)
 	upperCondition := make([]string, 0, 1)
+	lowerArgs := make([]string, 0, 1)
 	upperArgs := make([]string, 0, 1)
 
 	preConditionForLower := make([]string, 0, 1)
@@ -170,8 +163,6 @@ func (c *chunkRange) copy() *chunkRange {
 	for _, bound := range c.bounds {
 		newChunk.bounds = append(newChunk.bounds, bound)
 	}
-	//newChunk.conditions = c.conditions
-	//newChunk.conditionsArgs = c.conditionsArgs
 
 	return newChunk
 }
@@ -219,7 +210,6 @@ func (s *randomSpliter) split(table *TableInstance, columns []*model.ColumnInfo,
 	}
 
 	chunk := newChunkRange()
-	//chunk.columns = append(chunk.columns, field)
 	if min == max {
 		chunk.bounds = append(chunk.bounds, bound{
 			column:      field,
@@ -439,10 +429,10 @@ func (s *bucketSpliter) getChunksByBuckets() ([]*chunkRange, error) {
 			err         error
 		)
 
-		indexColumns := s.getColumns(index, s.table.info)
+		indexColumns := getColumnsFromIndex(index, s.table.info)
 
 		for i, bucket := range buckets {
-			upperValues, err = s.getValues(bucket.UpperBound, indexColumns)
+			upperValues, err = dbutil.AnalyzeValuesFromBuckets(bucket.UpperBound, indexColumns)
 			if err != nil {
 				return nil, errors.Trace(err)
 			}
@@ -450,16 +440,11 @@ func (s *bucketSpliter) getChunksByBuckets() ([]*chunkRange, error) {
 			if bucket.Count-latestCount > int64(s.chunkSize) || i == len(buckets)-1 {
 				// create a new chunk
 				chunk := newChunkRange()
-				//var symbols []string
 				var lower, upper, lowerSymbol, upperSymbol string
 				for j, col := range index.Columns {
-					//values := make([]string, 0, 2)
-					//symbols = make([]string, 0, 2)
 					if len(lowerValues) != 0 {
 						lower = lowerValues[j]
 						lowerSymbol = gt
-						//values = append(values, lowerValues[j])
-						//symbols = append(symbols, gt)
 					}
 					if i != len(buckets)-1 {
 						upper = upperValues[j]
@@ -469,14 +454,6 @@ func (s *bucketSpliter) getChunksByBuckets() ([]*chunkRange, error) {
 					chunk.update(col.Name.O, lower, lowerSymbol, upper, upperSymbol)
 				}
 
-				/*
-					if i != len(buckets)-1 {
-						chunk.conditions = s.boundToBucket(lowerValues, upperValues, indexColumns, symbols)
-					} else {
-						chunk.conditions = s.boundToBucket(lowerValues, nil, indexColumns, symbols)
-					}
-					log.Infof(chunk.conditions)
-				*/
 				chunks = append(chunks, chunk)
 				lowerValues = upperValues
 				latestCount = bucket.Count
@@ -490,117 +467,6 @@ func (s *bucketSpliter) getChunksByBuckets() ([]*chunkRange, error) {
 	}
 
 	return chunks, nil
-}
-
-func (s *bucketSpliter) getColumns(index *model.IndexInfo, tableInfo *model.TableInfo) []*model.ColumnInfo {
-	indexColumns := make([]*model.ColumnInfo, 0, len(index.Columns))
-	for _, indexColumn := range index.Columns {
-		for _, column := range s.table.info.Columns {
-			if column.Name.O == indexColumn.Name.O {
-				indexColumns = append(indexColumns, column)
-			}
-		}
-	}
-
-	return indexColumns
-}
-
-// upperBound and lowerBound are looks like '(123, abc)' for multiple fields, or '123' for one field.
-func (s *bucketSpliter) getValues(valueString string, cols []*model.ColumnInfo) ([]string, error) {
-	vStr := strings.Trim(strings.Trim(valueString, "("), ")")
-	values := strings.Split(vStr, ", ")
-
-	for i, col := range cols {
-		//v := strings.Trim(values[i], " ")
-		if dbutil.IsTimeType(col.Tp) {
-			value, err := dbutil.FromPackedUint(values[i], col.Tp)
-			if err != nil {
-				return nil, errors.Trace(err)
-			}
-
-			values[i] = value
-		}
-	}
-
-	return values, nil
-}
-
-/*
-// (a > v1 || (a == v1 and b >= v2)) && (a < v3 || (a == v3 && a <= v4))
-func (s *bucketSpliter) boundToBucket(lowerBound, upperBound []string, columns []*model.ColumnInfo, symbols []string) string {
-	for example:
-	there is a bucket in TiDB, and the lowerbound and upperbound are (v1, v3), (v2, v4), and the columns are `a` and `b`, this buceket's data range is (a > v1 or (a == v1 and b >= v2)) and (a < v3 or (a == v3 and a <= v4)), not (a >= v1 and a <= v3 and b >= v2 and b <= v4)
-
-
-	bound1 := bound {
-		column: "a",
-		lower:  "v1",
-		lowerSymbol: ">=",
-		upper: "v2",
-		upperSymbol: "<=",
-	}
-	bound2 := bound {
-		column: "b",
-		lower:  "v3",
-		lowerSymbol: ">=",
-		upper: "v4",
-		upperSymbol: "<=",
-	}
-
-	// TODO: need use collate
-	lowerCondition := make([]string, 0, 1)
-	//lowerArgs := make([]string, 0, 1)
-	upperCondition := make([]string, 0, 1)
-	//upperArgs := make([]string, 0, 1)
-
-	preCondition := make([]string, 0, 1)
-	//preConditionArgs := make([]string, 0, 1)
-
-	log.Infof("lower: %v, upper: %v, symbols: %v", lowerBound, upperBound, symbols)
-	symbol := symbols[0]
-
-	for i, value := range lowerBound {
-		if len(preCondition) > 0 {
-			lowerCondition = append(lowerCondition, fmt.Sprintf("(%s AND %s %s '%s')", strings.Join(preCondition, " AND "), columns[i].Name.O, symbol, value))
-		} else {
-			lowerCondition = append(lowerCondition, fmt.Sprintf("(%s %s '%s')", columns[i].Name.O, symbol, value))
-		}
-
-		preCondition = append(preCondition, fmt.Sprintf("%s = '%s'", columns[i].Name.O, value))
-		//preConditionArgs = append(preConditionArgs, lowerValues[i])
-	}
-
-	symbol = symbols[len(symbols)-1]
-
-	preCondition = make([]string, 0, 1)
-	for i, value := range upperBound {
-		if len(preCondition) > 0 {
-			upperCondition = append(upperCondition, fmt.Sprintf("(%s AND %s %s '%s')", strings.Join(preCondition, " AND "), columns[i].Name.O, symbol, value))
-		} else {
-			upperCondition = append(upperCondition, fmt.Sprintf("(%s %s '%s')", columns[i].Name.O, symbol, value))
-		}
-
-		preCondition = append(preCondition, fmt.Sprintf("%s = '%s'", columns[i].Name.O, value))
-	}
-
-	if len(upperCondition) == 0 {
-		return strings.Join(lowerCondition, " OR ")
-	}
-
-	if len(lowerCondition) == 0 {
-		return strings.Join(upperCondition, " OR ")
-	}
-
-	return fmt.Sprintf("(%s) AND (%s)", strings.Join(lowerCondition, " OR "), strings.Join(upperCondition, " OR "))
-}
-*/
-
-// CheckJob is the struct of job for check
-type CheckJob struct {
-	Schema string
-	Table  string
-	Where  string
-	Args   []string
 }
 
 func getChunksForTable(table *TableInstance, columns []*model.ColumnInfo, chunkSize int, limits string, collation string) ([]*chunkRange, string, error) {
@@ -647,6 +513,14 @@ func getSplitFields(db *sql.DB, schema string, table *model.TableInfo, splitFiel
 	return cols, nil
 }
 
+// CheckJob is the struct of job for check
+type CheckJob struct {
+	Schema string
+	Table  string
+	Where  string
+	Args   []string
+}
+
 // GenerateCheckJob generates some CheckJobs.
 func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSize int, collation string) ([]*CheckJob, error) {
 	jobBucket := make([]*CheckJob, 0, 10)
@@ -672,10 +546,6 @@ func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSiz
 	}
 
 	jobCnt += len(chunks)
-
-	if collation != "" {
-		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
-	}
 
 	for {
 		length := len(chunks)
