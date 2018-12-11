@@ -22,6 +22,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/diff"
+	"github.com/pingcap/tidb-tools/pkg/utils"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -235,7 +236,7 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]interface{}, er
 		if err != nil {
 			return nil, errors.Errorf("get tables from %s.%s error %v", cfg.TargetDBCfg.InstanceID, schemaTables.Schema, errors.Trace(err))
 		}
-		allTablesMap[schemaName(cfg.TargetDBCfg.InstanceID, schemaTables.Schema)] = diff.SliceToMap(allTables)
+		allTablesMap[schemaName(cfg.TargetDBCfg.InstanceID, schemaTables.Schema)] = utils.SliceToMap(allTables)
 	}
 
 	for _, table := range cfg.TableCfgs {
@@ -253,7 +254,7 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]interface{}, er
 			if err != nil {
 				return nil, errors.Errorf("get tables from %s.%s error %v", db.InstanceID, sourceTable.Schema, errors.Trace(err))
 			}
-			allTablesMap[schemaName(db.InstanceID, sourceTable.Schema)] = diff.SliceToMap(allTables)
+			allTablesMap[schemaName(db.InstanceID, sourceTable.Schema)] = utils.SliceToMap(allTables)
 		}
 	}
 

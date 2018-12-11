@@ -23,6 +23,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb/types"
 	log "github.com/sirupsen/logrus"
 )
@@ -595,4 +596,15 @@ func TableName(schema, table string) string {
 
 func escapeName(name string) string {
 	return fmt.Sprintf("`%s`", name)
+}
+
+// ReplacePlaceholder will use args to replace '?', used for log.
+func ReplacePlaceholder(str string, args []string) string {
+	/*
+		for example:
+		str is "a > ? AND a < ?", args is {'1', '2'},
+		this function will return "a > '1' AND a < '2'"
+	*/
+	newStr := strings.Replace(str, "?", "'%s'", -1)
+	return fmt.Sprintf(newStr, utils.StringsToInterfaces(args)...)
 }

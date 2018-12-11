@@ -22,6 +22,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/pkg/utils"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -43,22 +44,19 @@ type bound struct {
 
 // chunkRange represents chunk range
 type chunkRange struct {
-	bounds []bound
-
-	//conditions     string
-	//conditionsArgs []string
+	bounds []*bound
 }
 
 // newChunkRange return a range struct
 func newChunkRange() *chunkRange {
 	return &chunkRange{
-		bounds: make([]bound, 0, 2),
+		bounds: make([]*bound, 0, 2),
 	}
 }
 
 func (c *chunkRange) toString(mode string, collation string) (string, []string) {
 	if collation != "" {
-		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
+		collation = fmt.Sprintf(" COLLATE '%s'", collation)
 	}
 
 	if mode != "bucket" {
@@ -99,8 +97,8 @@ func (c *chunkRange) toString(mode string, collation string) (string, []string) 
 
 	for _, bound := range c.bounds {
 		if len(bound.lower) != 0 {
-			if len(preConditionArgsForLower) > 0 {
-				lowerCondition = append(lowerCondition, fmt.Sprintf("(%s AND `%s`%s %s ?)", strings.Join(preConditionArgsForLower, " AND "), bound.column, collation, bound.lowerSymbol))
+			if len(preConditionForLower) > 0 {
+				lowerCondition = append(lowerCondition, fmt.Sprintf("(%s AND `%s`%s %s ?)", strings.Join(preConditionForLower, " AND "), bound.column, collation, bound.lowerSymbol))
 				lowerArgs = append(append(lowerArgs, preConditionArgsForLower...), bound.lower)
 			} else {
 				lowerCondition = append(lowerCondition, fmt.Sprintf("(`%s`%s %s ?)", bound.column, collation, bound.lowerSymbol))
@@ -136,19 +134,22 @@ func (c *chunkRange) toString(mode string, collation string) (string, []string) 
 }
 
 func (c *chunkRange) update(column, lower, lowerSymbol, upper, upperSymbol string) {
-	for _, bound := range c.bounds {
-		if bound.column == column {
+	for i, b := range c.bounds {
+		if b.column == column {
 			// update the bound
-			bound.lower = lower
-			bound.lowerSymbol = lowerSymbol
-			bound.upper = upper
-			bound.upperSymbol = upperSymbol
+			c.bounds[i] = &bound{
+				column:      column,
+				lower:       lower,
+				lowerSymbol: lowerSymbol,
+				upper:       upper,
+				upperSymbol: upperSymbol,
+			}
 			return
 		}
 	}
 
 	// add a new bound
-	c.bounds = append(c.bounds, bound{
+	c.bounds = append(c.bounds, &bound{
 		column:      column,
 		lower:       lower,
 		lowerSymbol: lowerSymbol,
@@ -211,13 +212,13 @@ func (s *randomSpliter) split(table *TableInstance, columns []*model.ColumnInfo,
 
 	chunk := newChunkRange()
 	if min == max {
-		chunk.bounds = append(chunk.bounds, bound{
+		chunk.bounds = append(chunk.bounds, &bound{
 			column:      field,
 			lower:       min,
 			lowerSymbol: equal,
 		})
 	} else {
-		chunk.bounds = append(chunk.bounds, bound{
+		chunk.bounds = append(chunk.bounds, &bound{
 			column:      field,
 			lower:       min,
 			lowerSymbol: gte,
@@ -274,7 +275,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 			useNewColumn = true
 			splitCol = columns[colNum].Name.O
 
-			min, max, err = dbutil.GetMinMaxValue(context.Background(), db, schema, table, splitCol, limitRange, s.collation, StringsToInterfaces(args))
+			min, max, err = dbutil.GetMinMaxValue(context.Background(), db, schema, table, splitCol, limitRange, s.collation, utils.StringsToInterfaces(args))
 			if err != nil {
 				if errors.Cause(err) == dbutil.ErrNoData {
 					log.Infof("no data found in %s.%s", schema, table)
@@ -295,11 +296,11 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 	valueCounts := make([]int, 0, count)
 
 	// get random value as split value
-	randomValues, randomValueCount, err := dbutil.GetRandomValues(context.Background(), db, schema, table, splitCol, count-1, limitRange, s.collation, StringsToInterfaces(args))
+	randomValues, randomValueCount, err := dbutil.GetRandomValues(context.Background(), db, schema, table, splitCol, count-1, limitRange, s.collation, utils.StringsToInterfaces(args))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	log.Infof("split chunk %v, get split values from GetRandomValues: %v", chunk, splitValues)
+	log.Infof("split chunk %v, get split values from GetRandomValues: %v", chunk, randomValues)
 
 	/*
 		for examples:
@@ -339,8 +340,10 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 	for i := 0; i < len(splitValues); i++ {
 		if valueCounts[i] > 1 {
 			// means should split it
+			log.Infof("before update %v", chunk)
 			newChunk := chunk.copy()
 			newChunk.update(splitCol, splitValues[i], equal, "", "")
+			log.Infof("split chunk %v, count: %d", newChunk, valueCounts[i])
 			splitChunks, err := s.splitRange(db, newChunk, valueCounts[i], schema, table, columns)
 			if err != nil {
 				return nil, errors.Trace(err)

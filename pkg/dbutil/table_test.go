@@ -24,9 +24,9 @@ func TestClient(t *testing.T) {
 	TestingT(t)
 }
 
-var _ = Suite(&testTableSuite{})
+var _ = Suite(&testDBSuite{})
 
-type testTableSuite struct{}
+type testDBSuite struct{}
 
 type testCase struct {
 	sql     string
@@ -36,7 +36,7 @@ type testCase struct {
 	fineCol bool
 }
 
-func (*testTableSuite) TestTable(c *C) {
+func (*testDBSuite) TestTable(c *C) {
 	testCases := []*testCase{
 		{
 			`
@@ -93,7 +93,7 @@ func (*testTableSuite) TestTable(c *C) {
 	}
 }
 
-func (*testTableSuite) TestTableStructEqual(c *C) {
+func (*testDBSuite) TestTableStructEqual(c *C) {
 	createTableSQL1 := "CREATE TABLE `test`.`atest` (`id` int(24), `name` varchar(24), `birthday` datetime, `update_time` time, `money` decimal(20,2), primary key(`id`))"
 	tableInfo1, err := GetTableInfoBySQL(createTableSQL1)
 	c.Assert(err, IsNil)

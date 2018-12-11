@@ -23,7 +23,7 @@ type indexTestCase struct {
 	cols    []string
 }
 
-func (*testTableSuite) TestIndex(c *C) {
+func (*testDBSuite) TestIndex(c *C) {
 	testCases := []*indexTestCase{
 		{
 			`

@@ -18,6 +18,7 @@ import (
 
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb/types"
 	log "github.com/sirupsen/logrus"
 )
@@ -39,7 +40,7 @@ func removeColumns(tableInfo *model.TableInfo, columns []string) *model.TableInf
 		return tableInfo
 	}
 
-	removeColMap := SliceToMap(columns)
+	removeColMap := utils.SliceToMap(columns)
 	for i := 0; i < len(tableInfo.Indices); i++ {
 		index := tableInfo.Indices[i]
 		for j := 0; j < len(index.Columns); j++ {
@@ -100,23 +101,4 @@ func getRandomN(total, num int) []int {
 
 func needQuotes(ft types.FieldType) bool {
 	return !(dbutil.IsNumberType(ft.Tp) || dbutil.IsFloatType(ft.Tp))
-}
-
-// SliceToMap converts slice to map
-func SliceToMap(slice []string) map[string]interface{} {
-	sMap := make(map[string]interface{})
-	for _, str := range slice {
-		sMap[str] = struct{}{}
-	}
-	return sMap
-}
-
-// StringsToInterfaces converts string slice to interface slice
-func StringsToInterfaces(strs []string) []interface{} {
-	is := make([]interface{}, 0, len(strs))
-	for _, str := range strs {
-		is = append(is, str)
-	}
-
-	return is
 }
