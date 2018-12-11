@@ -386,7 +386,7 @@ type Bucket struct {
 }
 
 // GetBucketsInfo SHOW STATS_BUCKETS in TiDB.
-func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string) (map[string][]Bucket, error) {
+func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo) (map[string][]Bucket, error) {
 	/*
 		mysql.stats_buckets
 			example in tidb:
@@ -439,6 +439,22 @@ func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string) (map[
 			LowerBound: lowerBound.String,
 			UpperBound: upperBound.String,
 		})
+	}
+
+	// when primary key is int type, the columnName will be column's name, not `PRIMARY`, check and transform here.
+	indices := FindAllIndex(tableInfo)
+	for _, index := range indices {
+		if index.Name.O != "PRIMARY" {
+			continue
+		}
+		_, ok := buckets[index.Name.O]
+		if !ok && len(index.Columns) == 1 {
+			if _, ok := buckets[index.Columns[0].Name.O]; !ok {
+				return nil, errors.NotFoundf("primary key on %s in buckets info", index.Columns[0].Name.O)
+			}
+			buckets[index.Name.O] = buckets[index.Columns[0].Name.O]
+			delete(buckets, index.Columns[0].Name.O)
+		}
 	}
 
 	return buckets, errors.Trace(rows.Err())

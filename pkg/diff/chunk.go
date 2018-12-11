@@ -340,10 +340,8 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 	for i := 0; i < len(splitValues); i++ {
 		if valueCounts[i] > 1 {
 			// means should split it
-			log.Infof("before update %v", chunk)
 			newChunk := chunk.copy()
 			newChunk.update(splitCol, splitValues[i], equal, "", "")
-			log.Infof("split chunk %v, count: %d", newChunk, valueCounts[i])
 			splitChunks, err := s.splitRange(db, newChunk, valueCounts[i], schema, table, columns)
 			if err != nil {
 				return nil, errors.Trace(err)
@@ -402,7 +400,7 @@ func (s *bucketSpliter) split(table *TableInstance, columns []*model.ColumnInfo,
 	s.limits = limits
 	s.collation = collation
 
-	buckets, err := dbutil.GetBucketsInfo(context.Background(), s.table.Conn, s.table.Schema, s.table.Table)
+	buckets, err := dbutil.GetBucketsInfo(context.Background(), s.table.Conn, s.table.Schema, s.table.Table, s.table.info)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
