@@ -35,10 +35,10 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 	dbConn, err := createConn()
 	c.Assert(err, IsNil)
 
-	_, err = dbConn.Query("CREATE DATABASE IF NOT EXISTS test")
+	_, err = dbConn.Query("CREATE DATABASE IF NOT EXISTS `test`")
 	c.Assert(err, IsNil)
 
-	_, err = dbConn.Query("DROP TABLE IF EXISTS test.testa")
+	_, err = dbConn.Query("DROP TABLE IF EXISTS `test`.`testa`")
 	c.Assert(err, IsNil)
 
 	createTableSQL := `CREATE TABLE test.testa (
@@ -50,17 +50,21 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 		h year(4) DEFAULT NULL,
 		PRIMARY KEY (a))`
 
+	dataCount := 10000
 	cfg := &importer.Config{
 		TableSQL:    createTableSQL,
-		WorkerCount: 1,
-		JobCount:    10000,
+		WorkerCount: 5,
+		JobCount:    dataCount,
 		Batch:       100,
 		DBCfg:       dbutil.GetDBConfigFromEnv("test"),
 	}
 
-	// generate data for test.tetsa
+	// generate data for test.testa
 	importer.DoProcess(cfg)
-	defer dbConn.Query("DROP TABLE IF EXISTS test.testa")
+	defer dbConn.Query("DROP TABLE IF EXISTS `test`.`testa`")
+
+	// only work on tidb, so don't assert err here
+	_, _ = dbConn.Query("ANALYZE TABLE `test`.`testa`")
 
 	tableInfo, err := dbutil.GetTableInfoWithRowID(context.Background(), dbConn, "test", "testa", false)
 	c.Assert(err, IsNil)
@@ -79,14 +83,14 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 	c.Assert(err, IsNil)
 
 	// get data count from every chunk, and the sum of them should equal to the table's count.
-	allCount := 0
+	chunkDataCount := 0
 	for _, chunk := range chunks {
 		conditions, args := chunk.toString(mode, "")
 		count, err := dbutil.GetRowCount(context.Background(), tableInstance.Conn, tableInstance.Schema, tableInstance.Table, dbutil.ReplacePlaceholder(conditions, args))
 		c.Assert(err, IsNil)
-		allCount += int(count)
+		chunkDataCount += int(count)
 	}
-	c.Assert(allCount, Equals, 10000)
+	c.Assert(chunkDataCount, Equals, dataCount)
 }
 
 func (*testChunkSuite) TestChunkUpdate(c *C) {

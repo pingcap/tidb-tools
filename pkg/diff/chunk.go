@@ -47,10 +47,17 @@ type chunkRange struct {
 	bounds []*bound
 }
 
-// newChunkRange return a range struct
-func newChunkRange() *chunkRange {
+// newChunkRange return a chunkRange, if boundNum is greater than 0, will creates a chunkRange with fixed bound num.
+func newChunkRange(boundNum int) *chunkRange {
+	var bounds []*bound
+	if boundNum > 0 {
+		bounds = make([]*bound, boundNum)
+	} else {
+		bounds = make([]*bound, 0, 2)
+	}
+
 	return &chunkRange{
-		bounds: make([]*bound, 0, 2),
+		bounds: bounds,
 	}
 }
 
@@ -159,11 +166,8 @@ func (c *chunkRange) update(column, lower, lowerSymbol, upper, upperSymbol strin
 }
 
 func (c *chunkRange) copy() *chunkRange {
-	newChunk := newChunkRange()
-
-	for _, bound := range c.bounds {
-		newChunk.bounds = append(newChunk.bounds, bound)
-	}
+	newChunk := newChunkRange(len(c.bounds))
+	copy(newChunk.bounds, c.bounds)
 
 	return newChunk
 }
@@ -191,7 +195,6 @@ func (s *randomSpliter) split(table *TableInstance, columns []*model.ColumnInfo,
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-
 	if cnt == 0 {
 		log.Infof("no data found in %s.%s", table.Schema, table.Table)
 		return nil, nil
@@ -210,7 +213,7 @@ func (s *randomSpliter) split(table *TableInstance, columns []*model.ColumnInfo,
 		return nil, errors.Trace(err)
 	}
 
-	chunk := newChunkRange()
+	chunk := newChunkRange(0)
 	if min == max {
 		chunk.bounds = append(chunk.bounds, &bound{
 			column:      field,
@@ -440,7 +443,7 @@ func (s *bucketSpliter) getChunksByBuckets() ([]*chunkRange, error) {
 
 			if bucket.Count-latestCount > int64(s.chunkSize) || i == len(buckets)-1 {
 				// create a new chunk
-				chunk := newChunkRange()
+				chunk := newChunkRange(0)
 				var lower, upper, lowerSymbol, upperSymbol string
 				for j, col := range index.Columns {
 					if len(lowerValues) != 0 {

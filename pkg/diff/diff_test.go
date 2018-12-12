@@ -88,7 +88,7 @@ func (t *testDiffSuite) TestDiff(c *C) {
 	dbConn, err := createConn()
 	c.Assert(err, IsNil)
 
-	_, err = dbConn.Query("create database if not exists test")
+	_, err = dbConn.Query("CREATE DATABASE IF NOT EXISTS `test`")
 	c.Assert(err, IsNil)
 
 	testStructEqual(dbConn, c)
@@ -161,8 +161,8 @@ func testDataEqual(dbConn *sql.DB, c *C) {
 	targetTable := "testb"
 
 	defer func() {
-		_, _ = dbConn.Query(fmt.Sprintf("drop table test.%s", sourceTable))
-		_, _ = dbConn.Query(fmt.Sprintf("drop table test.%s", targetTable))
+		_, _ = dbConn.Query(fmt.Sprintf("DROP TABLE `test`.`%s`", sourceTable))
+		_, _ = dbConn.Query(fmt.Sprintf("DROP TABLE `test`.`%s`", targetTable))
 	}()
 
 	err := generateData(dbConn, dbutil.GetDBConfigFromEnv("test"), sourceTable, targetTable)
@@ -236,7 +236,7 @@ func generateData(dbConn *sql.DB, dbCfg dbutil.DBConfig, sourceTable, targetTabl
 
 	cfg := &importer.Config{
 		TableSQL:    createTableSQL,
-		WorkerCount: 1,
+		WorkerCount: 5,
 		JobCount:    10000,
 		Batch:       100,
 		DBCfg:       dbCfg,
@@ -246,12 +246,12 @@ func generateData(dbConn *sql.DB, dbCfg dbutil.DBConfig, sourceTable, targetTabl
 	importer.DoProcess(cfg)
 
 	// generate data for target table
-	_, err := dbConn.Query(fmt.Sprintf("create table test.%s like test.%s", targetTable, sourceTable))
+	_, err := dbConn.Query(fmt.Sprintf("CREATE TABLE `test`.`%s` LIKE `test`.`%s`", targetTable, sourceTable))
 	if err != nil {
 		return err
 	}
 
-	_, err = dbConn.Query(fmt.Sprintf("insert into test.%s (a, b, c, d, e, h) select a, b, c, d, e, h from test.%s", targetTable, sourceTable))
+	_, err = dbConn.Query(fmt.Sprintf("INSERT INTO `test`.`%s` (`a`, `b`, `c`, `d`, `e`, `h`) SELECT `a`, `b`, `c`, `d`, `e`, `h` FROM `test`.`%s`", targetTable, sourceTable))
 	if err != nil {
 		return err
 	}
@@ -265,17 +265,17 @@ func updateData(dbConn *sql.DB, table string) error {
 		return err
 	}
 
-	_, err = dbConn.Exec(fmt.Sprintf("update test.%s set e = e+1 where e = %v", table, values[0]))
+	_, err = dbConn.Exec(fmt.Sprintf("UPDATE `test`.`%s` SET `e` = `e`+1 WHERE `e` = %v", table, values[0]))
 	if err != nil {
 		return err
 	}
 
-	_, err = dbConn.Exec(fmt.Sprintf("delete from test.%s where e = %v", table, values[1]))
+	_, err = dbConn.Exec(fmt.Sprintf("DELETE FROM `test`.`%s` where `e` = %v", table, values[1]))
 	if err != nil {
 		return err
 	}
 
-	_, err = dbConn.Exec(fmt.Sprintf("replace into test.%s values('1992-09-27','2018-09-03 16:26:27','14:45:33','i',2048790075,2008)", table))
+	_, err = dbConn.Exec(fmt.Sprintf("REPLACE INTO `test`.`%s` VALUES('1992-09-27','2018-09-03 16:26:27','14:45:33','i',2048790075,2008)", table))
 	if err != nil {
 		return err
 	}
