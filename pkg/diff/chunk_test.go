@@ -15,6 +15,7 @@ package diff
 
 import (
 	"context"
+	"fmt"
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -86,6 +87,7 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 	chunkDataCount := 0
 	for _, chunk := range chunks {
 		conditions, args := chunk.toString(mode, "")
+		fmt.Println(dbutil.ReplacePlaceholder(conditions, args))
 		count, err := dbutil.GetRowCount(context.Background(), tableInstance.Conn, tableInstance.Schema, tableInstance.Table, dbutil.ReplacePlaceholder(conditions, args))
 		c.Assert(err, IsNil)
 		chunkDataCount += int(count)

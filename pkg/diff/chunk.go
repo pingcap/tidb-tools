@@ -141,34 +141,36 @@ func (c *chunkRange) toString(mode string, collation string) (string, []string) 
 }
 
 func (c *chunkRange) update(column, lower, lowerSymbol, upper, upperSymbol string) {
-	for i, b := range c.bounds {
-		if b.column == column {
-			// update the bound
-			c.bounds[i] = &bound{
-				column:      column,
-				lower:       lower,
-				lowerSymbol: lowerSymbol,
-				upper:       upper,
-				upperSymbol: upperSymbol,
-			}
-			return
-		}
-	}
-
-	// add a new bound
-	c.bounds = append(c.bounds, &bound{
+	newBound := &bound{
 		column:      column,
 		lower:       lower,
 		lowerSymbol: lowerSymbol,
 		upper:       upper,
 		upperSymbol: upperSymbol,
-	})
+	}
+
+	for i, b := range c.bounds {
+		if b.column == column {
+			// update the bound
+			c.bounds[i] = newBound
+			return
+		}
+	}
+
+	// add a new bound
+	c.bounds = append(c.bounds, newBound)
 }
 
 func (c *chunkRange) copy() *chunkRange {
 	newChunk := newChunkRange(len(c.bounds))
 	copy(newChunk.bounds, c.bounds)
 
+	return newChunk
+}
+
+func (c *chunkRange) copyAndUpdate(column, lower, lowerSymbol, upper, upperSymbol string) *chunkRange {
+	newChunk := c.copy()
+	newChunk.update(column, lower, lowerSymbol, upper, upperSymbol)
 	return newChunk
 }
 
@@ -190,7 +192,7 @@ func (s *randomSpliter) split(table *TableInstance, columns []*model.ColumnInfo,
 	s.limits = limits
 	s.collation = collation
 
-	// get the chunk count
+	// get the chunk count by data count and chunk size
 	cnt, err := dbutil.GetRowCount(context.Background(), table.Conn, table.Schema, table.Table, limits)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -201,47 +203,10 @@ func (s *randomSpliter) split(table *TableInstance, columns []*model.ColumnInfo,
 	}
 
 	chunkCnt := (int(cnt) + chunkSize - 1) / chunkSize
-	field := columns[0].Name.O
-
-	// fetch min, max
-	min, max, err := dbutil.GetMinMaxValue(context.Background(), table.Conn, table.Schema, table.Table, field, limits, collation, nil)
-	if err != nil {
-		if errors.Cause(err) == dbutil.ErrNoData {
-			log.Infof("no data found in %s.%s", table.Schema, table.Table)
-			return nil, nil
-		}
-		return nil, errors.Trace(err)
-	}
-
-	chunk := newChunkRange(0)
-	if min == max {
-		chunk.bounds = append(chunk.bounds, &bound{
-			column:      field,
-			lower:       min,
-			lowerSymbol: equal,
-		})
-	} else {
-		chunk.bounds = append(chunk.bounds, &bound{
-			column:      field,
-			lower:       min,
-			lowerSymbol: gte,
-			upper:       max,
-			upperSymbol: lte,
-		})
-	}
-
-	chunks, err := s.splitRange(table.Conn, chunk, chunkCnt, table.Schema, table.Table, columns)
+	chunks, err := s.splitRange(table.Conn, newChunkRange(0), chunkCnt, table.Schema, table.Table, columns)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-
-	// for example, the min and max value in target table is 2-9, but 1-10 in source table. so we need generate chunk for data < 2 and data > 9
-	maxChunk := chunk.copy()
-	minChunk := chunk.copy()
-	maxChunk.update(field, "", "", max, gt)
-	minChunk.update(field, min, lt, "", "")
-	chunks = append(chunks, maxChunk)
-	chunks = append(chunks, minChunk)
 
 	return chunks, nil
 }
@@ -266,7 +231,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 
 	// if the last column's condition is not '=', continue use this column split data.
 	colNum := len(chunk.bounds)
-	if chunk.bounds[colNum-1].lowerSymbol != equal {
+	if colNum != 0 && chunk.bounds[colNum-1].lowerSymbol != equal {
 		splitCol = chunk.bounds[colNum-1].column
 		min = chunk.bounds[colNum-1].lower
 		max = chunk.bounds[colNum-1].upper
@@ -339,12 +304,11 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 		valueCounts = append(valueCounts, 1)
 	}
 
-	var lowerSymbol, upperSymbol string
+	var lower, upper, lowerSymbol, upperSymbol string
 	for i := 0; i < len(splitValues); i++ {
 		if valueCounts[i] > 1 {
 			// means should split it
-			newChunk := chunk.copy()
-			newChunk.update(splitCol, splitValues[i], equal, "", "")
+			newChunk := chunk.copyAndUpdate(splitCol, splitValues[i], equal, "", "")
 			splitChunks, err := s.splitRange(db, newChunk, valueCounts[i], schema, table, columns)
 			if err != nil {
 				return nil, errors.Trace(err)
@@ -355,34 +319,58 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 			upperSymbol = lt
 		} else {
 			if i == 0 {
-				lowerSymbol = symbolMin
-				upperSymbol = lt
+				if useNewColumn {
+					lower = ""
+					lowerSymbol = ""
+				} else {
+					lower = splitValues[i]
+					lowerSymbol = symbolMin
+				}
 			} else {
-				lowerSymbol = gte
-				upperSymbol = lt
+				lower = splitValues[i]
+				//lowerSymbol = gte
+			}
+
+			if i == len(splitValues)-2 {
+				if useNewColumn && valueCounts[len(valueCounts)-1] == 1 {
+					upper = ""
+					upperSymbol = ""
+				} else {
+					lower = splitValues[i+1]
+					lowerSymbol = symbolMax
+				}
+			} else {
+				if i == len(splitValues)-1 {
+					continue
+				} else {
+					upper = splitValues[i+1]
+				}
+				//upperSymbol = lt
 			}
 		}
 
-		if i == len(splitValues)-2 && valueCounts[len(valueCounts)-1] == 1 {
-			upperSymbol = symbolMax
-		}
+		//
+		//if i == len(splitValues)-2 && valueCounts[len(valueCounts)-1] == 1 {
+		//	upperSymbol = symbolMax
+		//}
 
-		if i < len(splitValues)-1 {
-			newChunk := chunk.copy()
-			newChunk.update(splitCol, splitValues[i], lowerSymbol, splitValues[i+1], upperSymbol)
-			chunks = append(chunks, newChunk)
-		}
+		//if i < len(splitValues)-1 {
+		newChunk := chunk.copyAndUpdate(splitCol, lower, lowerSymbol, upper, upperSymbol)
+		chunks = append(chunks, newChunk)
+
+		lowerSymbol = gte
+		upperSymbol = lt
+		//}
 	}
 
-	if useNewColumn {
-		// add chunk > max and < min
-		maxChunk := chunk.copy()
-		minChunk := chunk.copy()
-		maxChunk.update(splitCol, "", "", max, gt)
-		minChunk.update(splitCol, min, lt, "", "")
-		chunks = append(chunks, maxChunk)
-		chunks = append(chunks, minChunk)
-	}
+	/*
+		if useNewColumn {
+			// add chunk > max and < min
+			// for example, the min and max value in target table is 2-9, but 1-10 in source table. so we need generate chunk for data < 2 and data > 9
+			chunks = append(chunks, chunk.copyAndUpdate(splitCol, "", "", max, gt))
+			chunks = append(chunks, chunk.copyAndUpdate(splitCol, min, lt, "", ""))
+		}
+	*/
 
 	log.Debugf("getChunksForTable cut table: cnt=%d min=%s max=%s chunk=%d", count, min, max, len(chunks))
 
