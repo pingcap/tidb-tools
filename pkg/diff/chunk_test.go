@@ -35,6 +35,9 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 	dbConn, err := createConn()
 	c.Assert(err, IsNil)
 
+	_, err = dbConn.Query("CREATE DATABASE IF NOT EXISTS test")
+	c.Assert(err, IsNil)
+
 	_, err = dbConn.Query("DROP TABLE IF EXISTS test.testa")
 	c.Assert(err, IsNil)
 

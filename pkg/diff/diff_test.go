@@ -91,8 +91,8 @@ func (t *testDiffSuite) TestDiff(c *C) {
 	_, err = dbConn.Query("create database if not exists test")
 	c.Assert(err, IsNil)
 
-	//testStructEqual(dbConn, c)
-	//testDataEqual(dbConn, c)
+	testStructEqual(dbConn, c)
+	testDataEqual(dbConn, c)
 }
 
 func testStructEqual(conn *sql.DB, c *C) {
@@ -221,7 +221,7 @@ func createTableDiff(db *sql.DB) *TableDiff {
 }
 
 func createConn() (*sql.DB, error) {
-	return dbutil.OpenDB(dbutil.GetDBConfigFromEnv("test"))
+	return dbutil.OpenDB(dbutil.GetDBConfigFromEnv(""))
 }
 
 func generateData(dbConn *sql.DB, dbCfg dbutil.DBConfig, sourceTable, targetTable string) error {
