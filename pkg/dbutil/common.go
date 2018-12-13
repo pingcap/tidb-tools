@@ -381,15 +381,14 @@ type Bucket struct {
 // GetBucketsInfo SHOW STATS_BUCKETS in TiDB.
 func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo) (map[string][]Bucket, error) {
 	/*
-		mysql.stats_buckets
-			example in tidb:
-			mysql> SHOW STATS_BUCKETS WHERE db_name= "test" AND table_name="testa";
-			+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
-			| Db_name | Table_name | Partition_name | Column_name | Is_index | Bucket_id | Count | Repeats | Lower_Bound         | Upper_Bound         |
-			+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
-			| test    | testa      |                | PRIMARY     |        1 |         0 |    64 |       1 | 1846693550524203008 | 1846838686059069440 |
-			| test    | testa      |                | PRIMARY     |        1 |         1 |   128 |       1 | 1846840885082324992 | 1847056389361369088 |
-			+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
+		example in tidb:
+		mysql> SHOW STATS_BUCKETS WHERE db_name= "test" AND table_name="testa";
+		+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
+		| Db_name | Table_name | Partition_name | Column_name | Is_index | Bucket_id | Count | Repeats | Lower_Bound         | Upper_Bound         |
+		+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
+		| test    | testa      |                | PRIMARY     |        1 |         0 |    64 |       1 | 1846693550524203008 | 1846838686059069440 |
+		| test    | testa      |                | PRIMARY     |        1 |         1 |   128 |       1 | 1846840885082324992 | 1847056389361369088 |
+		+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
 	*/
 	buckets := make(map[string][]Bucket)
 	query := "SHOW STATS_BUCKETS WHERE db_name= ? AND table_name= ?;"
@@ -607,6 +606,7 @@ func escapeName(name string) string {
 }
 
 // ReplacePlaceholder will use args to replace '?', used for log.
+// tips: make sure the num of "?" is same with len(args)
 func ReplacePlaceholder(str string, args []string) string {
 	/*
 		for example:
