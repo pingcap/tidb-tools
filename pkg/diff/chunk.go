@@ -304,6 +304,21 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 		valueCounts = append(valueCounts, 1)
 	}
 
+	// TODO: use a new function, and add unit test
+	/*
+		for example:
+		the splitCol is `a`;
+		the splitValues is [1, 2, 3, 4, 5];
+		the splitCounts is [1, 3, 1, 1, 1];
+
+		this means you get 3 times value 2 by random, we can assume that there amolst be a lot of rows with value 2,
+		so we need use another column `b` to split the chunk [`a` = 2] to 3 chunks.
+
+		and then the splitCol is `b`;
+		the splitValues is ['w', 'x', 'y', 'z'];
+		the splitValues is [1, 1, 1, 1];
+		the chunk [`a` = 2] will split to [`a` = 2 AND `b` < 'x'], [`a` = 2 AND `b` >= 'x' AND `b` < 'y'] and [`a` = 2 AND `b` >= 'y']
+	*/
 	var lower, upper, lowerSymbol, upperSymbol string
 	for i := 0; i < len(splitValues); i++ {
 		if valueCounts[i] > 1 {
@@ -315,8 +330,8 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 			}
 			chunks = append(chunks, splitChunks...)
 
+			// already have the chunk [column = value], so next chunk should start with column > value
 			lowerSymbol = gt
-			upperSymbol = lt
 		} else {
 			if i == 0 {
 				if useNewColumn {
@@ -328,7 +343,6 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 				}
 			} else {
 				lower = splitValues[i]
-				//lowerSymbol = gte
 			}
 
 			if i == len(splitValues)-2 {
@@ -344,36 +358,18 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 					continue
 				} else {
 					upper = splitValues[i+1]
+					upperSymbol = lt
 				}
-				//upperSymbol = lt
 			}
 		}
 
-		//
-		//if i == len(splitValues)-2 && valueCounts[len(valueCounts)-1] == 1 {
-		//	upperSymbol = symbolMax
-		//}
-
-		//if i < len(splitValues)-1 {
 		newChunk := chunk.copyAndUpdate(splitCol, lower, lowerSymbol, upper, upperSymbol)
 		chunks = append(chunks, newChunk)
 
 		lowerSymbol = gte
-		upperSymbol = lt
-		//}
 	}
 
-	/*
-		if useNewColumn {
-			// add chunk > max and < min
-			// for example, the min and max value in target table is 2-9, but 1-10 in source table. so we need generate chunk for data < 2 and data > 9
-			chunks = append(chunks, chunk.copyAndUpdate(splitCol, "", "", max, gt))
-			chunks = append(chunks, chunk.copyAndUpdate(splitCol, min, lt, "", ""))
-		}
-	*/
-
 	log.Debugf("getChunksForTable cut table: cnt=%d min=%s max=%s chunk=%d", count, min, max, len(chunks))
-
 	return chunks, nil
 }
 
