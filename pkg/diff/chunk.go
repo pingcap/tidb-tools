@@ -224,7 +224,7 @@ func splitRange(db *sql.DB, chunk *chunkRange, count int64, Schema string, table
 
 func findSuitableField(db *sql.DB, Schema string, table *model.TableInfo) (*model.ColumnInfo, error) {
 	// first select the index, and number type index first
-	column, err := dbutil.FindSuitableIndex(context.Background(), db, Schema, table)
+	column, err := dbutil.FindSuitableColumnWithIndex(context.Background(), db, Schema, table)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

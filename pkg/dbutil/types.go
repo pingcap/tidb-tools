@@ -23,3 +23,11 @@ func IsFloatType(tp byte) bool {
 
 	return false
 }
+
+// IsTimeType returns true if tp is time type
+func IsTimeType(tp byte) bool {
+	if tp == mysql.TypeDatetime || tp == mysql.TypeTimestamp || tp == mysql.TypeDate {
+		return true
+	}
+	return false
+}
