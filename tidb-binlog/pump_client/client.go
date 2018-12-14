@@ -74,6 +74,15 @@ type PumpInfos struct {
 	UnAvaliablePumps map[string]*PumpStatus
 }
 
+// NewPumpInfos returns a PumpInfos.
+func NewPumpInfos() *PumpInfos {
+	return &PumpInfos{
+		Pumps:            make(map[string]*PumpStatus),
+		AvaliablePumps:   make(map[string]*PumpStatus),
+		UnAvaliablePumps: make(map[string]*PumpStatus),
+	}
+}
+
 // PumpsClient is the client of pumps.
 type PumpsClient struct {
 	ctx context.Context
@@ -102,18 +111,14 @@ type PumpsClient struct {
 
 	// Security is the security config
 	Security *tls.Config
+
+	// binlogSocket file path, for compatible with kafka version pump.
+	binlogSocket string
 }
 
 // NewPumpsClient returns a PumpsClient.
-func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.SecurityOption, binlogSocket string) (*PumpsClient, error) {
-	// TODO: get strategy from etcd, and can update strategy in real-time.
-	// use Range as default. and if binlogSocket is not empty, will use Local strategy.
-	strategy := Range
-	if len(binlogSocket) != 0 {
-		strategy = Local
-	}
-	selector := NewSelector(strategy)
-
+// TODO: get strategy from etcd, and can update strategy in real-time. Use Range as default now.
+func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.SecurityOption) (*PumpsClient, error) {
 	ectdEndpoints, err := utils.ParseHostPortAddr(etcdURLs)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -137,55 +142,70 @@ func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.Secur
 		return nil, errors.Trace(err)
 	}
 
-	pumpInfos := &PumpInfos{
-		Pumps:            make(map[string]*PumpStatus),
-		AvaliablePumps:   make(map[string]*PumpStatus),
-		UnAvaliablePumps: make(map[string]*PumpStatus),
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	newPumpsClient := &PumpsClient{
 		ctx:                ctx,
 		cancel:             cancel,
 		ClusterID:          clusterID,
 		EtcdRegistry:       node.NewEtcdRegistry(cli, DefaultEtcdTimeout),
-		Pumps:              pumpInfos,
-		Selector:           selector,
+		Pumps:              NewPumpInfos(),
+		Selector:           NewSelector(Range),
 		RetryTime:          DefaultAllRetryTime,
 		BinlogWriteTimeout: timeout,
 		Security:           security,
 	}
 
-	err = newPumpsClient.getPumpStatus(ctx, binlogSocket)
+	err = newPumpsClient.getPumpStatus(ctx)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	newPumpsClient.Selector.SetPumps(copyPumps(newPumpsClient.Pumps.AvaliablePumps))
 
-	// if strategy is Local, will only use the local pump, don't need detect other pump's status.
-	if strategy != Local {
-		newPumpsClient.wg.Add(2)
-		go newPumpsClient.watchStatus()
-		go newPumpsClient.detect()
-	}
+	newPumpsClient.wg.Add(2)
+	go newPumpsClient.watchStatus()
+	go newPumpsClient.detect()
 
 	return newPumpsClient, nil
 }
 
-// getPumpStatus retruns all the pumps status in the etcd.
-func (c *PumpsClient) getPumpStatus(pctx context.Context, binlogSocket string) error {
-	if len(binlogSocket) != 0 {
-		nodeStatus := &node.Status{
-			NodeID:  localPump,
-			Addr:    binlogSocket,
-			IsAlive: true,
-			State:   node.Online,
-		}
-		c.addPump(NewPumpStatus(nodeStatus, c.Security), false)
-
-		return nil
+// NewLocalPumpsClient returns a PumpsClient, this PumpsClient will write binlog by socket file. For compatible with kafka version pump.
+func NewLocalPumpsClient(binlogSocket string, timeout time.Duration, securityOpt pd.SecurityOption) (*PumpsClient, error) {
+	security, err := utils.ToTLSConfig(securityOpt.CAPath, securityOpt.CertPath, securityOpt.KeyPath)
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	newPumpsClient := &PumpsClient{
+		ctx:                ctx,
+		cancel:             cancel,
+		Pumps:              NewPumpInfos(),
+		Selector:           NewSelector(LocalUnix),
+		RetryTime:          DefaultAllRetryTime,
+		BinlogWriteTimeout: timeout,
+		Security:           security,
+		binlogSocket:       binlogSocket,
+	}
+
+	newPumpsClient.getLocalPumpStatus(ctx)
+	newPumpsClient.Selector.SetPumps(copyPumps(newPumpsClient.Pumps.AvaliablePumps))
+
+	return newPumpsClient, nil
+}
+
+// getLocalPumpStatus gets the local pump. For compatible with kafka version tidb-binlog.
+func (c *PumpsClient) getLocalPumpStatus(pctx context.Context) {
+	nodeStatus := &node.Status{
+		NodeID:  localPump,
+		Addr:    c.binlogSocket,
+		IsAlive: true,
+		State:   node.Online,
+	}
+	c.addPump(NewPumpStatus(nodeStatus, c.Security), false)
+}
+
+// getPumpStatus gets all the pumps status in the etcd.
+func (c *PumpsClient) getPumpStatus(pctx context.Context) error {
 	nodesStatus, err := c.EtcdRegistry.Nodes(pctx, node.NodePrefix[node.PumpNode])
 	if err != nil {
 		return errors.Trace(err)

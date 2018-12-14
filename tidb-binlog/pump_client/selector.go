@@ -31,8 +31,8 @@ const (
 	// Score means choose pump by it's score.
 	Score = "score"
 
-	// Local means will only use the local pump.
-	Local = "local"
+	// LocalUnix means will only use the local pump by unix socket.
+	LocalUnix = "local unix"
 )
 
 // PumpSelector selects pump for sending binlog.
@@ -227,19 +227,19 @@ func (r *RangeSelector) Next(binlog *pb.Binlog, retryTime int) *PumpStatus {
 	return nextPump
 }
 
-// LocalSelector will always select the local pump, used for compatible with kafka version tidb-binlog.
-type LocalSelector struct {
+// LocalUnixSelector will always select the local pump, used for compatible with kafka version tidb-binlog.
+type LocalUnixSelector struct {
 	// the pump to be selected.
 	Pump *PumpStatus
 }
 
-// NewLocalSelector returns a LocalSelector.
-func NewLocalSelector() PumpSelector {
-	return &LocalSelector{}
+// NewLocalUnixSelector returns a LocalUnixSelector.
+func NewLocalUnixSelector() PumpSelector {
+	return &LocalUnixSelector{}
 }
 
 // SetPumps implement PumpSelector.SetPumps.
-func (u *LocalSelector) SetPumps(pumps []*PumpStatus) {
+func (u *LocalUnixSelector) SetPumps(pumps []*PumpStatus) {
 	if len(pumps) == 0 {
 		u.Pump = nil
 	} else {
@@ -248,12 +248,12 @@ func (u *LocalSelector) SetPumps(pumps []*PumpStatus) {
 }
 
 // Select implement PumpSelector.Select.
-func (u *LocalSelector) Select(binlog *pb.Binlog) *PumpStatus {
+func (u *LocalUnixSelector) Select(binlog *pb.Binlog) *PumpStatus {
 	return u.Pump
 }
 
 // Next implement PumpSelector.Next. Only for Prewrite binlog.
-func (u *LocalSelector) Next(binlog *pb.Binlog, retryTime int) *PumpStatus {
+func (u *LocalUnixSelector) Next(binlog *pb.Binlog, retryTime int) *PumpStatus {
 	return u.Pump
 }
 
@@ -292,8 +292,8 @@ func NewSelector(algorithm string) PumpSelector {
 		selector = NewHashSelector()
 	case Score:
 		selector = NewScoreSelector()
-	case Local:
-		selector = NewLocalSelector()
+	case LocalUnix:
+		selector = NewLocalUnixSelector()
 	default:
 		Logger.Warnf("unknow algorithm %s, use range as default", algorithm)
 		selector = NewRangeSelector()

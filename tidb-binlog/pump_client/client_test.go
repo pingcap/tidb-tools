@@ -57,14 +57,8 @@ func (t *testClientSuite) TestSelector(c *C) {
 }
 
 func (*testClientSuite) testSelector(c *C, algorithm string) {
-	pumpInfos := &PumpInfos{
-		Pumps:            make(map[string]*PumpStatus),
-		AvaliablePumps:   make(map[string]*PumpStatus),
-		UnAvaliablePumps: make(map[string]*PumpStatus),
-	}
-
 	pumpsClient := &PumpsClient{
-		Pumps:              pumpInfos,
+		Pumps:              NewPumpInfos(),
 		Selector:           NewSelector(algorithm),
 		RetryTime:          DefaultAllRetryTime,
 		BinlogWriteTimeout: DefaultBinlogWriteTimeout,
@@ -279,11 +273,7 @@ func mockPumpsClient(client pb.PumpClient) *PumpsClient {
 		IsAvaliable: true,
 	}
 
-	pumpInfos := &PumpInfos{
-		Pumps:            make(map[string]*PumpStatus),
-		AvaliablePumps:   make(map[string]*PumpStatus),
-		UnAvaliablePumps: make(map[string]*PumpStatus),
-	}
+	pumpInfos := NewPumpInfos()
 	pumpInfos.Pumps[nodeID1] = pump1
 	pumpInfos.AvaliablePumps[nodeID1] = pump1
 	pumpInfos.Pumps[nodeID2] = pump2
