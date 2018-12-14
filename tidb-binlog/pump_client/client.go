@@ -112,7 +112,7 @@ type PumpsClient struct {
 	// Security is the security config
 	Security *tls.Config
 
-	// binlogSocket file path, for compatible with kafka version pump.
+	// binlog socket file path, for compatible with kafka version pump.
 	binlogSocket string
 }
 
@@ -186,9 +186,7 @@ func NewLocalPumpsClient(binlogSocket string, timeout time.Duration, securityOpt
 		Security:           security,
 		binlogSocket:       binlogSocket,
 	}
-
 	newPumpsClient.getLocalPumpStatus(ctx)
-	newPumpsClient.Selector.SetPumps(copyPumps(newPumpsClient.Pumps.AvaliablePumps))
 
 	return newPumpsClient, nil
 }
@@ -201,7 +199,7 @@ func (c *PumpsClient) getLocalPumpStatus(pctx context.Context) {
 		IsAlive: true,
 		State:   node.Online,
 	}
-	c.addPump(NewPumpStatus(nodeStatus, c.Security), false)
+	c.addPump(NewPumpStatus(nodeStatus, c.Security), true)
 }
 
 // getPumpStatus gets all the pumps status in the etcd.

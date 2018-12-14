@@ -229,6 +229,8 @@ func (r *RangeSelector) Next(binlog *pb.Binlog, retryTime int) *PumpStatus {
 
 // LocalUnixSelector will always select the local pump, used for compatible with kafka version tidb-binlog.
 type LocalUnixSelector struct {
+	sync.RWMutex
+
 	// the pump to be selected.
 	Pump *PumpStatus
 }
@@ -240,11 +242,13 @@ func NewLocalUnixSelector() PumpSelector {
 
 // SetPumps implement PumpSelector.SetPumps.
 func (u *LocalUnixSelector) SetPumps(pumps []*PumpStatus) {
+	u.Lock()
 	if len(pumps) == 0 {
 		u.Pump = nil
 	} else {
 		u.Pump = pumps[0]
 	}
+	u.Unlock()
 }
 
 // Select implement PumpSelector.Select.
