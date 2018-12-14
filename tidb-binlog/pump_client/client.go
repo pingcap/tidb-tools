@@ -246,7 +246,6 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 			if (retryTime+1)%RetryTime == 0 {
 				c.setPumpAvaliable(pump, false)
 				pump = c.Selector.Next(binlog, retryTime/5+1)
-				log.Infof("[pumps client] avaliable pumps: %v, write binlog choose pump %v", c.Pumps.AvaliablePumps, pump)
 				Logger.Debugf("[pumps client] avaliable pumps: %v, write binlog choose pump %v", c.Pumps.AvaliablePumps, pump)
 			}
 
