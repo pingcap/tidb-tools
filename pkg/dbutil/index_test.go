@@ -17,14 +17,12 @@ import (
 	. "github.com/pingcap/check"
 )
 
-type indexTestCase struct {
-	sql     string
-	indices []string
-	cols    []string
-}
-
 func (*testDBSuite) TestIndex(c *C) {
-	testCases := []*indexTestCase{
+	testCases := []struct {
+		sql     string
+		indices []string
+		cols    []string
+	}{
 		{
 			`
  			CREATE TABLE itest (a int(11) NOT NULL,
