@@ -235,7 +235,7 @@ type LocalUnixSelector struct {
 	Pump *PumpStatus
 }
 
-// NewLocalUnixSelector returns a LocalUnixSelector.
+// NewLocalUnixSelector returns a new LocalUnixSelector.
 func NewLocalUnixSelector() PumpSelector {
 	return &LocalUnixSelector{}
 }
@@ -253,11 +253,17 @@ func (u *LocalUnixSelector) SetPumps(pumps []*PumpStatus) {
 
 // Select implement PumpSelector.Select.
 func (u *LocalUnixSelector) Select(binlog *pb.Binlog) *PumpStatus {
+	u.RLock()
+	defer u.RUnlock()
+
 	return u.Pump
 }
 
 // Next implement PumpSelector.Next. Only for Prewrite binlog.
 func (u *LocalUnixSelector) Next(binlog *pb.Binlog, retryTime int) *PumpStatus {
+	u.RLock()
+	defer u.RUnlock()
+
 	return u.Pump
 }
 
