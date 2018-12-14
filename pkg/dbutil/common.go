@@ -213,7 +213,7 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 	return randomValue, nil
 }
 
-// GetMinMaxValue get min and max value.
+// GetMinMaxValue return min and max value of given column by specified limitRange condition.
 func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column string, limitRange string, collation string, args []interface{}) (string, string, error) {
 	/*
 		example:
@@ -598,11 +598,11 @@ func IsTiDB(ctx context.Context, db *sql.DB) (bool, error) {
 
 // TableName returns `schema`.`table`
 func TableName(schema, table string) string {
-	return fmt.Sprintf("%s.%s", escapeName(schema), escapeName(table))
+	return fmt.Sprintf("`%s`.`%s`", escapeName(schema), escapeName(table))
 }
 
 func escapeName(name string) string {
-	return fmt.Sprintf("`%s`", name)
+	return strings.Replace(name, "`", "``", -1)
 }
 
 // ReplacePlaceholder will use args to replace '?', used for log.
