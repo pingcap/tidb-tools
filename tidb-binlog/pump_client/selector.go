@@ -31,8 +31,8 @@ const (
 	// Score means choose pump by it's score.
 	Score = "score"
 
-	// Unique means will only use one pump.
-	Unique = "unique"
+	// Local means will only use the local pump.
+	Local = "local"
 )
 
 // PumpSelector selects pump for sending binlog.
@@ -227,19 +227,19 @@ func (r *RangeSelector) Next(binlog *pb.Binlog, retryTime int) *PumpStatus {
 	return nextPump
 }
 
-// UniqueSelector will always select a same pump, used for compatible with kafka version tidb-binlog.
-type UniqueSelector struct {
+// LocalSelector will always select the local pump, used for compatible with kafka version tidb-binlog.
+type LocalSelector struct {
 	// the pump to be selected.
 	Pump *PumpStatus
 }
 
-// NewUniqueSelector returns a UniqueSelector.
-func NewUniqueSelector() PumpSelector {
-	return &UniqueSelector{}
+// NewLocalSelector returns a LocalSelector.
+func NewLocalSelector() PumpSelector {
+	return &LocalSelector{}
 }
 
 // SetPumps implement PumpSelector.SetPumps.
-func (u *UniqueSelector) SetPumps(pumps []*PumpStatus) {
+func (u *LocalSelector) SetPumps(pumps []*PumpStatus) {
 	if len(pumps) == 0 {
 		u.Pump = nil
 	} else {
@@ -248,12 +248,12 @@ func (u *UniqueSelector) SetPumps(pumps []*PumpStatus) {
 }
 
 // Select implement PumpSelector.Select.
-func (u *UniqueSelector) Select(binlog *pb.Binlog) *PumpStatus {
+func (u *LocalSelector) Select(binlog *pb.Binlog) *PumpStatus {
 	return u.Pump
 }
 
 // Next implement PumpSelector.Next. Only for Prewrite binlog.
-func (u *UniqueSelector) Next(binlog *pb.Binlog, retryTime int) *PumpStatus {
+func (u *LocalSelector) Next(binlog *pb.Binlog, retryTime int) *PumpStatus {
 	return u.Pump
 }
 
@@ -292,8 +292,8 @@ func NewSelector(algorithm string) PumpSelector {
 		selector = NewHashSelector()
 	case Score:
 		selector = NewScoreSelector()
-	case Unique:
-		selector = NewUniqueSelector()
+	case Local:
+		selector = NewLocalSelector()
 	default:
 		Logger.Warnf("unknow algorithm %s, use range as default", algorithm)
 		selector = NewRangeSelector()

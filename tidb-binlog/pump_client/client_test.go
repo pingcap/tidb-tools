@@ -21,6 +21,7 @@ import (
 	"time"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
 	binlog "github.com/pingcap/tipb/go-binlog"
 	pb "github.com/pingcap/tipb/go-binlog"
@@ -28,7 +29,10 @@ import (
 	"google.golang.org/grpc"
 )
 
-var testMaxRecvMsgSize = 1024
+var (
+	testMaxRecvMsgSize = 1024
+	testRetryTime      = 5
+)
 
 func TestClient(t *testing.T) {
 	TestingT(t)
@@ -62,7 +66,7 @@ func (*testClientSuite) testSelector(c *C, algorithm string) {
 	pumpsClient := &PumpsClient{
 		Pumps:              pumpInfos,
 		Selector:           NewSelector(algorithm),
-		RetryTime:          DefaultRetryTime,
+		RetryTime:          DefaultAllRetryTime,
 		BinlogWriteTimeout: DefaultBinlogWriteTimeout,
 	}
 
@@ -179,13 +183,18 @@ func (t *testClientSuite) TestWriteBinlog(c *C) {
 		err = pumpClient.WriteBinlog(blog)
 		c.Assert(err, NotNil)
 
-		// test binlog size small than grpc's MaxRecvMsgSize
-		blog = &pb.Binlog{
-			Tp:            pb.BinlogType_Prewrite,
-			PrewriteValue: make([]byte, 1),
+		for i := 0; i < 10; i++ {
+			// test binlog size small than grpc's MaxRecvMsgSize
+			blog = &pb.Binlog{
+				Tp:            pb.BinlogType_Prewrite,
+				PrewriteValue: make([]byte, 1),
+			}
+			err = pumpClient.WriteBinlog(blog)
+			c.Assert(err, IsNil)
 		}
-		err = pumpClient.WriteBinlog(blog)
-		c.Assert(err, IsNil)
+
+		// after write some binlog, the pump without grpc client will move to unavaliable list in pump client.
+		c.Assert(len(pumpClient.Pumps.UnAvaliablePumps), Equals, 1)
 
 		// test when pump is down
 		pumpServer.Close()
@@ -198,10 +207,19 @@ type mockPumpServer struct {
 	mode   string
 	addr   string
 	server *grpc.Server
+
+	retryTime int
 }
 
 // WriteBinlog implements PumpServer interface.
 func (p *mockPumpServer) WriteBinlog(ctx context.Context, req *binlog.WriteBinlogReq) (*binlog.WriteBinlogResp, error) {
+	p.retryTime++
+	if p.retryTime < testRetryTime {
+		return &binlog.WriteBinlogResp{}, errors.New("fake error")
+	}
+
+	// only the last retry will return succuess
+	p.retryTime = 0
 	return &binlog.WriteBinlogResp{}, nil
 }
 
@@ -240,14 +258,25 @@ func createMockPumpServer(addr string, mode string) (*mockPumpServer, error) {
 
 // mockPumpsClient creates a PumpsClient, used for test.
 func mockPumpsClient(client pb.PumpClient) *PumpsClient {
-	nodeID := "pump-1"
-	pump := &PumpStatus{
+	// add a avaliable pump
+	nodeID1 := "pump-1"
+	pump1 := &PumpStatus{
 		Status: node.Status{
-			NodeID: nodeID,
+			NodeID: nodeID1,
 			State:  node.Online,
 		},
 		IsAvaliable: true,
 		Client:      client,
+	}
+
+	// add a pump without grpc client
+	nodeID2 := "pump-2"
+	pump2 := &PumpStatus{
+		Status: node.Status{
+			NodeID: nodeID2,
+			State:  node.Online,
+		},
+		IsAvaliable: true,
 	}
 
 	pumpInfos := &PumpInfos{
@@ -255,17 +284,20 @@ func mockPumpsClient(client pb.PumpClient) *PumpsClient {
 		AvaliablePumps:   make(map[string]*PumpStatus),
 		UnAvaliablePumps: make(map[string]*PumpStatus),
 	}
-	pumpInfos.Pumps[nodeID] = pump
-	pumpInfos.AvaliablePumps[nodeID] = pump
+	pumpInfos.Pumps[nodeID1] = pump1
+	pumpInfos.AvaliablePumps[nodeID1] = pump1
+	pumpInfos.Pumps[nodeID2] = pump2
+	pumpInfos.AvaliablePumps[nodeID2] = pump2
 
 	pCli := &PumpsClient{
-		ClusterID:          1,
-		Pumps:              pumpInfos,
-		Selector:           NewSelector(Range),
-		RetryTime:          1,
+		ClusterID: 1,
+		Pumps:     pumpInfos,
+		Selector:  NewSelector(Range),
+		// have two pump, so use 2 * testRetryTime
+		RetryTime:          2 * testRetryTime,
 		BinlogWriteTimeout: 15 * time.Second,
 	}
-	pCli.Selector.SetPumps([]*PumpStatus{pump})
+	pCli.Selector.SetPumps([]*PumpStatus{pump1, pump2})
 
 	return pCli
 }

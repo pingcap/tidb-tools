@@ -36,8 +36,11 @@ const (
 	// DefaultEtcdTimeout is the default timeout config for etcd.
 	DefaultEtcdTimeout = 5 * time.Second
 
-	// DefaultRetryTime is the default time of retry.
-	DefaultRetryTime = 20
+	// DefaultAllRetryTime is the default retry time for all pumps, should greter than RetryTime.
+	DefaultAllRetryTime = 20
+
+	// RetryTime is the retry time for each pump.
+	RetryTime = 5
 
 	// DefaultBinlogWriteTimeout is the default max time binlog can use to write to pump.
 	DefaultBinlogWriteTimeout = 15 * time.Second
@@ -104,10 +107,10 @@ type PumpsClient struct {
 // NewPumpsClient returns a PumpsClient.
 func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.SecurityOption, binlogSocket string) (*PumpsClient, error) {
 	// TODO: get strategy from etcd, and can update strategy in real-time.
-	// use Range as default. and if binlogSocket is not empty, will use Unique strategy.
+	// use Range as default. and if binlogSocket is not empty, will use Local strategy.
 	strategy := Range
 	if len(binlogSocket) != 0 {
-		strategy = Unique
+		strategy = Local
 	}
 	selector := NewSelector(strategy)
 
@@ -148,7 +151,7 @@ func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.Secur
 		EtcdRegistry:       node.NewEtcdRegistry(cli, DefaultEtcdTimeout),
 		Pumps:              pumpInfos,
 		Selector:           selector,
-		RetryTime:          DefaultRetryTime,
+		RetryTime:          DefaultAllRetryTime,
 		BinlogWriteTimeout: timeout,
 		Security:           security,
 	}
@@ -159,7 +162,8 @@ func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.Secur
 	}
 	newPumpsClient.Selector.SetPumps(copyPumps(newPumpsClient.Pumps.AvaliablePumps))
 
-	if strategy != Unique {
+	// if strategy is Local, will only use the local pump, don't need detect other pump's status.
+	if strategy != Local {
 		newPumpsClient.wg.Add(2)
 		go newPumpsClient.watchStatus()
 		go newPumpsClient.detect()
@@ -239,9 +243,10 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 			}
 
 			// every pump can retry 5 times, if retry 5 times and still failed, set this pump unavaliable, and choose a new pump.
-			if (retryTime+1)%5 == 0 {
+			if (retryTime+1)%RetryTime == 0 {
 				c.setPumpAvaliable(pump, false)
 				pump = c.Selector.Next(binlog, retryTime/5+1)
+				log.Infof("[pumps client] avaliable pumps: %v, write binlog choose pump %v", c.Pumps.AvaliablePumps, pump)
 				Logger.Debugf("[pumps client] avaliable pumps: %v, write binlog choose pump %v", c.Pumps.AvaliablePumps, pump)
 			}
 
