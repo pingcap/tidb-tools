@@ -169,7 +169,20 @@ func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.Secur
 }
 
 // NewLocalPumpsClient returns a PumpsClient, this PumpsClient will write binlog by socket file. For compatible with kafka version pump.
-func NewLocalPumpsClient(binlogSocket string, timeout time.Duration, securityOpt pd.SecurityOption) (*PumpsClient, error) {
+func NewLocalPumpsClient(etcdURLs, binlogSocket string, timeout time.Duration, securityOpt pd.SecurityOption) (*PumpsClient, error) {
+	ectdEndpoints, err := utils.ParseHostPortAddr(etcdURLs)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	// get clusterid
+	pdCli, err := pd.NewClient(ectdEndpoints, securityOpt)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	clusterID := pdCli.GetClusterID(context.Background())
+	pdCli.Close()
+
 	security, err := utils.ToTLSConfig(securityOpt.CAPath, securityOpt.CertPath, securityOpt.KeyPath)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -179,6 +192,7 @@ func NewLocalPumpsClient(binlogSocket string, timeout time.Duration, securityOpt
 	newPumpsClient := &PumpsClient{
 		ctx:                ctx,
 		cancel:             cancel,
+		ClusterID:          clusterID,
 		Pumps:              NewPumpInfos(),
 		Selector:           NewSelector(LocalUnix),
 		RetryTime:          DefaultAllRetryTime,

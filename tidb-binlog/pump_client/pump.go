@@ -26,7 +26,10 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-var localPump string = "localPump"
+var (
+	// localPump is used to write local pump through unix socket connection.
+	localPump = "localPump"
+)
 
 // PumpStatus saves pump's status.
 type PumpStatus struct {
