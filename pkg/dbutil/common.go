@@ -455,8 +455,11 @@ func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string, table
 // upperBound and lowerBound are looks like '(123, abc)' for multiple fields, or '123' for one field.
 func AnalyzeValuesFromBuckets(valueString string, cols []*model.ColumnInfo) ([]string, error) {
 	// FIXME: maybe some values contains '(', ')' or ', '
-	vStr := strings.Trim(strings.Trim(valueString, "("), ")")
+	vStr := strings.Trim(valueString, "()")
 	values := strings.Split(vStr, ", ")
+	if len(values) != len(cols) {
+		return nil, errors.Errorf("analyze value %s failed", valueString)
+	}
 
 	for i, col := range cols {
 		if IsTimeType(col.Tp) {
@@ -615,4 +618,5 @@ func ReplacePlaceholder(str string, args []string) string {
 	*/
 	newStr := strings.Replace(str, "?", "'%s'", -1)
 	return fmt.Sprintf(newStr, utils.StringsToInterfaces(args)...)
+
 }
