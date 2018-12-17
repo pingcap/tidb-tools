@@ -486,7 +486,6 @@ func DecodeTimeInBucket(packedStr string, tp byte) (string, error) {
 	}
 
 	if packed == 0 {
-		t.Time = types.ZeroTime
 		return "", nil
 	}
 	ymdhms := packed >> 24
