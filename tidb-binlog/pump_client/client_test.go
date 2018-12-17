@@ -14,6 +14,7 @@
 package client
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -25,7 +26,6 @@ import (
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
 	binlog "github.com/pingcap/tipb/go-binlog"
 	pb "github.com/pingcap/tipb/go-binlog"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
 
