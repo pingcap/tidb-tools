@@ -15,6 +15,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path"
 	"time"
@@ -25,7 +26,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/siddontang/go/ioutil2"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
 )
 
 const physicalShiftBits = 18
