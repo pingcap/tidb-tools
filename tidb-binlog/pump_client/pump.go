@@ -14,6 +14,7 @@
 package client
 
 import (
+	"context"
 	"crypto/tls"
 	"net"
 	"time"
@@ -21,7 +22,6 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
 	pb "github.com/pingcap/tipb/go-binlog"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
