@@ -60,10 +60,10 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 DM 支持对原分库分表进行合库合表操作，但需要满足一些限制，详情见 [分库分表](./shard-table)
 
 ### 使用 DM
-您可以选择可以选择
+您可以选择
 
 - 阅读[快速开始](./get-started.md)来快速部署和启动一个同步任务
-- 按照下面的学习路线深入了解系统，定制自己的数据同步任务
+- 按照下面的学习路线深入了解 DM，然后定制数据同步任务
   1. 阅读并且了解 [使用限制](./restrictions.md)
   2. 根据 [DM Ansible 运维手册](./maintenance/dm-ansible.md) 文档部署和管理 DM 集群
   3. 阅读并且了解 [配置文件](./configuration/configuration.md)
