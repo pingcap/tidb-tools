@@ -40,3 +40,31 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 - 查看数据同步任务状态
 - 处理数据同步任务错误
 - 校验数据同步任务配置的正确性
+
+### 同步功能介绍
+
+#### schema / table 同步黑白名单
+
+上游数据库实例表的黑白名过滤名单规则。过滤规则类似于 MySQL replication-rules-db / tables, 可以用来过滤或者只同步某些 database 或者某些 table 的所有操作。详情见 [Task 配置项介绍](./configuration/argument-explanation.md)
+
+#### binlog Event 过滤
+
+比 schema / table 同步黑白名单更加细粒度的过滤规则，可以指定只同步或者过滤掉某些 database 或者某些 table 的具体的操作，比如 `INSERT`，`TRUNCATE TABLE`。详情见 [Task 配置项介绍](./configuration/argument-explanation.md)
+
+#### column mapping 过滤
+
+可以用来解决分库分表自增主键 ID 的冲突，根据用户配置的 source-id 以及 schema / table 的名字编号来对自增主键 ID 的值进行改造。详情见 [Task 配置项介绍](./configuration/argument-explanation.md)
+
+#### 分库分表支持
+
+DM 支持对原分库分表进行合库合表操作，但需要满足一些限制，详情见 [分库分表](./shard-table)
+
+### 使用 DM
+您可以选择可以选择
+
+- 阅读[快速开始](./get-started.md)来快速部署和启动一个同步任务
+- 按照下面的学习路线深入了解系统，定制自己的数据同步任务
+  1. 阅读并且了解 [使用限制](./restrictions.md)
+  2. 根据 [DM Ansible 运维手册](./maintenance/dm-ansible.md) 文档部署和管理 DM 集群
+  3. 阅读并且了解 [配置文件](./configuration/configuration.md)
+  4. 学习 [任务管理](#任务管理) 章节来管理和查看任务的运行

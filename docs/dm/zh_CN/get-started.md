@@ -47,11 +47,11 @@ Get Started
 # Master Configuration.
 
 [[deploy]]
-mysql-instance = "172.16.10.81:3306"
+source-id = "mysql-replica-01"
 dm-worker = "172.16.10.72:10081"
 
 [[deploy]]
-mysql-instance = "172.16.10.82:3306"
+source-id = "mysql-replica-02"
 dm-worker = "172.16.10.73:10081"
 ```
 
@@ -73,24 +73,14 @@ target-database:              # 下游 TiDB 配置信息
   user: "root"
   password: ""
 
-mysql-instances:                                  # 当前任务需要使用的全部上游 MySQL 实例
+mysql-instances:                       # 当前任务需要使用的全部上游 MySQL 实例
 -
-  config:                                         # MySQL-1 配置
-    host: "172.16.10.81"
-    port: 3306
-    user: "root"
-    password: "VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU="  # 明文 `123456` 某次加密后的密文，每次加密产生的密文会不同
-  instance-id: "172.16.10.81:3306"                # MySQL-1 的实例 ID，必须与 dm-master.toml 中的 `mysql-instance` 对应
-  black-white-list: "global"                      # 需要同步的库名/表名黑白名单的配置项名称，用于引用全局的黑白名单配置， 全局配置见下面的 black-white-list map 配置
-  mydumper-config-name: "global"                  # mydumper 的配置项名称，用于引用全局的 mydumper 配置
+  source-id: "mysql-replica-01"        # 上游实例或者复制组 ID，参考 inventory.ini 的 source_id 或者 dm-master.toml 的 source-id 配置
+  black-white-list: "global"           # 需要同步的库名/表名黑白名单的配置项名称，用于引用全局的黑白名单配置， 全局配置见下面的 black-white-list map 配置
+  mydumper-config-name: "global"       # mydumper 的配置项名称，用于引用全局的 mydumper 配置
 
 -
-  config:                                         # MySQL-2 配置
-    host: "172.16.10.82"
-    port: 3306
-    user: "root"
-    password: "VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU="
-  instance-id: "172.16.10.82:3306"
+  source-id: "mysql-replica-02"
   black-white-list: "global"
   mydumper-config-name: "global"
 

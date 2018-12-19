@@ -8,7 +8,10 @@ task 配置文件 [task.yaml](./task.yaml) 主要包含下面 [全局配置](#�
 
 ### 关键概念
 
-instance-id，DM-worker ID 等关键概念参见 [关键概念](../user-manual.md#关键概念) 
+| 概念         | 解释                                                         | 配置文件                                                     |
+| ------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| source-id  | 唯一确定一个 MySQL / MariaDB 实例, 或者一个具有主从结构的复制组 | `inventory.ini` 的 `source_id`;<br> `dm-master.toml` 的 `source-id`;<br> `task.yaml` 的 `source-id` |
+| DM-worker ID | 唯一确定一个 DM-worker （取值于 `dm-worker.toml` 的 `worker-addr` 参数） | `dm-worker.toml` 的 `worker-addr`;<br> dmctl 命令行的 `-worker` / `-w` flag  |
 
 
 ### 全局配置
@@ -93,14 +96,8 @@ syncers:                                            # syncer 处理单元运行�
 ```
 mysql-instances:
     -
-    ​    config:                                    # instance-id 对应的上游数据库配置 
-    ​        host: "192.168.199.118"
-    ​        port: 4306
-    ​        user: "root"
-    ​        password: "1234"                       # 需要使用 dmctl 加密的密码，具体说明见 [dmctl 使用手册]
-    ​    instance-id: "instance118-4306"            # MySQL Instance ID，对应上游 MySQL 实例，不允许配置 DM-master 的集群拓扑配置外的 mysql-instance 
-
-    ​    meta:                                      # 下游数据库的 checkpoint 不存在时 binlog 同步开始的位置; 如果 checkpoint 存在则没有作用 
+    ​    source-id: "mysql-replica-01"           # 上游实例或者复制组 ID，参考 inventory.ini 的 source_id 或者 dm-master.toml 的 source-id 配置
+    ​    meta:                                   # 下游数据库的 checkpoint 不存在时 binlog 同步开始的位置; 如果 checkpoint 存在则没有作用 
     ​        binlog-name: binlog-00001
     ​        binlog-pos: 4
 
@@ -114,13 +111,7 @@ mysql-instances:
     ​    syncer-config-name: "global"                                       # syncer 配置名称，具体配置见 [全局配置] [功能配置项集] 的 syncers （不能和 syncer 同时设置）
 
     -
-    ​    config:
-    ​        host: "192.168.199.118"
-    ​        port: 5306
-    ​        user: "root"
-    ​        password: "1234"
-    ​    instance-id: "instance118-5306"
-
+    ​    source-id: "mysql-replica-02"            #  上游实例或者复制组 ID，参考 inventory.ini 的 source_id 或者 dm-master.toml 的 source-id 配置
     ​    mydumper:                                                          # mydumper 相关配置（不能和 mydumper-config-name 同时设置）
     ​        mydumper-path: "./mydumper"                                    # mydumper binary 文件地址，这个无需设置，会由 ansible 部署程序自动生成
       ​      threads: 4
