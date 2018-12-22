@@ -22,7 +22,7 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 
 ### 使用手册
 
-- [DM 简介](./overview.md)
+- [DM 介绍](./overview.md)
 - [使用限制](./restrictions.md)
 - [运维管理](./maintenance)
     - [DM Ansible 运维手册](./maintenance/dm-ansible.md)
@@ -33,7 +33,6 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
     - [DM 监控与告警](./maintenance/metrics-alert.md)
 - [配置文件](./configuration)
     - [Task 配置文件介绍](./configuration/configuration.md)
-    - [Task 配置项介绍](./configuration/argument-explanation.md)
     - [task.yaml 示例](./configuration/task.yaml)
 - [任务管理](./task-handling)
     - [dmctl 使用手册](./task-handling/dmctl-manual.md)

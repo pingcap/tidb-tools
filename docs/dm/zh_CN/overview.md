@@ -46,17 +46,22 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 
 ### 同步功能介绍
 
+#### schema / table 路由
+
+可以把上游 MySQL/MariaDB 实例的某些表同步到下游指定表的路由功能，可以用来分库分表的合并同步，详情见 [table route rule 介绍](./features/table-route.md)
+
+
 #### schema / table 同步黑白名单
 
-上游数据库实例表的黑白名过滤名单规则。过滤规则类似于 MySQL replication-rules-db / tables, 可以用来过滤或者只同步某些 database 或者某些 table 的所有操作。详情见 [Task 配置项介绍](./configuration/argument-explanation.md)
+上游数据库实例表的黑白名过滤名单规则。过滤规则类似于 MySQL replication-rules-db / tables, 可以用来过滤或者只同步某些 database 或者某些 table 的所有操作。详情见 [black white list](./features/black-white-list.md)
 
 #### binlog Event 过滤
 
-比 schema / table 同步黑白名单更加细粒度的过滤规则，可以指定只同步或者过滤掉某些 database 或者某些 table 的具体的操作，比如 `INSERT`，`TRUNCATE TABLE`。详情见 [Task 配置项介绍](./configuration/argument-explanation.md)
+比 `schema / table` 同步黑白名单更加细粒度的过滤规则，可以指定只同步或者过滤掉某些 `schema / table` 的指定类型 binlog， 比如 `INSERT`，`TRUNCATE TABLE`。详情见 [binlog filter](./features/binlog-filter.md)
 
-#### column mapping 过滤
+#### 列值转换
 
-可以用来解决分库分表自增主键 ID 的冲突，根据用户配置的 source-id 以及 schema / table 的名字编号来对自增主键 ID 的值进行改造。详情见 [Task 配置项介绍](./configuration/argument-explanation.md)
+根据用户指定的内置表达式对表的列进行转换，可以用来解决分库分表自增主键 ID 的冲突，详情见 [column mapping rule 介绍](./features/column-mapping.md)
 
 #### 分库分表支持
 

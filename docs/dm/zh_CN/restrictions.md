@@ -6,7 +6,7 @@
 - 5.5 < MySQL version < 5.8
 - MariaDB version >= 10.1.2
 
-另外，在使用 dmctl 启动任务时，DM 会对任务上下游数据库的配置、权限等进行检查，具体见 [上游数据库实例检查](./task-handling/check-mysql.md)
+另外，在使用 dmctl 启动任务时，DM 会对任务上下游数据库的配置、权限等进行前置检查，具体细节见参考 [同步任务前置检查](./prechek.md)
 
 ### DDL 语法
 

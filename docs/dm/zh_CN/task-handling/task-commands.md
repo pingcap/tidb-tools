@@ -3,9 +3,8 @@
 
 ### 创建数据同步任务
 
-创建任务的时候，会对上游数据库实例的权限，以及表结构进行检查，对于分库分表同步任务的所有分表的表结构行如下的检查
-- 表中是否存在自增并且唯一的 column，并且是否存在对应的 `partition id` 类型 column mapping rule 且是否存在冲突
-- 上下游待同步表结构是否一致
+启动任务时，DM 会对任务上下游数据库的配置、权限等进行前置检查，具体细节见参考 [同步任务前置检查](../prechek.md)
+
 
 ```
 » help start-task
@@ -327,7 +326,7 @@ Global Flags:
 - table route rules
 - black white list
 - binlog filter rules
-- column mapping  rules
+- column mapping rules
 
 ##### 支持更新项更新步骤
 
