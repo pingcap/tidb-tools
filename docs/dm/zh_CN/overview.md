@@ -53,11 +53,11 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 
 #### schema / table 同步黑白名单
 
-上游数据库实例表的黑白名过滤名单规则。过滤规则类似于 MySQL replication-rules-db / tables, 可以用来过滤或者只同步某些 database 或者某些 table 的所有操作。详情见 [black white list](./features/black-white-list.md)
+上游数据库实例表的黑白名过滤名单规则。过滤规则类似于 MySQL replication-rules-db / tables, 可以用来过滤或者只同步某些 database 或者某些 table 的所有操作。详情见 [black white list 介绍](./features/black-white-list.md)
 
 #### binlog Event 过滤
 
-比 `schema / table` 同步黑白名单更加细粒度的过滤规则，可以指定只同步或者过滤掉某些 `schema / table` 的指定类型 binlog， 比如 `INSERT`，`TRUNCATE TABLE`。详情见 [binlog filter](./features/binlog-filter.md)
+比 `schema / table` 同步黑白名单更加细粒度的过滤规则，可以指定只同步或者过滤掉某些 `schema / table` 的指定类型 binlog， 比如 `INSERT`，`TRUNCATE TABLE`。详情见 [binlog filter 介绍](./features/binlog-filter.md)
 
 #### 列值转换
 
