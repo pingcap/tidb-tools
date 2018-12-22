@@ -32,38 +32,48 @@ DM-worker 任务运行过程包含多个任务处理逻辑单元
 包含 relay log、dump、load、replicate binlog 等处理单元， 这里先总体说下 上下游分别需要什么权限；
 
 #### 上游（MySQL/mariaDB)
-- SELECT
-- RELOAD
-- RELICATION SLAVE
-- REPLICATION CLIENT
+
+| 权限 | 作用域 |
+|----:|:----|
+| SELECT | Tables |
+| RELOAD | Global |
+| REPLICATION SLAVE | Global |
+| REPLICATION CLIENT | Global |
+
+如果你想同步 `db1` 到 TiDB，你可以执行下面的 GRANT 语句
 
 ```sql
-GRANT SELECT,RELOAD,REPLICATION SLAVE, REPLICATION CLIENT  ON *.* TO 'your_user'@'your_wildcard_of_host';
+GRANT RELOAD,REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'your_user'@'your_wildcard_of_host'
+GRANT SELECT ON db1.* TO 'your_user'@'your_wildcard_of_host';
 ```
 
+如果你也需要同步其他库, 请确保你这些库赋予了跟 `db1` 一样的权限。
+
 #### 下游 (TiDB)
-- SELECT
-- INSERT
-- UPDATE
-- DELETE
-- CREATE
-- DROP
-- ALTER
-- INDEX
+| 权限 | 作用域 |
+|----:|:----|
+| SELECT | Tables |
+| INSERT | Tables |
+| UPDATE | Tables |
+| DELETE | Tables |
+| CREATE | Databases,tables |
+| DROP | Databases, tables |
+| ALTER | Tables |
+| INDEX | Tables |
 
-
+在下面为你同步的数据库或者表，执行下面的 GRANT 语句
 ```sql
-GRANT SELECT,INSERT,UPDATE,DELETE,CREATE,DROP,ALTER,INDEX  ON *.* TO 'your_user'@'your_wildcard_of_host';
+GRANT SELECT,INSERT,UPDATE,DELETE,CREATE,DROP,ALTER,INDEX  ON db.table TO 'your_user'@'your_wildcard_of_host';
 ```
 
 下面会对各处理单元进行权限的细分（注意，随着需求的变化，这些权限也会跟着变化，并非一成不变）
 
 
-### 处理单元需要的最小权限
+### 处理单元需要的权限
 
 | 处理单元 | 上游 (MySQL/MariaDB) | 下游 (TiDB) | 系統 |
 |----:|:--------------------|:------------|:----|
-|relay log |SELECT（查询上游的一些环境变量，比如 binlog_format）<br>REPLICATION SLAVE（读取 binlog）<br>REPLICATION CLIENT（show master status, show slave status）| 无 | 本地读/写磁盘 |
+|relay log |REPLICATION SLAVE（读取 binlog）<br>REPLICATION CLIENT（show master status, show slave status）| 无 | 本地读/写磁盘 |
 |dumper |SELECT<br>RELOAD（flush tables with read lock, unlock tables）| 无 | 本地写磁盘 |
 |loader | 无 |SELECT（查询 checkpoint 记录）<br>CREATE（create database/create table）<br>DELETE（delete checkpoint）<br>INSERT（插入 dump 数据）| 本地读/写磁盘 |
-|binlog replication |SELECT（查询上游的一些环境变量，比如 binlog_format）<br>REPLICATION SLAVE（读取 binlog）<br>REPLICATION CLIENT（show master status, show slave status）| SELECT（show index, show column）<br>INSERT（dml）<br>UPDATE（dml）<br>DELETE（dml）<br>CREATE（databases, tables）<br>DROP （databases, tables）<br>ALTER（alter table）<br>INDEX（create/drop index）| 本地读/写磁盘 |
+|binlog replication |REPLICATION SLAVE（读取 binlog）<br>REPLICATION CLIENT（show master status, show slave status）| SELECT（show index, show column）<br>INSERT（dml）<br>UPDATE（dml）<br>DELETE（dml）<br>CREATE（databases, tables）<br>DROP （databases, tables）<br>ALTER（alter table）<br>INDEX（create/drop index）| 本地读/写磁盘 |

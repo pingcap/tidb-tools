@@ -12,7 +12,7 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 
 ### 架构图
 
-   ![DM structure](./architecture.png)
+   ![DM structure](./media/architecture.png)
 
 ***
 
