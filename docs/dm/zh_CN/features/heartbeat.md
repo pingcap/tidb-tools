@@ -16,7 +16,7 @@ heartbeat 提供根据真实同步数据来计算每个同步任务与 MySQL/Mar
 
 task 配置文件中设置
 ```
-enable-heartbeat = true
+enable-heartbeat: true
 ```
 
 #### 原理介绍
@@ -27,4 +27,4 @@ enable-heartbeat = true
 * DM-worker 每个任务拿到 `dm_heartbeat`.`heartbeat` 的 binlog 后，更新自己的同步时间 `TS_slave_task`
 * DM-worker 每 10 秒在对应的上游 MySQL/MariaDB 的 `dm_heartbeat`.`heartbeat` 查询当前的 `TS_master`, 并且对每个任务计算 `task_lag` = `TS_master` - `TS_slave_task`
 
-可以在 metrics 的 binlog replication 处理单元找到该监控 [replicate lag](./maintenance/metrics-alert.md#binlog-replication)
+可以在 metrics 的 binlog replication 处理单元找到该监控 [replicate lag](../maintenance/metrics-alert.md#binlog-replication)

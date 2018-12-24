@@ -43,12 +43,13 @@ column-mappings:
 - 只支持类型为 bigint 的自增主键
 - 库名的组成必须为 `schema 前缀 + 数字（既 schema ID）`，例如: 支持 `s_1`, 不支持 `s_a`
 - 表名的组成必须为 `table 前缀 + 数字（既 table ID）`
-- 目前该功能是定制功能，对分库分表的规模支持限制如下，如果需要调整请联系相关开发人员进行调整
+- 对分库分表的规模支持限制如下
   - 支持最多 15 个 MySQL/MariaDB 实例（instance ID ）
   - 每个实例支持最多 127 个 schema（schema ID）
   - 每个实例的每个 schema 255 个 table（table ID）
   - 自增主键 ID 范围 (>= 0, <= 17592186044415)
   - {instance ID、schema ID、table ID} 组合需要保持唯一
+- 目前该功能是定制功能，如果需要调整请联系相关开发人员进行调整
 
 ###### arguments 设置
 
@@ -66,3 +67,9 @@ int64 比特表示 `[1:1 bit] [2:4 bits] [3：7 bits] [4:8 bits] [5: 44 bits]`
 - 3： schema ID，默认 7 bits
 - 4： table ID，默认 8 bits
 - 5： 自增主键 ID，默认 44 bits
+
+例子： 我们有 2 个实例（M_1、M_2），每个实例有 2 个分库（s_1、s_2）, 每个分库有两个分表（t_1、t_2）
+
+我们应该对每个 MySQL 实例设置以下规则
+* M_1 设置 arguments = [1, "s_", "t_"], 那么表 `s_1`.`t_1` 的 `ID = 1` 的列经过转换后 ID 变为 `580981944116838401`
+* M_2 设置 arguments = [2, "s_", "t_"], 那么表 `s_1`.`t_2` 的 `ID = 1` 的行经过转换后 ID 变为 `1157460288606306305`
