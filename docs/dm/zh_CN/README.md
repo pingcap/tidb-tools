@@ -30,6 +30,7 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
     - [table 黑白名单](./features/black-white-list.md)
     - [binlog 过滤](./features/binlog-filter.md)
     - [列值转换](./features/column-mapping.md)
+    - [同步延迟监控](./features/heartbeat.md)
 - [运维管理](./maintenance)
     - [DM Ansible 运维手册](./maintenance/dm-ansible.md)
     - [扩充/缩减 DM 集群](./maintenance/scale-out.md)
