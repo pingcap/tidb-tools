@@ -77,4 +77,4 @@ DM 支持对原分库分表进行合库合表操作，但需要满足一些限�
   1. 阅读并且了解 [使用限制](./restrictions.md)
   2. 根据 [DM Ansible 运维手册](./maintenance/dm-ansible.md) 文档部署和管理 DM 集群
   3. 阅读并且了解 [配置文件](./configuration/configuration.md)
-  4. 学习 [任务管理](#任务管理) 章节来管理和查看任务的运行
+  4. 学习 [任务管理](./task-handling) 章节来管理和查看任务的运行

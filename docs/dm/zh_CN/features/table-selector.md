@@ -3,7 +3,7 @@ table selector
 
 #### 功能介绍
 
-table selector 对 schema/table 提供了一种基于通配符(https://zh.wikipedia.org/wiki/%E9%80%9A%E9%85%8D%E7%AC%A6)的匹配规则
+table selector 对 schema/table 提供了一种基于 [通配符](https://zh.wikipedia.org/wiki/%E9%80%9A%E9%85%8D%E7%AC%A6) 的匹配规则
 
 通过设置 `schema-pattern`/`table-pattern` 可以匹配到指定的表
 

@@ -43,6 +43,6 @@ filters:
 | drop index      | DDL  | drop index event              |
 | alter table     | DDL  | alter table event             |
 - sql-pattern: 用于过滤指定的 DDL SQLs， 支持正则表达式匹配，例如上面示例 `"^DROP\\s+PROCEDURE"`。 注意： 如果 `sql-pattern` 为空，则不进行任何过滤
-- action: string(`Do` / `Ignore`);  进行下面规则判断，满足其中之一则过滤，否则执行
+- action: string(`Do` / `Ignore`);  进行下面规则判断，满足其中之一则过滤，否则不过滤
     - Do: 白名单，不在该 rule 的 events 中，或者 sql-pattern 不为空的话，对应的 sql 也不在 sql-pattern 中
     - Ignore: 黑名单，在该 rule 的 events 或 sql-pattern 中

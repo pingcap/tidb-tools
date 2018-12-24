@@ -6,7 +6,7 @@ table route rule
 table route 提供将上游 MySQL/MariaDB 实例的某些表同步到下游指定表的功能。
 
 注意：
-- 不支持对同一个表设置两个不同的路由规则
+- 不支持对同一个表设置多个不同的路由规则
 - schema 的匹配规则需要单独设置，用来同步 `create/drop schema xx`, 例如下面的 `rule-2`
 
 #### 参数配置
