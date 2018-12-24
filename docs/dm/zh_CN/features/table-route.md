@@ -31,7 +31,10 @@ routes:
 
 如果上游有 `test_[1,2,3]`.`t_[1,2,3]`  9 张表
 
-* 同步到下游的 `test`.`t`，则必须创建上面参数配置的两条路由规则
+- 同步到下游的 `test`.`t`，则必须创建两条路由规则
+  - `rule-1` 用来同步匹配上 `schema-pattern: "test_*"` 和 `table-pattern: "t_*"` 的表的 DMLs/DDLs 到下游的 `test`.`t` 
+  - `rule-2` 用来同步匹配上 `schema-pattern: "test_*"` 的库的 DDLs （`create/drop schema xx`）
+  - 如果只设置了 `rule_1` 则同步会报错 `schema test doesn't exist`
 ```
   rule-1:
     schema-pattern: "test_*"
@@ -41,12 +44,10 @@ routes:
   rule-2:
     schema-pattern: "test_*"
     target-schema: "test"
+    
 ```
-  * `rule-1` 用来同步匹配上 `schema-pattern: "test_*"` 和 `table-pattern: "t_*"` 的表的 DMLs/DDLs 到下游的 `test`.`t` 
-  * `rule-2` 用来同步匹配上 `schema-pattern: "test_*"` 的库的 DDLs （`create/drop schema xx`）
-  * 如果只设置了 `rule_1` 则同步会报错 `schema test doesn't exist`
 
-* 同步到下游的 `test`.`t_[1,2,3]`，则必须创建上面参数配置的一条路由规则
+- 同步到下游的 `test`.`t_[1,2,3]`，则必须创建上面参数配置的一条路由规则
 ```
   rule-1:
     schema-pattern: "test_*"
