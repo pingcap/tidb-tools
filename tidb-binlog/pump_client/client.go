@@ -58,6 +58,9 @@ var (
 
 	// ErrNoAvaliablePump means no avaliable pump to write binlog.
 	ErrNoAvaliablePump = errors.New("no avaliable pump to write binlog")
+
+	// CommitBinlogMaxRetryTime is the max retry duration time for write commit binlog.
+	CommitBinlogMaxRetryTime = 10 * time.Minute
 )
 
 // PumpInfos saves pumps' infomations in pumps client.
@@ -251,22 +254,23 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 
 	for {
 		if pump == nil {
-			return ErrNoAvaliablePump
+			err = ErrNoAvaliablePump
+		} else {
+			resp, err = pump.writeBinlog(req, c.BinlogWriteTimeout)
+			if err == nil && resp.Errmsg != "" {
+				err = errors.New(resp.Errmsg)
+			}
+			if err == nil {
+				return nil
+			}
+			Logger.Errorf("[pumps client] write binlog error %v", err)
 		}
-
-		resp, err = pump.writeBinlog(req, c.BinlogWriteTimeout)
-		if err == nil && resp.Errmsg != "" {
-			err = errors.New(resp.Errmsg)
-		}
-		if err == nil {
-			return nil
-		}
-		Logger.Errorf("[pumps client] write binlog error %v", err)
 
 		if binlog.Tp == pb.BinlogType_Commit {
-			// only use one pump to write commit binlog, util write success or blocked for ten minutes.
-			if time.Since(startTime) > 10*time.Minute {
-				break
+			// only use one pump to write commit binlog, util write success or blocked for ten minutes. And will not return error to tidb.
+			if time.Since(startTime) > CommitBinlogMaxRetryTime {
+				Logger.Warnf("[pumps client] write commit binlog %d failed, error %v", binlog.CommitTs, err)
+				return nil
 			}
 		} else {
 			if !isRetryableError(err) {
@@ -295,6 +299,10 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 
 // setPumpAvaliable set pump's isAvaliable, and modify UnAvaliablePumps or AvaliablePumps.
 func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
+	if pump == nil {
+		return
+	}
+
 	pump.IsAvaliable = avaliable
 	if pump.IsAvaliable {
 		err := pump.createGrpcClient(c.Security)
