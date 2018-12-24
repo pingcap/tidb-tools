@@ -24,7 +24,7 @@ task-mode: all                  # 任务模式，full / incremental / all
 is-sharding: true               # 是否为分库分表任务
 meta-schema: "dm_meta"          # 下游储存 meta 信息的 database
 remove-meta: false              # 是否在任务同步开始前移除上面的 meta(checkpoint, onlineddl)
-enable-heartbeat: false         # 是否开启 heartbeat 功能，具体解释见同步功能介绍
+enable-heartbeat: false         # 是否开启 heartbeat 功能，具体解释见同步功能 heartbeat 介绍
 
 target-database:                # 下游数据库实例配置
     host: "192.168.0.1"
@@ -39,7 +39,7 @@ target-database:                # 下游数据库实例配置
 
 解释：任务模式，可以通过任务模式来指定需要执行的数据迁移工作
 - `full` - 只全量备份上游数据库，然后全量导入到下游数据库
-- `incremental` - 只通过 binlog 把上游数据库的增量修改同步到下游数据库
+- `incremental` - 只通过 binlog 把上游数据库的增量修改同步到下游数据库, 可以设置 instance 配置的 meta 配置项来指定增量同步开始的位置
 - `all` - `full` + `incremental`，先全量备份上游数据库，导入到下游数据库，然后从全量数据备份时导出的位置信息（binlog position / GTID）开始通过 binlog 增量同步数据到下游数据库
 
 
@@ -111,8 +111,8 @@ syncers:                                            # syncer 处理单元运行�
 mysql-instances:
     -
     ​    source-id: "mysql-replica-01"           # 上游实例或者复制组 ID，参考 inventory.ini 的 source_id 或者 dm-master.toml 的 source-id 配置
-    ​    meta:                                   # 下游数据库的 checkpoint 不存在时 binlog 同步开始的位置; 如果 checkpoint 存在则没有作用 
-    ​        binlog-name: binlog-00001
+    ​    meta:                                   # 下游数据库的 checkpoint 不存在时 binlog 同步开始的位置; 如果 checkpoint 存在则以 checkpoint 为准
+    ​        binlog-name: binlog-00001           # task-mode 为 full 和 all 的时候不需要设置
     ​        binlog-pos: 4
 
     ​    route-rules: ["route-rule-1", "route-rule-2"]    # 该上游数据库实例匹配的表到下游数据库的映射规则名称

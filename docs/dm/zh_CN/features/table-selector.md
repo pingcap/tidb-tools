@@ -21,7 +21,7 @@ table selector 在 `schema-pattern`/`table-pattern` 中使用以下两个通配�
 
 - `schema-pattern` 限制不能为空;
 - `table-pattern` 可以设置为空。 设置为空时，将只根据 `schema-pattern` 对 `schema` 进行匹配，得到匹配结果;
-- `table-pattern` 不为空时，分别根据 `schema-pattern` 和 `table-pattern` 进行匹配，两则都匹配则结果为匹配。
+- `table-pattern` 不为空时，分别根据 `schema-pattern` 和 `table-pattern` 进行匹配，两个都匹配则结果为匹配。
 
 例子：
 - `schema-pattern = "schema_*"` & `table-pattern = ""` 匹配所有库名以 `schema_` 开头的库和表
