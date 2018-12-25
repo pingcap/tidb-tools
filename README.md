@@ -14,8 +14,6 @@ make checker # build checker
 make sync_diff_inspector # build sync_diff_inspector
 
 make binlogctl  # build binlogctl
-
-make ddl_checker  # build ddl_checker
 ```
 
 When tidb-tools are built successfully, you can find the binary in the `bin` directory.
@@ -37,10 +35,6 @@ When tidb-tools are built successfully, you can find the binary in the `bin` dir
 - [binlogctl](./tidb-binlog/binlogctl)
 
     A tool for performing some tidb-binlog related operations, like querying the status of Pump/Drainer and pause/offline some Pump/Drainer.
-
-- [ddl_checker](./ddl_checker)
-
-    A tool for checking if DDL SQL can be successfully executed by TiDB.
 
 ## License
 

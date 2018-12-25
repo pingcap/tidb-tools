@@ -34,6 +34,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.5.1 // indirect
 	github.com/jonboulle/clockwork v0.1.0 // indirect
+	github.com/juju/errors v0.0.0-20181118221551-089d3ea4e4d5 // indirect
 	github.com/klauspost/cpuid v0.0.0-20180405133222-e7e905edc00e // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.1 // indirect
 	github.com/kr/pretty v0.1.0 // indirect
@@ -50,7 +51,7 @@ require (
 	github.com/pingcap/goleveldb v0.0.0-20171020122428-b9ff6c35079e // indirect
 	github.com/pingcap/kvproto v0.0.0-20181028030329-855d2192cdc7
 	github.com/pingcap/parser v0.0.0-20181024082006-53ac409ed043
-	github.com/pingcap/pd v2.1.0-rc.4+incompatible
+	github.com/pingcap/pd v0.0.0-20171213134044-eed819b69991
 	github.com/pingcap/tidb v2.1.0-rc.3.0.20181101080907-32b1dbd8d59f+incompatible
 	github.com/pingcap/tipb v0.0.0-20181012112600-11e33c750323
 	github.com/pkg/errors v0.8.0 // indirect
