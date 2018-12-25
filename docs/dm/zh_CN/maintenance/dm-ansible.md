@@ -3,7 +3,7 @@ DM Ansible 运维手册
 
 ## 概述
 
-Ansible 是一款自动化运维工具，DM-ansible 是 PingCAP 基于 Ansible Playbook 功能编写的集群部署工具。使用 DM-Ansible 可以快速部署一个完整的 DM 集群。
+Ansible 是一款自动化运维工具，DM-Ansible 是 PingCAP 基于 Ansible Playbook 功能编写的集群部署工具。使用 DM-Ansible 可以快速部署一个完整的 DM 集群。
 
 本部署工具可以通过配置文件设置集群拓扑，完成以下各项运维工作：
 
@@ -619,16 +619,16 @@ $ ansible-playbook rolling_update_monitor.yml --tags=prometheus
 dm_master ansible_host=172.16.10.71 dm_master_port=18261
 ```
 
-### 如何更新 dm-ansible
+### 如何更新 DM-Ansible
 
-以 tidb 用户登录中控机并进入 /home/tidb 目录，备份 dm-ansible 文件夹。
+以 tidb 用户登录中控机并进入 /home/tidb 目录，备份 `dm-ansible` 文件夹。
 
 ```
 $ cd /home/tidb
 $ mv dm-ansible dm-ansible-bak
 ```
 
-下载最新的 dm-ansible 并解压
+下载最新的 DM-Ansible 并解压
 
 ```
 $ cd /home/tidb

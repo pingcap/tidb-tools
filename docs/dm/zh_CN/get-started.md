@@ -11,7 +11,7 @@ Get Started
 
 ### 部署 DM 集群
 
-目前推荐使用 dm-ansible 来部署 DM 集群，具体部署方法请参照 [DM Ansible 部署安装](./maintenance/dm-ansible.md)。
+目前推荐使用 DM-Ansible 来部署 DM 集群，具体部署方法请参照 [DM Ansible 部署安装](./maintenance/dm-ansible.md)。
 
 #### 注意事项
 
@@ -24,13 +24,13 @@ Get Started
 
 #### 1 检查集群信息
 
-假设按上述步骤使用 dm-ansible 部署 DM 集群后，DM 集群中相关组件配置信息如下：
+假设按上述步骤使用 DM-Ansible 部署 DM 集群后，DM 集群中相关组件配置信息如下：
 
 | 组件 | Host | Port |
 |------| ---- | ---- |
 | dm_worker1 | 172.16.10.72 | 8262 |
-| dm-worker2 | 172.16.10.73 | 8262 |
-| dm-master | 172.16.10.71 | 8261 |
+| dm_worker2 | 172.16.10.73 | 8262 |
+| dm_master | 172.16.10.71 | 8261 |
 
 上下游数据库实例相关信息如下：
 
@@ -41,7 +41,7 @@ Get Started
 | 下游 TiDB | 172.16.10.83 | 4000 | root | |
 
 
-使用 dm-ansible 部署完成后，dm-master 进程配置文件 `{ansible deploy}/conf/dm-master.toml` 内容应该如下：
+使用 DM-Ansible 部署完成后，dm-master 进程配置文件 `{ansible deploy}/conf/dm-master.toml` 内容应该如下：
 
 ```toml
 # Master Configuration.

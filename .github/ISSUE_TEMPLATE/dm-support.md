@@ -34,10 +34,10 @@ Additionally, please provide the following info before submitting your issue. Th
         (paste TiDB cluster version here)
         ```
 
-    - [ ] How did you deploy DM: manually, or via dm-ansible?.
+    - [ ] How did you deploy DM: manually, or via DM-Ansible?.
 
         ```
-        (leave manually or dm-ansible here)
+        (leave manually or DM-Ansible here)
         ```
 
     - [ ] Other interesting information (system version, hardware config, etc):
