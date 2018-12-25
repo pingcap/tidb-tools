@@ -18,6 +18,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"path"
+	"strings"
 	"sync"
 	"time"
 
@@ -510,6 +511,10 @@ func isRetryableError(err error) bool {
 			return false
 		}
 	*/
+
+	if strings.Contains(err.Error(), "received message larger than max") {
+		return false
+	}
 
 	return true
 }
