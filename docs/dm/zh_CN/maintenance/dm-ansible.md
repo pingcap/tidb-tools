@@ -8,7 +8,7 @@ Ansible 是一款自动化运维工具，DM-ansible 是 PingCAP 基于 Ansible P
 本部署工具可以通过配置文件设置集群拓扑，完成以下各项运维工作：
 
 - 初始化部署机器操作系统参数
-- 部署 DM 集群组件（包括 dm-master、dm-worker、dmctl）
+- 部署 DM 集群组件（包括 DM-master、DM-worker、dmctl）
 - 部署监控组件（包括 prometheus、grafana、alertmanager）
 - 启动集群
 - 关闭集群
@@ -162,9 +162,9 @@ ansible-playbook local_prepare.yml
 
 | Name | Host IP | Services |
 | ---- | ------- | -------- |
-| node1 | 172.16.10.71 | dm-master, prometheus, grafana, alertmanager |
-| node2 | 172.16.10.72 | dm-worker |
-| node3 | 172.16.10.73 | dm-worker |
+| node1 | 172.16.10.71 | DM-master, prometheus, grafana, alertmanager |
+| node2 | 172.16.10.72 | DM-worker |
+| node3 | 172.16.10.73 | DM-worker |
 
 ```ini
 ## DM modules
@@ -212,7 +212,7 @@ grafana_admin_password = "admin"
 deploy_dir = /data1/dm
 ```
 
-如为某一服务单独设置部署目录，可在配置服务主机列表时配置主机变量，以 dm-master 节点为例，其他服务类推，请务必添加第一列别名，以免服务混布时混淆。
+如为某一服务单独设置部署目录，可在配置服务主机列表时配置主机变量，以 DM-master 节点为例，其他服务类推，请务必添加第一列别名，以免服务混布时混淆。
 
 ```
 dm-master ansible_host=172.16.10.71 deploy_dir=/data1/deploy
@@ -227,24 +227,24 @@ dm-master ansible_host=172.16.10.71 deploy_dir=/data1/deploy
 | grafana_admin_user | Grafana 管理员帐号用户名，默认为 admin |
 | grafana_admin_password | Grafana 管理员帐号密码，默认为 admin，用于 Ansible 导入 Dashboard，如后期通过 grafana web 修改了密码，请更新此变量 |
 
-#### dm-worker 配置参数解释
+#### DM-worker 配置参数解释
 
 | 变量 | 变量含义 |
 | ------------- | ------- |
-| source_id | dm-worker 绑定到唯一的一个数据库实例/具有主从架构的复制组，当发生主从切换的时候，只需要更新 mysql_host/port 而不用更改该 ID 标识|
-| server_id | dm-worker 伪装成一个 mysql slave，即 slave 的 server_id, 需要在 mysql 集群中全局唯一，取值范围 0 - 4294967295 |
+| source_id | DM-worker 绑定到唯一的一个数据库实例/具有主从架构的复制组，当发生主从切换的时候，只需要更新 mysql_host/port 而不用更改该 ID 标识|
+| server_id | DM-worker 伪装成一个 mysql slave，即 slave 的 server_id, 需要在 mysql 集群中全局唯一，取值范围 0 - 4294967295 |
 | mysql_host | 上游 MySQL host | 
 | mysql_user | 上游 MySQL 用户名，默认为 root |
 | mysql_password | 上游 MySQL 用户名密码，密码需使用 dmctl 工具加密，参考 [dmctl 加密上游 MySQL 密码](#dmctl-加密上游-mysql-用户密码) |
 | mysql_port | 上游 MySQL 端口号, 默认为 3306 |
-| enable_gtid | dm-worker 是否要用 GTID 形式的位置去拉取 binlog，前提是上游 mysql 已经开启 GTID 模式 |
-| relay_binlog_name | dm-worker 是否要从该指定 binlog file 开始拉取 binlog，仅本地不存在有效 relay log 时使用 |
-| relay_binlog_gtid | dm-worker 是否要从该指定 GTID 开始拉取 binlog，仅本地不存在有效 relay log 且 enable_gtid 为 true 时使用 |
+| enable_gtid | DM-worker 是否要用 GTID 形式的位置去拉取 binlog，前提是上游 mysql 已经开启 GTID 模式 |
+| relay_binlog_name | DM-worker 是否要从该指定 binlog file 开始拉取 binlog，仅本地不存在有效 relay log 时使用 |
+| relay_binlog_gtid | DM-worker 是否要从该指定 GTID 开始拉取 binlog，仅本地不存在有效 relay log 且 enable_gtid 为 true 时使用 |
 | flavor | flavor 表示 mysql 的发行版类型，官方版以及 percona、云 mysql 填写 mysql，mariadb 则填写 mariadb，默认为 mysql |
 
 #### dmctl 加密上游 MySQL 用户密码
 
-以上游 MySQL 用户密码为 `123456` 为例，将生成的字符串配置到 dm-worker 的 `mysql_password` 变量中。
+以上游 MySQL 用户密码为 `123456` 为例，将生成的字符串配置到 DM-worker 的 `mysql_password` 变量中。
 
 ```
 $ cd /home/tidb/dm-ansible/resources/bin
@@ -318,7 +318,7 @@ dm-worker2 ansible_host=172.16.10.73 source_id="mysql-replica-02" server_id=102 
 
 ### 启动集群
 
-此操作会按顺序启动整个 DM 集群所有组件（包括 dm-master、dm-worker 和监控组件）。
+此操作会按顺序启动整个 DM 集群所有组件（包括 DM-master、DM-worker 和监控组件）。
 
 ```
 $ ansible-playbook start.yml
@@ -326,7 +326,7 @@ $ ansible-playbook start.yml
 
 ### 关闭集群
 
-此操作会按顺序关闭整个 DM 集群所有组件（包括 dm-master、dm-worker 和监控组件）。
+此操作会按顺序关闭整个 DM 集群所有组件（包括 DM-master、DM-worker 和监控组件）。
 
 ```
 $ ansible-playbook stop.yml
@@ -351,13 +351,13 @@ $ ansible-playbook local_prepare.yml
 
 #### 使用 Ansible 滚动升级
 
-- 滚动升级 dm-worker 实例
+- 滚动升级 DM-worker 实例
 
 ```
 ansible-playbook rolling_update.yml --tags=dm-worker
 ```
 
-- 滚动升级 dm-master 实例
+- 滚动升级 DM-master 实例
 
 ```
 ansible-playbook rolling_update.yml --tags=dm-master
@@ -369,15 +369,15 @@ ansible-playbook rolling_update.yml --tags=dm-master
 ansible-playbook rolling_update.yml --tags=dmctl
 ```
 
-- 滚动升级 dm-worker、dm-master 和 dmctl
+- 滚动升级 DM-worker、DM-master 和 dmctl
 
 ```
 ansible-playbook rolling_update.yml
 ```
 
-### 增加 dm-worker 实例
+### 增加 DM-worker 实例
 
-假设在 172.16.10.74 上新增 dm-worker 实例，实例别名为 `dm_worker3`。
+假设在 172.16.10.74 上新增 DM-worker 实例，实例别名为 `dm_worker3`。
 
 #### 在中控机上配置部署机器 ssh 互信及 sudo 规则
 
@@ -399,7 +399,7 @@ username = tidb
 $ ansible-playbook -i hosts.ini create_users.yml -u root -k
 ```
 
-#### 编辑 inventory.ini 文件, 添加新增 dm-worker 实例
+#### 编辑 inventory.ini 文件, 添加新增 DM-worker 实例
 
 编辑 `inventory.ini` 文件，根据实际信息，添加新增 dm_worker 实例 dm_worker3。
 
@@ -412,19 +412,19 @@ dm_worker2 ansible_host=172.16.10.73 server_id=102 mysql_host=172.16.10.82 mysql
 dm_worker3 ansible_host=172.16.10.74 server_id=103 mysql_host=172.16.10.83 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
 ```
 
-#### 部署新增 dm-worker 实例
+#### 部署新增 DM-worker 实例
 
 ```
 $ ansible-playbook deploy.yml --tags=dm-worker -l dm_worker3
 ```
 
-#### 启动新增 dm-worker 实例
+#### 启动新增 DM-worker 实例
 
 ```
 $ ansible-playbook start.yml --tags=dm-worker -l dm_worker3
 ```
 
-#### 配置并重启 dm-master 服务
+#### 配置并重启 DM-master 服务
 
 ```
 $ ansible-playbook rolling_update.yml --tags=dm-master
@@ -436,17 +436,17 @@ $ ansible-playbook rolling_update.yml --tags=dm-master
 $ ansible-playbook rolling_update_monitor.yml --tags=prometheus
 ```
 
-### 下线 dm-worker 实例
+### 下线 DM-worker 实例
 
 假设下线 `dm_worker3` 实例。
 
-#### 关闭下线 dm-worker 实例
+#### 关闭下线 DM-worker 实例
 
 ```
 $ ansible-playbook stop.yml --tags=dm-worker -l dm_worker3
 ```
 
-#### 编辑 inventory.ini 文件，移除下线 dm-worker 实例信息
+#### 编辑 inventory.ini 文件，移除下线 DM-worker 实例信息
 
 编辑 `inventory.ini` 文件，注释或删除 dm_worker3 实例所在行。
 
@@ -459,7 +459,7 @@ dm_worker2 ansible_host=172.16.10.73 server_id=102 mysql_host=172.16.10.82 mysql
 # dm_worker3 ansible_host=172.16.10.74 server_id=103 mysql_host=172.16.10.83 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306 # 注释或删除该行
 ```
 
-#### 配置并重启 dm-master 服务
+#### 配置并重启 DM-master 服务
 
 ```
 $ ansible-playbook rolling_update.yml --tags=dm-master
@@ -471,9 +471,9 @@ $ ansible-playbook rolling_update.yml --tags=dm-master
 $ ansible-playbook rolling_update_monitor.yml --tags=prometheus
 ```
 
-### 替换 dm-master 实例
+### 替换 DM-master 实例
 
-假设 `172.16.10.71` 机器需要维护或故障，需要将 dm-master 实例从 `172.16.10.71` 机器迁移到 `172.16.10.80` 机器上。
+假设 `172.16.10.71` 机器需要维护或故障，需要将 DM-master 实例从 `172.16.10.71` 机器迁移到 `172.16.10.80` 机器上。
 
 #### 在中控机上配置部署机器 ssh 互信及 sudo 规则
 
@@ -495,7 +495,7 @@ username = tidb
 $ ansible-playbook -i hosts.ini create_users.yml -u root -k
 ```
 
-#### 关闭旧 dm-master 实例
+#### 关闭旧 DM-master 实例
 
 > 如果 `172.16.10.71` 机器故障，无法 SSH 登录，此步骤请忽略。
 
@@ -503,9 +503,9 @@ $ ansible-playbook -i hosts.ini create_users.yml -u root -k
 $ ansible-playbook stop.yml --tags=dm-master
 ```
 
-#### 编辑 inventory.ini 文件，配置 dm-master 实例信息
+#### 编辑 inventory.ini 文件，配置 DM-master 实例信息
 
-编辑 `inventory.ini` 文件，注释或删除旧 dm-master 实例所在行，增加新 dm-master 实例信息。
+编辑 `inventory.ini` 文件，注释或删除旧 DM-master 实例所在行，增加新 DM-master 实例信息。
 
 ```
 [dm_master_servers]
@@ -513,13 +513,13 @@ $ ansible-playbook stop.yml --tags=dm-master
 dm_master ansible_host=172.16.10.80
 ```
 
-#### 部署新 dm-master 实例
+#### 部署新 DM-master 实例
 
 ```
 $ ansible-playbook deploy.yml --tags=dm-master
 ```
 
-#### 启动新 dm-master 实例
+#### 启动新 DM-master 实例
 
 ```
 $ ansible-playbook start.yml --tags=dm-master
@@ -531,9 +531,9 @@ $ ansible-playbook start.yml --tags=dm-master
 ansible-playbook rolling_update.yml --tags=dmctl
 ```
 
-### 替换 dm-worker 实例
+### 替换 DM-worker 实例
 
-假设 `172.16.10.72` 机器需要维护或故障，需要将 dm-worker 实例 `dm_worker1` 从 `172.16.10.72` 机器迁移到 `172.16.10.75` 机器上。
+假设 `172.16.10.72` 机器需要维护或故障，需要将 DM-worker 实例 `dm_worker1` 从 `172.16.10.72` 机器迁移到 `172.16.10.75` 机器上。
 
 #### 在中控机上配置部署机器 ssh 互信及 sudo 规则
 
@@ -555,7 +555,7 @@ username = tidb
 $ ansible-playbook -i hosts.ini create_users.yml -u root -k
 ```
 
-#### 关闭旧 dm-worker 实例
+#### 关闭旧 DM-worker 实例
 
 > 如果 `172.16.10.72` 机器故障，无法 SSH 登录，此步骤请忽略。
 
@@ -563,7 +563,7 @@ $ ansible-playbook -i hosts.ini create_users.yml -u root -k
 $ ansible-playbook stop.yml --tags=dm-worker -l dm_worker1
 ```
 
-#### 编辑 inventory.ini 文件, 添加新 dm-worker 实例
+#### 编辑 inventory.ini 文件, 添加新 DM-worker 实例
 
 编辑 `inventory.ini` 文件，根据实际信息，注释或删除旧 dm_worker1 实例 `172.16.10.72` 所在行，增加新 dm_worker1 实例 `172.16.10.75` 信息。
 
@@ -575,19 +575,19 @@ dm_worker1 ansible_host=172.16.10.75 server_id=101 mysql_host=172.16.10.81 mysql
 dm_worker2 ansible_host=172.16.10.73 server_id=102 mysql_host=172.16.10.82 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
 ```
 
-#### 部署新 dm-worker 实例
+#### 部署新 DM-worker 实例
 
 ```
 $ ansible-playbook deploy.yml --tags=dm-worker -l dm_worker1
 ```
 
-#### 启动新 dm-worker 实例
+#### 启动新 DM-worker 实例
 
 ```
 $ ansible-playbook start.yml --tags=dm-worker -l dm_worker1
 ```
 
-#### 配置并重启 dm-master 服务
+#### 配置并重启 DM-master 服务
 
 ```
 $ ansible-playbook rolling_update.yml --tags=dm-master
@@ -605,8 +605,8 @@ $ ansible-playbook rolling_update_monitor.yml --tags=prometheus
 
 | 组件 | 端口变量 | 默认端口 | 说明 |
 | :-- | :-- | :-- | :-- |
-| dm-master | dm_master_port | 8261  | dm-master 服务通信端口 |
-| dm-worker | dm_worker_port | 8262  | dm-worker 服务通信端口 |
+| DM-master | dm_master_port | 8261  | DM-master 服务通信端口 |
+| DM-worker | dm_worker_port | 8262  | DM-worker 服务通信端口 |
 | Prometheus | prometheus_port | 9090 | Prometheus 服务通信端口 |
 | Grafana | grafana_port |  3000 | Web 监控服务对外服务和客户端(浏览器)访问端口 |
 | Alertmanager | alertmanager_port |  9093 | Alertmanager 服务通信端口 |
@@ -656,9 +656,9 @@ $ cp * /home/tidb/dm-ansible/dmctl/
 $ ansible-playbook local_prepare.yml
 ```
 
-### 单机部署多个 dm-worker 样例
+### 单机部署多个 DM-worker 样例
 
-以下为单机部署多个 dm-worker `inventory.ini` 文件样例，配置时请注意区分 `server_id`， `deploy_dir`，`dm_worker_port` 变量。
+以下为单机部署多个 DM-worker `inventory.ini` 文件样例，配置时请注意区分 `server_id`， `deploy_dir`，`dm_worker_port` 变量。
 
 ```ini
 ## DM modules

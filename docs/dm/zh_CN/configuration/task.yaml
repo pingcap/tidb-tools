@@ -1,7 +1,7 @@
 ---
 name: test # global unique
 task-mode: all  # full/incremental/all
-is-sharding: true  # whether multi dm-worker do one sharding job
+is-sharding: true  # whether multi DM-workers do one sharding job
 meta-schema: "dm_meta"  # meta schema in downstreaming database to store meta informaton of dm
 remove-meta: false  # remove meta from downstreaming database, now we delete checkpoint and online ddl information
 enable-heartbeat: false  # whether to enable heartbeat for calculating lag between master and syncer
