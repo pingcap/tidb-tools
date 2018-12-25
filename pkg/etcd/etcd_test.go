@@ -20,8 +20,8 @@ import (
 
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/integration"
+	"github.com/juju/errors"
 	. "github.com/pingcap/check"
-	"github.com/pingcap/errors"
 )
 
 var (

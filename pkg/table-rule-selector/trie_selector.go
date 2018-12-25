@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/pingcap/errors"
+	"github.com/juju/errors"
 )
 
 // 1. asterisk character (*, also called "star") matches zero or more characters,

@@ -19,7 +19,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/pingcap/errors"
+	"github.com/juju/errors"
 	"github.com/pingcap/tidb-tools/pkg/etcd"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"

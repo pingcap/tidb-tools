@@ -18,7 +18,7 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/pingcap/errors"
+	"github.com/juju/errors"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 )
 

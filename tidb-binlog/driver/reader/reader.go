@@ -15,7 +15,7 @@ package reader
 
 import (
 	"github.com/Shopify/sarama"
-	"github.com/pingcap/errors"
+	"github.com/juju/errors"
 	pb "github.com/pingcap/tidb-tools/tidb-binlog/slave_binlog_proto/go-binlog"
 	log "github.com/sirupsen/logrus"
 )

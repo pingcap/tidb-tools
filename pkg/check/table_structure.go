@@ -22,7 +22,7 @@ import (
 
 	"github.com/pingcap/tidb-tools/pkg/column-mapping"
 
-	"github.com/pingcap/errors"
+	"github.com/juju/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/charset"

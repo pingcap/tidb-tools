@@ -22,8 +22,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/juju/errors"
 	"github.com/ngaut/log"
-	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 )

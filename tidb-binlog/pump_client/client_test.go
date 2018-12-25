@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/juju/errors"
 	. "github.com/pingcap/check"
-	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
 	binlog "github.com/pingcap/tipb/go-binlog"
 	pb "github.com/pingcap/tipb/go-binlog"
