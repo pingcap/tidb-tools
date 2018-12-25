@@ -39,6 +39,7 @@ routes:
 
 ### 使用示例
 
+
 #### 分库分表合并
 
 下面例子都假设存在分库分表场景 - 将上游两个 MySQL 实例 `test_{1,2,3...}`.`t_{1,2,3...}` 同步到下游 TiDB 的 `test`.`t`
@@ -59,6 +60,8 @@ routes:
     target-schema: "test"
     
 ```
+***
+
 #### 分库合并
 
 下面例子都假设存在分库场景 - 将上游两个 MySQL 实例 `test_{1,2,3...}`.`t_{1,2,3...}` 同步到下游 TiDB 的 `test`.`t_{1,2,3...}`
@@ -69,6 +72,8 @@ routes:
     schema-pattern: "test_*"
     target-schema: "test"
 ```
+
+***
 
 #### 错误的路由
 
