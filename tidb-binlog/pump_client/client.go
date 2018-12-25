@@ -266,8 +266,8 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 			Logger.Errorf("[pumps client] write binlog error %v", err)
 		}
 
-		if binlog.Tp == pb.BinlogType_Commit {
-			// only use one pump to write commit binlog, util write success or blocked for ten minutes. And will not return error to tidb.
+		if binlog.Tp != pb.BinlogType_Prewrite {
+			// only use one pump to write commit/rollback binlog, util write success or blocked for ten minutes. And will not return error to tidb.
 			if time.Since(startTime) > CommitBinlogMaxRetryTime {
 				Logger.Warnf("[pumps client] write commit binlog %d failed, error %v", binlog.CommitTs, err)
 				return nil
