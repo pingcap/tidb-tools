@@ -335,6 +335,10 @@ func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 
 // addPump add a new pump.
 func (c *PumpsClient) addPump(pump *PumpStatus, updateSelector bool) {
+	if pump == nil {
+		return
+	}
+
 	c.Pumps.Lock()
 
 	if pump.State == node.Online {
@@ -353,6 +357,10 @@ func (c *PumpsClient) addPump(pump *PumpStatus, updateSelector bool) {
 
 // updatePump update pump's status, and return whether pump's IsAvaliable should be changed.
 func (c *PumpsClient) updatePump(status *node.Status) (pump *PumpStatus, avaliableChanged, avaliable bool) {
+	if status == nil {
+		return
+	}
+
 	var ok bool
 	c.Pumps.Lock()
 	if pump, ok = c.Pumps.Pumps[status.NodeID]; ok {
