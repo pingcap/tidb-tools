@@ -58,6 +58,9 @@ var (
 
 	// ErrNoAvaliablePump means no avaliable pump to write binlog.
 	ErrNoAvaliablePump = errors.New("no avaliable pump to write binlog")
+
+	// CommitBinlogMaxRetryTime is the max retry duration time for write commit binlog.
+	CommitBinlogMaxRetryTime = 10 * time.Minute
 )
 
 // PumpInfos saves pumps' infomations in pumps client.
@@ -235,8 +238,14 @@ func (c *PumpsClient) getPumpStatus(pctx context.Context) error {
 func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 	pump := c.Selector.Select(binlog)
 	if pump == nil {
-		return ErrNoAvaliablePump
+		if binlog.Tp == pb.BinlogType_Prewrite {
+			return ErrNoAvaliablePump
+		}
+
+		// never return error for commit/rollback binlog
+		return nil
 	}
+
 	Logger.Debugf("[pumps client] write binlog choose pump %s", pump.NodeID)
 
 	commitData, err := binlog.Marshal()
@@ -251,7 +260,12 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 
 	for {
 		if pump == nil {
-			return ErrNoAvaliablePump
+			if binlog.Tp == pb.BinlogType_Prewrite {
+				return ErrNoAvaliablePump
+			}
+
+			// never return error for commit/rollback binlog
+			return nil
 		}
 
 		resp, err = pump.writeBinlog(req, c.BinlogWriteTimeout)
@@ -263,10 +277,11 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 		}
 		Logger.Errorf("[pumps client] write binlog error %v", err)
 
-		if binlog.Tp == pb.BinlogType_Commit {
-			// only use one pump to write commit binlog, util write success or blocked for ten minutes.
-			if time.Since(startTime) > 10*time.Minute {
-				break
+		if binlog.Tp != pb.BinlogType_Prewrite {
+			// only use one pump to write commit/rollback binlog, util write success or blocked for ten minutes. And will not return error to tidb.
+			if time.Since(startTime) > CommitBinlogMaxRetryTime {
+				Logger.Warnf("[pumps client] write commit binlog %d failed, error %v", binlog.CommitTs, err)
+				return nil
 			}
 		} else {
 			if !isRetryableError(err) {
