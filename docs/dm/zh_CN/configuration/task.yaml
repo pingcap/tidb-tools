@@ -42,7 +42,7 @@ mysql-instances:             # one or more source database, config more source d
     meta:
       binlog-name: binlog-00001
       binlog-pos: 320
-   route-rules: ["route-rule-1", "route-rule-2"]
+    route-rules: ["route-rule-1", "route-rule-2"]
     filter-rules: ["user-filter-2"]
     column-mapping-rules: ["cm-rule-2"]
     black-white-list:  "bw-rule-1"
