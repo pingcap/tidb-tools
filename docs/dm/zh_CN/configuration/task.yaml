@@ -1,10 +1,11 @@
 ---
 name: test # global unique
 task-mode: all  # full/incremental/all
-is-sharding: true  # whether multi dm-worker do one sharding job
+is-sharding: true  # whether multi DM-workers do one sharding job
 meta-schema: "dm_meta"  # meta schema in downstreaming database to store meta informaton of dm
 remove-meta: false  # remove meta from downstreaming database, now we delete checkpoint and online ddl information
-disable-heartbeat: false  # whether to disable heartbeat for calculating lag between master and syncer
+enable-heartbeat: false  # whether to enable heartbeat for calculating lag between master and syncer
+# timezone: "Asia/Shanghai" # target database timezone, all timestamp event in binlog will translate to format time based on this timezone, default use DM-worker node's local timezone
 
 target-database:
   host: "192.168.0.1"
@@ -14,12 +15,7 @@ target-database:
 
 mysql-instances:             # one or more source database, config more source database for sharding merge
   -
-    config:
-      host: "192.168.199.118"
-      port: 4306
-      user: "root"
-      password: "1234"
-    instance-id: "instance118-4306" # unique in all instances, used as id when save checkpoints, configs, etc.
+    source-id: "mysql-replica-01" # unique in all instances
 
     # binlog pos used to as start pos for syncer, for different task-mode, this maybe used or not
     # `full` / `all`:
@@ -31,65 +27,37 @@ mysql-instances:             # one or more source database, config more source d
     meta:
       binlog-name: binlog-00001
       binlog-pos: 4
-    route-rules: ["user-route-rules-schema", "user-route-rules"]
+    route-rules: ["route-rule-1", "route-rule-2"]
     filter-rules: ["user-filter-1", "user-filter-2"]
-    column-mapping-rules: ["instance-1"]
-    black-white-list:  "instance"
+    column-mapping-rules: ["cm-rule-1"]
+    black-white-list:  "bw-rule-1"
 
-    # `mydumper-config-name` and `mydumper` should only set one
+
     mydumper-config-name: "global"   # ref `mydumpers` config
-#    mydumper:
-#      mydumper-path: "./mydumper"
-#      threads: 16
-
-    # `loader-config-name` and `loader` should only set one
-    loader-config-name: "global"    # ref `loaders` config
-    #loader:                  # local loader rule
-    #  pool-size: 32
-    # `syncer-config-name` and `syncer` should only set one
-
-    syncer-config-name: "global"    # ref `syncers` config
-    #syncer:
-    #  worker-count: 32
+    loader-config-name: "global"     # ref `loaders` config
+    syncer-config-name: "global"     # ref `syncers` config
 
   -
-    config:
-      host: "192.168.199.118"
-      port: 5306
-      user: "root"
-      password: "1234"
-    instance-id: "instance118-5306"
+    source-id: "mysql-replica-02"
     meta:
       binlog-name: binlog-00001
       binlog-pos: 320
-    route-rules: ["user-route-rules-schema", "user-route-rules"]
+    route-rules: ["route-rule-1", "route-rule-2"]
     filter-rules: ["user-filter-2"]
-    column-mapping-rules: ["instance-2"]
-    black-white-list: "instance"
+    column-mapping-rules: ["cm-rule-2"]
+    black-white-list:  "bw-rule-1"
 
-    mydumper:
-      mydumper-path: "./bin/mydumper"
-      threads: 4
-      chunk-filesize: 64
-      skip-tz-utc: true
-#      extra-args: "-B test -T t1,t2"
-
-    loader:                  # local loader rule
-      pool-size: 16
-      dir: "./dumped_data"   # must be unique between tasks for the same instance
-
-    syncer:
-      worker-count: 16
-      batch: 100
-      max-retry: 100
+    mydumper-config-name: "global"   # ref `mydumpers` config
+    loader-config-name: "global"     # ref `loaders` config
+    syncer-config-name: "global"     # ref `syncers` config
 
 # other common configs shared by all instances
 
 routes:                      # schema/table route mapping
-  user-route-rules-schema:
+  route-rule-1:
     schema-pattern: "test_*"
     target-schema: "test"
-  user-route-rules:
+  route-rule-2:
     schema-pattern: "test_*"
     table-pattern: "t_*"
     target-schema: "test"
@@ -107,7 +75,7 @@ filters:                     # filter rules, mysql instance can ref rules in it
     action: Do
 
 black-white-list:
-  instance:
+  bw-rule-1:
     do-dbs: ["~^test.*", "do"]
     ignore-dbs: ["mysql", "ignored"]
     do-tables:
@@ -120,14 +88,14 @@ black-white-list:
 
 
 column-mappings:             # column mapping rules, mysql instance can ref rules in it
-  instance-1:
+  cm-rule-1:
     schema-pattern: "test_*"
     table-pattern: "t_*"
     expression: "partition id"       # handle sharding partition id
     source-column: "id"
     target-column: "id"
     arguments: ["1", "test_", "t_"]
-  instance-2:
+  cm-rule-2:
     schema-pattern: "test_*"
     table-pattern: "t_*"
     expression: "partition id"       # handle sharding partition id

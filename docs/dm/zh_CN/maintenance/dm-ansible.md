@@ -3,7 +3,7 @@ DM Ansible 运维手册
 
 ## 概述
 
-Ansible 是一款自动化运维工具，DM-ansible 是 PingCAP 基于 Ansible Playbook 功能编写的集群部署工具。使用 DM-Ansible 可以快速部署一个完整的 DM 集群。
+Ansible 是一款自动化运维工具，DM-Ansible 是 PingCAP 基于 Ansible Playbook 功能编写的集群部署工具。使用 DM-Ansible 可以快速部署一个完整的 DM 集群。
 
 本部署工具可以通过配置文件设置集群拓扑，完成以下各项运维工作：
 
@@ -204,7 +204,7 @@ grafana_admin_password = "admin"
 
 #### 部署目录调整
 
-部署目录通过 `deploy_dir` 变量控制，默认全局变量已设置为 `/home/tidb/deploy`，对所有服务生效。如数据盘挂载目录为 `/data1`，可设置为 `/data1/deploy`，样例如下:
+部署目录通过 `deploy_dir` 变量控制，默认全局变量已设置为 `/home/tidb/deploy`，对所有服务生效。如数据盘挂载目录为 `/data1`，可设置为 `/data1/dm`，样例如下:
 
 ```
 ## Global variables
@@ -231,12 +231,15 @@ dm-master ansible_host=172.16.10.71 deploy_dir=/data1/deploy
 
 | 变量 | 变量含义 |
 | ------------- | ------- |
+| source_id | DM-worker 绑定到唯一的一个数据库实例/具有主从架构的复制组，当发生主从切换的时候，只需要更新 mysql_host/port 而不用更改该 ID 标识|
 | server_id | DM-worker 伪装成一个 mysql slave，即 slave 的 server_id, 需要在 mysql 集群中全局唯一，取值范围 0 - 4294967295 |
 | mysql_host | 上游 MySQL host | 
 | mysql_user | 上游 MySQL 用户名，默认为 root |
 | mysql_password | 上游 MySQL 用户名密码，密码需使用 dmctl 工具加密，参考 [dmctl 加密上游 MySQL 密码](#dmctl-加密上游-mysql-用户密码) |
 | mysql_port | 上游 MySQL 端口号, 默认为 3306 |
-| enable_gtid | DM-worker 是否要用 gtid 形式的位置去拉取 binlog，前提是上游 mysql 已经开启 gtid 模式; 支持 MySQL [and MariaDB] GTID |
+| enable_gtid | DM-worker 是否要用 GTID 形式的位置去拉取 binlog，前提是上游 mysql 已经开启 GTID 模式 |
+| relay_binlog_name | DM-worker 是否要从该指定 binlog file 开始拉取 binlog，仅本地不存在有效 relay log 时使用 |
+| relay_binlog_gtid | DM-worker 是否要从该指定 GTID 开始拉取 binlog，仅本地不存在有效 relay log 且 enable_gtid 为 true 时使用 |
 | flavor | flavor 表示 mysql 的发行版类型，官方版以及 percona、云 mysql 填写 mysql，mariadb 则填写 mariadb，默认为 mysql |
 
 #### dmctl 加密上游 MySQL 用户密码
@@ -247,6 +250,36 @@ dm-master ansible_host=172.16.10.71 deploy_dir=/data1/deploy
 $ cd /home/tidb/dm-ansible/resources/bin
 $ ./dmctl -encrypt 123456
 VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=
+```
+
+#### 设置 relay log 同步位置
+
+第一次启动 DM-worker 需要为 DM-worker 设置 `relay_binlog_name` 来指定从对应上游 MySQL/MariaDB 拉取 binlog 的起始位置，
+如果不设置，则从上游 MySQL/MariaDB 存在的最早的 binlog 文件开始拉取，这样可能要等比较长的时间才能拉取到最新的 binlog 提供给同步任务使用。
+
+```yaml
+[dm_worker_servers]
+dm-worker1 ansible_host=172.16.10.72 source_id="mysql-replica-01" server_id=101 relay_binlog_name="binlog.000011" mysql_host=172.16.10.72 mysql_user=root mysql_port=3306
+
+dm-worker2 ansible_host=172.16.10.73 source_id="mysql-replica-02" server_id=102 relay_binlog_name="binlog.000002" mysql_host=172.16.10.73 mysql_user=root mysql_port=3306
+```
+
+#### 打开 relay log GTID 同步
+
+在 DM 集群中，DM-worker 的 relay log 处理单元负责跟上游 MySQL/MariaDB 通讯来拉取其 binlog 文件到本地文件系统。
+
+我们可以通过设置
+- `enable_gtid` 开启 relay log 的 GTID 同步模式来应对主从切换等场景；
+- `relay_binlog_gtid` 来指定从对应上游 MySQL/MariaDB 拉取 binlog 的起始位置。
+
+目前 DM 支持 MariaDB 和 MySQL GTID。
+
+```yaml
+[dm_worker_servers]
+dm-worker1 ansible_host=172.16.10.72 source_id="mysql-replica-01" server_id=101 enable_gtid=true relay_binlog_gtid="aae3683d-f77b-11e7-9e3b-02a495f8993c:1-282967971,cc97fa93-f5cf-11e7-ae19-02915c68ee2e
+:1-284361339" mysql_host=172.16.10.72 mysql_user=root mysql_port=3306
+
+dm-worker2 ansible_host=172.16.10.73 source_id="mysql-replica-02" server_id=102 relay_binlog_name=binlog.000002 mysql_host=172.16.10.73 mysql_user=root mysql_port=3306
 ```
 
 ## 部署任务
@@ -368,7 +401,7 @@ $ ansible-playbook -i hosts.ini create_users.yml -u root -k
 
 #### 编辑 inventory.ini 文件, 添加新增 DM-worker 实例
 
-编辑 `inventory.ini` 文件，根据实际信息，添加新增 DM_worker 实例 `dm_worker3`。
+编辑 `inventory.ini` 文件，根据实际信息，添加新增 dm_worker 实例 dm_worker3。
 
 ```
 [dm_worker_servers]
@@ -415,7 +448,7 @@ $ ansible-playbook stop.yml --tags=dm-worker -l dm_worker3
 
 #### 编辑 inventory.ini 文件，移除下线 DM-worker 实例信息
 
-编辑 `inventory.ini` 文件，注释或删除 `dm_worker3` 实例所在行。
+编辑 `inventory.ini` 文件，注释或删除 dm_worker3 实例所在行。
 
 ```
 [dm_worker_servers]
@@ -532,7 +565,7 @@ $ ansible-playbook stop.yml --tags=dm-worker -l dm_worker1
 
 #### 编辑 inventory.ini 文件, 添加新 DM-worker 实例
 
-编辑 `inventory.ini` 文件，根据实际信息，注释或删除旧 `dm_worker1` 实例 `172.16.10.72` 所在行，增加新 `dm_worker1` 实例 `172.16.10.75` 信息。
+编辑 `inventory.ini` 文件，根据实际信息，注释或删除旧 dm_worker1 实例 `172.16.10.72` 所在行，增加新 dm_worker1 实例 `172.16.10.75` 信息。
 
 ```
 [dm_worker_servers]
@@ -572,10 +605,8 @@ $ ansible-playbook rolling_update_monitor.yml --tags=prometheus
 
 | 组件 | 端口变量 | 默认端口 | 说明 |
 | :-- | :-- | :-- | :-- |
-| DM-master | dm_master_port | 11080  | dm-master 服务通信端口 |
-| DM-master | dm_master_status_port | 11081  | dm-master 状态端口 |
-| DM-worker | dm_worker_port | 10081  | dm-worker 服务通信端口 |
-| DM-worker | dm_worker_status_port | 10082  | dm-worker 状态端口 |
+| DM-master | dm_master_port | 8261  | DM-master 服务通信端口 |
+| DM-worker | dm_worker_port | 8262  | DM-worker 服务通信端口 |
 | Prometheus | prometheus_port | 9090 | Prometheus 服务通信端口 |
 | Grafana | grafana_port |  3000 | Web 监控服务对外服务和客户端(浏览器)访问端口 |
 | Alertmanager | alertmanager_port |  9093 | Alertmanager 服务通信端口 |
@@ -585,19 +616,19 @@ $ ansible-playbook rolling_update_monitor.yml --tags=prometheus
 修改 `inventory.ini` 文件，在相应服务 IP 后添加对应服务端口相关主机变量即可：
 
 ```
-dm_master ansible_host=172.16.10.71 dm_master_port=12080 dm_master_status_port=12081
+dm_master ansible_host=172.16.10.71 dm_master_port=18261
 ```
 
-### 如何更新 DM-ansible
+### 如何更新 DM-Ansible
 
-以 tidb 用户登录中控机并进入 /home/tidb 目录，备份 DM-ansible 文件夹。
+以 tidb 用户登录中控机并进入 /home/tidb 目录，备份 `dm-ansible` 文件夹。
 
 ```
 $ cd /home/tidb
 $ mv dm-ansible dm-ansible-bak
 ```
 
-下载最新的 DM-ansible 并解压
+下载最新的 DM-Ansible 并解压
 
 ```
 $ cd /home/tidb
@@ -625,9 +656,9 @@ $ cp * /home/tidb/dm-ansible/dmctl/
 $ ansible-playbook local_prepare.yml
 ```
 
-### 单机部署多个 dm-worker 样例
+### 单机部署多个 DM-worker 样例
 
-以下为单机部署多个 dm-worker `inventory.ini` 文件样例，配置时请注意区分 `server_id`， `deploy_dir`，`dm_worker_port` 和 `dm_worker_status_port` 变量。
+以下为单机部署多个 DM-worker `inventory.ini` 文件样例，配置时请注意区分 `server_id`， `deploy_dir`，`dm_worker_port` 变量。
 
 ```ini
 ## DM modules
@@ -635,11 +666,11 @@ $ ansible-playbook local_prepare.yml
 dm_master ansible_host=172.16.10.71
 
 [dm_worker_servers]
-dm_worker1_1 ansible_host=172.16.10.72 server_id=101 deploy_dir=/data1/dm_worker dm_worker_port=10081 dm_worker_status_port=10082 mysql_host=172.16.10.81 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
-dm_worker1_2 ansible_host=172.16.10.72 server_id=102 deploy_dir=/data2/dm_worker dm_worker_port=10083 dm_worker_status_port=10084 mysql_host=172.16.10.82 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+dm_worker1_1 ansible_host=172.16.10.72 server_id=101 deploy_dir=/data1/dm_worker dm_worker_port=8262 mysql_host=172.16.10.81 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+dm_worker1_2 ansible_host=172.16.10.72 server_id=102 deploy_dir=/data2/dm_worker dm_worker_port=8263 mysql_host=172.16.10.82 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
 
-dm_worker2_1 ansible_host=172.16.10.73 server_id=103 deploy_dir=/data1/dm_worker dm_worker_port=10081 dm_worker_status_port=10082 mysql_host=172.16.10.83 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
-dm_worker2_2 ansible_host=172.16.10.73 server_id=104 deploy_dir=/data2/dm_worker dm_worker_port=10083 dm_worker_status_port=10084 mysql_host=172.16.10.84 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+dm_worker2_1 ansible_host=172.16.10.73 server_id=103 deploy_dir=/data1/dm_worker dm_worker_port=8262 mysql_host=172.16.10.83 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+dm_worker2_2 ansible_host=172.16.10.73 server_id=104 deploy_dir=/data2/dm_worker dm_worker_port=8263 mysql_host=172.16.10.84 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
 
 ## Monitoring modules
 [prometheus_servers]

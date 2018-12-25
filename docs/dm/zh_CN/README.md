@@ -22,9 +22,15 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 
 ### 使用手册
 
-- [DM 系统简介](./overview.md)
-- [用户使用手册](./user-manual.md)
+- [DM 介绍](./overview.md)
 - [使用限制](./restrictions.md)
+- [同步前置检查](./precheck.md)
+- [同步功能介绍](./features)
+    - [table 路由](./features/table-route.md)
+    - [table 黑白名单](./features/black-white-list.md)
+    - [binlog 过滤](./features/binlog-filter.md)
+    - [列值转换](./features/column-mapping.md)
+    - [同步延迟监控](./features/heartbeat.md)
 - [运维管理](./maintenance)
     - [DM Ansible 运维手册](./maintenance/dm-ansible.md)
     - [扩充/缩减 DM 集群](./maintenance/scale-out.md)
@@ -34,7 +40,6 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
     - [DM 监控与告警](./maintenance/metrics-alert.md)
 - [配置文件](./configuration)
     - [Task 配置文件介绍](./configuration/configuration.md)
-    - [Task 配置项介绍](./configuration/argument-explanation.md)
     - [task.yaml 示例](./configuration/task.yaml)
 - [任务管理](./task-handling)
     - [dmctl 使用手册](./task-handling/dmctl-manual.md)

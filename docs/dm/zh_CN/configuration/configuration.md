@@ -3,12 +3,15 @@ Task 配置文件介绍
 
 task 配置文件 [task.yaml](./task.yaml) 主要包含下面 [全局配置](#全局配置) 和 [instance 配置](#instance-配置) 两部分。
 
-具体各配置项的解释，可以阅读 [Task 配置项介绍](./argument-explanation.md)。
+具体各配置项的功能，可以阅读 [同步功能介绍](../overview.md#同步功能介绍)
 
 
 ### 关键概念
 
-instance-id，DM-worker ID 等关键概念参见 [关键概念](../user-manual.md#关键概念) 
+| 概念         | 解释                                                         | 配置文件                                                     |
+| ------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| source-id  | 唯一确定一个 MySQL / MariaDB 实例, 或者一个具有主从结构的复制组 | `inventory.ini` 的 `source_id`;<br> `dm-master.toml` 的 `source-id`;<br> `task.yaml` 的 `source-id` |
+| DM-worker ID | 唯一确定一个 DM-worker （取值于 `dm-worker.toml` 的 `worker-addr` 参数） | `dm-worker.toml` 的 `worker-addr`;<br> dmctl 命令行的 `-worker` / `-w` flag  |
 
 
 ### 全局配置
@@ -17,10 +20,11 @@ instance-id，DM-worker ID 等关键概念参见 [关键概念](../user-manual.m
 
 ```
 name: test                      # 任务名称，需要全局唯一
-task-mode: all                  # 任务模式，full / incremental / all，详情见 [Task 配置项介绍]
+task-mode: all                  # 任务模式，full / incremental / all
 is-sharding: true               # 是否为分库分表任务
 meta-schema: "dm_meta"          # 下游储存 meta 信息的 database
 remove-meta: false              # 是否在任务同步开始前移除上面的 meta(checkpoint, onlineddl)
+enable-heartbeat: false         # 是否开启 heartbeat 功能，具体解释见同步功能 heartbeat 介绍
 
 target-database:                # 下游数据库实例配置
     host: "192.168.0.1"
@@ -29,35 +33,48 @@ target-database:                # 下游数据库实例配置
     password: ""
 ```
 
+##### 任务模式 - task-mode
+
+`task-mode`: string( `full` / `incremental` / `all` ); 默认为 `all`
+
+解释：任务模式，可以通过任务模式来指定需要执行的数据迁移工作
+- `full` - 只全量备份上游数据库，然后全量导入到下游数据库
+- `incremental` - 只通过 binlog 把上游数据库的增量修改同步到下游数据库, 可以设置 instance 配置的 meta 配置项来指定增量同步开始的位置
+- `all` - `full` + `incremental`，先全量备份上游数据库，导入到下游数据库，然后从全量数据备份时导出的位置信息（binlog position / GTID）开始通过 binlog 增量同步数据到下游数据库
+
+
 #### 功能配置集
 
 主要包含下面几个功能配置集
 
 ```
 routes:                                             # 上游和下游表之间的路由映射规则集
-    user-route-rules-schema:                        # schema-pattern / table-pattern 采用 wildcard 的匹配规则，具体见 [Task 配置项介绍] 文档的 [route rule] 解释
+    route-rule-1:
     ​    schema-pattern: "test_*"                
     ​    table-pattern: "t_*"
     ​    target-schema: "test"
     ​    target-table: "t"
+    route-rule-2:
+    ​    schema-pattern: "test_*"
+    ​    target-schema: "test"
 
-filters:                                            # 上游数据库实例的匹配的表的 binlog event 过滤规则集
-    user-filter-1:                                  # 具体见 [Task 配置项介绍] 文档的 [binlog event filter rule] 解释
+filters:                                            # 上游数据库实例的匹配的表的 binlog 过滤规则集
+    filter-rule-1:
     ​    schema-pattern: "test_*"
     ​    table-pattern: "t_*"
     ​    events: ["truncate table", "drop table"]
     ​    action: Ignore
 
-black-white-list:                                   # 该上游数据库实例的匹配的表的黑名过滤名单规则集
-    instance:                                       # 具体解释见 [Task 配置项介绍] 文档的 [black white list rule] 解释
+black-white-list:                                   # 该上游数据库实例的匹配的表的黑白名单过滤规则集
+    bw-rule-1:
     ​    do-dbs: ["~^test.*", "do"]
     ​    ignore-dbs: ["mysql", "ignored"]
     ​    do-tables:
     ​    - db-name: "~^test.*"
     ​      tbl-name: "~^t.*"
 
-column-mappings:                                    # 上游数据库实例的匹配的表的 column 映射规则集
-    instance-1:                                     # 限制和具体解释见 [Task 配置项介绍] 文档的 [column mapping rule] 解释
+column-mappings:                                    # 上游数据库实例的匹配的表的列值转换规则集
+    cm-rule-1:
     ​    schema-pattern: "test_*"
     ​    table-pattern: "t_*"
     ​    expression: "partition id"
@@ -93,47 +110,23 @@ syncers:                                            # syncer 处理单元运行�
 ```
 mysql-instances:
     -
-    ​    config:                                    # instance-id 对应的上游数据库配置 
-    ​        host: "192.168.199.118"
-    ​        port: 4306
-    ​        user: "root"
-    ​        password: "1234"                       # 需要使用 dmctl 加密的密码，具体说明见 [dmctl 使用手册]
-    ​    instance-id: "instance118-4306"            # MySQL Instance ID，对应上游 MySQL 实例，不允许配置 DM-master 的集群拓扑配置外的 mysql-instance 
-
-    ​    meta:                                      # 下游数据库的 checkpoint 不存在时 binlog 同步开始的位置; 如果 checkpoint 存在则没有作用 
+    ​    source-id: "mysql-replica-01"           # 上游实例或者复制组 ID，参考 inventory.ini 的 source_id 或者 dm-master.toml 的 source-id 配置
+    ​    meta:                                   # 下游数据库的 checkpoint 不存在时 binlog 同步开始的位置; 如果 checkpoint 存在则以 checkpoint 为准
     ​        binlog-name: binlog-00001
     ​        binlog-pos: 4
 
-    ​    route-rules: ["user-route-rules-schema", "user-route-rules"]       # 该上游数据库实例匹配的表到下游数据库的映射规则名称，具体配置见 [全局配置] [功能配置项集] 的 routes
-    ​    filter-rules: ["user-filter-1", "user-filter-2"]                   # 该上游数据库实例匹配的表的 binlog event 过滤规则名称，具体配置见 [全局配置] [功能配置项集] 的 filters
-    ​    column-mapping-rules: ["instance-1"]                               # 该上游数据库实例匹配的表的 column 映射规则名称，具体配置见 [全局配置] [功能配置项集] 的 column-mappings
-    ​    black-white-list:  "instance"                                      # 该上游数据库实例匹配的表的黑名过滤名单规则名称，具体配置见 [全局配置] [功能配置项集] 的 black-white-list
+    ​    route-rules: ["route-rule-1", "route-rule-2"]    # 该上游数据库实例匹配的表到下游数据库的映射规则名称
+    ​    filter-rules: ["filter-rule-1"]                  # 该上游数据库实例匹配的表的 binlog 过滤规则名称
+    ​    column-mapping-rules: ["cm-rule-1"]              # 该上游数据库实例匹配的表的列值转换规则名称
+    ​    black-white-list:  "bw-rule-1"                   # 该上游数据库实例匹配的表的黑白名单过滤规则名称
 
-    ​    mydumper-config-name: "global"                                     # mydumper 配置名称，具体配置见 [全局配置] [功能配置项集] 的 mydumpers (不能和 mydumper 同时设置）
-    ​    loader-config-name: "global"                                       # loader 配置名称，具体配置见 [全局配置] [功能配置项集] 的 loaders（不能和 loader 同时设置）
-    ​    syncer-config-name: "global"                                       # syncer 配置名称，具体配置见 [全局配置] [功能配置项集] 的 syncers （不能和 syncer 同时设置）
+    ​    mydumper-config-name: "global"          # mydumper 配置名称
+    ​    loader-config-name: "global"            # loader 配置名称
+    ​    syncer-config-name: "global"            # syncer 配置名称
 
     -
-    ​    config:
-    ​        host: "192.168.199.118"
-    ​        port: 5306
-    ​        user: "root"
-    ​        password: "1234"
-    ​    instance-id: "instance118-5306"
-
-    ​    mydumper:                                                          # mydumper 相关配置（不能和 mydumper-config-name 同时设置）
-    ​        mydumper-path: "./mydumper"                                    # mydumper binary 文件地址，这个无需设置，会由 ansible 部署程序自动生成
-      ​      threads: 4
-    ​        chunk-filesize: 8
-    ​        skip-tz-utc: true
-      ​      extra-args: "-B test -T t1,t2"
-    
-    ​    loader:                                                            # loader 相关配置（不能和 loader-config-name 同时设置）
-      ​      pool-size: 32                                                  # 见上文 loaders 配置项说明
-      ​      dir: "./dumped_data"
-    
-    ​    syncer:                                                            # syncer 相关配置（不能和 syncer-config-name 同时设置）
-     ​       worker-count: 32                                               # 见上文 syncers 配置项说明
-     ​       batch: 2000
-    ​        max-retry: 200
+    ​    source-id: "mysql-replica-02"           # 上游实例或者复制组 ID，参考 inventory.ini 的 source_id 或者 dm-master.toml 的 source-id 配置
+    ​    mydumper-config-name: "global"          # mydumper 配置名称
+    ​    loader-config-name: "global"            # loader 配置名称
+    ​    syncer-config-name: "global"            # syncer 配置名称
 ```
