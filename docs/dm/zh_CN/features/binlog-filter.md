@@ -1,11 +1,13 @@
 binlog filter rule
 ===
 
-#### 功能介绍
+###
+
+### 功能介绍
 
 比 schema / table 同步黑白名单更加细粒度的过滤规则，可以指定只同步或者过滤掉某些 `schema / table` 的指定类型 binlog， 比如 `INSERT`，`TRUNCATE TABLE`
 
-#### 参数配置
+### 参数配置
 
 ```
 filters:
@@ -17,7 +19,7 @@ filters:
     ​action: Ignore
 ```
 
-#### 参数解释
+### 参数解释
 
 - [`schema-pattern` / `table-pattern`](./table-selector.md): 对匹配上该规则的上游 MySQL/MariaDB 实例的表的 binlog events 或者 DDL SQLs 进行以下规则过滤
 - events: binlog events 数组
@@ -47,7 +49,7 @@ filters:
     - Do: 白名单，不在该 rule 的 events 中，或者 sql-pattern 不为空的话，对应的 sql 也不在 sql-pattern 中
     - Ignore: 黑名单，在该 rule 的 events 或 sql-pattern 中
 
-#### 使用示例
+### 使用示例
 
 下面例子都假设存在分库分表场景 - 将上游两个 MySQL 实例 `test_{1,2,3...}`.`t_{1,2,3...}` 同步到下游 TiDB 的 `test`.`t`.
 
@@ -92,6 +94,8 @@ filters:
 - `do-schema-rule` 只同步所有匹配到 pattern `test_*` 的 schema 的 `create database` 操作
 
 注意：同步 `create table` 的原因是创建表后才能同步 `DML`
+
+***
 
 ##### 过滤 TiDB 不支持的 SQL 的语句
 
