@@ -1,36 +1,43 @@
-black whitle list
+同步表黑白名单
 ===
 
-#### 功能介绍
+### 索引
+- [功能介绍](#功能介绍)
+- [参数配置](#参数配置)
+- [参数解释](#参数配置)
+- [规则介绍](#规则介绍)
+- [使用示例](#使用示例)
+
+### 功能介绍
 
 上游数据库实例表的黑白名单过滤规则。过滤规则类似于 MySQL replication-rules-db / tables, 可以用来过滤或者只同步某些 database 或者某些 table 的所有操作
 
-#### 参数配置
+### 参数配置
 
-```
+```yaml
 black-white-list:
   rule-1:						
-​    do-dbs: ["~^test.*", "do"]         # 以 ~ 字符开头，表示规则是正则表达式
-​    ignore-dbs: ["mysql", "ignored"]
-​    do-tables:
-​    - db-name: "~^test.*"
-​      tbl-name: "~^t.*"
-​    - db-name: "do"
-​      tbl-name: "do"
-​    ignore-tables:
-​    - db-name: "do"
-​      tbl-name: "do"
+    do-dbs: ["~^test.*"]         # 以 ~ 字符开头，表示规则是正则表达式
+    ignore-dbs: ["mysql"]
+    do-tables:
+    - db-name: "~^test.*"
+      tbl-name: "~^t.*"
+    - db-name: "test"
+      tbl-name: "t"
+    ignore-tables:
+    - db-name: "test"
+      tbl-name: "log"
 ```
 
-#### 参数解释
+### 参数解释
 
 - `do-dbs` 要同步的库的白名单
 - `ignore-dbs` 要同步的库的黑名单
 - `do-tables` 要同步的表的白名单
 - `ignore-tables` 要同步的表的黑名单
-- 上面黑白名单中# 以 ~ 字符开头名称代表，改名称将应用与正则表达式匹配
+- 上面黑白名单中 以 ~ 字符开头名称为[正则表达式]((https://golang.org/pkg/regexp/syntax/#hdr-Syntax)
  
-#### 规则介绍
+### 规则介绍
 1. 首先 schema 过滤
     1. 如果 `do-dbs` 不为空，则判断 `do-dbs` 中有没有匹配的 schema，没有没有则返回并且忽略，否则进入 table 过滤
     2. 如果 `do-dbs` 为空，`ignore-dbs` 不为空，则判断 `ignore-dbs` 里面有没有匹配的 schema，如果有则返回并且忽略，否则进入 table 过滤
@@ -39,3 +46,51 @@ black-white-list:
     1. 如果 `do-tables` 不为空，则判断 `do-tables` 中有没有匹配的 rule, 如果有则返回并且执行，否则进入 table 过滤的步骤 2
     2. 如果 `ignore tables` 不为空，则判断 `ignore-tables` 中有没有匹配的 rule, 如果有则返回并且忽略， 否则进入 table 过滤的步骤 3
     3. 如果 `do-tables` 不为空，则返回并且忽略，否则返回并且执行
+
+### 使用示例
+
+假设上游的库包含下面的 tables:
+
+```
+`logs`.`messages_2016`
+`logs`.`messages_2017`
+`logs`.`messages_2018`
+`forum`.`users`
+`forum`.`messages`
+`forum_backup_2016`.`messages`
+`forum_backup_2017`.`messages`
+`forum_backup_2018`.`messages`
+```
+
+配置如下:
+
+```yaml
+black-white-list:
+  bw-rule:
+    do-dbs: ["forum_backup_2018", "forum"]
+    ignore-dbs: ["~^forum_backup_"]
+    do-tables:
+    - db-name: "logs"
+      tbl-name: "~_2018$"
+    - db-name: "~^forum.*"
+​      tbl-name: "messages"
+    ignore-tables:
+    - db-name: "~.*"
+​      tbl-name: "^messages.*"
+```
+
+应用 `bw-rule` 规则后
+- `forum_backup_2016`.`messages` 的 schema `forum_backup_2016` 不在 `do-dbs: ["forum_backup_2018", "forum"]` 中所以被过滤
+- `forum_backup_2017`.`messages` 的 schema `forum_backup_2017` 不在 `do-dbs: ["forum_backup_2018", "forum"]` 中所以被过滤
+- `forum_backup_2018`.`messages` 被执行
+   - schema `forum_backup_2018` 在 `do-dbs: ["forum_backup_2018", "forum"]` 然后进入 table 过滤
+   - schema 和 table 匹配上 `db-name: "~^forum.*", tbl-name: "messages"` 然后被执行
+- `logs`.`messages_2016` 的 schema 不在 `do-dbs: ["forum_backup_2018", "forum"]` 中所以被过滤
+- `logs`.`messages_2017` 的 schema 不在 `do-dbs: ["forum_backup_2018", "forum"]` 中所以被过滤
+- `logs`.`messages_2018` 的 schema 不在 `do-dbs: ["forum_backup_2018", "forum"]` 中所以被过滤
+- `forum`.`users` 被过滤
+   - schema `forum` 在 `do-dbs: ["forum_backup_2018", "forum"]` 然后进入 table 过滤
+   - table `users` 不在 `do-tables` 和 `ignore-tables` 中，并且 `do-tables` 不为空所以被过滤
+- `forum`.`messages` 被执行
+   - schema `forum` 在 `do-dbs: ["forum_backup_2018", "forum"]` 然后进入 table 过滤
+   - table `messages` 在 `do-tables` 中所以被执行

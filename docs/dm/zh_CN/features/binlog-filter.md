@@ -1,4 +1,4 @@
-binlog filter rule
+binlog 过滤
 ===
 
 ### 索引
