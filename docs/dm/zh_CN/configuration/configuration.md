@@ -65,7 +65,7 @@ filters:                                            # 上游数据库实例的�
     ​    events: ["truncate table", "drop table"]
     ​    action: Ignore
 
-black-white-list:                                   # 该上游数据库实例的匹配的表的黑名过滤名单规则集
+black-white-list:                                   # 该上游数据库实例的匹配的表的黑白名单过滤规则集
     bw-rule-1:
     ​    do-dbs: ["~^test.*", "do"]
     ​    ignore-dbs: ["mysql", "ignored"]
@@ -118,7 +118,7 @@ mysql-instances:
     ​    route-rules: ["route-rule-1", "route-rule-2"]    # 该上游数据库实例匹配的表到下游数据库的映射规则名称
     ​    filter-rules: ["filter-rule-1"]                  # 该上游数据库实例匹配的表的 binlog 过滤规则名称
     ​    column-mapping-rules: ["cm-rule-1"]              # 该上游数据库实例匹配的表的列值转换规则名称
-    ​    black-white-list:  "bw-rule-1"                   # 该上游数据库实例匹配的表的黑名过滤名单规则名称
+    ​    black-white-list:  "bw-rule-1"                   # 该上游数据库实例匹配的表的黑白名单过滤规则名称
 
     ​    mydumper-config-name: "global"          # mydumper 配置名称
     ​    loader-config-name: "global"            # loader 配置名称
