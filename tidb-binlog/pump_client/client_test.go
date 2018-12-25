@@ -190,8 +190,30 @@ func (t *testClientSuite) TestWriteBinlog(c *C) {
 		// after write some binlog, the pump without grpc client will move to unavaliable list in pump client.
 		c.Assert(len(pumpClient.Pumps.UnAvaliablePumps), Equals, 1)
 
+		// test write commit binlog, will not return error although write binlog failed.
+		preWriteBinlog := &pb.Binlog{
+			Tp:            pb.BinlogType_Prewrite,
+			StartTs:       123,
+			PrewriteValue: make([]byte, 1),
+		}
+		commitBinlog := &pb.Binlog{
+			Tp:            pb.BinlogType_Commit,
+			StartTs:       123,
+			CommitTs:      123,
+			PrewriteValue: make([]byte, 1),
+		}
+
+		err = pumpClient.WriteBinlog(preWriteBinlog)
+		c.Assert(err, IsNil)
+
 		// test when pump is down
 		pumpServer.Close()
+
+		CommitBinlogMaxRetryTime = time.Second
+		// write commit binlog failed will not return error
+		err = pumpClient.WriteBinlog(commitBinlog)
+		c.Assert(err, IsNil)
+
 		err = pumpClient.WriteBinlog(blog)
 		c.Assert(err, NotNil)
 	}
