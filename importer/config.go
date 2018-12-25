@@ -18,7 +18,7 @@ import (
 	"fmt"
 
 	"github.com/BurntSushi/toml"
-	"github.com/pingcap/errors"
+	"github.com/juju/errors"
 	"github.com/pingcap/tidb-tools/pkg/importer"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 )

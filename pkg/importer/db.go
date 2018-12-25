@@ -20,7 +20,7 @@ import (
 	"strconv"
 
 	_ "github.com/go-sql-driver/mysql" // for mysql driver
-	"github.com/pingcap/errors"
+	"github.com/juju/errors"
 	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	log "github.com/sirupsen/logrus"

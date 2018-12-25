@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
-	"github.com/pingcap/errors"
+	"github.com/juju/errors"
 )
 
 // Node organizes the ectd query result as a Trie tree

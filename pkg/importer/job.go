@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/pingcap/errors"
+	"github.com/juju/errors"
 	log "github.com/sirupsen/logrus"
 )
 

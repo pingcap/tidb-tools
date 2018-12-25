@@ -3,7 +3,7 @@ package dbutil
 import (
 	"database/sql"
 
-	"github.com/pingcap/errors"
+	"github.com/juju/errors"
 )
 
 // ScanRowsToInterfaces scans rows to interface arrary.

@@ -17,7 +17,7 @@ import (
 	"flag"
 	"os"
 
-	"github.com/pingcap/errors"
+	"github.com/juju/errors"
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
 	log "github.com/sirupsen/logrus"
 )

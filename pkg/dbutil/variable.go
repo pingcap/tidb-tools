@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/pingcap/errors"
+	"github.com/juju/errors"
 )
 
 // ShowVersion queries variable 'version' and returns its value.
