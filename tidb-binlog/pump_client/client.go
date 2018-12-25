@@ -18,7 +18,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"path"
-	"strings"
 	"sync"
 	"time"
 
@@ -238,8 +237,14 @@ func (c *PumpsClient) getPumpStatus(pctx context.Context) error {
 func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 	pump := c.Selector.Select(binlog)
 	if pump == nil {
-		return ErrNoAvaliablePump
+		if binlog.Tp == pb.BinlogType_Prewrite {
+			return ErrNoAvaliablePump
+		}
+
+		// never return error for commit/rollback binlog
+		return nil
 	}
+
 	Logger.Debugf("[pumps client] write binlog choose pump %s", pump.NodeID)
 
 	commitData, err := binlog.Marshal()
@@ -254,17 +259,22 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 
 	for {
 		if pump == nil {
-			err = ErrNoAvaliablePump
-		} else {
-			resp, err = pump.writeBinlog(req, c.BinlogWriteTimeout)
-			if err == nil && resp.Errmsg != "" {
-				err = errors.New(resp.Errmsg)
+			if binlog.Tp == pb.BinlogType_Prewrite {
+				return ErrNoAvaliablePump
 			}
-			if err == nil {
-				return nil
-			}
-			Logger.Errorf("[pumps client] write binlog error %v", err)
+
+			// never return error for commit/rollback binlog
+			return nil
 		}
+
+		resp, err = pump.writeBinlog(req, c.BinlogWriteTimeout)
+		if err == nil && resp.Errmsg != "" {
+			err = errors.New(resp.Errmsg)
+		}
+		if err == nil {
+			return nil
+		}
+		Logger.Errorf("[pumps client] write binlog error %v", err)
 
 		if binlog.Tp != pb.BinlogType_Prewrite {
 			// only use one pump to write commit/rollback binlog, util write success or blocked for ten minutes. And will not return error to tidb.
@@ -299,10 +309,6 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 
 // setPumpAvaliable set pump's isAvaliable, and modify UnAvaliablePumps or AvaliablePumps.
 func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
-	if pump == nil {
-		return
-	}
-
 	pump.IsAvaliable = avaliable
 	if pump.IsAvaliable {
 		err := pump.createGrpcClient(c.Security)
@@ -335,10 +341,6 @@ func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 
 // addPump add a new pump.
 func (c *PumpsClient) addPump(pump *PumpStatus, updateSelector bool) {
-	if pump == nil {
-		return
-	}
-
 	c.Pumps.Lock()
 
 	if pump.State == node.Online {
@@ -357,10 +359,6 @@ func (c *PumpsClient) addPump(pump *PumpStatus, updateSelector bool) {
 
 // updatePump update pump's status, and return whether pump's IsAvaliable should be changed.
 func (c *PumpsClient) updatePump(status *node.Status) (pump *PumpStatus, avaliableChanged, avaliable bool) {
-	if status == nil {
-		return
-	}
-
 	var ok bool
 	c.Pumps.Lock()
 	if pump, ok = c.Pumps.Pumps[status.NodeID]; ok {
@@ -507,9 +505,11 @@ func isRetryableError(err error) bool {
 	// ResourceExhausted indicates some resource has been exhausted, perhaps
 	// a per-user quota, or perhaps the entire file system is out of space.
 	// https://github.com/grpc/grpc-go/blob/9cc4fdbde2304827ffdbc7896f49db40c5536600/codes/codes.go#L76
-	if strings.Contains(err.Error(), "ResourceExhausted") {
-		return false
-	}
+	/*
+		if strings.Contains(err.Error(), "ResourceExhausted") {
+			return false
+		}
+	*/
 
 	return true
 }
