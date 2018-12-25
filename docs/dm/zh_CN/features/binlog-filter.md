@@ -46,3 +46,63 @@ filters:
 - action: string(`Do` / `Ignore`);  进行下面规则判断，满足其中之一则过滤，否则不过滤
     - Do: 白名单，不在该 rule 的 events 中，或者 sql-pattern 不为空的话，对应的 sql 也不在 sql-pattern 中
     - Ignore: 黑名单，在该 rule 的 events 或 sql-pattern 中
+
+#### 使用示例
+
+下面例子都假设存在分库分表场景 - 将上游两个 MySQL 实例 `test_{1,2,3...}`.`t_{1,2,3...}` 同步到下游 TiDB 的 `test`.`t`.
+
+##### 过滤分库分表的所有删除操作
+
+设置下面两个 filter rules 来过滤掉所有的删除操作
+```
+filters:
+  filter-table-rule:
+    schema-pattern: "test_*"
+    table-pattern: "t_*"
+    events: ["truncate table", "drop table", "delete"]
+    action: Ignore
+  filter-schema-rule:
+    schema-pattern: "test_*"
+    events: ["drop database"]
+    action: Ignore
+```
+
+- `filter-table-rule` 过滤所有匹配到 pattern `test_*`.`t_*` 的 table 的 `turncate table`、`drop table`、`delete statement` 操作
+- `filter-schema-rule` 过滤所有匹配到 pattern `test_*` 的 schema 的 `drop database` 操作
+
+***
+
+##### 只同步分库分表的 DML 操作
+
+设置下面两个 filter rules 只同步 DML 操作
+```
+filters:
+  do-table-rule:
+    schema-pattern: "test_*"
+    table-pattern: "t_*"
+    events: ["create table", "all dml"]
+    action: Do
+  do-schema-rule:
+    schema-pattern: "test_*"
+    events: ["create database"]
+    action: Do
+```
+
+- `do-table-rule` 只同步所有匹配到 pattern `test_*`.`t_*` 的 table 的 `create table`、`insert`、`update`、`delete` 操作
+- `do-schema-rule` 只同步所有匹配到 pattern `test_*` 的 schema 的 `create database` 操作
+
+注意：同步 `create table` 的原因是创建表后才能同步 `DML`
+
+##### 过滤 TiDB 不支持的 SQL 的语句
+
+设置下面的规则过滤不支持的 `PROCEDURE statement`
+```
+filters:
+  filter-procedure-rule:
+    schema-pattern: "test_*"
+    table-pattern: "t_*"
+    sql-pattern: ["^DROP\\s+PROCEDURE", "^CREATE\\s+PROCEDURE"]
+    action: Ignore
+```
+
+- `filter-procedure-rule` 过滤所有匹配到 pattern `test_*`.`t_*` 的 table 的 `^CREATE\\s+PROCEDURE`、`^DROP\\s+PROCEDURE` 操作
