@@ -62,8 +62,9 @@ filters:
 
 #### 过滤分库分表的所有删除操作
 
-设置下面两个 filter rules 来过滤掉所有的删除操作
-```
+需要设置下面两个 filter rules 来过滤掉所有的删除操作
+
+```yaml
 filters:
   filter-table-rule:
     schema-pattern: "test_*"
@@ -84,7 +85,8 @@ filters:
 #### 只同步分库分表的 DML 操作
 
 设置下面两个 filter rules 只同步 DML 操作
-```
+
+```yaml
 filters:
   do-table-rule:
     schema-pattern: "test_*"
@@ -107,7 +109,8 @@ filters:
 #### 过滤 TiDB 不支持的 SQL 的语句
 
 设置下面的规则过滤不支持的 `PROCEDURE statement`
-```
+
+```yaml
 filters:
   filter-procedure-rule:
     schema-pattern: "test_*"

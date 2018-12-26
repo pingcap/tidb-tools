@@ -20,7 +20,7 @@ table route 提供将上游 MySQL/MariaDB 实例的某些表同步到下游指�
 
 ### 参数配置
 
-```
+```yaml
 routes:                                             
   rule-1:
     schema-pattern: "test_*"                
@@ -49,7 +49,7 @@ routes:
   - `rule-2` 用来同步匹配上 `schema-pattern: "test_*"` 的库的 DDLs （`create/drop schema xx`）
   - 如果下游 TiDB `schema: test` 已经存在， 并且不会被删除则可以省略 `rule-2`
   - 如果下游 TiDB `schema: test` 不存在，只设置了 `rule_1` 则同步会报错 `schema test doesn't exist`
-```
+```yaml
   rule-1:
     schema-pattern: "test_*"
     table-pattern: "t_*"
@@ -67,7 +67,7 @@ routes:
 假设存在分库场景 - 将上游两个 MySQL 实例 `test_{1,2,3...}`.`t_{1,2,3...}` 同步到下游 TiDB 的 `test`.`t_{1,2,3...}`
 
 - 同步到下游的 `test`.`t_{1,2,3...}`，创建一个路由规则即可
-```
+```yaml
   rule-1:
     schema-pattern: "test_*"
     target-schema: "test"
@@ -79,7 +79,7 @@ routes:
 
 假设存在下面两个路由规则，`test_1_bak`.`t_1_bak` 可以匹配上 `rule-1` 和 `rule-2`, 违反 table 路由的限制而报错
 
-```
+```yaml
   rule-1:
     schema-pattern: "test_*"
     table-pattern: "t_*"
