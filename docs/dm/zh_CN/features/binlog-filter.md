@@ -12,11 +12,11 @@ binlog 过滤
 
 ### 功能介绍
 
-比 schema / table 同步黑白名单更加细粒度的过滤规则，可以指定只同步或者过滤掉某些 `schema / table` 的指定类型 binlog， 比如 `INSERT`，`TRUNCATE TABLE`
+比同步表黑白名单更加细粒度的过滤规则，可以指定只同步或者过滤掉某些 `schema / table` 的指定类型 binlog， 比如 `INSERT`，`TRUNCATE TABLE`
 
 ### 参数配置
 
-```
+```yaml
 filters:
   rule-1:
     schema-pattern: "test_*"
@@ -28,7 +28,7 @@ filters:
 
 ### 参数解释
 
-- [`schema-pattern` / `table-pattern`](./table-selector.md): 对匹配上该规则的上游 MySQL/MariaDB 实例的表的 binlog events 或者 DDL SQLs 进行以下规则过滤
+- [`schema-pattern` / `table-pattern`](./table-selector.md): 对匹配上的上游 MySQL/MariaDB 实例的表的 binlog events 或者 DDL SQLs 进行以下规则过滤
 - events: binlog events 数组
 
 | event           | 分类 | 解释                           |
@@ -51,7 +51,8 @@ filters:
 | rename table    | DDL  | rename table event            |
 | drop index      | DDL  | drop index event              |
 | alter table     | DDL  | alter table event             |
-- sql-pattern: 用于过滤指定的 DDL SQLs， 支持正则表达式匹配，例如上面示例 `"^DROP\\s+PROCEDURE"`。 注意： 如果 `sql-pattern` 为空，则不进行任何过滤
+
+- sql-pattern: 用于过滤指定的 DDL SQLs， 支持正则表达式匹配，例如上面示例 `"^DROP\\s+PROCEDURE"`
 - action: string(`Do` / `Ignore`);  进行下面规则判断，满足其中之一则过滤，否则不过滤
     - Do: 白名单，不在该 rule 的 events 中，或者 sql-pattern 不为空的话，对应的 sql 也不在 sql-pattern 中
     - Ignore: 黑名单，在该 rule 的 events 或 sql-pattern 中

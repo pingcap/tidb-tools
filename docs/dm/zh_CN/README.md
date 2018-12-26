@@ -49,6 +49,9 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
     - [分库分表支持方案](./shard-table/merge-solution.md)
     - [sharding DDL 使用限制](./shard-table/restrictions.md)
     - [手动处理 sharding DDL lock](./shard-table/handle-DDL-lock.md)
+- [同步任务案例]
+   - [简单的从库同步场景](./use-cases/one-tidb-slave.md)
+   - [简单的从库同步场景](./use-cases/shard-merge.md)
 - [错误处理](./troubleshoot)
     - [skip 或 replace 异常 SQL](./troubleshoot/skip-replace-sqls.md)
     - [重置数据同步任务](./troubleshoot/reset-task.md)

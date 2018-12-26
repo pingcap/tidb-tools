@@ -169,3 +169,6 @@ DM 在运行过程中，DM-worker, DM-master 及 dmctl 都会通过 log 输出�
   2. 根据 [DM Ansible 运维手册](./maintenance/dm-ansible.md) 文档部署和管理 DM 集群
   3. 阅读并且了解 [配置文件](./configuration/configuration.md)
   4. 学习 [任务管理](./task-handling) 章节来管理和查看任务的运行
+  5. 学习了解同步案例
+     1. [简单的从库同步场景](./use-cases/one-tidb-slave.md)
+     2. [简单的从库同步场景](./use-cases/shard-merge.md)

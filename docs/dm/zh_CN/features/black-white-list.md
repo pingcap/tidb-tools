@@ -39,13 +39,20 @@ black-white-list:
  
 ### 规则介绍
 1. 首先 schema 过滤
-    1. 如果 `do-dbs` 不为空，则判断 `do-dbs` 中有没有匹配的 schema，没有没有则返回并且忽略，否则进入 table 过滤
-    2. 如果 `do-dbs` 为空，`ignore-dbs` 不为空，则判断 `ignore-dbs` 里面有没有匹配的 schema，如果有则返回并且忽略，否则进入 table 过滤
+    1. 如果 `do-dbs` 不为空
+       1. 判断 `do-dbs` 中有没有匹配的 schema，没有则忽略
+       2. 否则进入 table 过滤
+    2. 如果 `do-dbs` 为空，`ignore-dbs` 不为空
+       1. 判断 `ignore-dbs` 里面有没有匹配的 schema，如果有则忽略
+       2. 否则进入 table 过滤
     3. 如果 `do-dbs` 和 `ignore-dbs` 都为空，则进入 table 过滤
 2. 然后 table 过滤
-    1. 如果 `do-tables` 不为空，则判断 `do-tables` 中有没有匹配的 rule, 如果有则返回并且执行，否则进入 table 过滤的步骤 2
-    2. 如果 `ignore tables` 不为空，则判断 `ignore-tables` 中有没有匹配的 rule, 如果有则返回并且忽略， 否则进入 table 过滤的步骤 3
-    3. 如果 `do-tables` 不为空，则返回并且忽略，否则返回并且执行
+    1. 如果 `do-tables` 不为空
+       1. 判断 `do-tables` 中有没有匹配的 rule, 如果有则执行
+       2. 否则被忽略
+    2. 如果 `ignore tables` 不为空
+       1. 判断 `ignore-tables` 中有没有匹配的 rule, 如果有则返回并且忽略
+       2. 否则执行
 
 ### 使用示例
 
