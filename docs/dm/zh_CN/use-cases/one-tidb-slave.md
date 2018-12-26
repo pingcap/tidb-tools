@@ -10,6 +10,7 @@
 假设上游存在下面的 schema
 
 - instance 1
+
 | schma | tables|
 |------:|:------|
 | user  | information, log|
@@ -17,6 +18,7 @@
 | log   | messages |
 
 - instance 2
+
 | schma | tables|
 |------:|:------|
 | user  | information, log|
@@ -24,6 +26,7 @@
 | log   | messages |
 
 - instance 3
+
 | schma | tables|
 |------:|:------|
 | user  | information, log|
