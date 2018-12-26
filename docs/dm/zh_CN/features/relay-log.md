@@ -1,0 +1,51 @@
+relay-log
+===
+
+
+#### 基本介绍
+
+DM-worker 首次启动后会自动同步上游的 binlog 到配置的本地目录（使用 `DM-Ansible` 部署的默认同步目录为 `<deploy_dir>/relay_log`）。在 DM-worker 的运行过程中会实时同步上游的 binlog 更新到本地文件。DM-worker 的 syncer 组件会实时读取本地的 relay-log 更新并同步更新至下游数据库。
+
+
+#### relay-log目录结构
+
+以下是一个 relay_log 目录结构示例：
+
+```
+relay_log/
+|-- 7e427cc0-091c-11e9-9e45-72b7c59d52d7.000001
+|   |-- mysql-bin.000001
+|   |-- mysql-bin.000002
+|   |-- mysql-bin.000003
+|   |-- mysql-bin.000004
+|   `-- relay.meta
+|-- 842965eb-091c-11e9-9e45-9a3bff03fa39.000002
+|   |-- mysql-bin.000001
+|   `-- relay.meta
+`-- server-uuid.index
+```
+
+- subdir 目录：DM-worker 从上游数据库同步的 binlog 会保存在同一个目录，每一个目录叫做一个 subdir，subdir 的命名格式是 <上游数据库的 uuid>.<本地subdir序号>。当上游进行主从切换后，DM-worker 会生成一个新的 subdir 目录，并且新目录序号递增。
+- server-uuid.index： 记录了当前的 subdir 列表信息
+- relay.meta：在每个 subdir 内，用于保存已同步上游 binlog 的位置信息。
+
+
+#### relay-log 初始同步点
+
+DM-worker 从上游 binlog 哪个文件开始同步有以下几种情况：
+
+* 本地有有效的 relay_log（有效指有正确的 server-uuid.index 文件、subdir、relay.meta 文件和 binlog 文件），会根据 relay.meta 记录的 binlog 点继续同步
+* 本地没有有效 relay_log，并且没有指定 relay-binlog-name 或 relay_binlog_gtid，从上游最旧的 binlog 开始同步，依次同步上游所有 binlog 文件至最新
+* 本地没有有效 relay_log，非 GTID 模式指定了 relay-binlog-name，从上游指定的 binlog 文件开始同步；GTID 模式指定了 relay_binlog_gtid，从上游指定 GTID 开始同步
+
+#### relay-log 清理
+
+目前提供自动清理和手动清理两种清理方式，通过文件读写的检测机制，会保证不会清理正在使用中或未来会使用到的 relay-log。
+
+- 自动清理：在 DM-worker 配置文件中包括三个配置项：
+
+    * purge-interval：单位秒，每多少秒进行依次后台自动清理
+    * purge-expires：单位小时，指定超过多少小时没有更新的 relay-log 会被后台自动清理掉
+    * purge-remain-space：单位GB，指定 DM-worker 机器剩余磁盘空间小于多少时会在后台尝试清理没有使用的 relay-log
+
+- 手动清理：使用 dmctl 提供的 purge-relay 命令，通过指定 subdir 和文件名，清理掉在指定文件之前的所有 relay-log
