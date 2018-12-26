@@ -80,6 +80,7 @@ black-white-list:
 ```
 
 应用 `bw-rule` 规则后
+
 | table | 是否被过滤| 过滤的原因 |
 |----:|:----|:----------------|
 | `logs`.`messages_2016` | 是 | schema `logs` 没有匹配到 `do-dbs` 任意一项 |
