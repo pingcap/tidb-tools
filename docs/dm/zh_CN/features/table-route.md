@@ -42,13 +42,13 @@ routes:
 
 #### 分库分表合并
 
-下面例子都假设存在分库分表场景 - 将上游两个 MySQL 实例 `test_{1,2,3...}`.`t_{1,2,3...}` 同步到下游 TiDB 的 `test`.`t`
+假设存在分库分表场景 - 将上游两个 MySQL 实例 `test_{1,2,3...}`.`t_{1,2,3...}` 同步到下游 TiDB 的 `test`.`t`
 
-- 同步到下游的 `test`.`t`，则需要创建两条路由规则
+- 同步到下游的 `test`.`t`，则需要创建两个路由规则
   - `rule-1` 用来同步匹配上 `schema-pattern: "test_*"` 和 `table-pattern: "t_*"` 的表的 DMLs/DDLs 到下游的 `test`.`t` 
   - `rule-2` 用来同步匹配上 `schema-pattern: "test_*"` 的库的 DDLs （`create/drop schema xx`）
-  - 如果 `schema` 已经存在， 并且不需要删除则可以省略 `rule-2`
-  - 如果 `schema` 不存在，只设置了 `rule_1` 则同步会报错 `schema test doesn't exist`
+  - 如果下游 TiDB `schema: test` 已经存在， 并且不会被删除则可以省略 `rule-2`
+  - 如果下游 TiDB `schema: test` 不存在，只设置了 `rule_1` 则同步会报错 `schema test doesn't exist`
 ```
   rule-1:
     schema-pattern: "test_*"
@@ -64,9 +64,9 @@ routes:
 
 #### 分库合并
 
-下面例子都假设存在分库场景 - 将上游两个 MySQL 实例 `test_{1,2,3...}`.`t_{1,2,3...}` 同步到下游 TiDB 的 `test`.`t_{1,2,3...}`
+假设存在分库场景 - 将上游两个 MySQL 实例 `test_{1,2,3...}`.`t_{1,2,3...}` 同步到下游 TiDB 的 `test`.`t_{1,2,3...}`
 
-- 同步到下游的 `test`.`t_{1,2,3...}`，则创建一条规则即可
+- 同步到下游的 `test`.`t_{1,2,3...}`，创建一个路由规则即可
 ```
   rule-1:
     schema-pattern: "test_*"
@@ -77,7 +77,7 @@ routes:
 
 #### 错误的路由
 
-假设存在下面两个规则，`test_1_bak`.`t_1_bak` 可以匹配上 `rule-1` 和 `rule-2`, 违反 table 路由的限制而报错
+假设存在下面两个路由规则，`test_1_bak`.`t_1_bak` 可以匹配上 `rule-1` 和 `rule-2`, 违反 table 路由的限制而报错
 
 ```
   rule-1:
