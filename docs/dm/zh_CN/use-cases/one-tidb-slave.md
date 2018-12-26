@@ -37,13 +37,13 @@
 #### 同步需求
 
 1. schema `user` 不做合并
-  - instance 1 的 schema `user` 同步到 TiDB 的 `user_north`
-  - instance 2 的 schema `user` 同步到 TiDB 的 `user_east`
-  - instance 3 的 schema `user` 同步到 TiDB 的 `user_south`
-  - table `log` 不允许任何删除操作
+   1. instance 1 的 schema `user` 同步到 TiDB 的 `user_north`
+   2. instance 2 的 schema `user` 同步到 TiDB 的 `user_east`
+   3. instance 3 的 schema `user` 同步到 TiDB 的 `user_south`
+   4. table `log` 不允许任删除操作
 2. schema `store` 合并到下游的 `store`，表不合并
-  - instance 2 和 3 都存在 `store_sz`, 分别同步到 `store_suzhou`, `store_shenzhen`
-  - `store` 不允许任何删除操作
+   1. instance 2 和 3 都存在 `store_sz`, 分别同步到 `store_suzhou`, `store_shenzhen`
+   2. `store` 不允许任何删除操作
 3. schema `log` 需要被过滤掉
 
 #### 下游实例
