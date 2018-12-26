@@ -11,7 +11,7 @@
 
 ### 场景描述
 
-下面我们描述一个比较常见的场景，将上游三个 MySQL 实例同步到下游一个 TiDB 集群中。 
+下面我们描述一个比较常见的场景，将上游三个 MySQL 实例同步到下游一个 TiDB 集群中（不涉及合并分表数据）。
 
 #### 上游实例
 
@@ -109,12 +109,12 @@ routes:
 ```yaml
 filters:
   ...
-  filter-log-rule-table:
+  log-filter-rule:
     schema-pattern: "user"
     table-pattern: "log"
     events: ["truncate table", "drop table", "delete"]
     action: Ignore
-  filter-log-rule-schema:
+  user-filter-rule:
     schema-pattern: "user"
     events: ["drop database"]
     action: Ignore
@@ -127,7 +127,7 @@ filters:
 ```yaml
 filters:
   ...
-  filter-store-rule:
+  store-filter-rule:
     schema-pattern: "store"
     events: ["drop database", "truncate table", "drop table", "delete"]
     action: Ignore
@@ -165,7 +165,7 @@ mysql-instances:
   -
     source-id: "instance-1"
     route-rules: ["instance-1-user-rule"]
-    filter-rules: ["filter-log-rule-table", "filter-log-rule-table" , "filter-store-rule"]
+    filter-rules: ["log-filter-rule", "user-filter-rule" , "store-filter-rule"]
     black-white-list:  "log-filter"
     mydumper-config-name: "global"
     loader-config-name: "global"
@@ -174,7 +174,7 @@ mysql-instances:
   -
     source-id: "instance-2"
     route-rules: ["instance-2-user-rule", instance-2-router-rule]
-    filter-rules: ["filter-log-rule-table", "filter-log-rule-table" , "filter-store-rule"]
+    filter-rules: ["log-filter-rule", "user-filter-rule" , "store-filter-rule"]
     black-white-list:  "log-filter"
     mydumper-config-name: "global"
     loader-config-name: "global"
@@ -182,7 +182,7 @@ mysql-instances:
   -
     source-id: "instance-3"
     route-rules: ["instance-3-user-rule", instance-3-router-rule]
-    filter-rules: ["filter-log-rule-table", "filter-log-rule-table" , "filter-store-rule"]
+    filter-rules: ["log-filter-rule", "user-filter-rule" , "store-filter-rule"]
     black-white-list:  "log-filter"
     mydumper-config-name: "global"
     loader-config-name: "global"
@@ -212,16 +212,16 @@ routes:
     target-table:  "store_shenzhen"
 
 filters:
-  filter-log-rule-table:
+  log-filter-rule:
     schema-pattern: "user"
     table-pattern: "log"
     events: ["truncate table", "drop table", "delete"]
     action: Ignore
-  filter-log-rule-schema:
+  user-filter-rule:
     schema-pattern: "user"
     events: ["drop database"]
     action: Ignore
-  filter-store-rule:
+  store-filter-rule:
     schema-pattern: "store"
     events: ["drop database", "truncate table", "drop table", "delete"]
     action: Ignore
@@ -235,7 +235,6 @@ mydumpers:
     threads: 4
     chunk-filesize: 64
     skip-tz-utc: true
-    extra-args: "-B test -T t1,t2 --no-locks"
 
 loaders:
   global:
