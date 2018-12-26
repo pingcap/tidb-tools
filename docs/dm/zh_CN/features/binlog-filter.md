@@ -100,7 +100,7 @@ filters:
 - `do-table-rule` 只同步所有匹配到 pattern `test_*`.`t_*` 的 table 的 `create table`、`insert`、`update`、`delete` 操作
 - `do-schema-rule` 只同步所有匹配到 pattern `test_*` 的 schema 的 `create database` 操作
 
-注意：同步 `create table` 的原因是创建表后才能同步 `DML`
+注意：同步 `create database/table` 的原因是创建库和表后才能同步 `DML`
 
 ***
 

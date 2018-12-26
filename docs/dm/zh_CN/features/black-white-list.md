@@ -49,7 +49,7 @@ black-white-list:
 
 ### 使用示例
 
-假设上游的库包含下面的 tables:
+假设上游 MySQL 实例包含下面的 tables:
 
 ```
 `logs`.`messages_2016`
@@ -80,17 +80,13 @@ black-white-list:
 ```
 
 应用 `bw-rule` 规则后
-- `forum_backup_2016`.`messages` 的 schema `forum_backup_2016` 不在 `do-dbs: ["forum_backup_2018", "forum"]` 中所以被过滤
-- `forum_backup_2017`.`messages` 的 schema `forum_backup_2017` 不在 `do-dbs: ["forum_backup_2018", "forum"]` 中所以被过滤
-- `forum_backup_2018`.`messages` 被执行
-   - schema `forum_backup_2018` 在 `do-dbs: ["forum_backup_2018", "forum"]` 然后进入 table 过滤
-   - schema 和 table 匹配上 `db-name: "~^forum.*", tbl-name: "messages"` 然后被执行
-- `logs`.`messages_2016` 的 schema 不在 `do-dbs: ["forum_backup_2018", "forum"]` 中所以被过滤
-- `logs`.`messages_2017` 的 schema 不在 `do-dbs: ["forum_backup_2018", "forum"]` 中所以被过滤
-- `logs`.`messages_2018` 的 schema 不在 `do-dbs: ["forum_backup_2018", "forum"]` 中所以被过滤
-- `forum`.`users` 被过滤
-   - schema `forum` 在 `do-dbs: ["forum_backup_2018", "forum"]` 然后进入 table 过滤
-   - table `users` 不在 `do-tables` 和 `ignore-tables` 中，并且 `do-tables` 不为空所以被过滤
-- `forum`.`messages` 被执行
-   - schema `forum` 在 `do-dbs: ["forum_backup_2018", "forum"]` 然后进入 table 过滤
-   - table `messages` 在 `do-tables` 中所以被执行
+| table | 是否被过滤| 过滤的原因 |
+|----:|:----|:----------------|
+| `logs`.`messages_2016` | 是 | schema `logs` 没有匹配到 `do-dbs` 任意一项 |
+| `logs`.`messages_2017` | 是 | schema `logs` 没有匹配到 `do-dbs` 任意一项 |
+| `logs`.`messages_2018` | 是 | schema `logs` 没有匹配到 `do-dbs` 任意一项 |
+| `forum_backup_2016`.`messages` | 是 | schema `forum_backup_2016` 没有匹配到 `do-dbs` 任意一项 |
+| `forum_backup_2017`.`messages` | 是 | schema `forum_backup_2017` 没有匹配到 `do-dbs` 任意一项 |
+| `forum`.`users` | 是 | 1. schema `forum` 匹配到 `do-dbs` 进入 table 过滤<br> 2. schema 和 table 没有匹配到 `do-tables` 和 `ignore-tables` 中任意一项，并且 `do-tables` 不为空，因此过滤 |
+| `forum`.`messages` | 否 | 1. schema `forum` 匹配到 `do-dbs` 进入 table 过滤<br> 2. table `messages` 在 `do-tables` 的 `db-name: "~^forum.*",tbl-name: "messages"` |
+| `forum_backup_2018`.`messages` | 否 | 1. schema `forum_backup_2018` 匹配到 `do-dbs` 进入 table 过滤<br> 2. schema 和 table 匹配到 `do-tables` 的  `db-name: "~^forum.*",tbl-name: "messages"` |
