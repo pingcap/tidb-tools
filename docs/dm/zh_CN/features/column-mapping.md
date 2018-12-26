@@ -54,7 +54,7 @@ column-mappings:
   - 支持最多 15 个 MySQL/MariaDB 实例（instance ID ）
   - 每个实例支持最多 127 个 schema（0 <= schema ID  <= 127）
   - 每个实例的每个 schema 255 个 table（0 <= table ID <= 255）
-  - 自增主键 ID 范围 (>= 0, <= 17592186044415)
+  - 自增主键 ID 范围 (0 <= ID <= 17592186044415)
   - {instance ID、schema ID、table ID} 组合需要保持唯一
 - 目前该功能是定制功能，如果需要调整请联系相关开发人员进行调整
 
