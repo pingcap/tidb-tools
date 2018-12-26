@@ -103,20 +103,20 @@ query-status
 ##### 状态转换图
 
 ```
-                                   error occured
-                        New -----------------------------|
-                         |                               |
-                         |         resume task           |
-                         |  |-------------------------|  |
-                         |  |                         |  |
-                         |  |                         |  |
-                         v  v      error occured      |  v
-  Finished <---------- Running --------------------> Paused
-                         ^  |                         |
-                         |  |                         |
-              start task |  | stop task               |
-                         |  |                         |
-                         |  v         stop task       |
-                       Stopped <----------------------|
+                                         error occured
+                            New -------------------------------|
+                             |                                 |
+                             |           resume task           |
+                             |  |---------------------------|  |
+                             |  |                           |  |
+                             |  |                           |  |
+                             v  v        error occured      |  v
+  Finished <-------------- Running ----------------------> Paused
+                             ^  |                           |
+                             |  |                           |
+                  start task |  | stop task                 |
+                             |  |                           |
+                             |  v        stop task          |
+                           Stopped <------------------------|
 
 ```
