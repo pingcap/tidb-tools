@@ -39,7 +39,7 @@ schema-pattern： "schema_*"
 table-pattern： ""
 ```
 
-- 匹配所有库名以 `schema_` 并且表名以 `table_` 开头的表
+- 匹配所有库名以 `schema_` 为前缀，并且表名以 `table_` 前缀的表
 ```yaml
 schema-pattern = "schema_*"
 table-pattern = "table_*"

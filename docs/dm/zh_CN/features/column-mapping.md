@@ -10,7 +10,7 @@
 
 ### 功能介绍
 
-column mapping 提供对表的列值进行修改的功能。目前只支持 DM 提供的内置表达式，根据不同的表达式，可以对表的指定列做不同的修改操作。
+column mapping 提供对表的列值进行修改的功能。可以根据不同的表达式对表的指定列做不同的修改操作，目前只支持 DM 提供的内置表达式。
 
 注意：
 - 不支持修改 column 的类型和表结构
@@ -51,9 +51,9 @@ column-mappings:
 - 库名的组成必须为 `schema 前缀 + 数字（既 schema ID）`，例如: 支持 `s_1`, 不支持 `s_a`
 - 表名的组成必须为 `table 前缀 + 数字（既 table ID）`
 - 对分库分表的规模支持限制如下
-  - 支持最多 15 个 MySQL/MariaDB 实例（instance ID ）
-  - 每个实例支持最多 127 个 schema（0 <= schema ID  <= 127）
-  - 每个实例的每个 schema 255 个 table（0 <= table ID <= 255）
+  - 支持最多 16 个 MySQL/MariaDB 实例（0 <= instance ID <= 15）
+  - 每个实例支持最多 128 个 schema（0 <= schema ID  <= 127）
+  - 每个实例的每个 schema 256 个 table（0 <= table ID <= 255）
   - 自增主键 ID 范围 (0 <= ID <= 17592186044415)
   - {instance ID、schema ID、table ID} 组合需要保持唯一
 - 目前该功能是定制功能，如果需要调整请联系相关开发人员进行调整
@@ -61,7 +61,7 @@ column-mappings:
 ##### arguments 设置
 
 用户需要在 arguments 里面顺序设置三个参数
-- instance_id: 上游分库分表的 MySQL/MariaDB 实例 ID
+- instance_id: 客户指定的上游分库分表的 MySQL/MariaDB instance ID（0 <= instance ID <= 15）
 - schema 前缀: 用来解析库名获取 `schema ID`
 - table 前缀： 用来解释表名获取 `table ID`
 
@@ -101,6 +101,3 @@ column-mappings:
 
 - MySQL instance 1 的表 `test_1`.`t_1` 的 `ID = 1` 的列经过转换后 ID = 1 变为 `1 << (64-1-4) | 1 << (64-1-4-7) | 1 << 44 | 1 = 580981944116838401`
 - MySQL instance 2 的表 `test_1`.`t_2` 的 `ID = 1` 的行经过转换后 ID = 2 变为 `2 << (64-1-4) | 1 << (64-1-4-7) | 2 << 44 | 2 = 1157460288606306306`
-
-
-
