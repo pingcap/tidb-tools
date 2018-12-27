@@ -10,7 +10,7 @@ relay-log
 
 ### 功能介绍
 
-DM-worker 启动后会自动同步上游的 binlog 到配置的本地目录（使用 `DM-Ansible` 部署的默认同步目录为 `<deploy_dir>/relay_log`）。DM-worker 运行过程中会实时同步上游的 binlog 更新到本地文件，syncer 组件会实时读取本地的 relay-log 更新并同步更新至下游数据库。
+DM-worker 启动后会自动同步上游的 binlog 到配置的本地目录（使用 `DM-Ansible` 部署的默认同步目录为 `<deploy_dir>/relay_log`），与 [MySQL Slave Relay Log](https://dev.mysql.com/doc/refman/5.7/en/slave-logs-relaylog.html) 的使用方式类似。DM-worker 运行过程中会实时同步上游的 binlog 更新到本地文件，syncer 组件会实时读取本地的 relay-log 更新并同步更新至下游数据库。
 
 
 ### 本地存储目录结构
@@ -31,27 +31,34 @@ DM-worker 启动后会自动同步上游的 binlog 到配置的本地目录（�
 `-- server-uuid.index
 ```
 
-- subdir 目录：DM-worker 从上游数据库同步的 binlog 会保存在同一个目录，每一个目录叫做一个 subdir，subdir 的命名格式是 <上游数据库 uuid>.<本地 subdir 序号>。当上游进行主从切换后，DM-worker 会生成一个新的 subdir 目录，并且新目录序号递增。
+- subdir 目录：DM-worker 从上游数据库同步的 binlog 会保存在同一个目录，每一个目录叫做一个 subdir，subdir 的命名格式是 <上游数据库 uuid>.<本地 subdir 序号>。当上游进行[主从切换](./master-slave-switch.md)后，DM-worker 会生成一个新的 subdir 目录，并且新目录序号递增。
 - server-uuid.index： 记录了当前的 subdir 列表信息
-- relay.meta：在每个 subdir 内，用于保存已同步上游 binlog 的位置信息。
+- relay.meta：在每个 subdir 内，用于保存已同步上游 binlog 的位置信息。例如
+
+```bash
+[root@dm-worker1 relay_log]# cat c0149e17-dff1-11e8-b6a8-0242ac110004.000001/relay.meta
+binlog-name = "mysql-bin.000010"    # 当前同步的 binlog 名
+binlog-pos = 63083620               # 当前同步的 binlog position
+binlog-gtid = "c0149e17-dff1-11e8-b6a8-0242ac110004:1-3328" # 当前同步的 binlog GTID
+```
 
 
 ### 初始同步规则
 
 DM-worker 每次启动（或 relay-log 从暂停状态恢复同步），从上游 binlog 哪个位置开始同步有以下几种情况：
 
-* 本地有有效的 relay_log（有效指有正确的 server-uuid.index 文件、subdir、relay.meta 文件和 binlog 文件）：会根据 relay.meta 记录的 binlog 点继续同步
+* 本地有有效的 relay_log（有效指有正确的 server-uuid.index 文件、subdir 和 relay.meta 文件）：会根据 relay.meta 记录的 binlog 点继续同步
 * 本地没有有效 relay_log，并且没有在 DM-worker 配置文件中指定 relay-binlog-name 或 relay-binlog-gtid：从上游最旧的 binlog 开始同步，依次同步上游所有 binlog 文件至最新
 * 本地没有有效 relay_log：非 GTID 模式指定了 relay-binlog-name，从指定的 binlog 文件开始同步；GTID 模式指定了 relay-binlog-gtid，从指定 GTID 开始同步
 
 ### 数据清理
 
-目前 relay-log 提供自动清理和手动清理两种清理方式，通过文件读写的检测机制，不会清理正在使用中或未来会使用到的 relay-log。
+目前 relay-log 提供自动清理和手动清理两种清理方式，通过文件读写的检测机制，不会清理正在使用中或已在运行中的任务未来会使用到的 relay-log。
 
 - 自动清理：在 DM-worker 配置文件中包括三个配置项：
 
-    * purge-interval：单位秒，每多少秒进行依次后台自动清理
-    * purge-expires：单位小时，指定超过多少小时没有更新的 relay-log 会在后台自动清理中被清理掉
+    * purge-interval：单位秒，每多少秒尝试进行一次后台自动清理
+    * purge-expires：单位小时，指定超过多少小时没有更新的 relay-log 会在后台自动清理中被清理掉；设置为 0 表示不按更新时间清理
     * purge-remain-space：单位GB，指定 DM-worker 机器剩余磁盘空间小于多少时，会在后台自动清理中尝试清理可以安全清理的 relay-log
 
 - 手动清理：使用 dmctl 提供的 purge-relay 命令，通过指定 subdir 和 binlog 文件名，清理掉在指定 binlog 之前的所有 relay-log

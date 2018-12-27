@@ -104,7 +104,7 @@ query-status
 
 - New: 初始状态，如果没有出错会转换到 Running 状态，出错转换到 Paused 状态
 - Running: 正常运行状态
-- Paused: 暂停状态，运行出错会进入此状态，可以通过 `resume-task` 命令重新开始运行任务
+- Paused: 暂停状态，运行出错会进入此状态；在 Running 状态中使用 `pause-task` 也会进入此状态。可以通过 `resume-task` 命令重新开始运行任务
 - Stopped: 停止状态，不可通过 `resume-task` 重新运行。在 Running 或 Paused 状态通过 `stop-task` 会进入此状态
 - Finished: 运行结束状态，只有全量任务正常运行结束会进入此状态
 
@@ -112,19 +112,19 @@ query-status
 
 ```
                                          error occured
-                            New -------------------------------|
-                             |                                 |
-                             |           resume task           |
-                             |  |---------------------------|  |
-                             |  |                           |  |
-                             |  |                           |  |
-                             v  v        error occured      |  v
-  Finished <-------------- Running ----------------------> Paused
-                             ^  |                           |
-                             |  |                           |
-                  start task |  | stop task                 |
-                             |  |                           |
-                             |  v        stop task          |
-                           Stopped <------------------------|
+                            New --------------------------------|
+                             |                                  |
+                             |           resume-task            |
+                             |  |----------------------------|  |
+                             |  |                            |  |
+                             |  |                            |  |
+                             v  v        error occured       |  v
+  Finished <-------------- Running -----------------------> Paused
+                             ^  |        or pause-task       |
+                             |  |                            |
+                  start task |  | stop task                  |
+                             |  |                            |
+                             |  v        stop task           |
+                           Stopped <-------------------------|
 
 ```
