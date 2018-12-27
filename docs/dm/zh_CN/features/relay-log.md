@@ -1,18 +1,24 @@
 relay-log
 ===
 
+### 索引
+- [功能介绍](#功能介绍)
+- [本地存储目录结构](#本地存储目录结构)
+- [初始同步规则](#初始同步规则)
+- [数据清理](#数据清理)
 
-#### 基本介绍
+
+#### 功能介绍
 
 DM-worker 启动后会自动同步上游的 binlog 到配置的本地目录（使用 `DM-Ansible` 部署的默认同步目录为 `<deploy_dir>/relay_log`）。DM-worker 运行过程中会实时同步上游的 binlog 更新到本地文件，syncer 组件会实时读取本地的 relay-log 更新并同步更新至下游数据库。
 
 
-#### relay-log 目录结构
+#### 本地存储目录结构
 
-以下是一个 relay-log 目录结构示例：
+以下是一个 relay-log 本地存储的目录结构示例：
 
 ```
-relay_log/
+<deploy_dir>/relay_log/
 |-- 7e427cc0-091c-11e9-9e45-72b7c59d52d7.000001
 |   |-- mysql-bin.000001
 |   |-- mysql-bin.000002
@@ -30,7 +36,7 @@ relay_log/
 - relay.meta：在每个 subdir 内，用于保存已同步上游 binlog 的位置信息。
 
 
-#### relay-log 初始同步点
+#### 初始同步规则
 
 DM-worker 每次启动（或 relay-log 从暂停状态恢复同步），从上游 binlog 哪个位置开始同步有以下几种情况：
 
@@ -38,9 +44,9 @@ DM-worker 每次启动（或 relay-log 从暂停状态恢复同步），从上�
 * 本地没有有效 relay_log，并且没有在 DM-worker 配置文件中指定 relay-binlog-name 或 relay-binlog-gtid：从上游最旧的 binlog 开始同步，依次同步上游所有 binlog 文件至最新
 * 本地没有有效 relay_log：非 GTID 模式指定了 relay-binlog-name，从指定的 binlog 文件开始同步；GTID 模式指定了 relay-binlog-gtid，从指定 GTID 开始同步
 
-#### relay-log 清理
+#### 数据清理
 
-目前提供自动清理和手动清理两种清理方式，通过文件读写的检测机制，不会清理正在使用中或未来会使用到的 relay-log。
+目前 relay-log 提供自动清理和手动清理两种清理方式，通过文件读写的检测机制，不会清理正在使用中或未来会使用到的 relay-log。
 
 - 自动清理：在 DM-worker 配置文件中包括三个配置项：
 
