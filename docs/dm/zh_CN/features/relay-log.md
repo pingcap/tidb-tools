@@ -48,7 +48,7 @@ binlog-gtid = "c0149e17-dff1-11e8-b6a8-0242ac110004:1-3328" # 当前同步的 bi
 DM-worker 每次启动（或 relay-log 从暂停状态恢复同步），从上游 binlog 哪个位置开始同步有以下几种情况：
 
 * 本地有有效的 relay_log（有效指有正确的 server-uuid.index 文件、subdir 和 relay.meta 文件）：会根据 relay.meta 记录的 binlog 点继续同步
-* 本地没有有效 relay_log，并且没有在 DM-worker 配置文件中指定 relay-binlog-name 或 relay-binlog-gtid：从上游最旧的 binlog 开始同步，依次同步上游所有 binlog 文件至最新
+* 本地没有有效 relay_log，并且没有在 DM-worker 配置文件中指定 relay-binlog-name 或 relay-binlog-gtid：非 GTID 模式下会从上游最旧的 binlog 开始同步，依次同步上游所有 binlog 文件至最新；GTID 模式下，从上游初始 GTID 开始同步，如果上游 relay-log 被清理掉则会出错。
 * 本地没有有效 relay_log：非 GTID 模式指定了 relay-binlog-name，从指定的 binlog 文件开始同步；GTID 模式指定了 relay-binlog-gtid，从指定 GTID 开始同步
 
 ### 数据清理
@@ -90,11 +90,11 @@ deb76a2b-09cc-11e9-9129-5242cf3bb246.000003
 在 `dmctl` 分别执行以下命令的实际效果分别是
 
 ```
-# 执行该命令会清空 deb76a2b-09cc-11e9-9129-5242cf3bb246.000001 目录，e4e0e8ab-09cc-11e9-9220-82cc35207219.000002 和 deb76a2b-09cc-11e9-9129-5242cf3bb246.000003 目录保留
+# 执行该命令会清空 deb76a2b-09cc-11e9-9129-5242cf3bb246.000001 目录
+# e4e0e8ab-09cc-11e9-9220-82cc35207219.000002 和 deb76a2b-09cc-11e9-9129-5242cf3bb246.000003 目录保留
 » purge-relay -w 10.128.16.223:10081 --filename mysql-bin.000001 --sub-dir e4e0e8ab-09cc-11e9-9220-82cc35207219.000002
 
-# 执行该命令会清空 deb76a2b-09cc-11e9-9129-5242cf3bb246.000001、e4e0e8ab-09cc-11e9-9220-82cc35207219.000002 目录，deb76a2b-09cc-11e9-9129-5242cf3bb246.000003 目录保留
+# 执行该命令会清空 deb76a2b-09cc-11e9-9129-5242cf3bb246.000001、e4e0e8ab-09cc-11e9-9220-82cc35207219.000002 目录
+# deb76a2b-09cc-11e9-9129-5242cf3bb246.000003 目录保留
 » purge-relay -w 10.128.16.223:10081 --filename mysql-bin.000001
-
-
 ```
