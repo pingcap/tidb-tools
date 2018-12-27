@@ -32,7 +32,7 @@ query-status
                         "masterBinlogGtid": "c0149e17-dff1-11e8-b6a8-0242ac110004:1-14",    # 上游数据库 GTID 信息
                         "syncerBinlog": "(bin.000001, 2525)",                               # sync 处理单元已经同步的 binlog position
                         "syncerBinlogGtid": "",                                             # 目前该值始终为空
-                        "blockingDDLs": [       # 当前被阻塞的DDL列表
+                        "blockingDDLs": [       # 当前被阻塞的DDL列表，该 DM-worker 的上游表都处于 synced 状态此项才会不为空
                             "USE `test`; ALTER TABLE `test`.`t_target` DROP COLUMN `age`;"
                         ],
                         "unresolvedGroups": [   # 没有解决的sharding group信息
@@ -46,7 +46,7 @@ query-status
                                     "`test`.`t2`"
                                     "`test`.`t3`"
                                 ],
-                                "unsynced": [                                   # 上游还没有执行该 sharding DDL 的表
+                                "unsynced": [                                   # 上游还没有执行该 sharding DDL 的表，如果还有上游表没有完成同步，blockingDDLs 的内容是空
                                     "`test`.`t1`"
                                 ]
                             }
