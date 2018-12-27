@@ -8,16 +8,20 @@ skip 或 replace 异常 SQL
 - [使用示例](#使用示例)
     - [出错后被动 skip](#出错后被动-skip)
     - [出错前主动 replace](#出错前主动-replace)
-    - [sharding 场景下出错前主动 replace](#sharding-场景下出错前主动-replacee)
+    - [sharding 场景下出错前主动 replace](#sharding-场景下出错前主动-replace)
 
 
 ### 功能介绍
 
 目前 TiDB 并不兼容所有的 MySQL 语法（TiDB 支持的 DDL 语法见 <https://pingcap.com/docs-cn/sql/ddl/>），当使用 DM 从 MySQL 同步数据到 TiDB 时，可能会由于 TiDB 不支持对应 SQL 语句报错而造成同步中断。
 
-当由于 TiDB 不支持的 SQL 导致同步出错时，可以使用 dmctl 来手动选择跳过该 SQL 对应的 binlog event 或使用其它指定的 SQL 来替代本次执行以恢复同步任务。
+当由于 TiDB 不支持的 SQL 导致同步出错时，可以使用 dmctl 来手动选择跳过该 SQL 对应的 binlog event 或使用其它指定的 SQL 来替代对应的 binlog event 向下游执行以恢复同步任务。
 
 当提前预知会有 TiDB 不支持的 SQL 将要被同步时，可以使用 dmctl 来手动预定跳过/替代操作，当同步该 SQL 对应的 binlog event 时自动执行预定的操作，避免同步过程被中断。
+
+注意：
+- 单次 skip 或 replace 操作都是针对单个 binlog event 的
+- `--sharding` 操作都是针对 sharding DDL lock 的 owner 的，且此时只能使用 `--sql-pattern` 来进行匹配
 
 
 ### 命令介绍
@@ -41,13 +45,13 @@ query-error [--worker=127.0.0.1:8262] [task-name]
 
 ##### 参数释解
 
-- `worker`: flag 参数，string，`--worker`，可选；不指定时查询所有 DM-worker 上的错误，指定时仅查询特定的一组 DM-worker 上的错误。
-- `task-name`: 非 flag 参数，string，可选；不指定时查询所有任务内的错误，指定时仅查询特定任务内的错误。
+- `worker`: flag 参数，string，`--worker`，可选；不指定时查询所有 DM-worker 上的错误，指定时仅查询特定的一组 DM-worker 上的错误
+- `task-name`: 非 flag 参数，string，可选；不指定时查询所有任务内的错误，指定时仅查询特定任务内的错误
 
 
 #### sql-skip
 
-预定在 binlog event 的 position 或 SQL 与指定的 `binlog-pos` 或 `sql-pattern` 匹配时执行跳过（skip）操作。
+预定在 binlog event 的 position 或 SQL 与指定的 `binlog-pos` 或 `sql-pattern` 匹配时执行该跳过（skip）操作。
 
 ##### 命令样例
 
@@ -57,16 +61,16 @@ sql-skip <--worker=127.0.0.1:8262> [--binlog-pos=mysql-bin|000001.000003:3270] [
 
 ##### 参数解释
 
-- `worker`: flag 参数，string，`--worker`，未指定 `--sharding` 时必选，指定 `--sharding` 时禁止使用；在指定时表示预定操作将生效的 DM-worker。
-- `binlog-pos`: flag 参数，string，`--binlog-pos`，与 `--sql-pattern` 必须指定其中一个、且只能指定其中一个；在指定时表示操作将在 binlog event 的 position 匹配时生效，格式为 `binlog-filename:binlog-pos`（比如：`mysql-bin|000001.000003:3270`，在同步已经发生错误时，可通过 `query-erro` 返回的 `failedBinlogPosition` 获得）。
-- `sql-pattern`: flag 参数，string，`--sql-pattern`，与 `--binlog-pos` 必须 指定其中一个、且只能指定其中一个；在指定时表示操作将在 binlog event 对应的 DDL 经过可选的 router-rule 转换后匹配时生效，格式为以 `~` 为前缀的正则表达式或完整的待匹配文本（比如：``` ~(?i)ALTER\s+TABLE\s+`db1`.`tbl1`\s+ADD\s+COLUMN\s+col1\s+INT ```，字符串内部不支持空格，如需要使用空格，应使用正则表达式的 `\s+` 替代）。
-- `sharding`: flag 参数，boolean，`--sharding`，未指定 `--worker` 时必选，指定 `--worker` 时禁止使用；在指定时表示预定的操作将在 sharding DDL 同步过程中的 owner 内生效。
-- `task-name`: 非 flag 参数，string，必选；表示预定的操作将生效的 task。
+- `worker`: flag 参数，string，`--worker`，未指定 `--sharding` 时必选，指定 `--sharding` 时禁止使用；在指定时表示预定操作将生效的 DM-worker
+- `binlog-pos`: flag 参数，string，`--binlog-pos`，与 `--sql-pattern` 必须指定其中一个、且只能指定其中一个；在指定时表示操作将在 binlog event 的 position 匹配时生效，格式为 `binlog-filename:binlog-pos`（比如：`mysql-bin|000001.000003:3270`，在同步已经发生错误时，可通过 `query-error` 返回的 `failedBinlogPosition` 获得）
+- `sql-pattern`: flag 参数，string，`--sql-pattern`，与 `--binlog-pos` 必须指定其中一个、且只能指定其中一个；在指定时表示操作将在 binlog event 对应的 DDL 经过可选的 router-rule 转换后匹配时生效，格式为以 `~` 为前缀的正则表达式或完整的待匹配文本（比如：``` ~(?i)ALTER\s+TABLE\s+`db1`.`tbl1`\s+ADD\s+COLUMN\s+col1\s+INT ```，字符串内部不支持空格，如需要使用空格，应使用正则表达式的 `\s+` 替代）
+- `sharding`: flag 参数，boolean，`--sharding`，未指定 `--worker` 时必选，指定 `--worker` 时禁止使用；在指定时表示预定的操作将在 sharding DDL 同步过程中的 DDL lock owner 内生效
+- `task-name`: 非 flag 参数，string，必选；表示预定的操作将生效的 task
 
 
 #### sql-replace
 
-预定在 binlog event 的 position 或 SQL 与指定的 `binlog-pos` 或 `sql-pattern` 匹配时执行替代（replace）操作。
+预定在 binlog event 的 position 或 SQL 与指定的 `binlog-pos` 或 `sql-pattern` 匹配时执行该替代（replace）操作。
 
 ##### 命令样例
 
