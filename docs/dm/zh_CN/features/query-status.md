@@ -5,7 +5,7 @@ query-status
 - [查询结果介绍](#查询结果介绍)
 - [子任务状态](#子任务状态)
 
-#### 查询结果介绍
+### 查询结果介绍
 
 ```
 » query-status
@@ -98,7 +98,7 @@ query-status
 
 ```
 
-#### 子任务状态
+### 子任务状态
 
 - New: 初始状态，如果没有出错会转换到 Running 状态，出错转换到 Paused 状态
 - Running: 正常运行状态
@@ -106,7 +106,7 @@ query-status
 - Stopped: 停止状态，不可通过 `resume-task` 重新运行。在 Running 或 Paused 状态通过 `stop-task` 会进入此状态
 - Finished: 运行结束状态，只有全量任务正常运行结束会进入此状态
 
-##### 状态转换图
+#### 状态转换图
 
 ```
                                          error occured
