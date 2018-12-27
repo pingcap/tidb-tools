@@ -170,10 +170,9 @@ mysql-instances:
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
-
   -
     source-id: "instance-2"
-    route-rules: ["instance-2-user-rule", instance-2-router-rule]
+    route-rules: ["instance-2-user-rule", instance-2-store-rule]
     filter-rules: ["log-filter-rule", "user-filter-rule" , "store-filter-rule"]
     black-white-list:  "log-filter"
     mydumper-config-name: "global"
@@ -181,7 +180,7 @@ mysql-instances:
     syncer-config-name: "global"
   -
     source-id: "instance-3"
-    route-rules: ["instance-3-user-rule", instance-3-router-rule]
+    route-rules: ["instance-3-user-rule", instance-3-store-rule]
     filter-rules: ["log-filter-rule", "user-filter-rule" , "store-filter-rule"]
     black-white-list:  "log-filter"
     mydumper-config-name: "global"
