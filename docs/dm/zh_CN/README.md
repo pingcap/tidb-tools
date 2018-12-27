@@ -25,33 +25,33 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 - [DM 介绍](./overview.md)
 - [使用限制](./restrictions.md)
 - [同步前置检查](./precheck.md)
-- [同步功能介绍](./features)
+- 同步功能介绍
     - [table 路由](./features/table-route.md)
     - [table 黑白名单](./features/black-white-list.md)
     - [binlog 过滤](./features/binlog-filter.md)
     - [列值转换](./features/column-mapping.md)
     - [同步延迟监控](./features/heartbeat.md)
-- [运维管理](./maintenance)
+- 运维管理
     - [DM Ansible 运维手册](./maintenance/dm-ansible.md)
     - [扩充/缩减 DM 集群](./maintenance/scale-out.md)
     - [部署目录结构](./maintenance/directory-structure.md)
     - [重启 DM 组件注意事项](./maintenance/caution-for-restart-dm.md)
     - [使用 dmctl 执行主-从切换](./maintenance/master-slave-switch.md)
     - [DM 监控与告警](./maintenance/metrics-alert.md)
-- [配置文件](./configuration)
+- 配置文件
     - [Task 配置文件介绍](./configuration/configuration.md)
     - [task.yaml 示例](./configuration/task.yaml)
-- [任务管理](./task-handling)
+- 任务管理
     - [dmctl 使用手册](./task-handling/dmctl-manual.md)
     - [任务管理命令](./task-handling/task-commands.md)
     - [上游数据库实例检查](./task-handling/check-mysql.md)
-- [分库分表](./shard-table)
+- 分库分表
     - [分库分表支持方案](./shard-table/merge-solution.md)
     - [sharding DDL 使用限制](./shard-table/restrictions.md)
     - [手动处理 sharding DDL lock](./shard-table/handle-DDL-lock.md)
-- [同步任务案例]
+- 同步任务案例
    - [简单的从库同步场景](./use-cases/one-tidb-slave.md)
-   - [简单的从库同步场景](./use-cases/shard-merge.md)
+   - [分库分表合并场景](./use-cases/shard-merge.md)
 - [错误处理](./troubleshoot)
     - [skip 或 replace 异常 SQL](./troubleshoot/skip-replace-sqls.md)
     - [重置数据同步任务](./troubleshoot/reset-task.md)
