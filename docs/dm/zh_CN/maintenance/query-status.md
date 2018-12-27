@@ -10,8 +10,8 @@ query-status
 ```
 » query-status
 {
-    "result": true,
-    "msg": "",
+    "result": true,     # 表示查询是否成功
+    "msg": "",          # 查询失败时，失败原因的描述
     "workers": [                            # DM-worker 列表
         {
             "result": true,
@@ -20,19 +20,20 @@ query-status
             "subTaskStatus": [              # 该 DM-worker 所有子任务信息
                 {
                     "name": "test",         # 任务名称
-                    "stage": "Running",     # 子任务运行状态，包含 New, Running, Paused, Stopped, Finished。不同状态的含义和状态转换关系请参考 #子任务状态
-                    "unit": "Sync",         # DM 工作组件，包括 Check, Dump, Load, Sync
+                    "stage": "Running",     # 子任务运行状态，包含 New, Running, Paused, Stopped, Finished。不同状态的含义和状态转换关系请参考[子任务状态]
+                    "unit": "Sync",         # DM 处理单元，包括 Check, Dump, Load, Sync
                     "result": null,
                     "unresolvedDDLLockID": "",  # sharding DDL 锁ID
-                    "sync": {                   # sync 组件同步信息，总是显示与当前工作组件相同的组件同步信息
+                    "sync": {                   # sync 处理单元同步信息，总是显示与当前处理单元相同的组件同步信息
                         "totalEvents": "12",    # 该子任务同步的总的 binlog 事件数
-                        "totalTps": "1",        # 该子任务每秒同步 binlog 事件
-                        "recentTps": "1",       # 目前同 totalTps
+                        "totalTps": "1",        # 该子任务每秒同步 binlog 事件数
+                        "recentTps": "1",       # 该子任务最近1秒同步的 binlog 事件数
                         "masterBinlog": "(bin.000001, 3234)",                               # 上游数据库 binlog position
                         "masterBinlogGtid": "c0149e17-dff1-11e8-b6a8-0242ac110004:1-14",    # 上游数据库 GTID 信息
-                        "syncerBinlog": "(bin.000001, 2525)",                               # syncer 组件已经同步的 binlog position
-                        "syncerBinlogGtid": "",                                             # syncer 组件已经同步的 GTID 信息
+                        "syncerBinlog": "(bin.000001, 2525)",                               # sync 处理单元已经同步的 binlog position
+                        "syncerBinlogGtid": "",                                             # 目前该值始终为空
                         "blockingDDLs": [       # 当前被阻塞的DDL列表
+                            "USE `test`; ALTER TABLE `test`.`t_target` DROP COLUMN `age`;"
                         ],
                         "unresolvedGroups": [   # 没有解决的sharding group信息
                             {
@@ -40,16 +41,17 @@ query-status
                                 "DDLs": [
                                     "USE `test`; ALTER TABLE `test`.`t_target` DROP COLUMN `age`;"
                                 ],
-                                "firstPos": "(bin|000001.000001, 3130)",        # 最先阻塞的 binlog position
-                                "synced": [                                     # 上游已经执行完该 sharding DDL 的表
+                                "firstPos": "(bin|000001.000001, 3130)",        # 待同步的第一条 sharding DDL 的 binlog event position
+                                "synced": [                                     # sync 处理单元已经读到该 sharding DDL 的上游分表
                                     "`test`.`t2`"
+                                    "`test`.`t3`"
                                 ],
                                 "unsynced": [                                   # 上游还没有执行该 sharding DDL 的表
                                     "`test`.`t1`"
                                 ]
                             }
                         ],
-                        "synced": false         # 增量同步是否追上上游
+                        "synced": false         # 增量同步是否追上上游，sync 处理单元后台并非实时刷新保存点，所以该同步标记为 false 时不一定存在同步延迟
                     }
                 }
             ],
@@ -60,7 +62,7 @@ query-status
                 "relayBinlog": "(bin.000001, 3234)",                                # 已经拉取到本地的 binlog position
                 "relayBinlogGtid": "c0149e17-dff1-11e8-b6a8-0242ac110004:1-14",     # 已经拉取到本地的 binlog GTID 信息
                 "relayCatchUpMaster": true,     # 本地同步的 relay log 是否已经追上上游
-                "stage": "Running",             # relay log 同步组件的运行状态
+                "stage": "Running",             # relay log 同步处理单元的运行状态
                 "result": null
             }
         },
@@ -75,7 +77,7 @@ query-status
                     "unit": "Load",
                     "result": null,
                     "unresolvedDDLLockID": "",
-                    "load": {                   # loader 组件同步信息
+                    "load": {                   # loader 处理单元同步信息
                         "finishedBytes": "115", # 已全量导入字节数
                         "totalBytes": "452",    # 总计需要导入的字节数
                         "progress": "25.44 %"   # 全量导入进度
