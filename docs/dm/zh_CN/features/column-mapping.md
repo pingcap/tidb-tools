@@ -52,9 +52,9 @@ column-mappings:
 - 表名的组成必须为 `table 前缀 + 数字（既 table ID）`
 - 对分库分表的规模支持限制如下
   - 支持最多 15 个 MySQL/MariaDB 实例（instance ID ）
-  - 每个实例支持最多 127 个 schema（schema ID）
-  - 每个实例的每个 schema 255 个 table（table ID）
-  - 自增主键 ID 范围 (>= 0, <= 17592186044415)
+  - 每个实例支持最多 127 个 schema（0 <= schema ID  <= 127）
+  - 每个实例的每个 schema 255 个 table（0 <= table ID <= 255）
+  - 自增主键 ID 范围 (0 <= ID <= 17592186044415)
   - {instance ID、schema ID、table ID} 组合需要保持唯一
 - 目前该功能是定制功能，如果需要调整请联系相关开发人员进行调整
 
