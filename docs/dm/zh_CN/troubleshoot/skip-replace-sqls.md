@@ -19,17 +19,32 @@ skip 或 replace 异常 SQL
 
 当由于 TiDB 不支持的 SQL 导致同步出错时，可以使用 dmctl 来手动选择跳过该 SQL 对应的 binlog event 或使用其它指定的 SQL 来替代对应的 binlog event 向下游执行以恢复同步任务。
 
-当提前预知会有 TiDB 不支持的 SQL 将要被同步时，可以使用 dmctl 来手动预定跳过/替代操作，当同步该 SQL 对应的 binlog event 时自动执行预定的操作，避免同步过程被中断。
+当提前预知会有 TiDB 不支持的 SQL 将要被同步时，也可以使用 dmctl 来手动预设跳过/替代操作，当尝试同步该 SQL 对应的 binlog event 到下游时自动执行预设的操作，避免同步过程被中断。
 
 注意：
-- skip 或 replace 只适合用于跳过/替代执行下游 TiDB 不支持的 SQL，其它同步错误请不要使用此方式进行处理
+- skip 或 replace 只适合用于跳过/替代执行 **下游 TiDB 不支持执行的 SQL**，其它同步错误请不要使用此方式进行处理
+    - 其它同步错误可尝试使用 [同步表黑白名单](../features/black-white-list.md) 或 [binlog 过滤](../features/binlog-filter.md)
 - 单次 skip 或 replace 操作都是针对单个 binlog event 的
 - `--sharding` 操作都是针对 sharding DDL lock 的 owner 的，且此时只能使用 `--sql-pattern` 来进行匹配
 
 
 ### 支持场景
 
-TODO
+- 同步过程中，上游执行了 TiDB 不支持的 DDL 并同步到了 DM 造成了同步任务中断
+    - 业务能接受下游 TiDB 不执行该 DDL，使用 `sql-skip` 跳过对该 DDL 的同步以恢复同步任务
+    - 业务能接受下游 TiDB 执行其它 DDL 来作为替代，使用 `sql-replace` 替代该 DDL 的同步以恢复同步任务
+- 同步过程中，预先知道上游将执行 TiDB 不支持的 DDL，提前处理以避免同步任务中断
+    - 业务能接受下游 TiDB 不执行该 DDL，使用 `sql-skip` 预设一个跳过 DDL 的操作，当执行到该 DDL 时即自动跳过
+    - 业务能接受下游 TiDB 执行其它 DDL 来作为替代，使用 `sql-replace` 预设一个替代 DDL 的操作，当执行到该 DDL 时即自动替代
+
+**不支持场景**
+
+- 业务不能接受下游 TiDB 不执行该 DDL，且也不能使用其它 DDL 作为替代
+    - 比如：DROP PRIMARY KEY
+    - 此时只能在下游重建（DDL 执行完后的）新表结构对应的表，并完整重导该表的全部数据
+- 不是由于 TiDB 不支持 **执行** 该 DDL 导致的同步出错
+    - 比如：TiDB parser 无法解析该 DDL；上下游表结构不一致；网络故障等
+    - 各类不支持通过 `sql-skip` / `sql-replace` 处理的场景需要具体分析后选择合适的方式进行处理
 
 
 ### 实现原理
@@ -47,6 +62,8 @@ TODO
 `query-status` 命令用于查询当前 DM-worker 内子任务及 relay 等的状态，具体参见 [查询数据同步任务状态](../task-handling/task-commands.md#查询数据同步任务状态)。
 
 
+---
+
 #### query-error
 
 查询 DM-worker 内子任务及 relay 在运行中当前存在的错误。
@@ -63,9 +80,11 @@ query-error [--worker=127.0.0.1:8262] [task-name]
 - `task-name`: 非 flag 参数，string，可选；不指定时查询所有任务内的错误，指定时仅查询特定任务内的错误
 
 
+---
+
 #### sql-skip
 
-预定在 binlog event 的 position 或 SQL 与指定的 `binlog-pos` 或 `sql-pattern` 匹配时执行该跳过（skip）操作。
+预设在 binlog event 的 position 或 SQL 与指定的 `binlog-pos` 或 `sql-pattern` 匹配时执行该跳过（skip）操作。
 
 ##### 命令样例
 
@@ -75,7 +94,7 @@ sql-skip <--worker=127.0.0.1:8262> [--binlog-pos=mysql-bin|000001.000003:3270] [
 
 ##### 参数解释
 
-- `worker`: flag 参数，string，`--worker`，未指定 `--sharding` 时必选，指定 `--sharding` 时禁止使用；在指定时表示预定操作将生效的 DM-worker
+- `worker`: flag 参数，string，`--worker`，未指定 `--sharding` 时必选，指定 `--sharding` 时禁止使用；在指定时表示预设操作将生效的 DM-worker
 - `binlog-pos`: flag 参数，string，`--binlog-pos`，与 `--sql-pattern` 必须指定其中一个、且只能指定其中一个；在指定时表示操作将在 binlog event 的 position 匹配时生效，格式为 `binlog-filename:binlog-pos`（比如：`mysql-bin|000001.000003:3270`，在同步已经发生错误时，可通过 `query-error` 返回的 `failedBinlogPosition` 获得）
 - `sql-pattern`: flag 参数，string，`--sql-pattern`，与 `--binlog-pos` 必须指定其中一个、且只能指定其中一个；在指定时表示操作将在 binlog event 对应的 DDL 经过可选的 router-rule 转换后匹配时生效，格式为以 `~` 为前缀的正则表达式或完整的待匹配文本（比如：``` ~(?i)ALTER\s+TABLE\s+`db1`.`tbl1`\s+ADD\s+COLUMN\s+col1\s+INT ```，字符串内部不支持空格，如需要使用空格，应使用正则表达式的 `\s+` 替代）
     - 注意：
@@ -83,13 +102,15 @@ sql-skip <--worker=127.0.0.1:8262> [--binlog-pos=mysql-bin|000001.000003:3270] [
         - 正则中的 schema 和 table 名必须是经过可选的 router-rule 转换后的名字，即对应下游的 target schema / table 名。如上游为 ``` `shard_db_1`.`shard_tbl_1` ```，下游为 ``` `shard_db`.`shard_tbl` ```，则应该尝试匹配 ``` `shard_db`.`shard_tbl` ```
         - 正则中的 schema 名、table 名及 column 名需要使用 ``` ` ``` 标记，如：``` `db1`.`tbl1` ```
         - 暂时不支持正则表达式中包含原始的空格，需要使用 `\s` 或 `\s+` 替代空格
-- `sharding`: flag 参数，boolean，`--sharding`，未指定 `--worker` 时必选，指定 `--worker` 时禁止使用；在指定时表示预定的操作将在 sharding DDL 同步过程中的 DDL lock owner 内生效
-- `task-name`: 非 flag 参数，string，必选；表示预定的操作将生效的 task
+- `sharding`: flag 参数，boolean，`--sharding`，未指定 `--worker` 时必选，指定 `--worker` 时禁止使用；在指定时表示预设的操作将在 sharding DDL 同步过程中的 DDL lock owner 内生效
+- `task-name`: 非 flag 参数，string，必选；表示预设的操作将生效的 task
 
+
+---
 
 #### sql-replace
 
-预定在 binlog event 的 position 或 SQL 与指定的 `binlog-pos` 或 `sql-pattern` 匹配时执行该替代（replace）操作。
+预设在 binlog event 的 position 或 SQL 与指定的 `binlog-pos` 或 `sql-pattern` 匹配时执行该替代（replace）操作。
 
 ##### 命令样例
 
@@ -185,7 +206,7 @@ exec sqls[[USE `db1`; ALTER TABLE `db1`.`tbl1` CHANGE COLUMN `c2` `c2` decimal(1
 1. 使用 `query-error` 获取同步出错的 binlog event position 信息
     - 即上面 `query-error` 返回信息中的 `failedBinlogPosition` 信息
     - 本示例中为 `mysql-bin|000001.000003:34642`
-2. 使用 `sql-skip` 命令预定一个 binlog event 跳过（skip）操作（该操作将在 `resume-task` 后同步该 binlog event 到下游时生效）
+2. 使用 `sql-skip` 命令预设一个 binlog event 跳过（skip）操作（该操作将在 `resume-task` 后同步该 binlog event 到下游时生效）
     ```bash
     » sql-skip --worker=127.0.0.1:8262 --binlog-pos=mysql-bin|000001.000003:34642 test
     {
@@ -229,6 +250,8 @@ exec sqls[[USE `db1`; ALTER TABLE `db1`.`tbl1` CHANGE COLUMN `c2` `c2` decimal(1
 5. 使用 `query-error` 确认原错误信息已经不存在
 
 
+---
+
 #### 出错前主动 replace
 
 ##### 业务场景
@@ -261,7 +284,7 @@ ALTER TABLE db2.tbl2 DROP COLUMN c2;
 exec sqls[[USE `db2`; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`;]] failed, err:Error 1105: can't drop column c2 with index covered now
 ```
 
-**但如果我们在上游实际执行该 DDL 前，已经知道该 DDL 不被 TiDB 所支持。** 则我们可以使用 `sql-skip` / `sql-replace` 为此 DDL 提前预定一个跳过（skip）/替代执行（replace）操作。
+**但如果我们在上游实际执行该 DDL 前，已经知道该 DDL 不被 TiDB 所支持。** 则我们可以使用 `sql-skip` / `sql-replace` 为此 DDL 提前预设一个跳过（skip）/替代执行（replace）操作。
 
 对于这个示例业务中的 DDL，由于 TiDB 暂时不支持 DROP 存在索引的列，因此我们使用两条 SQLs 来替代执行，即可以先 DROP 索引、然后再 DROP c2 列。
 
@@ -277,7 +300,7 @@ exec sqls[[USE `db2`; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`;]] failed, err:E
     ```sql
     ALTER TABLE `db2`.`tbl2` DROP INDEX idx_c2;ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`
     ```
-3. 使用 `sql-replace` 命令预定一个 binlog event 替代执行（replace）操作（该操作将在同步该 binlog event 到下游时生效）
+3. 使用 `sql-replace` 命令预设一个 binlog event 替代执行（replace）操作（该操作将在同步该 binlog event 到下游时生效）
     ```bash
     » sql-replace --worker=127.0.0.1:8262 --sql-pattern=~(?i)ALTER\s+TABLE\s+`db2`.`tbl2`\s+DROP\s+COLUMN\s+`c2` test ALTER TABLE `db2`.`tbl2` DROP INDEX idx_c2;ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`
     {
@@ -304,6 +327,8 @@ exec sqls[[USE `db2`; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`;]] failed, err:E
 6. 使用 `query-status` 确认任务 `stage` 持续为 `Running`
 7. 使用 `query-error` 确认不存在 DDL 执行错误
 
+
+---
 
 #### 合库合表场景下出错前主动 replace
 
@@ -341,7 +366,7 @@ ALTER TABLE shard_db_*.shard_table_* DROP COLUMN c2;
 exec sqls[[USE `shard_db`; ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`;]] failed, err:Error 1105: can't drop column c2 with index covered now
 ```
 
-**但如果我们在上游实际执行该 DDL 前，已经知道该 DDL 不被 TiDB 所支持。** 则我们可以使用 `sql-skip` / `sql-replace` 为此 DDL 提前预定一个跳过（skip）/替代执行（replace）操作。
+**但如果我们在上游实际执行该 DDL 前，已经知道该 DDL 不被 TiDB 所支持。** 则我们可以使用 `sql-skip` / `sql-replace` 为此 DDL 提前预设一个跳过（skip）/替代执行（replace）操作。
 
 对于这个示例业务中的 DDL，由于 TiDB 暂时不支持 DROP 存在索引的列，因此我们使用两条 SQLs 来替代执行，即可以先 DROP 索引、然后再 DROP c2 列。
 
@@ -358,7 +383,7 @@ exec sqls[[USE `shard_db`; ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`
     ALTER TABLE `shard_db`.`shard_table` DROP INDEX idx_c2;ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`
     ```
 3. 这是合库合表场景，因此使用 `--sharding` 参数来由 DM 自动确定替代执行操作只发生在 DDL lock 的 owner 上
-4. 使用 `sql-replace` 命令预定一个 binlog event 替代执行（replace）操作（该操作将在同步该 binlog event 到下游时生效）
+4. 使用 `sql-replace` 命令预设一个 binlog event 替代执行（replace）操作（该操作将在同步该 binlog event 到下游时生效）
     ```bash
     » sql-replace --sharding --sql-pattern=~(?i)ALTER\s+TABLE\s+`shard_db`.`shard_table`\s+DROP\s+COLUMN\s+`c2` test ALTER TABLE `shard_db`.`shard_table` DROP INDEX idx_c2;ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`
      {
