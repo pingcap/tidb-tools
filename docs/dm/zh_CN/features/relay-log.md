@@ -10,7 +10,7 @@ relay-log
 
 ### 功能介绍
 
-DM-worker 启动后会自动同步上游的 binlog 到配置的本地目录（使用 `DM-Ansible` 部署的默认同步目录为 `<deploy_dir>/relay_log`），与 [MySQL Slave Relay Log](https://dev.mysql.com/doc/refman/5.7/en/slave-logs-relaylog.html) 的使用方式类似。DM-worker 运行过程中会实时同步上游的 binlog 更新到本地文件，syncer 组件会实时读取本地的 relay-log 更新并同步更新至下游数据库。
+DM-worker 启动后会自动同步上游的 binlog 到配置的本地目录（使用 `DM-Ansible` 部署的默认同步目录为 `<deploy_dir>/relay_log`），与 [MySQL Slave Relay Log](https://dev.mysql.com/doc/refman/5.7/en/slave-logs-relaylog.html) 的作用类似。DM-worker 运行过程中会实时同步上游的 binlog 更新到本地文件，syncer 组件会实时读取本地的 relay-log 更新并同步更新至下游数据库。
 
 
 ### 本地存储目录结构
@@ -31,7 +31,7 @@ DM-worker 启动后会自动同步上游的 binlog 到配置的本地目录（�
 `-- server-uuid.index
 ```
 
-- subdir 目录：DM-worker 从上游数据库同步的 binlog 会保存在同一个目录，每一个目录叫做一个 subdir，subdir 的命名格式是 <上游数据库 uuid>.<本地 subdir 序号>。当上游进行[主从切换](./master-slave-switch.md)后，DM-worker 会生成一个新的 subdir 目录，并且新目录序号递增。例如在例子中，`7e427cc0-091c-11e9-9e45-72b7c59d52d7.000001` 目录里，`7e427cc0-091c-11e9-9e45-72b7c59d52d7` 表示上游数据库 uuid，000001是本地 subdir 序号。
+- subdir 目录：DM-worker 从上游数据库同步的 binlog 会保存在同一个目录，每一个目录叫做一个 subdir，subdir 的命名格式是 <上游数据库 uuid>.<本地 subdir 序号>。当上游进行[主从切换](../maintenance/master-slave-switch.md)后，DM-worker 会生成一个新的 subdir 目录，并且新目录序号递增。例如在例子中，`7e427cc0-091c-11e9-9e45-72b7c59d52d7.000001` 目录里，`7e427cc0-091c-11e9-9e45-72b7c59d52d7` 表示上游数据库 uuid，000001是本地 subdir 序号。
 - server-uuid.index： 记录了当前的 subdir 列表信息
 - relay.meta：在每个 subdir 内，用于保存已同步上游 binlog 的位置信息。例如
 
@@ -67,7 +67,7 @@ DM-worker 每次启动（或 relay-log 从暂停状态恢复同步），从上�
 
     * purge-interval：单位秒，每多少秒尝试进行一次后台自动清理
     * purge-expires：单位小时，指定超过多少小时没有更新的 relay-log 会在后台自动清理中被清理掉；设置为 0 表示不按更新时间清理
-    * purge-remain-space：单位GB，指定 DM-worker 机器剩余磁盘空间小于多少时，会在后台自动清理中尝试清理可以安全清理的 relay-log
+    * purge-remain-space：单位GB，指定 DM-worker 机器剩余磁盘空间小于多少时，会在后台自动清理中尝试清理可以安全清理的 relay-log；设置为 0 表示不按剩余磁盘空间清理
     * 默认参数分别是 3600, 0, 15，代表每隔 3600 秒运行一次后台清理任务：不会按 relay-log 更新时间进行清理；如果磁盘空间小于 15GB，会尝试安全清理 relay-log
 
 - 手动清理：使用 dmctl 提供的 purge-relay 命令，通过指定 subdir 和 binlog 文件名，清理掉在指定 binlog 之前的所有 relay-log
