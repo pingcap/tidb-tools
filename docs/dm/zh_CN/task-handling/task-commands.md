@@ -323,10 +323,10 @@ Global Flags:
 
 ##### 支持的更新项
 
-- table route rules
-- black white list
-- binlog filter rules
-- column mapping rules
+- 表路由规则
+- 表黑白名单规则
+- binlog 过滤规则
+- 列值转换规则
 
 ##### 支持更新项更新步骤
 

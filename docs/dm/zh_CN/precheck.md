@@ -36,6 +36,7 @@ TiDB 和 MySQL 的兼容性存在一些差别
     - column 类型
     - 主键
     - 唯一索引
-- 是否存在自增主键
-    - 如果存在自增主键，自增主键 column 类型为 bigint，并且为其配置了 [column mapping](./features/column-mapping.md)，那么检查允许通过
-    - 否则检查不通过
+-  自增主键冲突检查
+    - 如果分表存在自增主键，自增主键 column 的类型不为 bigint，则检查失败
+    - 如果分表存在自增主键，自增主键 column 的类型为 bigint， 并且没有为其配置了 [column mapping](./features/column-mapping.md)，则检查失败
+    - 其他情况检查通过
