@@ -368,14 +368,24 @@ exec sqls[[USE `shard_db`; ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`
          ]
      }
     ```
-    DM-master 节点中也可以看到类似如下 log:
+    **DM-master** 节点中也可以看到类似如下 log：
     ```bash
     2018/12/28 16:53:33 operator.go:108: [info] [sql-operator] set a new operator uuid: eba35acd-6c5e-4bc3-b0b0-ae8bd1232351, request: name:"test" op:REPLACE args:"ALTER TABLE `shard_db`.`shard_table` DROP INDEX idx_c2;" args:"ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`" sqlPattern:"~(?i)ALTER\\s+TABLE\\s+`shard_db`.`shard_table`\\s+DROP\\s+COLUMN\\s+`c2`" sharding:true
     ```
 5. 在上游 MySQL 实例的分表上执行 DDL
-6. 观察下游表结构是否变更成功，对应的 DDL lock owner 节点中也可以看到类型如下的 log：
+6. 观察下游表结构是否变更成功，对应的 DDL lock **owner** 节点中也可以看到类型如下的 log：
     ```bash
     2018/12/28 16:54:35 operator.go:136: [info] [sql-operator] set a new operator uuid: c959f2fb-f1c2-40c7-a1fa-e73cd51736dd, pattern: ~(?i)ALTER\s+TABLE\s+`shard_db`.`shard_table`\s+DROP\s+COLUMN\s+`c2`, op: REPLACE, args: ALTER TABLE `shard_db`.`shard_table` DROP INDEX idx_c2; ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`
+    ```
+    ```bash
+    2018/12/28 16:54:35 operator.go:173: [info] [sql-operator] sql-pattern ~(?i)ALTER\s+TABLE\s+`shard_db`.`shard_table`\s+DROP\s+COLUMN\s+`c2` matched SQL USE `shard_db`; ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`;, applying operator uuid: c959f2fb-f1c2-40c7-a1fa-e73cd51736dd, pattern: ~(?i)ALTER\s+TABLE\s+`shard_db`.`shard_table`\s+DROP\s+COLUMN\s+`c2`, op: REPLACE, args: ALTER TABLE `shard_db`.`shard_table` DROP INDEX idx_c2; ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`
+    ```
+    同时，**DM-master** 节点中也可以看到类似如下 log：
+    ```bash
+    2018/12/28 16:54:35 operator.go:125: [info] [sql-operator] get an operator uuid: eba35acd-6c5e-4bc3-b0b0-ae8bd1232351, request: name:"test" op:REPLACE args:"ALTER TABLE `shard_db`.`shard_table` DROP INDEX idx_c2;" args:"ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`" sqlPattern:"~(?i)ALTER\\s+TABLE\\s+`shard_db`.`shard_table`\\s+DROP\\s+COLUMN\\s+`c2`" sharding:true  with key ~(?i)ALTER\s+TABLE\s+`shard_db`.`shard_table`\s+DROP\s+COLUMN\s+`c2` matched SQL USE `shard_db`; ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`;
+    ```
+    ```bash
+    2018/12/28 16:54:36 operator.go:148: [info] [sql-operator] remove an operator uuid: eba35acd-6c5e-4bc3-b0b0-ae8bd1232351, request: name:"test" op:REPLACE args:"ALTER TABLE `shard_db`.`shard_table` DROP INDEX idx_c2;" args:"ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`" sqlPattern:"~(?i)ALTER\\s+TABLE\\s+`shard_db`.`shard_table`\\s+DROP\\s+COLUMN\\s+`c2`" sharding:true
     ```
 7. 使用 `query-status` 确认任务 `stage` 持续为 `Running` 且不存在正阻塞同步的 DDL（`blockingDDLs`） 与待解决的 sharding group（`unresolvedGroups`）
 8. 使用 `query-error` 确认不存在 DDL 执行错误
