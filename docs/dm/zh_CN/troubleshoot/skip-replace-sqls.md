@@ -94,7 +94,7 @@ DM 在进行增量数据同步时，简化后的流程大致可表述为：
 但当需要在同步中断前主动处理 SQL 不被支持的情况以避免同步任务中断时，由于无法提前预知 binlog event 的 position 信息，因此需要使用其它方式来确保与后续将到达的 binlog event 进行匹配。
 
 在 DM 中，支持如下两种方式的 binlog event 匹配模式（两种模式只能二选其一）：
-1. binlog position: binlog event 在 binlog file 中的起始位置，使用 `SHOW BINLOG EVENTS` 时输出的 `Pos`（不是 `End_log_pos`）
+1. binlog position: binlog event 在 binlog file 中的起始位置，使用 `SHOW BINLOG EVENTS` 时输出的 `End_log_pos`（不是 `Pos`）
 2. DDL pattern: （仅限于 DDL 的）正则表达式匹配模式，以 `~` 为前缀，不包含原始空格（字符串中空格以 `\s` 或 `\s+` 表示）
 
 对于合库合表场景，如果需要由 DM 自动选择 DDL lock owner 来执行跳过/替代执行操作，则由于不同 DM-worker 上 DDL 对应的 binlog position 无逻辑关联且难以确定，因此只能使用 DDL pattern 匹配模式。
