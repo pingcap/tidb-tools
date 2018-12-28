@@ -462,8 +462,8 @@ func AnalyzeValuesFromBuckets(valueString string, cols []*model.ColumnInfo) ([]s
 	}
 
 	for i, col := range cols {
-		if IsTimeType(col.Tp) {
-			value, err := DecodeTimeInBucket(values[i], col.Tp)
+		if IsTimeTypeAndNeedDecode(col.Tp) {
+			value, err := DecodeTimeInBucket(values[i])
 			if err != nil {
 				return nil, errors.Trace(err)
 			}
@@ -476,7 +476,7 @@ func AnalyzeValuesFromBuckets(valueString string, cols []*model.ColumnInfo) ([]s
 }
 
 // DecodeTimeInBucket decodes Time from a packed uint64 value.
-func DecodeTimeInBucket(packedStr string, tp byte) (string, error) {
+func DecodeTimeInBucket(packedStr string) (string, error) {
 	packed, err := strconv.ParseUint(packedStr, 10, 64)
 	if err != nil {
 		return "", err
