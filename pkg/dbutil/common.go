@@ -476,10 +476,7 @@ func AnalyzeValuesFromBuckets(valueString string, cols []*model.ColumnInfo) ([]s
 }
 
 // DecodeTimeInBucket decodes Time from a packed uint64 value.
-// reference: https://github.com/pingcap/tidb/blob/08f0168a6caea0280d6157e5be69f2dc6fd0d5b3/types/time.go#L449
 func DecodeTimeInBucket(packedStr string, tp byte) (string, error) {
-	var t types.Time
-
 	packed, err := strconv.ParseUint(packedStr, 10, 64)
 	if err != nil {
 		return "", err
@@ -488,20 +485,13 @@ func DecodeTimeInBucket(packedStr string, tp byte) (string, error) {
 	if packed == 0 {
 		return "", nil
 	}
-	ymdhms := packed >> 24
-	ymd := ymdhms >> 17
-	day := int(ymd & (1<<5 - 1))
-	ym := ymd >> 5
-	month := int(ym % 13)
-	year := int(ym / 13)
 
-	hms := ymdhms & (1<<17 - 1)
-	second := int(hms & (1<<6 - 1))
-	minute := int((hms >> 6) & (1<<6 - 1))
-	hour := int(hms >> 12)
-	microsec := int(packed % (1 << 24))
+	t := new(types.Time)
+	err = t.FromPackedUint(packed)
+	if err != nil {
+		return "", err
+	}
 
-	t.Time = types.FromDate(year, month, day, hour, minute, second, microsec)
 	return t.String(), nil
 }
 
