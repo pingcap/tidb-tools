@@ -4,6 +4,8 @@ skip 或 replace 异常 SQL
 ### 索引
 
 - [功能介绍](#功能介绍)
+- [支持场景](#支持场景)
+- [实现原理](#实现原理)
 - [命令介绍](#命令介绍)
 - [使用示例](#使用示例)
     - [出错后被动 skip](#出错后被动-skip)
@@ -23,6 +25,17 @@ skip 或 replace 异常 SQL
 - skip 或 replace 只适合用于跳过/替代执行下游 TiDB 不支持的 SQL，其它同步错误请不要使用此方式进行处理
 - 单次 skip 或 replace 操作都是针对单个 binlog event 的
 - `--sharding` 操作都是针对 sharding DDL lock 的 owner 的，且此时只能使用 `--sql-pattern` 来进行匹配
+
+
+### 支持场景
+
+TODO
+
+
+### 实现原理
+
+TODO
+
 
 
 ### 命令介绍
@@ -172,7 +185,7 @@ exec sqls[[USE `db1`; ALTER TABLE `db1`.`tbl1` CHANGE COLUMN `c2` `c2` decimal(1
 1. 使用 `query-error` 获取同步出错的 binlog event position 信息
     - 即上面 `query-error` 返回信息中的 `failedBinlogPosition` 信息
     - 本示例中为 `mysql-bin|000001.000003:34642`
-2. 使用 `sql-skip` 命令预定一个 binlog event 跳过（skip）操作（该操作将在 `resume-task` 后执行到该 binlog event 时生效）
+2. 使用 `sql-skip` 命令预定一个 binlog event 跳过（skip）操作（该操作将在 `resume-task` 后同步该 binlog event 到下游时生效）
     ```bash
     » sql-skip --worker=127.0.0.1:8262 --binlog-pos=mysql-bin|000001.000003:34642 test
     {
@@ -242,13 +255,13 @@ mysql> SHOW CREATE TABLE db2.tbl2;
 ALTER TABLE db2.tbl2 DROP COLUMN c2;
 ```
 
-假设使用 DM 进行同步，则当同步到该 DDL 对应的 binlog event 时，会由于 TiDB 不支持该 DDL 而导致 DM 同步任务中断且报如下错误：
+假设使用 DM 进行同步，则当同步该 DDL 对应的 binlog event 到下游时，会由于 TiDB 不支持该 DDL 而导致 DM 同步任务中断且报如下错误：
 
 ```bash
 exec sqls[[USE `db2`; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`;]] failed, err:Error 1105: can't drop column c2 with index covered now
 ```
 
-**但如果我们在上游实际执行该 DDL 前，已经知道该 DDL 不被 TiDB 所支持。** 则我们可以使用 `sql-replace` 为此 DDL 提前预定一个跳过（skip）/替代执行（replace）操作。
+**但如果我们在上游实际执行该 DDL 前，已经知道该 DDL 不被 TiDB 所支持。** 则我们可以使用 `sql-skip` / `sql-replace` 为此 DDL 提前预定一个跳过（skip）/替代执行（replace）操作。
 
 对于这个示例业务中的 DDL，由于 TiDB 暂时不支持 DROP 存在索引的列，因此我们使用两条 SQLs 来替代执行，即可以先 DROP 索引、然后再 DROP c2 列。
 
@@ -264,7 +277,7 @@ exec sqls[[USE `db2`; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`;]] failed, err:E
     ```sql
     ALTER TABLE `db2`.`tbl2` DROP INDEX idx_c2;ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`
     ```
-3. 使用 `sql-replace` 命令预定一个 binlog event 替代执行（replace）操作（该操作将在同步到该 binlog event 时生效）
+3. 使用 `sql-replace` 命令预定一个 binlog event 替代执行（replace）操作（该操作将在同步该 binlog event 到下游时生效）
     ```bash
     » sql-replace --worker=127.0.0.1:8262 --sql-pattern=~(?i)ALTER\s+TABLE\s+`db2`.`tbl2`\s+DROP\s+COLUMN\s+`c2` test ALTER TABLE `db2`.`tbl2` DROP INDEX idx_c2;ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`
     {
@@ -284,7 +297,7 @@ exec sqls[[USE `db2`; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`;]] failed, err:E
     2018/12/28 15:33:13 operator.go:136: [info] [sql-operator] set a new operator uuid: c699a18a-8e75-47eb-8e7e-0e5abde2053c, pattern: ~(?i)ALTER\s+TABLE\s+`db2`.`tbl2`\s+DROP\s+COLUMN\s+`c2`, op: REPLACE, args: ALTER TABLE `db2`.`tbl2` DROP INDEX idx_c2; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`
     ```
 4. 在上游 MySQL 执行 DDL
-5. 观察下游是否表结构变更成功，对应 DM-worker 节点中也可以看到类似如下 log：
+5. 观察下游表结构是否变更成功，对应 DM-worker 节点中也可以看到类似如下 log：
     ```bash
     2018/12/28 15:33:45 operator.go:173: [info] [sql-operator] sql-pattern ~(?i)ALTER\s+TABLE\s+`db2`.`tbl2`\s+DROP\s+COLUMN\s+`c2` matched SQL USE `db2`; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`;, applying operator uuid: c699a18a-8e75-47eb-8e7e-0e5abde2053c, pattern: ~(?i)ALTER\s+TABLE\s+`db2`.`tbl2`\s+DROP\s+COLUMN\s+`c2`, op: REPLACE, args: ALTER TABLE `db2`.`tbl2` DROP INDEX idx_c2; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`
     ```
@@ -294,4 +307,76 @@ exec sqls[[USE `db2`; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`;]] failed, err:E
 
 #### 合库合表场景下出错前主动 replace
 
-TODO
+##### 业务场景
+
+假设当前存在如下的 4 个上游表需要合并后同步到下游的同一个表 ``` `shard_db`.`shard_table` ```：
+- MySQL 实例 1 内有 `shard_db_1` 逻辑库，包括 `shard_table_1` 和 `shard_table_2` 两个表
+- MySQL 实例 2 内有 `shard_db_2` 逻辑库，包括 `shard_table_1` 和 `shard_table_2` 两个表
+
+初始时表结构为：
+
+```sql
+mysql> SHOW CREATE TABLE shard_db_1.shard_table_1;
++---------------+------------------------------------------+
+| Table         | Create Table                             |
++---------------+------------------------------------------+
+| shard_table_1 | CREATE TABLE `shard_table_1` (
+  `c1` int(11) NOT NULL,
+  `c2` int(11) DEFAULT NULL,
+  PRIMARY KEY (`c1`),
+  KEY `idx_c2` (`c2`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 |
++---------------+------------------------------------------+
+```
+
+如果此时在上游所有分表上都执行以下 DDL 修改表结构（即 DROP 列 c2）：
+
+```sql
+ALTER TABLE shard_db_*.shard_table_* DROP COLUMN c2;
+```
+
+则当 DM 通过 sharding DDL lock 协调 2 个 DM-worker 同步该 DDL、请求 DDL lock owner 向下游 TiDB 执行该 DDL 时，会由于 TiDB 不支持该 DDL 而导致 DM 同步任务中断且报如下错误：
+
+```bash
+exec sqls[[USE `shard_db`; ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`;]] failed, err:Error 1105: can't drop column c2 with index covered now
+```
+
+**但如果我们在上游实际执行该 DDL 前，已经知道该 DDL 不被 TiDB 所支持。** 则我们可以使用 `sql-skip` / `sql-replace` 为此 DDL 提前预定一个跳过（skip）/替代执行（replace）操作。
+
+对于这个示例业务中的 DDL，由于 TiDB 暂时不支持 DROP 存在索引的列，因此我们使用两条 SQLs 来替代执行，即可以先 DROP 索引、然后再 DROP c2 列。
+
+##### 主动 replace 该 SQL
+
+1. 为将要在上游执行的 DDL（经过可选的 router-rule 转换后的 DDL）设计一个可以匹配上的正则表达式
+    - 上游将执行的 DDL 为 `ALTER TABLE shard_db_*.shard_table_* DROP COLUMN c2`;
+    - 由于存在 router-rule 会将表名转为 ``` `shard_db`.`shard_table` ```，因此可设计正则表达式
+        ```sql
+        ~(?i)ALTER\s+TABLE\s+`shard_db`.`shard_table`\s+DROP\s+COLUMN\s+`c2`
+        ```
+2. 为该 DDL 设计将用于替代执行的新 DDL
+    ```sql
+    ALTER TABLE `shard_db`.`shard_table` DROP INDEX idx_c2;ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`
+    ```
+3. 这是合库合表场景，因此使用 `--sharding` 参数来由 DM 自动确定替代执行操作只发生在 DDL lock 的 owner 上
+4. 使用 `sql-replace` 命令预定一个 binlog event 替代执行（replace）操作（该操作将在同步该 binlog event 到下游时生效）
+    ```bash
+    » sql-replace --sharding --sql-pattern=~(?i)ALTER\s+TABLE\s+`shard_db`.`shard_table`\s+DROP\s+COLUMN\s+`c2` test ALTER TABLE `shard_db`.`shard_table` DROP INDEX idx_c2;ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`
+     {
+         "result": true,
+         "msg": "request with --sharding saved and will be sent to DDL lock's owner when resolving DDL lock",
+         "workers": [
+         ]
+     }
+    ```
+    DM-master 节点中也可以看到类似如下 log:
+    ```bash
+    2018/12/28 16:53:33 operator.go:108: [info] [sql-operator] set a new operator uuid: eba35acd-6c5e-4bc3-b0b0-ae8bd1232351, request: name:"test" op:REPLACE args:"ALTER TABLE `shard_db`.`shard_table` DROP INDEX idx_c2;" args:"ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`" sqlPattern:"~(?i)ALTER\\s+TABLE\\s+`shard_db`.`shard_table`\\s+DROP\\s+COLUMN\\s+`c2`" sharding:true
+    ```
+5. 在上游 MySQL 实例的分表上执行 DDL
+6. 观察下游表结构是否变更成功，对应的 DDL lock owner 节点中也可以看到类型如下的 log：
+    ```bash
+    2018/12/28 16:54:35 operator.go:136: [info] [sql-operator] set a new operator uuid: c959f2fb-f1c2-40c7-a1fa-e73cd51736dd, pattern: ~(?i)ALTER\s+TABLE\s+`shard_db`.`shard_table`\s+DROP\s+COLUMN\s+`c2`, op: REPLACE, args: ALTER TABLE `shard_db`.`shard_table` DROP INDEX idx_c2; ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`
+    ```
+7. 使用 `query-status` 确认任务 `stage` 持续为 `Running` 且不存在正阻塞同步的 DDL（`blockingDDLs`） 与待解决的 sharding group（`unresolvedGroups`）
+8. 使用 `query-error` 确认不存在 DDL 执行错误
+9. 使用 `show-ddl-locks` 确认不存在待解决的 DDL lock
