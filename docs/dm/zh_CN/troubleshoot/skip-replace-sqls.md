@@ -127,7 +127,7 @@ ALTER TABLE db1.tbl1 CHANGE c2 c2 DECIMAL (10, 3);
 exec sqls[[USE `db1`; ALTER TABLE `db1`.`tbl1` CHANGE COLUMN `c2` `c2` decimal(10,3);]] failed, err:Error 1105: unsupported modify column length 10 is less than origin 11
 ```
 
-此时使用 `query-status` 查询任务状态，可看到 Sync 处理单元的 `stage` 转为了 `Paused` 且 `errors` 中有相关的错误描述信息。
+此时使用 `query-status` 查询任务状态，可看到 `stage` 转为了 `Paused` 且 `errors` 中有相关的错误描述信息。
 
 使用 `query-error` 可以更明确地获取到该错误的信息，如下：
 
@@ -248,7 +248,7 @@ ALTER TABLE db2.tbl2 DROP COLUMN c2;
 exec sqls[[USE `db2`; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`;]] failed, err:Error 1105: can't drop column c2 with index covered now
 ```
 
-**但如果我们在上游实际执行该 DDL 前，已经知道该 DDL 不被 TiDB 所支持。**则我们可以使用 `sql-replace` 为此 DDL 提前预定一个跳过（skip）/替代执行（replace）操作。
+**但如果我们在上游实际执行该 DDL 前，已经知道该 DDL 不被 TiDB 所支持。** 则我们可以使用 `sql-replace` 为此 DDL 提前预定一个跳过（skip）/替代执行（replace）操作。
 
 对于这个示例业务中的 DDL，由于 TiDB 暂时不支持 DROP 存在索引的列，因此我们使用两条 SQLs 来替代执行，即可以先 DROP 索引、然后再 DROP c2 列。
 
@@ -256,7 +256,10 @@ exec sqls[[USE `db2`; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`;]] failed, err:E
 
 1. 为将要在上游执行的 DDL（经过可选的 router-rule 转换后的 DDL）设计一个可以匹配上的正则表达式
     - 上游将执行的 DDL 为 `ALTER TABLE db2.tbl2 DROP COLUMN c2;`
-    - 由于不存在 router-rule 转换，因此可设计正则表达式 ``` ~(?i)ALTER\s+TABLE\s+`db2`.`tbl2`\s+DROP\s+COLUMN\s+`c2` ```
+    - 由于不存在 router-rule 转换，因此可设计正则表达式
+        ```sql
+        ~(?i)ALTER\s+TABLE\s+`db2`.`tbl2`\s+DROP\s+COLUMN\s+`c2`
+        ```
 2. 为该 DDL 设计将用于替代执行的新 DDLs
     ```sql
     ALTER TABLE `db2`.`tbl2` DROP INDEX idx_c2;ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`
@@ -281,8 +284,7 @@ exec sqls[[USE `db2`; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`;]] failed, err:E
     2018/12/28 15:33:13 operator.go:136: [info] [sql-operator] set a new operator uuid: c699a18a-8e75-47eb-8e7e-0e5abde2053c, pattern: ~(?i)ALTER\s+TABLE\s+`db2`.`tbl2`\s+DROP\s+COLUMN\s+`c2`, op: REPLACE, args: ALTER TABLE `db2`.`tbl2` DROP INDEX idx_c2; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`
     ```
 4. 在上游 MySQL 执行 DDL
-5. 观察下游是否表结构变更成功
-    对应 DM-worker 节点中也可以看到类似如下 log：
+5. 观察下游是否表结构变更成功，对应 DM-worker 节点中也可以看到类似如下 log：
     ```bash
     2018/12/28 15:33:45 operator.go:173: [info] [sql-operator] sql-pattern ~(?i)ALTER\s+TABLE\s+`db2`.`tbl2`\s+DROP\s+COLUMN\s+`c2` matched SQL USE `db2`; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`;, applying operator uuid: c699a18a-8e75-47eb-8e7e-0e5abde2053c, pattern: ~(?i)ALTER\s+TABLE\s+`db2`.`tbl2`\s+DROP\s+COLUMN\s+`c2`, op: REPLACE, args: ALTER TABLE `db2`.`tbl2` DROP INDEX idx_c2; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`
     ```
