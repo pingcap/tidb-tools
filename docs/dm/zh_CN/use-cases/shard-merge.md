@@ -93,7 +93,7 @@ routes:
 
 ***
 
-- 同步需求 4 和 5 可以通过同步功能 [binlog filter](../features/binlog-filter.md) 来解决, 配置如下
+- 同步需求 4 和 5 可以通过同步功能 [binlog 过滤](../features/binlog-filter.md) 来解决, 配置如下
 
 ```yaml
 filters:
@@ -106,7 +106,7 @@ filters:
 
 ***
 
-- 同步需求 6  可以通过同步功能 [binlog filter](../features/binlog-filter.md) 来解决，配置如下
+- 同步需求 6  可以通过同步功能 [binlog 过滤](../features/binlog-filter.md) 来解决，配置如下
 
 ```yaml
 filters:
