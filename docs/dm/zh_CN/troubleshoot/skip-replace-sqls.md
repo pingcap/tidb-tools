@@ -8,7 +8,7 @@ skip 或 replace 异常 SQL
 - [使用示例](#使用示例)
     - [出错后被动 skip](#出错后被动-skip)
     - [出错前主动 replace](#出错前主动-replace)
-    - [sharding 场景下出错前主动 replace](#sharding-场景下出错前主动-replace)
+    - [合库合表场景下出错前主动 replace](#合库合表场景下出错前主动-replace)
 
 
 ### 功能介绍
@@ -20,6 +20,7 @@ skip 或 replace 异常 SQL
 当提前预知会有 TiDB 不支持的 SQL 将要被同步时，可以使用 dmctl 来手动预定跳过/替代操作，当同步该 SQL 对应的 binlog event 时自动执行预定的操作，避免同步过程被中断。
 
 注意：
+- skip 或 replace 只适合用于跳过/替代执行下游 TiDB 不支持的 SQL，其它同步错误请不要使用此方式进行处理
 - 单次 skip 或 replace 操作都是针对单个 binlog event 的
 - `--sharding` 操作都是针对 sharding DDL lock 的 owner 的，且此时只能使用 `--sql-pattern` 来进行匹配
 
@@ -92,50 +93,128 @@ sql-replace <--worker=127.0.0.1:8262> [--binlog-pos=mysql-bin|000001.000003:3270
 
 #### 出错后被动 skip
 
-TODO
+##### 业务场景
+
+假设当前需要同步上游的 `db1.tbl1` 表到下游 TiDB（非合库合表同步），初始时表结构为：
+
+```sql
+mysql> SHOW CREATE TABLE db1.tbl1;
++-------+--------------------------------------------------+
+| Table | Create Table                                     |
++-------+--------------------------------------------------+
+| tbl1  | CREATE TABLE `tbl1` (
+  `c1` int(11) NOT NULL,
+  `c2` decimal(11,3) DEFAULT NULL,
+  PRIMARY KEY (`c1`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 |
++-------+--------------------------------------------------+
+```
+
+如果此时上游执行以下 DDL 修改表结构（即将列的 DECIMAL(11, 3) 修改为 DECIMAL(10, 3)）：
+
+```sql
+ALTER TABLE db1.tbl1 CHANGE c2 c2 DECIMAL (10, 3);
+```
+
+则会由于 TiDB 不支持该 DDL 而导致 DM 同步任务中断且报如下错误：
+
+```bash
+exec sqls[[USE `db1`; ALTER TABLE `db1`.`tbl1` CHANGE COLUMN `c2` `c2` decimal(10,3);]] failed, err:Error 1105: unsupported modify column length 10 is less than origin 11
+```
+
+此时使用 `query-status` 查询任务状态，可看到 `stage` 转为了 `Paused` 且 `errors` 中有相关的错误描述信息。
+
+使用 `query-error` 可以更明确地获取到该错误的信息，如下：
+
+```bash
+» query-error test
+{
+    "result": true,
+    "msg": "",
+    "workers": [
+        {
+            "result": true,
+            "worker": "127.0.0.1:8262",
+            "msg": "",
+            "subTaskError": [
+                {
+                    "name": "test",
+                    "stage": "Paused",
+                    "unit": "Sync",
+                    "sync": {
+                        "errors": [
+                            {
+                                "msg": "exec sqls[[USE `db1`; ALTER TABLE `db1`.`tbl1` CHANGE COLUMN `c2` `c2` decimal(10,3);]] failed, err:Error 1105: unsupported modify column length 10 is less than origin 11",
+                                "failedBinlogPosition": "mysql-bin|000001.000003:34642",
+                                "errorSQL": "[USE `db1`; ALTER TABLE `db1`.`tbl1` CHANGE COLUMN `c2` `c2` decimal(10,3);]"
+                            }
+                        ]
+                    }
+                }
+            ],
+            "RelayError": {
+                "msg": ""
+            }
+        }
+    ]
+}
+```
+
+##### 被动 skip 该 SQL
+
+假设业务上可以接受下游 TiDB 不执行此 DDL（即继续保持原有的表结构），则可以通过使用 `sql-skip` 命令跳过该 DDL 以恢复任务同步。操作步骤如下：
+
+1. 使用 `query-error` 获取同步出错的 binlog event position 信息
+    - 即上面 `query-error` 返回信息中的 `failedBinlogPosition` 信息
+    - 本示例中为 `mysql-bin|000001.000003:34642`
+2. 使用 `sql-skip` 命令预定一个 binlog event 跳过（skip）操作（该操作将在 `resume-task` 后执行到该 binlog event 时生效）
+    ```bash
+    » sql-skip --worker=127.0.0.1:8262 --binlog-pos=mysql-bin|000001.000003:34642 test
+    {
+        "result": true,
+        "msg": "",
+        "workers": [
+            {
+                "result": true,
+                "worker": "",
+                "msg": ""
+            }
+        ]
+    }
+    ```
+    对应 DM-worker 节点中也可以看到类似如下 log：
+    ```bash
+    2018/12/28 11:17:51 operator.go:136: [info] [sql-operator] set a new operator uuid: 6bfcf30f-2841-4d70-9a34-28d7082bdbd7, pos: (mysql-bin|000001.000003, 34642), op: SKIP, args:
+    ```
+3. 使用 `resume-task` 恢复之前出错中断的 task
+    ```bash
+    » resume-task --worker=127.0.0.1:8262 test
+    {
+        "op": "Resume",
+        "result": true,
+        "msg": "",
+        "workers": [
+            {
+                "op": "Resume",
+                "result": true,
+                "worker": "127.0.0.1:8262",
+                "msg": ""
+            }
+        ]
+    }
+    ```
+    对应 DM-worker 节点中也可以看到类似如下 log：
+    ```bash
+    2018/12/28 11:27:46 operator.go:173: [info] [sql-operator] binlog-pos (mysql-bin|000001.000003, 34642) matched, applying operator uuid: 6bfcf30f-2841-4d70-9a34-28d7082bdbd7, pos: (mysql-bin|000001.000003, 34642), op: SKIP, args:
+    ```
+4. 使用 `query-status` 确认任务 `stage` 已经转为 `Running`
+5. 使用 `query-error` 确认原错误信息已经不存在
+
 
 #### 出错前主动 replace
 
 TODO
 
-#### sharding 场景下出错前主动 replace
+#### 合库合表场景下出错前主动 replace
 
 TODO
-
-
----
-
-
-### 手动处理异常 SQL 流程
-
-1. 使用 `query-status` 查询任务当前运行状态
-    1. 是否由于遇到错误而导致某个 DM-worker 的某个任务状态为 `Paused`
-    2. 任务出错的原因是否是执行 SQL 出错
-2. 记录下 `query-status` 时返回的 syncer 已同步的 binlog pos (`SyncerBinlog`)
-3. 根据出错情况及业务场景等，决定是否要 跳过 / 替代 当前出错 SQL
-4. 如果需要跳过当前出错 SQL
-    * 使用 `sql-skip` 指定需要执行 SQL 跳过操作的 DM-worker, task name 及 binlog pos 并执行跳过操作
-5. 如果需要替代执行当前出错 SQL
-    * 使用 `sql-replace` 指定需要执行 SQL 替代操作的 DM-worker, task name, binlog pos 及 用于替代原 SQL 的新 SQL（可指定多条，`;` 分隔）
-6. 使用 `resume-task` 并指定 DM-worker, task name 恢复由于出错而 paused 的 DM-worker 上的任务
-7. 使用 `query-status` 查看 SQL 跳过是否成功
-
-#### 如何找到参数中需要指定的 binlog pos
-
-在 `dm-worker.log` 中查找对应于出错 SQL 的 `current pos`
-
-
-### 命令参数说明
-
-#### sql-skip
-
-- `worker`: flag 参数，string，`--worker`，必选；指定需要执行跳过操作的 SQL 所处的 DM-worker
-- `task-name`: 非 flag 参数，string，必选；指定需要执行跳过操作的 SQL 所处的 task
-- `binlog-pos`: 非 flag 参数，string，必选；指定需要执行跳过操作的 SQL 所处的 binlog pos，形式为 `mysql-bin.000002:123`（`:` 分隔 binlog name 与 pos）
-
-#### sql-replace
-
-- `worker`: flag 参数，string，`--worker`，必选；指定需要执行替代操作的 SQL 所处的 DM-worker
-- `task-name`: 非 flag 参数，string，必选；指定需要执行替代操作的 SQL 所处的 task
-- `binlog-pos`: 非 flag 参数，string，必选；指定需要执行替代操作的 SQL 所处的 binlog pos，形式为 `mysql-bin.000002:123`（`:` 分隔 binlog name 与 pos）
-- `sqls`：非 flag 参数，string，必选；指定将用于替代原 SQL 的新 SQLs（可指定多条，`;` 分隔）
