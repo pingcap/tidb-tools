@@ -38,22 +38,27 @@ black-white-list:
 - 上面黑白名单中 以 ~ 字符开头名称为[正则表达式](https://golang.org/pkg/regexp/syntax/#hdr-Syntax)
  
 ### 规则介绍
+
+判断 table `test`.`t` 是否被过滤
+
 1. 首先 *schema 过滤判断*
     1. 如果 `do-dbs` 不为空
-       1. 判断 `do-dbs` 中有没有匹配的 schema，没有则过滤
+       1. 判断 `do-dbs` 中有没有匹配的 schema，没有则过滤 `test`.`t`
        2. 否则进入 *table 过滤判断*
     2. 如果 `do-dbs` 为空，`ignore-dbs` 不为空
-       1. 判断 `ignore-dbs` 里面有没有匹配的 schema，如果有则过滤
+       1. 判断 `ignore-dbs` 里面有没有匹配的 schema，如果有则过滤 `test`.`t`
        2. 否则进入 *table 过滤判断*
     3. 如果 `do-dbs` 和 `ignore-dbs` 都为空，则进入 *table 过滤判断*
 2. 然后 *table 过滤判断*
     1. 如果 `do-tables` 不为空
-       1. 判断 `do-tables` 中有没有匹配的 rule, 如果有则执行
-       2. 否则被过滤
+       1. 判断 `do-tables` 中有没有匹配的 table, 如果有则同步 `test`.`t`
+       2. 否则过滤 `test`.`t`
     2. 如果 `ignore-tables` 不为空
-       1. 判断 `ignore-tables` 中有没有匹配的 rule, 如果有则过滤
-       2. 否则执行
-     3. 如果 `do-tables` 和 `ignore-tables` 都为空，则执行
+       1. 判断 `ignore-tables` 中有没有匹配的 table, 如果有则过滤 `test`.`t`
+       2. 否则同步 `test`.`t`
+     3. 如果 `do-tables` 和 `ignore-tables` 都为空，则同步 `test`.`t`
+
+注意： 判断 schema `test` 是否被过滤，只进行 *schema 过滤判断*
 
 ### 使用示例
 
