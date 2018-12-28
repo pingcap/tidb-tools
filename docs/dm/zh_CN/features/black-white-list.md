@@ -39,7 +39,7 @@ black-white-list:
  
 ### 规则介绍
 
-判断 table `test`.`t` 是否被过滤
+判断 table `test`.`t` 是否同步
 
 1. 首先 *schema 过滤判断*
     1. 如果 `do-dbs` 不为空
