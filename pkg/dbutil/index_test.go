@@ -56,6 +56,28 @@ func (*testDBSuite) TestIndex(c *C) {
 			[]string{"test"},
 			[]string{"a"},
 		},
+		{
+			`
+ 			CREATE TABLE mtest (
+				a int(24),
+				b int(24),
+				KEY test1 (a),
+				KEY test2 (b))
+ 			`,
+			[]string{"test1", "test2"},
+			[]string{"a", "b"},
+		},
+		{
+			`
+ 			CREATE TABLE mtest (
+				a int(24),
+				b int(24),
+				UNIQUE KEY test1 (a),
+				UNIQUE KEY test2 (b))
+ 			`,
+			[]string{"test1", "test2"},
+			[]string{"a", "b"},
+		},
 	}
 
 	for _, testCase := range testCases {
