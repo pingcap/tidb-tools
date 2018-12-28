@@ -46,8 +46,8 @@
 
 1. 三个实例的 `user`.`information` 合并到下游 TiDB 的 `user`.`information`
 2. 三个实例的 `user`.`log_{north|south|east}` 合并到下游 TiDB 的 `user`.`log_{north|south|east}`
-3. 三个实例的 `store_{01|02}`.`sale_{01|02}` 同步到下游 TiDB 的 `store`.`sale`
-4. 过滤掉三个实例的 `user`.`log` 表的所有删除操作
+3. 三个实例的 `store_{01|02}`.`sale_{01|02}` 合并到下游 TiDB 的 `store`.`sale`
+4. 过滤掉三个实例的 `user``.log_{north|south|east}` 表的所有删除操作
 5. 过滤掉三个实例的 `user`.`information` 表的所有删除操作
 6. 过滤掉三个实例的 `store_{01|02}`.`sale_{01|02}` 表的所有删除操作
 7. 过滤掉三个实例的 `user`.`log`
@@ -64,7 +64,7 @@
 
 ### 同步方案
 
-- 同步需求 1 和 2 通过设置 table 路由来解决，配置如下
+- 同步需求 1 和 2 通过设置 [table 路由](../features/table-route.md) 来解决，配置如下
 
 ```yaml
 routes:
@@ -104,6 +104,8 @@ filters:
     action: Ignore
 ```
 
+注意： 同步需求 4 和 5， 加上需求 7 意味着可以过滤掉 schema `user` 的所有删除操作，所以这里设置一个 schema level 的过滤规则
+
 ***
 
 - 同步需求 6  可以通过同步功能 [binlog 过滤](../features/binlog-filter.md) 来解决，配置如下
@@ -128,7 +130,7 @@ filters:
 
 ```yaml
 black-white-list:
-  log-bak-filter:
+  log-bak-ignored:
     ignore-tales:
     - db-name: "user"
       tbl-name: "log_bak"
@@ -186,7 +188,7 @@ mysql-instances:
     route-rules: ["user-route-rule", "store-route-rule", "sale-route-rule"]
     filter-rules: ["user-filter-rule", "store-filter-rule" , "sale-filter-rule"]
     column-mapping-rules: ["instance-1-sale"]
-    black-white-list:  "log-bak-filter"
+    black-white-list:  "log-bak-ignored"
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
@@ -196,7 +198,7 @@ mysql-instances:
     route-rules: ["user-route-rule", "store-route-rule", "sale-route-rule"]
     filter-rules: ["user-filter-rule", "store-filter-rule" , "sale-filter-rule"]
     column-mapping-rules: ["instance-2-sale"]
-    black-white-list:  "log-bak-filter"
+    black-white-list:  "log-bak-ignored"
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
@@ -205,7 +207,7 @@ mysql-instances:
     route-rules: ["user-route-rule", "store-route-rule", "sale-route-rule"]
     filter-rules: ["user-filter-rule", "store-filter-rule" , "sale-filter-rule"]
     column-mapping-rules: ["instance-3-sale"]
-    black-white-list:  "log-bak-filter"
+    black-white-list:  "log-bak-ignored"
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
@@ -241,10 +243,34 @@ filters:
     action: Ignore
 
 black-white-list:
-  log-bak-filter:
+  log-bak-ignored:
     ignore-tales:
     - db-name: "user"
       tbl-name: "log_bak"
+
+column-mappings:
+  instance-1-sale:
+​    schema-pattern: "store_*"
+​    table-pattern: "sale_*"
+​    expression: "partition id"
+​    source-column: "id"
+​    target-column: "id"
+​    arguments: ["1", "store_", "sale_"]
+  instance-2-sale:
+​    schema-pattern: "store_*"
+​    table-pattern: "sale_*"
+​    expression: "partition id"
+​    source-column: "id"
+​    target-column: "id"
+​    arguments: ["2", "store_", "sale_"]
+  instance-3-sale:
+​    schema-pattern: "store_*"
+​    table-pattern: "sale_*"
+​    expression: "partition id"
+​    source-column: "id"
+​    target-column: "id"
+​    arguments: ["3", "store_", "sale_"]
+
 
 mydumpers:
   global:

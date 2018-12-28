@@ -48,7 +48,7 @@
    1. instance 1 的 schema `user` 同步到 TiDB 的 `user_north`
    2. instance 2 的 schema `user` 同步到 TiDB 的 `user_east`
    3. instance 3 的 schema `user` 同步到 TiDB 的 `user_south`
-   4. table `log` 不允许任删除操作
+   4. table `log` 不允许任何删除操作
 2. schema `store` 合并到下游的 `store`，表不合并
    1. instance 2 和 3 都存在 `store_sz`, 分别同步到 `store_suzhou`, `store_shenzhen`
    2. `store` 不允许任何删除操作
@@ -67,7 +67,7 @@
 
 ### 同步方案
 
-- 同步需求 1 的 i、ii、iii 可以通过设置 table 路由来解决，配置如下
+- 同步需求 1 的 i、ii、iii 可以通过设置 [table 路由](../features/table-route.md) 来解决，配置如下
 
 ```yaml
 routes:
@@ -141,7 +141,7 @@ filters:
 
 ```yaml
 black-white-list:
-  log-filter:
+  log-ignored:
     ignore-dbs: ["log"]
 ```
 
@@ -166,7 +166,7 @@ mysql-instances:
     source-id: "instance-1"
     route-rules: ["instance-1-user-rule"]
     filter-rules: ["log-filter-rule", "user-filter-rule" , "store-filter-rule"]
-    black-white-list:  "log-filter"
+    black-white-list:  "log-ignored"
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
@@ -174,7 +174,7 @@ mysql-instances:
     source-id: "instance-2"
     route-rules: ["instance-2-user-rule", instance-2-store-rule]
     filter-rules: ["log-filter-rule", "user-filter-rule" , "store-filter-rule"]
-    black-white-list:  "log-filter"
+    black-white-list:  "log-ignored"
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
@@ -182,7 +182,7 @@ mysql-instances:
     source-id: "instance-3"
     route-rules: ["instance-3-user-rule", instance-3-store-rule]
     filter-rules: ["log-filter-rule", "user-filter-rule" , "store-filter-rule"]
-    black-white-list:  "log-filter"
+    black-white-list:  "log-ignored"
     mydumper-config-name: "global"
     loader-config-name: "global"
     syncer-config-name: "global"
@@ -226,7 +226,7 @@ filters:
     action: Ignore
 
 black-white-list:
-  log-filter:
+  log-ignored:
     ignore-dbs: ["log"]
 
 mydumpers:
