@@ -106,7 +106,7 @@ The key's randomart image is:
 以 `tidb` 用户登录中控机并进入 `/home/tidb` 目录。
 
 ```
-$ wget http://download.pingcap.org/dm-ansible.tar.gz
+$ wget http://download.pingcap.org/dm-ansible-latest.tar.gz
 ```
 
 ## 在中控机器上安装 Ansible 及其依赖
@@ -114,7 +114,8 @@ $ wget http://download.pingcap.org/dm-ansible.tar.gz
 以 `tidb` 用户登录中控机，请务必按以下方式通过 pip 安装 Ansible 及其相关依赖的指定版本，否则会有兼容问题。安装完成后，可通过 `ansible --version` 查看 Ansible 版本。目前 DM-Ansible 兼容 Ansible 2.5 版本及以上版本，Ansible 及相关依赖版本记录在 `dm-ansible/requirements.txt` 文件中。
 
   ```bash
-  $ tar -xzvf dm-ansible.tar.gz
+  $ tar -xzvf dm-ansible-latest.tar.gz
+  $ mv dm-ansible-latest dm-ansible
   $ cd /home/tidb/dm-ansible
   $ sudo pip install -r ./requirements.txt
   $ ansible --version
@@ -632,8 +633,9 @@ $ mv dm-ansible dm-ansible-bak
 
 ```
 $ cd /home/tidb
-$ wget http://download.pingcap.org/dm-ansible.tar.gz
-$ tar -xzvf dm-ansible.tar.gz
+$ wget http://download.pingcap.org/dm-ansible-latest.tar.gz
+$ tar -xzvf dm-ansible-latest.tar.gz
+$ mv dm-ansible-latest dm-ansible
 ```
 
 迁移 `inventory.ini` 配置文件
