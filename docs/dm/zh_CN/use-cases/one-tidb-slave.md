@@ -133,7 +133,7 @@ filters:
     action: Ignore
 ```
 
-`filter-store-rule` 和 `filter-log-rule-table/schema` 的区别: `filter-store-rule` 针对整个 `store` schema, 而 `filter-log-rule-table/schema` 针对表 `user`.`log`
+`store-filter-rule` 和 `log-filter-rule & user-filter-rule` 的区别: `store-filter-rule` 针对整个 `store` schema, 而 `log-filter-rule & user-filter-rule` 针对表 `user`.`log`
 
 ***
 
