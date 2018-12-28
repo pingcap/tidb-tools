@@ -6,6 +6,7 @@ skip 或 replace 异常 SQL
 - [功能介绍](#功能介绍)
 - [支持场景](#支持场景)
 - [实现原理](#实现原理)
+    - [匹配模式](#匹配模式)
 - [命令介绍](#命令介绍)
 - [使用示例](#使用示例)
     - [出错后被动 skip](#出错后被动-skip)
@@ -26,6 +27,7 @@ skip 或 replace 异常 SQL
     - 其它同步错误可尝试使用 [同步表黑白名单](../features/black-white-list.md) 或 [binlog 过滤](../features/binlog-filter.md)
 - 单次 skip 或 replace 操作都是针对单个 binlog event 的
 - `--sharding` 操作都是针对 sharding DDL lock 的 owner 的，且此时只能使用 `--sql-pattern` 来进行匹配
+- `--sharding` 操作必须在上游全部分表执行完 DDL 之前使用，否则无法生效或可能被错误地应用于后续的其它 DDL
 
 
 ### 支持场景
@@ -49,8 +51,59 @@ skip 或 replace 异常 SQL
 
 ### 实现原理
 
-TODO
+DM 在进行增量数据同步时，简化后的流程大致可表述为：
 
+1. relay 处理单元从上游拉取 binlog 存储在本地作为 relay log
+2. replicate binlog（sync）处理单元读取本地 relay log，获取其中的 binlog event
+3. 从 binlog event 中解析、构造 DDL/DML 后向下游 TiDB 执行
+
+在解析 binlog event 向下游 TiDB 执行时，可能会由于 TiDB 不支持对应的 SQL 报错而造成同步中断。
+
+在 DM 中，可以为 binlog event 注册一些跳过（skip）/替代执行（replace）操作（operator）。在向下游 TiDB 执行 SQL 前，将当前的 binlog event 信息（position、DDL）与注册的 operator 进行比较。如果 position 或 DDL 与注册的某个 operator 匹配，则执行该 operator 对应的操作并将该 operator 移除。
+
+**同步中断后使用 `sql-skip` / `sql-replace` 恢复任务的流程**
+
+1. 使用 `sql-skip` / `sql-replace` 为指定的 binlog position 或 DDL pattern 注册 operator
+2. 使用 `resume-task` 恢复之前由于同步出错导致中断的任务
+3. 重新解析获得之前造成同步出错的 binlog event
+4. 该 binlog event 与 step.1 时注册的 operator 匹配成功
+5. 执行 operator 对应的操作（skip/replace）后，继续执行同步任务
+
+**同步中断前使用 `sql-skip` / `sql-replace` 避免任务中断的流程**
+
+1. 使用 `sql-skip` / `sql-replace` 为指定的 DDL pattern 注册 operator
+2. 从 relay log 中解析获得 binlog event
+3. （包含 TiDB 不支持 SQL 的）binlog event 与 step.1 时注册的 operator 匹配成功
+4. 执行 operator 对应的操作（skip/replace）后，继续执行同步任务，不发生中断
+
+**合库合表同步中断前使用 `sql-skip` / `sql-replace` 避免任务中断的流程**
+
+1. 使用 `sql-skip` / `sql-replace` 为指定的 DDL pattern 注册 operator（在 DM-master 上）
+2. 各 DM-worker 从 relay log 中解析获得 binlog event
+3. 各 DM-worker 通过 DM-master 协调进行 DDL lock 同步
+4. DM-master 判断 DDL lock 同步成功，将 step.1 时注册的 operator 发送给 DDL lock owner
+5. DM-master 请求 DDL lock owner 执行 DDL
+6. DDL lock owner 将要执行的 DDL 与 step.4 收到的 operator 匹配成功
+7. 执行 operator 对应的操作（skip/replace）后，继续执行同步任务
+
+
+#### 匹配模式
+
+当同步任务由于执行 SQL 出错而中断时，可以使用 `query-error` 获取对应 binlog event 的 position 信息。通过在 `sql-skip` / `sql-replace` 执行时指定该 position 信息，即可与对应的 binlog event 进行匹配。
+
+但当需要在同步中断前主动处理 SQL 不被支持的情况以避免同步任务中断时，由于无法提前预知 binlog event 的 position 信息，因此需要使用其它方式来确保与后续将到达的 binlog event 进行匹配。
+
+在 DM 中，支持如下两种方式的 binlog event 匹配模式（两种模式只能二选其一）：
+1. binlog position: binlog event 在 binlog file 中的起始位置，使用 `SHOW BINLOG EVENTS` 时输出的 `Pos`（不是 `End_log_pos`）
+2. DDL pattern: （仅限于 DDL 的）正则表达式匹配模式，以 `~` 为前缀，不包含原始空格（字符串中空格以 `\s` 或 `\s+` 表示）
+
+对于合库合表场景，如果需要由 DM 自动选择 DDL lock owner 来执行跳过/替代执行操作，则由于不同 DM-worker 上 DDL 对应的 binlog position 无逻辑关联且难以确定，因此只能使用 DDL pattern 匹配模式。
+
+
+**限制：**
+
+- 一个 binlog event 只能注册一个 operator，后注册的 operator 会覆盖之前已经注册的 operator
+- operator 在与 binlog event 匹配成功后即会被删除，后续如果需要再进行（`--sql-pattern`）匹配需要重新注册
 
 
 ### 命令介绍
@@ -96,7 +149,7 @@ sql-skip <--worker=127.0.0.1:8262> [--binlog-pos=mysql-bin|000001.000003:3270] [
 
 - `worker`: flag 参数，string，`--worker`，未指定 `--sharding` 时必选，指定 `--sharding` 时禁止使用；在指定时表示预设操作将生效的 DM-worker
 - `binlog-pos`: flag 参数，string，`--binlog-pos`，与 `--sql-pattern` 必须指定其中一个、且只能指定其中一个；在指定时表示操作将在 binlog event 的 position 匹配时生效，格式为 `binlog-filename:binlog-pos`（比如：`mysql-bin|000001.000003:3270`，在同步已经发生错误时，可通过 `query-error` 返回的 `failedBinlogPosition` 获得）
-- `sql-pattern`: flag 参数，string，`--sql-pattern`，与 `--binlog-pos` 必须指定其中一个、且只能指定其中一个；在指定时表示操作将在 binlog event 对应的 DDL 经过可选的 router-rule 转换后匹配时生效，格式为以 `~` 为前缀的正则表达式或完整的待匹配文本（比如：``` ~(?i)ALTER\s+TABLE\s+`db1`.`tbl1`\s+ADD\s+COLUMN\s+col1\s+INT ```，字符串内部不支持空格，如需要使用空格，应使用正则表达式的 `\s+` 替代）
+- `sql-pattern`: flag 参数，string，`--sql-pattern`，与 `--binlog-pos` 必须指定其中一个、且只能指定其中一个；在指定时表示操作将在 binlog event 对应的 DDL 经过可选的 router-rule 转换后匹配时生效，格式为以 `~` 为前缀的正则表达式（比如：``` ~(?i)ALTER\s+TABLE\s+`db1`.`tbl1`\s+ADD\s+COLUMN\s+col1\s+INT ```，字符串内部不支持空格，如需要使用空格，应使用正则表达式的 `\s+` 替代）
     - 注意：
         - 使用正则表达式时，以 `~` 为前缀，语法参考 <https://golang.org/pkg/regexp/syntax/#hdr-Syntax>
         - 正则中的 schema 和 table 名必须是经过可选的 router-rule 转换后的名字，即对应下游的 target schema / table 名。如上游为 ``` `shard_db_1`.`shard_tbl_1` ```，下游为 ``` `shard_db`.`shard_tbl` ```，则应该尝试匹配 ``` `shard_db`.`shard_tbl` ```
