@@ -57,6 +57,11 @@ func (*testDBSuite) TestTableName(c *C) {
 			"test-a",
 			"`test-1`.`test-a`",
 		},
+		{
+			"test",
+			"t`esta",
+			"`test`.`t``esta`",
+		},
 	}
 
 	for _, testCase := range testCases {
