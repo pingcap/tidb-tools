@@ -23,7 +23,7 @@ query-status
                     "stage": "Running",     # 子任务运行状态，包含 New, Running, Paused, Stopped, Finished。不同状态的含义和状态转换关系请参考[子任务状态]
                     "unit": "Sync",         # DM 处理单元，包括 Check, Dump, Load, Sync
                     "result": null,         # 子任务出错时会在这里显示错误信息
-                    "unresolvedDDLLockID": "test-`test`.`t_target`",    # sharding DDL 锁ID，当该 sync 处理单元上游所有表都执行了 sharding DDL，会生成该 sharding DDL 锁 ID
+                    "unresolvedDDLLockID": "test-`test`.`t_target`",    # sharding DDL锁ID，该子任务处于 sharding DDL 处理的第二阶段会显示该 ID，可用于异常情况下手动处理 sharding DDL lock。具体使用方法参考 <分库分表/手动处理 sharding DDL lock> 章节
                     "sync": {                   # sync 处理单元同步信息，总是显示与当前处理单元相同的组件同步信息
                         "totalEvents": "12",    # 该子任务同步的总的 binlog 事件数
                         "totalTps": "1",        # 该子任务每秒同步 binlog 事件数
