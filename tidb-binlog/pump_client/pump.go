@@ -17,6 +17,7 @@ import (
 	"context"
 	"crypto/tls"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -46,10 +47,14 @@ type PumpStatus struct {
 		Offline:
 			this pump is offline, and can't provide write binlog service forever.
 	*/
+	sync.RWMutex
+
 	node.Status
 
 	// the pump is avaliable or not
 	IsAvaliable bool
+
+	security *tls.Config
 
 	grpcConn *grpc.ClientConn
 
@@ -62,6 +67,7 @@ func NewPumpStatus(status *node.Status, security *tls.Config) *PumpStatus {
 	pumpStatus := &PumpStatus{}
 	pumpStatus.Status = *status
 	pumpStatus.IsAvaliable = (status.State == node.Online)
+	pumpStatus.security = security
 
 	if status.State != node.Online {
 		return pumpStatus
@@ -77,7 +83,10 @@ func NewPumpStatus(status *node.Status, security *tls.Config) *PumpStatus {
 }
 
 // createGrpcClient create grpc client for online pump.
-func (p *PumpStatus) createGrpcClient(security *tls.Config) error {
+func (p *PumpStatus) createGrpcClient() error {
+	p.Lock()
+	defer p.Unlock()
+
 	// release the old connection, and create a new one
 	if p.grpcConn != nil {
 		p.grpcConn.Close()
@@ -96,8 +105,8 @@ func (p *PumpStatus) createGrpcClient(security *tls.Config) error {
 	Logger.Debugf("[pumps client] create gcpc client at %s", p.Addr)
 	var clientConn *grpc.ClientConn
 	var err error
-	if security != nil {
-		clientConn, err = grpc.Dial(p.Addr, dialerOpt, grpc.WithTransportCredentials(credentials.NewTLS(security)))
+	if p.security != nil {
+		clientConn, err = grpc.Dial(p.Addr, dialerOpt, grpc.WithTransportCredentials(credentials.NewTLS(p.security)))
 	} else {
 		clientConn, err = grpc.Dial(p.Addr, dialerOpt, grpc.WithInsecure())
 	}
@@ -113,6 +122,9 @@ func (p *PumpStatus) createGrpcClient(security *tls.Config) error {
 
 // closeGrpcClient closes the pump's grpc connection.
 func (p *PumpStatus) closeGrpcClient() {
+	p.Lock()
+	defer p.Unlock()
+
 	if p.grpcConn != nil {
 		p.grpcConn.Close()
 		p.Client = nil
@@ -120,8 +132,15 @@ func (p *PumpStatus) closeGrpcClient() {
 }
 
 func (p *PumpStatus) writeBinlog(req *pb.WriteBinlogReq, timeout time.Duration) (*pb.WriteBinlogResp, error) {
-	if p.Client == nil {
-		return nil, errors.Errorf("pump %s don't have avaliable pump client", p.NodeID)
+	p.RLock()
+	clientIsNil = (p.Client == nil)
+	p.RUnlock()
+
+	if clientIsNil {
+		err := p.createGrpcClient()
+		if err != nil {
+			return nil, errors.Errorf("create grpc connection for pump %s failed, error %v", p.NodeID, err)
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)

@@ -40,7 +40,7 @@ const (
 	DefaultAllRetryTime = 20
 
 	// RetryTime is the retry time for each pump.
-	RetryTime = 5
+	RetryTime = 10
 
 	// DefaultBinlogWriteTimeout is the default max time binlog can use to write to pump.
 	DefaultBinlogWriteTimeout = 15 * time.Second
@@ -49,7 +49,7 @@ const (
 	CheckInterval = 30 * time.Second
 
 	// RetryInterval is the default interval of retrying to write binlog.
-	RetryInterval = 100 * time.Millisecond
+	RetryInterval = time.Second
 )
 
 var (
@@ -305,6 +305,19 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 		time.Sleep(RetryInterval)
 	}
 
+	// send binlog to unavaliable pumps.
+	for _, pump := range c.UnAvaliablePumps {
+		resp, err = pump.writeBinlog(req, c.BinlogWriteTimeout)
+		if err == nil {
+			if resp.Errmsg != "" {
+				err = errors.New(resp.Errmsg)
+			} else {
+				c.setPumpAvaliable(pump, true)
+				return nil
+			}
+		}
+	}
+
 	return err
 }
 
@@ -411,6 +424,13 @@ func (c *PumpsClient) watchStatus() {
 			Logger.Info("[pumps client] watch status finished")
 			return
 		case wresp := <-rch:
+			err := wresp.Err()
+			if err != nil {
+				Logger.Warnf("[pumps client] watch status meet error %v", err)
+				time.Sleep(time.Second)
+				continue
+			}
+
 			for _, ev := range wresp.Events {
 				status := &node.Status{}
 				err := json.Unmarshal(ev.Kv.Value, &status)
