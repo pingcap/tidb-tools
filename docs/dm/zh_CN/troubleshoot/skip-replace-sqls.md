@@ -90,7 +90,11 @@ DM 在进行增量数据同步时，简化后的流程大致可表述为：
 
 在 DM 中，支持如下两种方式的 binlog event 匹配模式（两种模式只能二选其一）：
 1. binlog position: binlog event 在 binlog file 中的起始位置，使用 `SHOW BINLOG EVENTS` 时输出的 `End_log_pos`（不是 `Pos`）
+    - 在命令中使用 `--binlog-pos` 参数传入，格式为 `binlog-filename:binlog-pos`，如 `mysql-bin|000001.000003:3270`
+    - 注意其中的 `binlog-filename` 部分由 *原始 binlog-filename 前缀*（`mysql-bin`）+ `|` + *relay sub dir 索引*（`000001`）+ `.` + *原始 binlog-filename 后续*（`000003`） 组成
+    - 在执行出错后，可直接从 `query-error` 返回的 `failedBinlogPosition` 中获得
 2. DDL pattern: （仅限于 DDL 的）正则表达式匹配模式，以 `~` 为前缀，不包含原始空格（字符串中空格以 `\s` 或 `\s+` 表示）
+    - 在命令中使用 `--sql-pattern` 参数传入，如要匹配 ``` ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2` ```，则对应的正则表达式为 ``` ~(?i)ALTER\s+TABLE\s+`db2`.`tbl2`\s+DROP\s+COLUMN\s+`c2` ```
 
 对于合库合表场景，如果需要由 DM 自动选择 DDL lock owner 来执行跳过/替代执行操作，则由于不同 DM-worker 上 DDL 对应的 binlog position 无逻辑关联且难以确定，因此只能使用 DDL pattern 匹配模式。
 
@@ -116,7 +120,7 @@ DM 在进行增量数据同步时，简化后的流程大致可表述为：
 
 查询 DM-worker 内子任务及 relay 在运行中当前存在的错误。
 
-##### 命令样例
+##### 命令示例
 
 ```bash
 query-error [--worker=127.0.0.1:8262] [task-name]
@@ -127,6 +131,44 @@ query-error [--worker=127.0.0.1:8262] [task-name]
 - `worker`: flag 参数，string，`--worker`，可选；不指定时查询所有 DM-worker 上的错误，指定时仅查询特定的一组 DM-worker 上的错误
 - `task-name`: 非 flag 参数，string，可选；不指定时查询所有任务内的错误，指定时仅查询特定任务内的错误
 
+##### 返回结果示例
+
+```bash
+» query-error test
+{
+    "result": true,                              # 查询 error 操作本身是否成功
+    "msg": "",                                   # 查询 error 操作失败时的原因
+    "workers": [                                 # DM-worker 信息列表
+        {
+            "result": true,                      # 该 DM-worker 查询 error 操作是否成功
+            "worker": "127.0.0.1:8262",          # 该 DM-worker 的 IP:port (worker-id)
+            "msg": "",                           # 查询该 DM-worker 的 error 失败时的原因
+            "subTaskError": [                    # 该 DM-worker 上运行的子任务的错误信息
+                {
+                    "name": "test",              # 任务名
+                    "stage": "Paused",           # 当前任务所处状态
+                    "unit": "Sync",              # 当前正在处理任务的处理单元
+                    "sync": {                    # sync（replicate binlog）处理单元的错误信息
+                        "errors": [              # 当前处理单元的错误信息列表
+                            {
+                                // 错误信息描述
+                                "msg": "exec sqls[[USE `db1`; ALTER TABLE `db1`.`tbl1` CHANGE COLUMN `c2` `c2` decimal(10,3);]] failed, err:Error 1105: unsupported modify column length 10 is less than origin 11",
+                                // 发生错误的  binlog event position
+                                "failedBinlogPosition": "mysql-bin|000001.000003:34642",
+                                // 发生错误的 SQL
+                                "errorSQL": "[USE `db1`; ALTER TABLE `db1`.`tbl1` CHANGE COLUMN `c2` `c2` decimal(10,3);]"
+                            }
+                        ]
+                    }
+                }
+            ],
+            "RelayError": {                      # 该 DM-worker 上 relay 处理单元的错误信息
+                "msg": ""                        # 错误信息描述
+            }
+        }
+    ]
+}
+```
 
 ---
 
@@ -134,7 +176,7 @@ query-error [--worker=127.0.0.1:8262] [task-name]
 
 预设在 binlog event 的 position 或 SQL 与指定的 `binlog-pos` 或 `sql-pattern` 匹配时执行该跳过（skip）操作。
 
-##### 命令样例
+##### 命令示例
 
 ```bash
 sql-skip <--worker=127.0.0.1:8262> [--binlog-pos=mysql-bin|000001.000003:3270] [--sql-pattern=~(?i)ALTER\s+TABLE\s+`db1`.`tbl1`\s+ADD\s+COLUMN\s+col1\s+INT] [--sharding] <task-name>
@@ -160,7 +202,7 @@ sql-skip <--worker=127.0.0.1:8262> [--binlog-pos=mysql-bin|000001.000003:3270] [
 
 预设在 binlog event 的 position 或 SQL 与指定的 `binlog-pos` 或 `sql-pattern` 匹配时执行该替代（replace）操作。
 
-##### 命令样例
+##### 命令示例
 
 ```bash
 sql-replace <--worker=127.0.0.1:8262> [--binlog-pos=mysql-bin|000001.000003:3270] [--sql-pattern=~(?i)ALTER\s+TABLE\s+`db1`.`tbl1`\s+ADD\s+COLUMN\s+col1\s+INT] [--sharding] <task-name> <SQL-1;SQL-2>
@@ -211,41 +253,7 @@ exec sqls[[USE `db1`; ALTER TABLE `db1`.`tbl1` CHANGE COLUMN `c2` `c2` decimal(1
 
 此时使用 `query-status` 查询任务状态，可看到 `stage` 转为了 `Paused` 且 `errors` 中有相关的错误描述信息。
 
-使用 `query-error` 可以更明确地获取到该错误的信息，如下：
-
-```bash
-» query-error test
-{
-    "result": true,
-    "msg": "",
-    "workers": [
-        {
-            "result": true,
-            "worker": "127.0.0.1:8262",
-            "msg": "",
-            "subTaskError": [
-                {
-                    "name": "test",
-                    "stage": "Paused",
-                    "unit": "Sync",
-                    "sync": {
-                        "errors": [
-                            {
-                                "msg": "exec sqls[[USE `db1`; ALTER TABLE `db1`.`tbl1` CHANGE COLUMN `c2` `c2` decimal(10,3);]] failed, err:Error 1105: unsupported modify column length 10 is less than origin 11",
-                                "failedBinlogPosition": "mysql-bin|000001.000003:34642",
-                                "errorSQL": "[USE `db1`; ALTER TABLE `db1`.`tbl1` CHANGE COLUMN `c2` `c2` decimal(10,3);]"
-                            }
-                        ]
-                    }
-                }
-            ],
-            "RelayError": {
-                "msg": ""
-            }
-        }
-    ]
-}
-```
+使用 `query-error` 可以更明确地获取到该错误的信息，如执行 `query-error test` 获得出错的 binlog event position（`failedBinlogPosition`）为 `mysql-bin|000001.000003:34642`。
 
 ##### 被动 skip 该 SQL
 
