@@ -31,12 +31,14 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
     - [binlog 过滤](./features/binlog-filter.md)
     - [列值转换](./features/column-mapping.md)
     - [同步延迟监控](./features/heartbeat.md)
+    - [relay-log](./features/relay-log.md)
 - 运维管理
     - [DM Ansible 运维手册](./maintenance/dm-ansible.md)
     - [扩充/缩减 DM 集群](./maintenance/scale-out.md)
     - [部署目录结构](./maintenance/directory-structure.md)
     - [重启 DM 组件注意事项](./maintenance/caution-for-restart-dm.md)
     - [使用 dmctl 执行主-从切换](./maintenance/master-slave-switch.md)
+    - [query-status内容介绍](./maintenance/query-status.md)
     - [DM 监控与告警](./maintenance/metrics-alert.md)
 - 配置文件
     - [Task 配置文件介绍](./configuration/configuration.md)
