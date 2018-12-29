@@ -111,7 +111,7 @@ DM 在进行增量数据同步时，简化后的流程大致可表述为：
 
 #### query-status
 
-`query-status` 命令用于查询当前 DM-worker 内子任务及 relay 等的状态，具体参见 [查询数据同步任务状态](../task-handling/task-commands.md#查询数据同步任务状态)。
+`query-status` 命令用于查询当前 DM-worker 内子任务及 relay 等的状态，具体参见 [query-status](../task-handling/query-status.md)。
 
 
 ---
