@@ -1,6 +1,16 @@
 DM 简介
 ===
 
+## 索引
+- [介绍](#介绍)
+- [架构图](#架构图)
+- [组件功能](#组件功能)
+  - [DM-master](#DM-master)
+  - [DM-worker](#DM-worker)
+  - [dmctl](#dmctl)
+- [同步功能介绍](#同步功能介绍)
+- [使用 DM](#使用-DM)
+
 ### 介绍
 
 DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备份和 MariaDB/MySQL binlog 增量同步，设计的主要目的是
