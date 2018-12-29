@@ -48,7 +48,6 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
         - 基础使用
             - [dmctl 使用手册](./task-handling/dmctl-manual.md)
             - [任务管理命令](./task-handling/task-commands.md)
-            - [上游数据库实例检查](./task-handling/check-mysql.md)
             - [query-status 内容介绍](./task-handling/query-status.md)
         - 配置文件
             - [Task 配置文件介绍](./configuration/configuration.md)
