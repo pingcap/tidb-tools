@@ -6,7 +6,7 @@ skip 或 replace 异常 SQL
 - [功能介绍](#功能介绍)
 - [支持场景](#支持场景)
 - [实现原理](#实现原理)
-    - [匹配模式](#匹配模式)
+    - [如何匹配 binlog event](#如何匹配-binlog-event)
 - [命令介绍](#命令介绍)
 - [使用示例](#使用示例)
     - [出错后被动 skip](#出错后被动-skip)
@@ -25,9 +25,13 @@ skip 或 replace 异常 SQL
 注意：
 - skip 或 replace 只适合用于跳过/替代执行 **下游 TiDB 不支持执行的 SQL**，其它同步错误请不要使用此方式进行处理
     - 其它同步错误可尝试使用 [同步表黑白名单](../features/black-white-list.md) 或 [binlog 过滤](../features/binlog-filter.md)
+- 如果业务不能接受下游 TiDB 不执行出错的 DDL，且也不能使用其它 DDL 作为替代，则不适合使用本功能
+    - 比如：DROP PRIMARY KEY
+    - 此时只能在下游重建（DDL 执行完后的）新表结构对应的表，并完整重导该表的全部数据
 - 单次 skip 或 replace 操作都是针对单个 binlog event 的
 - `--sharding` 操作都是针对 sharding DDL lock 的 owner 的，且此时只能使用 `--sql-pattern` 来进行匹配
 - `--sharding` 操作必须在上游全部分表执行完 DDL 之前使用，否则无法生效或可能被错误地应用于后续的其它 DDL
+    - 即应该先使用 `sql-skip` / `sql-replace` 预设跳过/替代执行操作后后，再在上游（至少最后一个分表）执行 DDL
 
 
 ### 支持场景
@@ -38,15 +42,6 @@ skip 或 replace 异常 SQL
 - 同步过程中，预先知道上游将执行 TiDB 不支持的 DDL，提前处理以避免同步任务中断
     - 业务能接受下游 TiDB 不执行该 DDL，使用 `sql-skip` 预设一个跳过 DDL 的操作，当执行到该 DDL 时即自动跳过
     - 业务能接受下游 TiDB 执行其它 DDL 来作为替代，使用 `sql-replace` 预设一个替代 DDL 的操作，当执行到该 DDL 时即自动替代
-
-**不支持场景**
-
-- 业务不能接受下游 TiDB 不执行该 DDL，且也不能使用其它 DDL 作为替代
-    - 比如：DROP PRIMARY KEY
-    - 此时只能在下游重建（DDL 执行完后的）新表结构对应的表，并完整重导该表的全部数据
-- 不是由于 TiDB 不支持 **执行** 该 DDL 导致的同步出错
-    - 比如：TiDB parser 无法解析该 DDL；上下游表结构不一致；网络故障等
-    - 各类不支持通过 `sql-skip` / `sql-replace` 处理的场景需要具体分析后选择合适的方式进行处理
 
 
 ### 实现原理
@@ -87,7 +82,7 @@ DM 在进行增量数据同步时，简化后的流程大致可表述为：
 7. 执行 operator 对应的操作（skip/replace）后，继续执行同步任务
 
 
-#### 匹配模式
+#### 如何匹配 binlog event
 
 当同步任务由于执行 SQL 出错而中断时，可以使用 `query-error` 获取对应 binlog event 的 position 信息。通过在 `sql-skip` / `sql-replace` 执行时指定该 position 信息，即可与对应的 binlog event 进行匹配。
 
