@@ -39,8 +39,8 @@ const (
 	// DefaultAllRetryTime is the default retry time for all pumps, should greter than RetryTime.
 	DefaultAllRetryTime = 20
 
-	// RetryTime is the retry time for each pump.
-	RetryTime = 10
+	// DefaultRetryTime is the default retry time for each pump.
+	DefaultRetryTime = 10
 
 	// DefaultBinlogWriteTimeout is the default max time binlog can use to write to pump.
 	DefaultBinlogWriteTimeout = 15 * time.Second
@@ -153,7 +153,6 @@ func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.Secur
 		EtcdRegistry:       node.NewEtcdRegistry(cli, DefaultEtcdTimeout),
 		Pumps:              NewPumpInfos(),
 		Selector:           NewSelector(Range),
-		RetryTime:          DefaultAllRetryTime,
 		BinlogWriteTimeout: timeout,
 		Security:           security,
 	}
@@ -163,6 +162,11 @@ func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.Secur
 		return nil, errors.Trace(err)
 	}
 	newPumpsClient.Selector.SetPumps(copyPumps(newPumpsClient.Pumps.AvaliablePumps))
+
+	newPumpsClient.RetryTime = DefaultAllRetryTime / len(newPumpsClient.Pumps.Pumps)
+	if newPumpsClient.RetryTime < DefaultRetryTime {
+		newPumpsClient.RetryTime = DefaultRetryTime
+	}
 
 	newPumpsClient.wg.Add(2)
 	go newPumpsClient.watchStatus()
@@ -260,12 +264,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 
 	for {
 		if pump == nil {
-			if binlog.Tp == pb.BinlogType_Prewrite {
-				return ErrNoAvaliablePump
-			}
-
-			// never return error for commit/rollback binlog
-			return nil
+			break
 		}
 
 		resp, err = pump.writeBinlog(req, c.BinlogWriteTimeout)
@@ -289,24 +288,26 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 				return err
 			}
 
-			// every pump can retry 5 times, if retry 5 times and still failed, set this pump unavaliable, and choose a new pump.
-			if (retryTime+1)%RetryTime == 0 {
+			// every pump can retry at least 10 times, if retry some times and still failed, set this pump unavaliable, and choose a new pump.
+			if (retryTime+1)%c.RetryTime == 0 {
 				c.setPumpAvaliable(pump, false)
 				pump = c.Selector.Next(binlog, retryTime/5+1)
 				Logger.Debugf("[pumps client] avaliable pumps: %v, write binlog choose pump %v", c.Pumps.AvaliablePumps, pump)
 			}
 
 			retryTime++
-			if retryTime > c.RetryTime {
-				break
-			}
 		}
 
 		time.Sleep(RetryInterval)
 	}
 
-	// send binlog to unavaliable pumps.
-	for _, pump := range c.UnAvaliablePumps {
+	if binlog.Tp != pb.BinlogType_Prewrite {
+		// never return error for commit/rollback binlog.
+		return nil
+	}
+
+	// send binlog to unavaliable pumps to retry again.
+	for _, pump := range c.Pumps.UnAvaliablePumps {
 		resp, err = pump.writeBinlog(req, c.BinlogWriteTimeout)
 		if err == nil {
 			if resp.Errmsg != "" {
@@ -318,20 +319,13 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 		}
 	}
 
-	return err
+	return errors.Annotatef(ErrNoAvaliablePump, "the last error %v", err)
 }
 
 // setPumpAvaliable set pump's isAvaliable, and modify UnAvaliablePumps or AvaliablePumps.
 func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 	pump.IsAvaliable = avaliable
 	if pump.IsAvaliable {
-		err := pump.createGrpcClient(c.Security)
-		if err != nil {
-			Logger.Errorf("[pumps client] create grpc client for pump %s failed, error: %v", pump.NodeID, err)
-			pump.IsAvaliable = false
-			return
-		}
-
 		c.Pumps.Lock()
 		delete(c.Pumps.UnAvaliablePumps, pump.NodeID)
 		if _, ok := c.Pumps.Pumps[pump.NodeID]; ok {
@@ -348,9 +342,9 @@ func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 		c.Pumps.Unlock()
 	}
 
-	c.Pumps.RLock()
+	c.Pumps.Lock()
 	c.Selector.SetPumps(copyPumps(c.Pumps.AvaliablePumps))
-	c.Pumps.RUnlock()
+	c.Pumps.Unlock()
 }
 
 // addPump add a new pump.
@@ -427,7 +421,13 @@ func (c *PumpsClient) watchStatus() {
 			err := wresp.Err()
 			if err != nil {
 				Logger.Warnf("[pumps client] watch status meet error %v", err)
-				time.Sleep(time.Second)
+				// get all the pump's information from etcd again.
+				err = c.getPumpStatus(c.ctx)
+				if err == nil {
+					c.Pumps.Lock()
+					c.Selector.SetPumps(copyPumps(c.Pumps.AvaliablePumps))
+					c.Pumps.Unlock()
+				}
 				continue
 			}
 
@@ -487,15 +487,6 @@ func (c *PumpsClient) detect() {
 			c.Pumps.RUnlock()
 
 			for _, pump := range needCheckPumps {
-				err := pump.createGrpcClient(c.Security)
-				if err != nil {
-					Logger.Errorf("[pumps client] create grpc client for pump %s failed, error %v", pump.NodeID, errors.Trace(err))
-					continue
-				}
-				if pump.Client == nil {
-					continue
-				}
-
 				_, err = pump.writeBinlog(req, c.BinlogWriteTimeout)
 				if err == nil {
 					checkPassPumps = append(checkPassPumps, pump)

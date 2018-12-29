@@ -73,7 +73,7 @@ func NewPumpStatus(status *node.Status, security *tls.Config) *PumpStatus {
 		return pumpStatus
 	}
 
-	err := pumpStatus.createGrpcClient(security)
+	err := pumpStatus.createGrpcClient()
 	if err != nil {
 		Logger.Errorf("[pumps client] create grpc client for %s failed, error %v", status.NodeID, err)
 		pumpStatus.IsAvaliable = false
@@ -84,9 +84,6 @@ func NewPumpStatus(status *node.Status, security *tls.Config) *PumpStatus {
 
 // createGrpcClient create grpc client for online pump.
 func (p *PumpStatus) createGrpcClient() error {
-	p.Lock()
-	defer p.Unlock()
-
 	// release the old connection, and create a new one
 	if p.grpcConn != nil {
 		p.grpcConn.Close()
@@ -120,10 +117,10 @@ func (p *PumpStatus) createGrpcClient() error {
 	return nil
 }
 
-// closeGrpcClient closes the pump's grpc connection.
-func (p *PumpStatus) closeGrpcClient() {
+// ResetGrpcClient closes the pump's grpc connection.
+func (p *PumpStatus) ResetGrpcClient() {
 	p.Lock()
-	defer p.Unlock()
+	defer p.UnLock()
 
 	if p.grpcConn != nil {
 		p.grpcConn.Close()
@@ -131,20 +128,25 @@ func (p *PumpStatus) closeGrpcClient() {
 	}
 }
 
-func (p *PumpStatus) writeBinlog(req *pb.WriteBinlogReq, timeout time.Duration) (*pb.WriteBinlogResp, error) {
+// WriteBinlog write binlog by grpc client.
+func (p *PumpStatus) WriteBinlog(req *pb.WriteBinlogReq, timeout time.Duration) (*pb.WriteBinlogResp, error) {
 	p.RLock()
-	clientIsNil = (p.Client == nil)
+	client := p.Client
 	p.RUnlock()
 
-	if clientIsNil {
+	if client == nil {
+		p.Lock()
 		err := p.createGrpcClient()
 		if err != nil {
+			p.Unlock()
 			return nil, errors.Errorf("create grpc connection for pump %s failed, error %v", p.NodeID, err)
 		}
+		client = p.Client
+		p.Unlock()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	resp, err := p.Client.WriteBinlog(ctx, req)
+	resp, err := client.WriteBinlog(ctx, req)
 	cancel()
 
 	return resp, err
