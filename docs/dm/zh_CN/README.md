@@ -30,6 +30,10 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
     - [同步延迟监控](./features/heartbeat.md)
     - [relay-log](./features/relay-log.md)
     - [数据流过程](./data-interaction-details.md)
+    - 分库分表
+        - [分库分表支持方案](./shard-table/merge-solution.md)
+        - [sharding DDL 使用限制](./shard-table/restrictions.md)
+        - [手动处理 sharding DDL lock](./shard-table/handle-DDL-lock.md)
 - 运维管理
     - [同步前置检查](./precheck.md)
     - [使用限制](./restrictions.md)
@@ -49,10 +53,6 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
         - 配置文件
             - [Task 配置文件介绍](./configuration/configuration.md)
             - [task.yaml 示例](./configuration/task.yaml)
-        - 分库分表
-            - [分库分表支持方案](./shard-table/merge-solution.md)
-            - [sharding DDL 使用限制](./shard-table/restrictions.md)
-            - [手动处理 sharding DDL lock](./shard-table/handle-DDL-lock.md)
         - 使用案例
             - [简单的从库同步场景](./use-cases/one-tidb-slave.md)
             - [分库分表合并场景](./use-cases/shard-merge.md)
