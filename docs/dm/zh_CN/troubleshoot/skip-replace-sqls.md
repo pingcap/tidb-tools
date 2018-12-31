@@ -11,6 +11,7 @@ skip 或 replace 异常 SQL
 - [使用示例](#使用示例)
     - [出错后被动 skip](#出错后被动-skip)
     - [出错前主动 replace](#出错前主动-replace)
+    - [合库合表场景下出错后被动 skip](#合库合表场景下出错后被动-skip)
     - [合库合表场景下出错前主动 replace](#合库合表场景下出错前主动-replace)
 
 
@@ -382,6 +383,26 @@ exec sqls[[USE `db2`; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`;]] failed, err:E
     ```
 6. 使用 `query-status` 确认任务 `stage` 持续为 `Running`
 7. 使用 `query-error` 确认不存在 DDL 执行错误
+
+
+---
+
+#### 合库合表场景下出错后被动 skip
+
+##### 业务场景
+
+上游多个 MySQL 实例内的多个表通过使用多个不同的 DM-worker 进行合库合表后同步到下游同一个 TiDB。
+
+上游各分表执行了 TiDB 不支持的 DDL，在 DM-master 通过 DDL lock 协调 DDL 同步后，请求 DDL lock owner 向下游 TiDB 执行该 DDL 时，会由于 TiDB 不支持该 DDL 而报错中断。
+
+##### 被动 skip 该 SQL
+
+合库合表场景下，被动 skip TiDB 不支持 DDL 的处理方式与非合库合表场景的 [出错后被动 skip](#出错后被动-skip) 基本一致。
+
+但由于在合库合表场景时，仅 DDL lock owner 需要向下游同步该 DDL，因此在处理过程中主要存在以下区别：
+
+1. 仅需要对 DDL lock owner 执行 `sql-skip` (`--worker=DDL-lock-owner`)
+2. 仅需要对 DDL lock owner 执行 `resume-task` （`--worker=DDL-lock-owner`）
 
 
 ---
