@@ -401,8 +401,8 @@ exec sqls[[USE `db2`; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`;]] failed, err:E
 
 但由于在合库合表场景时，仅 DDL lock owner 需要向下游同步该 DDL，因此在处理过程中主要存在以下区别：
 
-1. 仅需要对 DDL lock owner 执行 `sql-skip` (`--worker=DDL-lock-owner`)
-2. 仅需要对 DDL lock owner 执行 `resume-task` （`--worker=DDL-lock-owner`）
+1. 仅需要对 DDL lock owner 执行 `sql-skip` (`--worker={DDL-lock-owner}`)
+2. 仅需要对 DDL lock owner 执行 `resume-task` （`--worker={DDL-lock-owner}`）
 
 
 ---
