@@ -47,9 +47,6 @@ const (
 
 	// CheckInterval is the default interval for check unavaliable pumps.
 	CheckInterval = 30 * time.Second
-
-	// RetryInterval is the default interval of retrying to write binlog.
-	RetryInterval = time.Second
 )
 
 var (
@@ -61,6 +58,9 @@ var (
 
 	// CommitBinlogMaxRetryTime is the max retry duration time for write commit binlog.
 	CommitBinlogMaxRetryTime = 10 * time.Minute
+
+	// RetryInterval is the default interval of retrying to write binlog.
+	RetryInterval = time.Second
 )
 
 // PumpInfos saves pumps' infomations in pumps client.
@@ -267,7 +267,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 			break
 		}
 
-		resp, err = pump.writeBinlog(req, c.BinlogWriteTimeout)
+		resp, err = pump.WriteBinlog(req, c.BinlogWriteTimeout)
 		if err == nil && resp.Errmsg != "" {
 			err = errors.New(resp.Errmsg)
 		}
@@ -308,7 +308,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 
 	// send binlog to unavaliable pumps to retry again.
 	for _, pump := range c.Pumps.UnAvaliablePumps {
-		resp, err = pump.writeBinlog(req, c.BinlogWriteTimeout)
+		resp, err = pump.WriteBinlog(req, c.BinlogWriteTimeout)
 		if err == nil {
 			if resp.Errmsg != "" {
 				err = errors.New(resp.Errmsg)
@@ -386,11 +386,11 @@ func (c *PumpsClient) updatePump(status *node.Status) (pump *PumpStatus, avaliab
 	return
 }
 
-// removePump removes a pump.
+// removePump removes a pump, used when pump is offline.
 func (c *PumpsClient) removePump(nodeID string) {
 	c.Pumps.Lock()
 	if pump, ok := c.Pumps.Pumps[nodeID]; ok {
-		pump.closeGrpcClient()
+		pump.ResetGrpcClient()
 	}
 	delete(c.Pumps.Pumps, nodeID)
 	delete(c.Pumps.UnAvaliablePumps, nodeID)
@@ -421,7 +421,7 @@ func (c *PumpsClient) watchStatus() {
 			err := wresp.Err()
 			if err != nil {
 				Logger.Warnf("[pumps client] watch status meet error %v", err)
-				// get all the pump's information from etcd again.
+				// meet error, some event may missed, get all the pump's information from etcd again.
 				err = c.getPumpStatus(c.ctx)
 				if err == nil {
 					c.Pumps.Lock()
@@ -487,7 +487,7 @@ func (c *PumpsClient) detect() {
 			c.Pumps.RUnlock()
 
 			for _, pump := range needCheckPumps {
-				_, err = pump.writeBinlog(req, c.BinlogWriteTimeout)
+				_, err := pump.WriteBinlog(req, c.BinlogWriteTimeout)
 				if err == nil {
 					checkPassPumps = append(checkPassPumps, pump)
 				} else {

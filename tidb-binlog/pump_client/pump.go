@@ -120,7 +120,7 @@ func (p *PumpStatus) createGrpcClient() error {
 // ResetGrpcClient closes the pump's grpc connection.
 func (p *PumpStatus) ResetGrpcClient() {
 	p.Lock()
-	defer p.UnLock()
+	defer p.Unlock()
 
 	if p.grpcConn != nil {
 		p.grpcConn.Close()

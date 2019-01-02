@@ -157,6 +157,10 @@ func (t *testClientSuite) TestWriteBinlog(c *C) {
 		},
 	}
 
+	// make test faster
+	RetryInterval = 100 * time.Millisecond
+	CommitBinlogMaxRetryTime = time.Second
+
 	for _, cfg := range pumpServerConfig {
 		pumpServer, err := createMockPumpServer(cfg.addr, cfg.serverMode)
 		c.Assert(err, IsNil)
@@ -209,7 +213,6 @@ func (t *testClientSuite) TestWriteBinlog(c *C) {
 		// test when pump is down
 		pumpServer.Close()
 
-		CommitBinlogMaxRetryTime = time.Second
 		// write commit binlog failed will not return error
 		err = pumpClient.WriteBinlog(commitBinlog)
 		c.Assert(err, IsNil)
