@@ -250,8 +250,6 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 		return nil
 	}
 
-	Logger.Debugf("[pumps client] write binlog choose pump %s", pump.NodeID)
-
 	commitData, err := binlog.Marshal()
 	if err != nil {
 		return errors.Trace(err)
@@ -267,6 +265,8 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 			break
 		}
 
+		Logger.Debugf("[pumps client] avaliable pumps: %v, write binlog choose pump %v", c.Pumps.AvaliablePumps, pump)
+
 		resp, err = pump.WriteBinlog(req, c.BinlogWriteTimeout)
 		if err == nil && resp.Errmsg != "" {
 			err = errors.New(resp.Errmsg)
@@ -274,13 +274,12 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 		if err == nil {
 			return nil
 		}
-		Logger.Errorf("[pumps client] write binlog error %v", err)
+		Logger.Warnf("[pumps client] write binlog (type: %s, start ts: %d, commit ts: %d, length: %d) error %v", binlog.Tp, binlog.StartTs, binlog.CommitTs, len(commitData), err)
 
 		if binlog.Tp != pb.BinlogType_Prewrite {
 			// only use one pump to write commit/rollback binlog, util write success or blocked for ten minutes. And will not return error to tidb.
 			if time.Since(startTime) > CommitBinlogMaxRetryTime {
-				Logger.Warnf("[pumps client] write commit binlog %d failed, error %v", binlog.CommitTs, err)
-				return nil
+				break
 			}
 		} else {
 			if !isRetryableError(err) {
@@ -292,7 +291,6 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 			if (retryTime+1)%c.RetryTime == 0 {
 				c.setPumpAvaliable(pump, false)
 				pump = c.Selector.Next(binlog, retryTime/5+1)
-				Logger.Debugf("[pumps client] avaliable pumps: %v, write binlog choose pump %v", c.Pumps.AvaliablePumps, pump)
 			}
 
 			retryTime++
@@ -313,6 +311,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 			if resp.Errmsg != "" {
 				err = errors.New(resp.Errmsg)
 			} else {
+				// if this pump can write binlog success, set this pump to avaliable.
 				c.setPumpAvaliable(pump, true)
 				return nil
 			}
