@@ -40,3 +40,32 @@ func (*testDBSuite) TestReplacePlaceholder(c *C) {
 	}
 
 }
+
+func (*testDBSuite) TestTableName(c *C) {
+	testCases := []struct {
+		schema          string
+		table           string
+		expectTableName string
+	}{
+		{
+			"test",
+			"testa",
+			"`test`.`testa`",
+		},
+		{
+			"test-1",
+			"test-a",
+			"`test-1`.`test-a`",
+		},
+		{
+			"test",
+			"t`esta",
+			"`test`.`t``esta`",
+		},
+	}
+
+	for _, testCase := range testCases {
+		tableName := TableName(testCase.schema, testCase.table)
+		c.Assert(tableName, Equals, testCase.expectTableName)
+	}
+}

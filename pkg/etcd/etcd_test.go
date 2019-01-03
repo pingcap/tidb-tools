@@ -14,6 +14,7 @@
 package etcd
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -21,7 +22,6 @@ import (
 	"github.com/coreos/etcd/integration"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
-	"golang.org/x/net/context"
 )
 
 var (

@@ -17,46 +17,66 @@ import (
 	. "github.com/pingcap/check"
 )
 
-type indexTestCase struct {
-	sql     string
-	indices []string
-	cols    []string
-}
-
 func (*testDBSuite) TestIndex(c *C) {
-	testCases := []*indexTestCase{
+	testCases := []struct {
+		sql     string
+		indices []string
+		cols    []string
+	}{
 		{
 			`
-			CREATE TABLE itest (a int(11) NOT NULL,
-			b double NOT NULL DEFAULT '2',
-			c varchar(10) NOT NULL,
-			d time DEFAULT NULL,
-			PRIMARY KEY (a, b),
-			UNIQUE KEY d(d))
-			`,
+ 			CREATE TABLE itest (a int(11) NOT NULL,
+ 			b double NOT NULL DEFAULT '2',
+ 			c varchar(10) NOT NULL,
+ 			d time DEFAULT NULL,
+ 			PRIMARY KEY (a, b),
+ 			UNIQUE KEY d(d))
+ 			`,
 			[]string{"PRIMARY", "d"},
 			[]string{"a", "b", "d"},
 		}, {
 			`
-			CREATE TABLE jtest (
-				a int(11) NOT NULL,
-				b varchar(10) DEFAULT NULL,
-				c varchar(255) DEFAULT NULL,
-				KEY c(c),
-				UNIQUE KEY b(b, c),
-				PRIMARY KEY (a)
-			) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_bin
-			`,
+ 			CREATE TABLE jtest (
+ 				a int(11) NOT NULL,
+ 				b varchar(10) DEFAULT NULL,
+ 				c varchar(255) DEFAULT NULL,
+ 				KEY c(c),
+ 				UNIQUE KEY b(b, c),
+ 				PRIMARY KEY (a)
+ 			) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+ 			`,
 			[]string{"PRIMARY", "b", "c"},
 			[]string{"a", "b", "c"},
 		}, {
 			`
-			CREATE TABLE mtest (
-				a int(24),
-				KEY test (a))
-			`,
+ 			CREATE TABLE mtest (
+ 				a int(24),
+ 				KEY test (a))
+ 			`,
 			[]string{"test"},
 			[]string{"a"},
+		},
+		{
+			`
+ 			CREATE TABLE mtest (
+				a int(24),
+				b int(24),
+				KEY test1 (a),
+				KEY test2 (b))
+ 			`,
+			[]string{"test1", "test2"},
+			[]string{"a", "b"},
+		},
+		{
+			`
+ 			CREATE TABLE mtest (
+				a int(24),
+				b int(24),
+				UNIQUE KEY test1 (a),
+				UNIQUE KEY test2 (b))
+ 			`,
+			[]string{"test1", "test2"},
+			[]string{"a", "b"},
 		},
 	}
 

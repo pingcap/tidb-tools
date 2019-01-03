@@ -68,7 +68,7 @@ func ShowIndex(ctx context.Context, db *sql.DB, schemaName string, table string)
 	return indices, nil
 }
 
-// FindSuitableIndex returns first column of a suitable index.
+// FindSuitableColumnWithIndex returns first column of a suitable index.
 // The priority is
 // * primary key
 // * unique key

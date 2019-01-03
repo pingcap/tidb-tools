@@ -186,7 +186,7 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 	*/
 
 	if limitRange == "" {
-		limitRange = "true"
+		limitRange = "TRUE"
 	}
 
 	if collation != "" {
@@ -220,7 +220,7 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 	return randomValue, valueCount, errors.Trace(rows.Err())
 }
 
-// GetMinMaxValue get min and max value.
+// GetMinMaxValue return min and max value of given column by specified limitRange condition.
 func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column string, limitRange string, collation string, args []interface{}) (string, string, error) {
 	/*
 		example:
@@ -233,7 +233,7 @@ func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column strin
 	*/
 
 	if limitRange == "" {
-		limitRange = "true"
+		limitRange = "TRUE"
 	}
 
 	if collation != "" {
@@ -388,15 +388,14 @@ type Bucket struct {
 // GetBucketsInfo SHOW STATS_BUCKETS in TiDB.
 func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo) (map[string][]Bucket, error) {
 	/*
-		mysql.stats_buckets
-			example in tidb:
-			mysql> SHOW STATS_BUCKETS WHERE db_name= "test" AND table_name="testa";
-			+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
-			| Db_name | Table_name | Partition_name | Column_name | Is_index | Bucket_id | Count | Repeats | Lower_Bound         | Upper_Bound         |
-			+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
-			| test    | testa      |                | PRIMARY     |        1 |         0 |    64 |       1 | 1846693550524203008 | 1846838686059069440 |
-			| test    | testa      |                | PRIMARY     |        1 |         1 |   128 |       1 | 1846840885082324992 | 1847056389361369088 |
-			+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
+		example in tidb:
+		mysql> SHOW STATS_BUCKETS WHERE db_name= "test" AND table_name="testa";
+		+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
+		| Db_name | Table_name | Partition_name | Column_name | Is_index | Bucket_id | Count | Repeats | Lower_Bound         | Upper_Bound         |
+		+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
+		| test    | testa      |                | PRIMARY     |        1 |         0 |    64 |       1 | 1846693550524203008 | 1846838686059069440 |
+		| test    | testa      |                | PRIMARY     |        1 |         1 |   128 |       1 | 1846840885082324992 | 1847056389361369088 |
+		+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
 	*/
 	buckets := make(map[string][]Bucket)
 	query := "SHOW STATS_BUCKETS WHERE db_name= ? AND table_name= ?;"
@@ -426,7 +425,6 @@ func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string, table
 		default:
 			return nil, errors.New("Unknown struct for buckets info")
 		}
-
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -464,12 +462,15 @@ func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string, table
 // upperBound and lowerBound are looks like '(123, abc)' for multiple fields, or '123' for one field.
 func AnalyzeValuesFromBuckets(valueString string, cols []*model.ColumnInfo) ([]string, error) {
 	// FIXME: maybe some values contains '(', ')' or ', '
-	vStr := strings.Trim(strings.Trim(valueString, "("), ")")
+	vStr := strings.Trim(valueString, "()")
 	values := strings.Split(vStr, ", ")
+	if len(values) != len(cols) {
+		return nil, errors.Errorf("analyze value %s failed", valueString)
+	}
 
 	for i, col := range cols {
-		if IsTimeType(col.Tp) {
-			value, err := DecodeTimeInBucket(values[i], col.Tp)
+		if IsTimeTypeAndNeedDecode(col.Tp) {
+			value, err := DecodeTimeInBucket(values[i])
 			if err != nil {
 				return nil, errors.Trace(err)
 			}
@@ -482,33 +483,22 @@ func AnalyzeValuesFromBuckets(valueString string, cols []*model.ColumnInfo) ([]s
 }
 
 // DecodeTimeInBucket decodes Time from a packed uint64 value.
-// reference: https://github.com/pingcap/tidb/blob/08f0168a6caea0280d6157e5be69f2dc6fd0d5b3/types/time.go#L449
-func DecodeTimeInBucket(packedStr string, tp byte) (string, error) {
-	var t types.Time
-
+func DecodeTimeInBucket(packedStr string) (string, error) {
 	packed, err := strconv.ParseUint(packedStr, 10, 64)
 	if err != nil {
 		return "", err
 	}
 
 	if packed == 0 {
-		t.Time = types.ZeroTime
 		return "", nil
 	}
-	ymdhms := packed >> 24
-	ymd := ymdhms >> 17
-	day := int(ymd & (1<<5 - 1))
-	ym := ymd >> 5
-	month := int(ym % 13)
-	year := int(ym / 13)
 
-	hms := ymdhms & (1<<17 - 1)
-	second := int(hms & (1<<6 - 1))
-	minute := int((hms >> 6) & (1<<6 - 1))
-	hour := int(hms >> 12)
-	microsec := int(packed % (1 << 24))
+	t := new(types.Time)
+	err = t.FromPackedUint(packed)
+	if err != nil {
+		return "", err
+	}
 
-	t.Time = types.FromDate(year, month, day, hour, minute, second, microsec)
 	return t.String(), nil
 }
 
@@ -615,6 +605,7 @@ func escapeName(name string) string {
 }
 
 // ReplacePlaceholder will use args to replace '?', used for log.
+// tips: make sure the num of "?" is same with len(args)
 func ReplacePlaceholder(str string, args []string) string {
 	/*
 		for example:
@@ -623,4 +614,5 @@ func ReplacePlaceholder(str string, args []string) string {
 	*/
 	newStr := strings.Replace(str, "?", "'%s'", -1)
 	return fmt.Sprintf(newStr, utils.StringsToInterfaces(args)...)
+
 }

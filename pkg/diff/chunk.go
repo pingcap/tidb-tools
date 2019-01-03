@@ -81,8 +81,9 @@ func (c *chunkRange) toString(mode string, collation string) (string, []string) 
 			}
 		}
 
+		log.Infof("conditions: %v, length: %d", conditions, len(conditions))
 		if len(conditions) == 0 {
-			return "true", nil
+			return "TRUE", nil
 		}
 
 		return strings.Join(conditions, " AND "), args
@@ -126,6 +127,10 @@ func (c *chunkRange) toString(mode string, collation string) (string, []string) 
 			preConditionForUpper = append(preConditionForUpper, fmt.Sprintf("`%s` = ?", bound.column))
 			preConditionArgsForUpper = append(preConditionArgsForUpper, bound.upper)
 		}
+	}
+
+	if len(upperCondition) == 0 && len(lowerCondition) == 0 {
+		return "TRUE", nil
 	}
 
 	if len(upperCondition) == 0 {
@@ -545,6 +550,10 @@ func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSiz
 		chunks = chunks[1:]
 
 		conditions, args := chunk.toString(mode, collation)
+		log.Infof("conditions: %s", conditions)
+		for _, bound := range chunk.bounds {
+			log.Infof("bound: %+v", bound)
+		}
 		where := fmt.Sprintf("(%s AND %s)", conditions, limits)
 
 		log.Debugf("%s.%s create check job, where: %s, args: %v", table.Schema, table.Table, where, args)

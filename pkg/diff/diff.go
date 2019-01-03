@@ -151,7 +151,7 @@ func (t *TableDiff) adjustConfig() {
 	}
 
 	if len(t.Range) == 0 {
-		t.Range = "true"
+		t.Range = "TRUE"
 	}
 	if t.Sample <= 0 {
 		t.Sample = 100

@@ -39,7 +39,7 @@ tables = ["test1", "test2", "test3"]
 
 # support regular expression, must start with '~'.
 # for example, this config will check tables with prefix 'test'.
-# tables = ["~test*"]
+# tables = ["~^test.*"]
 
 
 # schema and table in table-config must be contained in check-tables.
