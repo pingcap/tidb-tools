@@ -17,7 +17,7 @@ skip 或 replace 异常 SQL
 
 ### 功能介绍
 
-目前 TiDB 并不兼容所有的 MySQL 语法（TiDB 支持的 DDL 语法见 <https://pingcap.com/docs-cn/sql/ddl/>），当使用 DM 从 MySQL 同步数据到 TiDB 时，可能会由于 TiDB 不支持对应 SQL 语句报错而造成同步中断。
+目前 TiDB 并不兼容所有的 MySQL 语法（TiDB 支持的 DDL 语法见 <https://pingcap.com/docs-cn/sql/ddl/>），当使用 DM 从 MySQL 同步数据到 TiDB 时，可能会由于 TiDB 不支持对应 SQL 语句，执行报错而造成同步中断。
 
 当由于 TiDB 不支持的 SQL 导致同步出错时，可以使用 dmctl 来手动选择跳过该 SQL 对应的 binlog event 或使用其它指定的 SQL 来替代对应的 binlog event 向下游执行以恢复同步任务。
 
