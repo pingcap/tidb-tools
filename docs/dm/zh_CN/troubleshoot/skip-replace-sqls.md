@@ -21,7 +21,7 @@ skip 或 replace 异常 SQL
 
 当由于 TiDB 不支持的 SQL 导致同步出错时，可以使用 dmctl 来手动选择跳过该 SQL 对应的 binlog event 或使用其它指定的 SQL 来替代对应的 binlog event 向下游执行以恢复同步任务。
 
-当提前预知会有 TiDB 不支持的 SQL 将要被同步时，也可以使用 dmctl 来手动预设跳过/替代操作，当尝试同步该 SQL 对应的 binlog event 到下游时自动执行预设的操作，避免同步过程被中断。
+当提前预知会有 TiDB 不支持的 SQL 将要被同步时，也可以使用 dmctl 来手动预设跳过/替代操作，当 DM 尝试同步该 SQL 对应的 binlog event 到下游时自动执行预设的操作，避免同步过程被中断。
 
 注意：
 - skip 或 replace 只适合用于一次性跳过/替代执行 **下游 TiDB 不支持执行的 SQL**，其它同步错误请不要使用此方式进行处理
