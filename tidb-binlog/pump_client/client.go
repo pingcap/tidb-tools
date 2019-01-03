@@ -161,6 +161,11 @@ func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.Secur
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+
+	if len(newPumpsClient.Pumps.Pumps) == 0 {
+		return nil, errors.New("no pump found in pd")
+	}
+
 	newPumpsClient.Selector.SetPumps(copyPumps(newPumpsClient.Pumps.AvaliablePumps))
 
 	newPumpsClient.RetryTime = DefaultAllRetryTime / len(newPumpsClient.Pumps.Pumps)
