@@ -157,7 +157,7 @@ func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.Secur
 		Security:           security,
 	}
 
-	err = newPumpsClient.getPumpStatus(ctx)
+	revision, err := newPumpsClient.getPumpStatus(ctx)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -174,7 +174,7 @@ func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.Secur
 	}
 
 	newPumpsClient.wg.Add(2)
-	go newPumpsClient.watchStatus()
+	go newPumpsClient.watchStatus(revision)
 	go newPumpsClient.detect()
 
 	return newPumpsClient, nil
@@ -229,10 +229,10 @@ func (c *PumpsClient) getLocalPumpStatus(pctx context.Context) {
 }
 
 // getPumpStatus gets all the pumps status in the etcd.
-func (c *PumpsClient) getPumpStatus(pctx context.Context) error {
-	nodesStatus, err := c.EtcdRegistry.Nodes(pctx, node.NodePrefix[node.PumpNode])
+func (c *PumpsClient) getPumpStatus(pctx context.Context) (revision int64, err error) {
+	nodesStatus, revision, err := c.EtcdRegistry.Nodes(pctx, node.NodePrefix[node.PumpNode])
 	if err != nil {
-		return errors.Trace(err)
+		return -1, errors.Trace(err)
 	}
 
 	for _, status := range nodesStatus {
@@ -240,7 +240,7 @@ func (c *PumpsClient) getPumpStatus(pctx context.Context) error {
 		c.addPump(NewPumpStatus(status, c.Security), false)
 	}
 
-	return nil
+	return revision, nil
 }
 
 // WriteBinlog writes binlog to a situable pump.
@@ -328,27 +328,26 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 
 // setPumpAvaliable set pump's isAvaliable, and modify UnAvaliablePumps or AvaliablePumps.
 func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
+	c.Pumps.Lock()
+	defer c.Pumps.Unlock()
+
 	pump.IsAvaliable = avaliable
+	pump.ResetGrpcClient()
+
 	if pump.IsAvaliable {
-		c.Pumps.Lock()
 		delete(c.Pumps.UnAvaliablePumps, pump.NodeID)
 		if _, ok := c.Pumps.Pumps[pump.NodeID]; ok {
 			c.Pumps.AvaliablePumps[pump.NodeID] = pump
 		}
-		c.Pumps.Unlock()
 
 	} else {
-		c.Pumps.Lock()
 		delete(c.Pumps.AvaliablePumps, pump.NodeID)
 		if _, ok := c.Pumps.Pumps[pump.NodeID]; ok {
 			c.Pumps.UnAvaliablePumps[pump.NodeID] = pump
 		}
-		c.Pumps.Unlock()
 	}
 
-	c.Pumps.Lock()
 	c.Selector.SetPumps(copyPumps(c.Pumps.AvaliablePumps))
-	c.Pumps.Unlock()
 }
 
 // addPump add a new pump.
@@ -412,10 +411,10 @@ func (c *PumpsClient) exist(nodeID string) bool {
 }
 
 // watchStatus watchs pump's status in etcd.
-func (c *PumpsClient) watchStatus() {
+func (c *PumpsClient) watchStatus(revision int64) {
 	defer c.wg.Done()
 	rootPath := path.Join(node.DefaultRootPath, node.NodePrefix[node.PumpNode])
-	rch := c.EtcdRegistry.WatchNode(c.ctx, rootPath)
+	rch := c.EtcdRegistry.WatchNode(c.ctx, rootPath, revision)
 	for {
 		select {
 		case <-c.ctx.Done():
@@ -426,12 +425,13 @@ func (c *PumpsClient) watchStatus() {
 			if err != nil {
 				Logger.Warnf("[pumps client] watch status meet error %v", err)
 				// meet error, some event may missed, get all the pump's information from etcd again.
-				err = c.getPumpStatus(c.ctx)
+				revision, err = c.getPumpStatus(c.ctx)
 				if err == nil {
 					c.Pumps.Lock()
 					c.Selector.SetPumps(copyPumps(c.Pumps.AvaliablePumps))
 					c.Pumps.Unlock()
 				}
+				rch = c.EtcdRegistry.WatchNode(c.ctx, rootPath, revision)
 				continue
 			}
 
