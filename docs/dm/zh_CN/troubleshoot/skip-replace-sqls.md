@@ -30,9 +30,8 @@ skip 或 replace 异常 SQL
     - 比如：DROP PRIMARY KEY
     - 此时只能在下游重建（DDL 执行完后的）新表结构对应的表，并完整重导该表的全部数据
 - 单次 skip 或 replace 操作都是针对单个 binlog event 的
-- `--sharding` 操作都是针对 sharding DDL lock 的 owner 的，且此时只能使用 `--sql-pattern` 来进行匹配
 - `--sharding` 仅用于对 sharding group 预设操作，必须在 DDL 执行之前预设，不能在 DDL 已经执行后预设
-    - `--sharding` 模式，只支持预设
+    - `--sharding` 模式，只支持预设，只能使用 `--sql-pattern` 来进行匹配
 
 
 ### 支持场景
@@ -248,7 +247,8 @@ ALTER TABLE db1.tbl1 CHANGE c2 c2 DECIMAL (10, 3);
 则会由于 TiDB 不支持该 DDL 而导致 DM 同步任务中断且报如下错误：
 
 ```bash
-exec sqls[[USE `db1`; ALTER TABLE `db1`.`tbl1` CHANGE COLUMN `c2` `c2` decimal(10,3);]] failed, err:Error 1105: unsupported modify column length 10 is less than origin 11
+exec sqls[[USE `db1`; ALTER TABLE `db1`.`tbl1` CHANGE COLUMN `c2` `c2` decimal(10,3);]] failed, 
+err:Error 1105: unsupported modify column length 10 is less than origin 11
 ```
 
 此时使用 `query-status` 查询任务状态，可看到 `stage` 转为了 `Paused` 且 `errors` 中有相关的错误描述信息。
@@ -279,7 +279,8 @@ exec sqls[[USE `db1`; ALTER TABLE `db1`.`tbl1` CHANGE COLUMN `c2` `c2` decimal(1
     ```
     对应 DM-worker 节点中也可以看到类似如下 log：
     ```bash
-    2018/12/28 11:17:51 operator.go:136: [info] [sql-operator] set a new operator uuid: 6bfcf30f-2841-4d70-9a34-28d7082bdbd7, pos: (mysql-bin|000001.000003, 34642), op: SKIP, args:
+    2018/12/28 11:17:51 operator.go:136: [info] [sql-operator] set a new operator 
+    uuid: 6bfcf30f-2841-4d70-9a34-28d7082bdbd7, pos: (mysql-bin|000001.000003, 34642), op: SKIP, args:
     ```
 3. 使用 `resume-task` 恢复之前出错中断的 task
     ```bash
@@ -300,7 +301,8 @@ exec sqls[[USE `db1`; ALTER TABLE `db1`.`tbl1` CHANGE COLUMN `c2` `c2` decimal(1
     ```
     对应 DM-worker 节点中也可以看到类似如下 log：
     ```bash
-    2018/12/28 11:27:46 operator.go:173: [info] [sql-operator] binlog-pos (mysql-bin|000001.000003, 34642) matched, applying operator uuid: 6bfcf30f-2841-4d70-9a34-28d7082bdbd7, pos: (mysql-bin|000001.000003, 34642), op: SKIP, args:
+    2018/12/28 11:27:46 operator.go:173: [info] [sql-operator] binlog-pos (mysql-bin|000001.000003, 34642) matched, 
+    applying operator uuid: 6bfcf30f-2841-4d70-9a34-28d7082bdbd7, pos: (mysql-bin|000001.000003, 34642), op: SKIP, args:
     ```
 4. 使用 `query-status` 确认任务 `stage` 已经转为 `Running`
 5. 使用 `query-error` 确认原错误信息已经不存在
@@ -337,7 +339,8 @@ ALTER TABLE db2.tbl2 DROP COLUMN c2;
 假设使用 DM 进行同步，则当同步该 DDL 对应的 binlog event 到下游时，会由于 TiDB 不支持该 DDL 而导致 DM 同步任务中断且报如下错误：
 
 ```bash
-exec sqls[[USE `db2`; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`;]] failed, err:Error 1105: can't drop column c2 with index covered now
+exec sqls[[USE `db2`; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`;]] failed, 
+err:Error 1105: can't drop column c2 with index covered now
 ```
 
 **但如果我们在上游实际执行该 DDL 前，已经知道该 DDL 不被 TiDB 所支持。** 则我们可以使用 `sql-skip` / `sql-replace` 为此 DDL 提前预设一个跳过（skip）/替代执行（replace）操作。
@@ -373,12 +376,19 @@ exec sqls[[USE `db2`; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`;]] failed, err:E
     ```
     对应 DM-worker 节点中也可以看到类似如下 log：
     ```bash
-    2018/12/28 15:33:13 operator.go:136: [info] [sql-operator] set a new operator uuid: c699a18a-8e75-47eb-8e7e-0e5abde2053c, pattern: ~(?i)ALTER\s+TABLE\s+`db2`.`tbl2`\s+DROP\s+COLUMN\s+`c2`, op: REPLACE, args: ALTER TABLE `db2`.`tbl2` DROP INDEX idx_c2; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`
+    2018/12/28 15:33:13 operator.go:136: [info] [sql-operator] set a new operator 
+    uuid: c699a18a-8e75-47eb-8e7e-0e5abde2053c, pattern: ~(?i)ALTER\s+TABLE\s+`db2`.`tbl2`\s+DROP\s+COLUMN\s+`c2`, 
+    op: REPLACE, args: ALTER TABLE `db2`.`tbl2` DROP INDEX idx_c2; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`
     ```
 4. 在上游 MySQL 执行 DDL
 5. 观察下游表结构是否变更成功，对应 DM-worker 节点中也可以看到类似如下 log：
     ```bash
-    2018/12/28 15:33:45 operator.go:173: [info] [sql-operator] sql-pattern ~(?i)ALTER\s+TABLE\s+`db2`.`tbl2`\s+DROP\s+COLUMN\s+`c2` matched SQL USE `db2`; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`;, applying operator uuid: c699a18a-8e75-47eb-8e7e-0e5abde2053c, pattern: ~(?i)ALTER\s+TABLE\s+`db2`.`tbl2`\s+DROP\s+COLUMN\s+`c2`, op: REPLACE, args: ALTER TABLE `db2`.`tbl2` DROP INDEX idx_c2; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`
+    2018/12/28 15:33:45 operator.go:173: [info] [sql-operator] 
+    sql-pattern ~(?i)ALTER\s+TABLE\s+`db2`.`tbl2`\s+DROP\s+COLUMN\s+`c2` matched SQL 
+    USE `db2`; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`;, 
+    applying operator uuid: c699a18a-8e75-47eb-8e7e-0e5abde2053c, 
+    pattern: ~(?i)ALTER\s+TABLE\s+`db2`.`tbl2`\s+DROP\s+COLUMN\s+`c2`, 
+    op: REPLACE, args: ALTER TABLE `db2`.`tbl2` DROP INDEX idx_c2; ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2`
     ```
 6. 使用 `query-status` 确认任务 `stage` 持续为 `Running`
 7. 使用 `query-error` 确认不存在 DDL 执行错误
@@ -439,7 +449,8 @@ ALTER TABLE shard_db_*.shard_table_* DROP COLUMN c2;
 则当 DM 通过 sharding DDL lock 协调 2 个 DM-worker 同步该 DDL、请求 DDL lock owner 向下游 TiDB 执行该 DDL 时，会由于 TiDB 不支持该 DDL 而导致 DM 同步任务中断且报如下错误：
 
 ```bash
-exec sqls[[USE `shard_db`; ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`;]] failed, err:Error 1105: can't drop column c2 with index covered now
+exec sqls[[USE `shard_db`; ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`;]] failed,
+err:Error 1105: can't drop column c2 with index covered now
 ```
 
 **但如果我们在上游实际执行该 DDL 前，已经知道该 DDL 不被 TiDB 所支持。** 则我们可以使用 `sql-skip` / `sql-replace` 为此 DDL 提前预设一个跳过（skip）/替代执行（replace）操作。
@@ -471,22 +482,47 @@ exec sqls[[USE `shard_db`; ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`
     ```
     **DM-master** 节点中也可以看到类似如下 log：
     ```bash
-    2018/12/28 16:53:33 operator.go:108: [info] [sql-operator] set a new operator uuid: eba35acd-6c5e-4bc3-b0b0-ae8bd1232351, request: name:"test" op:REPLACE args:"ALTER TABLE `shard_db`.`shard_table` DROP INDEX idx_c2;" args:"ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`" sqlPattern:"~(?i)ALTER\\s+TABLE\\s+`shard_db`.`shard_table`\\s+DROP\\s+COLUMN\\s+`c2`" sharding:true
+    2018/12/28 16:53:33 operator.go:108: [info] [sql-operator] set a new operator 
+    uuid: eba35acd-6c5e-4bc3-b0b0-ae8bd1232351, request: name:"test" 
+    op:REPLACE args:"ALTER TABLE `shard_db`.`shard_table` DROP INDEX idx_c2;" 
+    args:"ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`" 
+    sqlPattern:"~(?i)ALTER\\s+TABLE\\s+`shard_db`.`shard_table`\\s+DROP\\s+COLUMN\\s+`c2`" 
+    sharding:true
     ```
 5. 在上游 MySQL 实例的分表上执行 DDL
 6. 观察下游表结构是否变更成功，对应的 DDL lock **owner** 节点中也可以看到类型如下的 log：
     ```bash
-    2018/12/28 16:54:35 operator.go:136: [info] [sql-operator] set a new operator uuid: c959f2fb-f1c2-40c7-a1fa-e73cd51736dd, pattern: ~(?i)ALTER\s+TABLE\s+`shard_db`.`shard_table`\s+DROP\s+COLUMN\s+`c2`, op: REPLACE, args: ALTER TABLE `shard_db`.`shard_table` DROP INDEX idx_c2; ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`
+    2018/12/28 16:54:35 operator.go:136: [info] [sql-operator] set a new operator 
+    uuid: c959f2fb-f1c2-40c7-a1fa-e73cd51736dd, 
+    pattern: ~(?i)ALTER\s+TABLE\s+`shard_db`.`shard_table`\s+DROP\s+COLUMN\s+`c2`, 
+    op: REPLACE, args: ALTER TABLE `shard_db`.`shard_table` DROP INDEX idx_c2; ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`
     ```
     ```bash
-    2018/12/28 16:54:35 operator.go:173: [info] [sql-operator] sql-pattern ~(?i)ALTER\s+TABLE\s+`shard_db`.`shard_table`\s+DROP\s+COLUMN\s+`c2` matched SQL USE `shard_db`; ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`;, applying operator uuid: c959f2fb-f1c2-40c7-a1fa-e73cd51736dd, pattern: ~(?i)ALTER\s+TABLE\s+`shard_db`.`shard_table`\s+DROP\s+COLUMN\s+`c2`, op: REPLACE, args: ALTER TABLE `shard_db`.`shard_table` DROP INDEX idx_c2; ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`
+    2018/12/28 16:54:35 operator.go:173: [info] [sql-operator] 
+    sql-pattern ~(?i)ALTER\s+TABLE\s+`shard_db`.`shard_table`\s+DROP\s+COLUMN\s+`c2` matched SQL 
+    USE `shard_db`; ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`;, 
+    applying operator uuid: c959f2fb-f1c2-40c7-a1fa-e73cd51736dd, 
+    pattern: ~(?i)ALTER\s+TABLE\s+`shard_db`.`shard_table`\s+DROP\s+COLUMN\s+`c2`, 
+    op: REPLACE, args: ALTER TABLE `shard_db`.`shard_table` DROP INDEX idx_c2; ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`
     ```
     同时，**DM-master** 节点中也可以看到类似如下 log：
     ```bash
-    2018/12/28 16:54:35 operator.go:125: [info] [sql-operator] get an operator uuid: eba35acd-6c5e-4bc3-b0b0-ae8bd1232351, request: name:"test" op:REPLACE args:"ALTER TABLE `shard_db`.`shard_table` DROP INDEX idx_c2;" args:"ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`" sqlPattern:"~(?i)ALTER\\s+TABLE\\s+`shard_db`.`shard_table`\\s+DROP\\s+COLUMN\\s+`c2`" sharding:true  with key ~(?i)ALTER\s+TABLE\s+`shard_db`.`shard_table`\s+DROP\s+COLUMN\s+`c2` matched SQL USE `shard_db`; ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`;
+    2018/12/28 16:54:35 operator.go:125: [info] [sql-operator] get an operator 
+    uuid: eba35acd-6c5e-4bc3-b0b0-ae8bd1232351, request: name:"test" op:REPLACE 
+    args:"ALTER TABLE `shard_db`.`shard_table` DROP INDEX idx_c2;" 
+    args:"ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`" 
+    sqlPattern:"~(?i)ALTER\\s+TABLE\\s+`shard_db`.`shard_table`\\s+DROP\\s+COLUMN\\s+`c2`" 
+    sharding:true  
+    with key ~(?i)ALTER\s+TABLE\s+`shard_db`.`shard_table`\s+DROP\s+COLUMN\s+`c2` matched SQL 
+    USE `shard_db`; ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`;
     ```
     ```bash
-    2018/12/28 16:54:36 operator.go:148: [info] [sql-operator] remove an operator uuid: eba35acd-6c5e-4bc3-b0b0-ae8bd1232351, request: name:"test" op:REPLACE args:"ALTER TABLE `shard_db`.`shard_table` DROP INDEX idx_c2;" args:"ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`" sqlPattern:"~(?i)ALTER\\s+TABLE\\s+`shard_db`.`shard_table`\\s+DROP\\s+COLUMN\\s+`c2`" sharding:true
+    2018/12/28 16:54:36 operator.go:148: [info] [sql-operator] remove an operator 
+    uuid: eba35acd-6c5e-4bc3-b0b0-ae8bd1232351, request: name:"test" op:REPLACE 
+    args:"ALTER TABLE `shard_db`.`shard_table` DROP INDEX idx_c2;" 
+    args:"ALTER TABLE `shard_db`.`shard_table` DROP COLUMN `c2`" 
+    sqlPattern:"~(?i)ALTER\\s+TABLE\\s+`shard_db`.`shard_table`\\s+DROP\\s+COLUMN\\s+`c2`" 
+    sharding:true
     ```
 7. 使用 `query-status` 确认任务 `stage` 持续为 `Running` 且不存在正阻塞同步的 DDL（`blockingDDLs`） 与待解决的 sharding group（`unresolvedGroups`）
 8. 使用 `query-error` 确认不存在 DDL 执行错误
