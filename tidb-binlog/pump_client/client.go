@@ -281,6 +281,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 
 		}
 		if pump == nil {
+			err = ErrNoAvaliablePump
 			break
 		}
 		Logger.Debugf("[pumps client] write binlog choose pump %s", pump.NodeID)

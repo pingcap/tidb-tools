@@ -97,6 +97,7 @@ func (h *HashSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 	}
 
 	if len(h.Pumps) == 0 {
+		h.TsMap[binlog.StartTs] = nil
 		return nil
 	}
 
@@ -165,6 +166,7 @@ func (r *RangeSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 	}
 
 	if len(r.Pumps) == 0 {
+		r.TsMap[binlog.StartTs] = nil
 		return nil
 	}
 
