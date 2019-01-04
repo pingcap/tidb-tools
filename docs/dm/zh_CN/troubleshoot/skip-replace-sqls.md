@@ -100,7 +100,8 @@ DM 在进行增量数据同步时，简化后的流程大致可表述为：
 
 **限制：**
 
-- 一个 binlog event 只能注册一个 operator，后注册的 operator 会覆盖之前已经注册的 operator
+- 一个 binlog event 只能注册一个使用 `--binlog-pos` 指定的 operator，后注册的 operator 会覆盖之前已经注册的 operator
+- 不要尝试为一个 binlog event 同时使用 `--binlog-pos` 和 `--sql-pattern` 指定 operator
 - operator 在与 binlog event 匹配成功后（而非执行成功后）即会被删除，后续如果需要再进行（`--sql-pattern`）匹配需要重新注册
 
 
