@@ -113,7 +113,7 @@ func (*testClientSuite) testSelector(c *C, algorithm string) {
 		if nodeID != "" {
 			pumpsClient.setPumpAvaliable(pumpsClient.Pumps.Pumps[nodeID], tCase.setAvliable[i])
 		}
-		pump := pumpsClient.Selector.Select(tCase.binlogs[i])
+		pump := pumpsClient.Selector.Select(tCase.binlogs[i], 0)
 		c.Assert(pump, Equals, tCase.choosePumps[i])
 	}
 
@@ -127,13 +127,13 @@ func (*testClientSuite) testSelector(c *C, algorithm string) {
 			StartTs: int64(j),
 		}
 
-		pump1 := pumpsClient.Selector.Select(prewriteBinlog)
+		pump1 := pumpsClient.Selector.Select(prewriteBinlog, 0)
 		if j%2 == 0 {
-			pump1 = pumpsClient.Selector.Next(prewriteBinlog, 0)
+			pump1 = pumpsClient.Selector.Select(prewriteBinlog, 1)
 		}
 
 		pumpsClient.setPumpAvaliable(pump1, false)
-		pump2 := pumpsClient.Selector.Select(commitBinlog)
+		pump2 := pumpsClient.Selector.Select(commitBinlog, 0)
 		c.Assert(pump2.IsAvaliable, Equals, false)
 		// prewrite binlog and commit binlog with same start ts should choose same pump
 		c.Assert(pump1.NodeID, Equals, pump2.NodeID)
@@ -158,7 +158,8 @@ func (t *testClientSuite) TestWriteBinlog(c *C) {
 	}
 
 	// make test faster
-	RetryInterval = 100 * time.Millisecond
+	RetryIntervalEach = 100 * time.Millisecond
+	RetryIntervalTotal = 100 * time.Millisecond
 	CommitBinlogMaxRetryTime = time.Second
 
 	for _, cfg := range pumpServerConfig {

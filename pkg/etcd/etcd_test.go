@@ -71,7 +71,7 @@ func (t *testEtcdSuite) TestCreateWithTTL(c *C) {
 	c.Assert(err, IsNil)
 
 	time.Sleep(2 * time.Second)
-	_, err = etcdCli.Get(ctx, key)
+	_, _, err = etcdCli.Get(ctx, key)
 	c.Assert(errors.IsNotFound(err), IsTrue)
 }
 
@@ -106,12 +106,12 @@ func (t *testEtcdSuite) TestUpdate(c *C) {
 
 	time.Sleep(2 * time.Second)
 
-	res, err := etcdCli.Get(ctx, key)
+	res, _, err := etcdCli.Get(ctx, key)
 	c.Assert(err, IsNil)
 	c.Assert(string(res), Equals, obj2)
 
 	time.Sleep(2 * time.Second)
-	res, err = etcdCli.Get(ctx, key)
+	res, _, err = etcdCli.Get(ctx, key)
 	c.Assert(errors.IsNotFound(err), IsTrue)
 }
 
@@ -142,7 +142,7 @@ func (t *testEtcdSuite) TestList(c *C) {
 	err = etcdCli.Create(ctx, k11, k11, nil)
 	c.Assert(err, IsNil)
 
-	root, err := etcdCli.List(ctx, key)
+	root, _, err := etcdCli.List(ctx, key)
 	c.Assert(err, IsNil)
 	c.Assert(string(root.Childs["level1"].Value), Equals, k1)
 	c.Assert(string(root.Childs["level1"].Childs["level1"].Value), Equals, k11)
@@ -158,21 +158,21 @@ func (t *testEtcdSuite) TestDelete(c *C) {
 		c.Assert(err, IsNil)
 	}
 
-	root, err := etcdCli.List(ctx, key)
+	root, _, err := etcdCli.List(ctx, key)
 	c.Assert(err, IsNil)
 	c.Assert(root.Childs, HasLen, 2)
 
 	err = etcdCli.Delete(ctx, keys[1], false)
 	c.Assert(err, IsNil)
 
-	root, err = etcdCli.List(ctx, key)
+	root, _, err = etcdCli.List(ctx, key)
 	c.Assert(err, IsNil)
 	c.Assert(root.Childs, HasLen, 1)
 
 	err = etcdCli.Delete(ctx, key, true)
 	c.Assert(err, IsNil)
 
-	root, err = etcdCli.List(ctx, key)
+	root, _, err = etcdCli.List(ctx, key)
 	c.Assert(err, IsNil)
 	c.Assert(root.Childs, HasLen, 0)
 }
