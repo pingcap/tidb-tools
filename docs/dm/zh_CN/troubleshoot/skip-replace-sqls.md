@@ -4,9 +4,9 @@ skip 或 replace 异常 SQL
 ### 索引
 
 - [功能介绍](#功能介绍)
+    - [如何匹配 binlog event](#如何匹配-binlog-event)
 - [支持场景](#支持场景)
 - [实现原理](#实现原理)
-    - [如何匹配 binlog event](#如何匹配-binlog-event)
 - [命令介绍](#命令介绍)
 - [使用示例](#使用示例)
     - [出错后被动 skip](#出错后被动-skip)
@@ -32,6 +32,29 @@ skip 或 replace 异常 SQL
 - 单次 skip 或 replace 操作都是针对单个 binlog event 的
 - `--sharding` 仅用于对 sharding group 预设操作，必须在 DDL 执行之前预设，不能在 DDL 已经执行后预设
     - `--sharding` 模式，只支持预设，只能使用 `--sql-pattern` 来进行匹配
+
+
+#### 如何匹配 binlog event
+
+当同步任务由于执行 SQL 出错而中断时，可以使用 `query-error` 获取对应 binlog event 的 position 信息。通过在 `sql-skip` / `sql-replace` 执行时指定该 position 信息，即可与对应的 binlog event 进行匹配。
+
+但当需要在同步中断前主动处理 SQL 不被支持的情况以避免同步任务中断时，由于无法提前预知 binlog event 的 position 信息，因此需要使用其它方式来确保与后续将到达的 binlog event 进行匹配。
+
+在 DM 中，支持如下两种方式的 binlog event 匹配模式（两种模式只能二选其一）：
+1. binlog position: 在 DM 中的 binlog filename 与上游 MySQL 中的 filename 不完全一致
+    - 在命令中使用 `--binlog-pos` 参数传入，格式为 `binlog-filename:binlog-pos`，如 `mysql-bin|000001.000003:3270`
+    - 在同步执行出错后，可直接从 `query-error` 返回的 `failedBinlogPosition` 中获得
+2. DDL pattern: （仅限于 DDL 的）正则表达式匹配模式，以 `~` 为前缀，不包含原始空格（字符串中空格以 `\s` 或 `\s+` 表示）
+    - 在命令中使用 `--sql-pattern` 参数传入，如要匹配 ``` ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2` ```，则对应的正则表达式为 ``` ~(?i)ALTER\s+TABLE\s+`db2`.`tbl2`\s+DROP\s+COLUMN\s+`c2` ```
+
+对于合库合表场景，如果需要由 DM 自动选择 DDL lock owner 来执行跳过/替代执行操作，则由于不同 DM-worker 上 DDL 对应的 binlog position 无逻辑关联且难以确定，因此只能使用 DDL pattern 匹配模式。
+
+
+**限制：**
+
+- 一个 binlog event 只能注册一个使用 `--binlog-pos` 指定的 operator，后注册的 operator 会覆盖之前已经注册的 operator
+- 不要尝试为一个 binlog event 同时使用 `--binlog-pos` 和 `--sql-pattern` 指定 operator
+- operator 在与 binlog event 匹配成功后（而非执行成功后）即会被删除，后续如果需要再进行（`--sql-pattern`）匹配需要重新注册
 
 
 ### 支持场景
@@ -80,29 +103,6 @@ DM 在进行增量数据同步时，简化后的流程大致可表述为：
 5. DM-master 请求 DDL lock owner 执行 DDL
 6. DDL lock owner 将要执行的 DDL 与 step.4 收到的 operator 匹配成功
 7. 执行 operator 对应的操作（skip/replace）后，继续执行同步任务
-
-
-#### 如何匹配 binlog event
-
-当同步任务由于执行 SQL 出错而中断时，可以使用 `query-error` 获取对应 binlog event 的 position 信息。通过在 `sql-skip` / `sql-replace` 执行时指定该 position 信息，即可与对应的 binlog event 进行匹配。
-
-但当需要在同步中断前主动处理 SQL 不被支持的情况以避免同步任务中断时，由于无法提前预知 binlog event 的 position 信息，因此需要使用其它方式来确保与后续将到达的 binlog event 进行匹配。
-
-在 DM 中，支持如下两种方式的 binlog event 匹配模式（两种模式只能二选其一）：
-1. binlog position: 在 DM 中的 binlog filename 与上游 MySQL 中的 filename 不完全一致
-    - 在命令中使用 `--binlog-pos` 参数传入，格式为 `binlog-filename:binlog-pos`，如 `mysql-bin|000001.000003:3270`
-    - 在同步执行出错后，可直接从 `query-error` 返回的 `failedBinlogPosition` 中获得
-2. DDL pattern: （仅限于 DDL 的）正则表达式匹配模式，以 `~` 为前缀，不包含原始空格（字符串中空格以 `\s` 或 `\s+` 表示）
-    - 在命令中使用 `--sql-pattern` 参数传入，如要匹配 ``` ALTER TABLE `db2`.`tbl2` DROP COLUMN `c2` ```，则对应的正则表达式为 ``` ~(?i)ALTER\s+TABLE\s+`db2`.`tbl2`\s+DROP\s+COLUMN\s+`c2` ```
-
-对于合库合表场景，如果需要由 DM 自动选择 DDL lock owner 来执行跳过/替代执行操作，则由于不同 DM-worker 上 DDL 对应的 binlog position 无逻辑关联且难以确定，因此只能使用 DDL pattern 匹配模式。
-
-
-**限制：**
-
-- 一个 binlog event 只能注册一个使用 `--binlog-pos` 指定的 operator，后注册的 operator 会覆盖之前已经注册的 operator
-- 不要尝试为一个 binlog event 同时使用 `--binlog-pos` 和 `--sql-pattern` 指定 operator
-- operator 在与 binlog event 匹配成功后（而非执行成功后）即会被删除，后续如果需要再进行（`--sql-pattern`）匹配需要重新注册
 
 
 ### 命令介绍
