@@ -273,6 +273,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 
 	retryTime := 0
 	var pump *PumpStatus
+	var resp *pb.WriteBinlogResp
 	startTime := time.Now()
 	for {
 		if pump == nil || binlog.Tp == pb.BinlogType_Prewrite {
@@ -284,7 +285,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 		}
 		Logger.Debugf("[pumps client] write binlog choose pump %s", pump.NodeID)
 
-		resp, err := pump.WriteBinlog(req, c.BinlogWriteTimeout)
+		resp, err = pump.WriteBinlog(req, c.BinlogWriteTimeout)
 		if err == nil && resp.Errmsg != "" {
 			err = errors.New(resp.Errmsg)
 		}
@@ -351,6 +352,7 @@ func (c *PumpsClient) backoffWriteBinlog(req *pb.WriteBinlogReq, binlogType pb.B
 				err = errors.New(resp.Errmsg)
 			} else {
 				// if this pump can write binlog success, set this pump to avaliable.
+				Logger.Debugf("[pumps client] write binlog to unavaliable pump %s success, set this pump to avaliable", pump.NodeID)
 				c.setPumpAvaliable(pump, true)
 				return pump, nil
 			}
@@ -527,9 +529,10 @@ func (c *PumpsClient) detect() {
 			for _, pump := range needCheckPumps {
 				_, err := pump.WriteBinlog(req, c.BinlogWriteTimeout)
 				if err == nil {
+					Logger.Debugf("[pumps client] write detect binlog to unavaliable pump %s success", pump.NodeID)
 					checkPassPumps = append(checkPassPumps, pump)
 				} else {
-					Logger.Errorf("[pumps client] write detect binlog to pump %s error %v", pump.NodeID, err)
+					Logger.Debugf("[pumps client] write detect binlog to pump %s error %v", pump.NodeID, err)
 				}
 			}
 
