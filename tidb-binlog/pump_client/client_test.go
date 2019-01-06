@@ -107,7 +107,7 @@ func (*testClientSuite) testSelector(c *C, algorithm string) {
 	tCase.setNodeID = []string{"pump0", "", "pump0", "pump1", "", "pump2"}
 	tCase.setAvliable = []bool{true, false, false, true, false, true}
 	tCase.choosePumps = []*PumpStatus{pumpsClient.Pumps.Pumps["pump0"], pumpsClient.Pumps.Pumps["pump0"], nil,
-		pumpsClient.Pumps.Pumps["pump1"], pumpsClient.Pumps.Pumps["pump1"], pumpsClient.Pumps.Pumps["pump1"]}
+		nil, pumpsClient.Pumps.Pumps["pump1"], pumpsClient.Pumps.Pumps["pump1"]}
 
 	for i, nodeID := range tCase.setNodeID {
 		if nodeID != "" {
@@ -158,9 +158,9 @@ func (t *testClientSuite) TestWriteBinlog(c *C) {
 	}
 
 	// make test faster
-	RetryIntervalEach = 100 * time.Millisecond
-	RetryIntervalTotal = 100 * time.Millisecond
+	RetryInterval = 100 * time.Millisecond
 	CommitBinlogMaxRetryTime = time.Second
+	PreWriteBinlogMaxRetryTime = time.Second
 
 	for _, cfg := range pumpServerConfig {
 		pumpServer, err := createMockPumpServer(cfg.addr, cfg.serverMode)

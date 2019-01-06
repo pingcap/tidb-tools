@@ -62,11 +62,8 @@ var (
 	// PreWriteBinlogMaxRetryTime is the max retry duration time for write prewrite binlog.
 	PreWriteBinlogMaxRetryTime = 10 * time.Second
 
-	// RetryIntervalEach is the interval of retrying to write binlog betweem different pumps.
-	RetryIntervalEach = 100 * time.Millisecond
-
-	// RetryIntervalTotal is the interval after retrying to write binlog use whole the avaliable pumps.
-	RetryIntervalTotal = time.Second
+	// RetryInterval is the interval of retrying to write binlog.
+	RetryInterval = 100 * time.Millisecond
 )
 
 // PumpInfos saves pumps' infomations in pumps client.
@@ -81,6 +78,9 @@ type PumpInfos struct {
 	// UnAvaliablePumps saves the unAvaliable pumps.
 	// And only pump with Online state in this map need check is it avaliable.
 	UnAvaliablePumps map[string]*PumpStatus
+
+	// ErrNums saves the error's num for every pump.
+	ErrNums map[string]int64
 }
 
 // NewPumpInfos returns a PumpInfos.
@@ -89,6 +89,7 @@ func NewPumpInfos() *PumpInfos {
 		Pumps:            make(map[string]*PumpStatus),
 		AvaliablePumps:   make(map[string]*PumpStatus),
 		UnAvaliablePumps: make(map[string]*PumpStatus),
+		ErrNums:          make(map[string]int64),
 	}
 }
 
@@ -251,14 +252,20 @@ func (c *PumpsClient) getPumpStatus(pctx context.Context) (revision int64, err e
 
 // WriteBinlog writes binlog to a situable pump.
 func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
-	errNums := make(map[*PumpStatus]int)
+	errNums := make(map[*PumpStatus]int64)
+	var successPump *PumpStatus
 	defer func() {
-		// if one pump retry more than 5 times and still failed, set this pump unavaliable.
-		for pump, errNum := range errNums {
-			if errNum >= 5 {
-				c.setPumpAvaliable(pump, false)
-			}
+		if len(errNums) == 0 {
+			return
 		}
+
+		for pump, errNum := range errNums {
+			c.addErrNum(pump.NodeID, errNum)
+		}
+		if successPump != nil {
+			c.clearErrNum(successPump.NodeID)
+		}
+		c.checkErr()
 	}()
 
 	commitData, err := binlog.Marshal()
@@ -267,10 +274,6 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 	}
 	req := &pb.WriteBinlogReq{ClusterID: c.ClusterID, Payload: commitData}
 
-	c.Pumps.RLock()
-	pumpNums := len(c.Pumps.AvaliablePumps)
-	c.Pumps.RUnlock()
-
 	retryTime := 0
 	var pump *PumpStatus
 	var resp *pb.WriteBinlogResp
@@ -278,7 +281,6 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 	for {
 		if pump == nil || binlog.Tp == pb.BinlogType_Prewrite {
 			pump = c.Selector.Select(binlog, retryTime)
-
 		}
 		if pump == nil {
 			err = ErrNoAvaliablePump
@@ -291,7 +293,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 			err = errors.New(resp.Errmsg)
 		}
 		if err == nil {
-			delete(errNums, pump)
+			successPump = pump
 			return nil
 		}
 		errNums[pump]++
@@ -315,16 +317,12 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 			retryTime++
 		}
 
-		if retryTime/pumpNums == 0 {
-			time.Sleep(RetryIntervalTotal)
-		} else {
-			time.Sleep(RetryIntervalEach)
-		}
+		time.Sleep(RetryInterval)
 	}
 
 	pump, err1 := c.backoffWriteBinlog(req, binlog.Tp)
 	if err1 == nil {
-		delete(errNums, pump)
+		successPump = pump
 		return nil
 	}
 
@@ -363,12 +361,52 @@ func (c *PumpsClient) backoffWriteBinlog(req *pb.WriteBinlogReq, binlogType pb.B
 	return nil, err
 }
 
+func (c *PumpsClient) addErrNum(nodeID string, num int64) {
+	c.Pumps.Lock()
+	c.Pumps.ErrNums[nodeID] += num
+	c.Pumps.Unlock()
+}
+
+func (c *PumpsClient) clearErrNum(nodeID string) {
+	c.Pumps.RLock()
+	if _, ok := c.Pumps.ErrNums[nodeID]; !ok {
+		c.Pumps.RUnlock()
+		return
+	}
+	c.Pumps.RUnlock()
+
+	c.Pumps.Lock()
+	delete(c.Pumps.ErrNums, nodeID)
+	c.Pumps.Unlock()
+}
+
+// checkErr checks the error num for each pump, if this num is greater than DefaultRetryTime, set this pump to unavaliable.
+func (c *PumpsClient) checkErr() {
+	unAvaliablePumps := make([]*PumpStatus, 0, 3)
+
+	c.Pumps.RLock()
+	for nodeID, num := range c.Pumps.ErrNums {
+		if num >= DefaultRetryTime {
+			if pump, ok := c.Pumps.Pumps[nodeID]; ok {
+				unAvaliablePumps = append(unAvaliablePumps, pump)
+			}
+		}
+	}
+	c.Pumps.RUnlock()
+
+	for _, pump := range unAvaliablePumps {
+		c.setPumpAvaliable(pump, false)
+	}
+
+}
+
 // setPumpAvaliable set pump's isAvaliable, and modify UnAvaliablePumps or AvaliablePumps.
 func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 	c.Pumps.Lock()
 	defer c.Pumps.Unlock()
 
 	pump.IsAvaliable = avaliable
+	delete(c.Pumps.ErrNums, pump.NodeID)
 	pump.ResetGrpcClient()
 
 	if pump.IsAvaliable {
