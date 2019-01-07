@@ -252,14 +252,15 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, checkJobs []*CheckJ
 				return false, errors.Trace(err)
 			}
 			if sourceChecksum == targetChecksum {
-				log.Infof("table: %s, range: %s, args: %v, checksum is equal, checksum: %d", job.Table, job.Where, job.Args, sourceChecksum)
+				log.Infof("table: %s, range: %s, args: %v, checksum is equal, checksum: %d", dbutil.TableName(job.Schema, job.Table), job.Where, job.Args, sourceChecksum)
 				continue
 			}
 
-			log.Errorf("table: %s, range: %s, args: %v, checksum is not equal, one is %d, another is %d", job.Table, job.Where, job.Args, sourceChecksum, targetChecksum)
+			log.Warnf("table: %s, range: %s, args: %v, checksum is not equal, one is %d, another is %d", dbutil.TableName(job.Schema, job.Table), job.Where, job.Args, sourceChecksum, targetChecksum)
 		}
 
 		// if checksum is not equal or don't need compare checksum, compare the data
+		log.Infof("select data from %s for range (where: %s, args: %v) and then check data", dbutil.TableName(job.Schema, job.Table), job.Where, job.Args)
 		sourceRows := make(map[string][]map[string]*dbutil.ColumnData)
 		for i, sourceTable := range t.SourceTables {
 			rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, job.Where, job.Args, SliceToMap(t.IgnoreColumns), t.Collation)
@@ -293,8 +294,6 @@ func (t *TableDiff) compareRows(sourceRows map[string][]map[string]*dbutil.Colum
 		equal     = true
 		rowsData1 = make([]map[string]*dbutil.ColumnData, 0, 100)
 		rowsData2 = make([]map[string]*dbutil.ColumnData, 0, 100)
-		//rowsNull1 = make([]map[string]bool, 0, 100)
-		//rowsNull2 = make([]map[string]bool, 0, 100)
 	)
 
 	rowDatas := &RowDatas{
@@ -321,24 +320,6 @@ func (t *TableDiff) compareRows(sourceRows map[string][]map[string]*dbutil.Colum
 			})
 			sourceMap[source] = struct{}{}
 			sourceOffset[source]++
-
-			/*
-				if rows.Next() {
-					data, null, err := dbutil.ScanRow(rows)
-					if err != nil {
-						return false, errors.Trace(err)
-					}
-					heap.Push(rowDatas, RowData{
-						Data:   data,
-						Null:   null,
-						Source: source,
-					})
-					sourceMap[source] = struct{}{}
-				} else {
-					rows.Close()
-
-				}
-			*/
 		}
 
 		if rowDatas.Len() == 0 {
@@ -350,21 +331,7 @@ func (t *TableDiff) compareRows(sourceRows map[string][]map[string]*dbutil.Colum
 		delete(sourceMap, rowData.Source)
 	}
 
-	//for _, data := range targetRows {
-	//	rowsData2 = append(rowsData2, data.Data)
-	//}
 	rowsData2 = targetRows
-	log.Infof("rowsData1: %v, rowsData2: %v", rowsData1, rowsData2)
-	/*
-		for targetRows.Next() {
-			data2, null2, err := dbutil.ScanRow(targetRows)
-			if err != nil {
-				return false, errors.Trace(err)
-			}
-
-		}
-		targetRows.Close()
-	*/
 
 	var index1, index2 int
 	for {
