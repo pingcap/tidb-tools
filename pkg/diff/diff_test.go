@@ -40,11 +40,11 @@ func (*testDiffSuite) TestGenerateSQLs(c *C) {
 	c.Assert(err, IsNil)
 
 	rowsData := map[string]*dbutil.ColumnData{
-		"id":          &dbutil.ColumnData{[]byte("1"), false},
-		"name":        &dbutil.ColumnData{[]byte("xxx"), false},
-		"birthday":    &dbutil.ColumnData{[]byte("2018-01-01 00:00:00"), false},
-		"update_time": &dbutil.ColumnData{[]byte("10:10:10"), false},
-		"money":       &dbutil.ColumnData{[]byte("11.1111"), false},
+		"id":          {[]byte("1"), false},
+		"name":        {[]byte("xxx"), false},
+		"birthday":    {[]byte("2018-01-01 00:00:00"), false},
+		"update_time": {[]byte("10:10:10"), false},
+		"money":       {[]byte("11.1111"), false},
 	}
 
 	_, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)

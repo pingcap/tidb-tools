@@ -239,7 +239,6 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, checkJobs []*CheckJ
 	}
 
 	for _, job := range checkJobs {
-		log.Infof("check job: %v", job)
 		if t.UseChecksum {
 			// first check the checksum is equal or not
 			sourceChecksum, err := t.getSourceTableChecksum(ctx, job)
@@ -566,5 +565,5 @@ func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableIn
 		datas = append(datas, data)
 	}
 
-	return datas, orderKeyCols, nil
+	return datas, orderKeyCols, errors.Trace(rows.Err())
 }

@@ -46,9 +46,9 @@ func (s *testMergerSuite) TestMerge(c *C) {
 	heap.Init(rowDatas)
 	for i, id := range ids {
 		data := map[string]*dbutil.ColumnData{
-			"id":   &dbutil.ColumnData{[]byte(strconv.Itoa(id)), false},
-			"name": &dbutil.ColumnData{[]byte(names[i]), false},
-			"age":  &dbutil.ColumnData{[]byte(strconv.Itoa(ages[i])), false},
+			"id":   {[]byte(strconv.Itoa(id)), false},
+			"name": {[]byte(names[i]), false},
+			"age":  {[]byte(strconv.Itoa(ages[i])), false},
 		}
 		heap.Push(rowDatas, RowData{
 			Data: data,
