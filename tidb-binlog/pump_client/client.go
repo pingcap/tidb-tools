@@ -172,13 +172,7 @@ func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.Secur
 	if len(newPumpsClient.Pumps.Pumps) == 0 {
 		return nil, errors.New("no pump found in pd")
 	}
-
 	newPumpsClient.Selector.SetPumps(copyPumps(newPumpsClient.Pumps.AvaliablePumps))
-
-	newPumpsClient.RetryTime = DefaultAllRetryTime / len(newPumpsClient.Pumps.Pumps)
-	if newPumpsClient.RetryTime < DefaultRetryTime {
-		newPumpsClient.RetryTime = DefaultRetryTime
-	}
 
 	newPumpsClient.wg.Add(2)
 	go newPumpsClient.watchStatus(revision)
@@ -214,7 +208,6 @@ func NewLocalPumpsClient(etcdURLs, binlogSocket string, timeout time.Duration, s
 		ClusterID:          clusterID,
 		Pumps:              NewPumpInfos(),
 		Selector:           NewSelector(LocalUnix),
-		RetryTime:          DefaultAllRetryTime,
 		BinlogWriteTimeout: timeout,
 		Security:           security,
 		binlogSocket:       binlogSocket,
@@ -317,7 +310,11 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 			retryTime++
 		}
 
-		time.Sleep(RetryInterval)
+		if binlog.Tp != pb.BinlogType_Prewrite {
+			time.Sleep(RetryInterval * 10)
+		} else {
+			time.Sleep(RetryInterval)
+		}
 	}
 
 	pump, err1 := c.backoffWriteBinlog(req, binlog.Tp)
