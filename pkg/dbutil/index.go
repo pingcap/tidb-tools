@@ -42,23 +42,23 @@ func ShowIndex(ctx context.Context, db *sql.DB, schemaName string, table string)
 	defer rows.Close()
 
 	for rows.Next() {
-		fields, _, err1 := ScanRow(rows)
+		fields, err1 := ScanRow(rows)
 		if err1 != nil {
 			return nil, errors.Trace(err1)
 		}
-		seqInINdex, err1 := strconv.Atoi(string(fields["Seq_in_index"]))
+		seqInINdex, err1 := strconv.Atoi(string(fields["Seq_in_index"].Data))
 		if err != nil {
 			return nil, errors.Trace(err1)
 		}
-		cardinality, err1 := strconv.Atoi(string(fields["Cardinality"]))
+		cardinality, err1 := strconv.Atoi(string(fields["Cardinality"].Data))
 		if err != nil {
 			return nil, errors.Trace(err1)
 		}
 		index := &IndexInfo{
-			Table:       string(fields["Table"]),
-			NoneUnique:  string(fields["Non_unique"]) == "1",
-			KeyName:     string(fields["Key_name"]),
-			ColumnName:  string(fields["Column_name"]),
+			Table:       string(fields["Table"].Data),
+			NoneUnique:  string(fields["Non_unique"].Data) == "1",
+			KeyName:     string(fields["Key_name"].Data),
+			ColumnName:  string(fields["Column_name"].Data),
 			SeqInIndex:  seqInINdex,
 			Cardinality: cardinality,
 		}

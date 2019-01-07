@@ -513,12 +513,12 @@ func GetTidbLatestTSO(ctx context.Context, db *sql.DB) (int64, error) {
 	defer rows.Close()
 
 	for rows.Next() {
-		fields, _, err1 := ScanRow(rows)
+		fields, err1 := ScanRow(rows)
 		if err1 != nil {
 			return 0, errors.Trace(err1)
 		}
 
-		ts, err1 := strconv.ParseInt(string(fields["Position"]), 10, 64)
+		ts, err1 := strconv.ParseInt(string(fields["Position"].Data), 10, 64)
 		if err1 != nil {
 			return 0, errors.Trace(err1)
 		}

@@ -18,12 +18,12 @@ import (
 
 	"github.com/ngaut/log"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 )
 
 // RowData is the struct of rows selected from mysql/tidb
 type RowData struct {
-	Data   map[string][]byte
-	Null   map[string]bool
+	Data   map[string]*dbutil.ColumnData
 	Source string
 }
 
@@ -38,8 +38,8 @@ func (r RowDatas) Less(i, j int) bool {
 	var data1, data2 []byte
 
 	for _, col := range r.OrderKeyCols {
-		data1 = r.Rows[i].Data[col.Name.O]
-		data2 = r.Rows[j].Data[col.Name.O]
+		data1 = r.Rows[i].Data[col.Name.O].Data
+		data2 = r.Rows[j].Data[col.Name.O].Data
 		if needQuotes(col.FieldType) {
 			if string(data1) > string(data2) {
 				return false
@@ -47,10 +47,10 @@ func (r RowDatas) Less(i, j int) bool {
 				return true
 			} else {
 				// `NULL` is less than ""
-				if r.Rows[i].Null[col.Name.O] {
+				if r.Rows[i].Data[col.Name.O].IsNull {
 					return true
 				}
-				if r.Rows[j].Null[col.Name.O] {
+				if r.Rows[j].Data[col.Name.O].IsNull {
 					return false
 				}
 				continue
