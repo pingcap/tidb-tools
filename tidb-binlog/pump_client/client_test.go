@@ -60,7 +60,6 @@ func (*testClientSuite) testSelector(c *C, algorithm string) {
 	pumpsClient := &PumpsClient{
 		Pumps:              NewPumpInfos(),
 		Selector:           NewSelector(algorithm),
-		RetryTime:          DefaultAllRetryTime,
 		BinlogWriteTimeout: DefaultBinlogWriteTimeout,
 	}
 
