@@ -55,6 +55,9 @@ type PumpStatus struct {
 
 	node.Status
 
+	// the pump is avaliable or not, obsolete now
+	IsAvaliable bool
+
 	security *tls.Config
 
 	grpcConn *grpc.ClientConn
@@ -141,12 +144,16 @@ func (p *PumpStatus) WriteBinlog(req *pb.WriteBinlogReq, timeout time.Duration) 
 		p.Lock()
 		defer p.Unlock()
 
-		err := p.createGrpcClient()
-		if err != nil {
-			atomic.AddInt64(&p.ErrNum, 1)
-			return nil, errors.Errorf("create grpc connection for pump %s failed, error %v", p.NodeID, err)
+		if p.Client != nil {
+			client = p.Client
+		} else {
+			err := p.createGrpcClient()
+			if err != nil {
+				atomic.AddInt64(&p.ErrNum, 1)
+				return nil, errors.Errorf("create grpc connection for pump %s failed, error %v", p.NodeID, err)
+			}
+			client = p.Client
 		}
-		client = p.Client
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -162,8 +169,8 @@ func (p *PumpStatus) WriteBinlog(req *pb.WriteBinlogReq, timeout time.Duration) 
 	return resp, err
 }
 
-// IsAvaliable returns true if pump is avaliable.
-func (p *PumpStatus) IsAvaliable() bool {
+// IsUsable returns true if pump is usable.
+func (p *PumpStatus) IsUsable() bool {
 	if atomic.LoadInt64(&p.ErrNum) > defaultMaxErrNums {
 		return false
 	}

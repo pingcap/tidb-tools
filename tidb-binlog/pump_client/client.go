@@ -345,7 +345,7 @@ func (c *PumpsClient) checkPumpAvaliable() {
 	c.Pumps.RUnlock()
 
 	for _, pump := range allPumps {
-		if !pump.IsAvaliable() {
+		if !pump.IsUsable() {
 			c.setPumpAvaliable(pump, false)
 		}
 	}
