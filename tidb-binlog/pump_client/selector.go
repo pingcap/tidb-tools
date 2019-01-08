@@ -149,11 +149,9 @@ func (r *RangeSelector) SetPumps(pumps []*PumpStatus) {
 
 // Select implement PumpSelector.Select.
 func (r *RangeSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
-	// TODO: use status' label to match situale pump.
+	// TODO: use status' label to match situable pump.
 	r.Lock()
-	defer func() {
-		r.Unlock()
-	}()
+	defer r.Unlock()
 
 	if binlog.Tp != pb.BinlogType_Prewrite {
 		// binlog is commit binlog or rollback binlog, choose the same pump by start ts map.

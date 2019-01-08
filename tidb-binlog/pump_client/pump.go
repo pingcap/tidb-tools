@@ -18,6 +18,7 @@ import (
 	"crypto/tls"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -30,6 +31,9 @@ import (
 var (
 	// localPump is used to write local pump through unix socket connection.
 	localPump = "localPump"
+
+	// if pump failed more than defaultMaxErrNums times, this pump can treated as unavaliable.
+	defaultMaxErrNums int64 = 10
 )
 
 // PumpStatus saves pump's status.
@@ -51,22 +55,20 @@ type PumpStatus struct {
 
 	node.Status
 
-	// the pump is avaliable or not
-	IsAvaliable bool
-
 	security *tls.Config
 
 	grpcConn *grpc.ClientConn
 
 	// the client of this pump
 	Client pb.PumpClient
+
+	ErrNum int64
 }
 
 // NewPumpStatus returns a new PumpStatus according to node's status.
 func NewPumpStatus(status *node.Status, security *tls.Config) *PumpStatus {
 	pumpStatus := &PumpStatus{}
 	pumpStatus.Status = *status
-	pumpStatus.IsAvaliable = (status.State == node.Online)
 	pumpStatus.security = security
 
 	if status.State != node.Online {
@@ -76,7 +78,6 @@ func NewPumpStatus(status *node.Status, security *tls.Config) *PumpStatus {
 	err := pumpStatus.createGrpcClient()
 	if err != nil {
 		Logger.Errorf("[pumps client] create grpc client for %s failed, error %v", status.NodeID, err)
-		pumpStatus.IsAvaliable = false
 	}
 
 	return pumpStatus
@@ -99,7 +100,7 @@ func (p *PumpStatus) createGrpcClient() error {
 			return net.DialTimeout("tcp", addr, timeout)
 		})
 	}
-	Logger.Debugf("[pumps client] create gcpc client at %s", p.Addr)
+	Logger.Debugf("[pumps client] create grpc client at %s", p.Addr)
 	var clientConn *grpc.ClientConn
 	var err error
 	if p.security != nil {
@@ -122,6 +123,8 @@ func (p *PumpStatus) ResetGrpcClient() {
 	p.Lock()
 	defer p.Unlock()
 
+	atomic.StoreInt64(&p.ErrNum, 0)
+
 	if p.grpcConn != nil {
 		p.grpcConn.Close()
 		p.Client = nil
@@ -140,6 +143,7 @@ func (p *PumpStatus) WriteBinlog(req *pb.WriteBinlogReq, timeout time.Duration) 
 
 		err := p.createGrpcClient()
 		if err != nil {
+			atomic.AddInt64(&p.ErrNum, 1)
 			return nil, errors.Errorf("create grpc connection for pump %s failed, error %v", p.NodeID, err)
 		}
 		client = p.Client
@@ -149,5 +153,20 @@ func (p *PumpStatus) WriteBinlog(req *pb.WriteBinlogReq, timeout time.Duration) 
 	resp, err := client.WriteBinlog(ctx, req)
 	cancel()
 
+	if err != nil {
+		atomic.AddInt64(&p.ErrNum, 1)
+	} else {
+		atomic.StoreInt64(&p.ErrNum, 0)
+	}
+
 	return resp, err
+}
+
+// IsAvaliable returns true if pump is avaliable.
+func (p *PumpStatus) IsAvaliable() bool {
+	if atomic.LoadInt64(&p.ErrNum) > defaultMaxErrNums {
+		return false
+	}
+
+	return true
 }

@@ -133,12 +133,9 @@ func (*testClientSuite) testSelector(c *C, algorithm string) {
 
 		pumpsClient.setPumpAvaliable(pump1, false)
 		pump2 := pumpsClient.Selector.Select(commitBinlog, 0)
-		c.Assert(pump2.IsAvaliable, Equals, false)
 		// prewrite binlog and commit binlog with same start ts should choose same pump
 		c.Assert(pump1.NodeID, Equals, pump2.NodeID)
-
 		pumpsClient.setPumpAvaliable(pump1, true)
-		c.Assert(pump2.IsAvaliable, Equals, true)
 	}
 }
 
@@ -283,8 +280,7 @@ func mockPumpsClient(client pb.PumpClient) *PumpsClient {
 			NodeID: nodeID1,
 			State:  node.Online,
 		},
-		IsAvaliable: true,
-		Client:      client,
+		Client: client,
 	}
 
 	// add a pump without grpc client
@@ -294,7 +290,6 @@ func mockPumpsClient(client pb.PumpClient) *PumpsClient {
 			NodeID: nodeID2,
 			State:  node.Online,
 		},
-		IsAvaliable: true,
 	}
 
 	pumpInfos := NewPumpInfos()
