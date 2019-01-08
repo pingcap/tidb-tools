@@ -94,6 +94,7 @@ func (h *HashSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 
 		// this should never happened
 		Logger.Warnf("[pumps client] %s binlog with start ts %d don't have matched prewrite binlog", binlog.Tp, binlog.StartTs)
+		return nil
 	}
 
 	if len(h.Pumps) == 0 {
@@ -163,6 +164,7 @@ func (r *RangeSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 
 		// this should never happened
 		Logger.Warnf("[pumps client] %s binlog with start ts %d don't have matched prewrite binlog", binlog.Tp, binlog.StartTs)
+		return nil
 	}
 
 	if len(r.Pumps) == 0 {
