@@ -159,8 +159,7 @@ func (t *testClientSuite) TestWriteBinlog(c *C) {
 
 	// make test faster
 	RetryInterval = 100 * time.Millisecond
-	CommitBinlogMaxRetryTime = time.Second
-	PreWriteBinlogMaxRetryTime = time.Second
+	CommitBinlogTimeout = time.Second
 
 	for _, cfg := range pumpServerConfig {
 		pumpServer, err := createMockPumpServer(cfg.addr, cfg.serverMode)
@@ -306,12 +305,10 @@ func mockPumpsClient(client pb.PumpClient) *PumpsClient {
 	pumpInfos.AvaliablePumps[nodeID2] = pump2
 
 	pCli := &PumpsClient{
-		ClusterID: 1,
-		Pumps:     pumpInfos,
-		Selector:  NewSelector(Range),
-		// have two pump, so use 2 * testRetryTime
-		RetryTime:          2 * testRetryTime,
-		BinlogWriteTimeout: 15 * time.Second,
+		ClusterID:          1,
+		Pumps:              pumpInfos,
+		Selector:           NewSelector(Range),
+		BinlogWriteTimeout: time.Second,
 	}
 	pCli.Selector.SetPumps([]*PumpStatus{pump1, pump2})
 

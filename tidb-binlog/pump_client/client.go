@@ -36,9 +36,6 @@ const (
 	// DefaultEtcdTimeout is the default timeout config for etcd.
 	DefaultEtcdTimeout = 5 * time.Second
 
-	// DefaultAllRetryTime is the default retry time for all pumps, should greter than RetryTime.
-	DefaultAllRetryTime = 20
-
 	// DefaultRetryTime is the default retry time for each pump.
 	DefaultRetryTime = 10
 
@@ -56,11 +53,8 @@ var (
 	// ErrNoAvaliablePump means no avaliable pump to write binlog.
 	ErrNoAvaliablePump = errors.New("no avaliable pump to write binlog")
 
-	// CommitBinlogMaxRetryTime is the max retry duration time for write commit/rollback binlog.
-	CommitBinlogMaxRetryTime = 10 * time.Minute
-
-	// PreWriteBinlogMaxRetryTime is the max retry duration time for write prewrite binlog.
-	PreWriteBinlogMaxRetryTime = 10 * time.Second
+	// CommitBinlogTimeout is the max retry duration time for write commit/rollback binlog.
+	CommitBinlogTimeout = 10 * time.Minute
 
 	// RetryInterval is the interval of retrying to write binlog.
 	RetryInterval = 100 * time.Millisecond
@@ -279,7 +273,6 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 			err = ErrNoAvaliablePump
 			break
 		}
-		Logger.Debugf("[pumps client] write binlog choose pump %s", pump.NodeID)
 
 		resp, err = pump.WriteBinlog(req, c.BinlogWriteTimeout)
 		if err == nil && resp.Errmsg != "" {
@@ -294,7 +287,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 
 		if binlog.Tp != pb.BinlogType_Prewrite {
 			// only use one pump to write commit/rollback binlog, util write success or blocked for ten minutes. And will not return error to tidb.
-			if time.Since(startTime) > CommitBinlogMaxRetryTime {
+			if time.Since(startTime) > CommitBinlogTimeout {
 				break
 			}
 		} else {
@@ -303,7 +296,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 				return err
 			}
 
-			if time.Since(startTime) > PreWriteBinlogMaxRetryTime {
+			if time.Since(startTime) > c.BinlogWriteTimeout {
 				break
 			}
 
@@ -502,8 +495,11 @@ func (c *PumpsClient) watchStatus(revision int64) {
 					c.Pumps.Lock()
 					c.Selector.SetPumps(copyPumps(c.Pumps.AvaliablePumps))
 					c.Pumps.Unlock()
+					rch = c.EtcdRegistry.WatchNode(c.ctx, rootPath, revision)
+				} else {
+					Logger.Warnf("[pumps client] get pumps from pd failed, error: %v", errors.Trace(err))
 				}
-				rch = c.EtcdRegistry.WatchNode(c.ctx, rootPath, revision)
+
 				continue
 			}
 
