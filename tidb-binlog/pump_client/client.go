@@ -437,9 +437,26 @@ func (c *PumpsClient) exist(nodeID string) bool {
 // watchStatus watchs pump's status in etcd.
 func (c *PumpsClient) watchStatus(revision int64) {
 	defer c.wg.Done()
+	needUpdatePumps := false
 	rootPath := path.Join(node.DefaultRootPath, node.NodePrefix[node.PumpNode])
 	rch := c.EtcdRegistry.WatchNode(c.ctx, rootPath, revision)
+
 	for {
+		if needUpdatePumps {
+			revision, err := c.getPumpStatus(c.ctx)
+			if err == nil {
+				c.Pumps.Lock()
+				c.Selector.SetPumps(copyPumps(c.Pumps.AvaliablePumps))
+				c.Pumps.Unlock()
+				rch = c.EtcdRegistry.WatchNode(c.ctx, rootPath, revision)
+				needUpdatePumps = false
+				break
+			} else {
+				Logger.Warnf("[pumps client] get pumps from pd failed, error: %v", errors.Trace(err))
+				time.Sleep(time.Second)
+			}
+		}
+
 		select {
 		case <-c.ctx.Done():
 			Logger.Info("[pumps client] watch status finished")
@@ -449,16 +466,7 @@ func (c *PumpsClient) watchStatus(revision int64) {
 			if err != nil {
 				// meet error, some event may missed, get all the pump's information from etcd again.
 				Logger.Warnf("[pumps client] watch status meet error %v", err)
-				revision, err = c.getPumpStatus(c.ctx)
-				if err == nil {
-					c.Pumps.Lock()
-					c.Selector.SetPumps(copyPumps(c.Pumps.AvaliablePumps))
-					c.Pumps.Unlock()
-					rch = c.EtcdRegistry.WatchNode(c.ctx, rootPath, revision)
-				} else {
-					Logger.Warnf("[pumps client] get pumps from pd failed, error: %v", errors.Trace(err))
-				}
-
+				needUpdatePumps = true
 				continue
 			}
 
