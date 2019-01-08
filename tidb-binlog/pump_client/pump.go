@@ -136,13 +136,13 @@ func (p *PumpStatus) WriteBinlog(req *pb.WriteBinlogReq, timeout time.Duration) 
 
 	if client == nil {
 		p.Lock()
+		defer p.Unlock()
+
 		err := p.createGrpcClient()
 		if err != nil {
-			p.Unlock()
 			return nil, errors.Errorf("create grpc connection for pump %s failed, error %v", p.NodeID, err)
 		}
 		client = p.Client
-		p.Unlock()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
