@@ -99,6 +99,10 @@ func (t *testEtcdSuite) TestUpdate(c *C) {
 	err = etcdCli.Create(ctx, key, obj1, opts)
 	c.Assert(err, IsNil)
 
+	res, revision1, err := etcdCli.Get(ctx, key)
+	c.Assert(err, IsNil)
+	c.Assert(string(res), Equals, obj1)
+
 	time.Sleep(time.Second)
 
 	err = etcdCli.Update(ctx, key, obj2, 3)
@@ -106,9 +110,11 @@ func (t *testEtcdSuite) TestUpdate(c *C) {
 
 	time.Sleep(2 * time.Second)
 
-	res, _, err := etcdCli.Get(ctx, key)
+	// the new revision should greater than the old
+	res, revision2, err := etcdCli.Get(ctx, key)
 	c.Assert(err, IsNil)
 	c.Assert(string(res), Equals, obj2)
+	c.Assert(revision2-revision1 > 0, Equals, true)
 
 	time.Sleep(2 * time.Second)
 	res, _, err = etcdCli.Get(ctx, key)
@@ -142,12 +148,17 @@ func (t *testEtcdSuite) TestList(c *C) {
 	err = etcdCli.Create(ctx, k11, k11, nil)
 	c.Assert(err, IsNil)
 
-	root, _, err := etcdCli.List(ctx, key)
+	root, revision1, err := etcdCli.List(ctx, key)
 	c.Assert(err, IsNil)
 	c.Assert(string(root.Childs["level1"].Value), Equals, k1)
 	c.Assert(string(root.Childs["level1"].Childs["level1"].Value), Equals, k11)
 	c.Assert(string(root.Childs["level2"].Value), Equals, k2)
 	c.Assert(string(root.Childs["level3"].Value), Equals, k3)
+
+	// the revision of list should equal to the key's revision under the list path
+	_, revision2, err := etcdCli.Get(ctx, k11)
+	c.Assert(err, IsNil)
+	c.Assert(revision1, Equals, revision2)
 }
 
 func (t *testEtcdSuite) TestDelete(c *C) {
