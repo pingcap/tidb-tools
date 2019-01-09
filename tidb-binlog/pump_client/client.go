@@ -238,10 +238,13 @@ func (c *PumpsClient) getPumpStatus(pctx context.Context) (revision int64, err e
 
 // WriteBinlog writes binlog to a situable pump.
 func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
+	var choosePump *PumpStatus
 	meetError := false
 	defer func() {
 		if meetError {
 			c.checkPumpAvaliable()
+			log.Infof("binlog type %s, ts %d choose pump %v", binlog.Tp, binlog.StartTs, choosePump)
+			c.Selector.Feedback(binlog.StartTs, binlog.Tp, choosePump)
 		}
 	}()
 
@@ -269,6 +272,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 			err = errors.New(resp.Errmsg)
 		}
 		if err == nil {
+			choosePump = pump
 			return nil
 		}
 
@@ -304,6 +308,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 	if err1 == nil {
 		return nil
 	}
+	choosePump = pump
 
 	return errors.Errorf("write binlog failed, the last error %v", err)
 }
@@ -338,7 +343,6 @@ func (c *PumpsClient) backoffWriteBinlog(req *pb.WriteBinlogReq, binlogType pb.B
 				// if this pump can write binlog success, set this pump to avaliable.
 				Logger.Debugf("[pumps client] write binlog to unavaliable pump %s success, set this pump to avaliable", pump.NodeID)
 				c.setPumpAvaliable(pump, true)
-				c.Selector.SetTsMap(startTS, pump)
 				return pump, nil
 			}
 		}

@@ -43,8 +43,8 @@ type PumpSelector interface {
 	// Select returns a situable pump. Tips: should call this function only one time for commit/rollback binlog.
 	Select(binlog *pb.Binlog, retryTime int) *PumpStatus
 
-	// SetTsMap set the corresponding relations between startTS and pump.
-	SetTsMap(startTS int64, pump *PumpStatus)
+	// Feedback set the corresponding relations between startTS and pump.
+	Feedback(startTS int64, binlogType pb.BinlogType, pump *PumpStatus)
 }
 
 // HashSelector select a pump by hash.
@@ -91,7 +91,6 @@ func (h *HashSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 	if binlog.Tp != pb.BinlogType_Prewrite {
 		// binlog is commit binlog or rollback binlog, choose the same pump by start ts map.
 		if pump, ok := h.TsMap[binlog.StartTs]; ok {
-			delete(h.TsMap, binlog.StartTs)
 			return pump
 		}
 
@@ -101,19 +100,21 @@ func (h *HashSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 	}
 
 	if len(h.Pumps) == 0 {
-		h.TsMap[binlog.StartTs] = nil
 		return nil
 	}
 
 	pump := h.Pumps[(hashTs(binlog.StartTs)+int(retryTime))%len(h.Pumps)]
-	h.TsMap[binlog.StartTs] = pump
 	return pump
 }
 
-// SetTsMap implement PumpSelector.Select
-func (h *HashSelector) SetTsMap(startTS int64, pump *PumpStatus) {
+// Feedback implement PumpSelector.Feedback
+func (h *HashSelector) Feedback(startTS int64, binlogType pb.BinlogType, pump *PumpStatus) {
 	h.Lock()
-	h.TsMap[startTS] = pump
+	if binlogType != pb.BinlogType_Prewrite {
+		delete(h.TsMap, startTS)
+	} else {
+		h.TsMap[startTS] = pump
+	}
 	h.Unlock()
 }
 
@@ -166,7 +167,6 @@ func (r *RangeSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 	if binlog.Tp != pb.BinlogType_Prewrite {
 		// binlog is commit binlog or rollback binlog, choose the same pump by start ts map.
 		if pump, ok := r.TsMap[binlog.StartTs]; ok {
-			delete(r.TsMap, binlog.StartTs)
 			return pump
 		}
 
@@ -176,7 +176,6 @@ func (r *RangeSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 	}
 
 	if len(r.Pumps) == 0 {
-		r.TsMap[binlog.StartTs] = nil
 		return nil
 	}
 
@@ -186,15 +185,18 @@ func (r *RangeSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 
 	pump := r.Pumps[r.Offset]
 
-	r.TsMap[binlog.StartTs] = pump
 	r.Offset++
 	return pump
 }
 
-// SetTsMap implement PumpSelector.Select
-func (r *RangeSelector) SetTsMap(startTS int64, pump *PumpStatus) {
+// Feedback implement PumpSelector.Select
+func (r *RangeSelector) Feedback(startTS int64, binlogType pb.BinlogType, pump *PumpStatus) {
 	r.Lock()
-	r.TsMap[startTS] = pump
+	if binlogType != pb.BinlogType_Prewrite {
+		delete(r.TsMap, startTS)
+	} else {
+		r.TsMap[startTS] = pump
+	}
 	r.Unlock()
 }
 
@@ -230,8 +232,8 @@ func (u *LocalUnixSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus
 	return u.Pump
 }
 
-// SetTsMap implement PumpSelector.Select
-func (u *LocalUnixSelector) SetTsMap(startTS int64, pump *PumpStatus) {
+// Feedback implement PumpSelector.Feedback
+func (u *LocalUnixSelector) Feedback(startTS int64, binlogType pb.BinlogType, pump *PumpStatus) {
 	return
 }
 
@@ -254,8 +256,8 @@ func (s *ScoreSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 	return nil
 }
 
-// SetTsMap implement PumpSelector.Select
-func (s *ScoreSelector) SetTsMap(startTS int64, pump *PumpStatus) {
+// Feedback implement PumpSelector.Feedback
+func (s *ScoreSelector) Feedback(startTS int64, binlogType pb.BinlogType, pump *PumpStatus) {
 	// TODO
 }
 
