@@ -324,6 +324,10 @@ func (c *PumpsClient) backoffWriteBinlog(req *pb.WriteBinlogReq, binlogType pb.B
 	var resp *pb.WriteBinlogResp
 	// send binlog to unavaliable pumps to retry again.
 	for _, pump := range unAvaliablePumps {
+		if !pump.IsUsable() {
+			continue
+		}
+
 		pump.ResetGrpcClient()
 
 		resp, err = pump.WriteBinlog(req, c.BinlogWriteTimeout)
@@ -381,7 +385,7 @@ func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 func (c *PumpsClient) addPump(pump *PumpStatus, updateSelector bool) {
 	c.Pumps.Lock()
 
-	if pump.State == node.Online {
+	if pump.IsUsable() {
 		c.Pumps.AvaliablePumps[pump.NodeID] = pump
 	} else {
 		c.Pumps.UnAvaliablePumps[pump.NodeID] = pump
@@ -404,7 +408,7 @@ func (c *PumpsClient) updatePump(status *node.Status) (pump *PumpStatus, avaliab
 			if status.State == node.Online {
 				avaliableChanged = true
 				avaliable = true
-			} else if pump.Status.State == node.Online {
+			} else if pump.IsUsable() {
 				avaliableChanged = true
 				avaliable = false
 			}
@@ -511,7 +515,7 @@ func (c *PumpsClient) detect() {
 			req := &pb.WriteBinlogReq{ClusterID: c.ClusterID, Payload: nil}
 			c.Pumps.RLock()
 			for _, pump := range c.Pumps.UnAvaliablePumps {
-				if pump.Status.State == node.Online {
+				if pump.IsUsable() {
 					needCheckPumps = append(needCheckPumps, pump)
 				}
 			}

@@ -74,15 +74,6 @@ func NewPumpStatus(status *node.Status, security *tls.Config) *PumpStatus {
 	pumpStatus.Status = *status
 	pumpStatus.security = security
 
-	if status.State != node.Online {
-		return pumpStatus
-	}
-
-	err := pumpStatus.createGrpcClient()
-	if err != nil {
-		Logger.Errorf("[pumps client] create grpc client for %s failed, error %v", status.NodeID, err)
-	}
-
 	return pumpStatus
 }
 
@@ -171,6 +162,10 @@ func (p *PumpStatus) WriteBinlog(req *pb.WriteBinlogReq, timeout time.Duration) 
 
 // IsUsable returns true if pump is usable.
 func (p *PumpStatus) IsUsable() bool {
+	if p.status.State != node.Online {
+		return false
+	}
+
 	if atomic.LoadInt64(&p.ErrNum) > defaultMaxErrNums {
 		return false
 	}
