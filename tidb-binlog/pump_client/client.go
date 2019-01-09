@@ -30,6 +30,8 @@ import (
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
 	pb "github.com/pingcap/tipb/go-binlog"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -294,6 +296,11 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 				break
 			}
 
+			if isConnUnAvliable(err) {
+				// this kind of error indicate that the grpc connection is not avaliable, may be create the connection again can write success.
+				pump.ResetGrpcClient()
+			}
+
 			retryTime++
 		}
 
@@ -368,7 +375,7 @@ func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 	c.Pumps.Lock()
 	defer c.Pumps.Unlock()
 
-	pump.ResetGrpcClient()
+	pump.Reset()
 
 	if avaliable {
 		delete(c.Pumps.UnAvaliablePumps, pump.NodeID)
@@ -429,7 +436,7 @@ func (c *PumpsClient) updatePump(status *node.Status) (pump *PumpStatus, avaliab
 func (c *PumpsClient) removePump(nodeID string) {
 	c.Pumps.Lock()
 	if pump, ok := c.Pumps.Pumps[nodeID]; ok {
-		pump.ResetGrpcClient()
+		pump.Reset()
 	}
 	delete(c.Pumps.Pumps, nodeID)
 	delete(c.Pumps.UnAvaliablePumps, nodeID)
@@ -561,6 +568,18 @@ func isRetryableError(err error) bool {
 	}
 
 	return true
+}
+
+func isConnUnAvliable(err error) bool {
+	// Unavailable indicates the service is currently unavailable.
+	// This is a most likely a transient condition and may be corrected
+	// by retrying with a backoff.
+	// https://github.com/grpc/grpc-go/blob/76cc50721c5fde18bae10a36f4c202f5f2f95bb7/codes/codes.go#L139
+	if status.Code(err) == codes.Unavailable {
+		return true
+	}
+
+	return false
 }
 
 func copyPumps(pumps map[string]*PumpStatus) []*PumpStatus {

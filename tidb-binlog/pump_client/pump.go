@@ -84,8 +84,6 @@ func (p *PumpStatus) createGrpcClient() error {
 		p.grpcConn.Close()
 	}
 
-	atomic.StoreInt64(&p.ErrNum, 0)
-
 	var dialerOpt grpc.DialOption
 	if p.NodeID == localPump {
 		dialerOpt = grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
@@ -124,6 +122,12 @@ func (p *PumpStatus) ResetGrpcClient() {
 		p.grpcConn.Close()
 		p.Client = nil
 	}
+}
+
+// Reset resets the pump's grpc conn and err num.
+func (p *PumpStatus) Reset() {
+	p.ResetGrpcClient()
+	atomic.StoreInt64(&p.ErrNum, 0)
 }
 
 // WriteBinlog write binlog by grpc client.
