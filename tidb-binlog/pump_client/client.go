@@ -243,9 +243,9 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 	defer func() {
 		if meetError {
 			c.checkPumpAvaliable()
-			log.Infof("binlog type %s, ts %d choose pump %v", binlog.Tp, binlog.StartTs, choosePump)
-			c.Selector.Feedback(binlog.StartTs, binlog.Tp, choosePump)
 		}
+
+		c.Selector.Feedback(binlog.StartTs, binlog.Tp, choosePump)
 	}()
 
 	commitData, err := binlog.Marshal()
@@ -348,7 +348,7 @@ func (c *PumpsClient) backoffWriteBinlog(req *pb.WriteBinlogReq, binlogType pb.B
 		}
 	}
 
-	return nil, err
+	return nil, errors.New("write binlog to unavaliable pump failed")
 }
 
 func (c *PumpsClient) checkPumpAvaliable() {

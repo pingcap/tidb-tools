@@ -84,6 +84,8 @@ func (p *PumpStatus) createGrpcClient() error {
 		p.grpcConn.Close()
 	}
 
+	atomic.StoreInt64(&p.ErrNum, 0)
+
 	var dialerOpt grpc.DialOption
 	if p.NodeID == localPump {
 		dialerOpt = grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
@@ -103,6 +105,7 @@ func (p *PumpStatus) createGrpcClient() error {
 		clientConn, err = grpc.Dial(p.Addr, dialerOpt, grpc.WithInsecure())
 	}
 	if err != nil {
+		atomic.AddInt64(&p.ErrNum, 1)
 		return err
 	}
 
@@ -116,8 +119,6 @@ func (p *PumpStatus) createGrpcClient() error {
 func (p *PumpStatus) ResetGrpcClient() {
 	p.Lock()
 	defer p.Unlock()
-
-	atomic.StoreInt64(&p.ErrNum, 0)
 
 	if p.grpcConn != nil {
 		p.grpcConn.Close()
@@ -133,18 +134,19 @@ func (p *PumpStatus) WriteBinlog(req *pb.WriteBinlogReq, timeout time.Duration) 
 
 	if client == nil {
 		p.Lock()
-		defer p.Unlock()
 
 		if p.Client != nil {
 			client = p.Client
 		} else {
 			err := p.createGrpcClient()
 			if err != nil {
-				atomic.AddInt64(&p.ErrNum, 1)
+				p.Unlock()
 				return nil, errors.Errorf("create grpc connection for pump %s failed, error %v", p.NodeID, err)
 			}
 			client = p.Client
 		}
+
+		p.Unlock()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
