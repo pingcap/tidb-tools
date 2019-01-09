@@ -490,13 +490,18 @@ func (c *PumpsClient) watchStatus(revision int64) {
 
 // detect send detect binlog to pumps with online state in UnAvaliablePumps,
 func (c *PumpsClient) detect() {
-	defer c.wg.Done()
+	checkTick := time.NewTicker(CheckInterval)
+	defer func() {
+		checkTick.Stop()
+		c.wg.Done()
+	}()
+
 	for {
 		select {
 		case <-c.ctx.Done():
 			Logger.Infof("[pumps client] heartbeat finished")
 			return
-		default:
+		case <-checkTick.C:
 			// send detect binlog to pump, if this pump can return response without error
 			// means this pump is avaliable.
 			needCheckPumps := make([]*PumpStatus, 0, len(c.Pumps.UnAvaliablePumps))
@@ -523,8 +528,6 @@ func (c *PumpsClient) detect() {
 			for _, pump := range checkPassPumps {
 				c.setPumpAvaliable(pump, true)
 			}
-
-			time.Sleep(CheckInterval)
 		}
 	}
 }

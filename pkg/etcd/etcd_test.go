@@ -20,6 +20,7 @@ import (
 
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/integration"
+	"github.com/pingcap/check"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 )
@@ -114,7 +115,7 @@ func (t *testEtcdSuite) TestUpdate(c *C) {
 	res, revision2, err := etcdCli.Get(ctx, key)
 	c.Assert(err, IsNil)
 	c.Assert(string(res), Equals, obj2)
-	c.Assert(revision2-revision1 > 0, Equals, true)
+	c.Assert(revision2, check.Greater, revision1)
 
 	time.Sleep(2 * time.Second)
 	res, _, err = etcdCli.Get(ctx, key)
@@ -155,7 +156,7 @@ func (t *testEtcdSuite) TestList(c *C) {
 	c.Assert(string(root.Childs["level2"].Value), Equals, k2)
 	c.Assert(string(root.Childs["level3"].Value), Equals, k3)
 
-	// the revision of list should equal to the key's revision under the list path
+	// the revision of list should equal to the latest update's revision
 	_, revision2, err := etcdCli.Get(ctx, k11)
 	c.Assert(err, IsNil)
 	c.Assert(revision1, Equals, revision2)
