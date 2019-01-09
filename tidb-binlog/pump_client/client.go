@@ -450,7 +450,6 @@ func (c *PumpsClient) watchStatus(revision int64) {
 				c.Pumps.Unlock()
 				rch = c.EtcdRegistry.WatchNode(c.ctx, rootPath, revision)
 				needUpdatePumps = false
-				break
 			} else {
 				Logger.Warnf("[pumps client] get pumps from pd failed, error: %v", errors.Trace(err))
 				time.Sleep(time.Second)
