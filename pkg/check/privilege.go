@@ -56,13 +56,30 @@ func (pc *SourcePrivilegeChecker) Check(ctx context.Context) *Result {
 		markCheckError(result, err)
 		return result
 	}
+
+	return pc.VerifyPrivileges(grants)
+}
+
+func (pc *SourcePrivilegeChecker) VerifyPrivileges(grants []string) *Result {
+	result := &Result{
+		Name:  pc.Name(),
+		Desc:  "check privileges of source DB",
+		State: StateFailure,
+		Extra: fmt.Sprintf("address of db instance - %s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
+	}
+
 	if len(grants) == 0 {
 		result.ErrorMsg = "there is no such grant defined for current user on host '%'"
 		return result
 	}
 
+	// TiDB parser does not support parse `IDENTIFIED BY PASSWORD <secret>`,
+	// but it may appear in some cases, ref: https://bugs.mysql.com/bug.php?id=78888.
+	// We do not need the password in grant statement, so we can replace it.
+	firstGrant := strings.Replace(grants[0], "IDENTIFIED BY PASSWORD <secret>", "IDENTIFIED BY PASSWORD 'secret'", 1)
+
 	// get username and hostname
-	node, err := parser.New().ParseOneStmt(grants[0], "", "")
+	node, err := parser.New().ParseOneStmt(firstGrant, "", "")
 	if err != nil {
 		result.ErrorMsg = errors.ErrorStack(errors.Annotatef(err, "grants[0] %s", grants[0]))
 		return result
