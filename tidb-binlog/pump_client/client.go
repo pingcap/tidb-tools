@@ -300,7 +300,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 		}
 	}
 
-	pump, err1 := c.backoffWriteBinlog(req, binlog.Tp)
+	pump, err1 := c.backoffWriteBinlog(req, binlog.Tp, binlog.StartTs)
 	if err1 == nil {
 		return nil
 	}
@@ -308,7 +308,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 	return errors.Errorf("write binlog failed, the last error %v", err)
 }
 
-func (c *PumpsClient) backoffWriteBinlog(req *pb.WriteBinlogReq, binlogType pb.BinlogType) (pump *PumpStatus, err error) {
+func (c *PumpsClient) backoffWriteBinlog(req *pb.WriteBinlogReq, binlogType pb.BinlogType, startTS int64) (pump *PumpStatus, err error) {
 	if binlogType != pb.BinlogType_Prewrite {
 		// never return error for commit/rollback binlog.
 		return nil, nil
@@ -338,6 +338,7 @@ func (c *PumpsClient) backoffWriteBinlog(req *pb.WriteBinlogReq, binlogType pb.B
 				// if this pump can write binlog success, set this pump to avaliable.
 				Logger.Debugf("[pumps client] write binlog to unavaliable pump %s success, set this pump to avaliable", pump.NodeID)
 				c.setPumpAvaliable(pump, true)
+				c.Selector.SetTsMap(startTS, pump)
 				return pump, nil
 			}
 		}
@@ -455,7 +456,7 @@ func (c *PumpsClient) watchStatus(revision int64) {
 			if wresp.Err() != nil {
 				// meet error, watch from the latest revision.
 				Logger.Warnf("[pumps client] watch status meet error %v", wresp.Err())
-				rch = c.EtcdRegistry.WatchNode(c.ctx, rootPath, revision)
+				rch = c.EtcdRegistry.WatchNode(c.ctx, c.nodePath, revision)
 				continue
 			}
 

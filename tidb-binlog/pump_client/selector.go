@@ -42,6 +42,9 @@ type PumpSelector interface {
 
 	// Select returns a situable pump. Tips: should call this function only one time for commit/rollback binlog.
 	Select(binlog *pb.Binlog, retryTime int) *PumpStatus
+
+	// SetTsMap set the corresponding relations between startTS and pump.
+	SetTsMap(startTS int64, pump *PumpStatus)
 }
 
 // HashSelector select a pump by hash.
@@ -105,6 +108,13 @@ func (h *HashSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 	pump := h.Pumps[(hashTs(binlog.StartTs)+int(retryTime))%len(h.Pumps)]
 	h.TsMap[binlog.StartTs] = pump
 	return pump
+}
+
+// SetTsMap implement PumpSelector.Select
+func (h *HashSelector) SetTsMap(startTS int64, pump *PumpStatus) {
+	h.Lock()
+	h.TsMap[startTS] = pump
+	h.Unlock()
 }
 
 // RangeSelector select a pump by range.
@@ -181,6 +191,13 @@ func (r *RangeSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 	return pump
 }
 
+// SetTsMap implement PumpSelector.Select
+func (r *RangeSelector) SetTsMap(startTS int64, pump *PumpStatus) {
+	r.Lock()
+	r.TsMap[startTS] = pump
+	r.Unlock()
+}
+
 // LocalUnixSelector will always select the local pump, used for compatible with kafka version tidb-binlog.
 type LocalUnixSelector struct {
 	sync.RWMutex
@@ -213,6 +230,11 @@ func (u *LocalUnixSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus
 	return u.Pump
 }
 
+// SetTsMap implement PumpSelector.Select
+func (u *LocalUnixSelector) SetTsMap(startTS int64, pump *PumpStatus) {
+	return
+}
+
 // ScoreSelector select a pump by pump's score.
 type ScoreSelector struct{}
 
@@ -230,6 +252,11 @@ func (s *ScoreSelector) SetPumps(pumps []*PumpStatus) {
 func (s *ScoreSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 	// TODO
 	return nil
+}
+
+// SetTsMap implement PumpSelector.Select
+func (s *ScoreSelector) SetTsMap(startTS int64, pump *PumpStatus) {
+	// TODO
 }
 
 // NewSelector returns a PumpSelector according to the algorithm.
