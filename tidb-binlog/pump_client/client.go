@@ -114,6 +114,8 @@ type PumpsClient struct {
 
 	// binlog socket file path, for compatible with kafka version pump.
 	binlogSocket string
+
+	nodePath string
 }
 
 // NewPumpsClient returns a PumpsClient.
@@ -152,6 +154,7 @@ func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.Secur
 		Selector:           NewSelector(Range),
 		BinlogWriteTimeout: timeout,
 		Security:           security,
+		nodePath:           path.Join(node.DefaultRootPath, node.NodePrefix[node.PumpNode]),
 	}
 
 	revision, err := newPumpsClient.getPumpStatus(ctx)
@@ -437,8 +440,7 @@ func (c *PumpsClient) exist(nodeID string) bool {
 // watchStatus watchs pump's status in etcd.
 func (c *PumpsClient) watchStatus(revision int64) {
 	defer c.wg.Done()
-	rootPath := path.Join(node.DefaultRootPath, node.NodePrefix[node.PumpNode])
-	rch := c.EtcdRegistry.WatchNode(c.ctx, rootPath, revision)
+	rch := c.EtcdRegistry.WatchNode(c.ctx, c.nodePath, revision)
 
 	for {
 		select {
