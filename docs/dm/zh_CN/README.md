@@ -44,6 +44,7 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
         - [重启 DM 组件注意事项](./maintenance/caution-for-restart-dm.md)
         - [使用 dmctl 执行主-从切换](./maintenance/master-slave-switch.md)
         - [DM 监控与告警](./maintenance/metrics-alert.md)
+        - [迁移dm-worker](./maintenance/dm-migrate.md)
     - 任务管理
         - 基础使用
             - [dmctl 使用手册](./task-handling/dmctl-manual.md)
