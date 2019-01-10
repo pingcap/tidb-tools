@@ -298,7 +298,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 			}
 
 			// make sure already retry every avaliable pump.
-			if time.Since(startTime) > c.BinlogWriteTimeout && retryTime > pumpNum { 
+			if time.Since(startTime) > c.BinlogWriteTimeout && retryTime > pumpNum {
 				break
 			}
 
