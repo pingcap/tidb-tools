@@ -56,7 +56,7 @@ func (o *incompatibilityOption) String() string {
 	return text.String()
 }
 
-// TablesChecker checks compatibility of table structures, there are differents between MySQL and TiDB.
+// TablesChecker checks compatibility of table structures, there are differences between MySQL and TiDB.
 // In generally we need to check definitions of columns, constraints and table options.
 // Because of the early TiDB engineering design, we did not have a complete list of check items, which are all based on experience now.
 type TablesChecker struct {

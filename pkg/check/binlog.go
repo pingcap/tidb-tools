@@ -37,7 +37,7 @@ func NewMySQLBinlogEnableChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker {
 func (pc *MySQLBinlogEnableChecker) Check(ctx context.Context) *Result {
 	result := &Result{
 		Name:  pc.Name(),
-		Desc:  "check whether mysql binlog is enable",
+		Desc:  "check whether mysql binlog is enabled",
 		State: StateFailure,
 		Extra: fmt.Sprintf("address of db instance - %s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
 	}
