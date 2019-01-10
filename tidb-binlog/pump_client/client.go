@@ -232,7 +232,7 @@ func (c *PumpsClient) getPumpStatus(pctx context.Context) (revision int64, err e
 	}
 
 	for _, status := range nodesStatus {
-		log.Debugf("[pumps client] get pump %v from etcd", status)
+		log.Debugf("[pumps client] get pump %v from pd", status)
 		c.addPump(NewPumpStatus(status, c.Security), false)
 	}
 
