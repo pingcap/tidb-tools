@@ -194,6 +194,9 @@ type Config struct {
 	// ignore check table's data
 	IgnoreDataCheck bool `toml:"ignore-data-check" json:"ignore-data-check"`
 
+	// use this tidb's statistics information to split chunk
+	TiDBInstanceID string `toml:"tidb-instance-id" json:"tidb-instance-id"`
+
 	// config file
 	ConfigFile string
 

@@ -81,7 +81,6 @@ func (c *chunkRange) toString(mode string, collation string) (string, []string) 
 			}
 		}
 
-		log.Infof("conditions: %v, length: %d", conditions, len(conditions))
 		if len(conditions) == 0 {
 			return "TRUE", nil
 		}
@@ -462,18 +461,21 @@ func (s *bucketSpliter) getChunksByBuckets() ([]*chunkRange, error) {
 	return chunks, nil
 }
 
-func getChunksForTable(table *TableInstance, columns []*model.ColumnInfo, chunkSize int, limits string, collation string) ([]*chunkRange, string, error) {
-	s := bucketSpliter{}
-	chunks, err := s.split(table, columns, chunkSize, limits, collation)
-	if err != nil || len(chunks) == 0 {
-		log.Warnf("use bucket information to get chunks error: %v, chunks num: %d", errors.Trace(err), len(chunks))
-		// get chunks from tidb bucket information failed, use random.
-		s := randomSpliter{}
-		chunks, err = s.split(table, columns, chunkSize, limits, collation)
-		return chunks, "normal", err
+func getChunksForTable(table *TableInstance, columns []*model.ColumnInfo, chunkSize int, limits string, collation string, useTiDBStatsInfo bool) ([]*chunkRange, string, error) {
+	if useTiDBStatsInfo {
+		s := bucketSpliter{}
+		chunks, err := s.split(table, columns, chunkSize, limits, collation)
+		if err != nil || len(chunks) == 0 {
+			log.Warnf("use tidb bucket information to get chunks error: %v, chunks num: %d, will split chunk by random again", errors.Trace(err), len(chunks))
+		} else {
+			return chunks, "bucket", nil
+		}
 	}
 
-	return chunks, "bucket", nil
+	// get chunks from tidb bucket information failed, use random.
+	s := randomSpliter{}
+	chunks, err := s.split(table, columns, chunkSize, limits, collation)
+	return chunks, "normal", err
 }
 
 // getSplitFields returns fields to split chunks, order by pk, uk, index, columns.
@@ -515,7 +517,7 @@ type CheckJob struct {
 }
 
 // GenerateCheckJob generates some CheckJobs.
-func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSize int, collation string) ([]*CheckJob, error) {
+func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSize int, collation string, useTiDBStatsInfo bool) ([]*CheckJob, error) {
 	jobBucket := make([]*CheckJob, 0, 10)
 	var jobCnt int
 	var err error
@@ -530,7 +532,7 @@ func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSiz
 		return nil, errors.Trace(err)
 	}
 
-	chunks, mode, err := getChunksForTable(table, fields, chunkSize, limits, collation)
+	chunks, mode, err := getChunksForTable(table, fields, chunkSize, limits, collation, useTiDBStatsInfo)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -550,10 +552,6 @@ func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSiz
 		chunks = chunks[1:]
 
 		conditions, args := chunk.toString(mode, collation)
-		log.Infof("conditions: %s", conditions)
-		for _, bound := range chunk.bounds {
-			log.Infof("bound: %+v", bound)
-		}
 		where := fmt.Sprintf("(%s AND %s)", conditions, limits)
 
 		log.Debugf("%s.%s create check job, where: %s, args: %v", table.Schema, table.Table, where, args)

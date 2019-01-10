@@ -83,6 +83,9 @@ type TableDiff struct {
 	// ignore check table's data
 	IgnoreDataCheck bool
 
+	// get tidb statistics information from which table instance. if is nil, will split chunk by random.
+	TiDBStatsSource *TableInstance
+
 	sqlCh chan string
 
 	wg sync.WaitGroup
@@ -168,8 +171,15 @@ func (t *TableDiff) CheckTableData(ctx context.Context) (bool, error) {
 }
 
 // EqualTableData checks data is equal or not.
-func (t *TableDiff) EqualTableData(ctx context.Context) (bool, error) {
-	allJobs, err := GenerateCheckJob(t.TargetTable, t.Fields, t.Range, t.ChunkSize, t.Collation)
+func (t *TableDiff) EqualTableData(ctx context.Context) (equal bool, err error) {
+	var allJobs []*CheckJob
+
+	if t.TiDBStatsSource != nil {
+		allJobs, err = GenerateCheckJob(t.TiDBStatsSource, t.Fields, t.Range, t.ChunkSize, t.Collation, true)
+	} else {
+		allJobs, err = GenerateCheckJob(t.TargetTable, t.Fields, t.Range, t.ChunkSize, t.Collation, false)
+	}
+
 	if err != nil {
 		return false, errors.Trace(err)
 	}
@@ -199,7 +209,7 @@ func (t *TableDiff) EqualTableData(ctx context.Context) (bool, error) {
 	}
 
 	num := 0
-	equal := true
+	equal = true
 
 CheckResult:
 	for {
