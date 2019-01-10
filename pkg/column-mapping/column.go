@@ -465,7 +465,7 @@ func partitionID(info *mappingInfo, vals []interface{}) ([]interface{}, error) {
 	}
 
 	if originID >= maxOriginID || originID < 0 {
-		return nil, errors.NotValidf("id must less than %d, bigger or equal than 0, but get %d", maxOriginID, originID)
+		return nil, errors.NotValidf("id must less than %d, greater than or equal to 0, but got %d", maxOriginID, originID)
 	}
 
 	originID = int64(info.instanceID | info.schemaID | info.tableID | originID)
@@ -507,13 +507,13 @@ func computePartitionID(schema, table string, rule *Rule) (instanceID int64, sch
 
 func computeID(name string, prefix string, bitSize int, shiftCount uint) (int64, error) {
 	if len(prefix) >= len(name) || prefix != name[:len(prefix)] {
-		return 0, errors.NotValidf("%s is not prefix of %s", prefix, name)
+		return 0, errors.NotValidf("%s is not the prefix of %s", prefix, name)
 	}
 
 	idStr := name[len(prefix):]
 	id, err := strconv.ParseUint(idStr, 10, bitSize)
 	if err != nil {
-		return 0, errors.NotValidf("suffix of %s is not int64", idStr)
+		return 0, errors.NotValidf("suffix of %s's data type is not int64", idStr)
 	}
 
 	return int64(id << shiftCount), nil
