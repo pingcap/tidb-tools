@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 )
 

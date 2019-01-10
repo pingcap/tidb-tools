@@ -16,10 +16,10 @@ package diff
 import (
 	"math/rand"
 
-	"github.com/ngaut/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/types"
+	log "github.com/sirupsen/logrus"
 )
 
 func equalStrings(str1, str2 []string) bool {

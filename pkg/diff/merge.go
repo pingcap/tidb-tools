@@ -14,9 +14,9 @@
 package diff
 
 import (
+	"log"
 	"strconv"
 
-	"github.com/ngaut/log"
 	"github.com/pingcap/parser/model"
 )
 
