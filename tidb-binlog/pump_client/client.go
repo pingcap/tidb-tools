@@ -105,7 +105,7 @@ type PumpsClient struct {
 	// Selector will select a suitable pump.
 	Selector PumpSelector
 
-	// the max retry time if write binlog failed.
+	// the max retry time if write binlog failed, obsolete now.
 	RetryTime int
 
 	// BinlogWriteTimeout is the max time binlog can use to write to pump.
@@ -238,7 +238,7 @@ func (c *PumpsClient) getPumpStatus(pctx context.Context) (revision int64, err e
 	return revision, nil
 }
 
-// WriteBinlog writes binlog to a situable pump.
+// WriteBinlog writes binlog to a situable pump. Tips: will never return error for commit/rollback binlog.
 func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 	var choosePump *PumpStatus
 	meetError := false
@@ -311,6 +311,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 		}
 	}
 
+	Logger.Info("[pumps client] write binlog to avaliable pumps all failed, will try unavaliable pumps")
 	pump, err1 := c.backoffWriteBinlog(req, binlog.Tp, binlog.StartTs)
 	if err1 == nil {
 		return nil
