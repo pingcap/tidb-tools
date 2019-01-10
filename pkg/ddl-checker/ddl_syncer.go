@@ -16,6 +16,7 @@ package checker
 import (
 	"context"
 	"database/sql"
+
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 )
