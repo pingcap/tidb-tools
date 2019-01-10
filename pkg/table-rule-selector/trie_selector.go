@@ -222,12 +222,6 @@ func (t *trieSelector) Match(schema, table string) RuleSet {
 
 	rules = append(rules, matchedSchemaResult.rules...)
 
-	// only need to find schema level matched rule
-	if len(table) == 0 {
-		t.addToCache(cacheKey, rules)
-		return rules.clone()
-	}
-
 	for _, si := range matchedSchemaResult.nodes {
 		matchedTableResult := &matchedResult{
 			rules: make(RuleSet, 0, 4),
