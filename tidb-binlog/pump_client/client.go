@@ -260,6 +260,11 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 	var pump *PumpStatus
 	var resp *pb.WriteBinlogResp
 	startTime := time.Now()
+
+	c.Pumps.RLock()
+	pumpNum := len(c.Pumps.AvaliablePumps)
+	c.Pumps.RUnlock()
+
 	for {
 		if pump == nil || binlog.Tp == pb.BinlogType_Prewrite {
 			pump = c.Selector.Select(binlog, retryTime)
@@ -292,7 +297,8 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 				return err
 			}
 
-			if time.Since(startTime) > c.BinlogWriteTimeout {
+			// make sure already retry every avaliable pump.
+			if time.Since(startTime) > c.BinlogWriteTimeout && retryTime > pumpNum { 
 				break
 			}
 
