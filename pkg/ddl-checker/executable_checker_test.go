@@ -16,8 +16,9 @@ package checker
 import (
 	"container/list"
 	"context"
-	. "github.com/pingcap/check"
 	"testing"
+
+	. "github.com/pingcap/check"
 )
 
 var _ = Suite(&testSuite{})

@@ -16,6 +16,7 @@ package checker
 import (
 	"context"
 	"fmt"
+
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
