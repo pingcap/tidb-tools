@@ -69,7 +69,7 @@ func (pc *SourcePrivilegeChecker) Check(ctx context.Context) *Result {
 	}
 	grantStmt, ok := node.(*ast.GrantStmt)
 	if !ok {
-		result.ErrorMsg = fmt.Sprintf("%s is not grant stament", grants[0])
+		result.ErrorMsg = fmt.Sprintf("%s is not grant statment", grants[0])
 		return result
 	}
 
