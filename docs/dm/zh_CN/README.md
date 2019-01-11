@@ -22,6 +22,10 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 ### 使用手册
 
 - [DM 介绍](./overview.md)
+- [使用限制](./restrictions.md)
+- 使用案例
+    - [简单的从库同步场景](./use-cases/one-tidb-slave.md)
+    - [分库分表合并场景](./use-cases/shard-merge.md)
 - 功能介绍
     - [table 路由](./features/table-route.md)
     - [table 黑白名单](./features/black-white-list.md)
@@ -35,8 +39,7 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
         - [sharding DDL 使用限制](./shard-table/restrictions.md)
         - [手动处理 sharding DDL lock](./shard-table/handle-DDL-lock.md)
 - 运维管理
-    - [同步前置检查](./precheck.md)
-    - [使用限制](./restrictions.md)
+    - [DM 同步任务前置检查](./precheck.md)
     - 部署与集群管理
         - [DM Ansible 运维手册](./maintenance/dm-ansible.md)
         - [扩充/缩减 DM 集群](./maintenance/scale-out.md)
@@ -52,9 +55,6 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
         - 配置文件
             - [Task 配置文件介绍](./configuration/configuration.md)
             - [task.yaml 示例](./configuration/task.yaml)
-        - 使用案例
-            - [简单的从库同步场景](./use-cases/one-tidb-slave.md)
-            - [分库分表合并场景](./use-cases/shard-merge.md)
     - [问题诊断](./troubleshoot)
         - [skip 或 replace 异常 SQL](./troubleshoot/skip-replace-sqls.md)
         - [重置数据同步任务](./troubleshoot/reset-task.md)
