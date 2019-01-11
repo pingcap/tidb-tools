@@ -59,6 +59,7 @@ show-ddl-locks [--worker=127.0.0.1:8262] [task-name]
 }
 ```
 
+---
 
 #### unlock-ddl-lock
 
@@ -93,6 +94,8 @@ unlock-ddl-lock [--worker=127.0.0.1:8262] [--owner] [--force-remove] <lock-ID>
     ]
 }
 ```
+
+---
 
 #### break-ddl-lock
 
