@@ -67,7 +67,7 @@ filters:                                            # 上游数据库实例的�
     ​    table-pattern: "t_*"
     ​    events: ["truncate table", "drop table"]
     ​    action: Ignore
-    user-filter-2:
+    filter-rule-2:
         schema-pattern: "test_*"
         events: ["All DML"]                         # 只执行 schema `test_*` 下面的所有 DML events
         action: Do
