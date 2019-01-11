@@ -22,7 +22,7 @@
 
 1. `inventory.ini` - DM-Ansible 部署配置文件，需要用户根据自己的机器拓扑进行编辑。 详情见 [DM Ansible 运维手册](./maintenance/dm-ansible.md)
 2. `dm-master.toml` - DM-master 进程运行的配置文件，包含 DM 集群的拓扑信息， MySQL instance 和 DM-worker 的对应关系（必须是一对一的关系）。使用 DM-Ansible 部署时会自动生成该文件
-3. `dm-worker.toml` - DM-worker 进程运行的配置文件，包含访问上游 MySQL instance 的配置信息。使用 DM-Ansible 部署时会自动生成该文件
+3. `dm-worker.toml` - DM-worker 进程运行的配置文件，包含访问上游 MySQL instance 的配置信息和 relay log 的配置信息。使用 DM-Ansible 部署时会自动生成该文件
 
 #### task-配置生成
 
