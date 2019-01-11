@@ -89,7 +89,9 @@ func (c *chunkRange) toString(mode string, collation string) (string, []string) 
 	}
 
 	/* for example:
-	there is a bucket in TiDB, and the lowerbound and upperbound are (v1, v3), (v2, v4), and the columns are `a` and `b`, this buceket's data range is (a > v1 or (a == v1 and b >= v2)) and (a < v3 or (a == v3 and a <= v4)), not (a >= v1 and a <= v3 and b >= v2 and b <= v4)
+	there is a bucket in TiDB, and the lowerbound and upperbound are (v1, v3), (v2, v4), and the columns are `a` and `b`,
+	this buceket's data range is (a > v1 or (a == v1 and b >= v2)) and (a < v3 or (a == v3 and a <= v4)),
+	not (a >= v1 and a <= v3 and b >= v2 and b <= v4)
 	*/
 
 	lowerCondition := make([]string, 0, 1)
@@ -215,7 +217,7 @@ func (s *randomSpliter) split(table *TableInstance, columns []*model.ColumnInfo,
 	return chunks, nil
 }
 
-// splitRange splits a chunk to multiple chunks. Notice: can only split chunks have max and min value or equal to a value, otherwise will panic.
+// splitRange splits a chunk to multiple chunks.
 func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, schema string, table string, columns []*model.ColumnInfo) ([]*chunkRange, error) {
 	var chunks []*chunkRange
 
@@ -308,7 +310,6 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 		valueCounts = append(valueCounts, 1)
 	}
 
-	// TODO: use a new function, and add unit test
 	/*
 		for example:
 		the splitCol is `a`;

@@ -15,7 +15,6 @@ package diff
 
 import (
 	"context"
-	"fmt"
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -87,7 +86,6 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 	chunkDataCount := 0
 	for _, chunk := range chunks {
 		conditions, args := chunk.toString(mode, "")
-		fmt.Println(dbutil.ReplacePlaceholder(conditions, args))
 		count, err := dbutil.GetRowCount(context.Background(), tableInstance.Conn, tableInstance.Schema, tableInstance.Table, dbutil.ReplacePlaceholder(conditions, args))
 		c.Assert(err, IsNil)
 		chunkDataCount += int(count)
@@ -115,8 +113,7 @@ func (*testChunkSuite) TestChunkUpdate(c *C) {
 	}
 
 	// update a bound
-	newChunk := chunk.copy()
-	newChunk.update("a", "5", ">=", "6", "<=")
+	newChunk := chunk.copyAndUpdate("a", "5", ">=", "6", "<=")
 	conditions, args := newChunk.toString("normal", "")
 	c.Assert(conditions, Equals, "`a` >= ? AND `a` <= ? AND `b` > ? AND `b` < ?")
 	expectArgs := []string{"5", "6", "3", "4"}
@@ -125,8 +122,7 @@ func (*testChunkSuite) TestChunkUpdate(c *C) {
 	}
 
 	// add a new bound
-	newChunk = chunk.copy()
-	newChunk.update("c", "7", ">", "8", "<")
+	newChunk = chunk.copyAndUpdate("c", "7", ">", "8", "<")
 	conditions, args = newChunk.toString("normal", "")
 	c.Assert(conditions, Equals, "`a` > ? AND `a` < ? AND `b` > ? AND `b` < ? AND `c` > ? AND `c` < ?")
 	expectArgs = []string{"1", "2", "3", "4", "7", "8"}
