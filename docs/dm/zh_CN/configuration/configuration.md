@@ -69,7 +69,7 @@ filters:                                            # 上游数据库实例的�
     ​    action: Ignore
     user-filter-2:
         schema-pattern: "test_*"
-        events: ["All DML"]                         # 只执行 `test_*` 下面的所有 DML events
+        events: ["All DML"]                         # 只执行 schema `test_*` 下面的所有 DML events
         action: Do
 
 black-white-list:                                   # 该上游数据库实例的匹配的表的黑白名单过滤规则集
