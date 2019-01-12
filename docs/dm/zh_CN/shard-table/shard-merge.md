@@ -13,24 +13,26 @@
 
 分库分表合并同步功能用于将上游 MySQL/MariaDB 实例中结构相同的表同步到下游 TiDB 的同一个表中。DM 分库分表合并同步功能既支持同步上游的 DML 数据，也支持协调同步多个上游分表的 DDL 表结构变更。
 
-如果需要执行分库分表合并任务，请在任务配置文件中设置 `is-sharding: true`。
+如果需要执行分库分表合并任务，必须在任务配置文件中设置 `is-sharding: true`。
 
 ### 限制
 
-- 上游的分表必须以相同的顺序执行（[table 路由](../features/table-route.md) 转换后相同的）DDL
+- 一个逻辑 sharding group（需要合并同步到下游同一个表的所有分表组成的 group）内的所有上游分表必须以相同的顺序执行（[table 路由](../features/table-route.md) 转换后相同的）DDL
     - 比如不支持 table_1 先增加列 a 后再增加列 b，而 table_2 先增加列 b 后再增加列 a，这种不同顺序的 DDL 执行方式
-- 一个逻辑 sharding group 内的所有 DM-worker 对应的上游分表，都应该执行对应的 DDL
+- 每个逻辑 sharding group 推荐使用一个独立的任务进行同步
+    - 如果一个任务内存在多个 sharding group，则必须等待一个 sharding group 的 DDL 同步完成后，才能开始对其他 sharding group 执行 DDL
+- 一个逻辑 sharding group 内的所有上游分表，都应该执行对应的 DDL
     - 比如其中有 DM-worker-2 对应的一个或多个上游分表未执行 DDL，则其他已执行 DDL 的 DM-worker 都会暂停同步任务，等待 DM-worker-2 收到对应上游的 DDL
 - 一个逻辑 sharding group 必须等待一个 DDL 完全执行完毕后，才能执行下一个 DDL
 - sharding group 数据同步任务不支持 `DROP DATABASE / TABLE`
     - 上游分表的 `DROP DATABASE / TABLE` 语句会被自动忽略
 - sharding group 支持 `RENAME TABLE`，但是有下面的限制
     - 只支持 `RENAME TABLE` 到一个不存在的表
-    - 一个 `RENAME TABLE` 语句只能有一个 `RENAME` 操作
+    - 一个 `RENAME TABLE` 语句只能有一个 `RENAME` 操作，online DDL 中的 `RENAME` 有特殊方案进行支持
 - 各分表增量同步的起始点的表结构必须一致，才能确保来自不同分表的 DML 可以同步到一个确定表结构的下游，也才能确保后续各分表的 DDL 能够正确匹配与同步
 - 如果需要变更 [table 路由](../features/table-route.md) 规则，需要先等所有 sharding DDL 同步完成
     - 当 sharding DDL 在同步过程中时，使用 dmctl 尝试变更 `router-rules` 会报错
-- 如果需要 `CREATE` 新表加入到已有的 sharding group 中，需要保持和最新更改的表结构一致
+- 如果需要 `CREATE` 新表加入到一个正在执行 DDL 的 sharding group 中，需要保持和最新更改的表结构一致
     - 比如原 table_1, table_2 初始时有 (a, b) 两列，sharding DDL 执行后有 (a, b, c) 三列，则同步完成后新 `CREATE` 的表应当有 (a, b, c) 三列
 - 由于已经收到 DDL 的 DM-worker 会暂停任务以等待其他 DM-worker 收到对应的 DDL，因此数据同步延迟会增加
 
@@ -38,8 +40,6 @@
 ### 背景
 
 DM 目前使用 `ROW` format 的 binlog 进行数据同步，binlog 中不包含表结构信息。当使用 Row binlog 同步时，如果没有将多个上游表合并同步到下游的同一个表，则对于下游的一个表只存在一个上游表的 DDL 会更新其表结构，Row binlog 可以认为是具有 self-description 属性。当进行数据同步时，可以根据 column values 及下游的表结构构造出对应的 DML。
-
-在需要将上游的多个表合并同步到下游的同一个表时，如果同步过程中上游表不会执行 DDL 进行表结构变更，可以通过使用 [table 路由](../features/table-route.md) 来转换上游 MySQL/MariaDB 实例的某些表同步到下游指定表中，可以通过使用 [列值转换](../features/column-mapping.md) 来解决合表后自增主键的冲突问题。
 
 但在分表合并同步时，如果上游的表会执行 DDL 进行表结构变更，则需要对 DDL 的同步进行更多处理以避免根据 column values 生成的 DML 与下游实际表结构不一致的问题。下面举一个简化后的例子：
 
