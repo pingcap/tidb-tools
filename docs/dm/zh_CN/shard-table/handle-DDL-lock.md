@@ -211,6 +211,7 @@ MySQL 及 DM 操作与处理流程为：
     - `show-ddl-locks` 返回的 `unsynced` 中一直包含 DM-worker-2 的信息（`127.0.0.1:8263`） 
 6. 使用 `unlock-dll-lock` 来请求 DM-master 主动 unlock 该 DDL lock
     - 如果 DDL lock 的 owner 也已经下线，可以使用 `--owner` 参数指定其他 DM-worker 作为新 owner 来执行 DDL
+    - 当存在任意 DM-worker 报错时，`result` 将为 `false`，此时请仔细检查各 DM-worker 的错误是否是预期可接受的
     - 已下线的 DM-worker 会返回 `rpc error: code = Unavailable` 错误属于预期行为，可以忽略；如果其它未下线的 DM-worker 返回错误，则需要根据情况额外处理
     ```bash
     » unlock-ddl-lock test-`shard_db`.`shard_table`
