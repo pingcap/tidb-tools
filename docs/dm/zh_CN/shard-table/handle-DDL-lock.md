@@ -7,6 +7,8 @@
 - [命令介绍](#命令介绍)
 - [支持场景](#支持场景)
     - [部分 DM-worker 下线](#部分-DM-worker-下线)
+    - [unlock 过程中部分 DM-worker 重启](#unlock-过程中部分-DM-worker-重启)
+    - [unlock 过程中部分 DM-worker 临时不可达](#unlock-过程中部分-DM-worker-临时不可达)
 
 ### 功能介绍
 
@@ -65,7 +67,7 @@ show-ddl-locks [--worker=127.0.0.1:8262] [task-name]
 
 #### unlock-ddl-lock
 
-主动请求 DM-master unlock（解除）指定的 DDL lock，包括请求 owner 执行 DDL、请求其他非 owner 的 DM-worker 跳过 DDL、移除 DM-master 上的 lock 信息。
+主动请求 DM-master unlock 解除指定的 DDL lock，包括请求 owner 执行 DDL、请求其他非 owner 的 DM-worker 跳过 DDL、移除 DM-master 上的 lock 信息。
 
 ##### 命令示例
 
@@ -101,7 +103,7 @@ unlock-ddl-lock [--worker=127.0.0.1:8262] [--owner] [--force-remove] <lock-ID>
 
 #### break-ddl-lock
 
-主动请求 DM-worker break（强制打破）当前正在等待 unlock 的 DDL lock，包括请求 DM-worker 执行/跳过 DDL、移除该 DM-worker 上的 DDL lock 信息。
+主动请求 DM-worker break 强制打破当前正在等待 unlock 的 DDL lock，包括请求 DM-worker 执行/跳过 DDL、移除该 DM-worker 上的 DDL lock 信息。
 
 ##### 命令示例
 
@@ -273,24 +275,161 @@ MySQL 及 DM 操作与处理流程为：
 
 ---
 
-### 部分 DM-worker 重启 （或临时不可达）
+#### unlock 过程中部分 DM-worker 重启
 
-#### lock 异常原因
+##### lock 异常原因
 
-当前 DM 调度多个 DM-worker 执行 / 跳过 sharding DDL 及更新 checkpoint 这个解除 lock 的操作流程并不是原子的，因此可能存在 owner 执行完 DDL 后、其他 DM-worker 跳过该 DDL 前非 owner 发生了重启。此时，DM-master 上的 lock 信息已经被移除，但重启的 DM-worker 并没能跳过该 DDL 及更新 checkpoint。
+在 DM-master 收到所有 DM-worker 的 DDL 信息后，执行自动 unlock DDL lock 的操作主要包括以下步骤：
 
-重启并重新 `start-task` 后，该 DM-worker 将重新尝试同步该 sharding DDL，并由于其他 DM-worker 已完成了该 DDL 的同步，重启的 DM-worker 将无法同步并跳过该 DDL。
+1. 请求 lock owner 执行 DDL 并更新对应分表的 checkpoint
+2. 在 owner 执行 DDL 成功后，移除 DM-master 上保存的 DDL lock 信息
+3. 在 owner 执行 DDL 成功后，请求其他所有 DM-worker 跳过 DDL 并更新对应分表的 checkpoint
 
-#### 手动处理方法
+上述 unlock DDL lock 的操作不是原子的，当 owner 执行 DDL 成功后，请求其他 DM-worker 跳过 DDL 时如果该 DM-worker 发生了重启，则会造成该 DM-worker 跳过 DDL 失败。
 
-1. 使用 `query-status` 查看重启的 DM-worker 当前正 block 的 sharding DDL 信息
-2. 使用 `break-ddl-lock` 命令指定要强制打破 lock 的 DM-worker 信息
-    * 指定 `skip` 参数跳过该 sharding DDL
-3. 使用 `query-status` 查看 lock 是否打破成功
+此时 DM-master 上的 lock 信息被移除，但该 DM-worker 重启后将尝试继续重新同步该 DDL，但由于其他 DM-worker（包括原 owner）已经同步完该 DDL 并已经在继续后续同步，该 DM-worker 将永远无法等待该 DDL 对应 lock 的自动 unlock。
 
-#### 手动处理后影响
 
-手动打破 lock 后，后续 sharding DDL 将可以自动正常同步。
+##### 手动处理示例
+
+仍然假设有 [部分 DM-worker 下线](#部分-DM-worker-下线) 示例中的上下游表结构及合表同步需求。
+
+当在 DM-master 自动执行 unlock 操作的过程中，owner（DM-worker-1）成功执行了 DDL 且开始继续进行后续同步，并移除了 DM-master 上的 DDL lock 信息，但在请求 DM-worker-2 跳过 DDL 的过程中由于 DM-worker-2 发生了重启而跳过 DDL 失败。
+
+DM-worker-2 重启后，将尝试重新同步重启前已经在等待的 DDL lock，此时在 DM-master 上将创建一个新的 lock，并且该 DM-worker 将成为 lock 的 owner（其他 DM-worker 此时已经执行/跳过 DDL 后在进行后续同步）。
+
+处理流程为：
+
+1. 使用 `show-ddl-locks` 确认 DM-master 上存在该 DDL 对应的 lock
+    - 应该仅有该重启的 DM-worker（`127.0.0.1:8263`）处于 `syned` 状态
+    ```bash
+    » show-ddl-locks
+    {
+        "result": true,
+        "msg": "",
+        "locks": [
+            {
+                "ID": "test-`shard_db`.`shard_table`",
+                "task": "test",
+                "owner": "127.0.0.1:8263",
+                "DDLs": [
+                    "USE `shard_db`; ALTER TABLE `shard_db`.`shard_table` ADD COLUMN `c2` int(11);"
+                ],
+                "synced": [
+                    "127.0.0.1:8263"
+                ],
+                "unsynced": [
+                    "127.0.0.1:8262"
+                ]
+            }
+        ]
+    }
+    ```
+2. 使用 `unlock-ddl-lock` 请求 DM-master unlock 该 lock
+    - 使用 `--worker` 参数限定操作仅针对该重启的 DM-worker（`127.0.0.1:8263`）
+    - lock 过程中该 DM-worker 会尝试再次向下游执行该 DDL（重启前的原 owner 已向下游执行过该 DDL），需要确保该 DDL 可被多次执行
+    ```bash
+    » unlock-ddl-lock --worker=127.0.0.1:8263 test-`shard_db`.`shard_table`
+    {
+        "result": true,
+        "msg": "",
+        "workers": [
+            {
+                "result": true,
+                "worker": "127.0.0.1:8263",
+                "msg": ""
+            }
+        ]
+    }
+    ```
+3. 使用 `show-ddl-locks` 确认 DDL lock 是否被成功 unlock
+4. 使用 `query-status` 确认同步任务是否正常
+
+---
+
+#### unlock 过程中部分 DM-worker 临时不可达
+
+##### lock 异常原因
+
+与 [unlock 过程中部分 DM-worker 重启](#unlock-过程中部分-DM-worker-重启) 造成 lock 异常的原因类似。当请求 DM-worker 跳过 DDL 时如果该 DM-worker 临时不可达，则会造成该 DM-worker 跳过 DDL 失败。
+
+此时 DM-master 上的 lock 信息被移除，但该 DM-worker 将处于等待一个不再存在的 DDL lock 的状态。
+
+
+##### 手动处理示例
+
+仍然假设有 [部分 DM-worker 下线](#部分-DM-worker-下线) 示例中的上下游表结构及合表同步需求。
+
+当在 DM-master 自动执行 unlock 操作的过程中，owner（DM-worker-1）成功执行了 DDL 且开始继续进行后续同步，并移除了 DM-master 上的 DDL lock 信息，但在请求 DM-worker-2 跳过 DDL 的过程中由于网络原因等临时不可达而跳过 DDL 失败。
+
+处理流程为：
+
+1. 使用 `show-ddl-locks` 确认 DM-master 上不再存在该 DDL 对应的 lock
+2. 使用 `query-status` 确认 DM-worker 仍在等待 lock 同步
+    ```bash
+    » query-status test
+    {
+        "result": true,
+        "msg": "",
+        "workers": [
+            ...
+            {
+                ...
+                "worker": "127.0.0.1:8263",
+                "subTaskStatus": [
+                    {
+                        ...
+                        "unresolvedDDLLockID": "test-`shard_db`.`shard_table`",
+                        "sync": {
+                            ...
+                            "blockingDDLs": [
+                                "USE `shard_db`; ALTER TABLE `shard_db`.`shard_table` ADD COLUMN `c2` int(11);"
+                            ],
+                            "unresolvedGroups": [
+                                {
+                                    "target": "`shard_db`.`shard_table`",
+                                    "DDLs": [
+                                        "USE `shard_db`; ALTER TABLE `shard_db`.`shard_table` ADD COLUMN `c2` int(11);"
+                                    ],
+                                    "firstPos": "(mysql-bin|000001.000003, 1752)",
+                                    "synced": [
+                                        "`shard_db_2`.`shard_table_1`",
+                                        "`shard_db_2`.`shard_table_2`"
+                                    ],
+                                    "unsynced": [
+                                    ]
+                                }
+                            ],
+                            "synced": false
+                        }
+                    }
+                ]
+                ...
+            }
+        ]
+    }
+    ```
+3. 使用 `break-ddl-lock` 请求强制 break 该 DM-worker 当前正在等待的 DDL lock
+    - 由于 owner 已经向下游执行了 DDL，因此在 break 时使用 `--skip` 参数
+    ```bash
+    » break-ddl-lock --worker=127.0.0.1:8263 --skip test
+    {
+        "result": true,
+        "msg": "",
+        "workers": [
+            {
+                "result": true,
+                "worker": "127.0.0.1:8263",
+                "msg": ""
+            }
+        ]
+    }
+    ```
+4. 使用 `query-status` 确认同步任务是否正常且不再处于等待 lock 的状态
+
+##### 手动处理后影响
+
+手动强制 break lock 后，后续 sharding DDL 将可以自动正常同步。
 
 
 ### DM-master 重启
