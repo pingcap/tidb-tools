@@ -345,6 +345,10 @@ DM-worker-2 重启后，将尝试重新同步重启前已经在等待的 DDL loc
 3. 使用 `show-ddl-locks` 确认 DDL lock 是否被成功 unlock
 4. 使用 `query-status` 确认同步任务是否正常
 
+##### 手动处理后影响
+
+手动 unlock lock 后，后续 sharding DDL 将可以自动正常同步。
+
 ---
 
 #### unlock 过程中部分 DM-worker 临时不可达
