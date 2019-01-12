@@ -434,26 +434,3 @@ DM-worker-2 重启后，将尝试重新同步重启前已经在等待的 DDL loc
 ##### 手动处理后影响
 
 手动强制 break lock 后，后续 sharding DDL 将可以自动正常同步。
-
-
-### DM-master 重启
-
-#### lock 异常原因
-
-当 DM-worker 将 sharding DDL 信息发送给 DM-master 后，DM-worker 自身将挂起并等待 DM-master 通知以决定是否执行 / 跳过该 DDL。
-
-由于 DM-master 的状态是不持久化的，如果此时 DM-master 发生了重启，DM-worker 发送给 DM-master 的 lock 信息将丢失。
-
-因此，DM-master 重启后，将由于缺失 lock 信息而无法调度 DM-worker 执行 / 跳过 DDL。
-
-#### 手动处理方法
-
-1. 使用 `show-ddl-locks` 确认 sharding DDL lock 信息已丢失
-2. 使用 `query-status` 确认 DM-worker 当前正由于等待 sharding DDL lock 同步而 block
-3. 使用 `pause-task` 暂停被 block 的任务
-4. 使用 `resume-task` 恢复被暂停的任务，重新开始 sharding DDL lock 同步
-
-#### 手动处理后影响
-
-手动暂停、恢复任务后，DM-worker 会重新开始 sharding DDL lock 同步并将之前丢失的 lock 信息重新发送给 DM-master，后续 sharding DDL 将可以自动正常同步。
-
