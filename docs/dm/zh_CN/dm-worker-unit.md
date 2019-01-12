@@ -26,8 +26,6 @@ DM-worker 任务运行过程包含多个任务处理逻辑单元
 #### binlog replication/syncer
 读取 relay log 处理单元的 binlog events，转化为 SQLs，然后应用到下游 TiDB
 
-
-
 ### DM-worker 需要的权限
 包含 relay log、dump、load、replicate binlog 等处理单元， 这里先总体说下 上下游分别需要什么权限；
 

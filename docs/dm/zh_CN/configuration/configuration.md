@@ -13,6 +13,9 @@ task 配置文件 [task.yaml](./task.yaml) 主要包含下面 [全局配置](#�
 | source-id  | 唯一确定一个 MySQL / MariaDB 实例, 或者一个具有主从结构的复制组 | `inventory.ini` 的 `source_id`;<br> `dm-master.toml` 的 `source-id`;<br> `task.yaml` 的 `source-id` |
 | DM-worker ID | 唯一确定一个 DM-worker （取值于 `dm-worker.toml` 的 `worker-addr` 参数） | `dm-worker.toml` 的 `worker-addr`;<br> dmctl 命令行的 `-worker` / `-w` flag  |
 
+### 填写任务配置顺序
+1. 填写全局配置
+2. 根据全局配置填写 instance 配置
 
 ### 全局配置
 
@@ -64,14 +67,23 @@ filters:                                            # 上游数据库实例的�
     ​    table-pattern: "t_*"
     ​    events: ["truncate table", "drop table"]
     ​    action: Ignore
+    filter-rule-2:
+        schema-pattern: "test_*"
+        events: ["All DML"]                         # 只执行 schema `test_*` 下面的所有 DML events
+        action: Do
 
 black-white-list:                                   # 该上游数据库实例的匹配的表的黑白名单过滤规则集
     bw-rule-1:
-    ​    do-dbs: ["~^test.*", "do"]
-    ​    ignore-dbs: ["mysql", "ignored"]
-    ​    do-tables:
-    ​    - db-name: "~^test.*"
-    ​      tbl-name: "~^t.*"
+        do-dbs: ["~^test.*", "user"]
+        ignore-dbs: ["mysql", "account"]
+        do-tables:
+        - db-name: "~^test.*"
+          tbl-name: "~^t.*"
+        - db-name: "user"
+          tbl-name: "information"
+        ignore-tables:
+        - db-name: "user"
+          tbl-name: "log"
 
 column-mappings:                                    # 上游数据库实例的匹配的表的列值转换规则集
     cm-rule-1:
@@ -81,6 +93,13 @@ column-mappings:                                    # 上游数据库实例的�
     ​    source-column: "id"
     ​    target-column: "id"
     ​    arguments: ["1", "test_", "t_"]
+    cm-rule-2:
+        schema-pattern: "test_*"
+        table-pattern: "t_*"
+        expression: "partition id"
+        source-column: "id"
+        target-column: "id"
+        arguments: ["2", "test_", "t_"]
 
 mydumpers:                                          # mydumper 处理单元运行配置参数
     global:
