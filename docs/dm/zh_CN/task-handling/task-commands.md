@@ -3,9 +3,6 @@
 
 ### 创建数据同步任务
 
-启动任务时，DM 会对任务上下游数据库的配置、权限等进行前置检查，具体细节见参考 [同步任务前置检查](../precheck.md)
-
-
 ```
 » help start-task
 start a task with config file

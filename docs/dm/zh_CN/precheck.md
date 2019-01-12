@@ -5,6 +5,10 @@ DM 同步任务前置检查
 
 ### 检查项
 
+#### MySQL 版本
+- 5.5 < MySQL version < 5.8
+- MariaDB version >= 10.1.2
+
 #### MySQL binlog 配置
 
 - binlog 是否开启（DM 要求 binlog 必须开启）;

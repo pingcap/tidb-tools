@@ -76,15 +76,16 @@ filters:                     # filter rules, mysql instance can ref rules in it
 
 black-white-list:
   bw-rule-1:
-    do-dbs: ["~^test.*", "do"]
-    ignore-dbs: ["mysql", "ignored"]
+    do-dbs: ["~^test.*", "user"]
+    ignore-dbs: ["mysql", "account"]
     do-tables:
     - db-name: "~^test.*"
       tbl-name: "~^t.*"
-    - db-name: "do"
-      tbl-name: "do"
-    - db-name: "do"
-      tbl-name: "do"
+    - db-name: "user"
+      tbl-name: "information"
+    ignore-tables:
+    - db-name: "user"
+      tbl-name: "log"
 
 
 column-mappings:             # column mapping rules, mysql instance can ref rules in it

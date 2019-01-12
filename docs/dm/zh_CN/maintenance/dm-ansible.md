@@ -159,6 +159,33 @@ ansible-playbook local_prepare.yml
 > **注：** 请使用内网 IP 来部署集群，如果部署目标机器 SSH 端口非默认 22 端口，需添加 `ansible_port` 变量，如：
 > `dm-worker1 ansible_host=172.16.10.72 ansible_port=5555 server_id=101 mysql_host=172.16.10.72 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306`
 
+### inventory.ini 配置
+
+#### 全局变量解释
+
+| 变量            | 含义                                                        |
+| --------------- | ---------------------------------------------------------- |
+| cluster_name | 集群名称，可调整 |
+| dm_version | DM 版本，默认已配置 |
+| grafana_admin_user | Grafana 管理员帐号用户名，默认为 admin |
+| grafana_admin_password | Grafana 管理员帐号密码，默认为 admin，用于 Ansible 导入 Dashboard，如后期通过 grafana web 修改了密码，请更新此变量 |
+
+#### DM-worker 配置参数解释
+
+| 变量 | 变量含义 |
+| ------------- | ------- |
+| source_id | DM-worker 绑定到唯一的一个数据库实例/具有主从架构的复制组，当发生主从切换的时候，只需要更新 mysql_host/port 而不用更改该 ID 标识|
+| server_id | DM-worker 伪装成一个 mysql slave，即 slave 的 server_id, 需要在 mysql 集群中全局唯一，取值范围 0 - 4294967295 |
+| mysql_host | 上游 MySQL host |
+| mysql_user | 上游 MySQL 用户名，默认为 root |
+| mysql_password | 上游 MySQL 用户名密码，密码需使用 dmctl 工具加密，参考 [dmctl 加密上游 MySQL 密码](#dmctl-加密上游-mysql-用户密码) |
+| mysql_port | 上游 MySQL 端口号, 默认为 3306 |
+| enable_gtid | DM-worker 是否要用 GTID 形式的位置去拉取 binlog，前提是上游 mysql 已经开启 GTID 模式 |
+| relay_binlog_name | DM-worker 是否要从该指定 binlog file 开始拉取 binlog，仅本地不存在有效 relay log 时使用 |
+| relay_binlog_gtid | DM-worker 是否要从该指定 GTID 开始拉取 binlog，仅本地不存在有效 relay log 且 enable_gtid 为 true 时使用 |
+| flavor | flavor 表示 mysql 的发行版类型，官方版以及 percona、云 mysql 填写 mysql，mariadb 则填写 mariadb，默认为 mysql |
+
+
 ### 样例集群拓扑
 
 | Name | Host IP | Services |
@@ -166,6 +193,8 @@ ansible-playbook local_prepare.yml
 | node1 | 172.16.10.71 | DM-master, prometheus, grafana, alertmanager |
 | node2 | 172.16.10.72 | DM-worker |
 | node3 | 172.16.10.73 | DM-worker |
+| mysql-replica-01| 172.16.10.81 | MySQL |
+| mysql-replica-02| 172.16.10.82 | MySQL |
 
 ```ini
 ## DM modules
@@ -173,9 +202,9 @@ ansible-playbook local_prepare.yml
 dm_master ansible_host=172.16.10.71
 
 [dm_worker_servers]
-dm_worker1 ansible_host=172.16.10.72 server_id=101 mysql_host=172.16.10.81 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+dm_worker1 ansible_host=172.16.10.72 server_id=101 source_id="mysql-replica-01" mysql_host=172.16.10.81 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
 
-dm_worker2 ansible_host=172.16.10.73 server_id=102 mysql_host=172.16.10.82 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+dm_worker2 ansible_host=172.16.10.73 server_id=102 source_id="mysql-replica-02" mysql_host=172.16.10.82 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
 
 ## Monitoring modules
 [prometheus_servers]
@@ -219,30 +248,6 @@ deploy_dir = /data1/dm
 dm-master ansible_host=172.16.10.71 deploy_dir=/data1/deploy
 ```
 
-#### 全局变量解释
-
-| 变量            | 含义                                                        |
-| --------------- | ---------------------------------------------------------- |
-| cluster_name | 集群名称，可调整 |
-| dm_version | DM 版本，默认已配置 |
-| grafana_admin_user | Grafana 管理员帐号用户名，默认为 admin |
-| grafana_admin_password | Grafana 管理员帐号密码，默认为 admin，用于 Ansible 导入 Dashboard，如后期通过 grafana web 修改了密码，请更新此变量 |
-
-#### DM-worker 配置参数解释
-
-| 变量 | 变量含义 |
-| ------------- | ------- |
-| source_id | DM-worker 绑定到唯一的一个数据库实例/具有主从架构的复制组，当发生主从切换的时候，只需要更新 mysql_host/port 而不用更改该 ID 标识|
-| server_id | DM-worker 伪装成一个 mysql slave，即 slave 的 server_id, 需要在 mysql 集群中全局唯一，取值范围 0 - 4294967295 |
-| mysql_host | 上游 MySQL host | 
-| mysql_user | 上游 MySQL 用户名，默认为 root |
-| mysql_password | 上游 MySQL 用户名密码，密码需使用 dmctl 工具加密，参考 [dmctl 加密上游 MySQL 密码](#dmctl-加密上游-mysql-用户密码) |
-| mysql_port | 上游 MySQL 端口号, 默认为 3306 |
-| enable_gtid | DM-worker 是否要用 GTID 形式的位置去拉取 binlog，前提是上游 mysql 已经开启 GTID 模式 |
-| relay_binlog_name | DM-worker 是否要从该指定 binlog file 开始拉取 binlog，仅本地不存在有效 relay log 时使用 |
-| relay_binlog_gtid | DM-worker 是否要从该指定 GTID 开始拉取 binlog，仅本地不存在有效 relay log 且 enable_gtid 为 true 时使用 |
-| flavor | flavor 表示 mysql 的发行版类型，官方版以及 percona、云 mysql 填写 mysql，mariadb 则填写 mariadb，默认为 mysql |
-
 #### dmctl 加密上游 MySQL 用户密码
 
 以上游 MySQL 用户密码为 `123456` 为例，将生成的字符串配置到 DM-worker 的 `mysql_password` 变量中。
@@ -260,9 +265,9 @@ VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=
 
 ```yaml
 [dm_worker_servers]
-dm-worker1 ansible_host=172.16.10.72 source_id="mysql-replica-01" server_id=101 relay_binlog_name="binlog.000011" mysql_host=172.16.10.72 mysql_user=root mysql_port=3306
+dm-worker1 ansible_host=172.16.10.72 source_id="mysql-replica-01" server_id=101 relay_binlog_name="binlog.000011" mysql_host=172.16.10.81 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
 
-dm-worker2 ansible_host=172.16.10.73 source_id="mysql-replica-02" server_id=102 relay_binlog_name="binlog.000002" mysql_host=172.16.10.73 mysql_user=root mysql_port=3306
+dm-worker2 ansible_host=172.16.10.73 source_id="mysql-replica-02" server_id=102 relay_binlog_name="binlog.000002" mysql_host=172.16.10.82 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
 ```
 
 #### 打开 relay log GTID 同步
@@ -277,10 +282,9 @@ dm-worker2 ansible_host=172.16.10.73 source_id="mysql-replica-02" server_id=102 
 
 ```yaml
 [dm_worker_servers]
-dm-worker1 ansible_host=172.16.10.72 source_id="mysql-replica-01" server_id=101 enable_gtid=true relay_binlog_gtid="aae3683d-f77b-11e7-9e3b-02a495f8993c:1-282967971,cc97fa93-f5cf-11e7-ae19-02915c68ee2e
-:1-284361339" mysql_host=172.16.10.72 mysql_user=root mysql_port=3306
+dm-worker1 ansible_host=172.16.10.72 source_id="mysql-replica-01" server_id=101 enable_gtid=true relay_binlog_gtid="aae3683d-f77b-11e7-9e3b-02a495f8993c:1-282967971,cc97fa93-f5cf-11e7-ae19-02915c68ee2e:1-284361339" mysql_host=172.16.10.81 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
 
-dm-worker2 ansible_host=172.16.10.73 source_id="mysql-replica-02" server_id=102 relay_binlog_name=binlog.000002 mysql_host=172.16.10.73 mysql_user=root mysql_port=3306
+dm-worker2 ansible_host=172.16.10.73 source_id="mysql-replica-02" server_id=102 relay_binlog_name=binlog.000002 mysql_host=172.16.10.82 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
 ```
 
 ## 部署任务
