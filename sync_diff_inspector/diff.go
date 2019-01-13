@@ -156,8 +156,6 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 			tables = append(tables, matchedTables...)
 		}
 
-		sourceTables := make([]TableInstance, 0, 1)
-
 		for _, tableName := range tables {
 			tableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, df.targetDB.Conn, schemaTables.Schema, tableName, cfg.UseRowID)
 			if err != nil {
@@ -169,6 +167,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 				continue
 			}
 
+			sourceTables := make([]TableInstance, 0, 1)
 			// find matched datbase name and table name in table router to fill source tables
 			for instanceID, allSchemas := range allTablesMap {
 				if instanceID == df.targetDB.InstanceID {
