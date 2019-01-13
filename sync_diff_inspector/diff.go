@@ -22,6 +22,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/diff"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -39,6 +40,7 @@ type Diff struct {
 	tables            map[string]map[string]*TableConfig
 	fixSQLFile        *os.File
 	report            *Report
+	tableRouter       *router.Table
 
 	ctx context.Context
 }
@@ -125,7 +127,12 @@ func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 }
 
 // AdjustTableConfig adjusts the table's config by check-tables and table-config.
-func (df *Diff) AdjustTableConfig(cfg *Config) error {
+func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
+	df.tableRouter, err = router.NewTableRouter(false, cfg.Rules)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	allTablesMap, err := df.GetAllTables(cfg)
 	if err != nil {
 		return errors.Trace(err)
@@ -182,6 +189,8 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 			return errors.Errorf("table %s.%s not found in check tables", table.Schema, table.Table)
 		}
 
+		// for
+
 		sourceTables := make([]TableInstance, 0, len(table.SourceTables))
 		for _, sourceTable := range table.SourceTables {
 			if _, ok := df.sourceDBs[sourceTable.InstanceID]; !ok {
@@ -226,37 +235,34 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]interface{}, error) {
 	allTablesMap := make(map[string]map[string]interface{})
 
-	for _, schemaTables := range cfg.Tables {
-		if _, ok := allTablesMap[schemaName(cfg.TargetDBCfg.InstanceID, schemaTables.Schema)]; ok {
-			continue
-		}
-
-		allTables, err := dbutil.GetTables(df.ctx, cfg.TargetDBCfg.Conn, schemaTables.Schema)
+	targetSchemas, err := dbutil.GetSchemas(df.ctx, df.targetDB.Conn)
+	if err != nil {
+		return nil, errors.Errorf("get schemas from %s error %v", df.targetDB.InstanceID, errors.Trace(err))
+	}
+	for _, schema := range targetSchemas {
+		allTables, err := dbutil.GetTables(df.ctx, df.targetDB.Conn, schema)
 		if err != nil {
-			return nil, errors.Errorf("get tables from %s.%s error %v", cfg.TargetDBCfg.InstanceID, schemaTables.Schema, errors.Trace(err))
+			return nil, errors.Errorf("get tables from %s.%s error %v", df.targetDB.InstanceID, schema, errors.Trace(err))
 		}
-		allTablesMap[schemaName(cfg.TargetDBCfg.InstanceID, schemaTables.Schema)] = diff.SliceToMap(allTables)
+		allTablesMap[schemaName(df.targetDB.InstanceID, schema)] = diff.SliceToMap(allTables)
 	}
 
-	for _, table := range cfg.TableCfgs {
-		for _, sourceTable := range table.SourceTables {
-			if _, ok := allTablesMap[schemaName(sourceTable.InstanceID, sourceTable.Schema)]; ok {
-				continue
-			}
+	for _, source := range df.sourceDBs {
+		sourceSchemas, err := dbutil.GetSchemas(df.ctx, source.Conn)
+		if err != nil {
+			return nil, errors.Errorf("get schemas from %s error %v", source.InstanceID, errors.Trace(err))
+		}
 
-			db, ok := df.sourceDBs[sourceTable.InstanceID]
-			if !ok {
-				return nil, errors.Errorf("unknown instance id %s", sourceTable.InstanceID)
-			}
-
-			allTables, err := dbutil.GetTables(df.ctx, db.Conn, sourceTable.Schema)
+		for _, schema := range sourceSchemas {
+			allTables, err := dbutil.GetTables(df.ctx, source.Conn, schema)
 			if err != nil {
-				return nil, errors.Errorf("get tables from %s.%s error %v", db.InstanceID, sourceTable.Schema, errors.Trace(err))
+				return nil, errors.Errorf("get tables from %s.%s error %v", source.InstanceID, schema, errors.Trace(err))
 			}
-			allTablesMap[schemaName(db.InstanceID, sourceTable.Schema)] = diff.SliceToMap(allTables)
+			allTablesMap[schemaName(source.InstanceID, schema)] = diff.SliceToMap(allTables)
 		}
 	}
 
+	log.Infof("get all tables: %v", allTablesMap)
 	return allTablesMap, nil
 }
 

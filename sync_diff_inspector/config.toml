@@ -29,6 +29,14 @@ ignore-struct-check = false
 # the name of the file which saves sqls used to fix different data
 fix-sql-file = "fix.sql"
 
+# uncomment this if comparing data with different database name or table name
+#[[rules]]
+#schema-pattern = "test_*"
+#table-pattern = "t_*"
+#target-schema = "test"
+#target-table = "t"
+
+
 # tables need to check.
 [[check-tables]]
 # schema name in target database.
