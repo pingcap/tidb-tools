@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	pb "github.com/pingcap/tipb/go-binlog"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -95,7 +96,7 @@ func (h *HashSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 		}
 
 		// this should never happened
-		Logger.Warnf("[pumps client] %s binlog with start ts %d don't have matched prewrite binlog", binlog.Tp, binlog.StartTs)
+		log.Warnf("[pumps client] %s binlog with start ts %d don't have matched prewrite binlog", binlog.Tp, binlog.StartTs)
 		return nil
 	}
 
@@ -171,7 +172,7 @@ func (r *RangeSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 		}
 
 		// this should never happened
-		Logger.Warnf("[pumps client] %s binlog with start ts %d don't have matched prewrite binlog", binlog.Tp, binlog.StartTs)
+		log.Warnf("[pumps client] %s binlog with start ts %d don't have matched prewrite binlog", binlog.Tp, binlog.StartTs)
 		return nil
 	}
 
@@ -274,7 +275,7 @@ func NewSelector(algorithm string) PumpSelector {
 	case LocalUnix:
 		selector = NewLocalUnixSelector()
 	default:
-		Logger.Warnf("[pumps client] unknown algorithm %s, use range as default", algorithm)
+		log.Warnf("[pumps client] unknown algorithm %s, use range as default", algorithm)
 		selector = NewRangeSelector()
 	}
 
