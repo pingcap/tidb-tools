@@ -106,7 +106,7 @@ Go Version: go version go1.11.2 linux/amd64
     - 移除其中的 `config` 与 `instance-id` 配置项，增加 `source-id` 配置项（与 `inventory.ini` 中的 `source_id` 对应）
     如将
     ```yaml
-    config:	    source-id: "instance118-4306" # unique in all instances, used as id when save checkpoints, configs, etc.
+    config:
           host: "192.168.199.118"	
           port: 4306	
           user: "root"	
