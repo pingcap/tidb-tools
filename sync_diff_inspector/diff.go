@@ -138,6 +138,38 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 		return errors.Trace(err)
 	}
 
+	// get all source table's matched target table
+	// target database name => target table name => all matched source table instance
+	sourceTablesMap := make(map[string]map[string][]TableInstance)
+	for instanceID, allSchemas := range allTablesMap {
+		if instanceID == df.targetDB.InstanceID {
+			continue
+		}
+
+		for schema, allTables := range allSchemas {
+			for table := range allTables {
+				targetSchema, targetTable, err := df.tableRouter.Route(schema, table)
+				if err != nil {
+					return errors.Errorf("get route result for %s.%s.%s failed, error %v", instanceID, schema, table, err)
+				}
+
+				if _, ok := sourceTablesMap[targetSchema]; !ok {
+					sourceTablesMap[targetSchema] = make(map[string][]TableInstance)
+				}
+
+				if _, ok := sourceTablesMap[targetSchema][targetTable]; !ok {
+					sourceTablesMap[targetSchema][targetTable] = make([]TableInstance, 0, 1)
+				}
+
+				sourceTablesMap[targetSchema][targetTable] = append(sourceTablesMap[targetSchema][targetTable], TableInstance{
+					InstanceID: instanceID,
+					Schema:     schema,
+					Table:      table,
+				})
+			}
+		}
+	}
+
 	// fill the table information.
 	// will add default source information, don't worry, we will use table config's info replace this later.
 	for _, schemaTables := range cfg.Tables {
@@ -159,7 +191,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 		for _, tableName := range tables {
 			tableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, df.targetDB.Conn, schemaTables.Schema, tableName, cfg.UseRowID)
 			if err != nil {
-				return errors.Errorf("get table %s.%s's inforamtion error %v", schemaTables.Schema, tableName, errors.ErrorStack(err))
+				return errors.Errorf("get table %s.%s's inforamtion error %s", schemaTables.Schema, tableName, errors.ErrorStack(err))
 			}
 
 			if _, ok := df.tables[schemaTables.Schema][tableName]; ok {
@@ -168,29 +200,14 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 			}
 
 			sourceTables := make([]TableInstance, 0, 1)
-			// find matched datbase name and table name in table router to fill source tables
-			for instanceID, allSchemas := range allTablesMap {
-				if instanceID == df.targetDB.InstanceID {
-					continue
-				}
-
-				for schema, allTables := range allSchemas {
-					for table := range allTables {
-						targetSchema, targetTable, err := df.tableRouter.Route(schema, table)
-						if err != nil {
-							return errors.Errorf("get route result for %s.%s.%s failed, error %v", instanceID, schema, table, err)
-						}
-
-						if targetSchema == schemaTables.Schema && targetTable == tableName {
-							sourceTables = append(sourceTables, TableInstance{
-								InstanceID: instanceID,
-								Schema:     schema,
-								Table:      table,
-							})
-							log.Infof("find matched table %s.%s.%s with %s.%s.%s", instanceID, schema, table, df.targetDB.InstanceID, schemaTables.Schema, tableName)
-						}
-					}
-				}
+			if _, ok := sourceTablesMap[schemaTables.Schema][tableName]; ok {
+				sourceTables = sourceTablesMap[schemaTables.Schema][tableName]
+			} else {
+				sourceTables = append(sourceTables, TableInstance{
+					InstanceID: cfg.SourceDBCfg[0].InstanceID,
+					Schema:     schemaTables.Schema,
+					Table:      tableName,
+				})
 			}
 
 			// use same database name and table name
