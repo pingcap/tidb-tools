@@ -203,15 +203,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 			if _, ok := sourceTablesMap[schemaTables.Schema][tableName]; ok {
 				sourceTables = sourceTablesMap[schemaTables.Schema][tableName]
 			} else {
-				sourceTables = append(sourceTables, TableInstance{
-					InstanceID: cfg.SourceDBCfg[0].InstanceID,
-					Schema:     schemaTables.Schema,
-					Table:      tableName,
-				})
-			}
-
-			// use same database name and table name
-			if len(sourceTables) == 0 {
+				// use same database name and table name
 				sourceTables = append(sourceTables, TableInstance{
 					InstanceID: cfg.SourceDBCfg[0].InstanceID,
 					Schema:     schemaTables.Schema,
