@@ -47,17 +47,10 @@ type chunkRange struct {
 	bounds []*bound
 }
 
-// newChunkRange return a chunkRange, if boundNum is greater than 0, will creates a chunkRange with fixed bound num.
-func newChunkRange(boundNum int) *chunkRange {
-	var bounds []*bound
-	if boundNum > 0 {
-		bounds = make([]*bound, boundNum)
-	} else {
-		bounds = make([]*bound, 0, 2)
-	}
-
+// newChunkRange return a chunkRange.
+func newChunkRange() *chunkRange {
 	return &chunkRange{
-		bounds: bounds,
+		bounds: make([]*bound, 0, 2),
 	}
 }
 
@@ -168,7 +161,9 @@ func (c *chunkRange) update(column, lower, lowerSymbol, upper, upperSymbol strin
 }
 
 func (c *chunkRange) copy() *chunkRange {
-	newChunk := newChunkRange(len(c.bounds))
+	newChunk := &chunkRange{
+		bounds: make([]*bound, len(c.bounds)),
+	}
 	copy(newChunk.bounds, c.bounds)
 
 	return newChunk
@@ -209,7 +204,7 @@ func (s *randomSpliter) split(table *TableInstance, columns []*model.ColumnInfo,
 	}
 
 	chunkCnt := (int(cnt) + chunkSize - 1) / chunkSize
-	chunks, err := s.splitRange(table.Conn, newChunkRange(0), chunkCnt, table.Schema, table.Table, columns)
+	chunks, err := s.splitRange(table.Conn, newChunkRange(), chunkCnt, table.Schema, table.Table, columns)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -432,7 +427,7 @@ func (s *bucketSpliter) getChunksByBuckets() ([]*chunkRange, error) {
 
 			if bucket.Count-latestCount > int64(s.chunkSize) || i == len(buckets)-1 {
 				// create a new chunk
-				chunk := newChunkRange(0)
+				chunk := newChunkRange()
 				var lower, upper, lowerSymbol, upperSymbol string
 				for j, col := range index.Columns {
 					if len(lowerValues) != 0 {
