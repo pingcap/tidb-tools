@@ -513,7 +513,7 @@ func computeID(name string, prefix string, bitSize int, shiftCount uint) (int64,
 	idStr := name[len(prefix):]
 	id, err := strconv.ParseUint(idStr, 10, bitSize)
 	if err != nil {
-		return 0, errors.NotValidf("suffix of %s's data type is not int64", idStr)
+		return 0, errors.NotValidf("the suffix of %s can't be converted to int64", idStr)
 	}
 
 	return int64(id << shiftCount), nil
