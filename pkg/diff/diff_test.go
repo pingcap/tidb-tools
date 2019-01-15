@@ -260,7 +260,7 @@ func generateData(dbConn *sql.DB, dbCfg dbutil.DBConfig, sourceTable, targetTabl
 }
 
 func updateData(dbConn *sql.DB, table string) error {
-	values, _, err := dbutil.GetRandomValues(context.Background(), dbConn, "test", table, "e", 3, "TRUE", "", nil)
+	values, _, err := dbutil.GetRandomValues(context.Background(), dbConn, "test", table, "e", 3, "TRUE", nil, "")
 	if err != nil {
 		return err
 	}
