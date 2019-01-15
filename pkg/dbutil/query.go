@@ -49,7 +49,7 @@ func ScanRow(rows *sql.Rows) (map[string][]byte, map[string]bool, error) {
 	null := make(map[string]bool)
 	for i := range colVals {
 		result[cols[i]] = colVals[i]
-		null[cols[i]] = (colVals[i] == nil)
+		null[cols[i]] = colVals[i] == nil
 	}
 
 	return result, null, nil

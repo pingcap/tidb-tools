@@ -46,7 +46,7 @@ func ShowIndex(ctx context.Context, db *sql.DB, schemaName string, table string)
 		if err1 != nil {
 			return nil, errors.Trace(err1)
 		}
-		seqInINdex, err1 := strconv.Atoi(string(fields["Seq_in_index"]))
+		seqInIndex, err1 := strconv.Atoi(string(fields["Seq_in_index"]))
 		if err != nil {
 			return nil, errors.Trace(err1)
 		}
@@ -59,7 +59,7 @@ func ShowIndex(ctx context.Context, db *sql.DB, schemaName string, table string)
 			NoneUnique:  string(fields["Non_unique"]) == "1",
 			KeyName:     string(fields["Key_name"]),
 			ColumnName:  string(fields["Column_name"]),
-			SeqInIndex:  seqInINdex,
+			SeqInIndex:  seqInIndex,
 			Cardinality: cardinality,
 		}
 		indices = append(indices, index)

@@ -144,7 +144,7 @@ func columnDefToCol(offset int, colDef *ast.ColumnDef) (*model.ColumnInfo, []*as
 	return column, constraints
 }
 
-// BuildTableInfo builds table infomation using column constraints.
+// BuildTableInfo builds table information using column constraints.
 func BuildTableInfo(tableName model.CIStr, columns []*model.ColumnInfo, constraints []*ast.Constraint) (tbInfo *model.TableInfo, err error) {
 	tbInfo = &model.TableInfo{
 		Name: tableName,

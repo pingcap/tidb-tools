@@ -38,15 +38,15 @@ func NewExecutableChecker() (*ExecutableChecker, error) {
 	logutil.InitLogger(&logutil.LogConfig{
 		Level: "error",
 	})
-	mocktikv, err := mockstore.NewMockTikvStore()
+	mockTikv, err := mockstore.NewMockTikvStore()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	_, err = session.BootstrapSession(mocktikv)
+	_, err = session.BootstrapSession(mockTikv)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	session, err := session.CreateSession4Test(mocktikv)
+	session, err := session.CreateSession4Test(mockTikv)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
