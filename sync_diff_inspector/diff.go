@@ -128,7 +128,7 @@ func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 
 // AdjustTableConfig adjusts the table's config by check-tables and table-config.
 func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
-	df.tableRouter, err = router.NewTableRouter(false, cfg.Rules)
+	df.tableRouter, err = router.NewTableRouter(false, cfg.TableRules)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -217,10 +217,10 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 
 	for _, table := range cfg.TableCfgs {
 		if _, ok := df.tables[table.Schema]; !ok {
-			return errors.Errorf("schema %s not found in check tables", table.Schema)
+			return errors.NotFoundf("schema %s in check tables", table.Schema)
 		}
 		if _, ok := df.tables[table.Schema][table.Table]; !ok {
-			return errors.Errorf("table %s.%s not found in check tables", table.Schema, table.Table)
+			return errors.NotFoundf("table %s.%s in check tables", table.Schema, table.Table)
 		}
 
 		sourceTables := make([]TableInstance, 0, len(table.SourceTables))
@@ -265,17 +265,18 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 
 // GetAllTables get all tables in all databases.
 func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]map[string]interface{}, error) {
+	// instanceID => schema => table
 	allTablesMap := make(map[string]map[string]map[string]interface{})
 
 	allTablesMap[df.targetDB.InstanceID] = make(map[string]map[string]interface{})
 	targetSchemas, err := dbutil.GetSchemas(df.ctx, df.targetDB.Conn)
 	if err != nil {
-		return nil, errors.Errorf("get schemas from %s error %v", df.targetDB.InstanceID, errors.Trace(err))
+		return nil, errors.Annotatef(err, "get schemas from %s", df.targetDB.InstanceID)
 	}
 	for _, schema := range targetSchemas {
 		allTables, err := dbutil.GetTables(df.ctx, df.targetDB.Conn, schema)
 		if err != nil {
-			return nil, errors.Errorf("get tables from %s.%s error %v", df.targetDB.InstanceID, schema, errors.Trace(err))
+			return nil, errors.Annotatef(err, "get tables from %s.%s", df.targetDB.InstanceID, schema)
 		}
 		allTablesMap[df.targetDB.InstanceID][schema] = diff.SliceToMap(allTables)
 	}
@@ -284,13 +285,13 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]map[string]inte
 		allTablesMap[source.InstanceID] = make(map[string]map[string]interface{})
 		sourceSchemas, err := dbutil.GetSchemas(df.ctx, source.Conn)
 		if err != nil {
-			return nil, errors.Errorf("get schemas from %s error %v", source.InstanceID, errors.Trace(err))
+			return nil, errors.Annotatef(err, "get schemas from %s", source.InstanceID)
 		}
 
 		for _, schema := range sourceSchemas {
 			allTables, err := dbutil.GetTables(df.ctx, source.Conn, schema)
 			if err != nil {
-				return nil, errors.Errorf("get tables from %s.%s error %v", source.InstanceID, schema, errors.Trace(err))
+				return nil, errors.Annotatef(err, "get tables from %s.%s", source.InstanceID, schema)
 			}
 			allTablesMap[source.InstanceID][schema] = diff.SliceToMap(allTables)
 		}
