@@ -169,8 +169,8 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 	return cnt.Int64, nil
 }
 
-// GetRandomValues returns some random value and these value's count of a column, just like sampling. Tips: args is the value in limitRange.
-func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int, limitRange string, collation string, args []interface{}) ([]string, []int, error) {
+// GetRandomValues returns some random value and these value's count of a column, just like sampling. Tips: limitArgs is the value in limitRange.
+func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int, limitRange string, limitArgs []interface{}, collation string) ([]string, []int, error) {
 	/*
 		example:
 		mysql> SELECT `id`, COUNT(*) count FROM (SELECT `id` FROM `test`.`test`  WHERE `id` COLLATE "latin1_bin" > 0 AND `id` COLLATE "latin1_bin" < 100 ORDER BY RAND() LIMIT 5) rand_tmp GROUP BY `id` ORDER BY `id` COLLATE "latin1_bin";
@@ -198,9 +198,9 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 
 	query := fmt.Sprintf("SELECT %[1]s, COUNT(*) count FROM (SELECT %[1]s FROM %[2]s WHERE %[3]s ORDER BY RAND() LIMIT %[4]d)rand_tmp GROUP BY %[1]s ORDER BY %[1]s%[5]s",
 		escapeName(column), TableName(schemaName, table), limitRange, num, collation)
-	log.Debugf("get random values sql: %s, args: %v", query, args)
+	log.Debugf("get random values sql: %s, args: %v", query, limitArgs)
 
-	rows, err := db.QueryContext(ctx, query, args...)
+	rows, err := db.QueryContext(ctx, query, limitArgs...)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
@@ -221,7 +221,7 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 }
 
 // GetMinMaxValue return min and max value of given column by specified limitRange condition.
-func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column string, limitRange string, collation string, args []interface{}) (string, string, error) {
+func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column string, limitRange string, limitArgs []interface{}, collation string) (string, string, error) {
 	/*
 		example:
 		mysql> SELECT MIN(`id`) as MIN, MAX(`id`) as MAX FROM `test`.`testa` WHERE id > 0 AND id < 10;
@@ -242,10 +242,10 @@ func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column strin
 
 	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ MIN(`%s`%s) as MIN, MAX(`%s`%s) as MAX FROM `%s`.`%s` WHERE %s",
 		column, collation, column, collation, schema, table, limitRange)
-	log.Debugf("GetMinMaxValue query: %v, args: %v", query, args)
+	log.Debugf("GetMinMaxValue query: %v, args: %v", query, limitArgs)
 
 	var min, max sql.NullString
-	rows, err := db.QueryContext(ctx, query, args...)
+	rows, err := db.QueryContext(ctx, query, limitArgs...)
 	if err != nil {
 		return "", "", errors.Trace(err)
 	}

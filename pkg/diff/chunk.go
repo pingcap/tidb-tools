@@ -249,7 +249,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 			useNewColumn = true
 			splitCol = columns[colNum].Name.O
 
-			min, max, err = dbutil.GetMinMaxValue(context.Background(), db, schema, table, splitCol, limitRange, s.collation, utils.StringsToInterfaces(args))
+			min, max, err = dbutil.GetMinMaxValue(context.Background(), db, schema, table, splitCol, limitRange, utils.StringsToInterfaces(args), s.collation)
 			if err != nil {
 				if errors.Cause(err) == dbutil.ErrNoData {
 					log.Infof("no data found in %s.%s range %s, args %v", schema, table, limitRange, args)
@@ -270,7 +270,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 	valueCounts := make([]int, 0, count)
 
 	// get random value as split value
-	randomValues, randomValueCount, err := dbutil.GetRandomValues(context.Background(), db, schema, table, splitCol, count-1, limitRange, s.collation, utils.StringsToInterfaces(args))
+	randomValues, randomValueCount, err := dbutil.GetRandomValues(context.Background(), db, schema, table, splitCol, count-1, limitRange, utils.StringsToInterfaces(args), s.collation)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
