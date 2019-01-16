@@ -60,7 +60,6 @@ func (*testClientSuite) testSelector(c *C, algorithm string) {
 	pumpsClient := &PumpsClient{
 		Pumps:              NewPumpInfos(),
 		Selector:           NewSelector(algorithm),
-		RetryTime:          DefaultAllRetryTime,
 		BinlogWriteTimeout: DefaultBinlogWriteTimeout,
 	}
 
@@ -107,13 +106,14 @@ func (*testClientSuite) testSelector(c *C, algorithm string) {
 	tCase.setNodeID = []string{"pump0", "", "pump0", "pump1", "", "pump2"}
 	tCase.setAvliable = []bool{true, false, false, true, false, true}
 	tCase.choosePumps = []*PumpStatus{pumpsClient.Pumps.Pumps["pump0"], pumpsClient.Pumps.Pumps["pump0"], nil,
-		pumpsClient.Pumps.Pumps["pump1"], pumpsClient.Pumps.Pumps["pump1"], pumpsClient.Pumps.Pumps["pump1"]}
+		nil, pumpsClient.Pumps.Pumps["pump1"], pumpsClient.Pumps.Pumps["pump1"]}
 
 	for i, nodeID := range tCase.setNodeID {
 		if nodeID != "" {
 			pumpsClient.setPumpAvaliable(pumpsClient.Pumps.Pumps[nodeID], tCase.setAvliable[i])
 		}
-		pump := pumpsClient.Selector.Select(tCase.binlogs[i])
+		pump := pumpsClient.Selector.Select(tCase.binlogs[i], 0)
+		pumpsClient.Selector.Feedback(tCase.binlogs[i].StartTs, tCase.binlogs[i].Tp, pump)
 		c.Assert(pump, Equals, tCase.choosePumps[i])
 	}
 
@@ -127,19 +127,18 @@ func (*testClientSuite) testSelector(c *C, algorithm string) {
 			StartTs: int64(j),
 		}
 
-		pump1 := pumpsClient.Selector.Select(prewriteBinlog)
+		pump1 := pumpsClient.Selector.Select(prewriteBinlog, 0)
 		if j%2 == 0 {
-			pump1 = pumpsClient.Selector.Next(prewriteBinlog, 0)
+			pump1 = pumpsClient.Selector.Select(prewriteBinlog, 1)
 		}
+		pumpsClient.Selector.Feedback(prewriteBinlog.StartTs, prewriteBinlog.Tp, pump1)
 
 		pumpsClient.setPumpAvaliable(pump1, false)
-		pump2 := pumpsClient.Selector.Select(commitBinlog)
-		c.Assert(pump2.IsAvaliable, Equals, false)
+		pump2 := pumpsClient.Selector.Select(commitBinlog, 0)
+		pumpsClient.Selector.Feedback(commitBinlog.StartTs, commitBinlog.Tp, pump2)
 		// prewrite binlog and commit binlog with same start ts should choose same pump
 		c.Assert(pump1.NodeID, Equals, pump2.NodeID)
-
 		pumpsClient.setPumpAvaliable(pump1, true)
-		c.Assert(pump2.IsAvaliable, Equals, true)
 	}
 }
 
@@ -156,6 +155,10 @@ func (t *testClientSuite) TestWriteBinlog(c *C) {
 			"tcp",
 		},
 	}
+
+	// make test faster
+	RetryInterval = 100 * time.Millisecond
+	CommitBinlogTimeout = time.Second
 
 	for _, cfg := range pumpServerConfig {
 		pumpServer, err := createMockPumpServer(cfg.addr, cfg.serverMode)
@@ -209,7 +212,6 @@ func (t *testClientSuite) TestWriteBinlog(c *C) {
 		// test when pump is down
 		pumpServer.Close()
 
-		CommitBinlogMaxRetryTime = time.Second
 		// write commit binlog failed will not return error
 		err = pumpClient.WriteBinlog(commitBinlog)
 		c.Assert(err, IsNil)
@@ -281,8 +283,7 @@ func mockPumpsClient(client pb.PumpClient) *PumpsClient {
 			NodeID: nodeID1,
 			State:  node.Online,
 		},
-		IsAvaliable: true,
-		Client:      client,
+		Client: client,
 	}
 
 	// add a pump without grpc client
@@ -292,7 +293,6 @@ func mockPumpsClient(client pb.PumpClient) *PumpsClient {
 			NodeID: nodeID2,
 			State:  node.Online,
 		},
-		IsAvaliable: true,
 	}
 
 	pumpInfos := NewPumpInfos()
@@ -302,12 +302,10 @@ func mockPumpsClient(client pb.PumpClient) *PumpsClient {
 	pumpInfos.AvaliablePumps[nodeID2] = pump2
 
 	pCli := &PumpsClient{
-		ClusterID: 1,
-		Pumps:     pumpInfos,
-		Selector:  NewSelector(Range),
-		// have two pump, so use 2 * testRetryTime
-		RetryTime:          2 * testRetryTime,
-		BinlogWriteTimeout: 15 * time.Second,
+		ClusterID:          1,
+		Pumps:              pumpInfos,
+		Selector:           NewSelector(Range),
+		BinlogWriteTimeout: time.Second,
 	}
 	pCli.Selector.SetPumps([]*PumpStatus{pump1, pump2})
 

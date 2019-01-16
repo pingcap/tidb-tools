@@ -37,13 +37,13 @@ func queryNodesByKind(urls string, kind string) error {
 		return errors.Trace(err)
 	}
 
-	nodes, err := registry.Nodes(context.Background(), node.NodePrefix[kind])
+	nodes, _, err := registry.Nodes(context.Background(), node.NodePrefix[kind])
 	if err != nil {
 		return errors.Trace(err)
 	}
 
 	for _, n := range nodes {
-		log.Infof("%s: %+v", kind, n)
+		log.Infof("%s: %s", kind, formatNodeInfo(n))
 	}
 
 	return nil
@@ -60,7 +60,7 @@ func updateNodeState(urls, kind, nodeID, state string) error {
 		return errors.Trace(err)
 	}
 
-	nodes, err := registry.Nodes(context.Background(), node.NodePrefix[kind])
+	nodes, _, err := registry.Nodes(context.Background(), node.NodePrefix[kind])
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -101,7 +101,7 @@ func applyAction(urls, kind, nodeID string, action string) error {
 		return errors.Trace(err)
 	}
 
-	nodes, err := registry.Nodes(context.Background(), node.NodePrefix[kind])
+	nodes, _, err := registry.Nodes(context.Background(), node.NodePrefix[kind])
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -128,4 +128,9 @@ func applyAction(urls, kind, nodeID string, action string) error {
 	}
 
 	return errors.NotFoundf("nodeID %s", nodeID)
+}
+
+func formatNodeInfo(status *node.Status) string {
+	updateTime := utils.TSOToRoughTime(status.UpdateTS)
+	return fmt.Sprintf("{NodeID: %s, Addr: %s, State: %s, MaxCommitTS: %d, UpdateTime: %v}", status.NodeID, status.Addr, status.State, status.MaxCommitTS, updateTime)
 }
