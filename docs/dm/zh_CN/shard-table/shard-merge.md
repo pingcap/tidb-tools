@@ -17,10 +17,10 @@
 
 ### 限制
 
-- 一个逻辑 sharding group（需要合并同步到下游同一个表的所有分表组成的 group）内的所有上游分表必须以相同的顺序执行（[table 路由](../features/table-route.md) 转换后相同的）DDL
+- 一个逻辑 sharding group（需要合并同步到下游同一个表的所有分表组成的 group）内的所有上游分表必须以相同的顺序执行相同的 DDL（库名和表名可以不同）
     - 比如不支持 table_1 先增加列 a 后再增加列 b，而 table_2 先增加列 b 后再增加列 a，这种不同顺序的 DDL 执行方式
-- 每个逻辑 sharding group 推荐使用一个独立的任务进行同步
-    - 如果一个任务内存在多个 sharding group，则必须等待一个 sharding group 的 DDL 同步完成后，才能开始对其他 sharding group 执行 DDL
+- 如果一个任务内存在多个 sharding group，则必须等待一个 sharding group 的 DDL 同步完成后，才能开始对其他 sharding group 执行 DDL
+    - 每个逻辑 sharding group 推荐使用一个独立的任务进行同步
 - 一个逻辑 sharding group 内的所有上游分表，都应该执行对应的 DDL
     - 比如其中有 DM-worker-2 对应的一个或多个上游分表未执行 DDL，则其他已执行 DDL 的 DM-worker 都会暂停同步任务，等待 DM-worker-2 收到对应上游的 DDL
 - 一个逻辑 sharding group 必须等待一个 DDL 完全执行完毕后，才能执行下一个 DDL
