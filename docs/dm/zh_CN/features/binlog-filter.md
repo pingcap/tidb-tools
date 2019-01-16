@@ -8,7 +8,8 @@ binlog 过滤
 - [使用示例](#使用示例)
   - [过滤分库分表的所有删除操作](#过滤分库分表的所有删除操作)
   - [只同步分库分表的 DML 操作](#只同步分库分表的-DML-操作)
-  - [过滤 TiDB 不支持的 SQL 的语句](#过滤-TiDB-不支持的-SQL-的语句)
+  - [过滤 TiDB 不支持的 SQL 语句](#过滤-TiDB-不支持的-SQL-语句)
+  - [过滤 TiDB parser 不支持的 SQL 语句](#过滤-TiDB-parser-不支持的-SQL-语句)
 
 ### 功能介绍
 
@@ -110,7 +111,7 @@ filters:
 
 ***
 
-#### 过滤 TiDB 不支持的 SQL 的语句
+#### 过滤 TiDB 不支持的 SQL 语句
 
 设置下面的规则过滤不支持的 `PROCEDURE statement`
 
@@ -124,3 +125,21 @@ filters:
 ```
 
 - `filter-procedure-rule` 过滤所有匹配到 pattern `test_*`.`t_*` 的 table 的 `^CREATE\\s+PROCEDURE`、`^DROP\\s+PROCEDURE` 操作
+
+---
+
+#### 过滤 TiDB parser 不支持的 SQL 语句
+
+对于 TiDB parser 不支持的 SQL 语句，DM 无法解析获得 `schema`/`table` 信息，因此需要使用全局过滤规则（`schema-pattern: "*"`）。
+
+注意：全局过滤规则必须设置尽可能严格以避免不预期地过滤需要同步的数据
+
+设置下面的规则过滤 TiDB parser 不支持的 `PARTITION statement`
+
+```yaml
+filters:
+  filter-partition-rule:
+    schema-pattern: "*"
+    sql-pattern: ["ALTER\\s+TABLE[\\s\\S]*ADD\\s+PARTITION", "ALTER\\s+TABLE[\\s\\S]*DROP\\s+PARTITION"]
+    action: Ignore
+```

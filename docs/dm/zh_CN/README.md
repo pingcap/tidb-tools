@@ -19,7 +19,10 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 ### 用户指引
 
 - [Get Started](./get-started.md)
-- [从 syncer/loader 升级](./upgrade-to-dm)
+- 从 syncer/loader 升级
+    - [loader 升级到 DM](./upgrade/upgrade-from-loader.md)
+    - [syncer 升级到 DM](./upgrade/upgrade-from-syncer.md)
+- [DM 版本间升级指引](./upgrade/upgrade-guide.md)
 
 ### 使用手册
 

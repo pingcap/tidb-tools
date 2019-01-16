@@ -26,6 +26,7 @@ skip 或 replace 异常 SQL
 注意：
 - skip 或 replace 只适合用于一次性跳过/替代执行 **下游 TiDB 不支持执行的 SQL**，其它同步错误请不要使用此方式进行处理
     - 其它同步错误可尝试使用 [同步表黑白名单](../features/black-white-list.md) 或 [binlog 过滤](../features/binlog-filter.md)
+    - 如果需要过滤 TiDB parser 不支持解析的 SQL 请使用 [过滤 TiDB parser 不支持的 SQL 语句](../features/binlog-filter.md#过滤-TiDB-parser-不支持的-SQL-语句) 
 - 如果业务不能接受下游 TiDB 不执行出错的 DDL，且也不能使用其它 DDL 作为替代，则不适合使用本功能
     - 比如：DROP PRIMARY KEY
     - 此时只能在下游重建（DDL 执行完后的）新表结构对应的表，并完整重导该表的全部数据
