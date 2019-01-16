@@ -50,6 +50,7 @@ Go Version: go version go1.11.2 linux/amd64
 
 1. 变更 `inventory.ini` 配置信息
     - 移除所有 `dm_worker_status_port` 配置项，根据需要变更 `dm_worker_port` 配置项
+    - 移除所有 `dm_master_status_port` 配置项，根据需要变更 `dm_master_port` 配置项
     
     如将
     ```bash
@@ -58,6 +59,14 @@ Go Version: go version go1.11.2 linux/amd64
     变更为
     ```bash
     dm_worker1_1 ansible_host=172.16.10.72 server_id=101 deploy_dir=/data1/dm_worker dm_worker_port=8262 mysql_host=172.16.10.81 mysql_user=root mysql_password='VjX8cEeTX+qcvZ3bPaO4h0C80pe/1aU=' mysql_port=3306
+    ```
+    将
+    ```bash
+    dm_master ansible_host=172.16.10.71 dm_master_port=12080 dm_master_status_port=12081	
+    ```
+    变更为
+    ```bash
+    dm_master ansible_host=172.16.10.71 dm_master_port=8261
     ```
 2. 使用 DM-Ansible 滚动升级 DM、Prometheus 与 Grafana
 
