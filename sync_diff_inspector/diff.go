@@ -151,9 +151,13 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 
 		for schema, allTables := range allSchemas {
 			for table := range allTables {
-				targetSchema, targetTable, err := df.tableRouter.Route(schema, table)
+				targetSchema, targetTable, findRule, err := df.tableRouter.Route(schema, table)
 				if err != nil {
 					return errors.Errorf("get route result for %s.%s.%s failed, error %v", instanceID, schema, table, err)
+				}
+
+				if !findRule {
+					continue
 				}
 
 				if _, ok := sourceTablesMap[targetSchema]; !ok {
