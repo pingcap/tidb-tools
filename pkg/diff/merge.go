@@ -41,11 +41,10 @@ func (r RowDatas) Less(i, j int) bool {
 		data1 = r.Rows[i].Data[col.Name.O]
 		data2 = r.Rows[j].Data[col.Name.O]
 		if needQuotes(col.FieldType) {
-			if string(data1) > string(data2) {
-				return false
-			} else if string(data1) < string(data2) {
-				return true
-			} else {
+			strData1 := string(data1)
+			strData2 := string(data2)
+
+			if strData1 == strData2 {
 				// `NULL` is less than ""
 				if r.Rows[i].Null[col.Name.O] {
 					return true
@@ -55,19 +54,25 @@ func (r RowDatas) Less(i, j int) bool {
 				}
 				continue
 			}
+			if strData1 > strData2 {
+				return false
+			}
+			return true
 		} else {
 			num1, err1 := strconv.ParseFloat(string(data1), 64)
 			num2, err2 := strconv.ParseFloat(string(data2), 64)
 			if err1 != nil || err2 != nil {
 				log.Fatalf("convert %s, %s to float failed, err1: %v, err2: %v", string(data1), string(data2), err1, err2)
 			}
-			if num1 > num2 {
-				return false
-			} else if num1 < num2 {
-				return true
-			} else {
+
+			if num1 == num2 {
 				continue
 			}
+			if num1 > num2 {
+				return false
+			}
+			return true
+
 		}
 	}
 
