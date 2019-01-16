@@ -33,6 +33,7 @@ skip 或 replace 异常 SQL
 - 单次 skip 或 replace 操作都是针对单个 binlog event 的
 - `--sharding` 仅用于对 sharding group 预设操作，必须在 DDL 执行之前预设，不能在 DDL 已经执行后预设
     - `--sharding` 模式，只支持预设，只能使用 `--sql-pattern` 来进行匹配
+    - 有关 DM 处理 sharding DDL 同步的原理，参见 [分库分表合并同步原理](../shard-table/shard-merge.md#原理)
 
 
 #### 如何匹配 binlog event

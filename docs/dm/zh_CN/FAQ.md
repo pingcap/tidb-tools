@@ -15,7 +15,7 @@ TiDB 对部分 DDL 并不支持（或者 DML 执行出错），需要用户根�
 
 主要需要使用的命令包括 `show-ddl-locks`, `unlock-ddl-lock`, `break-ddl-lock`。
 
-但使用上述命令人为干预 sharding DDL 同步前，先阅读 [sharding DDL 使用限制](./shard-table/restrictions.md)。
+但使用上述命令人为干预 sharding DDL 同步前，先阅读 [分库分表合并同步限制](./shard-table/shard-merge.md#限制)。
 
 具体操作见 [手动处理 sharding DDL lock](./shard-table/handle-DDL-lock.md)
 
