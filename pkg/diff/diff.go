@@ -535,6 +535,7 @@ func compareData(map1, map2 map[string][]byte, null1, null2 map[string]bool, ord
 			if num1 > num2 {
 				cmp = 1
 			}
+			break
 		}
 	}
 
