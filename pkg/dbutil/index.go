@@ -46,7 +46,7 @@ func ShowIndex(ctx context.Context, db *sql.DB, schemaName string, table string)
 		if err1 != nil {
 			return nil, errors.Trace(err1)
 		}
-		seqInINdex, err1 := strconv.Atoi(string(fields["Seq_in_index"].Data))
+		seqInIndex, err1 := strconv.Atoi(string(fields["Seq_in_index"].Data))
 		if err != nil {
 			return nil, errors.Trace(err1)
 		}
