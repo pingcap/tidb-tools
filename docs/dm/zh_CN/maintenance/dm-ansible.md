@@ -348,11 +348,13 @@ $ cd /home/tidb/dm-ansible
 $ rm -rf downloads
 ```
 
-2. 使用 playbook 下载最新的 DM binary，自动替换 `/home/tidb/dm-ansible/resource/bin/` 目录下 binary 文件。
-
+2. 使用 playbook 下载最新的（latest） DM binary，自动替换 `/home/tidb/dm-ansible/resource/bin/` 目录下 binary 文件。
 ```
 $ ansible-playbook local_prepare.yml
 ```
+
+> 如果需要根据 Git Commit Hash 下载指定版本的 DM binary，可以直接从 http://pingcap-dev.hk.ufileos.com/builds/pingcap/tidb-enterprise-tools/{git-commit-hash}/centos7/dm-linux-amd64.tar.gz 进行下载。
+> 如要下载 Git Commit Hash 为 cd753da958ea9a0d5686abc9f1988b61c9d36a89 的 DM bianry，则下载地址为 <http://pingcap-dev.hk.ufileos.com/builds/pingcap/tidb-enterprise-tools/cd753da958ea9a0d5686abc9f1988b61c9d36a89/centos7/dm-linux-amd64.tar.gz>。
 
 #### 使用 Ansible 滚动升级
 
