@@ -32,6 +32,14 @@ fix-sql-file = "fix.sql"
 # use this tidb's statistics information to split chunk
 # tidb-instance-id = ""
 
+# uncomment this if comparing data with different database name or table name
+#[[table-rules]]
+#schema-pattern = "test_*"
+#table-pattern = "t_*"
+#target-schema = "test"
+#target-table = "t"
+
+
 # tables need to check.
 [[check-tables]]
 # schema name in target database.

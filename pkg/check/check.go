@@ -101,7 +101,7 @@ func Do(ctx context.Context, checkers []Checker) (*Results, error) {
 				}
 
 				// if total == successful + warning + failed, it's finished
-				finished = (total == successful+warning+failed)
+				finished = total == successful+warning+failed
 				results.Results = append(results.Results, result)
 
 				if finished {
