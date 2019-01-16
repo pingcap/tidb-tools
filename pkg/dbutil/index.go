@@ -59,7 +59,7 @@ func ShowIndex(ctx context.Context, db *sql.DB, schemaName string, table string)
 			NoneUnique:  string(fields["Non_unique"].Data) == "1",
 			KeyName:     string(fields["Key_name"].Data),
 			ColumnName:  string(fields["Column_name"].Data),
-			SeqInIndex:  seqInINdex,
+			SeqInIndex:  seqInIndex,
 			Cardinality: cardinality,
 		}
 		indices = append(indices, index)
