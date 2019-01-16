@@ -42,38 +42,15 @@ func (t *testRouterSuite) TestRoute(c *C) {
 		table        string
 		targetSchema string
 		targetTable  string
-		matched     bool
-	}{{"test_1_a", "abc1", "t1", "abc", true}, {
-		"test_2_a",
-		"abc2",
-		"t1",
-		"abc",
-		true,
-	}, {
-		"test_1_a",
-		"test1",
-		"t2",
-		"test",
-		true,
-	}, {
-		"test_2_a",
-		"test2",
-		"t2",
-		"test",
-		true,
-	}, {
-		"test_1_a",
-		"xyz",
-		"test",
-		"xyz",
-		true,
-	}, {
-		"abc",
-		"abc",
-		"abc",
-		"abc",
-		false,
-	}}
+		matched      bool
+	}{
+		{"test_1_a", "abc1", "t1", "abc", true},
+		{"test_2_a", "abc2", "t1", "abc", true},
+		{"test_1_a", "test1", "t2", "test", true},
+		{"test_2_a", "test2", "t2", "test", true},
+		{"test_1_a", "xyz", "test", "xyz", true},
+		{"abc", "abc", "abc", "abc", false},
+	}
 
 	// initial table router
 	router, err := NewTableRouter(false, rules)
