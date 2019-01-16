@@ -22,6 +22,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -184,6 +185,9 @@ type Config struct {
 
 	// the tables to be checked
 	Tables []*CheckTables `toml:"check-tables" json:"check-tables"`
+
+	// TableRules defines table name and database name's conversion relationship between source database and target database
+	TableRules []*router.TableRule `toml:"table-rules" json:"table-rules"`
 
 	// the config of table
 	TableCfgs []*TableConfig `toml:"table-config" json:"table-config"`
