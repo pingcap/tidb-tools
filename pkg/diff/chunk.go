@@ -27,11 +27,14 @@ import (
 )
 
 var (
-	equal string = "="
-	lt    string = "<"
-	lte   string = "<="
-	gt    string = ">"
-	gte   string = ">="
+	equal = "="
+	lt    = "<"
+	lte   = "<="
+	gt    = ">"
+	gte   = ">="
+
+	bucketMode = "bucket"
+	normalMode = "normalMode"
 )
 
 type bound struct {
@@ -59,7 +62,7 @@ func (c *chunkRange) toString(mode string, collation string) (string, []string) 
 		collation = fmt.Sprintf(" COLLATE '%s'", collation)
 	}
 
-	if mode != "bucket" {
+	if mode != bucketMode {
 		conditions := make([]string, 0, 2)
 		args := make([]string, 0, 2)
 
@@ -227,7 +230,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 		useNewColumn                             bool
 	)
 
-	chunkLimits, args := chunk.toString("normal", s.collation)
+	chunkLimits, args := chunk.toString(normalMode, s.collation)
 	limitRange := fmt.Sprintf("%s AND %s", chunkLimits, s.limits)
 
 	// if the last column's condition is not '=', continue use this column split data.
@@ -464,14 +467,14 @@ func getChunksForTable(table *TableInstance, columns []*model.ColumnInfo, chunkS
 		if err != nil || len(chunks) == 0 {
 			log.Warnf("use tidb bucket information to get chunks error: %v, chunks num: %d, will split chunk by random again", errors.Trace(err), len(chunks))
 		} else {
-			return chunks, "bucket", nil
+			return chunks, bucketMode, nil
 		}
 	}
 
 	// get chunks from tidb bucket information failed, use random.
 	s := randomSpliter{}
 	chunks, err := s.split(table, columns, chunkSize, limits, collation)
-	return chunks, "normal", err
+	return chunks, normalMode, err
 }
 
 // getSplitFields returns fields to split chunks, order by pk, uk, index, columns.

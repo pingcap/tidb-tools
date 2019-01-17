@@ -101,39 +101,48 @@ func (*testChunkSuite) TestChunkUpdate(c *C) {
 				lower:       "1",
 				lowerSymbol: ">",
 				upper:       "2",
-				upperSymbol: "<",
+				upperSymbol: "<=",
 			}, {
 				column:      "b",
 				lower:       "3",
-				lowerSymbol: ">",
+				lowerSymbol: ">=",
 				upper:       "4",
 				upperSymbol: "<",
 			},
 		},
 	}
 
-	// update a bound
-	newChunk := chunk.copyAndUpdate("a", "5", ">=", "6", "<=")
-	conditions, args := newChunk.toString("normal", "")
-	c.Assert(conditions, Equals, "`a` >= ? AND `a` <= ? AND `b` > ? AND `b` < ?")
-	expectArgs := []string{"5", "6", "3", "4"}
-	for i, arg := range args {
-		c.Assert(arg, Equals, expectArgs[i])
+	testCases := []struct {
+		boundArgs  []string
+		expectStr  string
+		expectArgs []string
+	}{
+		{
+			[]string{"a", "5", ">=", "6", "<="},
+			"`a` >= ? AND `a` <= ? AND `b` >= ? AND `b` < ?",
+			[]string{"5", "6", "3", "4"},
+		}, {
+			[]string{"a", "5", ">=", "6", "<"},
+			"`a` >= ? AND `a` < ? AND `b` >= ? AND `b` < ?",
+			[]string{"5", "6", "3", "4"},
+		}, {
+			[]string{"c", "7", ">", "8", "<"},
+			"`a` > ? AND `a` <= ? AND `b` >= ? AND `b` < ? AND `c` > ? AND `c` < ?",
+			[]string{"1", "2", "3", "4", "7", "8"},
+		},
 	}
 
-	// add a new bound
-	newChunk = chunk.copyAndUpdate("c", "7", ">", "8", "<")
-	conditions, args = newChunk.toString("normal", "")
-	c.Assert(conditions, Equals, "`a` > ? AND `a` < ? AND `b` > ? AND `b` < ? AND `c` > ? AND `c` < ?")
-	expectArgs = []string{"1", "2", "3", "4", "7", "8"}
-	for i, arg := range args {
-		c.Assert(arg, Equals, expectArgs[i])
+	for _, cs := range testCases {
+		newChunk := chunk.copyAndUpdate(cs.boundArgs[0], cs.boundArgs[1], cs.boundArgs[2], cs.boundArgs[3], cs.boundArgs[4])
+		conditions, args := newChunk.toString(normalMode, "")
+		c.Assert(conditions, Equals, cs.expectStr)
+		c.Assert(args, DeepEquals, cs.expectArgs)
 	}
 
 	// the origin chunk is not changed
-	conditions, args = chunk.toString("normal", "")
-	c.Assert(conditions, Equals, "`a` > ? AND `a` < ? AND `b` > ? AND `b` < ?")
-	expectArgs = []string{"1", "2", "3", "4"}
+	conditions, args := chunk.toString(normalMode, "")
+	c.Assert(conditions, Equals, "`a` > ? AND `a` <= ? AND `b` >= ? AND `b` < ?")
+	expectArgs := []string{"1", "2", "3", "4"}
 	for i, arg := range args {
 		c.Assert(arg, Equals, expectArgs[i])
 	}
@@ -164,28 +173,28 @@ func (*testChunkSuite) TestChunkToString(c *C) {
 		},
 	}
 
-	conditions, args := chunk.toString("normal", "")
+	conditions, args := chunk.toString(normalMode, "")
 	c.Assert(conditions, Equals, "`a` > ? AND `a` < ? AND `b` > ? AND `b` < ? AND `c` > ? AND `c` < ?")
 	expectArgs := []string{"1", "2", "3", "4", "5", "6"}
 	for i, arg := range args {
 		c.Assert(arg, Equals, expectArgs[i])
 	}
 
-	conditions, args = chunk.toString("normal", "latin1")
+	conditions, args = chunk.toString(normalMode, "latin1")
 	c.Assert(conditions, Equals, "`a` COLLATE 'latin1' > ? AND `a` COLLATE 'latin1' < ? AND `b` COLLATE 'latin1' > ? AND `b` COLLATE 'latin1' < ? AND `c` COLLATE 'latin1' > ? AND `c` COLLATE 'latin1' < ?")
 	expectArgs = []string{"1", "2", "3", "4", "5", "6"}
 	for i, arg := range args {
 		c.Assert(arg, Equals, expectArgs[i])
 	}
 
-	conditions, args = chunk.toString("bucket", "")
+	conditions, args = chunk.toString(bucketMode, "")
 	c.Assert(conditions, Equals, "((`a` > ?) OR (`a` = ? AND `b` > ?) OR (`a` = ? AND `b` = ? AND `c` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` < ?) OR (`a` = ? AND `b` = ? AND `c` < ?))")
 	expectArgs = []string{"1", "1", "3", "1", "3", "5", "2", "2", "4", "2", "4", "6"}
 	for i, arg := range args {
 		c.Assert(arg, Equals, expectArgs[i])
 	}
 
-	conditions, args = chunk.toString("bucket", "latin1")
+	conditions, args = chunk.toString(bucketMode, "latin1")
 	c.Assert(conditions, Equals, "((`a` COLLATE 'latin1' > ?) OR (`a` = ? AND `b` COLLATE 'latin1' > ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE 'latin1' > ?)) AND ((`a` COLLATE 'latin1' < ?) OR (`a` = ? AND `b` COLLATE 'latin1' < ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE 'latin1' < ?))")
 	expectArgs = []string{"1", "1", "3", "1", "3", "5", "2", "2", "4", "2", "4", "6"}
 	for i, arg := range args {
