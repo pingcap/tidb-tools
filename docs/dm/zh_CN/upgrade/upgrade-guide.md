@@ -97,6 +97,8 @@ Go Version: go version go1.11.2 linux/amd64
 - `source_id`: 存在于 `inventory.ini` 中，用于标识一个上游 MySQL 实例或一个主从复制组
 - `source-id`: 存在于任务配置文件的 `mysql-instances` 中，其取值与 `inventory.ini` 中的 `source_id` 对应
 
+**注意：** 如果需要确保已有任务存储在下游数据库的断点信息能继续被使用，`source_id`/`source-id` 的值需要与对应 DM-worker 变更前的 `instance-id` 一致。
+
 #### 升级操作示例
 
 1. 变更 `inventory.ini` 配置信息
@@ -120,10 +122,10 @@ Go Version: go version go1.11.2 linux/amd64
           port: 4306	
           user: "root"	
           password: "1234"	
-        instance-id: "instance118-4306" # unique in all instances, used as id when save checkpoints, configs, etc.
+    instance-id: "instance118-4306" # unique in all instances, used as id when save checkpoints, configs, etc.
     ```
     变更为
     ```yaml
-    source-id: "instance118-4306" # unique in all instances, used as id when save checkpoints, configs, etc.
+    source-id: "instance118-4306" # 如需要重用之前任务的断点，需要与原 instance-id 取值一致
     ```
 4. 使用变更后的任务配置重新启动任务
