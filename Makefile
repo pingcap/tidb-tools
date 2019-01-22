@@ -1,4 +1,4 @@
-.PHONY: build importer checker dump_region binlogctl sync_diff_inspector ddl_checker test check deps
+.PHONY: build importer dump_region binlogctl sync_diff_inspector ddl_checker test check deps
 
 # Ensure GOPATH is set before running build process.
 ifeq "$(GOPATH)" ""
@@ -31,9 +31,6 @@ prepare:
 
 importer:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/importer ./importer
-
-checker:
-	$(GO) build -ldflags '$(LDFLAGS)' -o bin/checker ./checker
 
 dump_region:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/dump_region ./dump_region
