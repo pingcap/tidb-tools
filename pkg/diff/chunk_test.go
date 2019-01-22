@@ -77,7 +77,7 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 	}
 
 	// split chunks
-	fields, err := getSplitFields(tableInstance.Conn, tableInstance.Schema, tableInstance.info, nil)
+	fields, err := getSplitFields(tableInstance.info, nil)
 	c.Assert(err, IsNil)
 	chunks, mode, err := getChunksForTable(tableInstance, fields, 100, "TRUE", "", false)
 	c.Assert(err, IsNil)

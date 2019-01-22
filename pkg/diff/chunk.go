@@ -413,7 +413,6 @@ func (s *bucketSpliter) getChunksByBuckets() ([]*chunkRange, error) {
 		}
 
 		var (
-			chunkNum    int64
 			lowerValues []string
 			upperValues []string
 			latestCount int64
@@ -448,7 +447,6 @@ func (s *bucketSpliter) getChunksByBuckets() ([]*chunkRange, error) {
 				chunks = append(chunks, chunk)
 				lowerValues = upperValues
 				latestCount = bucket.Count
-				chunkNum++
 			}
 		}
 
@@ -478,7 +476,7 @@ func getChunksForTable(table *TableInstance, columns []*model.ColumnInfo, chunkS
 }
 
 // getSplitFields returns fields to split chunks, order by pk, uk, index, columns.
-func getSplitFields(db *sql.DB, schema string, table *model.TableInfo, splitFields []string) ([]*model.ColumnInfo, error) {
+func getSplitFields(table *model.TableInfo, splitFields []string) ([]*model.ColumnInfo, error) {
 	cols := make([]*model.ColumnInfo, 0, len(table.Columns))
 	colsMap := make(map[string]interface{})
 
@@ -526,7 +524,11 @@ func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSiz
 		splitFieldArr = strings.Split(splitFields, ",")
 	}
 
-	fields, err := getSplitFields(table.Conn, table.Schema, table.info, splitFieldArr)
+	for i := range splitFieldArr {
+		splitFieldArr[i] = strings.TrimSpace(splitFieldArr[i])
+	}
+
+	fields, err := getSplitFields(table.info, splitFieldArr)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
