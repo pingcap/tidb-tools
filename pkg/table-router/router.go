@@ -123,7 +123,7 @@ func (r *Table) RemoveRule(rule *TableRule) error {
 
 // Route routes schema/table to target schema/table
 // don't support to route schema/table to multiple schema/table
-func (r *Table) Route(schema, table string) (targetSchema string, targetTable string, matched bool, err error) {
+func (r *Table) Route(schema, table string) (string, string, error) {
 	schemaL, tableL := schema, table
 	if !r.caseSensitive {
 		schemaL, tableL = strings.ToLower(schema), strings.ToLower(table)
@@ -139,7 +139,7 @@ func (r *Table) Route(schema, table string) (targetSchema string, targetTable st
 	for i := range rules {
 		rule, ok := rules[i].(*TableRule)
 		if !ok {
-			return "", "", false, errors.NotValidf("table route rule %+v", rules[i])
+			return "", "", errors.NotValidf("table route rule %+v", rules[i])
 		}
 
 		if len(rule.TablePattern) == 0 {
@@ -149,9 +149,13 @@ func (r *Table) Route(schema, table string) (targetSchema string, targetTable st
 		}
 	}
 
+	var (
+		targetSchema string
+		targetTable  string
+	)
 	if len(table) == 0 || len(tableRules) == 0 {
 		if len(schemaRules) > 1 {
-			return "", "", false, errors.NotSupportedf("route %s/%s to rule set(%d)", schema, table, len(schemaRules))
+			return "", "", errors.NotSupportedf("route %s/%s to rule set(%d)", schema, table, len(schemaRules))
 		}
 
 		if len(schemaRules) == 1 {
@@ -159,14 +163,10 @@ func (r *Table) Route(schema, table string) (targetSchema string, targetTable st
 		}
 	} else {
 		if len(tableRules) > 1 {
-			return "", "", false, errors.NotSupportedf("route %s/%s to rule set(%d)", schema, table, len(tableRules))
+			return "", "", errors.NotSupportedf("route %s/%s to rule set(%d)", schema, table, len(tableRules))
 		}
 
 		targetSchema, targetTable = tableRules[0].TargetSchema, tableRules[0].TargetTable
-	}
-
-	if len(targetSchema) != 0 || len(targetTable) != 0 {
-		matched = true
 	}
 
 	if len(targetSchema) == 0 {
@@ -177,5 +177,5 @@ func (r *Table) Route(schema, table string) (targetSchema string, targetTable st
 		targetTable = table
 	}
 
-	return targetSchema, targetTable, matched, nil
+	return targetSchema, targetTable, nil
 }

@@ -14,7 +14,6 @@
 package router
 
 import (
-	"fmt"
 	"testing"
 
 	. "github.com/pingcap/check"
@@ -37,43 +36,13 @@ func (t *testRouterSuite) TestRoute(c *C) {
 		{"test_2_*", "test*", "t2", "test"},
 	}
 
-	cases := []struct {
-		schema       string
-		table        string
-		targetSchema string
-		targetTable  string
-		matched     bool
-	}{{"test_1_a", "abc1", "t1", "abc", true}, {
-		"test_2_a",
-		"abc2",
-		"t1",
-		"abc",
-		true,
-	}, {
-		"test_1_a",
-		"test1",
-		"t2",
-		"test",
-		true,
-	}, {
-		"test_2_a",
-		"test2",
-		"t2",
-		"test",
-		true,
-	}, {
-		"test_1_a",
-		"xyz",
-		"test",
-		"xyz",
-		true,
-	}, {
-		"abc",
-		"abc",
-		"abc",
-		"abc",
-		false,
-	}}
+	cases := [][]string{
+		{"test_1_a", "abc1", "t1", "abc"},
+		{"test_2_a", "abc2", "t1", "abc"},
+		{"test_1_a", "test1", "t2", "test"},
+		{"test_2_a", "test2", "t2", "test"},
+		{"test_1_a", "xyz", "test", "xyz"},
+	}
 
 	// initial table router
 	router, err := NewTableRouter(false, rules)
@@ -85,25 +54,22 @@ func (t *testRouterSuite) TestRoute(c *C) {
 		c.Assert(err, NotNil)
 	}
 	for _, cs := range cases {
-		fmt.Println(cs)
-		schema, table, matched, err := router.Route(cs.schema, cs.table)
+		schema, table, err := router.Route(cs[0], cs[1])
 		c.Assert(err, IsNil)
-		c.Assert(schema, Equals, cs.targetSchema)
-		c.Assert(table, Equals, cs.targetTable)
-		c.Assert(matched, Equals, cs.matched)
+		c.Assert(schema, Equals, cs[2])
+		c.Assert(table, Equals, cs[3])
 	}
 
 	// update rules
 	rules[0].TargetTable = "xxx"
-	cases[0].targetTable = "xxx"
+	cases[0][3] = "xxx"
 	err = router.UpdateRule(rules[0])
 	c.Assert(err, IsNil)
 	for _, cs := range cases {
-		schema, table, matched, err := router.Route(cs.schema, cs.table)
+		schema, table, err := router.Route(cs[0], cs[1])
 		c.Assert(err, IsNil)
-		c.Assert(schema, Equals, cs.targetSchema)
-		c.Assert(table, Equals, cs.targetTable)
-		c.Assert(matched, Equals, cs.matched)
+		c.Assert(schema, Equals, cs[2])
+		c.Assert(table, Equals, cs[3])
 	}
 
 	// remove rule
@@ -112,34 +78,32 @@ func (t *testRouterSuite) TestRoute(c *C) {
 	// remove not existing rule
 	err = router.RemoveRule(rules[0])
 	c.Assert(err, NotNil)
-	schema, table, matched, err := router.Route(cases[0].schema, cases[0].table)
+	schema, table, err := router.Route(cases[0][0], cases[0][1])
 	c.Assert(err, IsNil)
 	c.Assert(schema, Equals, "test")
 	c.Assert(table, Equals, "abc1")
-	c.Assert(matched, Equals, true)
 	// delete removed rule
 	rules = rules[1:]
 	cases = cases[1:]
 
 	// mismatched
-	schema, _, matched, err = router.Route("test_3_a", "")
+	schema, _, err = router.Route("test_3_a", "")
 	c.Assert(err, IsNil)
 	c.Assert(schema, Equals, "test_3_a")
-	c.Assert(matched, Equals, false)
 	// test multiple schema level rules
 	err = router.AddRule(&TableRule{"test_*", "", "error", ""})
 	c.Assert(err, IsNil)
-	_, _, _, err = router.Route("test_1_a", "")
+	_, _, err = router.Route("test_1_a", "")
 	c.Assert(err, NotNil)
 	// test multiple table level rules
 	err = router.AddRule(&TableRule{"test_1_*", "tes*", "error", "error"})
 	c.Assert(err, IsNil)
-	_, _, _, err = router.Route("test_1_a", "test")
+	_, _, err = router.Route("test_1_a", "test")
 	c.Assert(err, NotNil)
 	// invalid rule
 	err = router.Selector.Insert("test_1_*", "abc*", "error", false)
 	c.Assert(err, IsNil)
-	_, _, _, err = router.Route("test_1_a", "abc")
+	_, _, err = router.Route("test_1_a", "abc")
 	c.Assert(err, NotNil)
 
 	// Add/Update invalid table route rule
@@ -181,7 +145,7 @@ func (t *testRouterSuite) TestCaseSensitive(c *C) {
 		c.Assert(err, NotNil)
 	}
 	for _, cs := range cases {
-		schema, table, _, err := router.Route(cs[0], cs[1])
+		schema, table, err := router.Route(cs[0], cs[1])
 		c.Assert(err, IsNil)
 		c.Assert(schema, Equals, cs[2])
 		c.Assert(table, Equals, cs[3])
