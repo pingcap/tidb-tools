@@ -97,7 +97,7 @@ mydumpers:
 
 #### 3 启动任务
 
-进入 dmctl 目录（`/home/tidb/dm-ansible/resource/bin/`），使用以下命令启动 dmctl：
+进入 dmctl 目录（`/home/tidb/dm-ansible/resources/bin/`），使用以下命令启动 dmctl：
 ```bash
 ./dmctl --master-addr 172.16.10.71:8261
 ```
