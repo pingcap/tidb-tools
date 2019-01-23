@@ -35,7 +35,7 @@ SETMOD usage: SETMOD <MODCODE>; MODCODE = ["Auto", "Prompt", "Offline"] (case in
 ## Example
 
 ```
-# ./bin/checker --host 127.0.0.1 --port 3306 --user root --password 123 --schema test
+# ./bin/ddl_checker --host 127.0.0.1 --port 3306 --user root --password 123 --schema test
 
 [Auto] > ALTER TABLE table_name MODIFY column_1 int(11) NOT NULL;
 [DDLChecker] Syncing Table table_name
