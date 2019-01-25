@@ -517,30 +517,36 @@ func compareData(map1, map2 map[string][]byte, null1, null2 map[string]bool, ord
 			return false, 0, errors.Errorf("don't have key %s", col.Name.O)
 		}
 		if needQuotes(col.FieldType) {
-			if string(data1) > string(data2) {
-				cmp = 1
-				break
-			} else if string(data1) < string(data2) {
-				cmp = -1
-				break
-			} else {
+
+			strData1 := string(data1)
+			strData2 := string(data2)
+
+			if len(strData1) == len(strData2) && strData1 == strData2 {
 				continue
 			}
+
+			cmp = -1
+			if strData1 > strData2 {
+				cmp = 1
+			}
+			break
+
 		} else {
 			num1, err1 := strconv.ParseFloat(string(data1), 64)
 			num2, err2 := strconv.ParseFloat(string(data2), 64)
 			if err1 != nil || err2 != nil {
 				return false, 0, errors.Errorf("convert %s, %s to float failed, err1: %v, err2: %v", string(data1), string(data2), err1, err2)
 			}
-			if num1 > num2 {
-				cmp = 1
-				break
-			} else if num1 < num2 {
-				cmp = -1
-				break
-			} else {
+
+			if num1 == num2 {
 				continue
 			}
+
+			cmp = -1
+			if num1 > num2 {
+				cmp = 1
+			}
+			break
 		}
 	}
 
