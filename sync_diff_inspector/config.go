@@ -282,10 +282,6 @@ func (c *Config) checkConfig() bool {
 		return false
 	}
 
-	if c.TargetDBCfg.InstanceID == "" {
-		c.TargetDBCfg.InstanceID = "target"
-	}
-
 	if len(c.SourceDBCfg) == 0 {
 		log.Error("must have at least one source database")
 		return false
@@ -295,6 +291,14 @@ func (c *Config) checkConfig() bool {
 		if !c.SourceDBCfg[i].Valid() {
 			return false
 		}
+	}
+
+	if c.TargetDBCfg.InstanceID == "" {
+		c.TargetDBCfg.InstanceID = "target"
+	}
+	if _, ok := sourceInstanceMap[c.TargetDBCfg.InstanceID]; ok {
+		log.Errorf("target has same instance id %s in source", c.TargetDBCfg.InstanceID)
+		return false
 	}
 
 	if len(c.Tables) == 0 {

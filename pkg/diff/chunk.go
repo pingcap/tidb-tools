@@ -543,15 +543,7 @@ func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSiz
 
 	jobCnt += len(chunks)
 
-	for {
-		length := len(chunks)
-		if length == 0 {
-			break
-		}
-
-		chunk := chunks[0]
-		chunks = chunks[1:]
-
+	for _, chunk := range chunks {
 		conditions, args := chunk.toString(mode, collation)
 		where := fmt.Sprintf("(%s AND %s)", conditions, limits)
 
