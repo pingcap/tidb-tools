@@ -510,7 +510,7 @@ func compareData(map1, map2 map[string][]byte, null1, null2 map[string]bool, ord
 			strData1 := string(data1)
 			strData2 := string(data2)
 
-			if strData1 == strData2 {
+			if len(strData1) == len(strData2) && strData1 == strData2 {
 				continue
 			}
 
