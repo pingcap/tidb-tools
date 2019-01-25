@@ -281,27 +281,30 @@ func GenerateCheckJob(table *TableInstance, splitField, limits string, chunkSize
 		chunks = chunks[1:]
 
 		args := make([]interface{}, 0, 2)
-		var condition1, condition2 string
-		if !chunk.noBegin {
-			if chunk.containBegin {
-				condition1 = fmt.Sprintf("`%s`%s >= ?", column.Name, collation)
-			} else {
-				condition1 = fmt.Sprintf("`%s`%s > ?", column.Name, collation)
-			}
-			args = append(args, chunk.begin)
-		} else {
+		var (
 			condition1 = "TRUE"
-		}
-		if !chunk.noEnd {
-			if chunk.containEnd {
-				condition2 = fmt.Sprintf("`%s`%s <= ?", column.Name, collation)
-			} else {
-				condition2 = fmt.Sprintf("`%s`%s < ?", column.Name, collation)
-			}
-			args = append(args, chunk.end)
-		} else {
 			condition2 = "TRUE"
+		)
+		if !chunk.noBegin {
+			format := "`%s`%s > ?"
+			if chunk.containBegin {
+				format = "`%s`%s >= ?"
+			}
+
+			condition1 = fmt.Sprintf(format, column.Name, collation)
+			args = append(args, chunk.begin)
 		}
+
+		if !chunk.noEnd {
+			format := "`%s`%s < ?"
+			if chunk.containEnd {
+				format = "`%s`%s <= ?"
+			}
+
+			condition2 = fmt.Sprintf(format, column.Name, collation)
+			args = append(args, chunk.end)
+		}
+
 		where := fmt.Sprintf("(%s AND %s AND %s)", condition1, condition2, limits)
 
 		log.Debugf("%s.%s create dump job, where: %s, begin: %v, end: %v", table.Schema, table.Table, where, chunk.begin, chunk.end)
