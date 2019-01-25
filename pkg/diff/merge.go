@@ -16,8 +16,8 @@ package diff
 import (
 	"strconv"
 
-	"github.com/ngaut/log"
 	"github.com/pingcap/parser/model"
+	log "github.com/sirupsen/logrus"
 )
 
 // RowData is the struct of rows selected from mysql/tidb
