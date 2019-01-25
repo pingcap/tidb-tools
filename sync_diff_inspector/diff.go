@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/diff"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+	"github.com/pingcap/tidb-tools/pkg/utils"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -40,6 +41,7 @@ type Diff struct {
 	tables            map[string]map[string]*TableConfig
 	fixSQLFile        *os.File
 	report            *Report
+	tidbInstanceID    string
 	tableRouter       *router.Table
 
 	ctx context.Context
@@ -56,6 +58,7 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 		useChecksum:       cfg.UseChecksum,
 		ignoreDataCheck:   cfg.IgnoreDataCheck,
 		ignoreStructCheck: cfg.IgnoreStructCheck,
+		tidbInstanceID:    cfg.TiDBInstanceID,
 		tables:            make(map[string]map[string]*TableConfig),
 		report:            NewReport(),
 		ctx:               ctx,
@@ -265,7 +268,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 		}
 		df.tables[table.Schema][table.Table].IgnoreColumns = table.IgnoreColumns
 		df.tables[table.Schema][table.Table].RemoveColumns = table.RemoveColumns
-		df.tables[table.Schema][table.Table].Field = table.Field
+		df.tables[table.Schema][table.Table].Fields = table.Fields
 		df.tables[table.Schema][table.Table].Collation = table.Collation
 	}
 
@@ -287,7 +290,7 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]map[string]inte
 		if err != nil {
 			return nil, errors.Annotatef(err, "get tables from %s.%s", df.targetDB.InstanceID, schema)
 		}
-		allTablesMap[df.targetDB.InstanceID][schema] = diff.SliceToMap(allTables)
+		allTablesMap[df.targetDB.InstanceID][schema] = utils.SliceToMap(allTables)
 	}
 
 	for _, source := range df.sourceDBs {
@@ -302,7 +305,7 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]map[string]inte
 			if err != nil {
 				return nil, errors.Annotatef(err, "get tables from %s.%s", source.InstanceID, schema)
 			}
-			allTablesMap[source.InstanceID][schema] = diff.SliceToMap(allTables)
+			allTablesMap[source.InstanceID][schema] = utils.SliceToMap(allTables)
 		}
 	}
 
@@ -355,27 +358,44 @@ func (df *Diff) Equal() (err error) {
 
 	for _, schema := range df.tables {
 		for _, table := range schema {
+			var tidbStatsSource *diff.TableInstance
+
 			sourceTables := make([]*diff.TableInstance, 0, len(table.SourceTables))
 			for _, sourceTable := range table.SourceTables {
-				sourceTables = append(sourceTables, &diff.TableInstance{
+				sourceTableInstance := &diff.TableInstance{
 					Conn:   df.sourceDBs[sourceTable.InstanceID].Conn,
 					Schema: sourceTable.Schema,
 					Table:  sourceTable.Table,
-				})
+				}
+				sourceTables = append(sourceTables, sourceTableInstance)
+
+				if sourceTable.InstanceID == df.tidbInstanceID {
+					tidbStatsSource = sourceTableInstance
+				}
+			}
+
+			targetTableInstance := &diff.TableInstance{
+				Conn:   df.targetDB.Conn,
+				Schema: table.Schema,
+				Table:  table.Table,
+			}
+
+			if df.targetDB.InstanceID == df.tidbInstanceID {
+				tidbStatsSource = targetTableInstance
+			}
+
+			if len(df.tidbInstanceID) != 0 && tidbStatsSource == nil {
+				return errors.NotFoundf("tidb instance id %s", df.tidbInstanceID)
 			}
 
 			td := &diff.TableDiff{
 				SourceTables: sourceTables,
-				TargetTable: &diff.TableInstance{
-					Conn:   df.targetDB.Conn,
-					Schema: table.Schema,
-					Table:  table.Table,
-				},
+				TargetTable:  targetTableInstance,
 
 				IgnoreColumns: table.IgnoreColumns,
 				RemoveColumns: table.RemoveColumns,
 
-				Field:             table.Field,
+				Fields:            table.Fields,
 				Range:             table.Range,
 				Collation:         table.Collation,
 				ChunkSize:         df.chunkSize,
@@ -385,6 +405,7 @@ func (df *Diff) Equal() (err error) {
 				UseChecksum:       df.useChecksum,
 				IgnoreStructCheck: df.ignoreStructCheck,
 				IgnoreDataCheck:   df.ignoreDataCheck,
+				TiDBStatsSource:   tidbStatsSource,
 			}
 
 			structEqual, dataEqual, err := td.Equal(df.ctx, func(dml string) error {
