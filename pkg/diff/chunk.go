@@ -353,8 +353,8 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 					upper = ""
 					upperSymbol = ""
 				} else {
-					lower = splitValues[i+1]
-					lowerSymbol = symbolMax
+					upper = splitValues[i+1]
+					upperSymbol = symbolMax
 				}
 			} else {
 				if i == len(splitValues)-1 {
