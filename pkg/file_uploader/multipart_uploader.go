@@ -112,10 +112,10 @@ func loadCheckPoint(workDir string) (*checkPoint, error) {
 func (cp *checkPoint) logSliceUpload(si *Slice, hash string, successful bool) error {
 	cp.rwLock.Lock()
 	defer cp.rwLock.Unlock()
-	fileCp, exist := cp.status[si.FileName]
+	fileCp, exist := cp.status[si.FilePath]
 	if !exist {
 		fileCp = make(map[int64]*indexCheckPoint)
-		cp.status[si.FileName] = fileCp
+		cp.status[si.FilePath] = fileCp
 	}
 	fileCp[si.Index] = &indexCheckPoint{successful, time.Now(), hash, si.Offset, si.Length}
 
@@ -138,7 +138,7 @@ func (cp *checkPoint) logSliceUpload(si *Slice, hash string, successful bool) er
 func (cp *checkPoint) isSliceUploadSuccessful(si *Slice) bool {
 	cp.rwLock.RLock()
 	defer cp.rwLock.RUnlock()
-	fileCp, exist := cp.status[si.FileName]
+	fileCp, exist := cp.status[si.FilePath]
 	if !exist {
 		return exist
 	}
@@ -152,7 +152,7 @@ func (cp *checkPoint) isSliceUploadSuccessful(si *Slice) bool {
 func (cp *checkPoint) checkHash(si *Slice, hash string) bool {
 	cp.rwLock.RLock()
 	defer cp.rwLock.RUnlock()
-	indexCp := cp.status[si.FileName][si.Index]
+	indexCp := cp.status[si.FilePath][si.Index]
 	return hash == indexCp.Hash && indexCp.Uploaded &&
 		indexCp.Offset == si.Offset && indexCp.Length == si.Length
 }

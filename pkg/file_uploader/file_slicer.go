@@ -119,8 +119,8 @@ func (fs *FileSlicer) DoSlice(path string, file os.FileInfo) ([]Slice, error) {
 	sliceSize := fs.sliceStatus.SliceSize
 	fileName := file.Name()
 	fileSize := file.Size()
-	oldSliceTotalSize := fs.sliceStatus.SliceTotalSize[fileName]
-	fs.sliceStatus.SliceTotalSize[fileName] = fileSize
+	oldSliceTotalSize := fs.sliceStatus.SliceTotalSize[path]
+	fs.sliceStatus.SliceTotalSize[path] = fileSize
 	var sliceInfos []Slice
 	var i int64
 	for i = oldSliceTotalSize / sliceSize; i*sliceSize < fileSize; i++ {

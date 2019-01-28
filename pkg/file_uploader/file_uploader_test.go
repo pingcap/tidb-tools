@@ -1,6 +1,7 @@
 package file_uploader
 
 import (
+	"github.com/ngaut/log"
 	. "github.com/pingcap/check"
 	"io"
 	"io/ioutil"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"testing"
 	"time"
 )
 
@@ -15,32 +17,40 @@ var _ = Suite(&testFileUploader{})
 
 type testFileUploader struct{}
 
-// This Test Can Not Pass Not
+func TestSuite(t *testing.T) {
+	TestingT(t)
+}
+
+// This Test Can Not Pass Now
 func (t *testFileUploader) DontTestFileUploaderAppend(c *C) {
 	var wait sync.WaitGroup
 	dir, err := ioutil.TempDir("", "up_test_file_uploader_append")
 	c.Assert(err, IsNil)
 	//defer os.RemoveAll(dir)
-	filenames := []string{"testfile1"}
+	filenames := []string{"testfile1", "testfile2", "testdir/testfile1"}
 	wait.Add(len(filenames))
 	for _, filename := range filenames {
-		//go func() {
-		rand := rand.New(rand.NewSource(time.Now().Unix()))
-		sourceFilePath := filepath.Join(dir, filename)
-		err := os.MkdirAll(filepath.Dir(sourceFilePath), 0777)
-		c.Assert(err, IsNil)
-		file, err := os.OpenFile(sourceFilePath, os.O_CREATE|os.O_RDWR|os.O_SYNC, 0666)
-		c.Assert(err, IsNil)
-		defer file.Close()
-		_, err = io.CopyN(file, rand, 789*M)
-		c.Assert(err, IsNil)
-		wait.Done()
-		//}()
+		writeFile := func(filename string) {
+			log.Infof("start in go %s comp", filename)
+			rand := rand.New(rand.NewSource(time.Now().Unix()))
+			sourceFilePath := filepath.Join(dir, filename)
+			err := os.MkdirAll(filepath.Dir(sourceFilePath), 0777)
+			c.Assert(err, IsNil)
+			file, err := os.OpenFile(sourceFilePath, os.O_CREATE|os.O_RDWR|os.O_SYNC, 0666)
+			c.Assert(err, IsNil)
+			defer file.Close()
+			_, err = io.CopyN(file, rand, 123*M)
+			c.Assert(err, IsNil)
+			wait.Done()
+			log.Infof("file %s comp", filename)
+		}
+		go writeFile(filename)
+		time.Sleep(1 * time.Second)
 	}
 	targetDir, err := ioutil.TempDir("", "up_test_file_uploader_append_target")
 	c.Assert(err, IsNil)
 	//defer os.RemoveAll(targetDir)
-	fu := NewFileUploader(dir, 1, 100*M, NewMockFileUploaderDriver(dir, targetDir))
+	fu := NewFileUploader(dir, 8, 10*M, NewMockFileUploaderDriver(dir, targetDir))
 	wait.Wait()
 	fu.WaitAndClose()
 	for _, filename := range filenames {
@@ -57,5 +67,6 @@ func (t *testFileUploader) DontTestFileUploaderAppend(c *C) {
 		_, err = io.Copy(targetHash, targetFile)
 		c.Assert(err, IsNil)
 		c.Assert(sourceHash.String(), Equals, targetHash.String(), Commentf("hash check failure, file name: %s", filename))
+		log.Infof("file: %s sourceHash: %s targetHash: %s", filename, sourceHash, targetHash)
 	}
 }

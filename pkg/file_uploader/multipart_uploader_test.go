@@ -4,6 +4,7 @@ import (
 	. "github.com/pingcap/check"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 )
 
 var _ = Suite(&testCheckPointSuite{})
@@ -16,56 +17,56 @@ func (t *testFileSlicerSuite) TestCheckPoint(c *C) {
 	dir, err := ioutil.TempDir("", "up_test_check_point")
 	c.Assert(err, IsNil)
 	defer os.RemoveAll(dir)
-
+	checkPointRunning.Set(0)
 	checkPoint, err := loadCheckPoint(dir)
 	c.Assert(err, IsNil)
 	err = checkPoint.logSliceUpload(&Slice{
-		dir,
+		filepath.Join(dir, "test1"),
 		"test1", 0,
 		1024, 1024,
 	}, "hash1", true)
 	c.Assert(err, IsNil)
 	err = checkPoint.logSliceUpload(&Slice{
-		dir,
+		filepath.Join(dir, "test1"),
 		"test1", 1,
 		2048, 1024,
 	}, "hash2", true)
 	c.Assert(err, IsNil)
 	err = checkPoint.logSliceUpload(&Slice{
-		dir,
+		filepath.Join(dir, "test2"),
 		"test2", 0,
 		0, 2048,
 	}, "hash3", true)
 	c.Assert(err, IsNil)
 	err = checkPoint.logSliceUpload(&Slice{
-		dir,
+		filepath.Join(dir, "test2"),
 		"test2", 1,
 		2048, 2048,
 	}, "hash4", true)
 	c.Assert(err, IsNil)
 
 	c.Assert(checkPoint.isSliceUploadSuccessful(&Slice{
-		dir,
+		filepath.Join(dir, "test1"),
 		"test1", 0,
 		1024, 1024,
 	}), IsTrue)
 	c.Assert(checkPoint.isSliceUploadSuccessful(&Slice{
-		dir,
+		filepath.Join(dir, "test3"),
 		"test3", 0,
 		1024, 1024,
 	}), IsFalse)
 	c.Assert(checkPoint.isSliceUploadSuccessful(&Slice{
-		dir,
+		filepath.Join(dir, "test2"),
 		"test2", 0,
 		0, 1024,
 	}), IsFalse)
 	c.Assert(checkPoint.checkHash(&Slice{
-		dir,
+		filepath.Join(dir, "test2"),
 		"test2", 0,
 		0, 1024,
 	}, "hash3"), IsFalse)
 	c.Assert(checkPoint.checkHash(&Slice{
-		dir,
+		filepath.Join(dir, "test2"),
 		"test2", 0,
 		0, 2048,
 	}, "hash3"), IsTrue)
@@ -77,22 +78,22 @@ func (t *testFileSlicerSuite) TestCheckPoint(c *C) {
 	checkPoint, err = loadCheckPoint(dir)
 	c.Assert(err, IsNil)
 	c.Assert(checkPoint.isSliceUploadSuccessful(&Slice{
-		dir,
+		filepath.Join(dir, "test1"),
 		"test1", 1,
 		2048, 1024,
 	}), IsTrue)
 	c.Assert(checkPoint.isSliceUploadSuccessful(&Slice{
-		dir,
+		filepath.Join(dir, "test2"),
 		"test2", 0,
 		0, 1024,
 	}), IsFalse)
 	c.Assert(checkPoint.checkHash(&Slice{
-		dir,
+		filepath.Join(dir, "test2"),
 		"test2", 0,
 		0, 1024,
 	}, "hash3"), IsFalse)
 	c.Assert(checkPoint.checkHash(&Slice{
-		dir,
+		filepath.Join(dir, "test2"),
 		"test2", 0,
 		0, 2048,
 	}, "hash3"), IsTrue)
