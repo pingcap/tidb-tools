@@ -33,7 +33,7 @@ func NewFileUploader(workDir string, workerNum int, slicesSize int64, uploaderDr
 		workDir:        workDir,
 		slicer:         fileSlicer,
 		uploaderDriver: uploaderDriver,
-		slicesChan:     make(chan Slice, 64),
+		slicesChan:     make(chan Slice, 4),
 		closed:         false,
 	}
 	if err != nil {
@@ -45,11 +45,14 @@ func NewFileUploader(workDir string, workerNum int, slicesSize int64, uploaderDr
 		log.Errorf("watcher load failure: %#v", err)
 	}
 	go fu.process()
+
+	log.Infof("wait %d", workerNum)
 	fu.uploaderWait.Add(workerNum)
 	fu.createWorker(workerNum)
 	return fu
 }
 func (fu *FileUploader) createWorker(workerNum int) {
+	log.Info("create worker")
 	cp, err := loadCheckPoint(fu.workDir)
 	if err != nil {
 		log.Fatalf("check point load failure: %#v", err)
@@ -65,12 +68,14 @@ func (fu *FileUploader) createWorker(workerNum int) {
 					log.Errorf("slice %#v upload failure: %#v", slice, err)
 				}
 			}
+			log.Infof("wait done")
 			fu.uploaderWait.Done()
 		}()
 	}
 }
 
 func (fu *FileUploader) process() {
+	log.Info("in process")
 	workFunc := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return errors.Trace(err)
@@ -90,6 +95,7 @@ func (fu *FileUploader) process() {
 		return nil
 	}
 	for !fu.closed {
+		log.Info("work...")
 		err := filepath.Walk(fu.workDir, workFunc)
 		if err != nil {
 			log.Errorf("watch workDir failure: %#v", err)
@@ -100,9 +106,13 @@ func (fu *FileUploader) process() {
 }
 
 func (fu *FileUploader) WaitAndClose() {
+	time.Sleep(1 * time.Second)
+	log.Info("close")
 	fu.closed = true
 	fu.watcherWait.Wait()
+	log.Info("watcherWait wc")
 	close(fu.slicesChan)
 	fu.uploaderWait.Wait()
+	log.Info("uploaderWait wc")
 	//check
 }

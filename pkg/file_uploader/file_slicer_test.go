@@ -49,7 +49,7 @@ func (mf *MockFileInfo) Sys() interface{} {
 	panic("won't implement")
 }
 
-func (t *testFileSlicerSuite) TestWatcher(c *C) {
+func (t *testFileSlicerSuite) TestSlicer(c *C) {
 	// create dir
 	dir, err := ioutil.TempDir("", "up_test_file_slicer")
 	c.Assert(err, IsNil)

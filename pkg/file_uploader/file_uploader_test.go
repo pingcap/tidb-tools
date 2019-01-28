@@ -22,11 +22,12 @@ func TestSuite(t *testing.T) {
 }
 
 // This Test Can Not Pass Now
-func (t *testFileUploader) DontTestFileUploaderAppend(c *C) {
+func (t *testFileUploader) TestFileUploaderAppend(c *C) {
+	checkPointRunning.Set(0)
 	var wait sync.WaitGroup
 	dir, err := ioutil.TempDir("", "up_test_file_uploader_append")
 	c.Assert(err, IsNil)
-	//defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir)
 	filenames := []string{"testfile1", "testfile2", "testdir/testfile1"}
 	wait.Add(len(filenames))
 	for _, filename := range filenames {
@@ -49,7 +50,7 @@ func (t *testFileUploader) DontTestFileUploaderAppend(c *C) {
 	}
 	targetDir, err := ioutil.TempDir("", "up_test_file_uploader_append_target")
 	c.Assert(err, IsNil)
-	//defer os.RemoveAll(targetDir)
+	defer os.RemoveAll(targetDir)
 	fu := NewFileUploader(dir, 8, 10*M, NewMockFileUploaderDriver(dir, targetDir))
 	wait.Wait()
 	fu.WaitAndClose()

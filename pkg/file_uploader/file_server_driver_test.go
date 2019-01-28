@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 )
 
-var _ = Suite(&testFileUploader{})
+var _ = Suite(&testServerDriver{})
 
 type testServerDriver struct{}
 
