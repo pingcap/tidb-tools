@@ -17,7 +17,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"math"
 	"testing"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -81,7 +80,7 @@ func (t *testDiffSuite) TestDiff(c *C) {
 	dbConn, err := createConn()
 	c.Assert(err, IsNil)
 
-	_, err = dbConn.Query("create database if not exists test")
+	_, err = dbConn.Query("CREATE DATABASE IF NOT EXISTS `test`")
 	c.Assert(err, IsNil)
 
 	testStructEqual(dbConn, c)
@@ -180,9 +179,9 @@ func testStructEqual(conn *sql.DB, c *C) {
 func testDataEqual(dbConn *sql.DB, sourceTables []string, targetTable string, hasEmptyTable bool, c *C) {
 	defer func() {
 		for _, sourceTable := range sourceTables {
-			_, _ = dbConn.Query(fmt.Sprintf("drop table test.%s", sourceTable))
+			_, _ = dbConn.Query(fmt.Sprintf("DROP TABLE `test`.`%s`", sourceTable))
 		}
-		_, _ = dbConn.Query(fmt.Sprintf("drop table test.%s", targetTable))
+		_, _ = dbConn.Query(fmt.Sprintf("DROP TABLE `test`.`%s`", targetTable))
 	}()
 
 	err := generateData(dbConn, dbutil.GetDBConfigFromEnv("test"), sourceTables, targetTable, hasEmptyTable)
@@ -246,7 +245,7 @@ func createTableDiff(db *sql.DB, sourceTableNames []string, targetTableName stri
 }
 
 func createConn() (*sql.DB, error) {
-	return dbutil.OpenDB(dbutil.GetDBConfigFromEnv("test"))
+	return dbutil.OpenDB(dbutil.GetDBConfigFromEnv(""))
 }
 
 func generateData(dbConn *sql.DB, dbCfg dbutil.DBConfig, sourceTables []string, targetTable string, hasEmptyTable bool) error {
@@ -261,7 +260,7 @@ func generateData(dbConn *sql.DB, dbCfg dbutil.DBConfig, sourceTables []string, 
 
 	cfg := &importer.Config{
 		TableSQL:    createTableSQL,
-		WorkerCount: 1,
+		WorkerCount: 5,
 		JobCount:    10000,
 		Batch:       100,
 		DBCfg:       dbCfg,
@@ -272,7 +271,7 @@ func generateData(dbConn *sql.DB, dbCfg dbutil.DBConfig, sourceTables []string, 
 
 	// generate data for target table
 	for _, sourceTable := range sourceTables {
-		_, err := dbConn.Query(fmt.Sprintf("create table test.%s like test.%s", sourceTable, targetTable))
+		_, err := dbConn.Query(fmt.Sprintf("CREATE TABLE `test`.`%s` LIKE `test`.`%s`", sourceTable, targetTable))
 		if err != nil {
 			return err
 		}
@@ -283,7 +282,7 @@ func generateData(dbConn *sql.DB, dbCfg dbutil.DBConfig, sourceTables []string, 
 		randomValueNum--
 	}
 
-	values, err := dbutil.GetRandomValues(context.Background(), dbConn, "test", targetTable, "e", randomValueNum, math.MinInt64, math.MaxInt64, "true", "")
+	values, _, err := dbutil.GetRandomValues(context.Background(), dbConn, "test", targetTable, "e", int(randomValueNum), "TRUE", nil, "")
 	if err != nil {
 		return err
 	}
@@ -292,20 +291,20 @@ func generateData(dbConn *sql.DB, dbCfg dbutil.DBConfig, sourceTables []string, 
 	if randomValueNum == 0 {
 		conditions = append(conditions, "true")
 	} else {
-		conditions = append(conditions, fmt.Sprintf("e < %d", values[0]))
+		conditions = append(conditions, fmt.Sprintf("e < %s", values[0]))
 		for i := range values {
 			if i < len(values)-1 {
-				conditions = append(conditions, fmt.Sprintf("e >= %d AND e < %d", values[i], values[i+1]))
+				conditions = append(conditions, fmt.Sprintf("e >= %s AND e < %s", values[i], values[i+1]))
 			} else {
 				break
 			}
 		}
-		conditions = append(conditions, fmt.Sprintf("e >= %d", values[len(values)-1]))
+		conditions = append(conditions, fmt.Sprintf("e >= %s", values[len(values)-1]))
 	}
 
 	// if hasEmptyTable is true, the last source table will be empty.
 	for j, condition := range conditions {
-		_, err = dbConn.Query(fmt.Sprintf("insert into test.%s (a, b, c, d, e, h) select a, b, c, d, e, h from test.%s where %s", sourceTables[j], targetTable, condition))
+		_, err = dbConn.Query(fmt.Sprintf("INSERT INTO `test`.`%s` (`a`, `b`, `c`, `d`, `e`, `h`) SELECT `a`, `b`, `c`, `d`, `e`, `h` FROM `test`.`%s` WHERE %s", sourceTables[j], targetTable, condition))
 		if err != nil {
 			return err
 		}
@@ -315,22 +314,22 @@ func generateData(dbConn *sql.DB, dbCfg dbutil.DBConfig, sourceTables []string, 
 }
 
 func updateData(dbConn *sql.DB, table string) error {
-	values, err := dbutil.GetRandomValues(context.Background(), dbConn, "test", table, "e", 3, math.MinInt64, math.MaxInt64, "true", "")
+	values, _, err := dbutil.GetRandomValues(context.Background(), dbConn, "test", table, "e", 3, "TRUE", nil, "")
 	if err != nil {
 		return err
 	}
 
-	_, err = dbConn.Exec(fmt.Sprintf("update test.%s set e = e+1 where e = %v", table, values[0]))
+	_, err = dbConn.Exec(fmt.Sprintf("UPDATE `test`.`%s` SET `e` = `e`+1 WHERE `e` = %v", table, values[0]))
 	if err != nil {
 		return err
 	}
 
-	_, err = dbConn.Exec(fmt.Sprintf("delete from test.%s where e = %v", table, values[1]))
+	_, err = dbConn.Exec(fmt.Sprintf("DELETE FROM `test`.`%s` where `e` = %v", table, values[1]))
 	if err != nil {
 		return err
 	}
 
-	_, err = dbConn.Exec(fmt.Sprintf("replace into test.%s values('1992-09-27','2018-09-03 16:26:27','14:45:33','i',2048790075,2008)", table))
+	_, err = dbConn.Exec(fmt.Sprintf("REPLACE INTO `test`.`%s` VALUES('1992-09-27','2018-09-03 16:26:27','14:45:33','i',2048790075,2008)", table))
 	if err != nil {
 		return err
 	}

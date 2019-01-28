@@ -1,4 +1,4 @@
-.PHONY: build importer checker dump_region binlogctl sync_diff_inspector ddl_checker test check deps
+.PHONY: build importer dump_region binlogctl sync_diff_inspector ddl_checker test check deps
 
 # Ensure GOPATH is set before running build process.
 ifeq "$(GOPATH)" ""
@@ -23,7 +23,7 @@ FILES     := $$(find . -name '*.go' -type f | grep -vE 'vendor')
 VENDOR_TIDB := vendor/github.com/pingcap/tidb
 
 
-build: prepare check importer checker dump_region binlogctl sync_diff_inspector ddl_checker finish
+build: prepare check importer dump_region binlogctl sync_diff_inspector ddl_checker finish
 
 prepare:		
 	cp go.mod1 go.mod
@@ -31,9 +31,6 @@ prepare:
 
 importer:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/importer ./importer
-
-checker:
-	$(GO) build -ldflags '$(LDFLAGS)' -o bin/checker ./checker
 
 dump_region:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/dump_region ./dump_region

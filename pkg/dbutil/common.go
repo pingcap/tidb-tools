@@ -169,52 +169,59 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 	return cnt.Int64, nil
 }
 
-// GetRandomValues returns some random value of a column.
-func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int64, min, max interface{}, limitRange string, collation string) ([]interface{}, error) {
+// GetRandomValues returns some random value and these value's count of a column, just like sampling. Tips: limitArgs is the value in limitRange.
+func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int, limitRange string, limitArgs []interface{}, collation string) ([]string, []int, error) {
 	/*
 		example:
-		mysql> SELECT `id` FROM (SELECT `id` FROM `test`.`test` WHERE `id` COLLATE "latin1_bin" > 0 AND `id` COLLATE "latin1_bin" < 100 AND true ORDER BY RAND() LIMIT 3)rand_tmp ORDER BY `id` COLLATE "latin1_bin";
-		+----------+
-		| rand_tmp |
-		+----------+
-		|    15    |
-		|    58    |
-		|    67    |
-		+----------+
+		mysql> SELECT `id`, COUNT(*) count FROM (SELECT `id` FROM `test`.`test`  WHERE `id` COLLATE "latin1_bin" > 0 AND `id` COLLATE "latin1_bin" < 100 ORDER BY RAND() LIMIT 5) rand_tmp GROUP BY `id` ORDER BY `id` COLLATE "latin1_bin";
+		+------+-------+
+		| id   | count |
+		+------+-------+
+		|    1 |     2 |
+		|    2 |     2 |
+		|    3 |     1 |
+		+------+-------+
+
+		FIXME: TiDB now don't return rand value when use `ORDER BY RAND()`
 	*/
 
-	if limitRange != "" {
-		limitRange = "true"
+	if limitRange == "" {
+		limitRange = "TRUE"
 	}
 
 	if collation != "" {
 		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
 	}
 
-	randomValue := make([]interface{}, 0, num)
-	query := fmt.Sprintf("SELECT `%s` FROM (SELECT `%s` FROM `%s`.`%s` WHERE `%s`%s > ? AND `%s`%s < ? AND %s ORDER BY RAND() LIMIT %d)rand_tmp ORDER BY `%s`%s",
-		column, column, schemaName, table, column, collation, column, collation, limitRange, num, column, collation)
-	log.Debugf("get random values sql: %s, min: %v, max: %v", query, min, max)
-	rows, err := db.QueryContext(ctx, query, min, max)
+	randomValue := make([]string, 0, num)
+	valueCount := make([]int, 0, num)
+
+	query := fmt.Sprintf("SELECT %[1]s, COUNT(*) count FROM (SELECT %[1]s FROM %[2]s WHERE %[3]s ORDER BY RAND() LIMIT %[4]d)rand_tmp GROUP BY %[1]s ORDER BY %[1]s%[5]s",
+		escapeName(column), TableName(schemaName, table), limitRange, num, collation)
+	log.Debugf("get random values sql: %s, args: %v", query, limitArgs)
+
+	rows, err := db.QueryContext(ctx, query, limitArgs...)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var value interface{}
-		err = rows.Scan(&value)
+		var value string
+		var count int
+		err = rows.Scan(&value, &count)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, nil, errors.Trace(err)
 		}
 		randomValue = append(randomValue, value)
+		valueCount = append(valueCount, count)
 	}
 
-	return randomValue, nil
+	return randomValue, valueCount, errors.Trace(rows.Err())
 }
 
 // GetMinMaxValue return min and max value of given column by specified limitRange condition.
-func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column string, limitRange string, collation string, args []interface{}) (string, string, error) {
+func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column string, limitRange string, limitArgs []interface{}, collation string) (string, string, error) {
 	/*
 		example:
 		mysql> SELECT MIN(`id`) as MIN, MAX(`id`) as MAX FROM `test`.`testa` WHERE id > 0 AND id < 10;
@@ -226,7 +233,7 @@ func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column strin
 	*/
 
 	if limitRange == "" {
-		limitRange = "true"
+		limitRange = "TRUE"
 	}
 
 	if collation != "" {
@@ -235,10 +242,10 @@ func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column strin
 
 	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ MIN(`%s`%s) as MIN, MAX(`%s`%s) as MAX FROM `%s`.`%s` WHERE %s",
 		column, collation, column, collation, schema, table, limitRange)
-	log.Debugf("GetMinMaxValue query: %v, args: %v", query, args)
+	log.Debugf("GetMinMaxValue query: %v, args: %v", query, limitArgs)
 
 	var min, max sql.NullString
-	rows, err := db.QueryContext(ctx, query, args...)
+	rows, err := db.QueryContext(ctx, query, limitArgs...)
 	if err != nil {
 		return "", "", errors.Trace(err)
 	}

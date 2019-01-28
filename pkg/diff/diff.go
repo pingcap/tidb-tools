@@ -25,6 +25,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/pkg/utils"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -50,7 +51,7 @@ type TableDiff struct {
 	RemoveColumns []string
 
 	// field should be the primary key, unique key or field with index
-	Field string
+	Fields string
 
 	// select range, for example: "age > 10 AND age < 20"
 	Range string
@@ -81,6 +82,9 @@ type TableDiff struct {
 
 	// ignore check table's data
 	IgnoreDataCheck bool
+
+	// get tidb statistics information from which table instance. if is nil, will split chunk by random.
+	TiDBStatsSource *TableInstance
 
 	sqlCh chan string
 
@@ -150,7 +154,7 @@ func (t *TableDiff) adjustConfig() {
 	}
 
 	if len(t.Range) == 0 {
-		t.Range = "true"
+		t.Range = "TRUE"
 	}
 	if t.Sample <= 0 {
 		t.Sample = 100
@@ -167,8 +171,15 @@ func (t *TableDiff) CheckTableData(ctx context.Context) (bool, error) {
 }
 
 // EqualTableData checks data is equal or not.
-func (t *TableDiff) EqualTableData(ctx context.Context) (bool, error) {
-	allJobs, err := GenerateCheckJob(t.TargetTable, t.Field, t.Range, t.ChunkSize, t.Sample, t.Collation)
+func (t *TableDiff) EqualTableData(ctx context.Context) (equal bool, err error) {
+	var allJobs []*CheckJob
+
+	if t.TiDBStatsSource != nil {
+		allJobs, err = GenerateCheckJob(t.TiDBStatsSource, t.Fields, t.Range, t.ChunkSize, t.Collation, true)
+	} else {
+		allJobs, err = GenerateCheckJob(t.TargetTable, t.Fields, t.Range, t.ChunkSize, t.Collation, false)
+	}
+
 	if err != nil {
 		return false, errors.Trace(err)
 	}
@@ -198,7 +209,7 @@ func (t *TableDiff) EqualTableData(ctx context.Context) (bool, error) {
 	}
 
 	num := 0
-	equal := true
+	equal = true
 
 CheckResult:
 	for {
@@ -222,7 +233,7 @@ func (t *TableDiff) getSourceTableChecksum(ctx context.Context, job *CheckJob) (
 	var checksum int64
 
 	for _, sourceTable := range t.SourceTables {
-		checksumTmp, err := dbutil.GetCRC32Checksum(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.info, job.Where, job.Args, SliceToMap(t.IgnoreColumns))
+		checksumTmp, err := dbutil.GetCRC32Checksum(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.info, job.Where, utils.StringsToInterfaces(job.Args), utils.SliceToMap(t.IgnoreColumns))
 		if err != nil {
 			return -1, errors.Trace(err)
 		}
@@ -246,7 +257,7 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, checkJobs []*CheckJ
 				return false, errors.Trace(err)
 			}
 
-			targetChecksum, err := dbutil.GetCRC32Checksum(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, job.Where, job.Args, SliceToMap(t.IgnoreColumns))
+			targetChecksum, err := dbutil.GetCRC32Checksum(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, job.Where, utils.StringsToInterfaces(job.Args), utils.SliceToMap(t.IgnoreColumns))
 			if err != nil {
 				return false, errors.Trace(err)
 			}
@@ -262,14 +273,14 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, checkJobs []*CheckJ
 		log.Infof("select data from %s for range (where: %s, args: %v) and then check data", dbutil.TableName(job.Schema, job.Table), job.Where, job.Args)
 		sourceRows := make(map[string][]map[string]*dbutil.ColumnData)
 		for i, sourceTable := range t.SourceTables {
-			rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, job.Where, job.Args, SliceToMap(t.IgnoreColumns), t.Collation)
+			rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, job.Where, utils.StringsToInterfaces(job.Args), utils.SliceToMap(t.IgnoreColumns), t.Collation)
 			if err != nil {
 				return false, errors.Trace(err)
 			}
 			sourceRows[fmt.Sprintf("source-%d", i)] = rows
 		}
 
-		targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, job.Where, job.Args, SliceToMap(t.IgnoreColumns), t.Collation)
+		targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, job.Where, utils.StringsToInterfaces(job.Args), utils.SliceToMap(t.IgnoreColumns), t.Collation)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -493,30 +504,35 @@ func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model
 			return false, 0, errors.Errorf("don't have key %s", col.Name.O)
 		}
 		if needQuotes(col.FieldType) {
-			if string(data1.Data) > string(data2.Data) {
-				cmp = 1
-				break
-			} else if string(data1.Data) < string(data2.Data) {
-				cmp = -1
-				break
-			} else {
+			strData1 := string(data1.Data)
+			strData2 := string(data2.Data)
+
+			if len(strData1) == len(strData2) && strData1 == strData2 {
 				continue
 			}
+
+			cmp = -1
+			if strData1 > strData2 {
+				cmp = 1
+			}
+			break
+
 		} else {
 			num1, err1 := strconv.ParseFloat(string(data1.Data), 64)
 			num2, err2 := strconv.ParseFloat(string(data2.Data), 64)
 			if err1 != nil || err2 != nil {
 				return false, 0, errors.Errorf("convert %s, %s to float failed, err1: %v, err2: %v", string(data1.Data), string(data2.Data), err1, err2)
 			}
-			if num1 > num2 {
-				cmp = 1
-				break
-			} else if num1 < num2 {
-				cmp = -1
-				break
-			} else {
+
+			if num1 == num2 {
 				continue
 			}
+
+			cmp = -1
+			if num1 > num2 {
+				cmp = 1
+			}
+			break
 		}
 	}
 
