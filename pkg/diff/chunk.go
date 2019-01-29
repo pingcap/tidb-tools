@@ -86,7 +86,7 @@ func (c *chunkRange) toString(mode string, collation string) (string, []string) 
 
 	/* for example:
 	there is a bucket in TiDB, and the lowerbound and upperbound are (v1, v3), (v2, v4), and the columns are `a` and `b`,
-	this buceket's data range is (a > v1 or (a == v1 and b >= v2)) and (a < v3 or (a == v3 and a <= v4)),
+	this bucket's data range is (a > v1 or (a == v1 and b >= v2)) and (a < v3 or (a == v3 and a <= v4)),
 	not (a >= v1 and a <= v3 and b >= v2 and b <= v4)
 	*/
 
@@ -243,25 +243,26 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 		symbolMax = chunk.bounds[colNum-1].upperSymbol
 	} else {
 		// choose the next column to split data
-		if len(columns) > colNum {
-			useNewColumn = true
-			splitCol = columns[colNum].Name.O
-
-			min, max, err = dbutil.GetMinMaxValue(context.Background(), db, schema, table, splitCol, limitRange, utils.StringsToInterfaces(args), s.collation)
-			if err != nil {
-				if errors.Cause(err) == dbutil.ErrNoData {
-					log.Infof("no data found in %s.%s range %s, args %v", schema, table, limitRange, args)
-					return append(chunks, chunk), nil
-				}
-				return nil, errors.Trace(err)
-			}
-
-			symbolMin = gte
-			symbolMax = lte
-		} else {
+		if len(columns) <= colNum {
 			log.Warnf("chunk %v can't be splited", chunk)
 			return append(chunks, chunk), nil
 		}
+
+		useNewColumn = true
+		splitCol = columns[colNum].Name.O
+
+		min, max, err = dbutil.GetMinMaxValue(context.Background(), db, schema, table, splitCol, limitRange, utils.StringsToInterfaces(args), s.collation)
+		if err != nil {
+			if errors.Cause(err) == dbutil.ErrNoData {
+				log.Infof("no data found in %s.%s range %s, args %v", schema, table, limitRange, args)
+				return append(chunks, chunk), nil
+			}
+			return nil, errors.Trace(err)
+		}
+
+		symbolMin = gte
+		symbolMax = lte
+
 	}
 
 	splitValues := make([]string, 0, count)
@@ -359,10 +360,11 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 			} else {
 				if i == len(splitValues)-1 {
 					continue
-				} else {
-					upper = splitValues[i+1]
-					upperSymbol = lt
 				}
+
+				upper = splitValues[i+1]
+				upperSymbol = lt
+
 			}
 		}
 
@@ -462,11 +464,11 @@ func getChunksForTable(table *TableInstance, columns []*model.ColumnInfo, chunkS
 	if useTiDBStatsInfo {
 		s := bucketSpliter{}
 		chunks, err := s.split(table, columns, chunkSize, limits, collation)
-		if err != nil || len(chunks) == 0 {
-			log.Warnf("use tidb bucket information to get chunks error: %v, chunks num: %d, will split chunk by random again", errors.Trace(err), len(chunks))
-		} else {
+		if err == nil && len(chunks) > 0 {
 			return chunks, bucketMode, nil
 		}
+
+		log.Warnf("use tidb bucket information to get chunks error: %v, chunks num: %d, will split chunk by random again", errors.Trace(err), len(chunks))
 	}
 
 	// get chunks from tidb bucket information failed, use random.

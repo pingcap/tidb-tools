@@ -174,11 +174,15 @@ func (t *TableDiff) CheckTableData(ctx context.Context) (bool, error) {
 func (t *TableDiff) EqualTableData(ctx context.Context) (equal bool, err error) {
 	var allJobs []*CheckJob
 
+	table := t.TargetTable
+	useTiDB := false
+
 	if t.TiDBStatsSource != nil {
-		allJobs, err = GenerateCheckJob(t.TiDBStatsSource, t.Fields, t.Range, t.ChunkSize, t.Collation, true)
-	} else {
-		allJobs, err = GenerateCheckJob(t.TargetTable, t.Fields, t.Range, t.ChunkSize, t.Collation, false)
+		table = t.TiDBStatsSource
+		useTiDB = true
 	}
+
+	allJobs, err = GenerateCheckJob(table, t.Fields, t.Range, t.ChunkSize, t.Collation, useTiDB)
 
 	if err != nil {
 		return false, errors.Trace(err)
