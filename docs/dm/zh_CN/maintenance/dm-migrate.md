@@ -22,7 +22,7 @@ select binlog_name, binlog_pos from dm_meta.test_syncer_checkpoint where id = { 
 就要将其转换为`mysql-bin.000003`
 
 ### 同步点包括哪些信息
-需要 binlog-name 和 binlog-pos
+需要 binlog_name 和 binlog_pos
 参考[relay-log](../features/relay-log.md)
 
 ### 命令参数解释
