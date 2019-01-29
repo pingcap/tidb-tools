@@ -27,12 +27,11 @@ func (t *testFileUploader) TestFileUploaderAppend(c *C) {
 	var wait sync.WaitGroup
 	dir, err := ioutil.TempDir("", "up_test_file_uploader_append")
 	c.Assert(err, IsNil)
-	//defer os.RemoveAll(dir)
+	defer os.RemoveAll(dir)
 	filenames := []string{"testfile1", "testfile2", "testdir/testfile1"}
 	wait.Add(len(filenames))
 	for _, filename := range filenames {
 		writeFile := func(filename string) {
-			log.Infof("start in go %s comp", filename)
 			rand := rand.New(rand.NewSource(time.Now().Unix()))
 			sourceFilePath := filepath.Join(dir, filename)
 			err := os.MkdirAll(filepath.Dir(sourceFilePath), 0777)
@@ -43,7 +42,6 @@ func (t *testFileUploader) TestFileUploaderAppend(c *C) {
 			_, err = io.CopyN(file, rand, 123*M)
 			c.Assert(err, IsNil)
 			wait.Done()
-			log.Infof("file %s comp", filename)
 		}
 		go writeFile(filename)
 		time.Sleep(1 * time.Second)
