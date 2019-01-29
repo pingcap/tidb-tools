@@ -3,7 +3,7 @@ package file_uploader
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"io/ioutil"
 	"os"

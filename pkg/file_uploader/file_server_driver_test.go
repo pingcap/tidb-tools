@@ -3,6 +3,7 @@ package file_uploader
 import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -69,4 +70,18 @@ func (m *MockFileUploaderDriver) Upload(sliceInfo *Slice) (string, error) {
 
 func (m *MockFileUploaderDriver) Hash() FileHash {
 	return NewMd5Base64FileHash()
+}
+
+func (m *MockFileUploaderDriver) Complete(path string) (string, error) {
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_SYNC, 0666)
+	defer file.Close()
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	hash := m.Hash()
+	_, err = io.Copy(hash, file)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	return hash.String(), nil
 }

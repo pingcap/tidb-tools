@@ -9,7 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/juju/errors"
+	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 	"hash"
 	"io/ioutil"
@@ -26,6 +26,7 @@ type FileHash interface {
 type FileUploaderDriver interface {
 	Upload(sliceInfo *Slice) (string, error)
 	Hash() FileHash
+	Complete(path string) (string, error)
 }
 
 type Md5Base64FileHash struct {

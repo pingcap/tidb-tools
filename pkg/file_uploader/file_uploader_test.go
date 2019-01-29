@@ -27,7 +27,7 @@ func (t *testFileUploader) TestFileUploaderAppend(c *C) {
 	var wait sync.WaitGroup
 	dir, err := ioutil.TempDir("", "up_test_file_uploader_append")
 	c.Assert(err, IsNil)
-	defer os.RemoveAll(dir)
+	//defer os.RemoveAll(dir)
 	filenames := []string{"testfile1", "testfile2", "testdir/testfile1"}
 	wait.Add(len(filenames))
 	for _, filename := range filenames {
@@ -53,6 +53,18 @@ func (t *testFileUploader) TestFileUploaderAppend(c *C) {
 	defer os.RemoveAll(targetDir)
 	fu := NewFileUploader(dir, 8, 10*M, NewMockFileUploaderDriver(dir, targetDir))
 	wait.Wait()
+
+	// modify file to test checker
+	filePath := filepath.Join(dir, filenames[0])
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_RDWR|os.O_SYNC, 0666)
+	defer file.Close()
+	c.Assert(err, IsNil)
+	randBytes := make([]byte, 1024)
+	_, err = rand.Read(randBytes)
+	c.Assert(err, IsNil)
+	_, err = file.Write(randBytes)
+	c.Assert(err, IsNil)
+
 	fu.WaitAndClose()
 	for _, filename := range filenames {
 		sourceHash := NewMd5Base64FileHash()

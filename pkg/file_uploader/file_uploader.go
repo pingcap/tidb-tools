@@ -3,6 +3,7 @@ package file_uploader
 import (
 	"github.com/ngaut/log"
 	"github.com/pingcap/errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,12 +11,6 @@ import (
 	"time"
 )
 
-/*
-1 watcher to slice
-2 slice to multi uploader
-3 mock driver
-4 test
-*/
 type FileUploader struct {
 	workDir        string
 	slicer         *FileSlicer
@@ -111,8 +106,58 @@ func (fu *FileUploader) WaitAndClose() {
 	fu.closed = true
 	fu.watcherWait.Wait()
 	log.Info("watcherWait wc")
+	err := fu.checkAndCompleteUpload()
+	if err != nil {
+		log.Errorf("check failure: %#v", err)
+	}
 	close(fu.slicesChan)
 	fu.uploaderWait.Wait()
 	log.Info("uploaderWait wc")
 	//check
+}
+
+func (fu *FileUploader) checkAndCompleteUpload() error {
+	var filePaths []string
+	workFunc := func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return errors.Trace(err)
+		}
+		if strings.HasPrefix(info.Name(), ".fu_") {
+			return nil
+		}
+		if info.IsDir() {
+			return nil
+		}
+		filePaths = append(filePaths, path)
+		slices, err := fu.slicer.DoSlice(path, info)
+		for _, slice := range slices {
+			fu.slicesChan <- slice
+		}
+		return nil
+	}
+	fu.slicer.reset()
+	err := filepath.Walk(fu.workDir, workFunc)
+	for _, path := range filePaths {
+		targetHash, err := fu.uploaderDriver.Complete(path)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_SYNC, 0666)
+		defer file.Close()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		hash := fu.uploaderDriver.Hash()
+		_, err = io.Copy(hash, file)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		sourceHash := hash.String()
+		log.Infof("file hash check %s, sourceHash: %s, targetHash: %s", path, sourceHash, targetHash)
+		if targetHash != targetHash {
+			err = errors.New("some file check failure")
+			log.Errorf("file check failure: %s, sourceHash: %s, targetHash: %s", path, sourceHash, targetHash)
+		}
+	}
+	return errors.Trace(err)
 }

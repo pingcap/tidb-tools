@@ -2,6 +2,7 @@ package file_uploader
 
 import (
 	"encoding/json"
+	"github.com/ngaut/log"
 	"io"
 	"io/ioutil"
 	"os"
@@ -142,4 +143,12 @@ func (fs *FileSlicer) DoSlice(path string, file os.FileInfo) ([]Slice, error) {
 		return nil, errors.Annotate(err, "error thrown during flushing slice status")
 	}
 	return sliceInfos, nil
+}
+
+func (fs *FileSlicer) reset() {
+	fs.sliceStatus.SliceTotalSize = make(map[string]int64)
+	err := os.Remove(fs.sliceStatus.statusFile)
+	if err != nil {
+		log.Errorf("remove checkpoint file failure: %#v", err)
+	}
 }
