@@ -242,12 +242,13 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 		symbolMin = chunk.bounds[colNum-1].lowerSymbol
 		symbolMax = chunk.bounds[colNum-1].upperSymbol
 	} else {
-		// choose the next column to split data
 		if len(columns) <= colNum {
 			log.Warnf("chunk %v can't be splited", chunk)
 			return append(chunks, chunk), nil
 		}
 
+
+		// choose the next column to split data
 		useNewColumn = true
 		splitCol = columns[colNum].Name.O
 
