@@ -21,7 +21,6 @@ func TestSuite(t *testing.T) {
 	TestingT(t)
 }
 
-// This Test Can Not Pass Now
 func (t *testFileUploader) TestFileUploaderAppend(c *C) {
 	checkPointRunning.Set(0)
 	var wait sync.WaitGroup
