@@ -93,7 +93,10 @@ type TableDiff struct {
 
 // Equal tests whether two database have same data and schema.
 func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (bool, bool, error) {
-	t.adjustConfig()
+	err := t.adjustConfig(ctx)
+	if err != nil {
+		return false, false, errors.Trace(err)
+	}
 
 	t.sqlCh = make(chan string)
 	t.wg.Add(1)
@@ -104,7 +107,6 @@ func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (
 
 	structEqual := true
 	dataEqual := true
-	var err error
 
 	if !t.IgnoreStructCheck {
 		structEqual, err = t.CheckTableStruct(ctx)
@@ -127,18 +129,7 @@ func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (
 
 // CheckTableStruct checks table's struct
 func (t *TableDiff) CheckTableStruct(ctx context.Context) (bool, error) {
-	tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.UseRowID)
-	if err != nil {
-		return false, errors.Trace(err)
-	}
-	t.TargetTable.info = removeColumns(tableInfo, t.RemoveColumns)
-
 	for _, sourceTable := range t.SourceTables {
-		tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.UseRowID)
-		if err != nil {
-			return false, errors.Trace(err)
-		}
-		sourceTable.info = removeColumns(tableInfo, t.RemoveColumns)
 		eq := dbutil.EqualTableInfo(sourceTable.info, t.TargetTable.info)
 		if !eq {
 			return false, nil
@@ -148,7 +139,7 @@ func (t *TableDiff) CheckTableStruct(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
-func (t *TableDiff) adjustConfig() {
+func (t *TableDiff) adjustConfig(ctx context.Context) error {
 	if t.ChunkSize <= 0 {
 		t.ChunkSize = 100
 	}
@@ -163,6 +154,26 @@ func (t *TableDiff) adjustConfig() {
 	if t.CheckThreadCount <= 0 {
 		t.CheckThreadCount = 4
 	}
+
+	return t.getTableInfo(ctx)
+}
+
+func (t *TableDiff) getTableInfo(ctx context.Context) error {
+	tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.UseRowID)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	t.TargetTable.info = removeColumns(tableInfo, t.RemoveColumns)
+
+	for _, sourceTable := range t.SourceTables {
+		tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.UseRowID)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		sourceTable.info = removeColumns(tableInfo, t.RemoveColumns)
+	}
+
+	return nil
 }
 
 // CheckTableData checks table's data
