@@ -93,10 +93,7 @@ type TableDiff struct {
 
 // Equal tests whether two database have same data and schema.
 func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (bool, bool, error) {
-	err := t.adjustConfig(ctx)
-	if err != nil {
-		return false, false, errors.Trace(err)
-	}
+	t.adjustConfig()
 
 	t.sqlCh = make(chan string)
 	t.wg.Add(1)
@@ -104,6 +101,11 @@ func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (
 		t.WriteSqls(ctx, writeFixSQL)
 		t.wg.Done()
 	}()
+
+	err := t.getTableInfo(ctx)
+	if err != nil {
+		return false, false, errors.Trace(err)
+	}
 
 	structEqual := true
 	dataEqual := true
@@ -139,7 +141,7 @@ func (t *TableDiff) CheckTableStruct(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
-func (t *TableDiff) adjustConfig(ctx context.Context) error {
+func (t *TableDiff) adjustConfig() {
 	if t.ChunkSize <= 0 {
 		t.ChunkSize = 100
 	}
@@ -154,8 +156,6 @@ func (t *TableDiff) adjustConfig(ctx context.Context) error {
 	if t.CheckThreadCount <= 0 {
 		t.CheckThreadCount = 4
 	}
-
-	return t.getTableInfo(ctx)
 }
 
 func (t *TableDiff) getTableInfo(ctx context.Context) error {
