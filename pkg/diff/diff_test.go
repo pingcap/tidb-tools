@@ -266,10 +266,10 @@ func generateData(dbConn *sql.DB, dbCfg dbutil.DBConfig, sourceTables []string, 
 		DBCfg:       dbCfg,
 	}
 
-	// generate data for source table
+	// generate data for target table
 	importer.DoProcess(cfg)
 
-	// generate data for target table
+	// generate data for source tables
 	for _, sourceTable := range sourceTables {
 		_, err := dbConn.Query(fmt.Sprintf("CREATE TABLE `test`.`%s` LIKE `test`.`%s`", sourceTable, targetTable))
 		if err != nil {
@@ -292,12 +292,8 @@ func generateData(dbConn *sql.DB, dbCfg dbutil.DBConfig, sourceTables []string, 
 		conditions = append(conditions, "true")
 	} else {
 		conditions = append(conditions, fmt.Sprintf("e < %s", values[0]))
-		for i := range values {
-			if i < len(values)-1 {
+		for i := 0; i < len(values)-1; i++ {
 				conditions = append(conditions, fmt.Sprintf("e >= %s AND e < %s", values[i], values[i+1]))
-			} else {
-				break
-			}
 		}
 		conditions = append(conditions, fmt.Sprintf("e >= %s", values[len(values)-1]))
 	}
