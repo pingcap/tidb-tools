@@ -91,6 +91,9 @@ func NewAWSS3FileUploaderDriver(accessKeyID string, secretAccessKey string, buck
 
 func (fud *AWSS3FileUploaderDriver) Upload(sliceInfo *Slice) (string, error) {
 	relFilePath, err := filepath.Rel(fud.workDir, sliceInfo.FilePath)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
 	key := filepath.Join(fud.remoteDir, relFilePath)
 	uploadId, exist := fud.awsUploadIdSet.getUploadId(key)
 	if !exist {
@@ -155,8 +158,47 @@ func (fud *AWSS3FileUploaderDriver) uploadPart(uploadId, key string, slice *Slic
 	return md5, *output.ETag, nil
 }
 
+func (fud *AWSS3FileUploaderDriver) completeUpload(uploadId, key string, parts []*s3.CompletedPart) (string, error) {
+	completeInput := &s3.CompleteMultipartUploadInput{
+		Bucket:   aws.String(fud.bucketName),
+		Key:      aws.String(key),
+		UploadId: aws.String(uploadId),
+		MultipartUpload: &s3.CompletedMultipartUpload{
+			Parts: parts,
+		},
+	}
+	_, err := fud.s3.CompleteMultipartUpload(completeInput)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	//todo hash
+	return "hash", nil
+}
+
 func (fud *AWSS3FileUploaderDriver) Hash() FileHash {
 	return &Md5Base64FileHash{}
+}
+
+func (fud *AWSS3FileUploaderDriver) Complete(path string) (string, error) {
+	relFilePath, err := filepath.Rel(fud.workDir, path)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	key := filepath.Join(fud.remoteDir, relFilePath)
+	uploadId, exist := fud.awsUploadIdSet.getUploadId(key)
+	if !exist {
+		return "", errors.Errorf("key %s not exist", key)
+	}
+	parts := fud.awsUploadIdSet.getCompletedParts(key)
+	hash, err := fud.completeUpload(uploadId, key, parts)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	return hash, nil
+}
+
+func (fud *AWSS3FileUploaderDriver) Close(path string) (string, error) {
+	// 终止分片上传
 }
 
 var awsUploadIdRunning sync2.AtomicInt32
@@ -232,6 +274,20 @@ func (us *awsUploadIdSet) getUploadId(key string) (string, bool) {
 		return "", false
 	}
 	return item.UploadId, true
+}
+
+func (us *awsUploadIdSet) getCompletedParts(key string) []*s3.CompletedPart {
+	us.rwLock.RLock()
+	defer us.rwLock.RUnlock()
+	item, exist := us.status[key]
+	result := make([]*s3.CompletedPart, 0, len(item.ETag))
+	if !exist {
+		return result
+	}
+	for index, eTag := range item.ETag {
+		result = append(result, &s3.CompletedPart{ETag: aws.String(eTag), PartNumber: aws.Int64(index)})
+	}
+	return result
 }
 
 func (us *awsUploadIdSet) save() error {
