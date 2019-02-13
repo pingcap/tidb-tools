@@ -22,6 +22,8 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/diff"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
+	"github.com/pingcap/tidb-tools/pkg/utils"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -39,6 +41,8 @@ type Diff struct {
 	tables            map[string]map[string]*TableConfig
 	fixSQLFile        *os.File
 	report            *Report
+	tidbInstanceID    string
+	tableRouter       *router.Table
 
 	ctx context.Context
 }
@@ -54,6 +58,7 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 		useChecksum:       cfg.UseChecksum,
 		ignoreDataCheck:   cfg.IgnoreDataCheck,
 		ignoreStructCheck: cfg.IgnoreStructCheck,
+		tidbInstanceID:    cfg.TiDBInstanceID,
 		tables:            make(map[string]map[string]*TableConfig),
 		report:            NewReport(),
 		ctx:               ctx,
@@ -125,10 +130,47 @@ func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 }
 
 // AdjustTableConfig adjusts the table's config by check-tables and table-config.
-func (df *Diff) AdjustTableConfig(cfg *Config) error {
+func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
+	df.tableRouter, err = router.NewTableRouter(false, cfg.TableRules)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	allTablesMap, err := df.GetAllTables(cfg)
 	if err != nil {
 		return errors.Trace(err)
+	}
+
+	// get all source table's matched target table
+	// target database name => target table name => all matched source table instance
+	sourceTablesMap := make(map[string]map[string][]TableInstance)
+	for instanceID, allSchemas := range allTablesMap {
+		if instanceID == df.targetDB.InstanceID {
+			continue
+		}
+
+		for schema, allTables := range allSchemas {
+			for table := range allTables {
+				targetSchema, targetTable, err := df.tableRouter.Route(schema, table)
+				if err != nil {
+					return errors.Errorf("get route result for %s.%s.%s failed, error %v", instanceID, schema, table, err)
+				}
+
+				if _, ok := sourceTablesMap[targetSchema]; !ok {
+					sourceTablesMap[targetSchema] = make(map[string][]TableInstance)
+				}
+
+				if _, ok := sourceTablesMap[targetSchema][targetTable]; !ok {
+					sourceTablesMap[targetSchema][targetTable] = make([]TableInstance, 0, 1)
+				}
+
+				sourceTablesMap[targetSchema][targetTable] = append(sourceTablesMap[targetSchema][targetTable], TableInstance{
+					InstanceID: instanceID,
+					Schema:     schema,
+					Table:      table,
+				})
+			}
+		}
 	}
 
 	// fill the table information.
@@ -136,7 +178,10 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 	for _, schemaTables := range cfg.Tables {
 		df.tables[schemaTables.Schema] = make(map[string]*TableConfig)
 		tables := make([]string, 0, len(schemaTables.Tables))
-		allTables := allTablesMap[schemaName(df.targetDB.InstanceID, schemaTables.Schema)]
+		allTables, ok := allTablesMap[df.targetDB.InstanceID][schemaTables.Schema]
+		if !ok {
+			return errors.NotFoundf("schema %s.%s", df.targetDB.InstanceID, schemaTables.Schema)
+		}
 
 		for _, table := range schemaTables.Tables {
 			matchedTables, err := df.GetMatchTable(df.targetDB, schemaTables.Schema, table, allTables)
@@ -149,12 +194,24 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 		for _, tableName := range tables {
 			tableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, df.targetDB.Conn, schemaTables.Schema, tableName, cfg.UseRowID)
 			if err != nil {
-				return errors.Errorf("get table %s.%s's inforamtion error %v", schemaTables.Schema, tableName, errors.ErrorStack(err))
+				return errors.Errorf("get table %s.%s's inforamtion error %s", schemaTables.Schema, tableName, errors.ErrorStack(err))
 			}
 
 			if _, ok := df.tables[schemaTables.Schema][tableName]; ok {
 				log.Errorf("duplicate config for %s.%s", schemaTables.Schema, tableName)
 				continue
+			}
+
+			sourceTables := make([]TableInstance, 0, 1)
+			if _, ok := sourceTablesMap[schemaTables.Schema][tableName]; ok {
+				sourceTables = sourceTablesMap[schemaTables.Schema][tableName]
+			} else {
+				// use same database name and table name
+				sourceTables = append(sourceTables, TableInstance{
+					InstanceID: cfg.SourceDBCfg[0].InstanceID,
+					Schema:     schemaTables.Schema,
+					Table:      tableName,
+				})
 			}
 
 			df.tables[schemaTables.Schema][tableName] = &TableConfig{
@@ -165,21 +222,17 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 				IgnoreColumns:   make([]string, 0, 1),
 				TargetTableInfo: tableInfo,
 				Range:           "TRUE",
-				SourceTables: []TableInstance{{
-					InstanceID: cfg.SourceDBCfg[0].InstanceID,
-					Schema:     schemaTables.Schema,
-					Table:      tableName,
-				}},
+				SourceTables:    sourceTables,
 			}
 		}
 	}
 
 	for _, table := range cfg.TableCfgs {
 		if _, ok := df.tables[table.Schema]; !ok {
-			return errors.Errorf("schema %s not found in check tables", table.Schema)
+			return errors.NotFoundf("schema %s in check tables", table.Schema)
 		}
 		if _, ok := df.tables[table.Schema][table.Table]; !ok {
-			return errors.Errorf("table %s.%s not found in check tables", table.Schema, table.Table)
+			return errors.NotFoundf("table %s.%s in check tables", table.Schema, table.Table)
 		}
 
 		sourceTables := make([]TableInstance, 0, len(table.SourceTables))
@@ -188,7 +241,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 				return errors.Errorf("unkonwn database instance id %s", sourceTable.InstanceID)
 			}
 
-			allTables, ok := allTablesMap[schemaName(df.sourceDBs[sourceTable.InstanceID].InstanceID, sourceTable.Schema)]
+			allTables, ok := allTablesMap[df.sourceDBs[sourceTable.InstanceID].InstanceID][sourceTable.Schema]
 			if !ok {
 				return errors.Errorf("unknown schema %s in database %+v", sourceTable.Schema, df.sourceDBs[sourceTable.InstanceID])
 			}
@@ -215,7 +268,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 		}
 		df.tables[table.Schema][table.Table].IgnoreColumns = table.IgnoreColumns
 		df.tables[table.Schema][table.Table].RemoveColumns = table.RemoveColumns
-		df.tables[table.Schema][table.Table].Field = table.Field
+		df.tables[table.Schema][table.Table].Fields = table.Fields
 		df.tables[table.Schema][table.Table].Collation = table.Collation
 	}
 
@@ -223,37 +276,36 @@ func (df *Diff) AdjustTableConfig(cfg *Config) error {
 }
 
 // GetAllTables get all tables in all databases.
-func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]interface{}, error) {
-	allTablesMap := make(map[string]map[string]interface{})
+func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]map[string]interface{}, error) {
+	// instanceID => schema => table
+	allTablesMap := make(map[string]map[string]map[string]interface{})
 
-	for _, schemaTables := range cfg.Tables {
-		if _, ok := allTablesMap[schemaName(cfg.TargetDBCfg.InstanceID, schemaTables.Schema)]; ok {
-			continue
-		}
-
-		allTables, err := dbutil.GetTables(df.ctx, cfg.TargetDBCfg.Conn, schemaTables.Schema)
+	allTablesMap[df.targetDB.InstanceID] = make(map[string]map[string]interface{})
+	targetSchemas, err := dbutil.GetSchemas(df.ctx, df.targetDB.Conn)
+	if err != nil {
+		return nil, errors.Annotatef(err, "get schemas from %s", df.targetDB.InstanceID)
+	}
+	for _, schema := range targetSchemas {
+		allTables, err := dbutil.GetTables(df.ctx, df.targetDB.Conn, schema)
 		if err != nil {
-			return nil, errors.Errorf("get tables from %s.%s error %v", cfg.TargetDBCfg.InstanceID, schemaTables.Schema, errors.Trace(err))
+			return nil, errors.Annotatef(err, "get tables from %s.%s", df.targetDB.InstanceID, schema)
 		}
-		allTablesMap[schemaName(cfg.TargetDBCfg.InstanceID, schemaTables.Schema)] = diff.SliceToMap(allTables)
+		allTablesMap[df.targetDB.InstanceID][schema] = utils.SliceToMap(allTables)
 	}
 
-	for _, table := range cfg.TableCfgs {
-		for _, sourceTable := range table.SourceTables {
-			if _, ok := allTablesMap[schemaName(sourceTable.InstanceID, sourceTable.Schema)]; ok {
-				continue
-			}
+	for _, source := range df.sourceDBs {
+		allTablesMap[source.InstanceID] = make(map[string]map[string]interface{})
+		sourceSchemas, err := dbutil.GetSchemas(df.ctx, source.Conn)
+		if err != nil {
+			return nil, errors.Annotatef(err, "get schemas from %s", source.InstanceID)
+		}
 
-			db, ok := df.sourceDBs[sourceTable.InstanceID]
-			if !ok {
-				return nil, errors.Errorf("unknown instance id %s", sourceTable.InstanceID)
-			}
-
-			allTables, err := dbutil.GetTables(df.ctx, db.Conn, sourceTable.Schema)
+		for _, schema := range sourceSchemas {
+			allTables, err := dbutil.GetTables(df.ctx, source.Conn, schema)
 			if err != nil {
-				return nil, errors.Errorf("get tables from %s.%s error %v", db.InstanceID, sourceTable.Schema, errors.Trace(err))
+				return nil, errors.Annotatef(err, "get tables from %s.%s", source.InstanceID, schema)
 			}
-			allTablesMap[schemaName(db.InstanceID, sourceTable.Schema)] = diff.SliceToMap(allTables)
+			allTablesMap[source.InstanceID][schema] = utils.SliceToMap(allTables)
 		}
 	}
 
@@ -306,27 +358,44 @@ func (df *Diff) Equal() (err error) {
 
 	for _, schema := range df.tables {
 		for _, table := range schema {
+			var tidbStatsSource *diff.TableInstance
+
 			sourceTables := make([]*diff.TableInstance, 0, len(table.SourceTables))
 			for _, sourceTable := range table.SourceTables {
-				sourceTables = append(sourceTables, &diff.TableInstance{
+				sourceTableInstance := &diff.TableInstance{
 					Conn:   df.sourceDBs[sourceTable.InstanceID].Conn,
 					Schema: sourceTable.Schema,
 					Table:  sourceTable.Table,
-				})
+				}
+				sourceTables = append(sourceTables, sourceTableInstance)
+
+				if sourceTable.InstanceID == df.tidbInstanceID {
+					tidbStatsSource = sourceTableInstance
+				}
+			}
+
+			targetTableInstance := &diff.TableInstance{
+				Conn:   df.targetDB.Conn,
+				Schema: table.Schema,
+				Table:  table.Table,
+			}
+
+			if df.targetDB.InstanceID == df.tidbInstanceID {
+				tidbStatsSource = targetTableInstance
+			}
+
+			if len(df.tidbInstanceID) != 0 && tidbStatsSource == nil {
+				return errors.NotFoundf("tidb instance id %s", df.tidbInstanceID)
 			}
 
 			td := &diff.TableDiff{
 				SourceTables: sourceTables,
-				TargetTable: &diff.TableInstance{
-					Conn:   df.targetDB.Conn,
-					Schema: table.Schema,
-					Table:  table.Table,
-				},
+				TargetTable:  targetTableInstance,
 
 				IgnoreColumns: table.IgnoreColumns,
 				RemoveColumns: table.RemoveColumns,
 
-				Field:             table.Field,
+				Fields:            table.Fields,
 				Range:             table.Range,
 				Collation:         table.Collation,
 				ChunkSize:         df.chunkSize,
@@ -336,6 +405,7 @@ func (df *Diff) Equal() (err error) {
 				UseChecksum:       df.useChecksum,
 				IgnoreStructCheck: df.ignoreStructCheck,
 				IgnoreDataCheck:   df.ignoreDataCheck,
+				TiDBStatsSource:   tidbStatsSource,
 			}
 
 			structEqual, dataEqual, err := td.Equal(df.ctx, func(dml string) error {

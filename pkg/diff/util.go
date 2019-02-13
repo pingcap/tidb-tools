@@ -16,10 +16,11 @@ package diff
 import (
 	"math/rand"
 
-	"github.com/ngaut/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb/types"
+	log "github.com/sirupsen/logrus"
 )
 
 func equalStrings(str1, str2 []string) bool {
@@ -39,7 +40,7 @@ func removeColumns(tableInfo *model.TableInfo, columns []string) *model.TableInf
 		return tableInfo
 	}
 
-	removeColMap := SliceToMap(columns)
+	removeColMap := utils.SliceToMap(columns)
 	for i := 0; i < len(tableInfo.Indices); i++ {
 		index := tableInfo.Indices[i]
 		for j := 0; j < len(index.Columns); j++ {
@@ -66,6 +67,19 @@ func removeColumns(tableInfo *model.TableInfo, columns []string) *model.TableInf
 	return tableInfo
 }
 
+func getColumnsFromIndex(index *model.IndexInfo, tableInfo *model.TableInfo) []*model.ColumnInfo {
+	indexColumns := make([]*model.ColumnInfo, 0, len(index.Columns))
+	for _, indexColumn := range index.Columns {
+		for _, column := range tableInfo.Columns {
+			if column.Name.O == indexColumn.Name.O {
+				indexColumns = append(indexColumns, column)
+			}
+		}
+	}
+
+	return indexColumns
+}
+
 func getRandomN(total, num int) []int {
 	if num > total {
 		log.Warnf("the num %d is greater than total %d", num, total)
@@ -87,13 +101,4 @@ func getRandomN(total, num int) []int {
 
 func needQuotes(ft types.FieldType) bool {
 	return !(dbutil.IsNumberType(ft.Tp) || dbutil.IsFloatType(ft.Tp))
-}
-
-// SliceToMap converts slice to map
-func SliceToMap(slice []string) map[string]interface{} {
-	sMap := make(map[string]interface{})
-	for _, str := range slice {
-		sMap[str] = struct{}{}
-	}
-	return sMap
 }
