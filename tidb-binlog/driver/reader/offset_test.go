@@ -99,7 +99,7 @@ func (to *testOffsetSuite) TestOffset(c *C) {
 		10: testPoss[20],
 		15: testPoss[20],
 		20: testPoss[30],
-		35: sarama.OffsetNewest,
+		35: testPoss[30] + 1,
 	}
 	for ts, offset := range testCases {
 		offsetFounds, err := sk.Seek(topic, ts, []int32{0})
