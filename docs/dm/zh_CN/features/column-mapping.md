@@ -47,14 +47,14 @@ column-mappings:
 `partition id` 目的是为了解决分库分表合并同步的自增主键的冲突
 
 ##### 使用注意
-- 只支持类型为 bigint 的自增主键
+- 只支持类型为 bigint 的列，通常为自增主键，联合主键或者联合唯一索引的其中一列
 - 库名的组成必须为 `schema 前缀 + 数字（既 schema ID）`，例如: 支持 `s_1`, 不支持 `s_a`
 - 表名的组成必须为 `table 前缀 + 数字（既 table ID）`
 - 对分库分表的规模支持限制如下
   - 支持最多 16 个 MySQL/MariaDB 实例（0 <= instance ID <= 15）
   - 每个实例支持最多 128 个 schema（0 <= schema ID  <= 127）
   - 每个实例的每个 schema 256 个 table（0 <= table ID <= 255）
-  - 自增主键 ID 范围 (0 <= ID <= 17592186044415)
+  - 进行列值映射的列的范围 (0 <= ID <= 17592186044415)
   - {instance ID、schema ID、table ID} 组合需要保持唯一
 - 目前该功能是定制功能，如果需要调整请联系相关开发人员进行调整
 
