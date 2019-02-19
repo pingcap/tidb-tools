@@ -247,7 +247,6 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 			return append(chunks, chunk), nil
 		}
 
-
 		// choose the next column to split data
 		useNewColumn = true
 		splitCol = columns[colNum].Name.O
