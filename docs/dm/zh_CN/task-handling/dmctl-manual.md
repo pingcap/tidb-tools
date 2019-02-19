@@ -79,7 +79,7 @@ Use "dmctl [command] --help" for more information about a command.
 
 #### check-task
 
-检查上游 MySQL 实例配置，是否满足 DM 规范要求。详情见 [上游数据库实例检查](./check-mysql.md)
+检查上游 MySQL 实例配置，是否满足 DM 规范要求。详情见 [上游数据库实例检查](../precheck.md)
 
 #### DDL lock 管理命令
 

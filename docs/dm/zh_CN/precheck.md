@@ -29,7 +29,7 @@ DM 配置中的 MySQL user 至少需要具有以下权限
 TiDB 和 MySQL 的兼容性存在一些差别
 
 - foreign key 不支持
-- 字符集的兼容性 <https://github.com/pingcap/docs-cn/blob/master/sql/character-set-support.md>
+- 字符集的兼容性 [character-set-support.md](https://github.com/pingcap/docs-cn/blob/master/sql/character-set-support.md)
 
 #### 上游 MySQL 多实例分库分表一致性
 

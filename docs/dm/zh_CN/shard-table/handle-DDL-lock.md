@@ -148,7 +148,7 @@ break-ddl-lock <--worker=127.0.0.1:8262> [--remove-id] [--exec] [--skip] <task-n
 
 在 DM-master 尝试自动 unlock sharding DDL lock 之前，需要等待所有 DM-worker 的 sharding DDL 全部到达（具体流程见 [分库分表合并同步原理](./shard-merge.md#原理)）。如果 sharding DDL 已经在同步过程中，且有部分 DM-worker 下线并且不再计划重启它们（按业务需求移除了这部分 DM-worker），则会由于永远无法等齐所有的 DDL 而造成 lock 无法自动 unlock。
 
-> 如果不在 sharding DDL 同步过程中时需要下线 DM-worker，更好的做法是先使用 `stop-task` 停止运行中的任务，然后下线 DM-worker 并从任务配置文件中移除对应的配置信息，最后使用 `start-task` 及新的配置文件重新启动同步任务。
+> 如果不需要在 sharding DDL 同步过程中时下线 DM-worker，更好的做法是先使用 `stop-task` 停止运行中的任务，然后下线 DM-worker 并从任务配置文件中移除对应的配置信息，最后使用 `start-task` 及新的配置文件重新启动同步任务。
 
 ##### 手动处理示例
 

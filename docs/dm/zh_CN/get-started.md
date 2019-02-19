@@ -149,21 +149,21 @@ stop-task test              # 其中的 `test` 是 `task.yaml` 配置文件中 `
 
 #### DM 监控 dashboard
 
-如果您是参考 [部署 DM 集群](#部署-dm-集群) 部署 DM 集群时，正确部署了 prometheus 与 grafana，且 grafana 的地址为 `172.16.10.71`。
+如果您是通过 [部署 DM 集群](#部署-dm-集群) 来部署 DM 集群，确保正确部署了 prometheus 与 grafana，且 grafana 的地址为 `172.16.10.71`。
 
 在浏览器中打开 <http://172.16.10.71:3000> 进入 grafana，选择 DM 的 dashboard 即可看到 DM 相关监控项，具体各监控项的解释参见 [DM 监控与告警](./maintenance/metrics-alert.md)。
 
 #### DM log
 
-DM 在运行过程中，DM-worker, DM-master 及 dmctl 都会通过 log 输出相关信息。
+DM 在运行过程中，DM-worker，DM-master 及 dmctl 都会通过 log 输出相关信息。
 
-其中，DM-worker, DM-master 的 log 文件输出目录参见 [部署目录结构](./maintenance/directory-structure.md)，dmctl 的 log 文件与其 binary 同目录。
+其中，DM-worker， DM-master 的 log 文件输出目录参见 [部署目录结构](./maintenance/directory-structure.md)，dmctl 的 log 文件与其 binary 同目录。
 
 ***
 
 ### 下一步
 
-接下来你可以按照下面的学习路线深入了解 DM，然后定制符合你业务需求数据同步任务
+接下来你可以按照下面的学习路线深入了解 DM，然后定制符合你业务需求的数据同步任务
 
   1. 阅读并且了解 [使用限制](./restrictions.md)
   2. 阅读并且了解 [配置文件](./configuration/configuration.md)

@@ -152,7 +152,7 @@ $ ansible-playbook -i hosts.ini create_users.yml -u root -k
 ansible-playbook local_prepare.yml
 ```
 
-## 编辑 inventory.ini 文件, 配置集群拓扑
+## 编辑 inventory.ini 文件，配置集群拓扑
 
 以 `tidb` 用户登录中控机，`inventory.ini` 文件路径为 `/home/tidb/dm-ansible/inventory.ini`。
 
@@ -175,11 +175,11 @@ ansible-playbook local_prepare.yml
 | 变量 | 变量含义 |
 | ------------- | ------- |
 | source_id | DM-worker 绑定到唯一的一个数据库实例/具有主从架构的复制组，当发生主从切换的时候，只需要更新 mysql_host/port 而不用更改该 ID 标识|
-| server_id | DM-worker 伪装成一个 mysql slave，即 slave 的 server_id, 需要在 mysql 集群中全局唯一，取值范围 0 - 4294967295 |
+| server_id | DM-worker 伪装成一个 mysql slave，即 slave 的 server_id，需要在 mysql 集群中全局唯一，取值范围 0 - 4294967295 |
 | mysql_host | 上游 MySQL host |
 | mysql_user | 上游 MySQL 用户名，默认为 root |
 | mysql_password | 上游 MySQL 用户名密码，密码需使用 dmctl 工具加密，参考 [dmctl 加密上游 MySQL 密码](#dmctl-加密上游-mysql-用户密码) |
-| mysql_port | 上游 MySQL 端口号, 默认为 3306 |
+| mysql_port | 上游 MySQL 端口号，默认为 3306 |
 | enable_gtid | DM-worker 是否要用 GTID 形式的位置去拉取 binlog，前提是上游 mysql 已经开启 GTID 模式 |
 | relay_binlog_name | DM-worker 是否要从该指定 binlog file 开始拉取 binlog，仅本地不存在有效 relay log 时使用 |
 | relay_binlog_gtid | DM-worker 是否要从该指定 GTID 开始拉取 binlog，仅本地不存在有效 relay log 且 enable_gtid 为 true 时使用 |
@@ -406,7 +406,7 @@ username = tidb
 $ ansible-playbook -i hosts.ini create_users.yml -u root -k
 ```
 
-#### 编辑 inventory.ini 文件, 添加新增 DM-worker 实例
+#### 编辑 inventory.ini 文件，添加新增 DM-worker 实例
 
 编辑 `inventory.ini` 文件，根据实际信息，添加新增 dm_worker 实例 dm_worker3。
 
@@ -570,7 +570,7 @@ $ ansible-playbook -i hosts.ini create_users.yml -u root -k
 $ ansible-playbook stop.yml --tags=dm-worker -l dm_worker1
 ```
 
-#### 编辑 inventory.ini 文件, 添加新 DM-worker 实例
+#### 编辑 inventory.ini 文件，添加新 DM-worker 实例
 
 编辑 `inventory.ini` 文件，根据实际信息，注释或删除旧 dm_worker1 实例 `172.16.10.72` 所在行，增加新 dm_worker1 实例 `172.16.10.75` 信息。
 
