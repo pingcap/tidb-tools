@@ -4,8 +4,11 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"io"
+	"io/ioutil"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 var _ = Suite(&testServerDriver{})
@@ -84,4 +87,45 @@ func (m *MockFileUploaderDriver) Complete(path string) (string, error) {
 		return "", errors.Trace(err)
 	}
 	return hash.String(), nil
+}
+
+func (t *testServerDriver) TestAWSS3ServerDriver(c *C) {
+	dir, err := ioutil.TempDir("", "up_awss3_server_sriver")
+	defer os.RemoveAll(dir)
+	c.Assert(err, IsNil)
+	aws, err := NewAWSS3FileUploaderDriver("", "", "", "", "", "")
+	c.Assert(err, IsNil)
+
+	// create the file to be uploaded
+	filename := "test_file"
+	rand := rand.New(rand.NewSource(time.Now().Unix()))
+	sourceFilePath := filepath.Join(dir, filename)
+	file, err := os.OpenFile(sourceFilePath, os.O_CREATE|os.O_RDWR|os.O_SYNC, 0666)
+	c.Assert(err, IsNil)
+	defer file.Close()
+	_, err = io.CopyN(file, rand, 123*M)
+	c.Assert(err, IsNil)
+
+	// slice file
+	fileSlicer, err := NewFileSlicer(dir, SliceSize)
+	fileInfo, err := os.Stat(sourceFilePath)
+	slices, err := fileSlicer.DoSlice(sourceFilePath, fileInfo)
+	c.Assert(err, IsNil)
+
+	// upload slice
+	for _, slice := range slices {
+		_, err := aws.Upload(&slice)
+		c.Assert(err, IsNil)
+	}
+	hash, err := aws.Complete(sourceFilePath)
+	c.Assert(err, IsNil)
+
+	// check hash
+	sourceHash := NewMd5Base64FileHash()
+	sourceFile, err := os.OpenFile(sourceFilePath, os.O_CREATE|os.O_RDWR|os.O_SYNC, 0666)
+	c.Assert(err, IsNil)
+	defer sourceFile.Close()
+	_, err = io.Copy(sourceHash, sourceFile)
+	c.Assert(err, IsNil)
+	c.Assert(hash, Equals, sourceHash.String())
 }

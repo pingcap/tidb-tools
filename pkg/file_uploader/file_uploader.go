@@ -104,7 +104,6 @@ func (fu *FileUploader) WaitAndClose() {
 	}
 	close(fu.slicesChan)
 	fu.uploaderWait.Wait()
-	//check
 }
 
 func (fu *FileUploader) checkAndCompleteUpload() error {

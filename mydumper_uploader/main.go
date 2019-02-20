@@ -21,6 +21,7 @@ func main() {
 	// start file uploader
 	execMydumper(mydumperArgs...)
 	// close file uploader
+
 }
 
 func execMydumper(args ...string) {

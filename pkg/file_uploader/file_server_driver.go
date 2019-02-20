@@ -159,20 +159,28 @@ func (fud *AWSS3FileUploaderDriver) uploadPart(uploadId, key string, slice *Slic
 }
 
 func (fud *AWSS3FileUploaderDriver) completeUpload(uploadId, key string, parts []*s3.CompletedPart) (string, error) {
-	completeInput := &s3.CompleteMultipartUploadInput{
+	_, err := fud.s3.CompleteMultipartUpload(&s3.CompleteMultipartUploadInput{
 		Bucket:   aws.String(fud.bucketName),
 		Key:      aws.String(key),
 		UploadId: aws.String(uploadId),
 		MultipartUpload: &s3.CompletedMultipartUpload{
 			Parts: parts,
 		},
-	}
-	_, err := fud.s3.CompleteMultipartUpload(completeInput)
+	})
 	if err != nil {
 		return "", errors.Trace(err)
 	}
-	//todo hash
-	return "hash", nil
+	output, err := fud.s3.HeadObject(&s3.HeadObjectInput{
+		Bucket: aws.String(fud.bucketName),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	if hash, exist := output.Metadata["Content-MD5"]; exist {
+		return *hash, nil
+	}
+	return "", errors.Errorf("get metadata failure,key: %s", key)
 }
 
 func (fud *AWSS3FileUploaderDriver) Hash() FileHash {
