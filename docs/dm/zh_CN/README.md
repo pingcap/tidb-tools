@@ -28,6 +28,7 @@ DM (Data Migration) 是一体化数据同步任务管理平台，支持全量备
 
 - [DM 介绍](./overview.md)
 - [使用限制](./restrictions.md)
+    - [阿里云 RDS 支持限制](./vendors/aliyun-rds.md)
 - 使用案例
     - [简单的从库同步场景](./use-cases/one-tidb-slave.md)
     - [分库分表合并场景](./use-cases/shard-merge.md)
