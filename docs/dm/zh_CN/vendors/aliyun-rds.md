@@ -4,7 +4,7 @@
 ### 内容索引
 
 - [implict_primary_key 造成同步中断](#implict_primary_key-造成同步中断)
-- [缺少 SUPER privilege(s) 权限 dump 失败](#缺少-SUPER-privilege(s)-权限-dump-失败)
+- [缺少 SUPER privilege(s) 权限 dump 失败](#缺少-super-privileges-权限-dump-失败)
 
 > 注意：目前 DM 未针对阿里云 RDS 进行完备的测试，除以下已列出的功能在支持上受限外，可能还存在其他功能无法完整支持，如需在生产环境中使用 DM，请先根据实际业务场景进行完备的测试。
 
