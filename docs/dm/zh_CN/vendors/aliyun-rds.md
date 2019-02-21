@@ -19,7 +19,7 @@
 1. 对于将要创建的表，在创建表时显式地指定主键
 2. 对于已经存在且包含隐式主键的表，在关闭 `implict_primary_key` 参数后，显式地为表增加主键
 
-### 缺少 SUPER privilege(s) 权限 dump 失败
+### 缺少 SUPER 权限造成 dump 失败
 
 为获取一致性的 dumped data 和 binlog metadata，dump 时需要相关权限进行 `LOCK TABLES` 等操作。
 
