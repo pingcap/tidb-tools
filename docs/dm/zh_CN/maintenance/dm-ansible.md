@@ -340,14 +340,21 @@ $ ansible-playbook stop.yml
 ### 升级组件版本
 
 #### 下载 DM binary
+1. 以 `tidb` 用户登录中控机并进入 `/home/tidb/` 目录，备份原有的 dm-ansible 目录，删除旧版本压缩文件：
+    ```
+    $ mv dm-ansible dm-ansible-bak
+    $ rm -rf dm-ansible-latest.tar.gz
+    ```
 
-1. 下载最新 DM-Ansible。
+2. 下载最新 DM-Ansible，并且根据 dm-ansible-bak 中的已有配置更新 inventory.ini 等文件。
 
     ```
     $ wget http://download.pingcap.org/dm-ansible-latest.tar.gz
+    $ tar -xzvf dm-ansible-latest.tar.gz
+    $ mv dm-ansible-latest dm-ansible
     ```
 
-2. 使用 playbook 下载最新的（latest） DM binary。
+3. 使用 playbook 下载最新的（latest） DM binary。
 
     ```
     $ ansible-playbook local_prepare.yml
