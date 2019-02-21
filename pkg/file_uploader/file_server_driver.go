@@ -2,7 +2,7 @@ package file_uploader
 
 import (
 	"crypto/md5"
-	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
@@ -16,6 +16,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 )
 
@@ -30,36 +31,36 @@ type FileUploaderDriver interface {
 	Complete(path string) (string, error)
 }
 
-type Md5Base64FileHash struct {
+type Md5FileHash struct {
 	h hash.Hash
 }
 
-func NewMd5Base64FileHash() *Md5Base64FileHash {
-	return &Md5Base64FileHash{md5.New()}
+func NewMd5Base64FileHash() *Md5FileHash {
+	return &Md5FileHash{md5.New()}
 }
 
-func (fh *Md5Base64FileHash) Write(p []byte) (n int, err error) {
+func (fh *Md5FileHash) Write(p []byte) (n int, err error) {
 	return fh.h.Write(p)
 }
 
-func (fh *Md5Base64FileHash) Sum(b []byte) []byte {
+func (fh *Md5FileHash) Sum(b []byte) []byte {
 	return fh.h.Sum(b)
 }
 
-func (fh *Md5Base64FileHash) Reset() {
+func (fh *Md5FileHash) Reset() {
 	fh.h.Reset()
 }
 
-func (fh *Md5Base64FileHash) Size() int {
+func (fh *Md5FileHash) Size() int {
 	return fh.h.Size()
 }
 
-func (fh *Md5Base64FileHash) BlockSize() int {
+func (fh *Md5FileHash) BlockSize() int {
 	return fh.h.BlockSize()
 }
 
-func (fh *Md5Base64FileHash) String() string {
-	return base64.StdEncoding.EncodeToString(fh.Sum(nil))
+func (fh *Md5FileHash) String() string {
+	return hex.EncodeToString(fh.Sum(nil))
 }
 
 type AWSS3FileUploaderDriver struct {
@@ -107,7 +108,7 @@ func (fud *AWSS3FileUploaderDriver) Upload(sliceInfo *Slice) (string, error) {
 		}
 
 	}
-	md5, eTag, err := fud.uploadPart(uploadId, key, sliceInfo)
+	eTag, err := fud.uploadPart(uploadId, key, sliceInfo)
 	if err != nil {
 		return "", nil
 	}
@@ -115,7 +116,7 @@ func (fud *AWSS3FileUploaderDriver) Upload(sliceInfo *Slice) (string, error) {
 	if err != nil {
 		return "", errors.Trace(err)
 	}
-	return md5, nil
+	return eTag, nil
 }
 
 func (fud *AWSS3FileUploaderDriver) createUpload(key string) (string, error) {
@@ -131,31 +132,33 @@ func (fud *AWSS3FileUploaderDriver) createUpload(key string) (string, error) {
 
 }
 
-func (fud *AWSS3FileUploaderDriver) uploadPart(uploadId, key string, slice *Slice) (string, string, error) {
+func (fud *AWSS3FileUploaderDriver) uploadPart(uploadId, key string, slice *Slice) (string, error) {
 	file, err := os.OpenFile(slice.FilePath, os.O_RDONLY, 0444)
 	if err != nil {
-		return "", "", errors.Trace(err)
+		return "", errors.Trace(err)
 	}
 	defer file.Close()
 	hash := fud.Hash()
 	_, err = io.Copy(hash, io.NewSectionReader(file, slice.Offset, slice.Length))
 	if err != nil {
-		return "", "", errors.Trace(err)
+		return "", errors.Trace(err)
 	}
 	md5 := hash.String()
 	output, err := fud.s3.UploadPart(&s3.UploadPartInput{
 		Body:          io.NewSectionReader(file, slice.Offset, slice.Length),
 		Bucket:        aws.String(fud.bucketName),
 		Key:           aws.String(key),
-		PartNumber:    aws.Int64(slice.Index),
+		PartNumber:    aws.Int64(slice.Index + 1),
 		UploadId:      aws.String(uploadId),
 		ContentLength: aws.Int64(slice.Length),
-		ContentMD5:    aws.String(md5),
 	})
 	if err != nil {
-		return "", "", errors.Trace(err)
+		return "", errors.Trace(err)
 	}
-	return md5, *output.ETag, nil
+	if *output.ETag != fmt.Sprintf(`"%s"`, md5) {
+		return "", errors.Errorf("hash check failure, slice: %#v", slice)
+	}
+	return md5, nil
 }
 
 func (fud *AWSS3FileUploaderDriver) completeUpload(uploadId, key string, parts []*s3.CompletedPart) (string, error) {
@@ -177,14 +180,11 @@ func (fud *AWSS3FileUploaderDriver) completeUpload(uploadId, key string, parts [
 	if err != nil {
 		return "", errors.Trace(err)
 	}
-	if hash, exist := output.Metadata["Content-MD5"]; exist {
-		return *hash, nil
-	}
-	return "", errors.Errorf("get metadata failure,key: %s", key)
+	return *output.ETag, errors.Errorf("get metadata failure, key: %s", key)
 }
 
 func (fud *AWSS3FileUploaderDriver) Hash() FileHash {
-	return &Md5Base64FileHash{}
+	return NewMd5Base64FileHash()
 }
 
 func (fud *AWSS3FileUploaderDriver) Complete(path string) (string, error) {
@@ -207,6 +207,7 @@ func (fud *AWSS3FileUploaderDriver) Complete(path string) (string, error) {
 
 func (fud *AWSS3FileUploaderDriver) Close(path string) (string, error) {
 	// 终止分片上传
+	return "", nil
 }
 
 var awsUploadIdRunning sync2.AtomicInt32
@@ -267,6 +268,9 @@ func (us *awsUploadIdSet) putETag(key string, index int64, eTag string) error {
 	if !exist {
 		return errors.Errorf("key `%s` isn't exist in awsUploadIdFile", key)
 	}
+	if item.ETag == nil {
+		item.ETag = make(map[int64]string)
+	}
 	item.ETag[index] = eTag
 	if err := us.save(); err != nil {
 		return errors.Annotate(err, "save status failed")
@@ -284,6 +288,19 @@ func (us *awsUploadIdSet) getUploadId(key string) (string, bool) {
 	return item.UploadId, true
 }
 
+type CompletedParts []*s3.CompletedPart
+
+func (s CompletedParts) Len() int {
+	return len(s)
+}
+func (s CompletedParts) Less(i, j int) bool {
+	return *s[i].PartNumber < *s[j].PartNumber
+}
+
+func (s CompletedParts) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+
 func (us *awsUploadIdSet) getCompletedParts(key string) []*s3.CompletedPart {
 	us.rwLock.RLock()
 	defer us.rwLock.RUnlock()
@@ -293,8 +310,9 @@ func (us *awsUploadIdSet) getCompletedParts(key string) []*s3.CompletedPart {
 		return result
 	}
 	for index, eTag := range item.ETag {
-		result = append(result, &s3.CompletedPart{ETag: aws.String(eTag), PartNumber: aws.Int64(index)})
+		result = append(result, &s3.CompletedPart{ETag: aws.String(eTag), PartNumber: aws.Int64(index + 1)})
 	}
+	sort.Sort(CompletedParts(result))
 	return result
 }
 

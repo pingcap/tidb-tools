@@ -93,7 +93,7 @@ func (t *testServerDriver) TestAWSS3ServerDriver(c *C) {
 	dir, err := ioutil.TempDir("", "up_awss3_server_sriver")
 	defer os.RemoveAll(dir)
 	c.Assert(err, IsNil)
-	aws, err := NewAWSS3FileUploaderDriver("", "", "", "", "", "")
+	aws, err := NewAWSS3FileUploaderDriver("", "", "", "", dir, "")
 	c.Assert(err, IsNil)
 
 	// create the file to be uploaded
@@ -103,11 +103,11 @@ func (t *testServerDriver) TestAWSS3ServerDriver(c *C) {
 	file, err := os.OpenFile(sourceFilePath, os.O_CREATE|os.O_RDWR|os.O_SYNC, 0666)
 	c.Assert(err, IsNil)
 	defer file.Close()
-	_, err = io.CopyN(file, rand, 123*M)
+	_, err = io.CopyN(file, rand, 33*M)
 	c.Assert(err, IsNil)
 
 	// slice file
-	fileSlicer, err := NewFileSlicer(dir, SliceSize)
+	fileSlicer, err := NewFileSlicer(dir, 10*M)
 	fileInfo, err := os.Stat(sourceFilePath)
 	slices, err := fileSlicer.DoSlice(sourceFilePath, fileInfo)
 	c.Assert(err, IsNil)
@@ -117,15 +117,12 @@ func (t *testServerDriver) TestAWSS3ServerDriver(c *C) {
 		_, err := aws.Upload(&slice)
 		c.Assert(err, IsNil)
 	}
-	hash, err := aws.Complete(sourceFilePath)
+	_, err = aws.Complete(sourceFilePath)
 	c.Assert(err, IsNil)
 
 	// check hash
-	sourceHash := NewMd5Base64FileHash()
 	sourceFile, err := os.OpenFile(sourceFilePath, os.O_CREATE|os.O_RDWR|os.O_SYNC, 0666)
 	c.Assert(err, IsNil)
 	defer sourceFile.Close()
-	_, err = io.Copy(sourceHash, sourceFile)
 	c.Assert(err, IsNil)
-	c.Assert(hash, Equals, sourceHash.String())
 }
