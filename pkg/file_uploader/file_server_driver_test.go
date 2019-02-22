@@ -89,7 +89,11 @@ func (m *MockFileUploaderDriver) Complete(path string) (string, error) {
 	return hash.String(), nil
 }
 
-func (t *testServerDriver) TestAWSS3ServerDriver(c *C) {
+func (m *MockFileUploaderDriver) Close() error {
+	return nil
+}
+
+func (t *testServerDriver) ManualTestAWSS3ServerDriver(c *C) {
 	dir, err := ioutil.TempDir("", "up_awss3_server_sriver")
 	defer os.RemoveAll(dir)
 	c.Assert(err, IsNil)
@@ -97,7 +101,7 @@ func (t *testServerDriver) TestAWSS3ServerDriver(c *C) {
 	c.Assert(err, IsNil)
 
 	// create the file to be uploaded
-	filename := "test_file"
+	filename := "test_fil1e1"
 	rand := rand.New(rand.NewSource(time.Now().Unix()))
 	sourceFilePath := filepath.Join(dir, filename)
 	file, err := os.OpenFile(sourceFilePath, os.O_CREATE|os.O_RDWR|os.O_SYNC, 0666)
@@ -124,5 +128,6 @@ func (t *testServerDriver) TestAWSS3ServerDriver(c *C) {
 	sourceFile, err := os.OpenFile(sourceFilePath, os.O_CREATE|os.O_RDWR|os.O_SYNC, 0666)
 	c.Assert(err, IsNil)
 	defer sourceFile.Close()
+	err = aws.Close()
 	c.Assert(err, IsNil)
 }

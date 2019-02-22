@@ -10,12 +10,14 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/pingcap/errors"
+	"github.com/prometheus/common/log"
 	"github.com/siddontang/go/sync2"
 	"hash"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"sync"
 )
@@ -29,6 +31,7 @@ type FileUploaderDriver interface {
 	Upload(sliceInfo *Slice) (string, error)
 	Hash() FileHash
 	Complete(path string) (string, error)
+	Close() error
 }
 
 type Md5FileHash struct {
@@ -85,6 +88,12 @@ func NewAWSS3FileUploaderDriver(accessKeyID string, secretAccessKey string, buck
 	session, err := session.NewSession()
 	if err != nil {
 		return nil, errors.Annotatef(err, "create aws session failed")
+	}
+
+	// AWS S3 Key format, see: https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
+	s3KeyExp := regexp.MustCompile(`^([a-zA-Z0-9!\-_.*'()]+\/)+$`)
+	if !s3KeyExp.MatchString(remoteDir) {
+		return nil, errors.Errorf("remote dir format error or contains illegal characters")
 	}
 	s3 := s3.New(session, cfg)
 	return &AWSS3FileUploaderDriver{s3, bucketName, awsUs, remoteDir, workDir}, nil
@@ -180,7 +189,7 @@ func (fud *AWSS3FileUploaderDriver) completeUpload(uploadId, key string, parts [
 	if err != nil {
 		return "", errors.Trace(err)
 	}
-	return *output.ETag, errors.Errorf("get metadata failure, key: %s", key)
+	return *output.ETag, nil
 }
 
 func (fud *AWSS3FileUploaderDriver) Hash() FileHash {
@@ -205,9 +214,26 @@ func (fud *AWSS3FileUploaderDriver) Complete(path string) (string, error) {
 	return hash, nil
 }
 
-func (fud *AWSS3FileUploaderDriver) Close(path string) (string, error) {
-	// 终止分片上传
-	return "", nil
+func (fud *AWSS3FileUploaderDriver) Close() error {
+	output, err := fud.s3.ListMultipartUploads(&s3.ListMultipartUploadsInput{
+		Bucket: aws.String(fud.bucketName),
+		Prefix: aws.String(fud.remoteDir),
+	})
+	if err != nil {
+		return errors.Trace(err)
+	}
+	for _, multipartUpload := range output.Uploads {
+		_, err = fud.s3.AbortMultipartUpload(&s3.AbortMultipartUploadInput{
+			Bucket:   aws.String(fud.bucketName),
+			Key:      multipartUpload.Key,
+			UploadId: multipartUpload.UploadId,
+		})
+	}
+	if err != nil {
+		return errors.Trace(err)
+	}
+	log.Infof("abort %d multipart upload", len(output.Uploads))
+	return nil
 }
 
 var awsUploadIdRunning sync2.AtomicInt32

@@ -104,6 +104,7 @@ func (fu *FileUploader) WaitAndClose() {
 	}
 	close(fu.slicesChan)
 	fu.uploaderWait.Wait()
+	fu.uploaderDriver.Close()
 }
 
 func (fu *FileUploader) checkAndCompleteUpload() error {
