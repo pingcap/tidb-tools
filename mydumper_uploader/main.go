@@ -3,11 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/ngaut/log"
+	"github.com/pingcap/tidb-tools/pkg/file_uploader"
 	"os"
 	"os/exec"
 	"strings"
 	"unicode"
+
+	"github.com/ngaut/log"
 )
 
 var (
@@ -18,14 +20,18 @@ var (
 
 func main() {
 	parserArgs()
-	// start file uploader
+	driver, err := file_uploader.NewAWSS3FileUploaderDriver("", "", "", "", "", "")
+	if err != nil {
+		log.Fatalf("AWS S3 Driver create failure, err: %#v", err)
+		os.Exit(-1)
+	}
+	uploader := file_uploader.NewFileUploader("", 0, 0, driver)
 	execMydumper(mydumperArgs...)
-	// close file uploader
-
+	uploader.WaitAndClose()
 }
 
 func execMydumper(args ...string) {
-	cmd := exec.Command(*mydumper, mydumperArgs...)
+	cmd := exec.Command(*mydumper, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err := cmd.Start()
