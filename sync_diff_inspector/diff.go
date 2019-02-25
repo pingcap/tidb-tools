@@ -204,6 +204,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 
 			sourceTables := make([]TableInstance, 0, 1)
 			if _, ok := sourceTablesMap[schemaTables.Schema][tableName]; ok {
+				log.Infof("find matched source tables %v for %s.%s", sourceTablesMap[schemaTables.Schema][tableName], schemaTables.Schema, tableName)
 				sourceTables = sourceTablesMap[schemaTables.Schema][tableName]
 			} else {
 				// use same database name and table name

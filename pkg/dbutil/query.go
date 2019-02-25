@@ -27,11 +27,17 @@ func ScanRowsToInterfaces(rows *sql.Rows) ([][]interface{}, error) {
 	return rowsData, nil
 }
 
-// ScanRow scans rows into a map, and another map specify the value is null or not.
-func ScanRow(rows *sql.Rows) (map[string][]byte, map[string]bool, error) {
+// ColumnData saves column's data.
+type ColumnData struct {
+	Data   []byte
+	IsNull bool
+}
+
+// ScanRow scans rows into a map.
+func ScanRow(rows *sql.Rows) (map[string]*ColumnData, error) {
 	cols, err := rows.Columns()
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
 
 	colVals := make([][]byte, len(cols))
@@ -42,15 +48,17 @@ func ScanRow(rows *sql.Rows) (map[string][]byte, map[string]bool, error) {
 
 	err = rows.Scan(colValsI...)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
 
-	result := make(map[string][]byte)
-	null := make(map[string]bool)
+	result := make(map[string]*ColumnData)
 	for i := range colVals {
-		result[cols[i]] = colVals[i]
-		null[cols[i]] = colVals[i] == nil
+		data := &ColumnData{
+			Data:   colVals[i],
+			IsNull: colVals[i] == nil,
+		}
+		result[cols[i]] = data
 	}
 
-	return result, null, nil
+	return result, nil
 }
