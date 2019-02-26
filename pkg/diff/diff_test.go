@@ -293,7 +293,7 @@ func generateData(dbConn *sql.DB, dbCfg dbutil.DBConfig, sourceTables []string, 
 	} else {
 		conditions = append(conditions, fmt.Sprintf("e < %s", values[0]))
 		for i := 0; i < len(values)-1; i++ {
-				conditions = append(conditions, fmt.Sprintf("e >= %s AND e < %s", values[i], values[i+1]))
+			conditions = append(conditions, fmt.Sprintf("e >= %s AND e < %s", values[i], values[i+1]))
 		}
 		conditions = append(conditions, fmt.Sprintf("e >= %s", values[len(values)-1]))
 	}
