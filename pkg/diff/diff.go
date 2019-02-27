@@ -526,8 +526,9 @@ func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model
 				continue
 			}
 
-			cmp = -1
-			if strData1 > strData2 {
+			if strData1 < strData2 {
+				cmp = -1
+			} else if strData1 > strData2 {
 				cmp = 1
 			}
 			break
@@ -543,8 +544,9 @@ func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model
 				continue
 			}
 
-			cmp = -1
-			if num1 > num2 {
+			if num1 < num2 {
+				cmp = -1
+			} else if num1 > num2 {
 				cmp = 1
 			}
 			break
@@ -581,6 +583,7 @@ func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableIn
 	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ %s FROM `%s`.`%s` WHERE %s ORDER BY %s%s",
 		columns, schema, table, where, strings.Join(orderKeys, ","), collation)
 
+	log.Debugf("select data by sql %s, args: %v", query, args)
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
