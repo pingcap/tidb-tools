@@ -201,10 +201,6 @@ func (s *randomSpliter) split(table *TableInstance, columns []*model.ColumnInfo,
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	if cnt == 0 {
-		log.Infof("no data found in %s.%s", table.Schema, table.Table)
-		return nil, nil
-	}
 
 	chunkCnt := (int(cnt) + chunkSize - 1) / chunkSize
 	chunks, err := s.splitRange(table.Conn, newChunkRange(), chunkCnt, table.Schema, table.Table, columns)
