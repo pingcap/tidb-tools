@@ -156,6 +156,7 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 	if len(where) > 0 {
 		query += fmt.Sprintf(" WHERE %s", where)
 	}
+	log.Infof("get row count by sql %s", query)
 
 	var cnt sql.NullInt64
 	err := db.QueryRowContext(ctx, query).Scan(&cnt)
