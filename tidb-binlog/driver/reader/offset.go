@@ -148,7 +148,7 @@ func (ks *KafkaSeeker) seekOffset(topic string, partition int32, start int64, en
 	}
 
 	if endTS <= ts {
-		return sarama.OffsetNewest, nil
+		return end + 1, nil
 	}
 
 	return end, nil

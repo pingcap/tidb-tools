@@ -34,11 +34,6 @@ func (s *testMergerSuite) TestMerge(c *C) {
 	ids := []int{3, 2, 2, 4, 1}
 	names := []string{"d", "b", "c", "b", "a"}
 	ages := []int{1, 2, 3, 4, 5}
-	null := map[string]bool{
-		"id":   false,
-		"name": false,
-		"age":  false,
-	}
 
 	expectIDs := []int64{1, 2, 2, 3, 4}
 	expectNames := []string{"a", "b", "c", "d", "b"}
@@ -50,23 +45,22 @@ func (s *testMergerSuite) TestMerge(c *C) {
 
 	heap.Init(rowDatas)
 	for i, id := range ids {
-		data := map[string][]byte{
-			"id":   []byte(strconv.Itoa(id)),
-			"name": []byte(names[i]),
-			"age":  []byte(strconv.Itoa(ages[i])),
+		data := map[string]*dbutil.ColumnData{
+			"id":   {[]byte(strconv.Itoa(id)), false},
+			"name": {[]byte(names[i]), false},
+			"age":  {[]byte(strconv.Itoa(ages[i])), false},
 		}
 		heap.Push(rowDatas, RowData{
 			Data: data,
-			Null: null,
 		})
 	}
 
 	for i := 0; i < len(ids); i++ {
 		rowData := heap.Pop(rowDatas).(RowData)
 
-		id, err := strconv.ParseInt(string(rowData.Data["id"]), 10, 64)
+		id, err := strconv.ParseInt(string(rowData.Data["id"].Data), 10, 64)
 		c.Assert(err, IsNil)
-		name := string(rowData.Data["name"])
+		name := string(rowData.Data["name"].Data)
 		c.Assert(id, Equals, expectIDs[i])
 		c.Assert(name, Equals, expectNames[i])
 	}
