@@ -170,8 +170,10 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 		the splitValues is [1, 1, 1, 1];
 		the chunk [`a` = 2] will split to [`a` = 2 AND `b` < 'x'], [`a` = 2 AND `b` >= 'x' AND `b` < 'y'] and [`a` = 2 AND `b` >= 'y']
 	*/
+	log.Infof("splitValues: %v, valueCounts: %v", splitValues, valueCounts)
 	var lower, upper, lowerSymbol, upperSymbol string
 	for i := 0; i < len(splitValues); i++ {
+		log.Info(i)
 		if valueCounts[i] > 1 {
 			// means should split it
 			newChunk := chunk.copyAndUpdate(splitCol, splitValues[i], equal, "", "")
@@ -183,7 +185,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 
 			// already have the chunk [column = value], so next chunk should start with column > value
 			lowerSymbol = gt
-		} else {
+		} 
 			if i == 0 {
 				if useNewColumn {
 					lower = ""
@@ -201,21 +203,25 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 					upper = ""
 					upperSymbol = ""
 				} else {
+					log.Info("___+___")
 					upper = splitValues[i+1]
-					upperSymbol = symbolMax
+					if valueCounts[len(valueCounts)-1] == 1 {
+						upperSymbol = symbolMax
+					}
 				}
 			} else {
 				if i == len(splitValues)-1 {
-					continue
+					break
 				}
 
 				upper = splitValues[i+1]
 				upperSymbol = lt
 
 			}
-		}
-
+		
 		newChunk := chunk.copyAndUpdate(splitCol, lower, lowerSymbol, upper, upperSymbol)
+		cStr, args := newChunk.toString(normalMode, "")
+		log.Infof("chunk: %s, args: %v", cStr, args)
 		chunks = append(chunks, newChunk)
 
 		lowerSymbol = gte
