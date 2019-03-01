@@ -119,7 +119,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	log.Infof("split chunk %v, get split values from GetRandomValues: %v", chunk, randomValues)
+	log.Debugf("split chunk %v, get split values from GetRandomValues: %v", chunk, randomValues)
 
 	/*
 		for examples:
@@ -312,9 +312,6 @@ func (s *bucketSpliter) getChunksByBuckets() ([]*chunkRange, error) {
 			break
 		}
 	}
-	for _, chunk := range chunks {
-		chunkStr, args := chunk.toString(bucketMode, "")
-		log.Infof("chunk: %s, args: %v", chunkStr, args)
-	}
+
 	return chunks, nil
 }
