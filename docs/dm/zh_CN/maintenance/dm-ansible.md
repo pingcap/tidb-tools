@@ -365,7 +365,7 @@ $ ansible-playbook stop.yml
         ```
         $ wget https://download.pingcap.org/dm-ansible-v1.0.0-alpha.tar.gz
         $ tar -xzvf dm-ansible-v1.0.0-alpha.tar.gz
-    $ mv dm-ansible-v1.0.0-alpha dm-ansible
+        $ mv dm-ansible-v1.0.0-alpha dm-ansible
         ```
 
     - 下载 master 版本
