@@ -102,9 +102,16 @@ func (s *testSpliterSuite) TestSpliter(c *C) {
 			{"`a` >= ? AND `a` < ?", []string{"3", "10"}},
 			{"`a` = ? AND `b` < ?", []string{"10", "y"}},
 			{"`a` = ? AND `b` >= ?", []string{"10", "y"}},
+			{"`a` > ?", []string{"10"}},
 		},
 		{
-
+			{"`a` < ?", []string{"0"}},
+			{"`a` = ? AND `b` < ?", []string{"0", "y"}},
+			{"`a` = ? AND `b` >= ?", []string{"0", "y"}},
+			{"`a` > ? AND `a` < ?", []string{"0", "2"}},
+			{"`a` >= ? AND `a` < ?", []string{"2", "3"}},
+			{"`a` >= ? AND `a` <= ?", []string{"3", "4"}},
+			{"`a` > ?", []string{"4"}},
 		},
 	}
 
