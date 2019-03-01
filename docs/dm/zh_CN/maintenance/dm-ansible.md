@@ -105,17 +105,27 @@ The key's randomart image is:
 
 以 `tidb` 用户登录中控机并进入 `/home/tidb` 目录。
 
-```
-$ wget http://download.pingcap.org/dm-ansible-latest.tar.gz
-```
+- 下载 1.0.0-alpha 版本
+
+    ```
+    $ wget https://download.pingcap.org/dm-ansible-v1.0.0-alpha.tar.gz
+    ```
+
+- 下载 master 版本
+
+    ```
+    $ wget http://download.pingcap.org/dm-ansible-latest.tar.gz
+    ```
 
 ## 在中控机器上安装 Ansible 及其依赖
 
 以 `tidb` 用户登录中控机，请务必按以下方式通过 pip 安装 Ansible 及其相关依赖的指定版本，否则会有兼容问题。安装完成后，可通过 `ansible --version` 查看 Ansible 版本。目前 DM-Ansible 兼容 Ansible 2.5 版本及以上版本，Ansible 及相关依赖版本记录在 `dm-ansible/requirements.txt` 文件中。
 
   ```bash
-  $ tar -xzvf dm-ansible-latest.tar.gz
-  $ mv dm-ansible-latest dm-ansible
+  $ tar -xzvf dm-ansible-latest.tar.gz # master 版本
+  $ mv dm-ansible-latest dm-ansible # master 版本
+  $ tar -xzvf dm-ansible-v1.0.0-alpha.tar.gz # 1.0.0-alpha 版本
+  $ mv dm-ansible-v1.0.0-alpha dm-ansible # 1.0.0-alpha 版本
   $ cd /home/tidb/dm-ansible
   $ sudo pip install -r ./requirements.txt
   $ ansible --version
@@ -340,21 +350,33 @@ $ ansible-playbook stop.yml
 ### 升级组件版本
 
 #### 下载 DM binary
-1. 以 `tidb` 用户登录中控机并进入 `/home/tidb/` 目录，备份原有的 dm-ansible 目录，删除旧版本压缩文件：
+1. 以 `tidb` 用户登录中控机并进入 `/home/tidb/` 目录，备份原有的 dm-ansible 目录，删除旧版本压缩文件。
+
     ```
     $ mv dm-ansible dm-ansible-bak
-    $ rm -rf dm-ansible-latest.tar.gz
+    $ rm -rf dm-ansible-latest.tar.gz # master 版本
+    $ rm -rf dm-ansible-v1.0.0-alpha.tar.gz # 1.0.0-alpha 版本
     ```
 
 2. 下载最新 DM-Ansible，并且根据 dm-ansible-bak 中的已有配置更新 inventory.ini 等文件。
 
-    ```
-    $ wget http://download.pingcap.org/dm-ansible-latest.tar.gz
-    $ tar -xzvf dm-ansible-latest.tar.gz
-    $ mv dm-ansible-latest dm-ansible
-    ```
+    - 下载 1.0.0-alpha 版本
 
-3. 使用 playbook 下载最新的（latest） DM binary。
+        ```
+        $ wget https://download.pingcap.org/dm-ansible-v1.0.0-alpha.tar.gz
+        $ tar -xzvf dm-ansible-v1.0.0-alpha.tar.gz
+    $ mv dm-ansible-v1.0.0-alpha dm-ansible
+        ```
+
+    - 下载 master 版本
+
+        ```
+        $ wget http://download.pingcap.org/dm-ansible-latest.tar.gz
+        $ tar -xzvf dm-ansible-latest.tar.gz
+        $ mv dm-ansible-latest dm-ansible
+        ```
+
+3. 使用 playbook 下载最新的 DM binary。
 
     ```
     $ ansible-playbook local_prepare.yml
@@ -364,27 +386,27 @@ $ ansible-playbook stop.yml
 
 - 滚动升级 DM-worker 实例
 
-```
-ansible-playbook rolling_update.yml --tags=dm-worker
-```
+    ```
+    ansible-playbook rolling_update.yml --tags=dm-worker
+    ```
 
 - 滚动升级 DM-master 实例
 
-```
-ansible-playbook rolling_update.yml --tags=dm-master
-```
+    ```
+    ansible-playbook rolling_update.yml --tags=dm-master
+    ```
 
 - 升级 dmctl
 
-```
-ansible-playbook rolling_update.yml --tags=dmctl
-```
+    ```
+    ansible-playbook rolling_update.yml --tags=dmctl
+    ```
 
 - 滚动升级 DM-worker、DM-master 和 dmctl
 
-```
-ansible-playbook rolling_update.yml
-```
+    ```
+    ansible-playbook rolling_update.yml
+    ```
 
 ### 增加 DM-worker 实例
 
