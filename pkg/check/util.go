@@ -26,6 +26,9 @@ import (
 // MySQLVersion represents MySQL version number.
 type MySQLVersion [3]uint
 
+// UnlimitVersion define a unlimit version
+var UnlimitVersion = MySQLVersion{0, 0, 0}
+
 // version format:
 // mysql        5.7.18-log
 // mariadb      5.5.50-MariaDB-1~wheezy
@@ -57,12 +60,64 @@ func toMySQLVersion(v string) (MySQLVersion, error) {
 	return version, nil
 }
 
-// IsAtLeast means v >= min
-func (v MySQLVersion) IsAtLeast(min MySQLVersion) bool {
+// Be means v >= min
+func (v MySQLVersion) Be(min MySQLVersion) bool {
+	if min == UnlimitVersion {
+		return true
+	}
+
 	for i := range v {
 		if v[i] > min[i] {
 			return true
 		} else if v[i] < min[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// Bg means v > min
+func (v MySQLVersion) Bg(min MySQLVersion) bool {
+	if min == UnlimitVersion {
+		return true
+	}
+
+	for i := range v {
+		if v[i] > min[i] {
+			return true
+		} else if v[i] < min[i] {
+			return false
+		}
+	}
+	return false
+}
+
+// Lt means v < min
+func (v MySQLVersion) Lt(max MySQLVersion) bool {
+	if max == UnlimitVersion {
+		return true
+	}
+
+	for i := range v {
+		if v[i] < max[i] {
+			return true
+		} else if v[i] > max[i] {
+			return false
+		}
+	}
+	return false
+}
+
+// Le means v <= min
+func (v MySQLVersion) Le(max MySQLVersion) bool {
+	if max == UnlimitVersion {
+		return true
+	}
+
+	for i := range v {
+		if v[i] < max[i] {
+			return true
+		} else if v[i] > max[i] {
 			return false
 		}
 	}

@@ -250,9 +250,10 @@ func (c *TablesChecker) checkTableOption(opt *ast.TableOption) *incompatibilityO
 type ShardingTablesCheck struct {
 	name string
 
-	dbs     map[string]*sql.DB
-	tables  map[string]map[string][]string // instance => {schema: [table1, table2, ...]}
-	mapping map[string]*column.Mapping
+	dbs                          map[string]*sql.DB
+	tables                       map[string]map[string][]string // instance => {schema: [table1, table2, ...]}
+	mapping                      map[string]*column.Mapping
+	checkAutoIncrementPrimaryKey bool
 }
 
 // NewShardingTablesCheck returns a Checker
@@ -315,9 +316,11 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 					return r
 				}
 
-				passed := c.checkAutoIncrementKey(instance, schema, table, ctStmt, info, r)
-				if !passed {
-					return r
+				if c.checkAutoIncrementPrimaryKey {
+					passed := c.checkAutoIncrementKey(instance, schema, table, ctStmt, info, r)
+					if !passed {
+						return r
+					}
 				}
 
 				if stmtNode == nil {
