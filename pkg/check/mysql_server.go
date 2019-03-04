@@ -33,9 +33,9 @@ func NewMySQLVersionChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker {
 	return &MySQLVersionChecker{db: db, dbinfo: dbinfo}
 }
 
-// SupportedVersion definition the MySQL/MariaDB version that DM/syncer support
-// 5.6.0 <= MySQL Version < 5.8.0
-// 10.1.2 <= Mariadb Version
+// SupportedVersion defines the MySQL/MariaDB version that DM/syncer supports
+// * 5.6.0 <= MySQL Version < 5.8.0
+// * 10.1.2 <= Mariadb Version
 var SupportedVersion = map[string]struct {
 	Min MySQLVersion
 	Max MySQLVersion
