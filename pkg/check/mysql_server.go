@@ -46,7 +46,7 @@ var SupportedVersion = map[string]struct {
 	},
 	"mariadb": {
 		MySQLVersion{10, 1, 2},
-		UnlimitVersion,
+		MaxVersion,
 	},
 }
 
@@ -82,7 +82,7 @@ func (pc *MySQLVersionChecker) checkVersion(value string, result *Result) {
 		return
 	}
 
-	if !version.Be(needVersion.Min) {
+	if !version.Ge(needVersion.Min) {
 		result.ErrorMsg = fmt.Sprintf("version required at least %v but got %v", needVersion.Min, version)
 		result.Instruction = "Please upgrade your database system"
 		return

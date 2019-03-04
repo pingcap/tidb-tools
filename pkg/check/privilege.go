@@ -40,7 +40,7 @@ func NewSourceDumpPrivilegeChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker 
 }
 
 // Check implements the Checker interface.
-// We only check  RELOAD, SELECT privileges.
+// We only check RELOAD, SELECT privileges.
 func (pc *SourceDumpPrivilegeChecker) Check(ctx context.Context) *Result {
 	result := &Result{
 		Name:  pc.Name(),
@@ -131,7 +131,7 @@ func verifyPrivileges(result *Result, grants []string, expectedGrants []string) 
 	}
 
 	// TODO: user tidb parser(which not works very well now)
-	lackOfPrivileges := make([]string, 0, 3)
+	lackOfPrivileges := make([]string, 0, len(expectedGrants))
 	for _, expected := range expectedGrants {
 		hasPrivilege := false
 		for _, grant := range grants {

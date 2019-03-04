@@ -16,6 +16,7 @@ package check
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -26,8 +27,11 @@ import (
 // MySQLVersion represents MySQL version number.
 type MySQLVersion [3]uint
 
-// UnlimitVersion define a unlimit version
-var UnlimitVersion = MySQLVersion{0, 0, 0}
+// MinVersion define a mininum version
+var MinVersion = MySQLVersion{0, 0, 0}
+
+// MaxVersion define a maximum version
+var MaxVersion = MySQLVersion{math.MaxUint8, math.MaxUint8, math.MaxUint8}
 
 // version format:
 // mysql        5.7.18-log
@@ -60,12 +64,8 @@ func toMySQLVersion(v string) (MySQLVersion, error) {
 	return version, nil
 }
 
-// Be means v >= min
-func (v MySQLVersion) Be(min MySQLVersion) bool {
-	if min == UnlimitVersion {
-		return true
-	}
-
+// Ge means v >= min
+func (v MySQLVersion) Ge(min MySQLVersion) bool {
 	for i := range v {
 		if v[i] > min[i] {
 			return true
@@ -76,12 +76,8 @@ func (v MySQLVersion) Be(min MySQLVersion) bool {
 	return true
 }
 
-// Bg means v > min
-func (v MySQLVersion) Bg(min MySQLVersion) bool {
-	if min == UnlimitVersion {
-		return true
-	}
-
+// Gt means v > min
+func (v MySQLVersion) Gt(min MySQLVersion) bool {
 	for i := range v {
 		if v[i] > min[i] {
 			return true
@@ -94,10 +90,6 @@ func (v MySQLVersion) Bg(min MySQLVersion) bool {
 
 // Lt means v < min
 func (v MySQLVersion) Lt(max MySQLVersion) bool {
-	if max == UnlimitVersion {
-		return true
-	}
-
 	for i := range v {
 		if v[i] < max[i] {
 			return true
@@ -110,10 +102,6 @@ func (v MySQLVersion) Lt(max MySQLVersion) bool {
 
 // Le means v <= min
 func (v MySQLVersion) Le(max MySQLVersion) bool {
-	if max == UnlimitVersion {
-		return true
-	}
-
 	for i := range v {
 		if v[i] < max[i] {
 			return true
