@@ -4,55 +4,59 @@ import (
 	"testing"
 
 	tc "github.com/pingcap/check"
-
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
 )
 
 func TestClient(t *testing.T) {
 	tc.TestingT(t)
 }
 
-var _ = tc.Suite(&testPrivilegeSuite{})
+var _ = tc.Suite(&testCheckSuite{})
 
-type testPrivilegeSuite struct{}
+type testCheckSuite struct{}
 
-func (t *testPrivilegeSuite) TestVerifyPrivileges(c *tc.C) {
-	dbConfig := &dbutil.DBConfig{
-		Host: "127.0.0.1",
-		Port: 3306,
-	}
-	pc := NewSourcePrivilegeChecker(nil, dbConfig).(*SourcePrivilegeChecker)
+func (t *testCheckSuite) TestVerifyPrivileges(c *tc.C) {
+	var (
+		dumpPrivileges        = []string{"RELOAD", "SELECT"}
+		replicationPrivileges = []string{"REPLICATION SLAVE", "REPLICATION CLIENT"}
+	)
 
 	cases := []struct {
-		grants []string
-		state  State
+		grants          []string
+		dumpState       State
+		replcationState State
 	}{
 		{
-			grants: nil, // non grants
-			state:  StateFailure,
+			grants:          nil, // non grants
+			dumpState:       StateFailure,
+			replcationState: StateFailure,
 		},
 		{
-			grants: []string{"invalid SQL statement"},
-			state:  StateFailure,
+			grants:          []string{"invalid SQL statement"},
+			dumpState:       StateFailure,
+			replcationState: StateFailure,
 		},
 		{
-			grants: []string{"CREATE DATABASE db1"}, // non GRANT statement
-			state:  StateFailure,
+			grants:          []string{"CREATE DATABASE db1"}, // non GRANT statement
+			dumpState:       StateFailure,
+			replcationState: StateFailure,
 		},
 		{
-			grants: []string{"GRANT SELECT ON *.* TO 'user'@'%'"}, // lack necessary privilege
-			state:  StateFailure,
+			grants:          []string{"GRANT SELECT ON *.* TO 'user'@'%'"}, // lack necessary privilege
+			dumpState:       StateFailure,
+			replcationState: StateFailure,
 		},
 		{
-			grants: []string{"GRANT REPLICATION SLAVE ON *.* TO 'user'@'%'"}, // lack necessary privilege
-			state:  StateFailure,
+			grants:          []string{"GRANT REPLICATION SLAVE ON *.* TO 'user'@'%'"}, // lack necessary privilege
+			dumpState:       StateFailure,
+			replcationState: StateFailure,
 		},
 		{
 			grants: []string{ // lack optional privilege
 				"GRANT REPLICATION SLAVE ON *.* TO 'user'@'%'",
 				"GRANT REPLICATION CLIENT ON *.* TO 'user'@'%'",
 			},
-			state: StateWarning,
+			dumpState:       StateFailure,
+			replcationState: StateSuccess,
 		},
 		{
 			grants: []string{ // have privileges
@@ -60,42 +64,53 @@ func (t *testPrivilegeSuite) TestVerifyPrivileges(c *tc.C) {
 				"GRANT REPLICATION CLIENT ON *.* TO 'user'@'%'",
 				"GRANT RELOAD ON *.* TO 'user'@'%'",
 			},
-			state: StateSuccess,
+			dumpState:       StateFailure,
+			replcationState: StateSuccess,
 		},
 		{
 			grants: []string{ // have privileges
-				"GRANT REPLICATION SLAVE, REPLICATION CLIENT, RELOAD ON *.* TO 'user'@'%'",
+				"GRANT REPLICATION SLAVE, REPLICATION CLIENT, RELOAD, SELECT ON *.* TO 'user'@'%'",
 			},
-			state: StateSuccess,
+			dumpState:       StateSuccess,
+			replcationState: StateSuccess,
 		},
 		{
 			grants: []string{ // have privileges
 				"GRANT ALL PRIVILEGES ON *.* TO 'user'@'%'",
 			},
-			state: StateSuccess,
+			dumpState:       StateSuccess,
+			replcationState: StateSuccess,
 		},
 		{
 			grants: []string{ // lower case not supported yet
 				"GRANT all privileges ON *.* TO 'user'@'%'",
 			},
-			state: StateFailure,
+			dumpState:       StateFailure,
+			replcationState: StateFailure,
 		},
 		{
 			grants: []string{ // IDENTIFIED BY PASSWORD
 				"GRANT ALL PRIVILEGES ON *.* TO 'user'@'%' IDENTIFIED BY PASSWORD 'password'",
 			},
-			state: StateSuccess,
+			dumpState:       StateSuccess,
+			replcationState: StateSuccess,
 		},
 		{
 			grants: []string{ // IDENTIFIED BY PASSWORD with <secret> mark
 				"GRANT ALL PRIVILEGES ON *.* TO 'user'@'%' IDENTIFIED BY PASSWORD <secret>",
 			},
-			state: StateSuccess,
+			dumpState:       StateSuccess,
+			replcationState: StateSuccess,
 		},
 	}
 
 	for _, cs := range cases {
-		result := pc.VerifyPrivileges(cs.grants)
-		c.Assert(result.State, tc.Equals, cs.state)
+		result := &Result{
+			State: StateFailure,
+		}
+		verifyPrivileges(result, cs.grants, dumpPrivileges)
+		c.Assert(result.State, tc.Equals, cs.dumpState)
+		verifyPrivileges(result, cs.grants, replicationPrivileges)
+		c.Assert(result.State, tc.Equals, cs.replcationState)
 	}
 }
