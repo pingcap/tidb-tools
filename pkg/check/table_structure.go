@@ -496,5 +496,5 @@ func getBriefColumnList(stmt *ast.CreateTableStmt) briefColumnInfos {
 
 // Name implements Checker interface
 func (c *ShardingTablesCheck) Name() string {
-	return fmt.Sprintf("sharding table %s consistency check of shard", c.Name)
+	return fmt.Sprintf("sharding table %s consistency check", c.Name)
 }
