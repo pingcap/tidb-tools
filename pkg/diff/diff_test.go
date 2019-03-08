@@ -76,7 +76,7 @@ func (*testDiffSuite) TestGenerateSQLs(c *C) {
 	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` WHERE `id` is NULL;")
 }
 
-func (t *testDiffSuite) testDiff(c *C) {
+func (t *testDiffSuite) TestDiff(c *C) {
 	dbConn, err := createConn()
 	c.Assert(err, IsNil)
 
