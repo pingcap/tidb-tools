@@ -319,11 +319,8 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 		the chunk [`a` = 2] will split to [`a` = 2 AND `b` < 'x'], [`a` = 2 AND `b` >= 'x' AND `b` < 'y'] and [`a` = 2 AND `b` >= 'y']
 	*/
 
-	//var lower, upper string
 	lowerSymbol := symbolMin
 	upperSymbol := lt
-
-	
 
 	for i := 0; i < len(splitValues); i++ {
 		if i == 0 && useNewColumn {
@@ -364,11 +361,6 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 	}
 
 	log.Debugf("getChunksForTable cut table: cnt=%d min=%s max=%s chunk=%d", count, min, max, len(chunks))
-	
-	for _, chunk := range chunks {
-		chunkStr, args := chunk.toString(normalMode, "")
-		log.Infof("chunk: %s, args: %v", chunkStr, args)
-	}
 	
 	return chunks, nil
 }

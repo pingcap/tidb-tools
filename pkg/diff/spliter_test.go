@@ -160,6 +160,32 @@ func (s *testSpliterSuite) TestRandomSpliter(c *C) {
 			c.Assert(args, DeepEquals, expectResult[i][j].args)
 		}
 	}
+
+	// test case for split a range use same column
+	// split (0, 10) to (0, 5) and [5, 10)
+	randomRows := sqlmock.NewRows([]string{"a", "count"}).AddRow("5", 1)
+	mock.ExpectQuery("ORDER BY RAND()").WillReturnRows(randomRows)
+
+	expectChunks := []struct {
+		chunkStr string
+		args     []string
+	}{
+		{"`a` > ? AND `a` < ?", []string{"0", "5"}},
+		{"`a` >= ? AND `a` < ?", []string{"5", "10"}},
+	}
+
+	r := &randomSpliter {
+		table: tableInstance,
+	}
+
+	oriChunk := newChunkRange().copyAndUpdate("a", "0", gt, "10", lt)
+	chunks, err := r.splitRange(db, oriChunk, 2, "test", "test", tableInfo.Columns)
+	c.Assert(err, IsNil)
+	for i, chunk := range chunks {
+		chunkStr, args := chunk.toString(normalMode, "")
+		c.Assert(chunkStr, Equals, expectChunks[i].chunkStr)
+		c.Assert(args, DeepEquals, expectChunks[i].args)
+	}
 }
 
 func createFakeResultForRandomSplit(mock sqlmock.Sqlmock, count, aMin, aMax int, bMin, bMax string, aRandomValues []int, bRandomValues []string, aRandomValueCounts []int) {
