@@ -319,17 +319,20 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 		the chunk [`a` = 2] will split to [`a` = 2 AND `b` < 'x'], [`a` = 2 AND `b` >= 'x' AND `b` < 'y'] and [`a` = 2 AND `b` >= 'y']
 	*/
 
-	var lower, upper string
-	lowerSymbol := gte
+	//var lower, upper string
+	lowerSymbol := symbolMin
 	upperSymbol := lt
 
+	
+
 	for i := 0; i < len(splitValues); i++ {
-		if valueCounts[i] > 1 && useNewColumn {
-			if i == 0 {
-				// create chunk less than min %s", splitValues[0])
-				newChunk := chunk.copyAndUpdate(splitCol, "", "", splitValues[i], lt)
-				chunks = append(chunks, newChunk)
-			}
+		if i == 0 && useNewColumn {
+			// create chunk less than min
+			newChunk := chunk.copyAndUpdate(splitCol, "", "", splitValues[i], lt)
+			chunks = append(chunks, newChunk)
+		}
+
+		if valueCounts[i] > 1 {
 			// means should split it
 			newChunk := chunk.copyAndUpdate(splitCol, splitValues[i], equal, "", "")
 			splitChunks, err := s.splitRange(db, newChunk, valueCounts[i], schema, table, columns)
@@ -342,44 +345,31 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 			lowerSymbol = gt
 		}
 
-		if i == 0 && valueCounts[i] == 1 {
-			if useNewColumn {
-				lower = ""
-				lowerSymbol = ""
-			} else {
-				lower = splitValues[i]
-				lowerSymbol = symbolMin
-			}
-		} else {
-			lower = splitValues[i]
+		if i == len(splitValues) - 2 && valueCounts[i+1] == 1 {
+			upperSymbol = symbolMax
 		}
 
-		if i == len(splitValues)-2 {
-			if useNewColumn && valueCounts[len(valueCounts)-1] == 1 {
-				upper = ""
-				upperSymbol = ""
-			} else {
-				upper = splitValues[i+1]
-				if valueCounts[len(valueCounts)-1] == 1 {
-					upperSymbol = symbolMax
-				}
-			}
-		} else {
-			if i == len(splitValues)-1 {
-				break
-			}
-
-			upper = splitValues[i+1]
-			upperSymbol = lt
+		if i < len(splitValues) - 1 {	
+			newChunk := chunk.copyAndUpdate(splitCol, splitValues[i], lowerSymbol, splitValues[i+1], upperSymbol)
+			chunks = append(chunks, newChunk)
 		}
 
-		newChunk := chunk.copyAndUpdate(splitCol, lower, lowerSymbol, upper, upperSymbol)
-		chunks = append(chunks, newChunk)
+		if i == len(splitValues) - 1 && useNewColumn {
+			// create chunk max than max
+			newChunk := chunk.copyAndUpdate(splitCol, splitValues[i], gt, "", "")
+			chunks = append(chunks, newChunk)
+		}
 
 		lowerSymbol = gte
 	}
 
 	log.Debugf("getChunksForTable cut table: cnt=%d min=%s max=%s chunk=%d", count, min, max, len(chunks))
+	
+	for _, chunk := range chunks {
+		chunkStr, args := chunk.toString(normalMode, "")
+		log.Infof("chunk: %s, args: %v", chunkStr, args)
+	}
+	
 	return chunks, nil
 }
 
