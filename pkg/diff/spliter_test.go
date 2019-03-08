@@ -174,7 +174,7 @@ func (s *testSpliterSuite) TestRandomSpliter(c *C) {
 		{"`a` >= ? AND `a` < ?", []string{"5", "10"}},
 	}
 
-	r := &randomSpliter {
+	r := &randomSpliter{
 		table: tableInstance,
 	}
 

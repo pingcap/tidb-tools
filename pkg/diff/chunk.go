@@ -342,16 +342,16 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 			lowerSymbol = gt
 		}
 
-		if i == len(splitValues) - 2 && valueCounts[i+1] == 1 {
+		if i == len(splitValues)-2 && valueCounts[i+1] == 1 {
 			upperSymbol = symbolMax
 		}
 
-		if i < len(splitValues) - 1 {	
+		if i < len(splitValues)-1 {
 			newChunk := chunk.copyAndUpdate(splitCol, splitValues[i], lowerSymbol, splitValues[i+1], upperSymbol)
 			chunks = append(chunks, newChunk)
 		}
 
-		if i == len(splitValues) - 1 && useNewColumn {
+		if i == len(splitValues)-1 && useNewColumn {
 			// create chunk max than max
 			newChunk := chunk.copyAndUpdate(splitCol, splitValues[i], gt, "", "")
 			chunks = append(chunks, newChunk)
@@ -361,7 +361,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 	}
 
 	log.Debugf("getChunksForTable cut table: cnt=%d min=%s max=%s chunk=%d", count, min, max, len(chunks))
-	
+
 	return chunks, nil
 }
 
