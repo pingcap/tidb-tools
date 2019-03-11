@@ -11,7 +11,7 @@ import (
 	"github.com/pingcap/errors"
 )
 
-// FileSlicer slices file into `Slice`.
+// FileSlicer splits the file into `Slice`.
 // It can restore from checkpoint and designed for append only file.
 // Don't worry about random write file, `Checker` will guarantee file consistency.
 type FileSlicer struct {
@@ -25,6 +25,7 @@ type sliceStatus struct {
 	SliceTotalSize map[string]int64 `json:"slice_total_size"`
 }
 
+// Slice includes the file slice info
 type Slice struct {
 	FilePath string
 	FileName string

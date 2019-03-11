@@ -1,16 +1,19 @@
 package file_uploader
 
 import (
-	"github.com/ngaut/log"
-	"github.com/pingcap/errors"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ngaut/log"
+	"github.com/pingcap/errors"
 )
 
+// FileUploader checks the files changes in the work directory,
+// uploads files by FileUploaderDriver.
 type FileUploader struct {
 	workDir        string
 	slicer         *FileSlicer
@@ -22,6 +25,7 @@ type FileUploader struct {
 	closed         bool
 }
 
+// NewFileUploader creates a FileUploader instance.
 func NewFileUploader(workDir string, workerNum int, slicesSize int64, uploaderDriver FileUploaderDriver) *FileUploader {
 	fileSlicer, err := NewFileSlicer(workDir, slicesSize)
 	fu := &FileUploader{
@@ -53,7 +57,7 @@ func (fu *FileUploader) createWorker(workerNum int) {
 	}
 	for i := 0; i < workerNum; i++ {
 		go func() {
-			mu := NewMultipartUploader(fu.workDir, cp, fu.uploaderDriver)
+			mu := newMultipartUploader(fu.workDir, cp, fu.uploaderDriver)
 			for slice := range fu.slicesChan {
 				err := mu.upload(&slice)
 				if err != nil {
@@ -94,6 +98,8 @@ func (fu *FileUploader) process() {
 	fu.watcherWait.Done()
 }
 
+// WaitAndClose stops checking the files changes in work directory.
+// And waits for all files uploaded completed.
 func (fu *FileUploader) WaitAndClose() {
 	time.Sleep(1 * time.Second)
 	fu.closed = true

@@ -3,15 +3,17 @@ package file_uploader
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/pingcap/errors"
-	"github.com/siddontang/go/sync2"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/pingcap/errors"
+	"github.com/siddontang/go/sync2"
 )
 
+// UploadErrorType is the upload error code.
 type UploadErrorType int
 
 const (
@@ -22,50 +24,52 @@ const (
 	SliceHashCalculateFailed
 )
 
+// UploadError indicate one kind of error about uploading.
 type UploadError struct {
 	Tp      UploadErrorType
 	message string
 }
 
+// Error implements Error interface.
 func (up UploadError) Error() string {
 	return up.message
 }
 
-func NewUploadError(tp UploadErrorType, format string, args ...interface{}) UploadError {
+func newUploadError(tp UploadErrorType, format string, args ...interface{}) UploadError {
 	return UploadError{tp, fmt.Sprintf(format, args...)}
 }
 
-type MultipartUploader struct {
+type multipartUploader struct {
 	workDir      string
 	checkPoint   *checkPoint
 	fileUploader FileUploaderDriver
 }
 
-func NewMultipartUploader(workDir string, checkPoint *checkPoint, fileUploader FileUploaderDriver) *MultipartUploader {
-	return &MultipartUploader{workDir, checkPoint, fileUploader}
+func newMultipartUploader(workDir string, checkPoint *checkPoint, fileUploader FileUploaderDriver) *multipartUploader {
+	return &multipartUploader{workDir, checkPoint, fileUploader}
 }
 
-func (mu *MultipartUploader) upload(si *Slice) error {
+func (mu *multipartUploader) upload(si *Slice) error {
 	if !si.isValid() {
-		return NewUploadError(FileOrSliceNotExist, "file or slice is't exist; Slice %#v", si)
+		return newUploadError(FileOrSliceNotExist, "file or slice is't exist; Slice %#v", si)
 	}
 	if mu.checkPoint.isSliceUploadSuccessful(si) {
 		hash := mu.fileUploader.Hash()
 		_, err := si.writeTo(hash)
 		if err != nil {
-			return NewUploadError(SliceHashCalculateFailed, "can't calculate the hash of slice; Slice %#v ; Err %#v", si, err)
+			return newUploadError(SliceHashCalculateFailed, "can't calculate the hash of slice; Slice %#v ; Err %#v", si, err)
 		}
 		if mu.checkPoint.checkHash(si, hash.String()) {
-			return NewUploadError(SliceAlreadyUpdated, "slice is already updated; Slice %#v", si)
+			return newUploadError(SliceAlreadyUpdated, "slice is already updated; Slice %#v", si)
 		}
 	}
 	hash, err := mu.fileUploader.Upload(si)
 	if err != nil {
-		return NewUploadError(SliceUpdatedFailed, "slice is updated failed; Slice %#v ; Err %#v", si, err)
+		return newUploadError(SliceUpdatedFailed, "slice is updated failed; Slice %#v ; Err %#v", si, err)
 	}
 	err = mu.checkPoint.logSliceUpload(si, hash, true)
 	if err != nil {
-		return NewUploadError(CheckPointUpdatedFailed, "checkpoint is updated failed; Slice %#v", si)
+		return newUploadError(CheckPointUpdatedFailed, "checkpoint is updated failed; Slice %#v", si)
 	}
 	return nil
 }

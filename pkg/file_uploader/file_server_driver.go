@@ -5,13 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/pingcap/errors"
-	"github.com/prometheus/common/log"
-	"github.com/siddontang/go/sync2"
 	"hash"
 	"io"
 	"io/ioutil"
@@ -20,52 +13,78 @@ import (
 	"regexp"
 	"sort"
 	"sync"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/pingcap/errors"
+	"github.com/prometheus/common/log"
+	"github.com/siddontang/go/sync2"
 )
 
+// FileHash used to calculate files Hash.
 type FileHash interface {
 	hash.Hash
 	fmt.Stringer
 }
 
+// FileUploaderDriver is file server driver which can slice upload file.
 type FileUploaderDriver interface {
+	// Upload one slice.
+	// returns the hash of this slice.
 	Upload(sliceInfo *Slice) (string, error)
+	// Hash returns an instance of FileHash interface, which hash algorithm is same with file server.
 	Hash() FileHash
+	// Complete tells the file server that all slices of the file at `path` are already uploaded.
+	// Generally, file server will merge slices at this time.
 	Complete(path string) (string, error)
+	// Close tells the file server that all files are uploaded.
 	Close() error
 }
 
+// Md5FileHash calculates md5 hash of input stream.
 type Md5FileHash struct {
 	h hash.Hash
 }
 
-func NewMd5Base64FileHash() *Md5FileHash {
+// NewMd5FileHash creates a new md5 calculator.
+func NewMd5FileHash() *Md5FileHash {
 	return &Md5FileHash{md5.New()}
 }
 
+// Write implements Hash interface.
 func (fh *Md5FileHash) Write(p []byte) (n int, err error) {
 	return fh.h.Write(p)
 }
 
+// Sum implements Hash interface.
 func (fh *Md5FileHash) Sum(b []byte) []byte {
 	return fh.h.Sum(b)
 }
 
+// Reset implements Hash interface.
 func (fh *Md5FileHash) Reset() {
 	fh.h.Reset()
 }
 
+// Size implements Hash interface.
 func (fh *Md5FileHash) Size() int {
 	return fh.h.Size()
 }
 
+// BlockSize implements Hash interface.
 func (fh *Md5FileHash) BlockSize() int {
 	return fh.h.BlockSize()
 }
 
+// BlockSize implements Stringer interface.
 func (fh *Md5FileHash) String() string {
 	return hex.EncodeToString(fh.Sum(nil))
 }
 
+// AWSS3FileUploaderDriver is a uploader driver of AWS S3, using the official s3 sdk.
+// AWS Official S3 SDK: https://aws.amazon.com/cn/sdk-for-go/
 type AWSS3FileUploaderDriver struct {
 	s3             *s3.S3
 	bucketName     string
@@ -74,6 +93,9 @@ type AWSS3FileUploaderDriver struct {
 	workDir        string
 }
 
+// NewAWSS3FileUploaderDriver create a new `AWSS3FileUploaderDriver` instance.
+// remoteDir should compliance with the S3 key format rule.
+// AWS S3 Key format, see: https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html
 func NewAWSS3FileUploaderDriver(accessKeyID string, secretAccessKey string, bucketRegion string, bucketName string, workDir string, remoteDir string) (*AWSS3FileUploaderDriver, error) {
 	awsUs, err := loadAWSUploadId(workDir)
 	if err != nil {
@@ -99,6 +121,7 @@ func NewAWSS3FileUploaderDriver(accessKeyID string, secretAccessKey string, buck
 	return &AWSS3FileUploaderDriver{s3, bucketName, awsUs, remoteDir, workDir}, nil
 }
 
+// Upload implements FileUploaderDriver interface.
 func (fud *AWSS3FileUploaderDriver) Upload(sliceInfo *Slice) (string, error) {
 	relFilePath, err := filepath.Rel(fud.workDir, sliceInfo.FilePath)
 	if err != nil {
@@ -192,10 +215,12 @@ func (fud *AWSS3FileUploaderDriver) completeUpload(uploadId, key string, parts [
 	return *output.ETag, nil
 }
 
+// Hash implements FileUploaderDriver interface.
 func (fud *AWSS3FileUploaderDriver) Hash() FileHash {
-	return NewMd5Base64FileHash()
+	return NewMd5FileHash()
 }
 
+// Complete implements FileUploaderDriver interface.
 func (fud *AWSS3FileUploaderDriver) Complete(path string) (string, error) {
 	relFilePath, err := filepath.Rel(fud.workDir, path)
 	if err != nil {
@@ -214,6 +239,7 @@ func (fud *AWSS3FileUploaderDriver) Complete(path string) (string, error) {
 	return hash, nil
 }
 
+// Close implements FileUploaderDriver interface.
 func (fud *AWSS3FileUploaderDriver) Close() error {
 	output, err := fud.s3.ListMultipartUploads(&s3.ListMultipartUploadsInput{
 		Bucket: aws.String(fud.bucketName),
@@ -314,16 +340,16 @@ func (us *awsUploadIdSet) getUploadId(key string) (string, bool) {
 	return item.UploadId, true
 }
 
-type CompletedParts []*s3.CompletedPart
+type completedParts []*s3.CompletedPart
 
-func (s CompletedParts) Len() int {
+func (s completedParts) Len() int {
 	return len(s)
 }
-func (s CompletedParts) Less(i, j int) bool {
+func (s completedParts) Less(i, j int) bool {
 	return *s[i].PartNumber < *s[j].PartNumber
 }
 
-func (s CompletedParts) Swap(i, j int) {
+func (s completedParts) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
@@ -338,7 +364,7 @@ func (us *awsUploadIdSet) getCompletedParts(key string) []*s3.CompletedPart {
 	for index, eTag := range item.ETag {
 		result = append(result, &s3.CompletedPart{ETag: aws.String(eTag), PartNumber: aws.Int64(index + 1)})
 	}
-	sort.Sort(CompletedParts(result))
+	sort.Sort(completedParts(result))
 	return result
 }
 

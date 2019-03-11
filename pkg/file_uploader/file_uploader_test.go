@@ -1,8 +1,6 @@
 package file_uploader
 
 import (
-	"github.com/ngaut/log"
-	. "github.com/pingcap/check"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -11,6 +9,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/ngaut/log"
+	. "github.com/pingcap/check"
 )
 
 var _ = Suite(&testFileUploader{})
@@ -64,13 +65,13 @@ func (t *testFileUploader) TestFileUploaderAppend(c *C) {
 
 	fu.WaitAndClose()
 	for _, filename := range filenames {
-		sourceHash := NewMd5Base64FileHash()
+		sourceHash := NewMd5FileHash()
 		sourceFile, err := os.OpenFile(filepath.Join(dir, filename), os.O_CREATE|os.O_RDWR|os.O_SYNC, 0666)
 		c.Assert(err, IsNil)
 		defer sourceFile.Close()
 		_, err = io.Copy(sourceHash, sourceFile)
 		c.Assert(err, IsNil)
-		targetHash := NewMd5Base64FileHash()
+		targetHash := NewMd5FileHash()
 		targetFile, err := os.OpenFile(filepath.Join(targetDir, filename), os.O_CREATE|os.O_RDWR|os.O_SYNC, 0666)
 		c.Assert(err, IsNil)
 		defer targetFile.Close()

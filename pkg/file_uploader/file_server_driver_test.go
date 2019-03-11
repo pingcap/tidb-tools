@@ -1,14 +1,15 @@
 package file_uploader
 
 import (
-	. "github.com/pingcap/check"
-	"github.com/pingcap/errors"
 	"io"
 	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
 	"time"
+
+	. "github.com/pingcap/check"
+	"github.com/pingcap/errors"
 )
 
 var _ = Suite(&testServerDriver{})
@@ -72,7 +73,7 @@ func (m *MockFileUploaderDriver) Upload(sliceInfo *Slice) (string, error) {
 }
 
 func (m *MockFileUploaderDriver) Hash() FileHash {
-	return NewMd5Base64FileHash()
+	return NewMd5FileHash()
 }
 
 func (m *MockFileUploaderDriver) Complete(path string) (string, error) {

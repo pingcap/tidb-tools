@@ -1,10 +1,11 @@
 package file_uploader
 
 import (
-	. "github.com/pingcap/check"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	. "github.com/pingcap/check"
 )
 
 var _ = Suite(&testCheckPointSuite{})
