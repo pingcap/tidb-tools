@@ -352,7 +352,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 		}
 
 		if i == len(splitValues)-1 && useNewColumn {
-			// create chunk max than max
+			// create chunk greater than max
 			newChunk := chunk.copyAndUpdate(splitCol, splitValues[i], gt, "", "")
 			chunks = append(chunks, newChunk)
 		}
