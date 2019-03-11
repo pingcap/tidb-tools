@@ -3,10 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/ngaut/log"
-	"github.com/pingcap/tidb-tools/pkg/file_uploader"
 	"os"
 	"os/exec"
+
+	"github.com/ngaut/log"
+	"github.com/pingcap/tidb-tools/pkg/file_uploader"
 )
 
 var (
