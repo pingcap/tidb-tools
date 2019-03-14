@@ -18,7 +18,11 @@ sample-percent = 100
 use-rowid = false
 
 # calculate the data's checksum, and compare data by checksum.
+# set false if want to comapre the data directly
 use-checksum = true
+
+# set true if just want compare data by checksum, will skip select data when checksum is not equal. 
+only-use-checksum = false
 
 # ignore check table's data
 ignore-data-check = false
@@ -26,7 +30,8 @@ ignore-data-check = false
 # ignore check table's struct
 ignore-struct-check = false
 
-# the name of the file which saves sqls used to fix different data
+# the name of the file which saves sqls used to fix different data.
+# if fix-sql-file is "", will only check data by checksum.
 fix-sql-file = "fix.sql"
 
 # use this tidb's statistics information to split chunk
