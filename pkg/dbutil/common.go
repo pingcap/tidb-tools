@@ -22,10 +22,11 @@ import (
 	"strings"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb/types"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 const (
@@ -198,7 +199,7 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 
 	query := fmt.Sprintf("SELECT %[1]s, COUNT(*) count FROM (SELECT %[1]s FROM %[2]s WHERE %[3]s ORDER BY RAND() LIMIT %[4]d)rand_tmp GROUP BY %[1]s ORDER BY %[1]s%[5]s",
 		escapeName(column), TableName(schemaName, table), limitRange, num, collation)
-	log.Debugf("get random values sql: %s, args: %v", query, limitArgs)
+	log.Debug("get random values", zap.String("sql", query), zap.String("args", fmt.Sprintf("%v", limitArgs)))
 
 	rows, err := db.QueryContext(ctx, query, limitArgs...)
 	if err != nil {
@@ -242,7 +243,7 @@ func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column strin
 
 	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ MIN(`%s`%s) as MIN, MAX(`%s`%s) as MAX FROM `%s`.`%s` WHERE %s",
 		column, collation, column, collation, schema, table, limitRange)
-	log.Debugf("GetMinMaxValue query: %v, args: %v", query, limitArgs)
+	log.Debug("GetMinMaxValue", zap.String("sql", query), zap.String("args", fmt.Sprintf("%v", limitArgs)))
 
 	var min, max sql.NullString
 	rows, err := db.QueryContext(ctx, query, limitArgs...)
@@ -362,7 +363,7 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName str
 
 	query := fmt.Sprintf("SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED)) AS checksum FROM %s WHERE %s;",
 		strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), TableName(schemaName, tableName), limitRange)
-	log.Debugf("checksum sql: %s, args: %v", query, args)
+	log.Debug("checksum", zap.String("sql", query), zap.String("args", fmt.Sprintf("%v", args)))
 
 	var checksum sql.NullInt64
 	err := db.QueryRowContext(ctx, query, args...).Scan(&checksum)
@@ -371,7 +372,7 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName str
 	}
 	if !checksum.Valid {
 		// if don't have any data, the checksum will be `NULL`
-		log.Warnf("get empty checksum by query %s, args %v", query, args)
+		log.Warn("get empty checksum", zap.String("sql", query), zap.String("args", fmt.Sprintf("%v", args)))
 		return 0, nil
 	}
 
@@ -399,7 +400,7 @@ func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string, table
 	*/
 	buckets := make(map[string][]Bucket)
 	query := "SHOW STATS_BUCKETS WHERE db_name= ? AND table_name= ?;"
-	log.Debugf("GetBucketsInfo query: %s", query)
+	log.Debug("GetBucketsInfo", zap.String("sql", query))
 
 	rows, err := db.QueryContext(ctx, query, schema, table)
 	if err != nil {
@@ -537,7 +538,7 @@ func GetTidbLatestTSO(ctx context.Context, db *sql.DB) (int64, error) {
 // SetSnapshot set the snapshot variable for tidb
 func SetSnapshot(ctx context.Context, db *sql.DB, snapshot string) error {
 	sql := fmt.Sprintf("SET @@tidb_snapshot='%s'", snapshot)
-	log.Infof("set history snapshot: %s", sql)
+	log.Info("set history snapshot", zap.String("sql", sql))
 	_, err := db.ExecContext(ctx, sql)
 	return errors.Trace(err)
 }
@@ -588,7 +589,7 @@ func GetDBVersion(ctx context.Context, db *sql.DB) (string, error) {
 func IsTiDB(ctx context.Context, db *sql.DB) (bool, error) {
 	version, err := GetDBVersion(ctx, db)
 	if err != nil {
-		log.Errorf("get database's version meets error %v", err)
+		log.Error("get database's version failed", zap.Error(err))
 		return false, errors.Trace(err)
 	}
 

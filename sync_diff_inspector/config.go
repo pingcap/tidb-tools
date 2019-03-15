@@ -20,10 +20,11 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 const (
@@ -137,7 +138,7 @@ func (t *TableInstance) Valid() bool {
 	}
 
 	if _, ok := sourceInstanceMap[t.InstanceID]; !ok {
-		log.Errorf("unknown database instance id %s", t.InstanceID)
+		log.Error("unknown database instance id", zap.String("instance id", t.InstanceID))
 		return false
 	}
 
@@ -273,12 +274,12 @@ func (c *Config) configFromFile(path string) error {
 
 func (c *Config) checkConfig() bool {
 	if c.Sample > percent100 || c.Sample < percent0 {
-		log.Errorf("sample must be greater than 0 and less than or equal to 100!")
+		log.Error("sample must be greater than 0 and less than or equal to 100!")
 		return false
 	}
 
 	if c.CheckThreadCount <= 0 {
-		log.Errorf("check-thcount must greater than 0!")
+		log.Error("check-thcount must greater than 0!")
 		return false
 	}
 
@@ -297,7 +298,7 @@ func (c *Config) checkConfig() bool {
 		c.TargetDBCfg.InstanceID = "target"
 	}
 	if _, ok := sourceInstanceMap[c.TargetDBCfg.InstanceID]; ok {
-		log.Errorf("target has same instance id %s in source", c.TargetDBCfg.InstanceID)
+		log.Error("target has same instance id in source", zap.String("instance id", c.TargetDBCfg.InstanceID))
 		return false
 	}
 

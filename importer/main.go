@@ -18,8 +18,9 @@ import (
 	"os"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/importer"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -30,7 +31,7 @@ func main() {
 	case flag.ErrHelp:
 		os.Exit(0)
 	default:
-		log.Errorf("parse cmd flags err %s\n", err)
+		log.Error("parse cmd flags failed", zap.Error(err))
 		os.Exit(2)
 	}
 

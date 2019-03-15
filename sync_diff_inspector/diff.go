@@ -20,11 +20,11 @@ import (
 	"regexp"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/diff"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/pkg/utils"
-	log "github.com/sirupsen/logrus"
 )
 
 // Diff contains two sql DB, used for comparing.
@@ -198,7 +198,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 			}
 
 			if _, ok := df.tables[schemaTables.Schema][tableName]; ok {
-				log.Errorf("duplicate config for %s.%s", schemaTables.Schema, tableName)
+				log.Error("duplicate config for one table", zap.String("schema", schemaTables.Schema), zap.String("table", tableName))
 				continue
 			}
 

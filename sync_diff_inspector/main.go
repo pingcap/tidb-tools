@@ -21,8 +21,9 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/utils"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -33,7 +34,7 @@ func main() {
 	case flag.ErrHelp:
 		os.Exit(0)
 	default:
-		log.Errorf("parse cmd flags err %s\n", errors.ErrorStack(err))
+		log.Error("parse cmd flags err %s\n", errors.ErrorStack(err))
 		os.Exit(2)
 	}
 
@@ -72,12 +73,12 @@ func checkSyncState(ctx context.Context, cfg *Config) bool {
 
 	d, err := NewDiff(ctx, cfg)
 	if err != nil {
-		log.Fatalf("fail to initialize diff process %v", errors.ErrorStack(err))
+		log.Fatal("fail to initialize diff process", zap.String("error", errors.ErrorStack(err)))
 	}
 
 	err = d.Equal()
 	if err != nil {
-		log.Fatalf("check data difference error %v", errors.ErrorStack(err))
+		log.Fatal("check data difference failed", zap.String("error", errors.ErrorStack(err)))
 	}
 
 	log.Info(d.report)

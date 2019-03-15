@@ -14,7 +14,8 @@
 package importer
 
 import (
-	log "github.com/sirupsen/logrus"
+	"github.com/pingcap/log"
+	"go.uber.org/zap"
 )
 
 // DoProcess generates data.
@@ -22,28 +23,28 @@ func DoProcess(cfg *Config) {
 	table := newTable()
 	err := parseTableSQL(table, cfg.TableSQL)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("parseTableSQL", zap.Error(err))
 	}
 
 	err = parseIndexSQL(table, cfg.IndexSQL)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("parseIndexSQL", zap.Error(err))
 	}
 
 	dbs, err := createDBs(cfg.DBCfg, cfg.WorkerCount)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("createDBs", zap.Error(err))
 	}
 	defer closeDBs(dbs)
 
 	err = execSQL(dbs[0], cfg.TableSQL)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("execSQL", zap.Error(err))
 	}
 
 	err = execSQL(dbs[0], cfg.IndexSQL)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("execSQL", zap.Error(err))
 	}
 
 	doProcess(table, dbs, cfg.JobCount, cfg.WorkerCount, cfg.Batch)

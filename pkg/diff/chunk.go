@@ -20,10 +20,11 @@ import (
 	"strings"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 var (
@@ -239,7 +240,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 		symbolMax = chunk.bounds[colNum-1].upperSymbol
 	} else {
 		if len(columns) <= colNum {
-			log.Warnf("chunk %v can't be splited", chunk)
+			log.Warn("chunk can't be splited", zap.Any("chunk", chunk))
 			return append(chunks, chunk), nil
 		}
 
@@ -250,7 +251,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 		min, max, err = dbutil.GetMinMaxValue(context.Background(), db, schema, table, splitCol, limitRange, utils.StringsToInterfaces(args), s.collation)
 		if err != nil {
 			if errors.Cause(err) == dbutil.ErrNoData {
-				log.Infof("no data found in %s.%s range %s, args %v", schema, table, limitRange, args)
+				log.Info("no data found", zap.String("schema", schema), zap.String("table", table), zap.String("range", limitRange), zap.Any("args", args))
 				return append(chunks, chunk), nil
 			}
 			return nil, errors.Trace(err)
@@ -269,7 +270,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	log.Infof("split chunk %v, get split values from GetRandomValues: %v", chunk, randomValues)
+	log.Info("get split values by random values", zap.Any("chunk", chunk), zap.Any("random values", randomValues))
 
 	/*
 		for examples:
@@ -370,7 +371,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 		lowerSymbol = gte
 	}
 
-	log.Debugf("getChunksForTable cut table: cnt=%d min=%s max=%s chunk=%d", count, min, max, len(chunks))
+	log.Debug("getChunksForTable cut table", zap.Int("count", count), zap.String("min", min), zap.String("max", max), zap.Int("chunk num", len(chunks)))
 	return chunks, nil
 }
 
@@ -464,7 +465,7 @@ func getChunksForTable(table *TableInstance, columns []*model.ColumnInfo, chunkS
 			return chunks, bucketMode, nil
 		}
 
-		log.Warnf("use tidb bucket information to get chunks error: %v, chunks num: %d, will split chunk by random again", errors.Trace(err), len(chunks))
+		log.Warn("use tidb bucket information to get chunks failed, will split chunk by random again", zap.Int("get chunk", len(chunks)), zap.Error(err))
 	}
 
 	// get chunks from tidb bucket information failed, use random.
@@ -545,7 +546,7 @@ func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSiz
 		conditions, args := chunk.toString(mode, collation)
 		where := fmt.Sprintf("(%s AND %s)", conditions, limits)
 
-		log.Debugf("%s.%s create check job, where: %s, args: %v", table.Schema, table.Table, where, args)
+		log.Debug("create check job", zap.String("schema", table.Schema), zap.String("table", table.Table), zap.String("where", where), zap.Any("args", args))
 		jobBucket = append(jobBucket, &CheckJob{
 			Schema: table.Schema,
 			Table:  table.Table,
