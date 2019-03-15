@@ -21,12 +21,12 @@ import (
 
 	"github.com/Shopify/sarama"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/pingcap/log"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/tidb-binlog/driver/reader"
 	pb "github.com/pingcap/tidb-tools/tidb-binlog/slave_binlog_proto/go-binlog"
 	_ "github.com/pingcap/tidb/types/parser_driver" // for parser driver
-	log "github.com/sirupsen/logrus"
 )
 
 // a simple example to sync data to mysql

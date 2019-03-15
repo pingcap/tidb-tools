@@ -17,8 +17,8 @@ import (
 	"flag"
 
 	"github.com/Shopify/sarama"
+	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/tidb-binlog/driver/reader"
-	log "github.com/sirupsen/logrus"
 )
 
 var (

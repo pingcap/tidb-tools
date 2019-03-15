@@ -16,8 +16,8 @@ package reader
 import (
 	"github.com/Shopify/sarama"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	pb "github.com/pingcap/tidb-tools/tidb-binlog/slave_binlog_proto/go-binlog"
-	log "github.com/sirupsen/logrus"
 )
 
 func init() {

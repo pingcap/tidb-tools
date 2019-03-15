@@ -18,8 +18,9 @@ import (
 	"os"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 const (
@@ -35,7 +36,7 @@ func main() {
 	case flag.ErrHelp:
 		os.Exit(0)
 	default:
-		log.Errorf("parse cmd flags err %v", err)
+		log.Error("parse cmd flags", zap.Error(err))
 		os.Exit(2)
 	}
 
@@ -61,6 +62,6 @@ func main() {
 	}
 
 	if err != nil {
-		log.Fatalf("fail to execute %s error %v", cfg.Command, errors.ErrorStack(err))
+		log.Fatal("fail to execute command", zap.String("command", cfg.Command), zap.String("error", errors.ErrorStack(err)))
 	}
 }

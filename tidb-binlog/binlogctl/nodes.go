@@ -20,10 +20,11 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/etcd"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 var (
@@ -43,7 +44,7 @@ func queryNodesByKind(urls string, kind string) error {
 	}
 
 	for _, n := range nodes {
-		log.Infof("%s: %s", kind, formatNodeInfo(n))
+		log.Info("query node", zap.String("type", kind), zap.String("node", n.String()))
 	}
 
 	return nil
@@ -113,14 +114,14 @@ func applyAction(urls, kind, nodeID string, action string) error {
 
 		client := &http.Client{}
 		url := fmt.Sprintf("http://%s/state/%s/%s", n.Addr, n.NodeID, action)
-		log.Debugf("send put http request %s", url)
+		log.Debug("send put http request", zap.String("url", url))
 		req, err := http.NewRequest("PUT", url, nil)
 		if err != nil {
 			return errors.Trace(err)
 		}
 		_, err = client.Do(req)
 		if err == nil {
-			log.Infof("apply action %s on node %s success", action, n.NodeID)
+			log.Info("apply action on node success", zap.String("action", action), zap.String("NodeID", n.NodeID))
 			return nil
 		}
 
@@ -128,9 +129,4 @@ func applyAction(urls, kind, nodeID string, action string) error {
 	}
 
 	return errors.NotFoundf("nodeID %s", nodeID)
-}
-
-func formatNodeInfo(status *node.Status) string {
-	updateTime := utils.TSOToRoughTime(status.UpdateTS)
-	return fmt.Sprintf("{NodeID: %s, Addr: %s, State: %s, MaxCommitTS: %d, UpdateTime: %v}", status.NodeID, status.Addr, status.State, status.MaxCommitTS, updateTime)
 }
