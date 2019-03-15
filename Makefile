@@ -21,7 +21,9 @@ GOTEST   := CGO_ENABLED=1 $(GO) test -p 3
 PACKAGES := $$(go list ./... | grep -vE 'vendor')
 FILES     := $$(find . -name '*.go' -type f | grep -vE 'vendor')
 VENDOR_TIDB := vendor/github.com/pingcap/tidb
-
+PACKAGE_LIST  := go list ./...
+PACKAGES  := $$($(PACKAGE_LIST))
+FAIL_ON_STDOUT := awk '{ print } END { if (NR > 0) { exit 1 } }'
 
 build: prepare check importer checker dump_region binlogctl sync_diff_inspector ddl_checker finish
 
@@ -58,9 +60,7 @@ fmt:
 check:
 	#go get github.com/golang/lint/golint
 	@echo "vet"
-	@ go tool vet $(FILES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
-	@echo "vet --shadow"
-	@ go tool vet --shadow $(FILES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
+	$(GO) vet -all $(PACKAGES) 2>&1 | tee /dev/stderr | $(FAIL_ON_STDOUT)
 	#@echo "golint"
 	#@ golint ./... 2>&1 | grep -vE '\.pb\.go' | grep -vE 'vendor' | awk '{print} END{if(NR>0) {exit 1}}'
 	@echo "gofmt (simplify)"
