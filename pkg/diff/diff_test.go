@@ -39,11 +39,11 @@ func (*testDiffSuite) TestGenerateSQLs(c *C) {
 	c.Assert(err, IsNil)
 
 	rowsData := map[string]*dbutil.ColumnData{
-		"id":          {[]byte("1"), false},
-		"name":        {[]byte("xxx"), false},
-		"birthday":    {[]byte("2018-01-01 00:00:00"), false},
-		"update_time": {[]byte("10:10:10"), false},
-		"money":       {[]byte("11.1111"), false},
+		"id":          {Data: []byte("1"), IsNull: false},
+		"name":        {Data: []byte("xxx"), IsNull: false},
+		"birthday":    {Data: []byte("2018-01-01 00:00:00"), IsNull: false},
+		"update_time": {Data: []byte("10:10:10"), IsNull: false},
+		"money":       {Data: []byte("11.1111"), IsNull: false},
 	}
 
 	_, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
@@ -63,13 +63,13 @@ func (*testDiffSuite) TestGenerateSQLs(c *C) {
 	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` WHERE `id` = 1 AND `name` = 'xxx';")
 
 	// test value is nil
-	rowsData["name"] = &dbutil.ColumnData{[]byte(""), true}
+	rowsData["name"] = &dbutil.ColumnData{Data: []byte(""), IsNull: true}
 	replaceSQL = generateDML("replace", rowsData, orderKeyCols, tableInfo, "test")
 	deleteSQL = generateDML("delete", rowsData, orderKeyCols, tableInfo, "test")
 	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (1,NULL,'2018-01-01 00:00:00','10:10:10',11.1111);")
 	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` WHERE `id` = 1;")
 
-	rowsData["id"] = &dbutil.ColumnData{[]byte(""), true}
+	rowsData["id"] = &dbutil.ColumnData{Data: []byte(""), IsNull: true}
 	replaceSQL = generateDML("replace", rowsData, orderKeyCols, tableInfo, "test")
 	deleteSQL = generateDML("delete", rowsData, orderKeyCols, tableInfo, "test")
 	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (NULL,NULL,'2018-01-01 00:00:00','10:10:10',11.1111);")
