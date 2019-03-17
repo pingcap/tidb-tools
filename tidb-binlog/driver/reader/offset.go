@@ -57,7 +57,7 @@ func (ks *KafkaSeeker) Seek(topic string, ts int64, partitions []int32) (offsets
 	if len(partitions) == 0 {
 		partitions, err = ks.consumer.Partitions(topic)
 		if err != nil {
-			log.Errorf("get partitions from topic %s error %v", topic, err)
+			log.Error("get partitions from topic failed", zap.String("topic", topic), zap.Error(err))
 			return nil, errors.Trace(err)
 		}
 	}
@@ -65,7 +65,7 @@ func (ks *KafkaSeeker) Seek(topic string, ts int64, partitions []int32) (offsets
 	offsets, err = ks.seekOffsets(topic, partitions, ts)
 	if err != nil {
 		err = errors.Trace(err)
-		log.Errorf("seek offsets error %v", err)
+		log.Error("seek offsets failed", zap.Error(err))
 	}
 	return
 }
@@ -116,7 +116,7 @@ func (ks *KafkaSeeker) seekOffset(topic string, partition int32, start int64, en
 	}
 
 	if ts < startTS {
-		log.Warnf("given ts %v is smaller than oldest message's ts %v, some binlogs may lose", ts, startTS)
+		log.Warn("given ts is smaller than oldest message's ts, some binlogs may lose", zap.Int64("given ts", ts), zap.Int64("oldest ts", startTS))
 		offset = start
 		return
 	} else if ts == startTS {

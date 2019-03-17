@@ -25,6 +25,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/diff"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/pkg/utils"
+	"go.uber.org/zap"
 )
 
 // Diff contains two sql DB, used for comparing.
@@ -204,7 +205,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 
 			sourceTables := make([]TableInstance, 0, 1)
 			if _, ok := sourceTablesMap[schemaTables.Schema][tableName]; ok {
-				log.Infof("find matched source tables %v for %s.%s", sourceTablesMap[schemaTables.Schema][tableName], schemaTables.Schema, tableName)
+				log.Info("find matched source tables", zap.Any("source tables", sourceTablesMap[schemaTables.Schema][tableName]), zap.String("target schema", schemaTables.Schema), zap.String("table", tableName))
 				sourceTables = sourceTablesMap[schemaTables.Schema][tableName]
 			} else {
 				// use same database name and table name
@@ -414,7 +415,7 @@ func (df *Diff) Equal() (err error) {
 				return err
 			})
 			if err != nil {
-				log.Errorf("check %s.%s equal failed, error %v", table.Schema, table.Table, errors.ErrorStack(err))
+				log.Error("check failed", zap.String("schema", table.Schema), zap.String("table", table.Table), zap.String("error", errors.ErrorStack(err)))
 				return err
 			}
 

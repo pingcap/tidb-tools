@@ -34,22 +34,21 @@ func main() {
 	case flag.ErrHelp:
 		os.Exit(0)
 	default:
-		log.Error("parse cmd flags err %s\n", errors.ErrorStack(err))
+		log.Error("parse cmd flags", zap.String("error", errors.ErrorStack(err)))
 		os.Exit(2)
 	}
 
 	if cfg.PrintVersion {
-		log.Infof("version: \n%s", utils.GetRawInfo("sync_diff_inspector"))
+		log.Info("sync_diff_inspector", zap.String("version", utils.GetRawInfo("sync_diff_inspector")))
 		return
 	}
 
-	logLevel, err := log.ParseLevel(cfg.LogLevel)
-	if err != nil {
-		log.Warnf("invalide log level %s", cfg.LogLevel)
-		log.SetLevel(log.InfoLevel)
-	} else {
-		log.SetLevel(logLevel)
+	l := zap.NewAtomicLevel()
+	if err := l.UnmarshalText([]byte(cfg.LogLevel)); err != nil {
+		log.Error("invalide log level", zap.String("log level", cfg.LogLevel))
+		return
 	}
+	log.SetLevel(l.Level())
 
 	ok := cfg.checkConfig()
 	if !ok {
@@ -68,7 +67,7 @@ func main() {
 func checkSyncState(ctx context.Context, cfg *Config) bool {
 	beginTime := time.Now()
 	defer func() {
-		log.Infof("check data finished, all cost %v", time.Since(beginTime))
+		log.Info("check data finished", zap.Duration("cost", time.Since(beginTime)))
 	}()
 
 	d, err := NewDiff(ctx, cfg)
@@ -81,7 +80,7 @@ func checkSyncState(ctx context.Context, cfg *Config) bool {
 		log.Fatal("check data difference failed", zap.String("error", errors.ErrorStack(err)))
 	}
 
-	log.Info(d.report)
+	log.Info("check report", zap.String("report", d.report.String()))
 
 	return d.report.Result == Pass
 }

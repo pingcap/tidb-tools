@@ -51,9 +51,6 @@ const (
 )
 
 var (
-	// Logger is ..., obsolete now.
-	//Logger = log.New()
-
 	// ErrNoAvaliablePump means no avaliable pump to write binlog.
 	ErrNoAvaliablePump = errors.New("no avaliable pump to write binlog")
 
