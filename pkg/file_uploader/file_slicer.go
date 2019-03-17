@@ -2,12 +2,12 @@ package file_uploader
 
 import (
 	"encoding/json"
-	"github.com/ngaut/log"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 
+	"github.com/ngaut/log"
 	"github.com/pingcap/errors"
 )
 

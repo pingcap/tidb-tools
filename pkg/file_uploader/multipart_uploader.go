@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ngaut/log"
 	"github.com/pingcap/errors"
 	"github.com/siddontang/go/sync2"
 )
@@ -35,26 +36,26 @@ func (up UploadError) Error() string {
 	return up.message
 }
 
-func newUploadError(tp UploadErrorType, format string, args ...interface{}) UploadError {
-	return UploadError{tp, fmt.Sprintf(format, args...)}
+func newUploadError(tp UploadErrorType, format string, args ...interface{}) *UploadError {
+	return &UploadError{tp, fmt.Sprintf(format, args...)}
 }
 
 type multipartUploader struct {
-	workDir      string
-	checkPoint   *checkPoint
-	fileUploader FileUploaderDriver
+	workDir        string
+	checkPoint     *checkPoint
+	uploaderDriver FileUploaderDriver
 }
 
 func newMultipartUploader(workDir string, checkPoint *checkPoint, fileUploader FileUploaderDriver) *multipartUploader {
 	return &multipartUploader{workDir, checkPoint, fileUploader}
 }
 
-func (mu *multipartUploader) upload(si *Slice) error {
+func (mu *multipartUploader) upload(si *Slice) *UploadError {
 	if !si.isValid() {
 		return newUploadError(FileOrSliceNotExist, "file or slice is't exist; Slice %#v", si)
 	}
 	if mu.checkPoint.isSliceUploadSuccessful(si) {
-		hash := mu.fileUploader.Hash()
+		hash := mu.uploaderDriver.Hash()
 		_, err := si.writeTo(hash)
 		if err != nil {
 			return newUploadError(SliceHashCalculateFailed, "can't calculate the hash of slice; Slice %#v ; Err %#v", si, err)
@@ -63,7 +64,7 @@ func (mu *multipartUploader) upload(si *Slice) error {
 			return newUploadError(SliceAlreadyUpdated, "slice is already updated; Slice %#v", si)
 		}
 	}
-	hash, err := mu.fileUploader.Upload(si)
+	hash, err := mu.uploaderDriver.Upload(si)
 	if err != nil {
 		return newUploadError(SliceUpdatedFailed, "slice is updated failed; Slice %#v ; Err %#v", si, err)
 	}
@@ -71,6 +72,7 @@ func (mu *multipartUploader) upload(si *Slice) error {
 	if err != nil {
 		return newUploadError(CheckPointUpdatedFailed, "checkpoint is updated failed; Slice %#v", si)
 	}
+	log.Infof("Slice upload completed, slice:%#v", si)
 	return nil
 }
 

@@ -98,6 +98,7 @@ func (t *testServerDriver) ManualTestAWSS3ServerDriver(c *C) {
 	dir, err := ioutil.TempDir("", "up_awss3_server_sriver")
 	defer os.RemoveAll(dir)
 	c.Assert(err, IsNil)
+	// You need fill the parameters in the following line after switch on this test case.
 	aws, err := NewAWSS3FileUploaderDriver("", "", "", "", dir, "")
 	c.Assert(err, IsNil)
 

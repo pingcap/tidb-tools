@@ -18,8 +18,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/ngaut/log"
 	"github.com/pingcap/errors"
-	"github.com/prometheus/common/log"
 	"github.com/siddontang/go/sync2"
 )
 
@@ -134,11 +134,6 @@ func (fud *AWSS3FileUploaderDriver) Upload(sliceInfo *Slice) (string, error) {
 		if err != nil {
 			return "", errors.Trace(err)
 		}
-		err = fud.awsUploadIdSet.putUploadId(key, uploadId)
-		if err != nil {
-			return "", errors.Trace(err)
-		}
-
 	}
 	eTag, err := fud.uploadPart(uploadId, key, sliceInfo)
 	if err != nil {
@@ -151,7 +146,15 @@ func (fud *AWSS3FileUploaderDriver) Upload(sliceInfo *Slice) (string, error) {
 	return eTag, nil
 }
 
+var createUploadLock sync.Mutex
+
 func (fud *AWSS3FileUploaderDriver) createUpload(key string) (string, error) {
+	createUploadLock.Lock()
+	defer createUploadLock.Unlock()
+	uploadId, exist := fud.awsUploadIdSet.getUploadId(key)
+	if exist {
+		return uploadId, nil
+	}
 	resp, err := fud.s3.CreateMultipartUpload(&s3.CreateMultipartUploadInput{
 		Bucket:      aws.String(fud.bucketName),
 		Key:         aws.String(key),
@@ -160,11 +163,16 @@ func (fud *AWSS3FileUploaderDriver) createUpload(key string) (string, error) {
 	if err != nil {
 		return "", errors.Annotate(err, "AWS S3 create multipart upload failure")
 	}
-	return *resp.UploadId, nil
-
+	uploadId = *resp.UploadId
+	err = fud.awsUploadIdSet.putUploadId(key, uploadId)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	return uploadId, nil
 }
 
 func (fud *AWSS3FileUploaderDriver) uploadPart(uploadId, key string, slice *Slice) (string, error) {
+	log.Debugf("uploadPart upId:%s key:%s slice:%#v", uploadId, key, slice)
 	file, err := os.OpenFile(slice.FilePath, os.O_RDONLY, 0444)
 	if err != nil {
 		return "", errors.Trace(err)
@@ -194,6 +202,7 @@ func (fud *AWSS3FileUploaderDriver) uploadPart(uploadId, key string, slice *Slic
 }
 
 func (fud *AWSS3FileUploaderDriver) completeUpload(uploadId, key string, parts []*s3.CompletedPart) (string, error) {
+	log.Debugf("completeUpload upId:%s key:%s parts:%#v", uploadId, key, parts)
 	_, err := fud.s3.CompleteMultipartUpload(&s3.CompleteMultipartUploadInput{
 		Bucket:   aws.String(fud.bucketName),
 		Key:      aws.String(key),
@@ -248,6 +257,7 @@ func (fud *AWSS3FileUploaderDriver) Close() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+	log.Infof("abort %#v", output.Uploads)
 	for _, multipartUpload := range output.Uploads {
 		_, err = fud.s3.AbortMultipartUpload(&s3.AbortMultipartUploadInput{
 			Bucket:   aws.String(fud.bucketName),

@@ -2,9 +2,10 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"os/exec"
+	"strings"
+	"time"
 
 	"github.com/ngaut/log"
 	"github.com/pingcap/tidb-tools/pkg/file_uploader"
@@ -19,32 +20,39 @@ var (
 	awsBucketName      = flag.String("awsbucketname", "", "AWS S3 Bucket Name")
 	workDir            = flag.String("workdir", "", "Work Dir")
 	remoteDir          = flag.String("remotedir", "", "Remote Dir")
-	workerNum          = flag.Int("worker", 8, "Worker Thread Number")
-	sliceSize          = flag.Int64("slice", 100*1024*1024, "Upload File Slice Size(byte)")
+	workerNum          = flag.Int("worker", 1, "Worker Thread Number")
+	sliceSize          = flag.Int64("slice", 16*1024*1024, "Upload File Slice Size(byte)")
 	uploaderArgs       []string
 )
 
 func main() {
-	defaultUsage := flag.Usage
-	flag.Usage = func() {
-		defaultUsage()
-		fmt.Fprint(flag.CommandLine.Output(), "Usage of Mydumper:\n")
-		execMydumper("--help")
-	}
 	flag.Parse()
-	driver, err := file_uploader.NewAWSS3FileUploaderDriver(*awsAccessKeyId, *awsSecretAccessKey, *awsBucketRegion,
-		*awsBucketName, *workDir, *remoteDir)
+	cmd := execMydumper(strings.TrimSpace(*mydumperArgs))
+	time.Sleep(1 * time.Second)
+	driver, err := file_uploader.NewAWSS3FileUploaderDriver(
+		strings.TrimSpace(*awsAccessKeyId),
+		strings.TrimSpace(*awsSecretAccessKey),
+		strings.TrimSpace(*awsBucketRegion),
+		strings.TrimSpace(*awsBucketName),
+		strings.TrimSpace(*workDir),
+		strings.TrimSpace(*remoteDir))
+
 	if err != nil {
 		log.Fatalf("AWS S3 Driver create failure, err: %#v", err)
 		os.Exit(-1)
 	}
-	uploader := file_uploader.NewFileUploader("", *workerNum, *sliceSize, driver)
-	execMydumper(*mydumperArgs)
+	uploader := file_uploader.NewFileUploader(*workDir, *workerNum, *sliceSize, driver)
+	err = cmd.Wait()
+	if err != nil {
+		log.Errorf("Exec Mydumper failure %s", err.Error())
+		os.Exit(-1)
+	}
+	log.Info("mydumper exited.")
 	uploader.WaitAndClose()
 }
 
-func execMydumper(args string) {
-	cmd := exec.Command(*mydumper, args)
+func execMydumper(args string) *exec.Cmd {
+	cmd := exec.Command(*mydumper, strings.Split(args, " ")...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	err := cmd.Start()
@@ -52,9 +60,5 @@ func execMydumper(args string) {
 		log.Errorf("Exec Mydumper failure %s", err.Error())
 		os.Exit(-1)
 	}
-	err = cmd.Wait()
-	if err != nil {
-		log.Errorf("Exec Mydumper failure %s", err.Error())
-		os.Exit(-1)
-	}
+	return cmd
 }
