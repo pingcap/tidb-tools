@@ -199,7 +199,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 			}
 
 			if _, ok := df.tables[schemaTables.Schema][tableName]; ok {
-				log.Error("duplicate config for one table", zap.String("schema", schemaTables.Schema), zap.String("table", tableName))
+				log.Error("duplicate config for one table", zap.String("table", dbutil.TableName(schemaTables.Schema, tableName)))
 				continue
 			}
 
@@ -415,7 +415,7 @@ func (df *Diff) Equal() (err error) {
 				return err
 			})
 			if err != nil {
-				log.Error("check failed", zap.String("schema", table.Schema), zap.String("table", table.Table), zap.String("error", errors.ErrorStack(err)))
+				log.Error("check failed", zap.String("table", dbutil.TableName(table.Schema, table.Table)), zap.String("error", errors.ErrorStack(err)))
 				return err
 			}
 

@@ -18,6 +18,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	pb "github.com/pingcap/tidb-tools/tidb-binlog/slave_binlog_proto/go-binlog"
+	"go.uber.org/zap"
 )
 
 // KafkaSeeker seeks offset in kafka topics by given condition

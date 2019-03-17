@@ -18,6 +18,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	pb "github.com/pingcap/tidb-tools/tidb-binlog/slave_binlog_proto/go-binlog"
+	"go.uber.org/zap"
 )
 
 func init() {
@@ -96,7 +97,7 @@ func NewReader(cfg *Config) (r *Reader, err error) {
 			r = nil
 			return
 		}
-		log.Debug("set offset to: ", r.cfg.Offset)
+		log.Debug("set offset to", zap.Int64("offset", r.cfg.Offset))
 	}
 
 	go r.run()
@@ -137,17 +138,17 @@ func (r *Reader) getOffsetByTS(ts int64) (offset int64, err error) {
 
 func (r *Reader) run() {
 	offset := r.cfg.Offset
-	log.Debug("start at offset: ", offset)
+	log.Debug("start at", zap.Int64("offset", offset))
 
 	consumer, err := sarama.NewConsumerFromClient(r.client)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("create kafka consumer failed", zap.Error(err))
 	}
 	defer consumer.Close()
 	topic, partition := r.getTopic()
 	partitionConsumer, err := consumer.ConsumePartition(topic, partition, offset)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("create kafka partition consumer failed", zap.Error(err))
 	}
 	defer partitionConsumer.Close()
 
@@ -159,15 +160,15 @@ func (r *Reader) run() {
 			log.Info("reader stop to run")
 			return
 		case kmsg := <-partitionConsumer.Messages():
-			log.Debug("get kmsg offset: ", kmsg.Offset)
+			log.Debug("get kafka message", zap.Int64("offset", kmsg.Offset))
 			binlog := new(pb.Binlog)
 			err := binlog.Unmarshal(kmsg.Value)
 			if err != nil {
-				log.Warn(err)
+				log.Warn("unmarshal binlog failed", zap.Error(err))
 				continue
 			}
 			if r.cfg.CommitTS > 0 && binlog.CommitTs <= r.cfg.CommitTS {
-				log.Warn("skip binlog CommitTs: ", binlog.CommitTs)
+				log.Warn("skip binlog CommitTs", zap.Int64("commitTS", binlog.CommitTs))
 				continue
 			}
 

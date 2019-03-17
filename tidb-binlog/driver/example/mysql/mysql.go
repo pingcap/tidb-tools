@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/tidb-tools/tidb-binlog/driver/reader"
 	pb "github.com/pingcap/tidb-tools/tidb-binlog/slave_binlog_proto/go-binlog"
 	_ "github.com/pingcap/tidb/types/parser_driver" // for parser driver
+	"go.uber.org/zap"
 )
 
 // a simple example to sync data to mysql
@@ -77,26 +78,26 @@ func main() {
 	for {
 		select {
 		case msg := <-breader.Messages():
-			log.Debug("recv: ", msg.Binlog.String())
+			log.Debug("recv", zap.String("message", msg.Binlog.String()))
 			binlog := msg.Binlog
 			sqls, args := toSQL(binlog)
 
 			tx, err := db.Begin()
 			if err != nil {
-				log.Fatal(err)
+				log.Fatal("begin transcation failed", zap.Error(err))
 			}
 
 			for i := 0; i < len(sqls); i++ {
-				log.Debug("exec: args: ", sqls[i], args[i])
+				log.Debug("exec sql", zap.String("sql", sqls[i]), zap.Any("args", args[i]))
 				_, err = tx.Exec(sqls[i], args[i]...)
 				if err != nil {
 					tx.Rollback()
-					log.Fatal(err)
+					log.Fatal("exec sql failed", zap.Error(err))
 				}
 			}
 			err = tx.Commit()
 			if err != nil {
-				log.Fatal(err)
+				log.Fatal("commit transcation failed", zap.Error(err))
 			}
 		}
 	}
@@ -257,7 +258,7 @@ func toSQL(binlog *pb.Binlog) ([]string, [][]interface{}) {
 		ddl := binlog.DdlData
 		isCreateDatabase, err := isCreateDatabase(string(ddl.DdlQuery))
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal("parse ddl failed", zap.Error(err))
 		}
 		if !isCreateDatabase {
 			sql := fmt.Sprintf("use %s", ddl.GetSchemaName())
@@ -276,7 +277,7 @@ func toSQL(binlog *pb.Binlog) ([]string, [][]interface{}) {
 		}
 
 	default:
-		log.Fatal("unknown type: ", binlog.GetType())
+		log.Fatal("unknown type", zap.String("type", binlog.GetType().String()))
 	}
 
 	return allSQL, allArgs

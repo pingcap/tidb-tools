@@ -251,7 +251,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 		min, max, err = dbutil.GetMinMaxValue(context.Background(), db, schema, table, splitCol, limitRange, utils.StringsToInterfaces(args), s.collation)
 		if err != nil {
 			if errors.Cause(err) == dbutil.ErrNoData {
-				log.Info("no data found", zap.String("schema", schema), zap.String("table", table), zap.String("range", limitRange), zap.Any("args", args))
+				log.Info("no data found", zap.String("table", dbutil.TableName(schema, table)), zap.String("range", limitRange), zap.Any("args", args))
 				return append(chunks, chunk), nil
 			}
 			return nil, errors.Trace(err)
@@ -259,7 +259,6 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 
 		symbolMin = gte
 		symbolMax = lte
-
 	}
 
 	splitValues := make([]string, 0, count)
@@ -270,7 +269,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	log.Info("get split values by random values", zap.Any("chunk", chunk), zap.Any("random values", randomValues))
+	log.Debug("get split values by random values", zap.Any("chunk", chunk), zap.Any("random values", randomValues))
 
 	/*
 		for examples:
@@ -320,8 +319,17 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 		the splitValues is [1, 1, 1, 1];
 		the chunk [`a` = 2] will split to [`a` = 2 AND `b` < 'x'], [`a` = 2 AND `b` >= 'x' AND `b` < 'y'] and [`a` = 2 AND `b` >= 'y']
 	*/
-	var lower, upper, lowerSymbol, upperSymbol string
+
+	lowerSymbol := symbolMin
+	upperSymbol := lt
+
 	for i := 0; i < len(splitValues); i++ {
+		if i == 0 && useNewColumn {
+			// create chunk less than min
+			newChunk := chunk.copyAndUpdate(splitCol, "", "", splitValues[i], lt)
+			chunks = append(chunks, newChunk)
+		}
+
 		if valueCounts[i] > 1 {
 			// means should split it
 			newChunk := chunk.copyAndUpdate(splitCol, splitValues[i], equal, "", "")
@@ -333,40 +341,22 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 
 			// already have the chunk [column = value], so next chunk should start with column > value
 			lowerSymbol = gt
-		} else {
-			if i == 0 {
-				if useNewColumn {
-					lower = ""
-					lowerSymbol = ""
-				} else {
-					lower = splitValues[i]
-					lowerSymbol = symbolMin
-				}
-			} else {
-				lower = splitValues[i]
-			}
-
-			if i == len(splitValues)-2 {
-				if useNewColumn && valueCounts[len(valueCounts)-1] == 1 {
-					upper = ""
-					upperSymbol = ""
-				} else {
-					upper = splitValues[i+1]
-					upperSymbol = symbolMax
-				}
-			} else {
-				if i == len(splitValues)-1 {
-					continue
-				}
-
-				upper = splitValues[i+1]
-				upperSymbol = lt
-
-			}
 		}
 
-		newChunk := chunk.copyAndUpdate(splitCol, lower, lowerSymbol, upper, upperSymbol)
-		chunks = append(chunks, newChunk)
+		if i == len(splitValues)-2 && valueCounts[i+1] == 1 {
+			upperSymbol = symbolMax
+		}
+
+		if i < len(splitValues)-1 {
+			newChunk := chunk.copyAndUpdate(splitCol, splitValues[i], lowerSymbol, splitValues[i+1], upperSymbol)
+			chunks = append(chunks, newChunk)
+		}
+
+		if i == len(splitValues)-1 && useNewColumn {
+			// create chunk greater than max
+			newChunk := chunk.copyAndUpdate(splitCol, splitValues[i], gt, "", "")
+			chunks = append(chunks, newChunk)
+		}
 
 		lowerSymbol = gte
 	}
@@ -546,7 +536,7 @@ func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSiz
 		conditions, args := chunk.toString(mode, collation)
 		where := fmt.Sprintf("(%s AND %s)", conditions, limits)
 
-		log.Debug("create check job", zap.String("schema", table.Schema), zap.String("table", table.Table), zap.String("where", where), zap.Any("args", args))
+		log.Debug("create check job", zap.String("table", dbutil.TableName(table.Schema, table.Table)), zap.String("where", where), zap.Any("args", args))
 		jobBucket = append(jobBucket, &CheckJob{
 			Schema: table.Schema,
 			Table:  table.Table,
