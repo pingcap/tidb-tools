@@ -31,7 +31,6 @@ ignore-data-check = false
 ignore-struct-check = false
 
 # the name of the file which saves sqls used to fix different data.
-# if fix-sql-file is "", will only check data by checksum.
 fix-sql-file = "fix.sql"
 
 # use this tidb's statistics information to split chunk

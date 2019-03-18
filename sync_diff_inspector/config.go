@@ -318,6 +318,7 @@ func (c *Config) checkConfig() bool {
 	if c.OnlyUseChecksum {
 		if !c.UseChecksum {
 			log.Error("need set use-checksum = true")
+			return false
 		}
 	} else {
 		if len(c.FixSQLFile) == 0 {
