@@ -373,7 +373,7 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName str
 	}
 	if !checksum.Valid {
 		// if don't have any data, the checksum will be `NULL`
-		log.Warn("get empty checksum", zap.String("sql", query), zap.String("args", fmt.Sprintf("%v", args)))
+		log.Warn("get empty checksum", zap.String("sql", query), zap.Reflect("args", args))
 		return 0, nil
 	}
 
