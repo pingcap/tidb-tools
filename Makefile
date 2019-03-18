@@ -62,7 +62,6 @@ check:
 	@echo "vet"
 	@$(GO) vet -composites=false $(PACKAGES)
 	@$(GO) vet -vettool=$(CURDIR)/bin/shadow $(PACKAGES) || true
-	#$(GO) vet -all $(PACKAGES) 2>&1 | tee /dev/stderr | $(FAIL_ON_STDOUT)
 	#@echo "golint"
 	#@ golint ./... 2>&1 | grep -vE '\.pb\.go' | grep -vE 'vendor' | awk '{print} END{if(NR>0) {exit 1}}'
 	@echo "gofmt (simplify)"
