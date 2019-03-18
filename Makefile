@@ -1,4 +1,4 @@
-.PHONY: build importer checker dump_region binlogctl sync_diff_inspector ddl_checker test check deps
+.PHONY: build importer checker dump_region binlogctl sync_diff_inspector ddl_checker mydumper_uploader test check deps
 
 # Ensure GOPATH is set before running build process.
 ifeq "$(GOPATH)" ""
@@ -61,13 +61,13 @@ fmt:
 check:
 	#go get github.com/golang/lint/golint
 	@echo "vet"
-	#@ go tool vet $(FILES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
+	@ go tool vet $(FILES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
 	@echo "vet --shadow"
-	#@ go vet --shadow $(FILES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
-	@echo "golint"
+	@ go tool vet --shadow $(FILES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
+	#@echo "golint"
 	#@ golint ./... 2>&1 | grep -vE '\.pb\.go' | grep -vE 'vendor' | awk '{print} END{if(NR>0) {exit 1}}'
 	@echo "gofmt (simplify)"
-	#@ gofmt -s -l -w $(FILES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
+	@ gofmt -s -l -w $(FILES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
 
 finish:
 	cp go.mod go.mod1

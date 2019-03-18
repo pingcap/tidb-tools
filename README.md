@@ -41,6 +41,10 @@ When tidb-tools are built successfully, you can find the binary in the `bin` dir
 - [ddl_checker](./ddl_checker)
 
     A tool for checking if DDL SQL can be successfully executed by TiDB.
+    
+- [mydumper_uploader](./mydumper_uploader)
+
+    A tool for uploading the data exported by `mydumper` to AWS S3.
 
 ## License
 
