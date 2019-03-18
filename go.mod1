@@ -25,7 +25,6 @@ require (
 	github.com/pingcap/tipb v0.0.0-20190107072121-abbec73437b7
 	github.com/rcrowley/go-metrics v0.0.0-20181016184325-3113b8401b8a // indirect
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
-	github.com/sirupsen/logrus v1.2.0
 	go.uber.org/atomic v1.3.2
 	go.uber.org/zap v1.9.1
 	golang.org/x/crypto v0.0.0-20181030102418-4d3f4d9ffa16 // indirect
