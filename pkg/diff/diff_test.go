@@ -17,7 +17,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"math"
 	"testing"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -39,23 +38,17 @@ func (*testDiffSuite) TestGenerateSQLs(c *C) {
 	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL)
 	c.Assert(err, IsNil)
 
-	rowsData := map[string][]byte{
-		"id":          []byte("1"),
-		"name":        []byte("xxx"),
-		"birthday":    []byte("2018-01-01 00:00:00"),
-		"update_time": []byte("10:10:10"),
-		"money":       []byte("11.1111"),
+	rowsData := map[string]*dbutil.ColumnData{
+		"id":          {Data: []byte("1"), IsNull: false},
+		"name":        {Data: []byte("xxx"), IsNull: false},
+		"birthday":    {Data: []byte("2018-01-01 00:00:00"), IsNull: false},
+		"update_time": {Data: []byte("10:10:10"), IsNull: false},
+		"money":       {Data: []byte("11.1111"), IsNull: false},
 	}
-	null := map[string]bool{
-		"id":          false,
-		"name":        false,
-		"birthday":    false,
-		"update_time": false,
-		"money":       false,
-	}
+
 	_, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
-	replaceSQL := generateDML("replace", rowsData, null, orderKeyCols, tableInfo, "test")
-	deleteSQL := generateDML("delete", rowsData, null, orderKeyCols, tableInfo, "test")
+	replaceSQL := generateDML("replace", rowsData, orderKeyCols, tableInfo, "test")
+	deleteSQL := generateDML("delete", rowsData, orderKeyCols, tableInfo, "test")
 	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (1,'xxx','2018-01-01 00:00:00','10:10:10',11.1111);")
 	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` WHERE `id` = 1;")
 
@@ -64,23 +57,21 @@ func (*testDiffSuite) TestGenerateSQLs(c *C) {
 	tableInfo2, err := dbutil.GetTableInfoBySQL(createTableSQL2)
 	c.Assert(err, IsNil)
 	_, orderKeyCols2 := dbutil.SelectUniqueOrderKey(tableInfo2)
-	replaceSQL = generateDML("replace", rowsData, null, orderKeyCols2, tableInfo2, "test")
-	deleteSQL = generateDML("delete", rowsData, null, orderKeyCols2, tableInfo2, "test")
+	replaceSQL = generateDML("replace", rowsData, orderKeyCols2, tableInfo2, "test")
+	deleteSQL = generateDML("delete", rowsData, orderKeyCols2, tableInfo2, "test")
 	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (1,'xxx','2018-01-01 00:00:00','10:10:10',11.1111);")
 	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` WHERE `id` = 1 AND `name` = 'xxx';")
 
 	// test value is nil
-	rowsData["name"] = []byte("")
-	null["name"] = true
-	replaceSQL = generateDML("replace", rowsData, null, orderKeyCols, tableInfo, "test")
-	deleteSQL = generateDML("delete", rowsData, null, orderKeyCols, tableInfo, "test")
+	rowsData["name"] = &dbutil.ColumnData{Data: []byte(""), IsNull: true}
+	replaceSQL = generateDML("replace", rowsData, orderKeyCols, tableInfo, "test")
+	deleteSQL = generateDML("delete", rowsData, orderKeyCols, tableInfo, "test")
 	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (1,NULL,'2018-01-01 00:00:00','10:10:10',11.1111);")
 	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` WHERE `id` = 1;")
 
-	rowsData["id"] = []byte("")
-	null["id"] = true
-	replaceSQL = generateDML("replace", rowsData, null, orderKeyCols, tableInfo, "test")
-	deleteSQL = generateDML("delete", rowsData, null, orderKeyCols, tableInfo, "test")
+	rowsData["id"] = &dbutil.ColumnData{Data: []byte(""), IsNull: true}
+	replaceSQL = generateDML("replace", rowsData, orderKeyCols, tableInfo, "test")
+	deleteSQL = generateDML("delete", rowsData, orderKeyCols, tableInfo, "test")
 	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (NULL,NULL,'2018-01-01 00:00:00','10:10:10',11.1111);")
 	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` WHERE `id` is NULL;")
 }
@@ -89,11 +80,39 @@ func (t *testDiffSuite) TestDiff(c *C) {
 	dbConn, err := createConn()
 	c.Assert(err, IsNil)
 
-	_, err = dbConn.Query("create database if not exists test")
+	_, err = dbConn.Query("CREATE DATABASE IF NOT EXISTS `test`")
 	c.Assert(err, IsNil)
 
 	testStructEqual(dbConn, c)
-	testDataEqual(dbConn, c)
+	testCases := []struct {
+		sourceTables  []string
+		targetTable   string
+		hasEmptyTable bool
+	}{
+		{
+			[]string{"testa"},
+			"testb",
+			false,
+		},
+		{
+			[]string{"testc", "testd"},
+			"teste",
+			false,
+		},
+		{
+			[]string{"testf", "testg", "testh"},
+			"testi",
+			false,
+		},
+		{
+			[]string{"testj", "testk"},
+			"testl",
+			true,
+		},
+	}
+	for _, testCase := range testCases {
+		testDataEqual(dbConn, testCase.sourceTables, testCase.targetTable, testCase.hasEmptyTable, c)
+	}
 }
 
 func testStructEqual(conn *sql.DB, c *C) {
@@ -143,7 +162,7 @@ func testStructEqual(conn *sql.DB, c *C) {
 		_, err = conn.Query(testCase.createTargetTable)
 		c.Assert(err, IsNil)
 
-		tableDiff := createTableDiff(conn)
+		tableDiff := createTableDiff(conn, []string{"testa"}, "testb")
 		structEqual, _, err := tableDiff.Equal(context.Background(), func(sql string) error {
 			fmt.Println(sql)
 			return nil
@@ -157,16 +176,15 @@ func testStructEqual(conn *sql.DB, c *C) {
 	}
 }
 
-func testDataEqual(dbConn *sql.DB, c *C) {
-	sourceTable := "testa"
-	targetTable := "testb"
-
+func testDataEqual(dbConn *sql.DB, sourceTables []string, targetTable string, hasEmptyTable bool, c *C) {
 	defer func() {
-		_, _ = dbConn.Query(fmt.Sprintf("drop table test.%s", sourceTable))
-		_, _ = dbConn.Query(fmt.Sprintf("drop table test.%s", targetTable))
+		for _, sourceTable := range sourceTables {
+			_, _ = dbConn.Query(fmt.Sprintf("DROP TABLE `test`.`%s`", sourceTable))
+		}
+		_, _ = dbConn.Query(fmt.Sprintf("DROP TABLE `test`.`%s`", targetTable))
 	}()
 
-	err := generateData(dbConn, dbutil.GetDBConfigFromEnv("test"), sourceTable, targetTable)
+	err := generateData(dbConn, dbutil.GetDBConfigFromEnv("test"), sourceTables, targetTable, hasEmptyTable)
 	c.Assert(err, IsNil)
 
 	// compare data, should be equal
@@ -176,7 +194,7 @@ func testDataEqual(dbConn *sql.DB, c *C) {
 		return nil
 	}
 
-	tableDiff := createTableDiff(dbConn)
+	tableDiff := createTableDiff(dbConn, sourceTables, targetTable)
 	structEqual, dataEqual, err := tableDiff.Equal(context.Background(), writeSqls)
 	c.Assert(err, IsNil)
 	c.Assert(structEqual, Equals, true)
@@ -202,30 +220,35 @@ func testDataEqual(dbConn *sql.DB, c *C) {
 	c.Assert(dataEqual, Equals, true)
 }
 
-func createTableDiff(db *sql.DB) *TableDiff {
-	sourceTableInstance := &TableInstance{
-		Conn:   db,
-		Schema: "test",
-		Table:  "testa",
+func createTableDiff(db *sql.DB, sourceTableNames []string, targetTableName string) *TableDiff {
+	sourceTables := []*TableInstance{}
+	for _, table := range sourceTableNames {
+		sourceTableInstance := &TableInstance{
+			Conn:   db,
+			Schema: "test",
+			Table:  table,
+		}
+
+		sourceTables = append(sourceTables, sourceTableInstance)
 	}
 
 	targetTableInstance := &TableInstance{
 		Conn:   db,
 		Schema: "test",
-		Table:  "testb",
+		Table:  targetTableName,
 	}
 
 	return &TableDiff{
-		SourceTables: []*TableInstance{sourceTableInstance},
+		SourceTables: sourceTables,
 		TargetTable:  targetTableInstance,
 	}
 }
 
 func createConn() (*sql.DB, error) {
-	return dbutil.OpenDB(dbutil.GetDBConfigFromEnv("test"))
+	return dbutil.OpenDB(dbutil.GetDBConfigFromEnv(""))
 }
 
-func generateData(dbConn *sql.DB, dbCfg dbutil.DBConfig, sourceTable, targetTable string) error {
+func generateData(dbConn *sql.DB, dbCfg dbutil.DBConfig, sourceTables []string, targetTable string, hasEmptyTable bool) error {
 	createTableSQL := fmt.Sprintf(`CREATE TABLE test.%s (
 		a date NOT NULL,
 		b datetime DEFAULT NULL,
@@ -233,50 +256,76 @@ func generateData(dbConn *sql.DB, dbCfg dbutil.DBConfig, sourceTable, targetTabl
 		d varchar(10) COLLATE latin1_bin DEFAULT NULL,
 		e int(10) DEFAULT NULL,
 		h year(4) DEFAULT NULL,
-		PRIMARY KEY (a))`, sourceTable)
+		PRIMARY KEY (a))`, targetTable)
 
 	cfg := &importer.Config{
 		TableSQL:    createTableSQL,
-		WorkerCount: 1,
+		WorkerCount: 5,
 		JobCount:    10000,
 		Batch:       100,
 		DBCfg:       dbCfg,
 	}
 
-	// generate data for source table
+	// generate data for target table
 	importer.DoProcess(cfg)
 
-	// generate data for target table
-	_, err := dbConn.Query(fmt.Sprintf("create table test.%s like test.%s", targetTable, sourceTable))
+	// generate data for source tables
+	for _, sourceTable := range sourceTables {
+		_, err := dbConn.Query(fmt.Sprintf("CREATE TABLE `test`.`%s` LIKE `test`.`%s`", sourceTable, targetTable))
+		if err != nil {
+			return err
+		}
+	}
+
+	randomValueNum := int64(len(sourceTables) - 1)
+	if hasEmptyTable {
+		randomValueNum--
+	}
+
+	values, _, err := dbutil.GetRandomValues(context.Background(), dbConn, "test", targetTable, "e", int(randomValueNum), "TRUE", nil, "")
 	if err != nil {
 		return err
 	}
 
-	_, err = dbConn.Query(fmt.Sprintf("insert into test.%s (a, b, c, d, e, h) select a, b, c, d, e, h from test.%s", targetTable, sourceTable))
-	if err != nil {
-		return err
+	conditions := make([]string, 0, 3)
+	if randomValueNum == 0 {
+		conditions = append(conditions, "true")
+	} else {
+		conditions = append(conditions, fmt.Sprintf("e < %s", values[0]))
+		for i := 0; i < len(values)-1; i++ {
+			conditions = append(conditions, fmt.Sprintf("e >= %s AND e < %s", values[i], values[i+1]))
+		}
+		conditions = append(conditions, fmt.Sprintf("e >= %s", values[len(values)-1]))
+	}
+
+	// if hasEmptyTable is true, the last source table will be empty.
+	for j, condition := range conditions {
+		_, err = dbConn.Query(fmt.Sprintf("INSERT INTO `test`.`%s` (`a`, `b`, `c`, `d`, `e`, `h`) SELECT `a`, `b`, `c`, `d`, `e`, `h` FROM `test`.`%s` WHERE %s", sourceTables[j], targetTable, condition))
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
 func updateData(dbConn *sql.DB, table string) error {
-	values, err := dbutil.GetRandomValues(context.Background(), dbConn, "test", table, "e", 3, math.MinInt64, math.MaxInt64, "true", "")
+	values, _, err := dbutil.GetRandomValues(context.Background(), dbConn, "test", table, "e", 3, "TRUE", nil, "")
 	if err != nil {
 		return err
 	}
 
-	_, err = dbConn.Exec(fmt.Sprintf("update test.%s set e = e+1 where e = %v", table, values[0]))
+	_, err = dbConn.Exec(fmt.Sprintf("UPDATE `test`.`%s` SET `e` = `e`+1 WHERE `e` = %v", table, values[0]))
 	if err != nil {
 		return err
 	}
 
-	_, err = dbConn.Exec(fmt.Sprintf("delete from test.%s where e = %v", table, values[1]))
+	_, err = dbConn.Exec(fmt.Sprintf("DELETE FROM `test`.`%s` where `e` = %v", table, values[1]))
 	if err != nil {
 		return err
 	}
 
-	_, err = dbConn.Exec(fmt.Sprintf("replace into test.%s values('1992-09-27','2018-09-03 16:26:27','14:45:33','i',2048790075,2008)", table))
+	_, err = dbConn.Exec(fmt.Sprintf("REPLACE INTO `test`.`%s` VALUES('1992-09-27','2018-09-03 16:26:27','14:45:33','i',2048790075,2008)", table))
 	if err != nil {
 		return err
 	}

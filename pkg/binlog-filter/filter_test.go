@@ -166,3 +166,73 @@ func (t *testFilterSuite) TestCaseSensitive(c *C) {
 		c.Assert(action, Equals, cs.action)
 	}
 }
+
+func (t *testFilterSuite) TestGlobalFilter(c *C) {
+	schemaRule := &BinlogEventRule{
+		SchemaPattern: "*",
+		SQLPattern:    []string{"^FLUSH"},
+		Action:        Ignore,
+	}
+	tableRule := &BinlogEventRule{
+		SchemaPattern: "*",
+		TablePattern:  "*",
+		SQLPattern:    []string{"^FLUSH"},
+		Action:        Ignore,
+	}
+
+	cases := []struct {
+		schema string
+		table  string
+		sql    string
+		action ActionType
+	}{
+		{
+			schema: "db",
+			table:  "tbl",
+			sql:    "FLUSH ENGINE LOGS",
+			action: Ignore,
+		},
+		{
+			schema: "db",
+			table:  "",
+			sql:    "FLUSH ENGINE LOGS",
+			action: Ignore,
+		},
+		{
+			schema: "",
+			table:  "tbl",
+			sql:    "FLUSH ENGINE LOGS",
+			action: Ignore,
+		},
+		{
+			schema: "",
+			table:  "",
+			sql:    "FLUSH ENGINE LOGS",
+			action: Ignore,
+		},
+	}
+
+	// initial binlog event filter with schema rule
+	filter, err := NewBinlogEvent(false, []*BinlogEventRule{schemaRule})
+	c.Assert(err, IsNil)
+
+	for _, cs := range cases {
+		action, err := filter.Filter(cs.schema, cs.table, NullEvent, cs.sql)
+		c.Assert(err, IsNil)
+		c.Assert(action, Equals, cs.action)
+	}
+
+	// remove schema rule
+	err = filter.RemoveRule(schemaRule)
+	c.Assert(err, IsNil)
+
+	// add table rule
+	err = filter.AddRule(tableRule)
+	c.Assert(err, IsNil)
+
+	for _, cs := range cases {
+		action, err := filter.Filter(cs.schema, cs.table, NullEvent, cs.sql)
+		c.Assert(err, IsNil)
+		c.Assert(action, Equals, cs.action)
+	}
+}

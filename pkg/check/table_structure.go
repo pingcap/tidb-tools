@@ -56,7 +56,7 @@ func (o *incompatibilityOption) String() string {
 	return text.String()
 }
 
-// TablesChecker checks compatibility of table structures, there are differents between MySQL and TiDB.
+// TablesChecker checks compatibility of table structures, there are differences between MySQL and TiDB.
 // In generally we need to check definitions of columns, constraints and table options.
 // Because of the early TiDB engineering design, we did not have a complete list of check items, which are all based on experience now.
 type TablesChecker struct {
@@ -250,18 +250,20 @@ func (c *TablesChecker) checkTableOption(opt *ast.TableOption) *incompatibilityO
 type ShardingTablesCheck struct {
 	name string
 
-	dbs     map[string]*sql.DB
-	tables  map[string]map[string][]string // instance => {schema: [table1, table2, ...]}
-	mapping map[string]*column.Mapping
+	dbs                          map[string]*sql.DB
+	tables                       map[string]map[string][]string // instance => {schema: [table1, table2, ...]}
+	mapping                      map[string]*column.Mapping
+	checkAutoIncrementPrimaryKey bool
 }
 
 // NewShardingTablesCheck returns a Checker
-func NewShardingTablesCheck(name string, dbs map[string]*sql.DB, tables map[string]map[string][]string, mapping map[string]*column.Mapping) Checker {
+func NewShardingTablesCheck(name string, dbs map[string]*sql.DB, tables map[string]map[string][]string, mapping map[string]*column.Mapping, checkAutoIncrementPrimaryKey bool) Checker {
 	return &ShardingTablesCheck{
-		name:    name,
-		dbs:     dbs,
-		tables:  tables,
-		mapping: mapping,
+		name:                         name,
+		dbs:                          dbs,
+		tables:                       tables,
+		mapping:                      mapping,
+		checkAutoIncrementPrimaryKey: checkAutoIncrementPrimaryKey,
 	}
 }
 
@@ -315,9 +317,11 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 					return r
 				}
 
-				passed := c.checkAutoIncrementKey(instance, schema, table, ctStmt, info, r)
-				if !passed {
-					return r
+				if c.checkAutoIncrementPrimaryKey {
+					passed := c.checkAutoIncrementKey(instance, schema, table, ctStmt, info, r)
+					if !passed {
+						return r
+					}
 				}
 
 				if stmtNode == nil {
@@ -492,5 +496,5 @@ func getBriefColumnList(stmt *ast.CreateTableStmt) briefColumnInfos {
 
 // Name implements Checker interface
 func (c *ShardingTablesCheck) Name() string {
-	return "sharding table consistency check"
+	return fmt.Sprintf("sharding table %s consistency checking", c.name)
 }

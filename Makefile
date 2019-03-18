@@ -1,4 +1,4 @@
-.PHONY: build importer checker dump_region binlogctl sync_diff_inspector ddl_checker mydumper_uploader test check deps
+.PHONY: build importer dump_region binlogctl sync_diff_inspector ddl_checker mydumper_uploader test check deps
 
 # Ensure GOPATH is set before running build process.
 ifeq "$(GOPATH)" ""
@@ -21,9 +21,11 @@ GOTEST   := CGO_ENABLED=1 $(GO) test -p 3
 PACKAGES := $$(go list ./... | grep -vE 'vendor')
 FILES     := $$(find . -name '*.go' -type f | grep -vE 'vendor')
 VENDOR_TIDB := vendor/github.com/pingcap/tidb
+PACKAGE_LIST  := go list ./...
+PACKAGES  := $$($(PACKAGE_LIST))
+FAIL_ON_STDOUT := awk '{ print } END { if (NR > 0) { exit 1 } }'
 
-
-build: prepare check importer checker dump_region binlogctl sync_diff_inspector ddl_checker mydumper_uploader finish
+build: prepare check importer binlogctl sync_diff_inspector ddl_checker mydumper_uploader finish
 
 prepare:		
 	cp go.mod1 go.mod
@@ -31,9 +33,6 @@ prepare:
 
 importer:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/importer ./importer
-
-checker:
-	$(GO) build -ldflags '$(LDFLAGS)' -o bin/checker ./checker
 
 dump_region:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/dump_region ./dump_region
@@ -61,9 +60,7 @@ fmt:
 check:
 	#go get github.com/golang/lint/golint
 	@echo "vet"
-	@ go tool vet $(FILES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
-	@echo "vet --shadow"
-	@ go tool vet --shadow $(FILES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
+	$(GO) vet -all $(PACKAGES) 2>&1 | tee /dev/stderr | $(FAIL_ON_STDOUT)
 	#@echo "golint"
 	#@ golint ./... 2>&1 | grep -vE '\.pb\.go' | grep -vE 'vendor' | awk '{print} END{if(NR>0) {exit 1}}'
 	@echo "gofmt (simplify)"

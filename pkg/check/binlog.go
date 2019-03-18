@@ -37,7 +37,7 @@ func NewMySQLBinlogEnableChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker {
 func (pc *MySQLBinlogEnableChecker) Check(ctx context.Context) *Result {
 	result := &Result{
 		Name:  pc.Name(),
-		Desc:  "check whether mysql binlog is enable",
+		Desc:  "check whether mysql binlog is enabled",
 		State: StateFailure,
 		Extra: fmt.Sprintf("address of db instance - %s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
 	}
@@ -149,7 +149,7 @@ func (pc *MySQLBinlogRowImageChecker) Check(ctx context.Context) *Result {
 	}
 
 	// for mysql.version < 5.6.2 || mariadb.version < 10.1.6,  we don't need to check binlog_row_image.
-	if (!IsMariaDB(value) && !version.IsAtLeast(mysqlBinlogRowImageRequired)) || (IsMariaDB(value) && !version.IsAtLeast(mariadbBinlogRowImageRequired)) {
+	if (!IsMariaDB(value) && !version.Ge(mysqlBinlogRowImageRequired)) || (IsMariaDB(value) && !version.Ge(mariadbBinlogRowImageRequired)) {
 		result.State = StateSuccess
 		return result
 	}

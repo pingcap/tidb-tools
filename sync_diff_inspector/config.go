@@ -22,6 +22,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -72,7 +73,7 @@ type TableConfig struct {
 	// columns be removed, will remove these columns from table info, and will not check these columns' data.
 	RemoveColumns []string `toml:"remove-columns"`
 	// field should be the primary key, unique key or field with index
-	Field string `toml:"index-field"`
+	Fields string `toml:"index-fields"`
 	// select range, for example: "age > 10 AND age < 20"
 	Range string `toml:"range"`
 	// set true if comparing sharding tables with target table, should have more than one source tables.
@@ -185,6 +186,9 @@ type Config struct {
 	// the tables to be checked
 	Tables []*CheckTables `toml:"check-tables" json:"check-tables"`
 
+	// TableRules defines table name and database name's conversion relationship between source database and target database
+	TableRules []*router.TableRule `toml:"table-rules" json:"table-rules"`
+
 	// the config of table
 	TableCfgs []*TableConfig `toml:"table-config" json:"table-config"`
 
@@ -193,6 +197,9 @@ type Config struct {
 
 	// ignore check table's data
 	IgnoreDataCheck bool `toml:"ignore-data-check" json:"ignore-data-check"`
+
+	// use this tidb's statistics information to split chunk
+	TiDBInstanceID string `toml:"tidb-instance-id" json:"tidb-instance-id"`
 
 	// config file
 	ConfigFile string
@@ -275,10 +282,6 @@ func (c *Config) checkConfig() bool {
 		return false
 	}
 
-	if c.TargetDBCfg.InstanceID == "" {
-		c.TargetDBCfg.InstanceID = "target"
-	}
-
 	if len(c.SourceDBCfg) == 0 {
 		log.Error("must have at least one source database")
 		return false
@@ -288,6 +291,14 @@ func (c *Config) checkConfig() bool {
 		if !c.SourceDBCfg[i].Valid() {
 			return false
 		}
+	}
+
+	if c.TargetDBCfg.InstanceID == "" {
+		c.TargetDBCfg.InstanceID = "target"
+	}
+	if _, ok := sourceInstanceMap[c.TargetDBCfg.InstanceID]; ok {
+		log.Errorf("target has same instance id %s in source", c.TargetDBCfg.InstanceID)
+		return false
 	}
 
 	if len(c.Tables) == 0 {

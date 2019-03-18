@@ -33,8 +33,22 @@ func NewMySQLVersionChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker {
 	return &MySQLVersionChecker{db: db, dbinfo: dbinfo}
 }
 
-// MinVersion is mysql minimal version required
-var MinVersion = [3]uint{5, 5, 0}
+// SupportedVersion defines the MySQL/MariaDB version that DM/syncer supports
+// * 5.6.0 <= MySQL Version < 5.8.0
+// * 10.1.2 <= Mariadb Version
+var SupportedVersion = map[string]struct {
+	Min MySQLVersion
+	Max MySQLVersion
+}{
+	"mysql": {
+		MySQLVersion{5, 6, 0},
+		MySQLVersion{5, 8, 0},
+	},
+	"mariadb": {
+		MySQLVersion{10, 1, 2},
+		MaxVersion,
+	},
+}
 
 // Check implements the Checker interface.
 // we only support version >= 5.5
@@ -52,20 +66,34 @@ func (pc *MySQLVersionChecker) Check(ctx context.Context) *Result {
 		return result
 	}
 
+	pc.checkVersion(value, result)
+	return result
+}
+
+func (pc *MySQLVersionChecker) checkVersion(value string, result *Result) {
+	needVersion := SupportedVersion["mysql"]
+	if IsMariaDB(value) {
+		needVersion = SupportedVersion["mariadb"]
+	}
+
 	version, err := toMySQLVersion(value)
 	if err != nil {
 		markCheckError(result, err)
-		return result
+		return
 	}
 
-	if !version.IsAtLeast(MinVersion) {
-		result.ErrorMsg = fmt.Sprintf("version required at least %v but got %v", MinVersion, version)
+	if !version.Ge(needVersion.Min) {
+		result.ErrorMsg = fmt.Sprintf("version required at least %v but got %v", needVersion.Min, version)
 		result.Instruction = "Please upgrade your database system"
-		return result
+		return
+	}
+
+	if !version.Lt(needVersion.Max) {
+		result.ErrorMsg = fmt.Sprintf("version required less than %v but got %v", needVersion.Max, version)
+		return
 	}
 
 	result.State = StateSuccess
-	return result
 }
 
 // Name implements the Checker interface.

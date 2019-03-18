@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"strconv"
 
 	"github.com/pingcap/errors"
@@ -41,24 +42,24 @@ func ShowIndex(ctx context.Context, db *sql.DB, schemaName string, table string)
 	defer rows.Close()
 
 	for rows.Next() {
-		fields, _, err1 := ScanRow(rows)
+		fields, err1 := ScanRow(rows)
 		if err1 != nil {
 			return nil, errors.Trace(err1)
 		}
-		seqInINdex, err1 := strconv.Atoi(string(fields["Seq_in_index"]))
+		seqInIndex, err1 := strconv.Atoi(string(fields["Seq_in_index"].Data))
 		if err != nil {
 			return nil, errors.Trace(err1)
 		}
-		cardinality, err1 := strconv.Atoi(string(fields["Cardinality"]))
+		cardinality, err1 := strconv.Atoi(string(fields["Cardinality"].Data))
 		if err != nil {
 			return nil, errors.Trace(err1)
 		}
 		index := &IndexInfo{
-			Table:       string(fields["Table"]),
-			NoneUnique:  string(fields["Non_unique"]) == "1",
-			KeyName:     string(fields["Key_name"]),
-			ColumnName:  string(fields["Column_name"]),
-			SeqInIndex:  seqInINdex,
+			Table:       string(fields["Table"].Data),
+			NoneUnique:  string(fields["Non_unique"].Data) == "1",
+			KeyName:     string(fields["Key_name"].Data),
+			ColumnName:  string(fields["Column_name"].Data),
+			SeqInIndex:  seqInIndex,
 			Cardinality: cardinality,
 		}
 		indices = append(indices, index)
@@ -67,12 +68,12 @@ func ShowIndex(ctx context.Context, db *sql.DB, schemaName string, table string)
 	return indices, nil
 }
 
-// FindSuitableIndex returns first column of a suitable index.
+// FindSuitableColumnWithIndex returns first column of a suitable index.
 // The priority is
 // * primary key
 // * unique key
 // * normal index which has max cardinality
-func FindSuitableIndex(ctx context.Context, db *sql.DB, schemaName string, tableInfo *model.TableInfo) (*model.ColumnInfo, error) {
+func FindSuitableColumnWithIndex(ctx context.Context, db *sql.DB, schemaName string, tableInfo *model.TableInfo) (*model.ColumnInfo, error) {
 	// find primary key
 	for _, index := range tableInfo.Indices {
 		if index.Primary {
@@ -111,6 +112,49 @@ func FindSuitableIndex(ctx context.Context, db *sql.DB, schemaName string, table
 	}
 
 	return c, nil
+}
+
+// FindAllIndex returns all index, order is pk, uk, and normal index.
+func FindAllIndex(tableInfo *model.TableInfo) []*model.IndexInfo {
+	indices := make([]*model.IndexInfo, len(tableInfo.Indices))
+	copy(indices, tableInfo.Indices)
+	sort.SliceStable(indices, func(i, j int) bool {
+		a := indices[i]
+		b := indices[j]
+		switch {
+		case b.Primary:
+			return false
+		case a.Primary:
+			return true
+		case b.Unique:
+			return false
+		case a.Unique:
+			return true
+		default:
+			return false
+		}
+	})
+	return indices
+}
+
+// FindAllColumnWithIndex returns columns with index, order is pk, uk and normal index.
+func FindAllColumnWithIndex(tableInfo *model.TableInfo) []*model.ColumnInfo {
+	colsMap := make(map[string]interface{})
+	cols := make([]*model.ColumnInfo, 0, 2)
+
+	for _, index := range FindAllIndex(tableInfo) {
+		// index will be guaranteed to be visited in order PK -> UK -> IK
+		for _, indexCol := range index.Columns {
+			col := FindColumnByName(tableInfo.Columns, indexCol.Name.O)
+			if _, ok := colsMap[col.Name.O]; ok {
+				continue
+			}
+			colsMap[col.Name.O] = struct{}{}
+			cols = append(cols, col)
+		}
+	}
+
+	return cols
 }
 
 // SelectUniqueOrderKey returns some columns for order by condition.

@@ -29,6 +29,17 @@ ignore-struct-check = false
 # the name of the file which saves sqls used to fix different data
 fix-sql-file = "fix.sql"
 
+# use this tidb's statistics information to split chunk
+# tidb-instance-id = ""
+
+# uncomment this if comparing data with different database name or table name
+#[[table-rules]]
+#schema-pattern = "test_*"
+#table-pattern = "t_*"
+#target-schema = "test"
+#target-table = "t"
+
+
 # tables need to check.
 [[check-tables]]
 # schema name in target database.
@@ -53,7 +64,10 @@ table = "test3"
 
 # field should be the primary key, unique key or field with index. 
 # if comment this, diff will find a suitable field.
-index-field = "id"
+index-fields = "id"
+
+# can set multiple fields split by ','
+# index-fields = "id,age"
 
 # check data's range.
 range = "age > 10 AND age < 20"
@@ -104,5 +118,6 @@ host = "127.0.0.1"
 port = 4000
 user = "root"
 password = ""
+instance-id = "target-1"
 # remove comment if use tidb's snapshot data
 # snapshot = "2016-10-08 16:45:26"
