@@ -600,5 +600,5 @@ func copyPumps(pumps map[string]*PumpStatus) []*PumpStatus {
 
 // InitLogger initializes logger.
 func InitLogger(cfg *logutil.LogConfig) error {
-	return logutil.InitLogger(cfg)
+	return logutil.InitZapLogger(cfg)
 }
