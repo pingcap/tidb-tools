@@ -16,6 +16,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"time"
 
@@ -39,7 +40,7 @@ func main() {
 	}
 
 	if cfg.PrintVersion {
-		log.Info("sync_diff_inspector", zap.String("version", utils.GetRawInfo("sync_diff_inspector")))
+		fmt.Printf("version: \n%s", utils.GetRawInfo("sync_diff_inspector"))
 		return
 	}
 
