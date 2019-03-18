@@ -200,7 +200,7 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 
 	query := fmt.Sprintf("SELECT %[1]s, COUNT(*) count FROM (SELECT %[1]s FROM %[2]s WHERE %[3]s ORDER BY RAND() LIMIT %[4]d)rand_tmp GROUP BY %[1]s ORDER BY %[1]s%[5]s",
 		escapeName(column), TableName(schemaName, table), limitRange, num, collation)
-	log.Debug("get random values", zap.String("sql", query), zap.String("args", fmt.Sprintf("%v", limitArgs)))
+	log.Debug("get random values", zap.String("sql", query), zap.Reflect("args", limitArgs))
 
 	rows, err := db.QueryContext(ctx, query, limitArgs...)
 	if err != nil {
@@ -364,7 +364,7 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName str
 
 	query := fmt.Sprintf("SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED)) AS checksum FROM %s WHERE %s;",
 		strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), TableName(schemaName, tableName), limitRange)
-	log.Debug("checksum", zap.String("sql", query), zap.String("args", fmt.Sprintf("%v", args)))
+	log.Debug("checksum", zap.String("sql", query), zap.Reflect("args", args))
 
 	var checksum sql.NullInt64
 	err := db.QueryRowContext(ctx, query, args...).Scan(&checksum)
@@ -373,7 +373,7 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName str
 	}
 	if !checksum.Valid {
 		// if don't have any data, the checksum will be `NULL`
-		log.Warn("get empty checksum", zap.String("sql", query), zap.String("args", fmt.Sprintf("%v", args)))
+		log.Warn("get empty checksum", zap.String("sql", query), zap.Reflect("args", args))
 		return 0, nil
 	}
 
