@@ -200,7 +200,7 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 
 	query := fmt.Sprintf("SELECT %[1]s, COUNT(*) count FROM (SELECT %[1]s FROM %[2]s WHERE %[3]s ORDER BY RAND() LIMIT %[4]d)rand_tmp GROUP BY %[1]s ORDER BY %[1]s%[5]s",
 		escapeName(column), TableName(schemaName, table), limitRange, num, collation)
-	log.Debug("get random values", zap.String("sql", query), zap.String("args", fmt.Sprintf("%v", limitArgs)))
+	log.Debug("get random values", zap.String("sql", query), zap.Reflect("args", limitArgs))
 
 	rows, err := db.QueryContext(ctx, query, limitArgs...)
 	if err != nil {
