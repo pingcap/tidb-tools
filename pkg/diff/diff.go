@@ -278,15 +278,15 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, checkJobs []*CheckJ
 				return false, errors.Trace(err)
 			}
 			if sourceChecksum == targetChecksum {
-				log.Info("checksum is equal", zap.String("table", dbutil.TableName(job.Schema, job.Table)), zap.String("where", job.Where), zap.Any("args", job.Args), zap.Int64("checksum", sourceChecksum))
+				log.Info("checksum is equal", zap.String("table", dbutil.TableName(job.Schema, job.Table)), zap.String("where", job.Where), zap.Reflect("args", job.Args), zap.Int64("checksum", sourceChecksum))
 				continue
 			}
 
-			log.Warn("checksum is not equal", zap.String("table", dbutil.TableName(job.Schema, job.Table)), zap.String("where", job.Where), zap.Any("args", job.Args), zap.Int64("source checksum", sourceChecksum), zap.Int64("target checksum", targetChecksum))
+			log.Warn("checksum is not equal", zap.String("table", dbutil.TableName(job.Schema, job.Table)), zap.String("where", job.Where), zap.Reflect("args", job.Args), zap.Int64("source checksum", sourceChecksum), zap.Int64("target checksum", targetChecksum))
 		}
 
 		// if checksum is not equal or don't need compare checksum, compare the data
-		log.Info("select data and then check data", zap.String("table", dbutil.TableName(job.Schema, job.Table)), zap.String("where", job.Where), zap.Any("args", job.Args))
+		log.Info("select data and then check data", zap.String("table", dbutil.TableName(job.Schema, job.Table)), zap.String("where", job.Where), zap.Reflect("args", job.Args))
 		sourceRows := make(map[string][]map[string]*dbutil.ColumnData)
 		for i, sourceTable := range t.SourceTables {
 			rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, job.Where, utils.StringsToInterfaces(job.Args), utils.SliceToMap(t.IgnoreColumns), t.Collation)
@@ -502,9 +502,9 @@ func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model
 		}
 		equal = false
 		if data1.IsNull == data2.IsNull {
-			log.Error("find difference data", zap.String("column", key), zap.Any("data1", map1), zap.Any("data2", map2))
+			log.Error("find difference data", zap.String("column", key), zap.Reflect("data1", map1), zap.Reflect("data2", map2))
 		} else {
-			log.Error("find difference data, one of them is NULL", zap.String("column", key), zap.Any("data1", map1), zap.Any("data2", map2))
+			log.Error("find difference data, one of them is NULL", zap.String("column", key), zap.Reflect("data1", map1), zap.Reflect("data2", map2))
 		}
 		break
 	}

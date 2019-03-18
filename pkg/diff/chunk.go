@@ -240,7 +240,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 		symbolMax = chunk.bounds[colNum-1].upperSymbol
 	} else {
 		if len(columns) <= colNum {
-			log.Warn("chunk can't be splited", zap.Any("chunk", chunk))
+			log.Warn("chunk can't be splited", zap.Reflect("chunk", chunk))
 			return append(chunks, chunk), nil
 		}
 
@@ -251,7 +251,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 		min, max, err = dbutil.GetMinMaxValue(context.Background(), db, schema, table, splitCol, limitRange, utils.StringsToInterfaces(args), s.collation)
 		if err != nil {
 			if errors.Cause(err) == dbutil.ErrNoData {
-				log.Info("no data found", zap.String("table", dbutil.TableName(schema, table)), zap.String("range", limitRange), zap.Any("args", args))
+				log.Info("no data found", zap.String("table", dbutil.TableName(schema, table)), zap.String("range", limitRange), zap.Reflect("args", args))
 				return append(chunks, chunk), nil
 			}
 			return nil, errors.Trace(err)
@@ -269,7 +269,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	log.Debug("get split values by random values", zap.Any("chunk", chunk), zap.Any("random values", randomValues))
+	log.Debug("get split values by random values", zap.Reflect("chunk", chunk), zap.Reflect("random values", randomValues))
 
 	/*
 		for examples:
@@ -536,7 +536,7 @@ func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSiz
 		conditions, args := chunk.toString(mode, collation)
 		where := fmt.Sprintf("(%s AND %s)", conditions, limits)
 
-		log.Debug("create check job", zap.String("table", dbutil.TableName(table.Schema, table.Table)), zap.String("where", where), zap.Any("args", args))
+		log.Debug("create check job", zap.String("table", dbutil.TableName(table.Schema, table.Table)), zap.String("where", where), zap.Reflect("args", args))
 		jobBucket = append(jobBucket, &CheckJob{
 			Schema: table.Schema,
 			Table:  table.Table,
