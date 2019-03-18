@@ -230,7 +230,7 @@ func (c *PumpsClient) getPumpStatus(pctx context.Context) (revision int64, err e
 	}
 
 	for _, status := range nodesStatus {
-		log.Debug("[pumps client] get pump from pd", zap.String("pump", status.String()))
+		log.Debug("[pumps client] get pump from pd", zap.Stringer("pump", status))
 		c.addPump(NewPumpStatus(status, c.Security), false)
 	}
 
@@ -283,7 +283,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 		}
 
 		meetError = true
-		log.Warn("[pumps client] write binlog to pump failed", zap.String("NodeID", pump.NodeID), zap.String("binlog type", binlog.Tp.String()), zap.Int64("start ts", binlog.StartTs), zap.Int64("commit ts", binlog.CommitTs), zap.Int("length", len(commitData)), zap.Error(err))
+		log.Warn("[pumps client] write binlog to pump failed", zap.String("NodeID", pump.NodeID), zap.Stringer("binlog type", binlog.Tp), zap.Int64("start ts", binlog.StartTs), zap.Int64("commit ts", binlog.CommitTs), zap.Int("length", len(commitData)), zap.Error(err))
 		//log.Warn("[pumps client] write binlog to pump %s (type: %s, start ts: %d, commit ts: %d, length: %d) error %v", pump.NodeID, binlog.Tp, binlog.StartTs, binlog.CommitTs, len(commitData), err)
 
 		if binlog.Tp != pb.BinlogType_Prewrite {
@@ -484,7 +484,7 @@ func (c *PumpsClient) watchStatus(revision int64) {
 				status := &node.Status{}
 				err := json.Unmarshal(ev.Kv.Value, &status)
 				if err != nil {
-					log.Error("[pumps client] unmarshal pump status failed", zap.String("value", string(ev.Kv.Value)), zap.Error(err))
+					log.Error("[pumps client] unmarshal pump status failed", zap.ByteString("value", ev.Kv.Value), zap.Error(err))
 					continue
 				}
 

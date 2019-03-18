@@ -121,6 +121,6 @@ func saveMeta(metaFileName string, ts int64, timeZone string) error {
 		return errors.Annotatef(err, "save meta %+v into %s", meta, metaFileName)
 	}
 
-	log.Info("save meta", zap.String("meta", meta.String()))
+	log.Info("save meta", zap.Stringer("meta", meta))
 	return nil
 }

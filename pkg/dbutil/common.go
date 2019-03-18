@@ -244,7 +244,7 @@ func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column strin
 
 	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ MIN(`%s`%s) as MIN, MAX(`%s`%s) as MAX FROM `%s`.`%s` WHERE %s",
 		column, collation, column, collation, schema, table, limitRange)
-	log.Debug("GetMinMaxValue", zap.String("sql", query), zap.String("args", fmt.Sprintf("%v", limitArgs)))
+	log.Debug("GetMinMaxValue", zap.String("sql", query), zap.Reflect("args", limitArgs))
 
 	var min, max sql.NullString
 	rows, err := db.QueryContext(ctx, query, limitArgs...)

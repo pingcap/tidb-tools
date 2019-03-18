@@ -34,7 +34,7 @@ func main() {
 	case flag.ErrHelp:
 		os.Exit(0)
 	default:
-		log.Error("parse cmd flags", zap.String("error", errors.ErrorStack(err)))
+		log.Error("parse cmd flags", zap.Error(err))
 		os.Exit(2)
 	}
 
@@ -72,15 +72,15 @@ func checkSyncState(ctx context.Context, cfg *Config) bool {
 
 	d, err := NewDiff(ctx, cfg)
 	if err != nil {
-		log.Fatal("fail to initialize diff process", zap.String("error", errors.ErrorStack(err)))
+		log.Fatal("fail to initialize diff process", zap.Error(err))
 	}
 
 	err = d.Equal()
 	if err != nil {
-		log.Fatal("check data difference failed", zap.String("error", errors.ErrorStack(err)))
+		log.Fatal("check data difference failed", zap.Error(err))
 	}
 
-	log.Info("check report", zap.String("report", d.report.String()))
+	log.Info("check report", zap.Stringer("report", d.report))
 
 	return d.report.Result == Pass
 }

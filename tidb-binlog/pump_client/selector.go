@@ -97,7 +97,7 @@ func (h *HashSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 		}
 
 		// this should never happened
-		log.Warn("[pumps client] binlog don't have matched prewrite binlog", zap.String("binlog type", binlog.Tp.String()), zap.Int64("startTs", binlog.StartTs))
+		log.Warn("[pumps client] binlog don't have matched prewrite binlog", zap.Stringer("binlog type", binlog.Tp), zap.Int64("startTs", binlog.StartTs))
 		return nil
 	}
 
@@ -173,7 +173,7 @@ func (r *RangeSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 		}
 
 		// this should never happened
-		log.Warn("[pumps client] binlog don't have matched prewrite binlog", zap.String("binlog type", binlog.Tp.String()), zap.Int64("startTs", binlog.StartTs))
+		log.Warn("[pumps client] binlog don't have matched prewrite binlog", zap.Stringer("binlog type", binlog.Tp), zap.Int64("startTs", binlog.StartTs))
 		return nil
 	}
 

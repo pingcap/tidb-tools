@@ -78,7 +78,7 @@ func main() {
 	for {
 		select {
 		case msg := <-breader.Messages():
-			log.Debug("recv", zap.String("message", msg.Binlog.String()))
+			log.Debug("recv", zap.Stringer("message", msg.Binlog))
 			binlog := msg.Binlog
 			sqls, args := toSQL(binlog)
 
@@ -277,7 +277,7 @@ func toSQL(binlog *pb.Binlog) ([]string, [][]interface{}) {
 		}
 
 	default:
-		log.Fatal("unknown type", zap.String("type", binlog.GetType().String()))
+		log.Fatal("unknown type", zap.Stringer("type", binlog.GetType()))
 	}
 
 	return allSQL, allArgs

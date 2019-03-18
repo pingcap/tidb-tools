@@ -415,7 +415,7 @@ func (df *Diff) Equal() (err error) {
 				return err
 			})
 			if err != nil {
-				log.Error("check failed", zap.String("table", dbutil.TableName(table.Schema, table.Table)), zap.String("error", errors.ErrorStack(err)))
+				log.Error("check failed", zap.String("table", dbutil.TableName(table.Schema, table.Table)), zap.Error(err))
 				return err
 			}
 

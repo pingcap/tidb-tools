@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"go.uber.org/zap"
 )
@@ -34,24 +33,24 @@ func addJobs(jobCount int, jobChan chan struct{}) {
 func doInsert(table *table, db *sql.DB, count int) {
 	sqls, err := genRowDatas(table, count)
 	if err != nil {
-		log.Fatal("genRowDatas", zap.String("error", errors.ErrorStack(err)))
+		log.Fatal("genRowDatas", zap.Error(err))
 	}
 
 	txn, err := db.Begin()
 	if err != nil {
-		log.Fatal("begin transcation", zap.String("error", errors.ErrorStack(err)))
+		log.Fatal("begin transcation", zap.Error(err))
 	}
 
 	for _, sql := range sqls {
 		_, err = txn.Exec(sql)
 		if err != nil {
-			log.Fatal("exec", zap.String("sql", sql), zap.String("error", errors.ErrorStack(err)))
+			log.Fatal("exec", zap.String("sql", sql), zap.Error(err))
 		}
 	}
 
 	err = txn.Commit()
 	if err != nil {
-		log.Fatal("commit transcation", zap.String("error", errors.ErrorStack(err)))
+		log.Fatal("commit transcation", zap.Error(err))
 	}
 }
 

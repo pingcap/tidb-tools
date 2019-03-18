@@ -218,7 +218,7 @@ func (t *TableDiff) EqualTableData(ctx context.Context) (equal bool, err error) 
 		go func(checkJobs []*CheckJob) {
 			eq, err := t.checkChunkDataEqual(ctx, checkJobs)
 			if err != nil {
-				log.Error("check chunk data equal failed", zap.String("error", errors.ErrorStack(err)))
+				log.Error("check chunk data equal failed", zap.Error(err))
 			}
 			checkResultCh <- eq
 		}(checkJobs)

@@ -44,7 +44,7 @@ func queryNodesByKind(urls string, kind string) error {
 	}
 
 	for _, n := range nodes {
-		log.Info("query node", zap.String("type", kind), zap.String("node", n.String()))
+		log.Info("query node", zap.String("type", kind), zap.Stringer("node", n))
 	}
 
 	return nil
