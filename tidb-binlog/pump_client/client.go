@@ -284,7 +284,6 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 
 		meetError = true
 		log.Warn("[pumps client] write binlog to pump failed", zap.String("NodeID", pump.NodeID), zap.Stringer("binlog type", binlog.Tp), zap.Int64("start ts", binlog.StartTs), zap.Int64("commit ts", binlog.CommitTs), zap.Int("length", len(commitData)), zap.Error(err))
-		//log.Warn("[pumps client] write binlog to pump %s (type: %s, start ts: %d, commit ts: %d, length: %d) error %v", pump.NodeID, binlog.Tp, binlog.StartTs, binlog.CommitTs, len(commitData), err)
 
 		if binlog.Tp != pb.BinlogType_Prewrite {
 			// only use one pump to write commit/rollback binlog, util write success or blocked for ten minutes. And will not return error to tidb.
