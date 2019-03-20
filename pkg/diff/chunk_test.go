@@ -200,5 +200,4 @@ func (*testChunkSuite) TestChunkToString(c *C) {
 	for i, arg := range args {
 		c.Assert(arg, Equals, expectArgs[i])
 	}
-
 }
