@@ -14,7 +14,7 @@ require (
 	github.com/pingcap/log v0.0.0-20190307075452-bd41d9273596
 	github.com/pingcap/parser v0.0.0-20190312024907-3f6280b08c8b
 	github.com/pingcap/pd v2.1.0-rc.4+incompatible
-	github.com/pingcap/tidb v0.0.0-20190318101756-cb83d4cf1af2
+	github.com/pingcap/tidb v0.0.0-20190320062740-9071c7b5b9ed
 	github.com/pingcap/tipb v0.0.0-20190107072121-abbec73437b7
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
 	go.uber.org/atomic v1.3.2
