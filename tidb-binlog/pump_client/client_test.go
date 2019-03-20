@@ -144,15 +144,18 @@ func (*testClientSuite) testSelector(c *C, strategy string) {
 		pump1 = pumpsClient.Selector.Select(prewriteBinlog, 0)
 		pumpsClient.Selector.Feedback(prewriteBinlog.StartTs, prewriteBinlog.Tp, pump1)
 		if strategy == Range {
-			pumpsClient.SetSelectStrategy(Hash)
+			err := pumpsClient.SetSelectStrategy(Hash)
+			c.Assert(err, IsNil)
 		} else {
-			pumpsClient.SetSelectStrategy(Range)
+			err := pumpsClient.SetSelectStrategy(Range)
+			c.Assert(err, IsNil)
 		}
 		pump2 = pumpsClient.Selector.Select(commitBinlog, 0)
 		c.Assert(pump1.NodeID, Equals, pump2.NodeID)
 
 		// set back
-		pumpsClient.SetSelectStrategy(strategy)
+		err := pumpsClient.SetSelectStrategy(strategy)
+		c.Assert(err, IsNil)
 	}
 }
 
