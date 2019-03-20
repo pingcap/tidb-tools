@@ -16,11 +16,12 @@ package diff
 import (
 	"math/rand"
 
+	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb/types"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 func equalStrings(str1, str2 []string) bool {
@@ -82,7 +83,7 @@ func getColumnsFromIndex(index *model.IndexInfo, tableInfo *model.TableInfo) []*
 
 func getRandomN(total, num int) []int {
 	if num > total {
-		log.Warnf("the num %d is greater than total %d", num, total)
+		log.Warn("the num is greater than total", zap.Int("num", num), zap.Int("total", total))
 		num = total
 	}
 

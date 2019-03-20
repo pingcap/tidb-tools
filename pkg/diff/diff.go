@@ -23,10 +23,11 @@ import (
 	"sync"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 // TableInstance record a table instance
@@ -201,7 +202,7 @@ func (t *TableDiff) EqualTableData(ctx context.Context) (equal bool, err error) 
 
 	checkNums := len(allJobs) * t.Sample / 100
 	checkNumArr := getRandomN(len(allJobs), checkNums)
-	log.Infof("total has %d check jobs, check %d of them", len(allJobs), len(checkNumArr))
+	log.Info("check jobs", zap.Int("total job num", len(allJobs)), zap.Int("check job num", len(checkNumArr)))
 	if checkNums == 0 {
 		return true, nil
 	}
@@ -217,7 +218,7 @@ func (t *TableDiff) EqualTableData(ctx context.Context) (equal bool, err error) 
 		go func(checkJobs []*CheckJob) {
 			eq, err := t.checkChunkDataEqual(ctx, checkJobs)
 			if err != nil {
-				log.Errorf("check chunk data equal failed, error %v", errors.ErrorStack(err))
+				log.Error("check chunk data equal failed", zap.Error(err))
 			}
 			checkResultCh <- eq
 		}(checkJobs)
@@ -277,15 +278,15 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, checkJobs []*CheckJ
 				return false, errors.Trace(err)
 			}
 			if sourceChecksum == targetChecksum {
-				log.Infof("table: %s, range: %s, args: %v, checksum is equal, checksum: %d", dbutil.TableName(job.Schema, job.Table), job.Where, job.Args, sourceChecksum)
+				log.Info("checksum is equal", zap.String("table", dbutil.TableName(job.Schema, job.Table)), zap.String("where", job.Where), zap.Reflect("args", job.Args), zap.Int64("checksum", sourceChecksum))
 				continue
 			}
 
-			log.Warnf("table: %s, range: %s, args: %v, checksum is not equal, one is %d, another is %d", dbutil.TableName(job.Schema, job.Table), job.Where, job.Args, sourceChecksum, targetChecksum)
+			log.Warn("checksum is not equal", zap.String("table", dbutil.TableName(job.Schema, job.Table)), zap.String("where", job.Where), zap.Reflect("args", job.Args), zap.Int64("source checksum", sourceChecksum), zap.Int64("target checksum", targetChecksum))
 		}
 
 		// if checksum is not equal or don't need compare checksum, compare the data
-		log.Infof("select data from %s for range (where: %s, args: %v) and then check data", dbutil.TableName(job.Schema, job.Table), job.Where, job.Args)
+		log.Info("select data and then check data", zap.String("table", dbutil.TableName(job.Schema, job.Table)), zap.String("where", job.Where), zap.Reflect("args", job.Args))
 		sourceRows := make(map[string][]map[string]*dbutil.ColumnData)
 		for i, sourceTable := range t.SourceTables {
 			rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, job.Where, utils.StringsToInterfaces(job.Args), utils.SliceToMap(t.IgnoreColumns), t.Collation)
@@ -364,7 +365,7 @@ func (t *TableDiff) compareRows(sourceRows map[string][]map[string]*dbutil.Colum
 			// all the rowsData2's data should be deleted
 			for ; index2 < len(rowsData2); index2++ {
 				sql := generateDML("delete", rowsData2[index2], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
-				log.Infof("[delete] sql: %v", sql)
+				log.Info("[delete]", zap.String("sql", sql))
 				t.wg.Add(1)
 				t.sqlCh <- sql
 				equal = false
@@ -375,7 +376,7 @@ func (t *TableDiff) compareRows(sourceRows map[string][]map[string]*dbutil.Colum
 			// rowsData2 lack some data, should insert them
 			for ; index1 < len(rowsData1); index1++ {
 				sql := generateDML("replace", rowsData1[index1], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
-				log.Infof("[insert] sql: %v", sql)
+				log.Info("[insert]", zap.String("sql", sql))
 				t.wg.Add(1)
 				t.sqlCh <- sql
 				equal = false
@@ -396,21 +397,21 @@ func (t *TableDiff) compareRows(sourceRows map[string][]map[string]*dbutil.Colum
 		case 1:
 			// delete
 			sql := generateDML("delete", rowsData2[index2], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
-			log.Infof("[delete] sql: %s", sql)
+			log.Info("[delete]", zap.String("sql", sql))
 			t.wg.Add(1)
 			t.sqlCh <- sql
 			index2++
 		case -1:
 			// insert
 			sql := generateDML("replace", rowsData1[index1], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
-			log.Infof("[insert] sql: %s", sql)
+			log.Info("[insert]", zap.String("sql", sql))
 			t.wg.Add(1)
 			t.sqlCh <- sql
 			index1++
 		case 0:
 			// update
 			sql := generateDML("replace", rowsData1[index1], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
-			log.Infof("[update] sql: %s", sql)
+			log.Info("[update]", zap.String("sql", sql))
 			t.wg.Add(1)
 			t.sqlCh <- sql
 			index1++
@@ -432,7 +433,7 @@ func (t *TableDiff) WriteSqls(ctx context.Context, writeFixSQL func(string) erro
 
 			err := writeFixSQL(fmt.Sprintf("%s\n", dml))
 			if err != nil {
-				log.Errorf("write sql: %s failed, error: %v", dml, err)
+				log.Error("write sql failed", zap.String("sql", dml), zap.Error(err))
 			}
 			t.wg.Done()
 		case <-ctx.Done():
@@ -477,7 +478,7 @@ func generateDML(tp string, data map[string]*dbutil.ColumnData, keys []*model.Co
 		}
 		sql = fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE %s;", schema, table.Name, strings.Join(kvs, " AND "))
 	default:
-		log.Errorf("unknown sql type %s", tp)
+		log.Error("unknown sql type", zap.String("type", tp))
 	}
 
 	return
@@ -501,9 +502,9 @@ func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model
 		}
 		equal = false
 		if data1.IsNull == data2.IsNull {
-			log.Errorf("find difference data in column %s, data1: %s, data2: %s", key, data1.Data, data2.Data)
+			log.Error("find difference data", zap.String("column", key), zap.Reflect("data1", map1), zap.Reflect("data2", map2))
 		} else {
-			log.Errorf("find difference data in column %s, one of them is NULL, data1: %s, data2: %s", key, data1.Data, data2.Data)
+			log.Error("find difference data, one of them is NULL", zap.String("column", key), zap.Reflect("data1", map1), zap.Reflect("data2", map2))
 		}
 		break
 	}
@@ -583,7 +584,7 @@ func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableIn
 	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ %s FROM `%s`.`%s` WHERE %s ORDER BY %s%s",
 		columns, schema, table, where, strings.Join(orderKeys, ","), collation)
 
-	log.Debugf("select data by sql %s, args: %v", query, args)
+	log.Debug("select data", zap.String("sql", query), zap.Reflect("args", args))
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, nil, errors.Trace(err)

@@ -16,13 +16,15 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/utils"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -33,22 +35,21 @@ func main() {
 	case flag.ErrHelp:
 		os.Exit(0)
 	default:
-		log.Errorf("parse cmd flags err %s\n", errors.ErrorStack(err))
+		log.Error("parse cmd flags", zap.Error(err))
 		os.Exit(2)
 	}
 
 	if cfg.PrintVersion {
-		log.Infof("version: \n%s", utils.GetRawInfo("sync_diff_inspector"))
+		fmt.Printf("version: \n%s", utils.GetRawInfo("sync_diff_inspector"))
 		return
 	}
 
-	logLevel, err := log.ParseLevel(cfg.LogLevel)
-	if err != nil {
-		log.Warnf("invalide log level %s", cfg.LogLevel)
-		log.SetLevel(log.InfoLevel)
-	} else {
-		log.SetLevel(logLevel)
+	l := zap.NewAtomicLevel()
+	if err := l.UnmarshalText([]byte(cfg.LogLevel)); err != nil {
+		log.Error("invalide log level", zap.String("log level", cfg.LogLevel))
+		return
 	}
+	log.SetLevel(l.Level())
 
 	ok := cfg.checkConfig()
 	if !ok {
@@ -67,20 +68,20 @@ func main() {
 func checkSyncState(ctx context.Context, cfg *Config) bool {
 	beginTime := time.Now()
 	defer func() {
-		log.Infof("check data finished, all cost %v", time.Since(beginTime))
+		log.Info("check data finished", zap.Duration("cost", time.Since(beginTime)))
 	}()
 
 	d, err := NewDiff(ctx, cfg)
 	if err != nil {
-		log.Fatalf("fail to initialize diff process %v", errors.ErrorStack(err))
+		log.Fatal("fail to initialize diff process", zap.Error(err))
 	}
 
 	err = d.Equal()
 	if err != nil {
-		log.Fatalf("check data difference error %v", errors.ErrorStack(err))
+		log.Fatal("check data difference failed", zap.Error(err))
 	}
 
-	log.Info(d.report)
+	log.Info("check report", zap.Stringer("report", d.report))
 
 	return d.report.Result == Pass
 }
