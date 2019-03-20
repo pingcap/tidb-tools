@@ -16,16 +16,18 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path"
 	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	pd "github.com/pingcap/pd/client"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/siddontang/go/ioutil2"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 const physicalShiftBits = 18
@@ -40,7 +42,7 @@ func generateMetaInfo(cfg *Config) error {
 	// get newest ts from pd
 	commitTS, err := GetTSO(cfg)
 	if err != nil {
-		log.Errorf("get tso failed: %s", err)
+		log.Error("get tso failed", zap.Error(err))
 		return errors.Trace(err)
 	}
 
@@ -70,7 +72,7 @@ func GetTSO(cfg *Config) (int64, error) {
 	}
 	dist := time.Since(now)
 	if dist > slowDist {
-		log.Warnf("get timestamp too slow: %s", dist)
+		log.Warn("get timestamp too slow", zap.Duration("dist", dist))
 	}
 
 	return int64(composeTS(physical, logical)), nil
@@ -84,6 +86,11 @@ func composeTS(physical, logical int64) uint64 {
 // TODO: improve meta later, like adding offset of kafka topic that corresponds to each pump node
 type Meta struct {
 	CommitTS int64 `toml:"commitTS" json:"commitTS"`
+}
+
+// String returns the string of Meta
+func (m *Meta) String() string {
+	return fmt.Sprintf("commitTS: %d", m.CommitTS)
 }
 
 // saveMeta saves current tso in meta file.
@@ -101,7 +108,7 @@ func saveMeta(metaFileName string, ts int64, timeZone string) error {
 		t := utils.TSOToRoughTime(ts)
 		location, err1 := time.LoadLocation(timeZone)
 		if err1 != nil {
-			log.Warningf("fail to load location %s, error %v", timeZone, err1)
+			log.Warn("fail to load location", zap.String("time zone", timeZone), zap.Error(err1))
 		} else {
 			buf.WriteString(t.UTC().String())
 			buf.WriteByte('\n')
@@ -114,6 +121,6 @@ func saveMeta(metaFileName string, ts int64, timeZone string) error {
 		return errors.Annotatef(err, "save meta %+v into %s", meta, metaFileName)
 	}
 
-	log.Infof("meta: %+v", meta)
+	log.Info("save meta", zap.Stringer("meta", meta))
 	return nil
 }

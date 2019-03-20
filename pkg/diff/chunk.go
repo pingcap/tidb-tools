@@ -22,10 +22,10 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
-	log "github.com/sirupsen/logrus"
 	"go.uber.org/zap"
 )
 
@@ -263,7 +263,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *ChunkRange, count int, sch
 		symbolMax = chunk.Bounds[colNum-1].UpperSymbol
 	} else {
 		if len(columns) <= colNum {
-			log.Warnf("chunk %v can't be splited", chunk)
+			log.Warn("chunk can't be splited", zap.Stringer("chunk", chunk))
 			return append(chunks, chunk), nil
 		}
 
@@ -274,7 +274,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *ChunkRange, count int, sch
 		min, max, err = dbutil.GetMinMaxValue(context.Background(), db, schema, table, splitCol, limitRange, utils.StringsToInterfaces(args), s.collation)
 		if err != nil {
 			if errors.Cause(err) == dbutil.ErrNoData {
-				log.Infof("no data found in %s.%s range %s, args %v", schema, table, limitRange, args)
+				log.Info("no data found", zap.String("table", dbutil.TableName(schema, table)), zap.String("range", limitRange), zap.Reflect("args", args))
 				return append(chunks, chunk), nil
 			}
 			return nil, errors.Trace(err)
@@ -292,7 +292,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *ChunkRange, count int, sch
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	log.Debugf("split chunk %v, get split values from GetRandomValues: %v", chunk, randomValues)
+	log.Debug("get split values by random values", zap.Stringer("chunk", chunk), zap.Reflect("random values", randomValues))
 
 	/*
 		for examples:
@@ -384,8 +384,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *ChunkRange, count int, sch
 		lowerSymbol = gte
 	}
 
-	log.Debugf("getChunksForTable cut table: cnt=%d min=%s max=%s chunk=%d", count, min, max, len(chunks))
-
+	log.Debug("getChunksForTable cut table", zap.Int("count", count), zap.String("min", min), zap.String("max", max), zap.Int("chunk num", len(chunks)))
 	return chunks, nil
 }
 
@@ -479,7 +478,7 @@ func getChunksForTable(table *TableInstance, columns []*model.ColumnInfo, chunkS
 			return chunks, nil
 		}
 
-		log.Warnf("use tidb bucket information to get chunks error: %v, chunks num: %d, will split chunk by random again", errors.Trace(err), len(chunks))
+		log.Warn("use tidb bucket information to get chunks failed, will split chunk by random again", zap.Int("get chunk", len(chunks)), zap.Error(err))
 	}
 
 	// get chunks from tidb bucket information failed, use random.

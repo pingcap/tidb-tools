@@ -20,11 +20,11 @@ import (
 	"regexp"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/diff"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/pkg/utils"
-	log "github.com/sirupsen/logrus"
 	"go.uber.org/zap"
 )
 
@@ -203,13 +203,13 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 			}
 
 			if _, ok := df.tables[schemaTables.Schema][tableName]; ok {
-				log.Errorf("duplicate config for %s.%s", schemaTables.Schema, tableName)
+				log.Error("duplicate config for one table", zap.String("table", dbutil.TableName(schemaTables.Schema, tableName)))
 				continue
 			}
 
 			sourceTables := make([]TableInstance, 0, 1)
 			if _, ok := sourceTablesMap[schemaTables.Schema][tableName]; ok {
-				log.Infof("find matched source tables %v for %s.%s", sourceTablesMap[schemaTables.Schema][tableName], schemaTables.Schema, tableName)
+				log.Info("find matched source tables", zap.Reflect("source tables", sourceTablesMap[schemaTables.Schema][tableName]), zap.String("target schema", schemaTables.Schema), zap.String("table", tableName))
 				sourceTables = sourceTablesMap[schemaTables.Schema][tableName]
 			} else {
 				// use same database name and table name

@@ -18,8 +18,9 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/pingcap/log"
 	pb "github.com/pingcap/tipb/go-binlog"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 const (
@@ -97,7 +98,7 @@ func (h *HashSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 		}
 
 		// this should never happened
-		log.Warnf("[pumps client] %s binlog with start ts %d don't have matched prewrite binlog", binlog.Tp, binlog.StartTs)
+		log.Warn("[pumps client] binlog don't have matched prewrite binlog", zap.Stringer("binlog type", binlog.Tp), zap.Int64("startTs", binlog.StartTs))
 		return nil
 	}
 
@@ -166,7 +167,7 @@ func (r *RangeSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 		}
 
 		// this should never happened
-		log.Warnf("[pumps client] %s binlog with start ts %d don't have matched prewrite binlog", binlog.Tp, binlog.StartTs)
+		log.Warn("[pumps client] binlog don't have matched prewrite binlog", zap.Stringer("binlog type", binlog.Tp), zap.Int64("startTs", binlog.StartTs))
 		return nil
 	}
 
@@ -254,10 +255,10 @@ func (s *ScoreSelector) Feedback(startTS int64, binlogType pb.BinlogType, pump *
 	// TODO
 }
 
-// NewSelector returns a PumpSelector according to the algorithm.
-func NewSelector(algorithm string) PumpSelector {
+// NewSelector returns a PumpSelector according to the strategy.
+func NewSelector(strategy string) PumpSelector {
 	var selector PumpSelector
-	switch algorithm {
+	switch strategy {
 	case Range:
 		selector = NewRangeSelector()
 	case Hash:
@@ -267,7 +268,7 @@ func NewSelector(algorithm string) PumpSelector {
 	case LocalUnix:
 		selector = NewLocalUnixSelector()
 	default:
-		log.Warnf("[pumps client] unknown algorithm %s, use range as default", algorithm)
+		log.Warn("[pumps client] unknown strategy, use range as default", zap.String("strategy", strategy))
 		selector = NewRangeSelector()
 	}
 

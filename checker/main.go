@@ -20,10 +20,11 @@ import (
 	"os"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 var (
@@ -57,7 +58,7 @@ func main() {
 	schema := flag.Args()[0]
 	tables := flag.Args()[1:]
 	checkTables(schema, tables)
-	log.Infof("complete checking!!")
+	log.Info("complete checking!!")
 }
 
 func checkTables(schema string, tables []string) {
@@ -71,16 +72,16 @@ func checkTables(schema string, tables []string) {
 
 	db, err := dbutil.OpenDB(*dbInfo)
 	if err != nil {
-		log.Fatal("create database connection failed:", err)
+		log.Fatal("create database connection failed:", zap.Error(err))
 	}
 	defer dbutil.CloseDB(db)
 
 	result := check.NewTablesChecker(db, dbInfo, map[string][]string{schema: tables}).Check(context.Background())
 	if result.State == check.StateSuccess {
-		log.Infof("check schema %s successfully!", schema)
+		log.Info("check schema %s successfully!", zap.String("schema", schema))
 	} else if result.State == check.StateWarning {
-		log.Warningf("check schema %s and find warnings.\n%s", schema, result.ErrorMsg)
+		log.Warn("check schema find warnings.", zap.String("schema", schema), zap.String("error message", result.ErrorMsg))
 	} else {
-		log.Errorf("check schema %s and failed.\n%s", schema, result.ErrorMsg)
+		log.Error("check schema and failed.", zap.String("schema", schema), zap.String("error message", result.ErrorMsg))
 	}
 }

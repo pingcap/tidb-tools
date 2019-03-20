@@ -1,5 +1,11 @@
 package node
 
+import (
+	"fmt"
+
+	"github.com/pingcap/tidb-tools/pkg/utils"
+)
+
 var (
 	// DefaultRootPath is the root path of the keys stored in etcd, the `v1` is the tidb-binlog's version.
 	DefaultRootPath = "/tidb-binlog/v1"
@@ -67,4 +73,9 @@ type Status struct {
 
 	// UpdateTS is the last update ts of node's status.
 	UpdateTS int64 `json:"updateTS"`
+}
+
+func (s *Status) String() string {
+	updateTime := utils.TSOToRoughTime(s.UpdateTS)
+	return fmt.Sprintf("{NodeID: %s, Addr: %s, State: %s, MaxCommitTS: %d, UpdateTime: %v}", s.NodeID, s.Addr, s.State, s.MaxCommitTS, updateTime)
 }
