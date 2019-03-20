@@ -88,7 +88,7 @@ func main() {
 			}
 
 			for i := 0; i < len(sqls); i++ {
-				log.Debug("exec sql", zap.String("sql", sqls[i]), zap.Any("args", args[i]))
+				log.Debug("exec sql", zap.String("sql", sqls[i]), zap.Reflect("args", args[i]))
 				_, err = tx.Exec(sqls[i], args[i]...)
 				if err != nil {
 					tx.Rollback()

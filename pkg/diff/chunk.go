@@ -58,6 +58,28 @@ func newChunkRange() *chunkRange {
 	}
 }
 
+// String returns the string of chunkRange, used for log.
+func (c *chunkRange) String() string {
+	var s strings.Builder
+	s.WriteString("{")
+	for _, bound := range c.bounds {
+		s.WriteString("[ column: ")
+		s.WriteString(bound.column)
+		s.WriteString(", lower: ")
+		s.WriteString(bound.lower)
+		s.WriteString(", lowerSymbol: ")
+		s.WriteString(bound.lowerSymbol)
+		s.WriteString(", upper: ")
+		s.WriteString(bound.upper)
+		s.WriteString(", upperSymbol: ")
+		s.WriteString(bound.upperSymbol)
+		s.WriteString(" ], ")
+	}
+	s.WriteString("}")
+
+	return s.String()
+}
+
 func (c *chunkRange) toString(mode string, collation string) (string, []string) {
 	if collation != "" {
 		collation = fmt.Sprintf(" COLLATE '%s'", collation)
@@ -240,7 +262,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 		symbolMax = chunk.bounds[colNum-1].upperSymbol
 	} else {
 		if len(columns) <= colNum {
-			log.Warn("chunk can't be splited", zap.Reflect("chunk", chunk))
+			log.Warn("chunk can't be splited", zap.Stringer("chunk", chunk))
 			return append(chunks, chunk), nil
 		}
 
@@ -269,7 +291,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *chunkRange, count int, sch
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	log.Debug("get split values by random values", zap.Reflect("chunk", chunk), zap.Reflect("random values", randomValues))
+	log.Debug("get split values by random values", zap.Stringer("chunk", chunk), zap.Reflect("random values", randomValues))
 
 	/*
 		for examples:
