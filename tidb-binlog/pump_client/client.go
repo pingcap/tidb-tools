@@ -423,6 +423,10 @@ func (c *PumpsClient) addPump(pump *PumpStatus, updateSelector bool) {
 
 // SetSelectStrategy sets the selector's strategy, strategy should be 'range' or 'hash' now.
 func (c *PumpsClient) SetSelectStrategy(strategy string) {
+	if strategy != Range && strategy != Hash {
+		log.Warnf("strategy %s is not support", strategy)
+		return
+	}
 	c.Lock()
 	c.Selector = NewSelector(strategy)
 	c.Selector.SetPumps(copyPumps(c.Pumps.AvaliablePumps))
