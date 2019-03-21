@@ -65,7 +65,6 @@ var (
 
 // PumpInfos saves pumps' infomations in pumps client.
 type PumpInfos struct {
-	sync.RWMutex
 	// Pumps saves the map of pump's nodeID and pump status.
 	Pumps map[string]*PumpStatus
 
@@ -88,6 +87,8 @@ func NewPumpInfos() *PumpInfos {
 
 // PumpsClient is the client of pumps.
 type PumpsClient struct {
+	sync.RWMutex
+
 	ctx context.Context
 
 	cancel context.CancelFunc
@@ -123,7 +124,7 @@ type PumpsClient struct {
 
 // NewPumpsClient returns a PumpsClient.
 // TODO: get strategy from etcd, and can update strategy in real-time. Use Range as default now.
-func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.SecurityOption) (*PumpsClient, error) {
+func NewPumpsClient(etcdURLs, strategy string, timeout time.Duration, securityOpt pd.SecurityOption) (*PumpsClient, error) {
 	ectdEndpoints, err := utils.ParseHostPortAddr(etcdURLs)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -154,7 +155,7 @@ func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.Secur
 		ClusterID:          clusterID,
 		EtcdRegistry:       node.NewEtcdRegistry(cli, DefaultEtcdTimeout),
 		Pumps:              NewPumpInfos(),
-		Selector:           NewSelector(Range),
+		Selector:           NewSelector(strategy),
 		BinlogWriteTimeout: timeout,
 		Security:           security,
 		nodePath:           path.Join(node.DefaultRootPath, node.NodePrefix[node.PumpNode]),
@@ -241,6 +242,11 @@ func (c *PumpsClient) getPumpStatus(pctx context.Context) (revision int64, err e
 
 // WriteBinlog writes binlog to a situable pump. Tips: will never return error for commit/rollback binlog.
 func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
+	c.RLock()
+	pumpNum := len(c.Pumps.AvaliablePumps)
+	selector := c.Selector
+	c.RUnlock()
+
 	var choosePump *PumpStatus
 	meetError := false
 	defer func() {
@@ -248,7 +254,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 			c.checkPumpAvaliable()
 		}
 
-		c.Selector.Feedback(binlog.StartTs, binlog.Tp, choosePump)
+		selector.Feedback(binlog.StartTs, binlog.Tp, choosePump)
 	}()
 
 	commitData, err := binlog.Marshal()
@@ -262,13 +268,9 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 	var resp *pb.WriteBinlogResp
 	startTime := time.Now()
 
-	c.Pumps.RLock()
-	pumpNum := len(c.Pumps.AvaliablePumps)
-	c.Pumps.RUnlock()
-
 	for {
 		if pump == nil || binlog.Tp == pb.BinlogType_Prewrite {
-			pump = c.Selector.Select(binlog, retryTime)
+			pump = selector.Select(binlog, retryTime)
 		}
 		if pump == nil {
 			err = ErrNoAvaliablePump
@@ -335,11 +337,11 @@ func (c *PumpsClient) backoffWriteBinlog(req *pb.WriteBinlogReq, binlogType pb.B
 	}
 
 	unAvaliablePumps := make([]*PumpStatus, 0, 3)
-	c.Pumps.RLock()
+	c.RLock()
 	for _, pump := range c.Pumps.UnAvaliablePumps {
 		unAvaliablePumps = append(unAvaliablePumps, pump)
 	}
-	c.Pumps.RUnlock()
+	c.RUnlock()
 
 	var resp *pb.WriteBinlogResp
 	// send binlog to unavaliable pumps to retry again.
@@ -367,9 +369,9 @@ func (c *PumpsClient) backoffWriteBinlog(req *pb.WriteBinlogReq, binlogType pb.B
 }
 
 func (c *PumpsClient) checkPumpAvaliable() {
-	c.Pumps.RLock()
+	c.RLock()
 	allPumps := copyPumps(c.Pumps.Pumps)
-	c.Pumps.RUnlock()
+	c.RUnlock()
 
 	for _, pump := range allPumps {
 		if !pump.IsUsable() {
@@ -380,8 +382,8 @@ func (c *PumpsClient) checkPumpAvaliable() {
 
 // setPumpAvaliable set pump's isAvaliable, and modify UnAvaliablePumps or AvaliablePumps.
 func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
-	c.Pumps.Lock()
-	defer c.Pumps.Unlock()
+	c.Lock()
+	defer c.Unlock()
 
 	pump.Reset()
 
@@ -403,7 +405,7 @@ func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 
 // addPump add a new pump.
 func (c *PumpsClient) addPump(pump *PumpStatus, updateSelector bool) {
-	c.Pumps.Lock()
+	c.Lock()
 
 	if pump.IsUsable() {
 		c.Pumps.AvaliablePumps[pump.NodeID] = pump
@@ -416,13 +418,26 @@ func (c *PumpsClient) addPump(pump *PumpStatus, updateSelector bool) {
 		c.Selector.SetPumps(copyPumps(c.Pumps.AvaliablePumps))
 	}
 
-	c.Pumps.Unlock()
+	c.Unlock()
+}
+
+// SetSelectStrategy sets the selector's strategy, strategy should be 'range' or 'hash' now.
+func (c *PumpsClient) SetSelectStrategy(strategy string) error {
+	if strategy != Range && strategy != Hash {
+		return errors.Errorf("strategy %s is not support", strategy)
+	}
+
+	c.Lock()
+	c.Selector = NewSelector(strategy)
+	c.Selector.SetPumps(copyPumps(c.Pumps.AvaliablePumps))
+	c.Unlock()
+	return nil
 }
 
 // updatePump update pump's status, and return whether pump's IsAvaliable should be changed.
 func (c *PumpsClient) updatePump(status *node.Status) (pump *PumpStatus, avaliableChanged, avaliable bool) {
 	var ok bool
-	c.Pumps.Lock()
+	c.Lock()
 	if pump, ok = c.Pumps.Pumps[status.NodeID]; ok {
 		if pump.Status.State != status.State {
 			if status.State == node.Online {
@@ -435,14 +450,14 @@ func (c *PumpsClient) updatePump(status *node.Status) (pump *PumpStatus, avaliab
 		}
 		pump.Status = *status
 	}
-	c.Pumps.Unlock()
+	c.Unlock()
 
 	return
 }
 
 // removePump removes a pump, used when pump is offline.
 func (c *PumpsClient) removePump(nodeID string) {
-	c.Pumps.Lock()
+	c.Lock()
 	if pump, ok := c.Pumps.Pumps[nodeID]; ok {
 		pump.Reset()
 	}
@@ -450,14 +465,14 @@ func (c *PumpsClient) removePump(nodeID string) {
 	delete(c.Pumps.UnAvaliablePumps, nodeID)
 	delete(c.Pumps.AvaliablePumps, nodeID)
 	c.Selector.SetPumps(copyPumps(c.Pumps.AvaliablePumps))
-	c.Pumps.Unlock()
+	c.Unlock()
 }
 
 // exist returns true if pumps client has pump matched this nodeID.
 func (c *PumpsClient) exist(nodeID string) bool {
-	c.Pumps.RLock()
+	c.RLock()
 	_, ok := c.Pumps.Pumps[nodeID]
-	c.Pumps.RUnlock()
+	c.RUnlock()
 	return ok
 }
 
@@ -533,13 +548,13 @@ func (c *PumpsClient) detect() {
 			needCheckPumps := make([]*PumpStatus, 0, len(c.Pumps.UnAvaliablePumps))
 			checkPassPumps := make([]*PumpStatus, 0, 1)
 			req := &pb.WriteBinlogReq{ClusterID: c.ClusterID, Payload: nil}
-			c.Pumps.RLock()
+			c.RLock()
 			for _, pump := range c.Pumps.UnAvaliablePumps {
 				if pump.IsUsable() {
 					needCheckPumps = append(needCheckPumps, pump)
 				}
 			}
-			c.Pumps.RUnlock()
+			c.RUnlock()
 
 			for _, pump := range needCheckPumps {
 				_, err := pump.WriteBinlog(req, c.BinlogWriteTimeout)
