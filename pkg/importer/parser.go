@@ -19,11 +19,12 @@ import (
 	"strings"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/types"
 	_ "github.com/pingcap/tidb/types/parser_driver" // for parser driver
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 type column struct {
@@ -68,7 +69,7 @@ func (col *column) parseRule(kvs []string) {
 		var err error
 		col.step, err = strconv.ParseInt(value, 10, 64)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal("parseRule", zap.Error(err))
 		}
 	} else if key == "set" {
 		fields := strings.Split(value, ",")
