@@ -50,16 +50,16 @@ var _ = Suite(&testClientSuite{})
 type testClientSuite struct{}
 
 func (t *testClientSuite) TestSelector(c *C) {
-	algorithms := []string{Hash, Range}
-	for _, algorithm := range algorithms {
-		t.testSelector(c, algorithm)
+	strategys := []string{Hash, Range}
+	for _, strategy := range strategys {
+		t.testSelector(c, strategy)
 	}
 }
 
-func (*testClientSuite) testSelector(c *C, algorithm string) {
+func (*testClientSuite) testSelector(c *C, strategy string) {
 	pumpsClient := &PumpsClient{
 		Pumps:              NewPumpInfos(),
-		Selector:           NewSelector(algorithm),
+		Selector:           NewSelector(strategy),
 		BinlogWriteTimeout: DefaultBinlogWriteTimeout,
 	}
 
@@ -139,6 +139,23 @@ func (*testClientSuite) testSelector(c *C, algorithm string) {
 		// prewrite binlog and commit binlog with same start ts should choose same pump
 		c.Assert(pump1.NodeID, Equals, pump2.NodeID)
 		pumpsClient.setPumpAvaliable(pump1, true)
+
+		// after change strategy, prewrite binlog and commit binlog will choose same pump
+		pump1 = pumpsClient.Selector.Select(prewriteBinlog, 0)
+		pumpsClient.Selector.Feedback(prewriteBinlog.StartTs, prewriteBinlog.Tp, pump1)
+		if strategy == Range {
+			err := pumpsClient.SetSelectStrategy(Hash)
+			c.Assert(err, IsNil)
+		} else {
+			err := pumpsClient.SetSelectStrategy(Range)
+			c.Assert(err, IsNil)
+		}
+		pump2 = pumpsClient.Selector.Select(commitBinlog, 0)
+		c.Assert(pump1.NodeID, Equals, pump2.NodeID)
+
+		// set back
+		err := pumpsClient.SetSelectStrategy(strategy)
+		c.Assert(err, IsNil)
 	}
 }
 
