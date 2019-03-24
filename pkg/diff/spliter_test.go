@@ -155,7 +155,7 @@ func (s *testSpliterSuite) TestRandomSpliter(c *C) {
 		c.Assert(err, IsNil)
 
 		for j, chunk := range chunks {
-			chunkStr, args := chunk.toString(normalMode, "")
+			chunkStr, args := chunk.toString("")
 			c.Assert(chunkStr, Equals, expectResult[i][j].chunkStr)
 			c.Assert(args, DeepEquals, expectResult[i][j].args)
 		}
@@ -178,11 +178,11 @@ func (s *testSpliterSuite) TestRandomSpliter(c *C) {
 		table: tableInstance,
 	}
 
-	oriChunk := newChunkRange().copyAndUpdate("a", "0", gt, "10", lt)
+	oriChunk := NewChunkRange(normalMode).copyAndUpdate("a", "0", gt, "10", lt)
 	chunks, err := r.splitRange(db, oriChunk, 2, "test", "test", tableInfo.Columns)
 	c.Assert(err, IsNil)
 	for i, chunk := range chunks {
-		chunkStr, args := chunk.toString(normalMode, "")
+		chunkStr, args := chunk.toString("")
 		c.Assert(chunkStr, Equals, expectChunks[i].chunkStr)
 		c.Assert(args, DeepEquals, expectChunks[i].args)
 	}
@@ -289,7 +289,7 @@ func (s *testSpliterSuite) TestBucketSpliter(c *C) {
 		c.Assert(err, IsNil)
 
 		for j, chunk := range chunks {
-			chunkStr, args := chunk.toString(bucketMode, "")
+			chunkStr, args := chunk.toString("")
 			c.Assert(chunkStr, Equals, expectResult[i][j].chunkStr)
 			c.Assert(args, DeepEquals, expectResult[i][j].args)
 		}
