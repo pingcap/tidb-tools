@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -32,10 +33,11 @@ import (
 
 // TableInstance record a table instance
 type TableInstance struct {
-	Conn   *sql.DB
-	Schema string
-	Table  string
-	info   *model.TableInfo
+	Conn       *sql.DB
+	Schema     string
+	Table      string
+	InstanceID string
+	info       *model.TableInfo
 }
 
 // TableDiff saves config for diff table
@@ -96,6 +98,11 @@ type TableDiff struct {
 func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (bool, bool, error) {
 	t.adjustConfig()
 
+	err := t.Prepare(ctx)
+	if err != nil {
+		return false, false, err
+	}
+
 	t.sqlCh = make(chan string)
 	t.wg.Add(1)
 	go func() {
@@ -103,7 +110,7 @@ func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (
 		t.wg.Done()
 	}()
 
-	err := t.getTableInfo(ctx)
+	err = t.getTableInfo(ctx)
 	if err != nil {
 		return false, false, errors.Trace(err)
 	}
@@ -128,6 +135,25 @@ func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (
 	t.sqlCh <- "end"
 	t.wg.Wait()
 	return structEqual, dataEqual, nil
+}
+
+func (t *TableDiff) Prepare(ctx context.Context) error {
+	ctx1, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	sql := "create database if not exists sync_diff_inspector;"
+	_, err := t.TargetTable.Conn.ExecContext(ctx1, sql)
+	if err != nil {
+		return err
+	}
+
+	sql = "create table if not exists `sync_diff_inspector`.`chunk`(`chunk_id` int, `instance_id` varchar(30), `schema` varchar(30), `table` varchar(30), `range` varchar(100), `checksum` varchar(20), chunk_str text, check_result varchar(24), primary key(`chunk_id`, `instance_id`, `schema`, `table`));"
+	_, err = t.TargetTable.Conn.ExecContext(ctx1, sql)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // CheckTableStruct checks table's struct

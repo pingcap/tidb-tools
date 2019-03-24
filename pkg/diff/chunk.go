@@ -16,8 +16,10 @@ package diff
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -557,7 +559,7 @@ func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSiz
 
 	jobCnt += len(chunks)
 
-	for _, chunk := range chunks {
+	for i, chunk := range chunks {
 		conditions, args := chunk.toString(collation)
 		where := fmt.Sprintf("(%s AND %s)", conditions, limits)
 
@@ -568,7 +570,26 @@ func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSiz
 			Where:  where,
 			Args:   args,
 		})
+		err = saveChunkInfo(table.Conn, i, table.InstanceID, table.Schema, table.Table, where, "", "not_checked", chunk)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return jobBucket, nil
+}
+
+func saveChunkInfo(db *sql.DB, chunkID int, instanceID, schema, table, where, checksum, checkResult string, chunk *ChunkRange) error {
+	chunkBytes, err := json.Marshal(chunk)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	sql := "replace into sync_diff_inspector.chunk values(?, ?, ?, ?, ?, ?, ?, ?);"
+	_, err = db.ExecContext(ctx, sql, chunkID, instanceID, schema, table, where, checksum, string(chunkBytes), checkResult)
+
+	return err
 }

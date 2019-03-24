@@ -365,9 +365,10 @@ func (df *Diff) Equal() (err error) {
 			sourceTables := make([]*diff.TableInstance, 0, len(table.SourceTables))
 			for _, sourceTable := range table.SourceTables {
 				sourceTableInstance := &diff.TableInstance{
-					Conn:   df.sourceDBs[sourceTable.InstanceID].Conn,
-					Schema: sourceTable.Schema,
-					Table:  sourceTable.Table,
+					Conn:       df.sourceDBs[sourceTable.InstanceID].Conn,
+					Schema:     sourceTable.Schema,
+					Table:      sourceTable.Table,
+					InstanceID: sourceTable.InstanceID,
 				}
 				sourceTables = append(sourceTables, sourceTableInstance)
 
@@ -377,9 +378,10 @@ func (df *Diff) Equal() (err error) {
 			}
 
 			targetTableInstance := &diff.TableInstance{
-				Conn:   df.targetDB.Conn,
-				Schema: table.Schema,
-				Table:  table.Table,
+				Conn:       df.targetDB.Conn,
+				Schema:     table.Schema,
+				Table:      table.Table,
+				InstanceID: df.targetDB.InstanceID,
 			}
 
 			if df.targetDB.InstanceID == df.tidbInstanceID {
