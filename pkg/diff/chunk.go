@@ -585,12 +585,8 @@ func saveChunkInfo(db *sql.DB, chunkID int, instanceID, schema, table, where, ch
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
 	sql := "replace into sync_diff_inspector.chunk values(?, ?, ?, ?, ?, ?, ?, ?, ?);"
-	_, err = db.ExecContext(ctx, sql, chunkID, instanceID, schema, table, where, checksum, string(chunkBytes), checkResult, time.Now())
-
+	err = dbutil.ExecSQLWithRetry(db, sql, chunkID, instanceID, schema, table, where, checksum, string(chunkBytes), checkResult, time.Now())
 	if err != nil {
 		log.Error("save chunk info failed", zap.Error(err))
 		return err

@@ -20,6 +20,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -35,6 +36,12 @@ const (
 
 	// ImplicitColID is ID implicit column in TiDB
 	ImplicitColID = -1
+
+	// DefaultRetryTime is the default retry time for execute sql
+	DefaultRetryTime = 10
+
+	// DefaultTimeout is the default timeout for execute sql
+	DefaultTimeout time.Duration = 5 * time.Second
 )
 
 var (
@@ -616,4 +623,19 @@ func ReplacePlaceholder(str string, args []string) string {
 	*/
 	newStr := strings.Replace(str, "?", "'%s'", -1)
 	return fmt.Sprintf(newStr, utils.StringsToInterfaces(args)...)
+}
+
+// ExecSQLWithRetry executes sql with retry
+func ExecSQLWithRetry(db *sql.DB, sql string, args ...interface{}) (err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultTimeout)
+	defer cancel()
+
+	for i := 0; i < DefaultRetryTime; i++ {
+		_, err = db.ExecContext(ctx, sql, args)
+		if err == nil {
+			return nil
+		}
+	}
+
+	return err
 }
