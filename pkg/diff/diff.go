@@ -186,7 +186,7 @@ func (t *TableDiff) Prepare(ctx context.Context) error {
 		return errors.Trace(err)
 	}
 
-	createChunkTableSQL := "CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`chunk`(`chunk_id` int, `instance_id` varchar(30), `schema` varchar(30), `table` varchar(30), `range` varchar(100), `checksum` varchar(20), `chunk_str` text, `check_result` enum('not_checked','checking','success', 'failed', 'ignore'), update_time datetime, PRIMARY KEY(`chunk_id`, `instance_id`, `schema`, `table`));"
+	createChunkTableSQL := "CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`chunk`(`chunk_id` int, `instance_id` varchar(30), `schema` varchar(30), `table` varchar(30), `range` varchar(100), `checksum` varchar(20), `chunk_str` text, `check_result` enum('not_checked','checking','success', 'failed', 'ignore', 'error'), update_time datetime, PRIMARY KEY(`chunk_id`, `instance_id`, `schema`, `table`));"
 	_, err = t.TargetTable.Conn.ExecContext(context.Background(), createChunkTableSQL)
 	if err != nil {
 		log.Info("create chunk table", zap.Error(err))
@@ -344,30 +344,67 @@ func (t *TableDiff) checkChunksDataEqual(ctx context.Context, chunks []*ChunkRan
 	return equal, nil
 }
 
-func (t *TableDiff) checkChunkDataEqual(ctx context.Context, chunk *ChunkRange) (bool, error) {
-	equal := true
-
+func (t *TableDiff) checkChunkDataEqual(ctx context.Context, chunk *ChunkRange) (equal bool, err error) {
+	defer func() {
+		var state string 
+		if err != nil {
+			state = "error"
+		} else if equal {
+			state = "success"
+		} else {
+			state = "failed"
+		}
+		err1 := updateChunkInfo(t.TargetTable.Conn, chunk.ID, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table, "check_result", state)
+		if err1 != nil {
+			log.Warn("update chunk info", zap.Error(err1))
+		}
+		log.Info("checkChunkDataEqual success")
+	}()
+	
 	if t.UseChecksum {
 		// first check the checksum is equal or not
-		sourceChecksum, err := t.getSourceTableChecksum(ctx, chunk)
+		equal, err = t.compareChecksum(ctx, chunk)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
-
-		targetChecksum, err := dbutil.GetCRC32Checksum(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, utils.StringsToInterfaces(chunk.Args), utils.SliceToMap(t.IgnoreColumns))
-		if err != nil {
-			return false, errors.Trace(err)
-		}
-		if sourceChecksum == targetChecksum {
-			log.Info("checksum is equal", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", chunk.Where), zap.Reflect("args", chunk.Args), zap.Int64("checksum", sourceChecksum))
+		if equal {
 			return true, nil
 		}
-
-		log.Warn("checksum is not equal", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", chunk.Where), zap.Reflect("args", chunk.Args), zap.Int64("source checksum", sourceChecksum), zap.Int64("target checksum", targetChecksum))
 	}
 
 	// if checksum is not equal or don't need compare checksum, compare the data
 	log.Info("select data and then check data", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", chunk.Where), zap.Reflect("args", chunk.Args))
+
+	equal, err = t.compareRows(ctx, chunk)
+	if err != nil {
+		return false, errors.Trace(err)
+	}
+
+	return equal, nil
+}
+
+func (t *TableDiff) compareChecksum(ctx context.Context, chunk *ChunkRange) (bool, error) {
+	// first check the checksum is equal or not
+	sourceChecksum, err := t.getSourceTableChecksum(ctx, chunk)
+	if err != nil {
+		return false, errors.Trace(err)
+	}
+
+	targetChecksum, err := dbutil.GetCRC32Checksum(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, utils.StringsToInterfaces(chunk.Args), utils.SliceToMap(t.IgnoreColumns))
+	if err != nil {
+		return false, errors.Trace(err)
+	}
+	if sourceChecksum == targetChecksum {
+		log.Info("checksum is equal", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", chunk.Where), zap.Reflect("args", chunk.Args), zap.Int64("checksum", sourceChecksum))
+		return true, nil
+	}
+
+	log.Warn("checksum is not equal", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", chunk.Where), zap.Reflect("args", chunk.Args), zap.Int64("source checksum", sourceChecksum), zap.Int64("target checksum", targetChecksum))
+
+	return false, nil
+}
+
+func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, error) {
 	sourceRows := make(map[string][]map[string]*dbutil.ColumnData)
 	for i, sourceTable := range t.SourceTables {
 		rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, chunk.Where, utils.StringsToInterfaces(chunk.Args), utils.SliceToMap(t.IgnoreColumns), t.Collation)
@@ -381,21 +418,7 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, chunk *ChunkRange) 
 	if err != nil {
 		return false, errors.Trace(err)
 	}
-
-	eq, err := t.compareRows(sourceRows, targetRows, orderKeyCols)
-	if err != nil {
-		return false, errors.Trace(err)
-	}
-
-	// if equal is false, we continue check data, we should find all the different data just run once
-	if !eq {
-		equal = false
-	}
-
-	return equal, nil
-}
-
-func (t *TableDiff) compareRows(sourceRows map[string][]map[string]*dbutil.ColumnData, targetRows []map[string]*dbutil.ColumnData, orderKeyCols []*model.ColumnInfo) (bool, error) {
+	
 	var (
 		equal     = true
 		rowsData1 = make([]map[string]*dbutil.ColumnData, 0, 100)

@@ -602,6 +602,17 @@ func saveChunkInfo(db *sql.DB, chunkID int, instanceID, schema, table, where, ch
 	return nil
 }
 
+func updateChunkInfo(db *sql.DB, chunkID int, instanceID, schema, table, column string, value string) error {
+	sql := fmt.Sprintf("update sync_diff_inspector.chunk set %s = ?, update_time = ? where chunk_id = ? AND instance_id = ? AND `schema` = ? AND `table` = ?", column)
+	err := dbutil.ExecSQLWithRetry(db, sql, value, time.Now(), chunkID, instanceID, schema, table)
+	if err != nil {
+		log.Error("save chunk info failed", zap.Error(err), zap.String("sql", sql), zap.Int("chunkID", chunkID), zap.String("instanceID", instanceID), zap.String("schema", schema),
+	zap.String("table", table), zap.String("value", value))
+		return err
+	}
+	return nil
+}
+
 func saveSummaryInfo(db *sql.DB, schema, table string, num int, successNum int, failedNum int, state string, configHash string) error {
 	sql := "REPLACE INTO `sync_diff_inspector`.`table_summary` values(?, ?, ?, ?, ?, ?, ?, ?);"
 	err := dbutil.ExecSQLWithRetry(db, sql, schema, table, num, successNum, failedNum, state, configHash, time.Now())
