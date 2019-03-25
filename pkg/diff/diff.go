@@ -147,7 +147,7 @@ func (t *TableDiff) Prepare(ctx context.Context) error {
 		return err
 	}
 
-	sql = "create table if not exists `sync_diff_inspector`.`chunk`(`chunk_id` int, `instance_id` varchar(30), `schema` varchar(30), `table` varchar(30), `range` varchar(100), `checksum` varchar(20), chunk_str text, check_result varchar(24), primary key(`chunk_id`, `instance_id`, `schema`, `table`));"
+	sql = "create table if not exists `sync_diff_inspector`.`chunk`(`chunk_id` int, `instance_id` varchar(30), `schema` varchar(30), `table` varchar(30), `range` varchar(100), `checksum` varchar(20), chunk_str text, check_result ENUM('not_checked','checking','success', 'failed'), update_time datetime, primary key(`chunk_id`, `instance_id`, `schema`, `table`));"
 	_, err = t.TargetTable.Conn.ExecContext(ctx1, sql)
 	if err != nil {
 		return err
