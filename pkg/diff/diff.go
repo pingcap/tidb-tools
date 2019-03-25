@@ -105,6 +105,7 @@ type sumamry struct {
 	num        int
 	successNum int
 	failedNum  int
+	ignoreNum  int
 }
 
 func (t *TableDiff) setConfigHash() error {
@@ -185,7 +186,7 @@ func (t *TableDiff) Prepare(ctx context.Context) error {
 		return errors.Trace(err)
 	}
 
-	createChunkTableSQL := "CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`chunk`(`chunk_id` int, `instance_id` varchar(30), `schema` varchar(30), `table` varchar(30), `range` varchar(100), `checksum` varchar(20), `chunk_str` text, `check_result` enum('not_checked','checking','success', 'failed'), update_time datetime, PRIMARY KEY(`chunk_id`, `instance_id`, `schema`, `table`));"
+	createChunkTableSQL := "CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`chunk`(`chunk_id` int, `instance_id` varchar(30), `schema` varchar(30), `table` varchar(30), `range` varchar(100), `checksum` varchar(20), `chunk_str` text, `check_result` enum('not_checked','checking','success', 'failed', 'ignore'), update_time datetime, PRIMARY KEY(`chunk_id`, `instance_id`, `schema`, `table`));"
 	_, err = t.TargetTable.Conn.ExecContext(context.Background(), createChunkTableSQL)
 	if err != nil {
 		log.Info("create chunk table", zap.Error(err))
