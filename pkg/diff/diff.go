@@ -21,7 +21,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -96,8 +95,6 @@ type TableDiff struct {
 
 // Equal tests whether two database have same data and schema.
 func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (bool, bool, error) {
-	t.adjustConfig()
-
 	err := t.Prepare(ctx)
 	if err != nil {
 		return false, false, err
@@ -137,20 +134,26 @@ func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (
 	return structEqual, dataEqual, nil
 }
 
+// Prepare do some prepare work before check data, like adjust config and create checkpoint table
 func (t *TableDiff) Prepare(ctx context.Context) error {
-	ctx1, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
+	t.adjustConfig()
 
-	sql := "create database if not exists sync_diff_inspector;"
-	_, err := t.TargetTable.Conn.ExecContext(ctx1, sql)
+	//ctx, cancel := context.WithTimeout(context.Background(), dbutil.DefaultTimeout)
+	//defer cancel()
+	createSchemaSQL := "CREATE DATABASE IF NOT EXISTS `sync_diff_inspector`;"
+	_, err := t.TargetTable.Conn.ExecContext(context.Background(), createSchemaSQL)
 	if err != nil {
-		return err
+		log.Info("create schema", zap.Error(err))
+		return errors.Trace(err)
 	}
 
-	sql = "create table if not exists `sync_diff_inspector`.`chunk`(`chunk_id` int, `instance_id` varchar(30), `schema` varchar(30), `table` varchar(30), `range` varchar(100), `checksum` varchar(20), chunk_str text, check_result ENUM('not_checked','checking','success', 'failed'), update_time datetime, primary key(`chunk_id`, `instance_id`, `schema`, `table`));"
-	_, err = t.TargetTable.Conn.ExecContext(ctx1, sql)
+	//createSummaryTableSQL := "CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`table_summary`()"
+
+	createChunkTableSQL := "CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`chunk`(`chunk_id` int, `instance_id` varchar(30), `schema` varchar(30), `table` varchar(30), `range` varchar(100), `checksum` varchar(20), `chunk_str` text, `check_result` ENUM('not_checked','checking','success', 'failed'), update_time datetime, PRIMARY KEY(`chunk_id`, `instance_id`, `schema`, `table`));"
+	_, err = t.TargetTable.Conn.ExecContext(context.Background(), createChunkTableSQL)
 	if err != nil {
-		return err
+		log.Info("create chunk table", zap.Error(err))
+		return errors.Trace(err)
 	}
 
 	return nil

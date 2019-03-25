@@ -631,7 +631,7 @@ func ExecSQLWithRetry(db *sql.DB, sql string, args ...interface{}) (err error) {
 	defer cancel()
 
 	for i := 0; i < DefaultRetryTime; i++ {
-		_, err = db.ExecContext(ctx, sql, args)
+		_, err = db.ExecContext(ctx, sql, args...)
 		if err == nil {
 			return nil
 		}

@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"strconv"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -51,6 +52,7 @@ type Bound struct {
 
 // ChunkRange represents chunk range
 type ChunkRange struct {
+	ID     int      `json:"id"`
 	Bounds []*Bound `json:"boounds"`
 	Mode   string   `json:"mode"`
 }
@@ -66,7 +68,12 @@ func NewChunkRange(mode string) *ChunkRange {
 // String returns the string of ChunkRange, used for log.
 func (c *ChunkRange) String() string {
 	var s strings.Builder
-	s.WriteString("{")
+	s.WriteString("{ ID: ")
+	s.WriteString(strconv.Itoa(c.ID))
+	s.WriteString(", mode: ")
+	s.WriteString(c.Mode)
+	s.WriteString(", bounds: {")
+
 	for _, bound := range c.Bounds {
 		s.WriteString("[ column: ")
 		s.WriteString(bound.Column)
@@ -80,7 +87,7 @@ func (c *ChunkRange) String() string {
 		s.WriteString(bound.UpperSymbol)
 		s.WriteString(" ], ")
 	}
-	s.WriteString("}")
+	s.WriteString("}}")
 
 	return s.String()
 }
@@ -549,10 +556,21 @@ func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSiz
 		return nil, errors.Trace(err)
 	}
 
-	chunks, err := getChunksForTable(table, fields, chunkSize, limits, collation, useTiDBStatsInfo)
+	chunks, err := loadChunksInfo(table.Conn, table.InstanceID, table.Schema, table.Table)
 	if err != nil {
+		log.Info("load chunks info", zap.Error(err))
 		return nil, errors.Trace(err)
 	}
+	if len(chunks) == 0 {
+		log.Info("don't have checkpoint info")
+		chunks, err = getChunksForTable(table, fields, chunkSize, limits, collation, useTiDBStatsInfo)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+	} else {
+		log.Info("load chunks info success", zap.Int("num", len(chunks)), zap.Stringer("first chunk", chunks[0]))
+	}
+
 	if chunks == nil {
 		return nil, nil
 	}
@@ -560,6 +578,8 @@ func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSiz
 	jobCnt += len(chunks)
 
 	for i, chunk := range chunks {
+		chunk.ID = i
+
 		conditions, args := chunk.toString(collation)
 		where := fmt.Sprintf("(%s AND %s)", conditions, limits)
 
@@ -592,4 +612,34 @@ func saveChunkInfo(db *sql.DB, chunkID int, instanceID, schema, table, where, ch
 		return err
 	}
 	return nil
+}
+
+func loadChunksInfo(db *sql.DB, instanceID, schema, table string) ([]*ChunkRange, error) {
+	chunks := make([]*ChunkRange, 0, 100)
+
+	ctx, cancel := context.WithTimeout(context.Background(), dbutil.DefaultTimeout)
+	defer cancel()
+	sql := "SELECT * FROM `sync_diff_inspector`.`chunk` WHERE `instance_id` = ? AND `schema` = ? AND `table` = ?"
+	rows, err := db.QueryContext(ctx, sql, instanceID, schema, table)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		fields, err1 := dbutil.ScanRow(rows)
+		if err1 != nil {
+			return nil, errors.Trace(err1)
+		}
+
+		chunkStr := fields["chunk_str"].Data
+		chunk := new(ChunkRange)
+		err := json.Unmarshal(chunkStr, &chunk)
+		if err != nil {
+			return nil, err
+		}
+		chunks = append(chunks, chunk)
+	}
+
+	return chunks, nil
 }
