@@ -53,8 +53,11 @@ type Bound struct {
 // ChunkRange represents chunk range
 type ChunkRange struct {
 	ID     int      `json:"id"`
-	Bounds []*Bound `json:"boounds"`
+	Bounds []*Bound `json:"Bounds"`
 	Mode   string   `json:"mode"`
+
+	Where string
+	Args  []string
 }
 
 // NewChunkRange return a ChunkRange.
@@ -528,19 +531,18 @@ func getSplitFields(table *model.TableInfo, splitFields []string) ([]*model.Colu
 	return cols, nil
 }
 
-// CheckJob is the struct of job for check
-type CheckJob struct {
-	Schema string
-	Table  string
-	Where  string
-	Args   []string
-}
+// GetChunks gets some chunks.
+func GetChunks(table *TableInstance, splitFields, limits string, chunkSize int, collation string, useTiDBStatsInfo bool) ([]*ChunkRange, error) {
+	chunks, err := loadChunksInfo(table.Conn, table.InstanceID, table.Schema, table.Table)
+	if err != nil {
+		log.Info("load chunks info", zap.Error(err))
+		return nil, errors.Trace(err)
+	}
 
-// GenerateCheckJob generates some CheckJobs.
-func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSize int, collation string, useTiDBStatsInfo bool) ([]*CheckJob, error) {
-	jobBucket := make([]*CheckJob, 0, 10)
-	var jobCnt int
-	var err error
+	if len(chunks) != 0 {
+		log.Info("load chunks info success", zap.Int("num", len(chunks)), zap.Stringer("first chunk", chunks[0]))
+		return chunks, nil
+	}
 
 	var splitFieldArr []string
 	if len(splitFields) != 0 {
@@ -556,47 +558,33 @@ func GenerateCheckJob(table *TableInstance, splitFields, limits string, chunkSiz
 		return nil, errors.Trace(err)
 	}
 
-	chunks, err := loadChunksInfo(table.Conn, table.InstanceID, table.Schema, table.Table)
+	log.Info("don't have checkpoint info")
+	chunks, err = getChunksForTable(table, fields, chunkSize, limits, collation, useTiDBStatsInfo)
 	if err != nil {
-		log.Info("load chunks info", zap.Error(err))
 		return nil, errors.Trace(err)
-	}
-	if len(chunks) == 0 {
-		log.Info("don't have checkpoint info")
-		chunks, err = getChunksForTable(table, fields, chunkSize, limits, collation, useTiDBStatsInfo)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-	} else {
-		log.Info("load chunks info success", zap.Int("num", len(chunks)), zap.Stringer("first chunk", chunks[0]))
 	}
 
 	if chunks == nil {
 		return nil, nil
 	}
 
-	jobCnt += len(chunks)
-
 	for i, chunk := range chunks {
-		chunk.ID = i
-
 		conditions, args := chunk.toString(collation)
 		where := fmt.Sprintf("(%s AND %s)", conditions, limits)
 
 		log.Debug("create check job", zap.String("table", dbutil.TableName(table.Schema, table.Table)), zap.String("where", where), zap.Reflect("args", args))
-		jobBucket = append(jobBucket, &CheckJob{
-			Schema: table.Schema,
-			Table:  table.Table,
-			Where:  where,
-			Args:   args,
-		})
+
+		chunk.ID = i
+		chunk.Where = where
+		chunk.Args = args
+
 		err = saveChunkInfo(table.Conn, i, table.InstanceID, table.Schema, table.Table, where, "", "not_checked", chunk)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return jobBucket, nil
+	return chunks, nil
 }
 
 func saveChunkInfo(db *sql.DB, chunkID int, instanceID, schema, table, where, checksum, checkResult string, chunk *ChunkRange) error {
