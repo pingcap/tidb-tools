@@ -21,6 +21,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"encoding/json"
+	"crypto/md5"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -32,19 +34,19 @@ import (
 
 // TableInstance record a table instance
 type TableInstance struct {
-	Conn       *sql.DB
-	Schema     string
-	Table      string
-	InstanceID string
+	Conn       *sql.DB 
+	Schema     string `json:"schema"`
+	Table      string `json:"table"`
+	InstanceID string `json:"instance-id"`
 	info       *model.TableInfo
 }
 
 // TableDiff saves config for diff table
 type TableDiff struct {
 	// source tables
-	SourceTables []*TableInstance
-	// target table
-	TargetTable *TableInstance
+	SourceTables []*TableInstance `json: "source-tables"`
+	// target table 
+	TargetTable *TableInstance `json:"target-table"`
 
 	// columns be ignored
 	IgnoreColumns []string
@@ -53,10 +55,10 @@ type TableDiff struct {
 	RemoveColumns []string
 
 	// field should be the primary key, unique key or field with index
-	Fields string
+	Fields string `json:"fields"`
 
 	// select range, for example: "age > 10 AND age < 20"
-	Range string
+	Range string `json:"range"`
 
 	// for example, the whole data is [1...100]
 	// we can split these data to [1...10], [11...20], ..., [91...100]
@@ -65,19 +67,19 @@ type TableDiff struct {
 	ChunkSize int
 
 	// sampling check percent, for example 10 means only check 10% data
-	Sample int
+	Sample int `json:"sample"`
 
 	// how many goroutines are created to check data
 	CheckThreadCount int
 
 	// set true if target-db and source-db all support tidb implicit column "_tidb_rowid"
-	UseRowID bool
+	UseRowID bool `json:"use-rowid"`
 
 	// set false if want to comapre the data directly
 	UseChecksum bool
 
 	// collation config in mysql/tidb, should corresponding to charset.
-	Collation string
+	Collation string `json:"collation"`
 
 	// ignore check table's struct
 	IgnoreStructCheck bool
@@ -91,6 +93,20 @@ type TableDiff struct {
 	sqlCh chan string
 
 	wg sync.WaitGroup
+
+	configHash string
+}
+
+func (t *TableDiff) setConfigHash() error {
+	jsonBytes, err := json.Marshal(t)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	
+	t.configHash = fmt.Sprintf("%x", md5.Sum(jsonBytes))
+	log.Debug("table diff config", zap.ByteString("config", jsonBytes), zap.String("hash", t.configHash))
+
+	return nil
 }
 
 // Equal tests whether two database have same data and schema.
@@ -138,18 +154,28 @@ func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (
 func (t *TableDiff) Prepare(ctx context.Context) error {
 	t.adjustConfig()
 
+	err := t.setConfigHash()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	//ctx, cancel := context.WithTimeout(context.Background(), dbutil.DefaultTimeout)
 	//defer cancel()
 	createSchemaSQL := "CREATE DATABASE IF NOT EXISTS `sync_diff_inspector`;"
-	_, err := t.TargetTable.Conn.ExecContext(context.Background(), createSchemaSQL)
+	_, err = t.TargetTable.Conn.ExecContext(context.Background(), createSchemaSQL)
 	if err != nil {
 		log.Info("create schema", zap.Error(err))
 		return errors.Trace(err)
 	}
 
-	//createSummaryTableSQL := "CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`table_summary`()"
+	createSummaryTableSQL := "CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`table_summary`(`schema` varchar(30), `table` varchar(30), `chunk_num` int, `check_success_num` int, `check_failed_num` int, `state` enum('not_checked', 'checking', 'success', 'failed'), `config_hash` varchar(20), `update_time` datetime, PRIMARY KEY(`schema`, `table`));"
+	_, err = t.TargetTable.Conn.ExecContext(context.Background(), createSummaryTableSQL)
+	if err != nil {
+		log.Info("create chunk table", zap.Error(err))
+		return errors.Trace(err)
+	}
 
-	createChunkTableSQL := "CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`chunk`(`chunk_id` int, `instance_id` varchar(30), `schema` varchar(30), `table` varchar(30), `range` varchar(100), `checksum` varchar(20), `chunk_str` text, `check_result` ENUM('not_checked','checking','success', 'failed'), update_time datetime, PRIMARY KEY(`chunk_id`, `instance_id`, `schema`, `table`));"
+	createChunkTableSQL := "CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`chunk`(`chunk_id` int, `instance_id` varchar(30), `schema` varchar(30), `table` varchar(30), `range` varchar(100), `checksum` varchar(20), `chunk_str` text, `check_result` enum('not_checked','checking','success', 'failed'), update_time datetime, PRIMARY KEY(`chunk_id`, `instance_id`, `schema`, `table`));"
 	_, err = t.TargetTable.Conn.ExecContext(context.Background(), createChunkTableSQL)
 	if err != nil {
 		log.Info("create chunk table", zap.Error(err))

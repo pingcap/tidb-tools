@@ -18,8 +18,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -611,6 +611,21 @@ func saveChunkInfo(db *sql.DB, chunkID int, instanceID, schema, table, where, ch
 		log.Error("save chunk info failed", zap.Error(err))
 		return err
 	}
+	return nil
+}
+
+func saveSummaryInfo(db *sql.DB, schema, table string, num int, successNum int, failedNum int, state string, configHash string) error {
+	sql := "REPLACE INTO `sync_diff_inspector`.`table_summary` values(?, ?, ?, ?, ?, ?, ?, ?);"
+	err := dbutil.ExecSQLWithRetry(db, sql, schema, table, num, successNum, failedNum, state, configHash, time.Now())
+	if err != nil {
+		log.Error("save summary info failed", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+func updateSummaryInfo(db *sql.DB, instanceID, schema, table string, success bool) error {
 	return nil
 }
 
