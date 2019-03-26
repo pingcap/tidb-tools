@@ -16,11 +16,9 @@ package diff
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -532,16 +530,16 @@ func getSplitFields(table *model.TableInfo, splitFields []string) ([]*model.Colu
 }
 
 // GetChunks gets some chunks.
-func GetChunks(table *TableInstance, splitFields, limits string, chunkSize int, collation string, useTiDBStatsInfo bool) ([]*ChunkRange, error) {
-	chunks, err := loadChunksInfo(table.Conn, table.InstanceID, table.Schema, table.Table)
+func GetChunks(ctx context.Context, table *TableInstance, splitFields, limits string, chunkSize int, collation string, useTiDBStatsInfo bool) (chunks []*ChunkRange, fromCheckpoint bool, err error) {
+	chunks, err = loadChunksInfo(ctx, table.Conn, table.InstanceID, table.Schema, table.Table)
 	if err != nil {
 		log.Info("load chunks info", zap.Error(err))
-		return nil, errors.Trace(err)
+		return nil, false, errors.Trace(err)
 	}
 
 	if len(chunks) != 0 {
 		log.Info("load chunks info success", zap.Int("num", len(chunks)), zap.Stringer("first chunk", chunks[0]))
-		return chunks, nil
+		return chunks, true, nil
 	}
 
 	var splitFieldArr []string
@@ -555,17 +553,17 @@ func GetChunks(table *TableInstance, splitFields, limits string, chunkSize int, 
 
 	fields, err := getSplitFields(table.info, splitFieldArr)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, false, errors.Trace(err)
 	}
 
-	log.Info("don't have checkpoint info")
+	log.Debug("don't have checkpoint info or checkpoint info is expired")
 	chunks, err = getChunksForTable(table, fields, chunkSize, limits, collation, useTiDBStatsInfo)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, false, errors.Trace(err)
 	}
 
 	if chunks == nil {
-		return nil, nil
+		return nil, false, nil
 	}
 
 	for i, chunk := range chunks {
@@ -578,82 +576,11 @@ func GetChunks(table *TableInstance, splitFields, limits string, chunkSize int, 
 		chunk.Where = where
 		chunk.Args = args
 
-		err = saveChunkInfo(table.Conn, i, table.InstanceID, table.Schema, table.Table, where, "", "not_checked", chunk)
+		err = saveChunkInfo(ctx, table.Conn, i, table.InstanceID, table.Schema, table.Table, where, "", "not_checked", chunk)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 	}
 
-	return chunks, nil
-}
-
-func saveChunkInfo(db *sql.DB, chunkID int, instanceID, schema, table, where, checksum, checkResult string, chunk *ChunkRange) error {
-	chunkBytes, err := json.Marshal(chunk)
-	if err != nil {
-		return err
-	}
-
-	sql := "replace into sync_diff_inspector.chunk values(?, ?, ?, ?, ?, ?, ?, ?, ?);"
-	err = dbutil.ExecSQLWithRetry(db, sql, chunkID, instanceID, schema, table, where, checksum, string(chunkBytes), checkResult, time.Now())
-	if err != nil {
-		log.Error("save chunk info failed", zap.Error(err))
-		return err
-	}
-	return nil
-}
-
-func updateChunkInfo(db *sql.DB, chunkID int, instanceID, schema, table, column string, value string) error {
-	sql := fmt.Sprintf("update sync_diff_inspector.chunk set %s = ?, update_time = ? where chunk_id = ? AND instance_id = ? AND `schema` = ? AND `table` = ?", column)
-	err := dbutil.ExecSQLWithRetry(db, sql, value, time.Now(), chunkID, instanceID, schema, table)
-	if err != nil {
-		log.Error("save chunk info failed", zap.Error(err), zap.String("sql", sql), zap.Int("chunkID", chunkID), zap.String("instanceID", instanceID), zap.String("schema", schema),
-	zap.String("table", table), zap.String("value", value))
-		return err
-	}
-	return nil
-}
-
-func saveSummaryInfo(db *sql.DB, schema, table string, num int, successNum int, failedNum int, state string, configHash string) error {
-	sql := "REPLACE INTO `sync_diff_inspector`.`table_summary` values(?, ?, ?, ?, ?, ?, ?, ?);"
-	err := dbutil.ExecSQLWithRetry(db, sql, schema, table, num, successNum, failedNum, state, configHash, time.Now())
-	if err != nil {
-		log.Error("save summary info failed", zap.Error(err))
-		return err
-	}
-
-	return nil
-}
-
-func updateSummaryInfo(db *sql.DB, instanceID, schema, table string, success bool) error {
-	return nil
-}
-
-func loadChunksInfo(db *sql.DB, instanceID, schema, table string) ([]*ChunkRange, error) {
-	chunks := make([]*ChunkRange, 0, 100)
-
-	ctx, cancel := context.WithTimeout(context.Background(), dbutil.DefaultTimeout)
-	defer cancel()
-	sql := "SELECT * FROM `sync_diff_inspector`.`chunk` WHERE `instance_id` = ? AND `schema` = ? AND `table` = ?"
-	rows, err := db.QueryContext(ctx, sql, instanceID, schema, table)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		fields, err1 := dbutil.ScanRow(rows)
-		if err1 != nil {
-			return nil, errors.Trace(err1)
-		}
-
-		chunkStr := fields["chunk_str"].Data
-		chunk := new(ChunkRange)
-		err := json.Unmarshal(chunkStr, &chunk)
-		if err != nil {
-			return nil, err
-		}
-		chunks = append(chunks, chunk)
-	}
-
-	return chunks, nil
+	return chunks, false, nil
 }

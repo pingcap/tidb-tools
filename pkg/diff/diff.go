@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -128,11 +129,10 @@ func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (
 	}
 
 	t.sqlCh = make(chan string)
-	t.wg.Add(1)
-	go func() {
-		t.WriteSqls(ctx, writeFixSQL)
-		t.wg.Done()
-	}()
+	
+	t.wg.Add(2)
+	stopWriteSqlsCh := t.WriteSqls(ctx, writeFixSQL)
+	stopUpdateSummaryCh := t.UpdateSummaryInfo(ctx)
 
 	err = t.getTableInfo(ctx)
 	if err != nil {
@@ -156,7 +156,11 @@ func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (
 		}
 	}
 
-	t.sqlCh <- "end"
+	log.Info("stopWriteSqlsCh")
+	stopWriteSqlsCh <- true
+	log.Info("stopUpdateSummaryCh")
+	stopUpdateSummaryCh <- true
+	log.Info("wait")
 	t.wg.Wait()
 	return structEqual, dataEqual, nil
 }
@@ -170,26 +174,28 @@ func (t *TableDiff) Prepare(ctx context.Context) error {
 		return errors.Trace(err)
 	}
 
-	//ctx, cancel := context.WithTimeout(context.Background(), dbutil.DefaultTimeout)
-	//defer cancel()
-	createSchemaSQL := "CREATE DATABASE IF NOT EXISTS `sync_diff_inspector`;"
-	_, err = t.TargetTable.Conn.ExecContext(context.Background(), createSchemaSQL)
+	err = createCheckpointTable(ctx, t.TargetTable.Conn)
 	if err != nil {
-		log.Info("create schema", zap.Error(err))
 		return errors.Trace(err)
 	}
 
-	createSummaryTableSQL := "CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`table_summary`(`schema` varchar(30), `table` varchar(30), `chunk_num` int, `check_success_num` int, `check_failed_num` int, `state` enum('not_checked', 'checking', 'success', 'failed'), `config_hash` varchar(20), `update_time` datetime, PRIMARY KEY(`schema`, `table`));"
-	_, err = t.TargetTable.Conn.ExecContext(context.Background(), createSummaryTableSQL)
+	useCheckpoint, err := loadFromCheckPoint(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table)
 	if err != nil {
-		log.Info("create chunk table", zap.Error(err))
 		return errors.Trace(err)
 	}
 
-	createChunkTableSQL := "CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`chunk`(`chunk_id` int, `instance_id` varchar(30), `schema` varchar(30), `table` varchar(30), `range` varchar(100), `checksum` varchar(20), `chunk_str` text, `check_result` enum('not_checked','checking','success', 'failed', 'ignore', 'error'), update_time datetime, PRIMARY KEY(`chunk_id`, `instance_id`, `schema`, `table`));"
-	_, err = t.TargetTable.Conn.ExecContext(context.Background(), createChunkTableSQL)
+	if useCheckpoint {
+		return nil
+	}
+
+	// clean old checkpoint infomation, and initial table summary
+	err = cleanCheckpointInfo(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table)
 	if err != nil {
-		log.Info("create chunk table", zap.Error(err))
+		return errors.Trace(err)
+	}
+
+	err = initSummaryInfo(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
+	if err != nil {
 		return errors.Trace(err)
 	}
 
@@ -258,7 +264,7 @@ func (t *TableDiff) EqualTableData(ctx context.Context) (equal bool, err error) 
 		useTiDB = true
 	}
 
-	chunks, err := GetChunks(table, t.Fields, t.Range, t.ChunkSize, t.Collation, useTiDB)
+	chunks, _, err := GetChunks(ctx, table, t.Fields, t.Range, t.ChunkSize, t.Collation, useTiDB)
 
 	if err != nil {
 		return false, errors.Trace(err)
@@ -346,7 +352,7 @@ func (t *TableDiff) checkChunksDataEqual(ctx context.Context, chunks []*ChunkRan
 
 func (t *TableDiff) checkChunkDataEqual(ctx context.Context, chunk *ChunkRange) (equal bool, err error) {
 	defer func() {
-		var state string 
+		var state string
 		if err != nil {
 			state = "error"
 		} else if equal {
@@ -354,13 +360,13 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, chunk *ChunkRange) 
 		} else {
 			state = "failed"
 		}
-		err1 := updateChunkInfo(t.TargetTable.Conn, chunk.ID, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table, "check_result", state)
+		err1 := updateChunkInfo(ctx, t.TargetTable.Conn, chunk.ID, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table, "check_result", state)
 		if err1 != nil {
 			log.Warn("update chunk info", zap.Error(err1))
 		}
 		log.Info("checkChunkDataEqual success")
 	}()
-	
+
 	if t.UseChecksum {
 		// first check the checksum is equal or not
 		equal, err = t.compareChecksum(ctx, chunk)
@@ -418,7 +424,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 	if err != nil {
 		return false, errors.Trace(err)
 	}
-	
+
 	var (
 		equal     = true
 		rowsData1 = make([]map[string]*dbutil.ColumnData, 0, 100)
@@ -526,23 +532,66 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 }
 
 // WriteSqls write sqls to file
-func (t *TableDiff) WriteSqls(ctx context.Context, writeFixSQL func(string) error) {
-	for {
-		select {
-		case dml, ok := <-t.sqlCh:
-			if !ok || dml == "end" {
+func (t *TableDiff) WriteSqls(ctx context.Context, writeFixSQL func(string) error) chan bool {
+	stopWriteCh := make(chan bool)
+
+	go func() {
+		defer t.wg.Done()
+
+		for {
+			select {
+			case dml, ok := <-t.sqlCh:
+				if !ok {
+					return
+				}
+
+				err := writeFixSQL(fmt.Sprintf("%s\n", dml))
+				if err != nil {
+					log.Error("write sql failed", zap.String("sql", dml), zap.Error(err))
+				}
+				t.wg.Done()
+			case <-stopWriteCh:
+				return
+			case <-ctx.Done():
 				return
 			}
-
-			err := writeFixSQL(fmt.Sprintf("%s\n", dml))
-			if err != nil {
-				log.Error("write sql failed", zap.String("sql", dml), zap.Error(err))
-			}
-			t.wg.Done()
-		case <-ctx.Done():
-			return
 		}
-	}
+	}()
+
+	return stopWriteCh
+}
+
+func (t *TableDiff) UpdateSummaryInfo(ctx context.Context) chan bool {
+	stopUpdateCh := make(chan bool)
+
+	go func() {
+		update := func() {
+			err := updateSummaryInfo(ctx, t.TargetTable.Conn, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table)
+			if err != nil {
+				log.Error("save table summary info failed", zap.String("schema", t.TargetTable.Schema), zap.String("table", t.TargetTable.Table), zap.Error(err))
+			}
+		}
+		defer func() {
+			update()
+			t.wg.Done()
+		}()
+
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-stopUpdateCh:
+				return
+			case <-ticker.C:
+				update()
+			}
+		}
+	}()
+
+	return stopUpdateCh
 }
 
 func generateDML(tp string, data map[string]*dbutil.ColumnData, keys []*model.ColumnInfo, table *model.TableInfo, schema string) (sql string) {
