@@ -245,7 +245,7 @@ func updateSummaryInfo(ctx context.Context, db *sql.DB, instanceID, schema, tabl
 
 	state := checkingState
 	if total == successNum+failedNum+ignoreNum {
-		if total == successNum + ignoreNum {
+		if total == successNum+ignoreNum {
 			state = successState
 		} else {
 			state = failedState

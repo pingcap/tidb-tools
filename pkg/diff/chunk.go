@@ -558,7 +558,7 @@ func GetChunks(ctx context.Context, table *TableInstance, splitFields, limits st
 		return nil, false, errors.Trace(err)
 	}
 
-	log.Debug("don't have checkpoint info or checkpoint info is expired")
+	log.Debug("don't have checkpoint info or config changed")
 	chunks, err = getChunksForTable(table, fields, chunkSize, limits, collation, useTiDBStatsInfo)
 	if err != nil {
 		return nil, false, errors.Trace(err)

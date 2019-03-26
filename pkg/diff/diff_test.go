@@ -334,8 +334,8 @@ func updateData(dbConn *sql.DB, table string) error {
 }
 
 func (*testDiffSuite) TestConfigHash(c *C) {
-	tbDiff := &TableDiff {
-		Range: "a > 1",
+	tbDiff := &TableDiff{
+		Range:     "a > 1",
 		ChunkSize: 1000,
 	}
 	tbDiff.setConfigHash()
@@ -351,4 +351,3 @@ func (*testDiffSuite) TestConfigHash(c *C) {
 	hash3 := tbDiff.configHash
 	c.Assert(hash1 == hash3, Equals, false)
 }
-

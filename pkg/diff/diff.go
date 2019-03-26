@@ -36,10 +36,10 @@ import (
 
 // TableInstance record a table instance
 type TableInstance struct {
-	Conn       *sql.DB
-	Schema     string `json:"schema"`
-	Table      string `json:"table"`
-	InstanceID string `json:"instance-id"`
+	Conn       *sql.DB `json:"-"`
+	Schema     string  `json:"schema"`
+	Table      string  `json:"table"`
+	InstanceID string  `json:"instance-id"`
 	info       *model.TableInfo
 }
 
@@ -97,17 +97,6 @@ type TableDiff struct {
 	wg sync.WaitGroup
 
 	configHash string
-
-	summary *sumamry
-}
-
-type sumamry struct {
-	sync.RWMutex
-
-	num        int
-	successNum int
-	failedNum  int
-	ignoreNum  int
 }
 
 func (t *TableDiff) setConfigHash() error {
