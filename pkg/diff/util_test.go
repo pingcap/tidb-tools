@@ -14,6 +14,9 @@
 package diff
 
 import (
+	"context"
+
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 )
@@ -43,4 +46,24 @@ func (s *testUtilSuite) TestRemoveColumns(c *C) {
 	tbInfo = removeColumns(tableInfo3, []string{"b", "c"})
 	c.Assert(len(tbInfo.Columns), Equals, 2)
 	c.Assert(len(tbInfo.Indices), Equals, 1)
+}
+
+func (s *testUtilSuite) TestloadFromCheckPoint(c *C) {
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+
+	rows := sqlmock.NewRows([]string{"state", "config_hash"}).AddRow("success", "123")
+	mock.ExpectQuery("SELECT").WillReturnRows(rows)
+	useCheckpoint, err := loadFromCheckPoint(context.Background(), db, "test", "test", "123")
+	c.Assert(useCheckpoint, Equals, false)
+
+	rows = sqlmock.NewRows([]string{"state", "config_hash"}).AddRow("success", "123")
+	mock.ExpectQuery("SELECT").WillReturnRows(rows)
+	useCheckpoint, err = loadFromCheckPoint(context.Background(), db, "test", "test", "456")
+	c.Assert(useCheckpoint, Equals, false)
+
+	rows = sqlmock.NewRows([]string{"state", "config_hash"}).AddRow("failed", "123")
+	mock.ExpectQuery("SELECT").WillReturnRows(rows)
+	useCheckpoint, err = loadFromCheckPoint(context.Background(), db, "test", "test", "123")
+	c.Assert(useCheckpoint, Equals, true)
 }

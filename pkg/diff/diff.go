@@ -51,10 +51,10 @@ type TableDiff struct {
 	TargetTable *TableInstance `json:"target-table"`
 
 	// columns be ignored
-	IgnoreColumns []string
+	IgnoreColumns []string `json:"-"`
 
 	// columns be removed
-	RemoveColumns []string
+	RemoveColumns []string `json:"-"`
 
 	// field should be the primary key, unique key or field with index
 	Fields string `json:"fields"`
@@ -66,31 +66,31 @@ type TableDiff struct {
 	// we can split these data to [1...10], [11...20], ..., [91...100]
 	// the [1...10] is a chunk, and it's chunk size is 10
 	// size of the split chunk
-	ChunkSize int
+	ChunkSize int `json:"chunk-size"`
 
 	// sampling check percent, for example 10 means only check 10% data
 	Sample int `json:"sample"`
 
 	// how many goroutines are created to check data
-	CheckThreadCount int
+	CheckThreadCount int `json:"-"`
 
 	// set true if target-db and source-db all support tidb implicit column "_tidb_rowid"
 	UseRowID bool `json:"use-rowid"`
 
 	// set false if want to comapre the data directly
-	UseChecksum bool
+	UseChecksum bool `json:"-"`
 
 	// collation config in mysql/tidb, should corresponding to charset.
 	Collation string `json:"collation"`
 
 	// ignore check table's struct
-	IgnoreStructCheck bool
+	IgnoreStructCheck bool `json:"-"`
 
 	// ignore check table's data
-	IgnoreDataCheck bool
+	IgnoreDataCheck bool `json:"-"`
 
 	// get tidb statistics information from which table instance. if is nil, will split chunk by random.
-	TiDBStatsSource *TableInstance
+	TiDBStatsSource *TableInstance `json:"tidb-stats-source"`
 
 	sqlCh chan string
 
@@ -178,7 +178,7 @@ func (t *TableDiff) Prepare(ctx context.Context) error {
 		return errors.Trace(err)
 	}
 
-	useCheckpoint, err := loadFromCheckPoint(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table)
+	useCheckpoint, err := loadFromCheckPoint(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -280,6 +280,12 @@ func (t *TableDiff) EqualTableData(ctx context.Context) (equal bool, err error) 
 		go t.checkChunksDataEqual(ctx, t.Sample < 100 && !fromCheckpoint, checkWorkerCh[i], checkResultCh)
 	}
 
+	defer func() {
+		for _, ch := range checkWorkerCh {
+			close(ch)
+		}
+	}()
+
 	var checkedNum int
 	go func() {
 		rand.Seed(time.Now().UnixNano())
@@ -295,7 +301,6 @@ CheckResult:
 		select {
 		case eq := <-checkResultCh:
 			checkedNum++
-			//log.Info("checkedNum", zap.Int("checkedNum", checkedNum), zap.Int("checkNum", checkNum))
 			if !eq {
 				equal = false
 			}

@@ -18,7 +18,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -101,25 +100,6 @@ func getColumnsFromIndex(index *model.IndexInfo, tableInfo *model.TableInfo) []*
 	return indexColumns
 }
 
-func getRandomN(total, num int) []int {
-	if num > total {
-		log.Warn("the num is greater than total", zap.Int("num", num), zap.Int("total", total))
-		num = total
-	}
-
-	totalArray := make([]int, 0, total)
-	for i := 0; i < total; i++ {
-		totalArray = append(totalArray, i)
-	}
-
-	for j := 0; j < num; j++ {
-		r := j + rand.Intn(total-j)
-		totalArray[j], totalArray[r] = totalArray[r], totalArray[j]
-	}
-
-	return totalArray[:num]
-}
-
 func needQuotes(ft types.FieldType) bool {
 	return !(dbutil.IsNumberType(ft.Tp) || dbutil.IsFloatType(ft.Tp))
 }
@@ -150,20 +130,26 @@ func updateChunkInfo(ctx context.Context, db *sql.DB, chunkID int, instanceID, s
 	return nil
 }
 
-func loadFromCheckPoint(ctx context.Context, db *sql.DB, schema, table string) (bool, error) {
-	query := "SELECT `state` FROM `sync_diff_inspector`.`table_summary` WHERE `schema` = ? AND `table` = ? limit 1"
+func loadFromCheckPoint(ctx context.Context, db *sql.DB, schema, table, configHash string) (bool, error) {
+	query := "SELECT `state`, `config_hash` FROM `sync_diff_inspector`.`table_summary` WHERE `schema` = ? AND `table` = ? limit 1"
 	rows, err := db.QueryContext(ctx, query, schema, table)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
 	defer rows.Close()
 
-	var state sql.NullString
+	var state, cfgHash sql.NullString
 
 	for rows.Next() {
-		err1 := rows.Scan(&state)
+		err1 := rows.Scan(&state, &cfgHash)
 		if err1 != nil {
 			return false, errors.Trace(err1)
+		}
+
+		if cfgHash.Valid {
+			if configHash != cfgHash.String {
+				return false, nil
+			}
 		}
 
 		if state.Valid {
@@ -194,8 +180,8 @@ func loadChunksInfo(ctx context.Context, db *sql.DB, instanceID, schema, table s
 
 	ctx, cancel := context.WithTimeout(context.Background(), dbutil.DefaultTimeout)
 	defer cancel()
-	sql := "SELECT * FROM `sync_diff_inspector`.`chunk` WHERE `instance_id` = ? AND `schema` = ? AND `table` = ?"
-	rows, err := db.QueryContext(ctx, sql, instanceID, schema, table)
+	query := "SELECT `chunk_str` FROM `sync_diff_inspector`.`chunk` WHERE `instance_id` = ? AND `schema` = ? AND `table` = ?"
+	rows, err := db.QueryContext(ctx, query, instanceID, schema, table)
 	if err != nil {
 		return nil, err
 	}
