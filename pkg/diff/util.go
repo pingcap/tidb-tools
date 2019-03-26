@@ -179,7 +179,6 @@ func loadFromCheckPoint(ctx context.Context, db *sql.DB, schema, table string) (
 }
 
 func initSummaryInfo(ctx context.Context, db *sql.DB, schema, table string, configHash string) error {
-	//sql := "REPLACE INTO `sync_diff_inspector`.`table_summary`(`schema`, `table`, `state`, `config_hash`, `update_time`) VALUES(?, ?, ?, ?, ?) WHERE NOT EXISTS (SELECT * FROM `sync_diff_inspector`.`table_summary` WHERE `schema` = ? AND `table` = ?);"
 	sql := "REPLACE INTO `sync_diff_inspector`.`table_summary`(`schema`, `table`, `state`, `config_hash`, `update_time`) VALUES(?, ?, ?, ?, ?)"
 	err := dbutil.ExecSQLWithRetry(ctx, db, sql, schema, table, notCheckedState, configHash, time.Now())
 	if err != nil {
@@ -221,7 +220,6 @@ func loadChunksInfo(ctx context.Context, db *sql.DB, instanceID, schema, table s
 }
 
 func updateSummaryInfo(ctx context.Context, db *sql.DB, instanceID, schema, table string) error {
-	log.Info("updateSummaryInfo")
 	ctx, cancel := context.WithTimeout(ctx, dbutil.DefaultTimeout)
 	defer cancel()
 
@@ -261,7 +259,7 @@ func updateSummaryInfo(ctx context.Context, db *sql.DB, instanceID, schema, tabl
 
 	state := checkingState
 	if total == successNum+failedNum+ignoreNum {
-		if total == successNum {
+		if total == successNum + ignoreNum {
 			state = successState
 		} else {
 			state = failedState
@@ -309,7 +307,7 @@ func cleanCheckpointInfo(ctx context.Context, db *sql.DB, schema, table string) 
 		return errors.Trace(err)
 	}
 
-	deleteChunkSQL := "DELETE FROM `sync_diff_inspector`.`table_summary` WHERE `schema` = ? AND `table` = ?;"
+	deleteChunkSQL := "DELETE FROM `sync_diff_inspector`.`chunk` WHERE `schema` = ? AND `table` = ?;"
 	err = dbutil.ExecSQLWithRetry(ctx, db, deleteChunkSQL, schema, table)
 	if err != nil {
 		return errors.Trace(err)

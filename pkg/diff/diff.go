@@ -20,6 +20,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"strconv"
 	"strings"
 	"sync"
@@ -262,48 +263,43 @@ func (t *TableDiff) EqualTableData(ctx context.Context) (equal bool, err error) 
 		useTiDB = true
 	}
 
-	chunks, _, err := GetChunks(ctx, table, t.Fields, t.Range, t.ChunkSize, t.Collation, useTiDB)
-
+	chunks, fromCheckpoint, err := GetChunks(ctx, table, t.Fields, t.Range, t.ChunkSize, t.Collation, useTiDB)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
-
-	checkNums := len(chunks) * t.Sample / 100
-	checkNumArr := getRandomN(len(chunks), checkNums)
-	log.Info("check jobs", zap.Int("total job num", len(chunks)), zap.Int("check job num", len(checkNumArr)))
-	if checkNums == 0 {
+	if len(chunks) == 0 {
 		return true, nil
 	}
 
 	checkResultCh := make(chan bool, t.CheckThreadCount)
 	defer close(checkResultCh)
 
+	checkWorkerCh := make([]chan *ChunkRange, 0, t.CheckThreadCount)
 	for i := 0; i < t.CheckThreadCount; i++ {
-		checkChunks := make([]*ChunkRange, 0, len(checkNumArr))
-		for j := len(checkNumArr) * i / t.CheckThreadCount; j < len(checkNumArr)*(i+1)/t.CheckThreadCount && j < len(checkNumArr); j++ {
-			checkChunks = append(checkChunks, chunks[checkNumArr[j]])
-		}
-		go func(checkChunks []*ChunkRange) {
-			eq, err := t.checkChunksDataEqual(ctx, checkChunks)
-			if err != nil {
-				log.Error("check chunk data equal failed", zap.Error(err))
-			}
-			checkResultCh <- eq
-		}(checkChunks)
+		checkWorkerCh = append(checkWorkerCh, make(chan *ChunkRange, 10))
+		go t.checkChunksDataEqual(ctx, t.Sample < 100 && !fromCheckpoint, checkWorkerCh[i], checkResultCh)
 	}
 
-	num := 0
+	var checkedNum int
+	go func() {
+		rand.Seed(time.Now().UnixNano())
+		for _, chunk := range chunks {
+			checkWorkerCh[chunk.ID%t.CheckThreadCount] <- chunk
+		}
+	}()
+
 	equal = true
 
 CheckResult:
 	for {
 		select {
 		case eq := <-checkResultCh:
-			num++
+			checkedNum++
+			//log.Info("checkedNum", zap.Int("checkedNum", checkedNum), zap.Int("checkNum", checkNum))
 			if !eq {
 				equal = false
 			}
-			if num == t.CheckThreadCount {
+			if len(chunks) == checkedNum {
 				break CheckResult
 			}
 		case <-ctx.Done():
@@ -327,52 +323,61 @@ func (t *TableDiff) getSourceTableChecksum(ctx context.Context, chunk *ChunkRang
 	return checksum, nil
 }
 
-func (t *TableDiff) checkChunksDataEqual(ctx context.Context, chunks []*ChunkRange) (bool, error) {
-	equal := true
-	if len(chunks) == 0 {
-		return true, nil
+func (t *TableDiff) checkChunksDataEqual(ctx context.Context, filterByRand bool, chunks chan *ChunkRange, resultCh chan bool) {
+	for {
+		select {
+		case chunk, ok := <-chunks:
+			if !ok {
+				return
+			}
+			if chunk.State == successState || chunk.State == ignoreState {
+				resultCh <- true
+				continue
+			}
+			eq, err := t.checkChunkDataEqual(ctx, filterByRand, chunk)
+			if err != nil {
+				log.Error("check chunk data equal", zap.Error(err))
+				resultCh <- false
+			} else {
+				resultCh <- eq
+			}
+		case <-ctx.Done():
+			return
+		}
 	}
-
-	for _, chunk := range chunks {
-		if chunk.State == successState || chunk.State == ignoreState {
-			continue
-		}
-
-		eq, err := t.checkChunkDataEqual(ctx, chunk)
-		if err != nil {
-			return false, errors.Trace(err)
-		}
-
-		// if equal is false, we continue check data, we should find all the different data just run once
-		if !eq {
-			equal = false
-		}
-	}
-
-	return equal, nil
 }
 
-func (t *TableDiff) checkChunkDataEqual(ctx context.Context, chunk *ChunkRange) (equal bool, err error) {
+func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, chunk *ChunkRange) (equal bool, err error) {
 	update := func() {
-		err := updateChunkInfo(ctx, t.TargetTable.Conn, chunk.ID, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table, "state", chunk.State)
-		if err != nil {
-			log.Warn("update chunk info", zap.Error(err))
+		err1 := saveChunkInfo(ctx, t.TargetTable.Conn, chunk.ID, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table, "", chunk)
+		if err1 != nil {
+			log.Warn("update chunk info", zap.Error(err1))
 		}
 	}
-	
-	chunk.State = checkingState
-	update()
 
 	defer func() {
-		if err != nil {
-			chunk.State = errorState
-		} else if equal {
-			chunk.State = successState
-		} else {
-			chunk.State = failedState
+		if chunk.State != ignoreState {
+			if err != nil {
+				chunk.State = errorState
+			} else if equal {
+				chunk.State = successState
+			} else {
+				chunk.State = failedState
+			}
 		}
 		update()
 	}()
+
+	if filterByRand {
+		x := rand.Intn(100)
+		if x > t.Sample {
+			chunk.State = ignoreState
+			return true, nil
+		}
+	}
+
+	chunk.State = checkingState
+	update()
 
 	if t.UseChecksum {
 		// first check the checksum is equal or not
