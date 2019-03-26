@@ -31,8 +31,17 @@ import (
 )
 
 var (
-	// if update time is more than 10 minutes, this checkpoint info is expired
-	defaultExpiredDurationTime = "00:10:00"
+	successState = "success"
+
+	failedState = "failed"
+
+	errorState = "error"
+
+	notCheckedState = "not_checked"
+
+	checkingState = "checking"
+
+	ignoreState = "ignore"
 )
 
 func equalStrings(str1, str2 []string) bool {
@@ -115,14 +124,14 @@ func needQuotes(ft types.FieldType) bool {
 	return !(dbutil.IsNumberType(ft.Tp) || dbutil.IsFloatType(ft.Tp))
 }
 
-func saveChunkInfo(ctx context.Context, db *sql.DB, chunkID int, instanceID, schema, table, where, checksum, checkResult string, chunk *ChunkRange) error {
+func saveChunkInfo(ctx context.Context, db *sql.DB, chunkID int, instanceID, schema, table, checksum string, chunk *ChunkRange) error {
 	chunkBytes, err := json.Marshal(chunk)
 	if err != nil {
 		return err
 	}
 
 	sql := "REPLACE INTO `sync_diff_inspector`.`chunk` VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?);"
-	err = dbutil.ExecSQLWithRetry(ctx, db, sql, chunkID, instanceID, schema, table, where, checksum, string(chunkBytes), checkResult, time.Now())
+	err = dbutil.ExecSQLWithRetry(ctx, db, sql, chunkID, instanceID, schema, table, chunk.Where, checksum, string(chunkBytes), chunk.State, time.Now())
 	if err != nil {
 		log.Error("save chunk info failed", zap.Error(err))
 		return err
@@ -158,7 +167,7 @@ func loadFromCheckPoint(ctx context.Context, db *sql.DB, schema, table string) (
 		}
 
 		if state.Valid {
-			if state.String == "success" || state.String == "not_checked" {
+			if state.String == successState || state.String == notCheckedState {
 				return false, nil
 			}
 		}
@@ -172,7 +181,7 @@ func loadFromCheckPoint(ctx context.Context, db *sql.DB, schema, table string) (
 func initSummaryInfo(ctx context.Context, db *sql.DB, schema, table string, configHash string) error {
 	//sql := "REPLACE INTO `sync_diff_inspector`.`table_summary`(`schema`, `table`, `state`, `config_hash`, `update_time`) VALUES(?, ?, ?, ?, ?) WHERE NOT EXISTS (SELECT * FROM `sync_diff_inspector`.`table_summary` WHERE `schema` = ? AND `table` = ?);"
 	sql := "REPLACE INTO `sync_diff_inspector`.`table_summary`(`schema`, `table`, `state`, `config_hash`, `update_time`) VALUES(?, ?, ?, ?, ?)"
-	err := dbutil.ExecSQLWithRetry(ctx, db, sql, schema, table, "not_checked", configHash, time.Now())
+	err := dbutil.ExecSQLWithRetry(ctx, db, sql, schema, table, notCheckedState, configHash, time.Now())
 	if err != nil {
 		log.Error("save summary info failed", zap.Error(err))
 		return err
@@ -216,7 +225,7 @@ func updateSummaryInfo(ctx context.Context, db *sql.DB, instanceID, schema, tabl
 	ctx, cancel := context.WithTimeout(ctx, dbutil.DefaultTimeout)
 	defer cancel()
 
-	query := "SELECT `check_result`, COUNT(*) FROM `sync_diff_inspector`.`chunk` WHERE `instance_id` = ? AND `schema` = ? AND `table` = ? GROUP BY `check_result` ;"
+	query := "SELECT `state`, COUNT(*) FROM `sync_diff_inspector`.`chunk` WHERE `instance_id` = ? AND `schema` = ? AND `table` = ? GROUP BY `state` ;"
 	rows, err := db.QueryContext(ctx, query, instanceID, schema, table)
 	if err != nil {
 		return errors.Trace(err)
@@ -238,24 +247,24 @@ func updateSummaryInfo(ctx context.Context, db *sql.DB, instanceID, schema, tabl
 
 		total += num.Int64
 		switch chunkState.String {
-		case "success":
+		case successState:
 			successNum = num.Int64
-		case "failed", "error":
+		case failedState, errorState:
 			failedNum += num.Int64
-		case "ignore":
+		case ignoreState:
 			ignoreNum += num.Int64
-		case "not_checked", "checking":
+		case notCheckedState, checkingState:
 		}
 	}
 
 	log.Info("summary info", zap.String("instance_id", instanceID), zap.String("schema", schema), zap.String("table", table), zap.Int64("chunk num", total), zap.Int64("success num", successNum), zap.Int64("failed num", failedNum), zap.Int64("ignore num", ignoreNum))
 
-	state := "checking"
+	state := checkingState
 	if total == successNum+failedNum+ignoreNum {
 		if total == successNum {
-			state = "success"
+			state = successState
 		} else {
-			state = "failed"
+			state = failedState
 		}
 	}
 
@@ -283,7 +292,7 @@ func createCheckpointTable(ctx context.Context, db *sql.DB) error {
 		return errors.Trace(err)
 	}
 
-	createChunkTableSQL := "CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`chunk`(`chunk_id` int, `instance_id` varchar(30), `schema` varchar(30), `table` varchar(30), `range` varchar(100), `checksum` varchar(20), `chunk_str` text, `check_result` enum('not_checked','checking','success', 'failed', 'ignore', 'error') DEFAULT 'not_checked', update_time datetime, PRIMARY KEY(`chunk_id`, `instance_id`, `schema`, `table`));"
+	createChunkTableSQL := "CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`chunk`(`chunk_id` int, `instance_id` varchar(30), `schema` varchar(30), `table` varchar(30), `range` varchar(100), `checksum` varchar(20), `chunk_str` text, `state` enum('not_checked','checking','success', 'failed', 'ignore', 'error') DEFAULT 'not_checked', update_time datetime, PRIMARY KEY(`chunk_id`, `instance_id`, `schema`, `table`));"
 	_, err = db.ExecContext(ctx, createChunkTableSQL)
 	if err != nil {
 		log.Info("create chunk table", zap.Error(err))

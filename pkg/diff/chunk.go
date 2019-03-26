@@ -54,8 +54,10 @@ type ChunkRange struct {
 	Bounds []*Bound `json:"Bounds"`
 	Mode   string   `json:"mode"`
 
-	Where string
-	Args  []string
+	Where string   `json:"where"`
+	Args  []string `json:"args"`
+
+	State string `json:"state"`
 }
 
 // NewChunkRange return a ChunkRange.
@@ -568,15 +570,13 @@ func GetChunks(ctx context.Context, table *TableInstance, splitFields, limits st
 
 	for i, chunk := range chunks {
 		conditions, args := chunk.toString(collation)
-		where := fmt.Sprintf("(%s AND %s)", conditions, limits)
-
-		log.Debug("create check job", zap.String("table", dbutil.TableName(table.Schema, table.Table)), zap.String("where", where), zap.Reflect("args", args))
 
 		chunk.ID = i
-		chunk.Where = where
+		chunk.Where = fmt.Sprintf("(%s AND %s)", conditions, limits)
 		chunk.Args = args
+		chunk.State = notCheckedState
 
-		err = saveChunkInfo(ctx, table.Conn, i, table.InstanceID, table.Schema, table.Table, where, "", "not_checked", chunk)
+		err = saveChunkInfo(ctx, table.Conn, i, table.InstanceID, table.Schema, table.Table, "", chunk)
 		if err != nil {
 			return nil, false, err
 		}

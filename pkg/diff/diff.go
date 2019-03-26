@@ -129,7 +129,7 @@ func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (
 	}
 
 	t.sqlCh = make(chan string)
-	
+
 	t.wg.Add(2)
 	stopWriteSqlsCh := t.WriteSqls(ctx, writeFixSQL)
 	stopUpdateSummaryCh := t.UpdateSummaryInfo(ctx)
@@ -156,11 +156,9 @@ func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (
 		}
 	}
 
-	log.Info("stopWriteSqlsCh")
 	stopWriteSqlsCh <- true
-	log.Info("stopUpdateSummaryCh")
 	stopUpdateSummaryCh <- true
-	log.Info("wait")
+
 	t.wg.Wait()
 	return structEqual, dataEqual, nil
 }
@@ -336,6 +334,10 @@ func (t *TableDiff) checkChunksDataEqual(ctx context.Context, chunks []*ChunkRan
 	}
 
 	for _, chunk := range chunks {
+		if chunk.State == successState || chunk.State == ignoreState {
+			continue
+		}
+
 		eq, err := t.checkChunkDataEqual(ctx, chunk)
 		if err != nil {
 			return false, errors.Trace(err)
@@ -351,20 +353,25 @@ func (t *TableDiff) checkChunksDataEqual(ctx context.Context, chunks []*ChunkRan
 }
 
 func (t *TableDiff) checkChunkDataEqual(ctx context.Context, chunk *ChunkRange) (equal bool, err error) {
-	defer func() {
-		var state string
+	update := func() {
+		err := updateChunkInfo(ctx, t.TargetTable.Conn, chunk.ID, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table, "state", chunk.State)
 		if err != nil {
-			state = "error"
+			log.Warn("update chunk info", zap.Error(err))
+		}
+	}
+	
+	chunk.State = checkingState
+	update()
+
+	defer func() {
+		if err != nil {
+			chunk.State = errorState
 		} else if equal {
-			state = "success"
+			chunk.State = successState
 		} else {
-			state = "failed"
+			chunk.State = failedState
 		}
-		err1 := updateChunkInfo(ctx, t.TargetTable.Conn, chunk.ID, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table, "check_result", state)
-		if err1 != nil {
-			log.Warn("update chunk info", zap.Error(err1))
-		}
-		log.Info("checkChunkDataEqual success")
+		update()
 	}()
 
 	if t.UseChecksum {
