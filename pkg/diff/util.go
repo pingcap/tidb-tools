@@ -17,7 +17,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -114,17 +113,6 @@ func saveChunkInfo(ctx context.Context, db *sql.DB, chunkID int, instanceID, sch
 	err = dbutil.ExecSQLWithRetry(ctx, db, sql, chunkID, instanceID, schema, table, chunk.Where, checksum, string(chunkBytes), chunk.State, time.Now())
 	if err != nil {
 		log.Error("save chunk info failed", zap.Error(err))
-		return err
-	}
-	return nil
-}
-
-func updateChunkInfo(ctx context.Context, db *sql.DB, chunkID int, instanceID, schema, table, column string, value string) error {
-	sql := fmt.Sprintf("UPDATE `sync_diff_inspector`.`chunk` SET `%s` = ?, `update_time` = ? WHERE `chunk_id` = ? AND `instance_id` = ? AND `schema` = ? AND `table` = ?;", column)
-	err := dbutil.ExecSQLWithRetry(ctx, db, sql, value, time.Now(), chunkID, instanceID, schema, table)
-	if err != nil {
-		log.Error("save chunk info failed", zap.Error(err), zap.String("sql", sql), zap.Int("chunkID", chunkID), zap.String("instanceID", instanceID), zap.String("schema", schema),
-			zap.String("table", table), zap.String("value", value))
 		return err
 	}
 	return nil

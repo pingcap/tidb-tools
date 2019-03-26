@@ -277,7 +277,6 @@ func (t *TableDiff) EqualTableData(ctx context.Context) (equal bool, err error) 
 
 	var checkedNum int
 	go func() {
-		rand.Seed(time.Now().UnixNano())
 		for _, chunk := range chunks {
 			checkWorkerCh[chunk.ID%t.CheckThreadCount] <- chunk
 		}
@@ -363,8 +362,9 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, 
 	}()
 
 	if filterByRand {
-		x := rand.Intn(100)
-		if x > t.Sample {
+		rand.Seed(time.Now().UnixNano())
+		r := rand.Intn(100)
+		if r > t.Sample {
 			chunk.State = ignoreState
 			return true, nil
 		}

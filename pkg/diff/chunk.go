@@ -535,7 +535,7 @@ func getSplitFields(table *model.TableInfo, splitFields []string) ([]*model.Colu
 func GetChunks(ctx context.Context, table *TableInstance, splitFields, limits string, chunkSize int, collation string, useTiDBStatsInfo bool) (chunks []*ChunkRange, fromCheckpoint bool, err error) {
 	chunks, err = loadChunksInfo(ctx, table.Conn, table.InstanceID, table.Schema, table.Table)
 	if err != nil {
-		log.Info("load chunks info", zap.Error(err))
+		log.Error("load chunks info", zap.Error(err))
 		return nil, false, errors.Trace(err)
 	}
 
