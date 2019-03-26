@@ -257,6 +257,14 @@ func createCheckpointTable(ctx context.Context, db *sql.DB) error {
 		return errors.Trace(err)
 	}
 
+	/* example
+	mysql> select * from sync_diff_inspector.table_summary;
+	+--------+-------+-----------+-------------------+------------------+------------------+---------+----------------------------------+---------------------+
+	| schema | table | chunk_num | check_success_num | check_failed_num | check_ignore_num | state   | config_hash                      | update_time         |
+	+--------+-------+-----------+-------------------+------------------+------------------+---------+----------------------------------+---------------------+
+	| diff   | test  |       112 |               104 |                0 |                8 | success | 91f302052783672b01af3e2b0e7d66ff | 2019-03-26 12:42:11 |
+	+--------+-------+-----------+-------------------+------------------+------------------+---------+----------------------------------+---------------------+
+	*/
 	createSummaryTableSQL := "CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`table_summary`(`schema` varchar(30), `table` varchar(30), `chunk_num` int, `check_success_num` int, `check_failed_num` int, `check_ignore_num` int, `state` enum('not_checked', 'checking', 'success', 'failed') DEFAULT 'not_checked', `config_hash` varchar(50), `update_time` datetime, PRIMARY KEY(`schema`, `table`));"
 	_, err = db.ExecContext(ctx, createSummaryTableSQL)
 	if err != nil {
@@ -264,7 +272,15 @@ func createCheckpointTable(ctx context.Context, db *sql.DB) error {
 		return errors.Trace(err)
 	}
 
-	createChunkTableSQL := "CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`chunk`(`chunk_id` int, `instance_id` varchar(30), `schema` varchar(30), `table` varchar(30), `range` varchar(100), `checksum` varchar(20), `chunk_str` text, `state` enum('not_checked','checking','success', 'failed', 'ignore', 'error') DEFAULT 'not_checked', update_time datetime, PRIMARY KEY(`chunk_id`, `instance_id`, `schema`, `table`));"
+	/* example
+	mysql> select * from sync_diff_inspector.chunk where chunk_id = 2;;
+	+----------+-------------+--------+-------+---------------------------------+-------------+-----------+---------+---------------------+
+	| chunk_id | instance_id | schema | table | range                           |  checksum   | chunk_str | state   | update_time         |
+	+----------+-------------+--------+-------+---------------------------------+-------------+-----------+---------+---------------------+
+	|        2 | target-1    | diff   | test1 | (`a` >= ? AND `a` < ? AND TRUE) |  91f3020527 |  .....    | success | 2019-03-26 12:41:42 |
+	+----------+-------------+--------+-------+---------------------------------+-------------+-----------+---------+---------------------+
+	*/
+	createChunkTableSQL := "CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`chunk`(`chunk_id` int, `instance_id` varchar(30), `schema` varchar(30), `table` varchar(30), `range` varchar(100), `checksum` varchar(20), `chunk_str` text, `state` enum('not_checked', 'checking', 'success', 'failed', 'ignore', 'error') DEFAULT 'not_checked', update_time datetime, PRIMARY KEY(`chunk_id`, `instance_id`, `schema`, `table`));"
 	_, err = db.ExecContext(ctx, createChunkTableSQL)
 	if err != nil {
 		log.Info("create chunk table", zap.Error(err))
