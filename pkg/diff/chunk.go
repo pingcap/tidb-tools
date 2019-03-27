@@ -35,7 +35,7 @@ var (
 	gt    = ">"
 	gte   = ">="
 
-	bucketMode = "bucket"
+	bucketMode = "bucketMode"
 	normalMode = "normalMode"
 )
 
@@ -203,6 +203,7 @@ func (c *ChunkRange) update(column, lower, lowerSymbol, upper, upperSymbol strin
 
 func (c *ChunkRange) copy() *ChunkRange {
 	newChunk := &ChunkRange{
+		Mode:   c.Mode,
 		Bounds: make([]*Bound, len(c.Bounds)),
 	}
 	copy(newChunk.Bounds, c.Bounds)
