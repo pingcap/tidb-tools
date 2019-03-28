@@ -51,7 +51,7 @@ type Bound struct {
 // ChunkRange represents chunk range
 type ChunkRange struct {
 	ID     int      `json:"id"`
-	Bounds []*Bound `json:"Bounds"`
+	Bounds []*Bound `json:"bounds"`
 	Mode   string   `json:"mode"`
 
 	Where string   `json:"where"`
@@ -70,29 +70,13 @@ func NewChunkRange(mode string) *ChunkRange {
 
 // String returns the string of ChunkRange, used for log.
 func (c *ChunkRange) String() string {
-	var s strings.Builder
-	s.WriteString("{ ID: ")
-	s.WriteString(strconv.Itoa(c.ID))
-	s.WriteString(", mode: ")
-	s.WriteString(c.Mode)
-	s.WriteString(", bounds: {")
-
-	for _, bound := range c.Bounds {
-		s.WriteString("[ column: ")
-		s.WriteString(bound.Column)
-		s.WriteString(", lower: ")
-		s.WriteString(bound.Lower)
-		s.WriteString(", lowerSymbol: ")
-		s.WriteString(bound.LowerSymbol)
-		s.WriteString(", upper: ")
-		s.WriteString(bound.Upper)
-		s.WriteString(", upperSymbol: ")
-		s.WriteString(bound.UpperSymbol)
-		s.WriteString(" ], ")
+	chunkBytes, err := json.Marshal(chunk)
+	if err != nil {
+		log.Warn("get string for chunk", zap.Error(err))
+		return ""
 	}
-	s.WriteString("}}")
 
-	return s.String()
+	return string(chunkBytes)
 }
 
 func (c *ChunkRange) toString(collation string) (string, []string) {
