@@ -141,6 +141,7 @@ func loadFromCheckPoint(ctx context.Context, db *sql.DB, schema, table, configHa
 		}
 
 		if state.Valid {
+			// if state is not checked, the chunk info maybe not exists, so just return false
 			if state.String == successState || state.String == notCheckedState {
 				return false, nil
 			}

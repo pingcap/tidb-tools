@@ -89,6 +89,9 @@ type TableDiff struct {
 	// ignore check table's data
 	IgnoreDataCheck bool `json:"-"`
 
+	// set true will continue check from the latest checkpoint
+	UseCheckpoint bool `json:"use-checkpoint"`
+
 	// get tidb statistics information from which table instance. if is nil, will split chunk by random.
 	TiDBStatsSource *TableInstance `json:"tidb-stats-source"`
 
@@ -167,13 +170,16 @@ func (t *TableDiff) Prepare(ctx context.Context) error {
 		return errors.Trace(err)
 	}
 
-	useCheckpoint, err := loadFromCheckPoint(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
-	if err != nil {
-		return errors.Trace(err)
-	}
+	log.Info("use checkpoint", zap.Bool("usecheckpoint", t.UseCheckpoint))
+	if t.UseCheckpoint {
+		useCheckpoint, err := loadFromCheckPoint(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
+		if err != nil {
+			return errors.Trace(err)
+		}
 
-	if useCheckpoint {
-		return nil
+		if useCheckpoint {
+			return nil
+		}
 	}
 
 	// clean old checkpoint infomation, and initial table summary
