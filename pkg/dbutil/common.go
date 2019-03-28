@@ -22,11 +22,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
+	tmysql "github.com/pingcap/parser/mysql"
+	"github.com/pingcap/parser/terror"
 	"github.com/pingcap/tidb-tools/pkg/utils"
+	tddl "github.com/pingcap/tidb/ddl"
+	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/types"
+	gmysql "github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 )
 
@@ -635,7 +641,74 @@ func ExecSQLWithRetry(ctx context.Context, db *sql.DB, sql string, args ...inter
 		if err == nil {
 			return nil
 		}
+
+		if ignoreError(err) {
+			log.Debug("ignore execute sql error", zap.Error(err))
+			return nil
+		}
+
+		if !isRetryableError(err) {
+			return err
+		}
 	}
 
+	return err
+}
+
+func isRetryableError(err error) bool {
+	err = errors.Cause(err) // check the original error
+	mysqlErr, ok := err.(*mysql.MySQLError)
+	if ok {
+		switch mysqlErr.Number {
+		// ER_LOCK_DEADLOCK can retry to commit while meet deadlock
+		case tmysql.ErrUnknown, gmysql.ER_LOCK_DEADLOCK, tmysql.ErrPDServerTimeout, tmysql.ErrTiKVServerTimeout, tmysql.ErrTiKVServerBusy, tmysql.ErrResolveLockTimeout, tmysql.ErrRegionUnavailable:
+			return true
+		default:
+			return false
+		}
+	}
+
+	return false
+}
+
+func ignoreError(err error) bool {
+	// TODO: now only ignore some ddl error, add some dml error later
+	if ignoreDDLError(err) {
+		return true
+	}
+
+	return false
+}
+
+func ignoreDDLError(err error) bool {
+	err = originError(err)
+	mysqlErr, ok := err.(*mysql.MySQLError)
+	if !ok {
+		return false
+	}
+
+	errCode := terror.ErrCode(mysqlErr.Number)
+	switch errCode {
+	case infoschema.ErrDatabaseExists.Code(), infoschema.ErrDatabaseNotExists.Code(), infoschema.ErrDatabaseDropExists.Code(),
+		infoschema.ErrTableExists.Code(), infoschema.ErrTableNotExists.Code(), infoschema.ErrTableDropExists.Code(),
+		infoschema.ErrColumnExists.Code(), infoschema.ErrColumnNotExists.Code(),
+		infoschema.ErrIndexExists.Code(), tddl.ErrCantDropFieldOrKey.Code():
+		return true
+	case tmysql.ErrDupKeyName:
+		return true
+	default:
+		return false
+	}
+}
+
+// originError return original error
+func originError(err error) error {
+	for {
+		e := errors.Cause(err)
+		if e == err {
+			break
+		}
+		err = e
+	}
 	return err
 }

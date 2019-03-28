@@ -16,8 +16,8 @@ package diff
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/pingcap/errors"
@@ -70,7 +70,7 @@ func NewChunkRange(mode string) *ChunkRange {
 
 // String returns the string of ChunkRange, used for log.
 func (c *ChunkRange) String() string {
-	chunkBytes, err := json.Marshal(chunk)
+	chunkBytes, err := json.Marshal(c)
 	if err != nil {
 		log.Warn("get string for chunk", zap.Error(err))
 		return ""
