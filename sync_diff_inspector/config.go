@@ -322,8 +322,8 @@ func (c *Config) checkConfig() bool {
 		}
 	} else {
 		if len(c.FixSQLFile) == 0 {
-			log.Error("fix-sql-file is invalid")
-			return false
+			log.Warn("fix-sql-file is invalid, will use default value 'fix.sql'")
+			c.FixSQLFile = "fix.sql"
 		}
 	}
 

@@ -214,7 +214,7 @@ func testDataEqual(dbConn *sql.DB, sourceTables []string, targetTable string, ha
 		_, err = dbConn.Exec(sql)
 		c.Assert(err, IsNil)
 	}
-	structEqual, dataEqual, err = tableDiff.Equal(context.Background(), nil)
+	structEqual, dataEqual, err = tableDiff.Equal(context.Background(), writeSqls)
 	c.Assert(err, IsNil)
 	c.Assert(structEqual, Equals, true)
 	c.Assert(dataEqual, Equals, true)
