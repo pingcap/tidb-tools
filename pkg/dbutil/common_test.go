@@ -126,7 +126,7 @@ func (s *testDBSuite) TestIsIgnoreError(c *C) {
 
 	for _, t := range cases {
 		c.Logf("err %v, expected %v", t.err, t.canIgnore)
-		c.Assert(ignoreDDLError(t.err), Equals, t.canIgnore)
+		c.Assert(ignoreError(t.err), Equals, t.canIgnore)
 	}
 }
 
