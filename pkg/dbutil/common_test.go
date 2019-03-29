@@ -14,7 +14,13 @@
 package dbutil
 
 import (
+	"database/sql/driver"
+
+	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
+	"github.com/pingcap/errors"
+	tmysql "github.com/pingcap/parser/mysql"
+	gmysql "github.com/siddontang/go-mysql/mysql"
 )
 
 func (*testDBSuite) TestReplacePlaceholder(c *C) {
@@ -68,4 +74,48 @@ func (*testDBSuite) TestTableName(c *C) {
 		tableName := TableName(testCase.schema, testCase.table)
 		c.Assert(tableName, Equals, testCase.expectTableName)
 	}
+}
+
+func newMysqlErr(number uint16, message string) *mysql.MySQLError {
+	return &mysql.MySQLError{
+		Number:  number,
+		Message: message,
+	}
+}
+
+func (s *testDBSuite) TestIsRetryableError(c *C) {
+	cases := []struct {
+		err         error
+		isRetryable bool
+	}{
+		{newMysqlErr(tmysql.ErrNoDB, "no db error"), false},
+		{errors.New("unknown error"), true},
+		{newMysqlErr(tmysql.ErrUnknown, "i/o timeout"), true},
+		{newMysqlErr(tmysql.ErrDBCreateExists, "db already exists"), false},
+		{driver.ErrBadConn, true},
+		{newMysqlErr(gmysql.ER_LOCK_DEADLOCK, "Deadlock found when trying to get lock; try restarting transaction"), true},
+		{newMysqlErr(tmysql.ErrPDServerTimeout, "pd server timeout"), true},
+		{newMysqlErr(tmysql.ErrTiKVServerTimeout, "tikv server timeout"), true},
+		{newMysqlErr(tmysql.ErrTiKVServerBusy, "tikv server busy"), true},
+		{newMysqlErr(tmysql.ErrResolveLockTimeout, "resolve lock timeout"), true},
+		{newMysqlErr(tmysql.ErrRegionUnavailable, "region unavailable"), true},
+	}
+
+	for _, t := range cases {
+		c.Logf("err %v, expected %v", t.err, t.isRetryable)
+		c.Assert(isRetryableError(t.err), Equals, t.isRetryable)
+	}
+}
+
+func (s *testDBSuite) TestOriginError(c *C) {
+	c.Assert(originError(nil), IsNil)
+
+	err1 := errors.New("err1")
+	c.Assert(originError(err1), DeepEquals, err1)
+
+	err2 := errors.Trace(err1)
+	c.Assert(originError(err2), DeepEquals, err1)
+
+	err3 := errors.Trace(err2)
+	c.Assert(originError(err3), DeepEquals, err1)
 }

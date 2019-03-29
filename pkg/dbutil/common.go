@@ -668,7 +668,7 @@ func isRetryableError(err error) bool {
 		}
 	}
 
-	return false
+	return true
 }
 
 func ignoreError(err error) bool {
