@@ -43,7 +43,7 @@ const (
 	// ImplicitColID is ID implicit column in TiDB
 	ImplicitColID = -1
 
-	// DefaultRetryTime is the default retry time for execute sql
+	// DefaultRetryTime is the default retry time to execute sql
 	DefaultRetryTime = 10
 
 	// DefaultTimeout is the default timeout for execute sql
