@@ -1,6 +1,7 @@
 package node
 
 import (
+	"context"
 	"encoding/json"
 	"path"
 	"strings"
@@ -10,7 +11,6 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/etcd"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
 )
 
 // EtcdRegistry wraps the reactions with etcd
@@ -38,36 +38,37 @@ func (r *EtcdRegistry) prefixed(p ...string) string {
 }
 
 // Node returns the nodeStatus that matchs nodeID in the etcd
-func (r *EtcdRegistry) Node(pctx context.Context, prefix, nodeID string) (*Status, error) {
+func (r *EtcdRegistry) Node(pctx context.Context, prefix, nodeID string) (status *Status, revision int64, err error) {
 	ctx, cancel := context.WithTimeout(pctx, r.reqTimeout)
 	defer cancel()
 
-	data, err := r.client.Get(ctx, r.prefixed(prefix, nodeID))
+	data, revision, err := r.client.Get(ctx, r.prefixed(prefix, nodeID))
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, -1, errors.Trace(err)
 	}
 
-	status := &Status{}
 	if err = json.Unmarshal(data, &status); err != nil {
-		return nil, errors.Annotatef(err, "Invalid nodeID(%s)", nodeID)
+		return nil, -1, errors.Annotatef(err, "Invalid nodeID(%s)", nodeID)
 	}
-	return status, nil
+	return status, revision, nil
 }
 
 // Nodes retruns all the nodeStatuses in the etcd
-func (r *EtcdRegistry) Nodes(pctx context.Context, prefix string) ([]*Status, error) {
+func (r *EtcdRegistry) Nodes(pctx context.Context, prefix string) (status []*Status, revision int64, err error) {
 	ctx, cancel := context.WithTimeout(pctx, r.reqTimeout)
 	defer cancel()
 
-	resp, err := r.client.List(ctx, r.prefixed(prefix))
+	resp, revision, err := r.client.List(ctx, r.prefixed(prefix))
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, -1, errors.Trace(err)
 	}
-	status, err := NodesStatusFromEtcdNode(resp)
+
+	status, err = NodesStatusFromEtcdNode(resp)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, -1, errors.Trace(err)
 	}
-	return status, nil
+
+	return status, revision, nil
 }
 
 // UpdateNode update the node information.
@@ -88,7 +89,7 @@ func (r *EtcdRegistry) UpdateNode(pctx context.Context, prefix string, status *S
 }
 
 func (r *EtcdRegistry) checkNodeExists(ctx context.Context, prefix, nodeID string) (bool, error) {
-	_, err := r.client.Get(ctx, r.prefixed(prefix, nodeID))
+	_, _, err := r.client.Get(ctx, r.prefixed(prefix, nodeID))
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return false, nil
@@ -119,8 +120,8 @@ func (r *EtcdRegistry) createNode(ctx context.Context, prefix string, status *St
 }
 
 // WatchNode watchs node's event
-func (r *EtcdRegistry) WatchNode(pctx context.Context, prefix string) clientv3.WatchChan {
-	return r.client.Watch(pctx, prefix)
+func (r *EtcdRegistry) WatchNode(pctx context.Context, prefix string, revision int64) clientv3.WatchChan {
+	return r.client.Watch(pctx, prefix, revision)
 }
 
 func nodeStatusFromEtcdNode(id string, node *etcd.Node) (*Status, error) {

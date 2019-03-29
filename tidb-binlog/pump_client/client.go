@@ -14,6 +14,7 @@
 package client
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"path"
@@ -27,39 +28,43 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/etcd"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
+	"github.com/pingcap/tidb/util/logutil"
 	pb "github.com/pingcap/tipb/go-binlog"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
 	// DefaultEtcdTimeout is the default timeout config for etcd.
 	DefaultEtcdTimeout = 5 * time.Second
 
-	// DefaultRetryTime is the default time of retry.
-	DefaultRetryTime = 20
+	// DefaultRetryTime is the default retry time for each pump.
+	DefaultRetryTime = 10
 
 	// DefaultBinlogWriteTimeout is the default max time binlog can use to write to pump.
 	DefaultBinlogWriteTimeout = 15 * time.Second
 
 	// CheckInterval is the default interval for check unavaliable pumps.
 	CheckInterval = 30 * time.Second
-
-	// RetryInterval is the default interval of retrying to write binlog.
-	RetryInterval = 100 * time.Millisecond
 )
 
 var (
-	// Logger is ...
+	// Logger is ..., obsolete now.
 	Logger = log.New()
 
 	// ErrNoAvaliablePump means no avaliable pump to write binlog.
 	ErrNoAvaliablePump = errors.New("no avaliable pump to write binlog")
+
+	// CommitBinlogTimeout is the max retry duration time for write commit/rollback binlog.
+	CommitBinlogTimeout = 10 * time.Minute
+
+	// RetryInterval is the interval of retrying to write binlog.
+	RetryInterval = 100 * time.Millisecond
 )
 
 // PumpInfos saves pumps' infomations in pumps client.
 type PumpInfos struct {
-	sync.RWMutex
 	// Pumps saves the map of pump's nodeID and pump status.
 	Pumps map[string]*PumpStatus
 
@@ -71,8 +76,19 @@ type PumpInfos struct {
 	UnAvaliablePumps map[string]*PumpStatus
 }
 
+// NewPumpInfos returns a PumpInfos.
+func NewPumpInfos() *PumpInfos {
+	return &PumpInfos{
+		Pumps:            make(map[string]*PumpStatus),
+		AvaliablePumps:   make(map[string]*PumpStatus),
+		UnAvaliablePumps: make(map[string]*PumpStatus),
+	}
+}
+
 // PumpsClient is the client of pumps.
 type PumpsClient struct {
+	sync.RWMutex
+
 	ctx context.Context
 
 	cancel context.CancelFunc
@@ -91,7 +107,7 @@ type PumpsClient struct {
 	// Selector will select a suitable pump.
 	Selector PumpSelector
 
-	// the max retry time if write binlog failed.
+	// the max retry time if write binlog failed, obsolete now.
 	RetryTime int
 
 	// BinlogWriteTimeout is the max time binlog can use to write to pump.
@@ -99,14 +115,16 @@ type PumpsClient struct {
 
 	// Security is the security config
 	Security *tls.Config
+
+	// binlog socket file path, for compatible with kafka version pump.
+	binlogSocket string
+
+	nodePath string
 }
 
 // NewPumpsClient returns a PumpsClient.
-func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.SecurityOption) (*PumpsClient, error) {
-	// TODO: get strategy from etcd, and can update strategy in real-time. now use Range as default.
-	strategy := Range
-	selector := NewSelector(strategy)
-
+// TODO: get strategy from etcd, and can update strategy in real-time. Use Range as default now.
+func NewPumpsClient(etcdURLs, strategy string, timeout time.Duration, securityOpt pd.SecurityOption) (*PumpsClient, error) {
 	ectdEndpoints, err := utils.ParseHostPortAddr(etcdURLs)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -130,10 +148,54 @@ func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.Secur
 		return nil, errors.Trace(err)
 	}
 
-	pumpInfos := &PumpInfos{
-		Pumps:            make(map[string]*PumpStatus),
-		AvaliablePumps:   make(map[string]*PumpStatus),
-		UnAvaliablePumps: make(map[string]*PumpStatus),
+	ctx, cancel := context.WithCancel(context.Background())
+	newPumpsClient := &PumpsClient{
+		ctx:                ctx,
+		cancel:             cancel,
+		ClusterID:          clusterID,
+		EtcdRegistry:       node.NewEtcdRegistry(cli, DefaultEtcdTimeout),
+		Pumps:              NewPumpInfos(),
+		Selector:           NewSelector(strategy),
+		BinlogWriteTimeout: timeout,
+		Security:           security,
+		nodePath:           path.Join(node.DefaultRootPath, node.NodePrefix[node.PumpNode]),
+	}
+
+	revision, err := newPumpsClient.getPumpStatus(ctx)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	if len(newPumpsClient.Pumps.Pumps) == 0 {
+		return nil, errors.New("no pump found in pd")
+	}
+	newPumpsClient.Selector.SetPumps(copyPumps(newPumpsClient.Pumps.AvaliablePumps))
+
+	newPumpsClient.wg.Add(2)
+	go newPumpsClient.watchStatus(revision)
+	go newPumpsClient.detect()
+
+	return newPumpsClient, nil
+}
+
+// NewLocalPumpsClient returns a PumpsClient, this PumpsClient will write binlog by socket file. For compatible with kafka version pump.
+func NewLocalPumpsClient(etcdURLs, binlogSocket string, timeout time.Duration, securityOpt pd.SecurityOption) (*PumpsClient, error) {
+	ectdEndpoints, err := utils.ParseHostPortAddr(etcdURLs)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	// get clusterid
+	pdCli, err := pd.NewClient(ectdEndpoints, securityOpt)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	clusterID := pdCli.GetClusterID(context.Background())
+	pdCli.Close()
+
+	security, err := utils.ToTLSConfig(securityOpt.CAPath, securityOpt.CertPath, securityOpt.KeyPath)
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -141,49 +203,59 @@ func NewPumpsClient(etcdURLs string, timeout time.Duration, securityOpt pd.Secur
 		ctx:                ctx,
 		cancel:             cancel,
 		ClusterID:          clusterID,
-		EtcdRegistry:       node.NewEtcdRegistry(cli, DefaultEtcdTimeout),
-		Pumps:              pumpInfos,
-		Selector:           selector,
-		RetryTime:          DefaultRetryTime,
+		Pumps:              NewPumpInfos(),
+		Selector:           NewSelector(LocalUnix),
 		BinlogWriteTimeout: timeout,
 		Security:           security,
+		binlogSocket:       binlogSocket,
 	}
-
-	err = newPumpsClient.getPumpStatus(ctx)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	newPumpsClient.Selector.SetPumps(copyPumps(newPumpsClient.Pumps.AvaliablePumps))
-
-	newPumpsClient.wg.Add(2)
-	go newPumpsClient.watchStatus()
-	go newPumpsClient.detect()
+	newPumpsClient.getLocalPumpStatus(ctx)
 
 	return newPumpsClient, nil
 }
 
-// getPumpStatus retruns all the pumps status in the etcd.
-func (c *PumpsClient) getPumpStatus(pctx context.Context) error {
-	nodesStatus, err := c.EtcdRegistry.Nodes(pctx, node.NodePrefix[node.PumpNode])
+// getLocalPumpStatus gets the local pump. For compatible with kafka version tidb-binlog.
+func (c *PumpsClient) getLocalPumpStatus(pctx context.Context) {
+	nodeStatus := &node.Status{
+		NodeID:  localPump,
+		Addr:    c.binlogSocket,
+		IsAlive: true,
+		State:   node.Online,
+	}
+	c.addPump(NewPumpStatus(nodeStatus, c.Security), true)
+}
+
+// getPumpStatus gets all the pumps status in the etcd.
+func (c *PumpsClient) getPumpStatus(pctx context.Context) (revision int64, err error) {
+	nodesStatus, revision, err := c.EtcdRegistry.Nodes(pctx, node.NodePrefix[node.PumpNode])
 	if err != nil {
-		return errors.Trace(err)
+		return -1, errors.Trace(err)
 	}
 
 	for _, status := range nodesStatus {
-		Logger.Debugf("[pumps client] get pump %v from etcd", status)
+		log.Debugf("[pumps client] get pump %v from pd", status)
 		c.addPump(NewPumpStatus(status, c.Security), false)
 	}
 
-	return nil
+	return revision, nil
 }
 
-// WriteBinlog writes binlog to a situable pump.
+// WriteBinlog writes binlog to a situable pump. Tips: will never return error for commit/rollback binlog.
 func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
-	pump := c.Selector.Select(binlog)
-	if pump == nil {
-		return ErrNoAvaliablePump
-	}
-	Logger.Debugf("[pumps client] write binlog choose pump %s", pump.NodeID)
+	c.RLock()
+	pumpNum := len(c.Pumps.AvaliablePumps)
+	selector := c.Selector
+	c.RUnlock()
+
+	var choosePump *PumpStatus
+	meetError := false
+	defer func() {
+		if meetError {
+			c.checkPumpAvaliable()
+		}
+
+		selector.Feedback(binlog.StartTs, binlog.Tp, choosePump)
+	}()
 
 	commitData, err := binlog.Marshal()
 	if err != nil {
@@ -192,26 +264,34 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 	req := &pb.WriteBinlogReq{ClusterID: c.ClusterID, Payload: commitData}
 
 	retryTime := 0
-	startTime := time.Now()
+	var pump *PumpStatus
 	var resp *pb.WriteBinlogResp
+	startTime := time.Now()
 
 	for {
+		if pump == nil || binlog.Tp == pb.BinlogType_Prewrite {
+			pump = selector.Select(binlog, retryTime)
+		}
 		if pump == nil {
-			return ErrNoAvaliablePump
+			err = ErrNoAvaliablePump
+			break
 		}
 
-		resp, err = pump.writeBinlog(req, c.BinlogWriteTimeout)
+		resp, err = pump.WriteBinlog(req, c.BinlogWriteTimeout)
 		if err == nil && resp.Errmsg != "" {
 			err = errors.New(resp.Errmsg)
 		}
 		if err == nil {
+			choosePump = pump
 			return nil
 		}
-		Logger.Errorf("[pumps client] write binlog error %v", err)
 
-		if binlog.Tp == pb.BinlogType_Commit {
-			// only use one pump to write commit binlog, util write success or blocked for ten minutes.
-			if time.Since(startTime) > 10*time.Minute {
+		meetError = true
+		log.Warnf("[pumps client] write binlog to pump %s (type: %s, start ts: %d, commit ts: %d, length: %d) error %v", pump.NodeID, binlog.Tp, binlog.StartTs, binlog.CommitTs, len(commitData), err)
+
+		if binlog.Tp != pb.BinlogType_Prewrite {
+			// only use one pump to write commit/rollback binlog, util write success or blocked for ten minutes. And will not return error to tidb.
+			if time.Since(startTime) > CommitBinlogTimeout {
 				break
 			}
 		} else {
@@ -220,62 +300,114 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 				return err
 			}
 
-			// every pump can retry 5 times, if retry 5 times and still failed, set this pump unavaliable, and choose a new pump.
-			if (retryTime+1)%5 == 0 {
-				c.setPumpAvaliable(pump, false)
-				pump = c.Selector.Next(binlog, retryTime/5+1)
-				Logger.Debugf("[pumps client] avaliable pumps: %v, write binlog choose pump %v", c.Pumps.AvaliablePumps, pump)
+			// make sure already retry every avaliable pump.
+			if time.Since(startTime) > c.BinlogWriteTimeout && retryTime > pumpNum {
+				break
+			}
+
+			if isConnUnAvliable(err) {
+				// this kind of error indicate that the grpc connection is not avaliable, may be create the connection again can write success.
+				pump.ResetGrpcClient()
 			}
 
 			retryTime++
-			if retryTime > c.RetryTime {
-				break
-			}
 		}
 
-		time.Sleep(RetryInterval)
+		if binlog.Tp != pb.BinlogType_Prewrite {
+			time.Sleep(RetryInterval * 10)
+		} else {
+			time.Sleep(RetryInterval)
+		}
 	}
 
-	return err
+	log.Info("[pumps client] write binlog to avaliable pumps all failed, will try unavaliable pumps")
+	pump, err1 := c.backoffWriteBinlog(req, binlog.Tp, binlog.StartTs)
+	if err1 == nil {
+		return nil
+	}
+	choosePump = pump
+
+	return errors.Errorf("write binlog failed, the last error %v", err)
+}
+
+func (c *PumpsClient) backoffWriteBinlog(req *pb.WriteBinlogReq, binlogType pb.BinlogType, startTS int64) (pump *PumpStatus, err error) {
+	if binlogType != pb.BinlogType_Prewrite {
+		// never return error for commit/rollback binlog.
+		return nil, nil
+	}
+
+	unAvaliablePumps := make([]*PumpStatus, 0, 3)
+	c.RLock()
+	for _, pump := range c.Pumps.UnAvaliablePumps {
+		unAvaliablePumps = append(unAvaliablePumps, pump)
+	}
+	c.RUnlock()
+
+	var resp *pb.WriteBinlogResp
+	// send binlog to unavaliable pumps to retry again.
+	for _, pump := range unAvaliablePumps {
+		if !pump.IsUsable() {
+			continue
+		}
+
+		pump.ResetGrpcClient()
+
+		resp, err = pump.WriteBinlog(req, c.BinlogWriteTimeout)
+		if err == nil {
+			if resp.Errmsg != "" {
+				err = errors.New(resp.Errmsg)
+			} else {
+				// if this pump can write binlog success, set this pump to avaliable.
+				log.Debugf("[pumps client] write binlog to unavaliable pump %s success, set this pump to avaliable", pump.NodeID)
+				c.setPumpAvaliable(pump, true)
+				return pump, nil
+			}
+		}
+	}
+
+	return nil, errors.New("write binlog to unavaliable pump failed")
+}
+
+func (c *PumpsClient) checkPumpAvaliable() {
+	c.RLock()
+	allPumps := copyPumps(c.Pumps.Pumps)
+	c.RUnlock()
+
+	for _, pump := range allPumps {
+		if !pump.IsUsable() {
+			c.setPumpAvaliable(pump, false)
+		}
+	}
 }
 
 // setPumpAvaliable set pump's isAvaliable, and modify UnAvaliablePumps or AvaliablePumps.
 func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
-	pump.IsAvaliable = avaliable
-	if pump.IsAvaliable {
-		err := pump.createGrpcClient(c.Security)
-		if err != nil {
-			Logger.Errorf("[pumps client] create grpc client for pump %s failed, error: %v", pump.NodeID, err)
-			pump.IsAvaliable = false
-			return
-		}
+	c.Lock()
+	defer c.Unlock()
 
-		c.Pumps.Lock()
+	pump.Reset()
+
+	if avaliable {
 		delete(c.Pumps.UnAvaliablePumps, pump.NodeID)
 		if _, ok := c.Pumps.Pumps[pump.NodeID]; ok {
 			c.Pumps.AvaliablePumps[pump.NodeID] = pump
 		}
-		c.Pumps.Unlock()
 
 	} else {
-		c.Pumps.Lock()
 		delete(c.Pumps.AvaliablePumps, pump.NodeID)
 		if _, ok := c.Pumps.Pumps[pump.NodeID]; ok {
 			c.Pumps.UnAvaliablePumps[pump.NodeID] = pump
 		}
-		c.Pumps.Unlock()
 	}
 
-	c.Pumps.RLock()
 	c.Selector.SetPumps(copyPumps(c.Pumps.AvaliablePumps))
-	c.Pumps.RUnlock()
 }
 
 // addPump add a new pump.
 func (c *PumpsClient) addPump(pump *PumpStatus, updateSelector bool) {
-	c.Pumps.Lock()
+	c.Lock()
 
-	if pump.State == node.Online {
+	if pump.IsUsable() {
 		c.Pumps.AvaliablePumps[pump.NodeID] = pump
 	} else {
 		c.Pumps.UnAvaliablePumps[pump.NodeID] = pump
@@ -286,88 +418,110 @@ func (c *PumpsClient) addPump(pump *PumpStatus, updateSelector bool) {
 		c.Selector.SetPumps(copyPumps(c.Pumps.AvaliablePumps))
 	}
 
-	c.Pumps.Unlock()
+	c.Unlock()
+}
+
+// SetSelectStrategy sets the selector's strategy, strategy should be 'range' or 'hash' now.
+func (c *PumpsClient) SetSelectStrategy(strategy string) error {
+	if strategy != Range && strategy != Hash {
+		return errors.Errorf("strategy %s is not support", strategy)
+	}
+
+	c.Lock()
+	c.Selector = NewSelector(strategy)
+	c.Selector.SetPumps(copyPumps(c.Pumps.AvaliablePumps))
+	c.Unlock()
+	return nil
 }
 
 // updatePump update pump's status, and return whether pump's IsAvaliable should be changed.
 func (c *PumpsClient) updatePump(status *node.Status) (pump *PumpStatus, avaliableChanged, avaliable bool) {
 	var ok bool
-	c.Pumps.Lock()
+	c.Lock()
 	if pump, ok = c.Pumps.Pumps[status.NodeID]; ok {
 		if pump.Status.State != status.State {
 			if status.State == node.Online {
 				avaliableChanged = true
 				avaliable = true
-			} else if pump.Status.State == node.Online {
+			} else if pump.IsUsable() {
 				avaliableChanged = true
 				avaliable = false
 			}
 		}
 		pump.Status = *status
 	}
-	c.Pumps.Unlock()
+	c.Unlock()
 
 	return
 }
 
-// removePump removes a pump.
+// removePump removes a pump, used when pump is offline.
 func (c *PumpsClient) removePump(nodeID string) {
-	c.Pumps.Lock()
+	c.Lock()
 	if pump, ok := c.Pumps.Pumps[nodeID]; ok {
-		pump.closeGrpcClient()
+		pump.Reset()
 	}
 	delete(c.Pumps.Pumps, nodeID)
 	delete(c.Pumps.UnAvaliablePumps, nodeID)
 	delete(c.Pumps.AvaliablePumps, nodeID)
 	c.Selector.SetPumps(copyPumps(c.Pumps.AvaliablePumps))
-	c.Pumps.Unlock()
+	c.Unlock()
 }
 
 // exist returns true if pumps client has pump matched this nodeID.
 func (c *PumpsClient) exist(nodeID string) bool {
-	c.Pumps.RLock()
+	c.RLock()
 	_, ok := c.Pumps.Pumps[nodeID]
-	c.Pumps.RUnlock()
+	c.RUnlock()
 	return ok
 }
 
 // watchStatus watchs pump's status in etcd.
-func (c *PumpsClient) watchStatus() {
+func (c *PumpsClient) watchStatus(revision int64) {
 	defer c.wg.Done()
-	rootPath := path.Join(node.DefaultRootPath, node.NodePrefix[node.PumpNode])
-	rch := c.EtcdRegistry.WatchNode(c.ctx, rootPath)
+	rch := c.EtcdRegistry.WatchNode(c.ctx, c.nodePath, revision)
+
 	for {
 		select {
 		case <-c.ctx.Done():
-			Logger.Info("[pumps client] watch status finished")
+			log.Info("[pumps client] watch status finished")
 			return
 		case wresp := <-rch:
+			if wresp.Err() != nil {
+				// meet error, watch from the latest revision.
+				log.Warnf("[pumps client] watch status meet error %v", wresp.Err())
+				rch = c.EtcdRegistry.WatchNode(c.ctx, c.nodePath, revision)
+				continue
+			}
+
+			revision = wresp.Header.Revision
+
 			for _, ev := range wresp.Events {
 				status := &node.Status{}
 				err := json.Unmarshal(ev.Kv.Value, &status)
 				if err != nil {
-					Logger.Errorf("[pumps client] unmarshal pump status %q failed", ev.Kv.Value)
+					log.Errorf("[pumps client] unmarshal pump status %q failed", ev.Kv.Value)
 					continue
 				}
 
 				switch ev.Type {
 				case mvccpb.PUT:
 					if !c.exist(status.NodeID) {
-						Logger.Infof("[pumps client] find a new pump %s", status.NodeID)
+						log.Infof("[pumps client] find a new pump %s", status.NodeID)
 						c.addPump(NewPumpStatus(status, c.Security), true)
 						continue
 					}
 
 					pump, avaliableChanged, avaliable := c.updatePump(status)
 					if avaliableChanged {
-						Logger.Infof("[pumps client] pump %s's state is changed to %s", pump.Status.NodeID, status.State)
+						log.Infof("[pumps client] pump %s's state is changed to %s", pump.Status.NodeID, status.State)
 						c.setPumpAvaliable(pump, avaliable)
 					}
 
 				case mvccpb.DELETE:
 					// now will not delete pump node in fact, just for compatibility.
 					nodeID := node.AnalyzeNodeID(string(ev.Kv.Key))
-					Logger.Infof("[pumps client] remove pump %s", nodeID)
+					log.Infof("[pumps client] remove pump %s", nodeID)
 					c.removePump(nodeID)
 				}
 			}
@@ -377,59 +531,54 @@ func (c *PumpsClient) watchStatus() {
 
 // detect send detect binlog to pumps with online state in UnAvaliablePumps,
 func (c *PumpsClient) detect() {
-	defer c.wg.Done()
+	checkTick := time.NewTicker(CheckInterval)
+	defer func() {
+		checkTick.Stop()
+		c.wg.Done()
+	}()
+
 	for {
 		select {
 		case <-c.ctx.Done():
-			Logger.Infof("[pumps client] heartbeat finished")
+			log.Infof("[pumps client] heartbeat finished")
 			return
-		default:
+		case <-checkTick.C:
 			// send detect binlog to pump, if this pump can return response without error
 			// means this pump is avaliable.
 			needCheckPumps := make([]*PumpStatus, 0, len(c.Pumps.UnAvaliablePumps))
 			checkPassPumps := make([]*PumpStatus, 0, 1)
 			req := &pb.WriteBinlogReq{ClusterID: c.ClusterID, Payload: nil}
-			c.Pumps.RLock()
+			c.RLock()
 			for _, pump := range c.Pumps.UnAvaliablePumps {
-				if pump.Status.State == node.Online {
+				if pump.IsUsable() {
 					needCheckPumps = append(needCheckPumps, pump)
 				}
 			}
-			c.Pumps.RUnlock()
+			c.RUnlock()
 
 			for _, pump := range needCheckPumps {
-				err := pump.createGrpcClient(c.Security)
-				if err != nil {
-					Logger.Errorf("[pumps client] create grpc client for pump %s failed, error %v", pump.NodeID, errors.Trace(err))
-					continue
-				}
-				if pump.Client == nil {
-					continue
-				}
-
-				_, err = pump.writeBinlog(req, c.BinlogWriteTimeout)
+				_, err := pump.WriteBinlog(req, c.BinlogWriteTimeout)
 				if err == nil {
+					log.Debugf("[pumps client] write detect binlog to unavaliable pump %s success", pump.NodeID)
 					checkPassPumps = append(checkPassPumps, pump)
 				} else {
-					Logger.Errorf("[pumps client] write detect binlog to pump %s error %v", pump.NodeID, err)
+					log.Debugf("[pumps client] write detect binlog to pump %s error %v", pump.NodeID, err)
 				}
 			}
 
 			for _, pump := range checkPassPumps {
 				c.setPumpAvaliable(pump, true)
 			}
-
-			time.Sleep(CheckInterval)
 		}
 	}
 }
 
 // Close closes the PumpsClient.
 func (c *PumpsClient) Close() {
-	Logger.Infof("[pumps client] is closing")
+	log.Infof("[pumps client] is closing")
 	c.cancel()
 	c.wg.Wait()
-	Logger.Infof("[pumps client] is closed")
+	log.Infof("[pumps client] is closed")
 }
 
 func isRetryableError(err error) bool {
@@ -444,6 +593,18 @@ func isRetryableError(err error) bool {
 	return true
 }
 
+func isConnUnAvliable(err error) bool {
+	// Unavailable indicates the service is currently unavailable.
+	// This is a most likely a transient condition and may be corrected
+	// by retrying with a backoff.
+	// https://github.com/grpc/grpc-go/blob/76cc50721c5fde18bae10a36f4c202f5f2f95bb7/codes/codes.go#L139
+	if status.Code(err) == codes.Unavailable {
+		return true
+	}
+
+	return false
+}
+
 func copyPumps(pumps map[string]*PumpStatus) []*PumpStatus {
 	ps := make([]*PumpStatus, 0, len(pumps))
 	for _, pump := range pumps {
@@ -451,4 +612,9 @@ func copyPumps(pumps map[string]*PumpStatus) []*PumpStatus {
 	}
 
 	return ps
+}
+
+// InitLogger initializes logger.
+func InitLogger(cfg *logutil.LogConfig) error {
+	return logutil.InitLogger(cfg)
 }

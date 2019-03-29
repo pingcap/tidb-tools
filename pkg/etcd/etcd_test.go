@@ -14,14 +14,15 @@
 package etcd
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/integration"
+	"github.com/pingcap/check"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
-	"golang.org/x/net/context"
 )
 
 var (
@@ -71,7 +72,7 @@ func (t *testEtcdSuite) TestCreateWithTTL(c *C) {
 	c.Assert(err, IsNil)
 
 	time.Sleep(2 * time.Second)
-	_, err = etcdCli.Get(ctx, key)
+	_, _, err = etcdCli.Get(ctx, key)
 	c.Assert(errors.IsNotFound(err), IsTrue)
 }
 
@@ -99,6 +100,10 @@ func (t *testEtcdSuite) TestUpdate(c *C) {
 	err = etcdCli.Create(ctx, key, obj1, opts)
 	c.Assert(err, IsNil)
 
+	res, revision1, err := etcdCli.Get(ctx, key)
+	c.Assert(err, IsNil)
+	c.Assert(string(res), Equals, obj1)
+
 	time.Sleep(time.Second)
 
 	err = etcdCli.Update(ctx, key, obj2, 3)
@@ -106,12 +111,14 @@ func (t *testEtcdSuite) TestUpdate(c *C) {
 
 	time.Sleep(2 * time.Second)
 
-	res, err := etcdCli.Get(ctx, key)
+	// the new revision should greater than the old
+	res, revision2, err := etcdCli.Get(ctx, key)
 	c.Assert(err, IsNil)
 	c.Assert(string(res), Equals, obj2)
+	c.Assert(revision2, check.Greater, revision1)
 
 	time.Sleep(2 * time.Second)
-	res, err = etcdCli.Get(ctx, key)
+	res, _, err = etcdCli.Get(ctx, key)
 	c.Assert(errors.IsNotFound(err), IsTrue)
 }
 
@@ -142,12 +149,17 @@ func (t *testEtcdSuite) TestList(c *C) {
 	err = etcdCli.Create(ctx, k11, k11, nil)
 	c.Assert(err, IsNil)
 
-	root, err := etcdCli.List(ctx, key)
+	root, revision1, err := etcdCli.List(ctx, key)
 	c.Assert(err, IsNil)
 	c.Assert(string(root.Childs["level1"].Value), Equals, k1)
 	c.Assert(string(root.Childs["level1"].Childs["level1"].Value), Equals, k11)
 	c.Assert(string(root.Childs["level2"].Value), Equals, k2)
 	c.Assert(string(root.Childs["level3"].Value), Equals, k3)
+
+	// the revision of list should equal to the latest update's revision
+	_, revision2, err := etcdCli.Get(ctx, k11)
+	c.Assert(err, IsNil)
+	c.Assert(revision1, Equals, revision2)
 }
 
 func (t *testEtcdSuite) TestDelete(c *C) {
@@ -158,21 +170,21 @@ func (t *testEtcdSuite) TestDelete(c *C) {
 		c.Assert(err, IsNil)
 	}
 
-	root, err := etcdCli.List(ctx, key)
+	root, _, err := etcdCli.List(ctx, key)
 	c.Assert(err, IsNil)
 	c.Assert(root.Childs, HasLen, 2)
 
 	err = etcdCli.Delete(ctx, keys[1], false)
 	c.Assert(err, IsNil)
 
-	root, err = etcdCli.List(ctx, key)
+	root, _, err = etcdCli.List(ctx, key)
 	c.Assert(err, IsNil)
 	c.Assert(root.Childs, HasLen, 1)
 
 	err = etcdCli.Delete(ctx, key, true)
 	c.Assert(err, IsNil)
 
-	root, err = etcdCli.List(ctx, key)
+	root, _, err = etcdCli.List(ctx, key)
 	c.Assert(err, IsNil)
 	c.Assert(root.Childs, HasLen, 0)
 }

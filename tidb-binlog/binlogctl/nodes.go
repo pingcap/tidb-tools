@@ -14,6 +14,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -23,7 +24,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
 )
 
 var (
@@ -37,7 +37,7 @@ func queryNodesByKind(urls string, kind string) error {
 		return errors.Trace(err)
 	}
 
-	nodes, err := registry.Nodes(context.Background(), node.NodePrefix[kind])
+	nodes, _, err := registry.Nodes(context.Background(), node.NodePrefix[kind])
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -60,7 +60,7 @@ func updateNodeState(urls, kind, nodeID, state string) error {
 		return errors.Trace(err)
 	}
 
-	nodes, err := registry.Nodes(context.Background(), node.NodePrefix[kind])
+	nodes, _, err := registry.Nodes(context.Background(), node.NodePrefix[kind])
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -101,7 +101,7 @@ func applyAction(urls, kind, nodeID string, action string) error {
 		return errors.Trace(err)
 	}
 
-	nodes, err := registry.Nodes(context.Background(), node.NodePrefix[kind])
+	nodes, _, err := registry.Nodes(context.Background(), node.NodePrefix[kind])
 	if err != nil {
 		return errors.Trace(err)
 	}

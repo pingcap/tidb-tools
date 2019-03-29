@@ -14,6 +14,7 @@
 package etcd
 
 import (
+	"context"
 	"crypto/tls"
 	"path"
 	"strings"
@@ -21,7 +22,6 @@ import (
 
 	"github.com/coreos/etcd/clientv3"
 	"github.com/pingcap/errors"
-	"golang.org/x/net/context"
 )
 
 // Node organizes the ectd query result as a Trie tree
@@ -89,18 +89,18 @@ func (e *Client) Create(ctx context.Context, key string, val string, opts []clie
 }
 
 // Get returns a key/value matchs the given key
-func (e *Client) Get(ctx context.Context, key string) ([]byte, error) {
+func (e *Client) Get(ctx context.Context, key string) (value []byte, revision int64, err error) {
 	key = keyWithPrefix(e.rootPath, key)
 	resp, err := e.client.KV.Get(ctx, key)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, -1, errors.Trace(err)
 	}
 
 	if len(resp.Kvs) == 0 {
-		return nil, errors.NotFoundf("key %s in etcd", key)
+		return nil, -1, errors.NotFoundf("key %s in etcd", key)
 	}
 
-	return resp.Kvs[0].Value, nil
+	return resp.Kvs[0].Value, resp.Header.Revision, nil
 }
 
 // Update updates a key/value.
@@ -156,7 +156,7 @@ func (e *Client) UpdateOrCreate(ctx context.Context, key string, val string, ttl
 }
 
 // List returns the trie struct that constructed by the key/value with same prefix
-func (e *Client) List(ctx context.Context, key string) (*Node, error) {
+func (e *Client) List(ctx context.Context, key string) (node *Node, revision int64, err error) {
 	key = keyWithPrefix(e.rootPath, key)
 	if !strings.HasSuffix(key, "/") {
 		key += "/"
@@ -164,7 +164,7 @@ func (e *Client) List(ctx context.Context, key string) (*Node, error) {
 
 	resp, err := e.client.KV.Get(ctx, key, clientv3.WithPrefix())
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, -1, errors.Trace(err)
 	}
 
 	root := new(Node)
@@ -180,7 +180,7 @@ func (e *Client) List(ctx context.Context, key string) (*Node, error) {
 		tailNode.Value = kv.Value
 	}
 
-	return root, nil
+	return root, resp.Header.Revision, nil
 }
 
 // Delete deletes the key/values with matching prefix or key
@@ -200,7 +200,10 @@ func (e *Client) Delete(ctx context.Context, key string, withPrefix bool) error 
 }
 
 // Watch watchs the events of key with prefix.
-func (e *Client) Watch(ctx context.Context, prefix string) clientv3.WatchChan {
+func (e *Client) Watch(ctx context.Context, prefix string, revision int64) clientv3.WatchChan {
+	if revision > 0 {
+		return e.client.Watch(ctx, prefix, clientv3.WithPrefix(), clientv3.WithRev(revision))
+	}
 	return e.client.Watch(ctx, prefix, clientv3.WithPrefix())
 }
 

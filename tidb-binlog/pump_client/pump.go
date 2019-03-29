@@ -14,16 +14,27 @@
 package client
 
 import (
+	"context"
 	"crypto/tls"
 	"net"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
 	pb "github.com/pingcap/tipb/go-binlog"
-	"golang.org/x/net/context"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+)
+
+var (
+	// localPump is used to write local pump through unix socket connection.
+	localPump = "localPump"
+
+	// if pump failed more than defaultMaxErrNums times, this pump can treated as unavaliable.
+	defaultMaxErrNums int64 = 10
 )
 
 // PumpStatus saves pump's status.
@@ -41,55 +52,59 @@ type PumpStatus struct {
 		Offline:
 			this pump is offline, and can't provide write binlog service forever.
 	*/
+	sync.RWMutex
+
 	node.Status
 
-	// the pump is avaliable or not
+	// the pump is avaliable or not, obsolete now
 	IsAvaliable bool
+
+	security *tls.Config
 
 	grpcConn *grpc.ClientConn
 
 	// the client of this pump
 	Client pb.PumpClient
+
+	ErrNum int64
 }
 
 // NewPumpStatus returns a new PumpStatus according to node's status.
 func NewPumpStatus(status *node.Status, security *tls.Config) *PumpStatus {
 	pumpStatus := &PumpStatus{}
 	pumpStatus.Status = *status
-	pumpStatus.IsAvaliable = (status.State == node.Online)
-
-	if status.State != node.Online {
-		return pumpStatus
-	}
-
-	err := pumpStatus.createGrpcClient(security)
-	if err != nil {
-		Logger.Errorf("[pumps client] create grpc client for %s failed, error %v", status.NodeID, err)
-		pumpStatus.IsAvaliable = false
-	}
+	pumpStatus.security = security
 
 	return pumpStatus
 }
 
 // createGrpcClient create grpc client for online pump.
-func (p *PumpStatus) createGrpcClient(security *tls.Config) error {
+func (p *PumpStatus) createGrpcClient() error {
 	// release the old connection, and create a new one
 	if p.grpcConn != nil {
 		p.grpcConn.Close()
 	}
 
-	dialerOpt := grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
-		return net.DialTimeout("tcp", addr, timeout)
-	})
-	Logger.Debugf("[pumps client] create gcpc client at %s", p.Addr)
+	var dialerOpt grpc.DialOption
+	if p.NodeID == localPump {
+		dialerOpt = grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
+			return net.DialTimeout("unix", addr, timeout)
+		})
+	} else {
+		dialerOpt = grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
+			return net.DialTimeout("tcp", addr, timeout)
+		})
+	}
+	log.Debugf("[pumps client] create grpc client at %s", p.Addr)
 	var clientConn *grpc.ClientConn
 	var err error
-	if security != nil {
-		clientConn, err = grpc.Dial(p.Addr, dialerOpt, grpc.WithTransportCredentials(credentials.NewTLS(security)))
+	if p.security != nil {
+		clientConn, err = grpc.Dial(p.Addr, dialerOpt, grpc.WithTransportCredentials(credentials.NewTLS(p.security)))
 	} else {
 		clientConn, err = grpc.Dial(p.Addr, dialerOpt, grpc.WithInsecure())
 	}
 	if err != nil {
+		atomic.AddInt64(&p.ErrNum, 1)
 		return err
 	}
 
@@ -99,22 +114,68 @@ func (p *PumpStatus) createGrpcClient(security *tls.Config) error {
 	return nil
 }
 
-// closeGrpcClient closes the pump's grpc connection.
-func (p *PumpStatus) closeGrpcClient() {
+// ResetGrpcClient closes the pump's grpc connection.
+func (p *PumpStatus) ResetGrpcClient() {
+	p.Lock()
+	defer p.Unlock()
+
 	if p.grpcConn != nil {
 		p.grpcConn.Close()
 		p.Client = nil
 	}
 }
 
-func (p *PumpStatus) writeBinlog(req *pb.WriteBinlogReq, timeout time.Duration) (*pb.WriteBinlogResp, error) {
-	if p.Client == nil {
-		return nil, errors.Errorf("pump %s don't have avaliable pump client", p.NodeID)
+// Reset resets the pump's grpc conn and err num.
+func (p *PumpStatus) Reset() {
+	p.ResetGrpcClient()
+	atomic.StoreInt64(&p.ErrNum, 0)
+}
+
+// WriteBinlog write binlog by grpc client.
+func (p *PumpStatus) WriteBinlog(req *pb.WriteBinlogReq, timeout time.Duration) (*pb.WriteBinlogResp, error) {
+	p.RLock()
+	client := p.Client
+	p.RUnlock()
+
+	if client == nil {
+		p.Lock()
+
+		if p.Client != nil {
+			client = p.Client
+		} else {
+			err := p.createGrpcClient()
+			if err != nil {
+				p.Unlock()
+				return nil, errors.Errorf("create grpc connection for pump %s failed, error %v", p.NodeID, err)
+			}
+			client = p.Client
+		}
+
+		p.Unlock()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	resp, err := p.Client.WriteBinlog(ctx, req)
+	resp, err := client.WriteBinlog(ctx, req)
 	cancel()
 
+	if err != nil {
+		atomic.AddInt64(&p.ErrNum, 1)
+	} else {
+		atomic.StoreInt64(&p.ErrNum, 0)
+	}
+
 	return resp, err
+}
+
+// IsUsable returns true if pump is usable.
+func (p *PumpStatus) IsUsable() bool {
+	if p.Status.State != node.Online {
+		return false
+	}
+
+	if atomic.LoadInt64(&p.ErrNum) > defaultMaxErrNums {
+		return false
+	}
+
+	return true
 }
