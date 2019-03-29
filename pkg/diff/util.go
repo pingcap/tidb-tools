@@ -20,8 +20,6 @@ import (
 	"github.com/pingcap/tidb/types"
 )
 
-
-
 func equalStrings(str1, str2 []string) bool {
 	if len(str1) != len(str2) {
 		return false
@@ -82,4 +80,3 @@ func getColumnsFromIndex(index *model.IndexInfo, tableInfo *model.TableInfo) []*
 func needQuotes(ft types.FieldType) bool {
 	return !(dbutil.IsNumberType(ft.Tp) || dbutil.IsFloatType(ft.Tp))
 }
-

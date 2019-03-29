@@ -25,7 +25,6 @@ import (
 	"go.uber.org/zap"
 )
 
-
 var (
 	// for chunk: means this chunk's data is equal
 	// for table: means this all chunk in this table is equal(except ignore chunk)
