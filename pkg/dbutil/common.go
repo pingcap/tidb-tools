@@ -29,7 +29,6 @@ import (
 	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/parser/terror"
 	"github.com/pingcap/tidb-tools/pkg/utils"
-	tddl "github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/types"
 	gmysql "github.com/siddontang/go-mysql/mysql"
@@ -689,10 +688,9 @@ func ignoreDDLError(err error) bool {
 
 	errCode := terror.ErrCode(mysqlErr.Number)
 	switch errCode {
-	case infoschema.ErrDatabaseExists.Code(), infoschema.ErrDatabaseNotExists.Code(), infoschema.ErrDatabaseDropExists.Code(),
-		infoschema.ErrTableExists.Code(), infoschema.ErrTableNotExists.Code(), infoschema.ErrTableDropExists.Code(),
-		infoschema.ErrColumnExists.Code(), infoschema.ErrColumnNotExists.Code(),
-		infoschema.ErrIndexExists.Code(), tddl.ErrCantDropFieldOrKey.Code():
+	case infoschema.ErrDatabaseExists.Code(), infoschema.ErrDatabaseDropExists.Code(),
+		infoschema.ErrTableExists.Code(), infoschema.ErrTableDropExists.Code(),
+		infoschema.ErrColumnExists.Code(), infoschema.ErrIndexExists.Code():
 		return true
 	case tmysql.ErrDupKeyName:
 		return true

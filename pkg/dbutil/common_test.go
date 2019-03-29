@@ -20,6 +20,7 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	tmysql "github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb/infoschema"
 	gmysql "github.com/siddontang/go-mysql/mysql"
 )
 
@@ -104,6 +105,28 @@ func (s *testDBSuite) TestIsRetryableError(c *C) {
 	for _, t := range cases {
 		c.Logf("err %v, expected %v", t.err, t.isRetryable)
 		c.Assert(isRetryableError(t.err), Equals, t.isRetryable)
+	}
+}
+
+func (s *testDBSuite) TestIsIgnoreError(c *C) {
+	cases := []struct {
+		err       error
+		canIgnore bool
+	}{
+		{newMysqlErr(uint16(infoschema.ErrDatabaseExists.Code()), "Can't create database, database exists"), true},
+		{newMysqlErr(uint16(infoschema.ErrDatabaseDropExists.Code()), "Can't drop database, database doesn't exists"), true},
+		{newMysqlErr(uint16(infoschema.ErrTableExists.Code()), "Can't create table, table exists"), true},
+		{newMysqlErr(uint16(infoschema.ErrTableDropExists.Code()), "Can't drop table, table dosen't exists"), true},
+		{newMysqlErr(uint16(infoschema.ErrColumnExists.Code()), "Duplicate column name"), true},
+		{newMysqlErr(uint16(infoschema.ErrIndexExists.Code()), "Duplicate Index"), true},
+
+		{newMysqlErr(uint16(999), "fake error"), false},
+		{errors.New("unknown error"), false},
+	}
+
+	for _, t := range cases {
+		c.Logf("err %v, expected %v", t.err, t.canIgnore)
+		c.Assert(ignoreDDLError(t.err), Equals, t.canIgnore)
 	}
 }
 
