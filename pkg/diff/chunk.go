@@ -72,7 +72,7 @@ func NewChunkRange(mode string) *ChunkRange {
 func (c *ChunkRange) String() string {
 	chunkBytes, err := json.Marshal(c)
 	if err != nil {
-		log.Warn("get string for chunk", zap.Error(err))
+		log.Warn("fail to encode chunk into string", zap.Error(err))
 		return ""
 	}
 
