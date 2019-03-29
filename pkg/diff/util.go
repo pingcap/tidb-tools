@@ -29,16 +29,28 @@ import (
 )
 
 var (
+	// for chunk: means this chunk's data is equal
+	// for table: means this all chunk in this table is equal(except ignore chunk)
 	successState = "success"
 
+	// for chunk: means this chunk's data is not equal
+	// for table: means some chunks' data is not equal or some chunk check failed in this table
 	failedState = "failed"
 
+	// for chunk: means meet error when check, don't know the chunk's data is equal or not equal
+	// for table: don't have this state
 	errorState = "error"
 
+	// for chunk: means this chunk is not in check
+	// for table: all the chunk in this table is not in check
 	notCheckedState = "not_checked"
 
+	// for chunk: means this chunk is checking
+	// for table: some chunks in this table is checking
 	checkingState = "checking"
 
+	// for chunk: this chunk is ignored. if sample is not 100%, will ignore some chunk
+	// for table: don't have this state
 	ignoreState = "ignore"
 )
 
