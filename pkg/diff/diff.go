@@ -188,7 +188,7 @@ func (t *TableDiff) Prepare(ctx context.Context) error {
 		return errors.Trace(err)
 	}
 
-	err = initSummaryInfo(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
+	err = initTableSummary(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -348,7 +348,7 @@ func (t *TableDiff) checkChunksDataEqual(ctx context.Context, filterByRand bool,
 
 func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, chunk *ChunkRange) (equal bool, err error) {
 	update := func() {
-		err1 := saveChunkInfo(ctx, t.TargetTable.Conn, chunk.ID, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table, "", chunk)
+		err1 := saveChunk(ctx, t.TargetTable.Conn, chunk.ID, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table, "", chunk)
 		if err1 != nil {
 			log.Warn("update chunk info", zap.Error(err1))
 		}

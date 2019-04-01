@@ -518,7 +518,7 @@ func getSplitFields(table *model.TableInfo, splitFields []string) ([]*model.Colu
 
 // GetChunks gets some chunks.
 func GetChunks(ctx context.Context, table *TableInstance, splitFields, limits string, chunkSize int, collation string, useTiDBStatsInfo bool) (chunks []*ChunkRange, fromCheckpoint bool, err error) {
-	chunks, err = loadChunksInfo(ctx, table.Conn, table.InstanceID, table.Schema, table.Table)
+	chunks, err = loadChunks(ctx, table.Conn, table.InstanceID, table.Schema, table.Table)
 	if err != nil {
 		log.Error("load chunks info", zap.Error(err))
 		return nil, false, errors.Trace(err)
@@ -561,7 +561,7 @@ func GetChunks(ctx context.Context, table *TableInstance, splitFields, limits st
 		chunk.Args = args
 		chunk.State = notCheckedState
 
-		err = saveChunkInfo(ctx, table.Conn, i, table.InstanceID, table.Schema, table.Table, "", chunk)
+		err = saveChunk(ctx, table.Conn, i, table.InstanceID, table.Schema, table.Table, "", chunk)
 		if err != nil {
 			return nil, false, err
 		}

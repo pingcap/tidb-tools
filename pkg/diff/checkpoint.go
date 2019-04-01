@@ -89,6 +89,7 @@ func loadFromCheckPoint(ctx context.Context, db *sql.DB, schema, table, configHa
 		}
 
 		if state.Valid {
+			// is state is success, will begin a new check for this table
 			// if state is not checked, the chunk info maybe not exists, so just return false
 			if state.String == successState || state.String == notCheckedState {
 				return false, nil
@@ -98,7 +99,7 @@ func loadFromCheckPoint(ctx context.Context, db *sql.DB, schema, table, configHa
 		return true, nil
 	}
 
-	return false, nil
+	return false, errors.Trace(rows.Err())
 }
 
 func initTableSummary(ctx context.Context, db *sql.DB, schema, table string, configHash string) error {
@@ -139,7 +140,7 @@ func loadChunks(ctx context.Context, db *sql.DB, instanceID, schema, table strin
 		chunks = append(chunks, chunk)
 	}
 
-	return chunks, nil
+	return chunks, errors.Trace(rows.Err())
 }
 
 func updateSummaryInfo(ctx context.Context, db *sql.DB, instanceID, schema, table string) error {
@@ -176,6 +177,9 @@ func updateSummaryInfo(ctx context.Context, db *sql.DB, instanceID, schema, tabl
 			ignoreNum += num.Int64
 		case notCheckedState, checkingState:
 		}
+	}
+	if rows.Err() != nil {
+		return errors.Trace(rows.Err())
 	}
 
 	log.Info("summary info", zap.String("instance_id", instanceID), zap.String("schema", schema), zap.String("table", table), zap.Int64("chunk num", total), zap.Int64("success num", successNum), zap.Int64("failed num", failedNum), zap.Int64("ignore num", ignoreNum))
