@@ -101,7 +101,7 @@ func loadFromCheckPoint(ctx context.Context, db *sql.DB, schema, table, configHa
 	return false, nil
 }
 
-func initSummaryInfo(ctx context.Context, db *sql.DB, schema, table string, configHash string) error {
+func initTableSummary(ctx context.Context, db *sql.DB, schema, table string, configHash string) error {
 	sql := "REPLACE INTO `sync_diff_inspector`.`table_summary`(`schema`, `table`, `state`, `config_hash`, `update_time`) VALUES(?, ?, ?, ?, ?)"
 	err := dbutil.ExecSQLWithRetry(ctx, db, sql, schema, table, notCheckedState, configHash, time.Now())
 	if err != nil {
