@@ -112,7 +112,7 @@ func initSummaryInfo(ctx context.Context, db *sql.DB, schema, table string, conf
 	return nil
 }
 
-func loadChunksInfo(ctx context.Context, db *sql.DB, instanceID, schema, table string) ([]*ChunkRange, error) {
+func loadChunks(ctx context.Context, db *sql.DB, instanceID, schema, table string) ([]*ChunkRange, error) {
 	chunks := make([]*ChunkRange, 0, 100)
 
 	ctx, cancel := context.WithTimeout(context.Background(), dbutil.DefaultTimeout)
