@@ -24,26 +24,24 @@ import (
 )
 
 func Benchmark100Thread(b *testing.B) {
-	pumpClient, pumpServer := createMockPumpsClientAndServer(b)
-	writeFakeBinlog(b, pumpClient, 100, b.N)
-	pumpServer.Close()
+	benchmarkTest(b, 100)
 }
 
 func Benchmark200Thread(b *testing.B) {
-	pumpClient, pumpServer := createMockPumpsClientAndServer(b)
-	writeFakeBinlog(b, pumpClient, 200, b.N)
-	pumpServer.Close()
+	benchmarkTest(b, 200)
 }
 
 func Benchmark300Thread(b *testing.B) {
-	pumpClient, pumpServer := createMockPumpsClientAndServer(b)
-	writeFakeBinlog(b, pumpClient, 300, b.N)
-	pumpServer.Close()
+	benchmarkTest(b, 300)
 }
 
 func Benchmark400Thread(b *testing.B) {
+	benchmarkTest(b, 400)
+}
+
+func benchmarkTest(b *testing.B, threadCount int) {
 	pumpClient, pumpServer := createMockPumpsClientAndServer(b)
-	writeFakeBinlog(b, pumpClient, 400, b.N)
+	writeFakeBinlog(b, pumpClient, threadCount, b.N)
 	pumpServer.Close()
 }
 
