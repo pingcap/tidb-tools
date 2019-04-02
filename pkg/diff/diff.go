@@ -165,14 +165,14 @@ func (t *TableDiff) Prepare(ctx context.Context) error {
 		return errors.Trace(err)
 	}
 
-	err = createCheckpointTable(ctx, t.TargetTable.Conn)
+	err = createCheckpointTable(ctx, t.TargetTable.Conn, dbutil.DefaultTimeout)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
 	log.Info("use checkpoint", zap.Bool("usecheckpoint", t.UseCheckpoint))
 	if t.UseCheckpoint {
-		useCheckpoint, err := loadFromCheckPoint(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
+		useCheckpoint, err := loadFromCheckPoint(ctx, t.TargetTable.Conn, dbutil.DefaultTimeout, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -183,12 +183,12 @@ func (t *TableDiff) Prepare(ctx context.Context) error {
 	}
 
 	// clean old checkpoint infomation, and initial table summary
-	err = cleanCheckpointInfo(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table)
+	err = cleanCheckpointInfo(ctx, t.TargetTable.Conn, dbutil.DefaultTimeout, t.TargetTable.Schema, t.TargetTable.Table)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	err = initTableSummary(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
+	err = initTableSummary(ctx, t.TargetTable.Conn, dbutil.DefaultTimeout, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -348,7 +348,7 @@ func (t *TableDiff) checkChunksDataEqual(ctx context.Context, filterByRand bool,
 
 func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, chunk *ChunkRange) (equal bool, err error) {
 	update := func() {
-		err1 := saveChunk(ctx, t.TargetTable.Conn, chunk.ID, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table, "", chunk)
+		err1 := saveChunk(ctx, t.TargetTable.Conn, dbutil.DefaultTimeout, chunk.ID, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table, "", chunk)
 		if err1 != nil {
 			log.Warn("update chunk info", zap.Error(err1))
 		}
@@ -578,7 +578,7 @@ func (t *TableDiff) UpdateSummaryInfo(ctx context.Context) chan bool {
 
 	go func() {
 		update := func() {
-			err := updateSummaryInfo(ctx, t.TargetTable.Conn, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table)
+			err := updateSummaryInfo(ctx, t.TargetTable.Conn, dbutil.DefaultTimeout, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table)
 			if err != nil {
 				log.Error("save table summary info failed", zap.String("schema", t.TargetTable.Schema), zap.String("table", t.TargetTable.Table), zap.Error(err))
 			}

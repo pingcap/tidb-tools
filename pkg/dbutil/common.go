@@ -634,8 +634,8 @@ func ReplacePlaceholder(str string, args []string) string {
 }
 
 // ExecSQLWithRetry executes sql with retry
-func ExecSQLWithRetry(ctx context.Context, db *sql.DB, sql string, args ...interface{}) (err error) {
-	ctx1, cancel := context.WithTimeout(ctx, DefaultTimeout)
+func ExecSQLWithRetry(ctx context.Context, db *sql.DB, timeout time.Duration, sql string, args ...interface{}) (err error) {
+	ctx1, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	for i := 0; i < DefaultRetryTime; i++ {
@@ -663,8 +663,8 @@ func ExecSQLWithRetry(ctx context.Context, db *sql.DB, sql string, args ...inter
 }
 
 // ExecuteSQLs executes some sqls in one transaction
-func ExecuteSQLs(ctx context.Context, db *sql.DB, sqls []string, args [][]interface{}) error {
-	ctx1, cancel := context.WithTimeout(ctx, DefaultTimeout)
+func ExecuteSQLs(ctx context.Context, db *sql.DB, timeout time.Duration, sqls []string, args [][]interface{}) error {
+	ctx1, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	txn, err := db.Begin()
