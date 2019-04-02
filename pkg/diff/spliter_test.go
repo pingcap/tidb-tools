@@ -282,7 +282,6 @@ func (s *testSpliterSuite) TestBucketSpliter(c *C) {
 	}
 
 	for i, chunkSize := range chunkSizes {
-		fmt.Println(i)
 		createFakeResultForBucketSplit(mock)
 		bSpliter := new(bucketSpliter)
 		chunks, err := bSpliter.split(tableInstance, tableInfo.Columns, chunkSize, "TRUE", "")
