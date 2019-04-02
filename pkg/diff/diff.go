@@ -550,6 +550,7 @@ func (t *TableDiff) WriteSqls(ctx context.Context, writeFixSQL func(string) erro
 	go func() {
 		defer t.wg.Done()
 
+		stop := false
 		for {
 			select {
 			case dml, ok := <-t.sqlCh:
@@ -563,9 +564,15 @@ func (t *TableDiff) WriteSqls(ctx context.Context, writeFixSQL func(string) erro
 				}
 				t.wg.Done()
 			case <-stopWriteCh:
-				return
+				stop = true
 			case <-ctx.Done():
 				return
+			default:
+				if stop {
+					return
+				}
+
+				time.Sleep(100*time.Millisecond)
 			}
 		}
 	}()
