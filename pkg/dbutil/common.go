@@ -704,17 +704,17 @@ func ExecuteSQLs(ctx context.Context, db *sql.DB, timeout time.Duration, sqls []
 func isRetryableError(err error) bool {
 	err = errors.Cause(err) // check the original error
 	mysqlErr, ok := err.(*mysql.MySQLError)
-	if ok {
-		switch mysqlErr.Number {
-		// ER_LOCK_DEADLOCK can retry to commit while meet deadlock
-		case tmysql.ErrUnknown, gmysql.ER_LOCK_DEADLOCK, tmysql.ErrPDServerTimeout, tmysql.ErrTiKVServerTimeout, tmysql.ErrTiKVServerBusy, tmysql.ErrResolveLockTimeout, tmysql.ErrRegionUnavailable:
-			return true
-		default:
-			return false
-		}
+	if !ok {
+		return false
 	}
 
-	return true
+	switch mysqlErr.Number {
+	// ER_LOCK_DEADLOCK can retry to commit while meet deadlock
+	case tmysql.ErrUnknown, gmysql.ER_LOCK_DEADLOCK, tmysql.ErrPDServerTimeout, tmysql.ErrTiKVServerTimeout, tmysql.ErrTiKVServerBusy, tmysql.ErrResolveLockTimeout, tmysql.ErrRegionUnavailable:
+		return true
+	default:
+		return false
+	}
 }
 
 func ignoreError(err error) bool {
