@@ -75,6 +75,9 @@ type TableDiff struct {
 	// set false if want to comapre the data directly
 	UseChecksum bool
 
+	// set true if just want compare data by checksum, will skip select data when checksum is not equal
+	OnlyUseChecksum bool
+
 	// collation config in mysql/tidb, should corresponding to charset.
 	Collation string
 
@@ -283,6 +286,11 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, checkJobs []*CheckJ
 			}
 
 			log.Warn("checksum is not equal", zap.String("table", dbutil.TableName(job.Schema, job.Table)), zap.String("where", job.Where), zap.Reflect("args", job.Args), zap.Int64("source checksum", sourceChecksum), zap.Int64("target checksum", targetChecksum))
+		}
+
+		if t.UseChecksum && t.OnlyUseChecksum {
+			equal = false
+			continue
 		}
 
 		// if checksum is not equal or don't need compare checksum, compare the data
