@@ -109,7 +109,7 @@ func (t *TableDiff) setConfigHash() error {
 	}
 
 	t.configHash = fmt.Sprintf("%x", md5.Sum(jsonBytes))
-	log.Debug("table diff config", zap.ByteString("config", jsonBytes), zap.String("hash", t.configHash))
+	log.Debug("sync-diff-inspector config", zap.ByteString("config", jsonBytes), zap.String("hash", t.configHash))
 
 	return nil
 }
