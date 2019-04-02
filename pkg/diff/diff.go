@@ -183,12 +183,12 @@ func (t *TableDiff) Prepare(ctx context.Context) error {
 	}
 
 	// clean old checkpoint infomation, and initial table summary
-	err = cleanCheckpointInfo(ctx, t.TargetTable.Conn, dbutil.DefaultTimeout, t.TargetTable.Schema, t.TargetTable.Table)
+	err = cleanCheckpoint(ctx, t.TargetTable.Conn, dbutil.DefaultTimeout, t.TargetTable.Schema, t.TargetTable.Table)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	err = initTableSummary(ctx, t.TargetTable.Conn, dbutil.DefaultTimeout, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
+	err = initSummary(ctx, t.TargetTable.Conn, dbutil.DefaultTimeout, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -572,7 +572,7 @@ func (t *TableDiff) WriteSqls(ctx context.Context, writeFixSQL func(string) erro
 					return
 				}
 
-				time.Sleep(100*time.Millisecond)
+				time.Sleep(100 * time.Millisecond)
 			}
 		}
 	}()
@@ -585,7 +585,7 @@ func (t *TableDiff) UpdateSummaryInfo(ctx context.Context) chan bool {
 
 	go func() {
 		update := func() {
-			err := updateSummaryInfo(ctx, t.TargetTable.Conn, dbutil.DefaultTimeout, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table)
+			err := updateSummary(ctx, t.TargetTable.Conn, dbutil.DefaultTimeout, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table)
 			if err != nil {
 				log.Error("save table summary info failed", zap.String("schema", t.TargetTable.Schema), zap.String("table", t.TargetTable.Table), zap.Error(err))
 			}

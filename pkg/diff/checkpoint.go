@@ -73,55 +73,37 @@ func saveChunk(ctx context.Context, db *sql.DB, timeout time.Duration, chunkID i
 	return nil
 }
 
-// loadFromCheckPoint returns true if we should use the history checkpoint
-func loadFromCheckPoint(ctx context.Context, db *sql.DB, timeout time.Duration, schema, table, configHash string) (bool, error) {
+func getChunk(ctx context.Context, db *sql.DB, timeout time.Duration, instanceID, schema, table string, chunkID int) (*ChunkRange, error) {
 	ctx1, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	query := fmt.Sprintf("SELECT `state`, `config_hash` FROM `%s`.`%s` WHERE `schema` = ? AND `table` = ? limit 1;", checkpointSchemaName, summaryTableName)
-	rows, err := db.QueryContext(ctx1, query, schema, table)
+	query := fmt.Sprintf("SELECT `chunk_str` FROM `%s`.`%s` WHERE `instance_id` = ? AND `schema` = ? AND `table` = ? AND `chunk_id` = ? limit 1", checkpointSchemaName, chunkTableName)
+	rows, err := db.QueryContext(ctx1, query, instanceID, schema, table, chunkID)
 	if err != nil {
-		return false, errors.Trace(err)
+		return nil, err
 	}
 	defer rows.Close()
 
-	var state, cfgHash sql.NullString
-
 	for rows.Next() {
-		err1 := rows.Scan(&state, &cfgHash)
+		fields, err1 := dbutil.ScanRow(rows)
 		if err1 != nil {
-			return false, errors.Trace(err1)
+			return nil, errors.Trace(err1)
 		}
 
-		if cfgHash.Valid {
-			if configHash != cfgHash.String {
-				return false, nil
-			}
+		chunkStr := fields["chunk_str"].Data
+		chunk := new(ChunkRange)
+		err := json.Unmarshal(chunkStr, &chunk)
+		if err != nil {
+			return nil, err
 		}
-
-		if state.Valid {
-			// is state is success, will begin a new check for this table
-			// if state is not checked, the chunk info maybe not exists, so just return false
-			if state.String == successState || state.String == notCheckedState {
-				return false, nil
-			}
-		}
-
-		return true, nil
+		return chunk, nil
 	}
 
-	return false, errors.Trace(rows.Err())
-}
-
-func initTableSummary(ctx context.Context, db *sql.DB, timeout time.Duration, schema, table string, configHash string) error {
-	sql := fmt.Sprintf("REPLACE INTO `%s`.`%s`(`schema`, `table`, `state`, `config_hash`) VALUES(?, ?, ?, ?)", checkpointSchemaName, summaryTableName)
-	err := dbutil.ExecSQLWithRetry(ctx, db, timeout, sql, schema, table, notCheckedState, configHash)
-	if err != nil {
-		log.Error("save summary info failed", zap.Error(err))
-		return errors.Trace(err)
+	if rows.Err() != nil {
+		return nil, errors.Trace(rows.Err())
 	}
 
-	return nil
+	return nil, errors.NotFoundf("instanceID %d, schema %s, table %s, chunk %d", instanceID, schema, table, chunkID)
 }
 
 func loadChunks(ctx context.Context, db *sql.DB, timeout time.Duration, instanceID, schema, table string) ([]*ChunkRange, error) {
@@ -155,24 +137,23 @@ func loadChunks(ctx context.Context, db *sql.DB, timeout time.Duration, instance
 	return chunks, errors.Trace(rows.Err())
 }
 
-func updateSummaryInfo(ctx context.Context, db *sql.DB, timeout time.Duration, instanceID, schema, table string) error {
+func getSummaryFromChunk(ctx context.Context, db *sql.DB, timeout time.Duration, instanceID, schema, table string) (total, successNum, failedNum, ignoreNum int64, err error) {
 	ctx1, cancel := context.WithTimeout(ctx, dbutil.DefaultTimeout)
 	defer cancel()
 
 	query := fmt.Sprintf("SELECT `state`, COUNT(*) FROM `%s`.`%s` WHERE `instance_id` = ? AND `schema` = ? AND `table` = ? GROUP BY `state` ;", checkpointSchemaName, chunkTableName)
 	rows, err := db.QueryContext(ctx1, query, instanceID, schema, table)
 	if err != nil {
-		return errors.Trace(err)
+		return 0, 0, 0, 0, errors.Trace(err)
 	}
 	defer rows.Close()
 
-	var total, successNum, failedNum, ignoreNum int64
 	var chunkState sql.NullString
 	var num sql.NullInt64
 	for rows.Next() {
 		err1 := rows.Scan(&chunkState, &num)
 		if err1 != nil {
-			return errors.Trace(err1)
+			return 0, 0, 0, 0, errors.Trace(err1)
 		}
 
 		if !chunkState.Valid || !num.Valid {
@@ -191,9 +172,28 @@ func updateSummaryInfo(ctx context.Context, db *sql.DB, timeout time.Duration, i
 		}
 	}
 	if rows.Err() != nil {
-		return errors.Trace(rows.Err())
+		return 0, 0, 0, 0, errors.Trace(rows.Err())
 	}
 
+	return
+}
+
+func initSummary(ctx context.Context, db *sql.DB, timeout time.Duration, schema, table string, configHash string) error {
+	sql := fmt.Sprintf("REPLACE INTO `%s`.`%s`(`schema`, `table`, `state`, `config_hash`) VALUES(?, ?, ?, ?)", checkpointSchemaName, summaryTableName)
+	err := dbutil.ExecSQLWithRetry(ctx, db, timeout, sql, schema, table, notCheckedState, configHash)
+	if err != nil {
+		log.Error("save summary info failed", zap.Error(err))
+		return errors.Trace(err)
+	}
+
+	return nil
+}
+
+func updateSummary(ctx context.Context, db *sql.DB, timeout time.Duration, instanceID, schema, table string) error {
+	total, successNum, failedNum, ignoreNum, err := getSummaryFromChunk(ctx, db, timeout, instanceID, schema, table)
+	if err != nil {
+		return errors.Trace(err)
+	}
 	log.Info("summary info", zap.String("instance_id", instanceID), zap.String("schema", schema), zap.String("table", table), zap.Int64("chunk num", total), zap.Int64("success num", successNum), zap.Int64("failed num", failedNum), zap.Int64("ignore num", ignoreNum))
 
 	state := checkingState
@@ -282,7 +282,7 @@ func createCheckpointTable(ctx context.Context, db *sql.DB, timeout time.Duratio
 	return nil
 }
 
-func cleanCheckpointInfo(ctx context.Context, db *sql.DB, timeout time.Duration, schema, table string) error {
+func cleanCheckpoint(ctx context.Context, db *sql.DB, timeout time.Duration, schema, table string) error {
 	deleteSummarySQL := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `schema` = ? AND `table` = ?;", checkpointSchemaName, summaryTableName)
 	args1 := []interface{}{schema, table}
 
@@ -293,4 +293,44 @@ func cleanCheckpointInfo(ctx context.Context, db *sql.DB, timeout time.Duration,
 	args := [][]interface{}{args1, args2}
 
 	return errors.Trace(dbutil.ExecuteSQLs(ctx, db, timeout, sqls, args))
+}
+
+// loadFromCheckPoint returns true if we should use the history checkpoint
+func loadFromCheckPoint(ctx context.Context, db *sql.DB, timeout time.Duration, schema, table, configHash string) (bool, error) {
+	ctx1, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	query := fmt.Sprintf("SELECT `state`, `config_hash` FROM `%s`.`%s` WHERE `schema` = ? AND `table` = ? limit 1;", checkpointSchemaName, summaryTableName)
+	rows, err := db.QueryContext(ctx1, query, schema, table)
+	if err != nil {
+		return false, errors.Trace(err)
+	}
+	defer rows.Close()
+
+	var state, cfgHash sql.NullString
+
+	for rows.Next() {
+		err1 := rows.Scan(&state, &cfgHash)
+		if err1 != nil {
+			return false, errors.Trace(err1)
+		}
+
+		if cfgHash.Valid {
+			if configHash != cfgHash.String {
+				return false, nil
+			}
+		}
+
+		if state.Valid {
+			// is state is success, will begin a new check for this table
+			// if state is not checked, the chunk info maybe not exists, so just return false
+			if state.String == successState || state.String == notCheckedState {
+				return false, nil
+			}
+		}
+
+		return true, nil
+	}
+
+	return false, errors.Trace(rows.Err())
 }
