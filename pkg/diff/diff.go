@@ -80,6 +80,9 @@ type TableDiff struct {
 	// set false if want to comapre the data directly
 	UseChecksum bool `json:"-"`
 
+	// set true if just want compare data by checksum, will skip select data when checksum is not equal
+	OnlyUseChecksum bool
+
 	// collation config in mysql/tidb, should corresponding to charset.
 	Collation string `json:"collation"`
 
@@ -388,6 +391,10 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, 
 		if equal {
 			return true, nil
 		}
+	}
+
+	if t.UseChecksum && t.OnlyUseChecksum {
+		return false, nil
 	}
 
 	// if checksum is not equal or don't need compare checksum, compare the data

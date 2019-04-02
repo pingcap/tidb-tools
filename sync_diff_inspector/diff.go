@@ -38,6 +38,7 @@ type Diff struct {
 	useRowID          bool
 	useChecksum       bool
 	useCheckpoint     bool
+	onlyUseChecksum   bool
 	ignoreDataCheck   bool
 	ignoreStructCheck bool
 	tables            map[string]map[string]*TableConfig
@@ -59,6 +60,7 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 		useRowID:          cfg.UseRowID,
 		useChecksum:       cfg.UseChecksum,
 		useCheckpoint:     cfg.UseCheckpoint,
+		onlyUseChecksum:   cfg.OnlyUseChecksum,
 		ignoreDataCheck:   cfg.IgnoreDataCheck,
 		ignoreStructCheck: cfg.IgnoreStructCheck,
 		tidbInstanceID:    cfg.TiDBInstanceID,
@@ -410,6 +412,7 @@ func (df *Diff) Equal() (err error) {
 				UseRowID:          df.useRowID,
 				UseChecksum:       df.useChecksum,
 				UseCheckpoint:     df.useCheckpoint,
+				OnlyUseChecksum:   df.onlyUseChecksum,
 				IgnoreStructCheck: df.ignoreStructCheck,
 				IgnoreDataCheck:   df.ignoreDataCheck,
 				TiDBStatsSource:   tidbStatsSource,
