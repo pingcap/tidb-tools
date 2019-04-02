@@ -266,6 +266,7 @@ func (t *TableDiff) EqualTableData(ctx context.Context) (equal bool, err error) 
 		return false, errors.Trace(err)
 	}
 	if len(chunks) == 0 {
+		log.Warn("get 0 chunks, table is not checked", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)))
 		return true, nil
 	}
 
