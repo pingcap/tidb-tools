@@ -111,7 +111,7 @@ func loadFromCheckPoint(ctx context.Context, db *sql.DB, schema, table, configHa
 }
 
 func initTableSummary(ctx context.Context, db *sql.DB, schema, table string, configHash string) error {
-	sql := fmt.Sprintf("REPLACE INTO `%s`.`%s`(`schema`, `table`, `state`, `config_hash`) VALUES(?, ?, ?, ?, ?)", checkpointSchemaName, summaryTableName)
+	sql := fmt.Sprintf("REPLACE INTO `%s`.`%s`(`schema`, `table`, `state`, `config_hash`) VALUES(?, ?, ?, ?)", checkpointSchemaName, summaryTableName)
 	err := dbutil.ExecSQLWithRetry(ctx, db, sql, schema, table, notCheckedState, configHash)
 	if err != nil {
 		log.Error("save summary info failed", zap.Error(err))
@@ -225,7 +225,7 @@ func createCheckpointTable(ctx context.Context, db *sql.DB) error {
 	+--------+-------+-----------+-------------------+------------------+------------------+---------+----------------------------------+---------------------+
 	| diff   | test  |       112 |               104 |                0 |                8 | success | 91f302052783672b01af3e2b0e7d66ff | 2019-03-26 12:42:11 |
 	+--------+-------+-----------+-------------------+------------------+------------------+---------+----------------------------------+---------------------+
-	
+
 	note: config_hash is the hash value for the config, if config is changed, will clear the history checkpoint.
 	*/
 	createSummaryTableSQL :=
@@ -276,17 +276,14 @@ func createCheckpointTable(ctx context.Context, db *sql.DB) error {
 }
 
 func cleanCheckpointInfo(ctx context.Context, db *sql.DB, schema, table string) error {
-	deleteTableSummarySQL := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `schema` = ? AND `table` = ?;", checkpointSchemaName, summaryTableName)
-	err := dbutil.ExecSQLWithRetry(ctx, db, deleteTableSummarySQL, schema, table)
-	if err != nil {
-		return errors.Trace(err)
-	}
+	deleteSummarySQL := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `schema` = ? AND `table` = ?;", checkpointSchemaName, summaryTableName)
+	args1 := []interface{}{schema, table}
 
 	deleteChunkSQL := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `schema` = ? AND `table` = ?;", checkpointSchemaName, chunkTableName)
-	err = dbutil.ExecSQLWithRetry(ctx, db, deleteChunkSQL, schema, table)
-	if err != nil {
-		return errors.Trace(err)
-	}
+	args2 := []interface{}{schema, table}
 
-	return nil
+	sqls := []string{deleteSummarySQL, deleteChunkSQL}
+	args := [][]interface{}{args1, args2}
+
+	return errors.Trace(dbutil.ExecuteSQLs(ctx, db, sqls, args))
 }

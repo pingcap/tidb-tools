@@ -47,6 +47,9 @@ const (
 
 	// DefaultTimeout is the default timeout for execute sql
 	DefaultTimeout time.Duration = 5 * time.Second
+
+	// SlowWarnLog defines the duration to log warn log of sql when exec time greater than
+	SlowWarnLog = 100 * time.Millisecond
 )
 
 var (
@@ -636,8 +639,13 @@ func ExecSQLWithRetry(ctx context.Context, db *sql.DB, sql string, args ...inter
 	defer cancel()
 
 	for i := 0; i < DefaultRetryTime; i++ {
+		startTime := time.Now()
 		_, err = db.ExecContext(ctx1, sql, args...)
 		if err == nil {
+			takeDuration := time.Since(startTime)
+			if takeDuration > SlowWarnLog {
+				log.Warn("exec sql slow", zap.String("sql", sql), zap.Reflect("args", args), zap.Duration("take", takeDuration))
+			}
 			return nil
 		}
 
@@ -652,6 +660,45 @@ func ExecSQLWithRetry(ctx context.Context, db *sql.DB, sql string, args ...inter
 	}
 
 	return err
+}
+
+// ExecuteSQLs executes some sqls in one transaction
+func ExecuteSQLs(ctx context.Context, db *sql.DB, sqls []string, args [][]interface{}) error {
+	ctx1, cancel := context.WithTimeout(ctx, DefaultTimeout)
+	defer cancel()
+
+	txn, err := db.Begin()
+	if err != nil {
+		log.Error("exec sqls begin", zap.Error(err))
+		return errors.Trace(err)
+	}
+
+	for i := range sqls {
+		startTime := time.Now()
+
+		_, err = txn.ExecContext(ctx1, sqls[i], args[i]...)
+		if err != nil {
+			log.Error("exec sql", zap.String("sql", sqls[i]), zap.Reflect("args", args[i]), zap.Error(err))
+			rerr := txn.Rollback()
+			if rerr != nil {
+				log.Error("rollback", zap.Error(err))
+			}
+			return errors.Trace(err)
+		}
+
+		takeDuration := time.Since(startTime)
+		if takeDuration > SlowWarnLog {
+			log.Warn("exec sql slow", zap.String("sql", sqls[i]), zap.Reflect("args", args[i]), zap.Duration("take", takeDuration))
+		}
+	}
+
+	err = txn.Commit()
+	if err != nil {
+		log.Error("exec sqls commit", zap.Error(err))
+		return errors.Trace(err)
+	}
+
+	return nil
 }
 
 func isRetryableError(err error) bool {
