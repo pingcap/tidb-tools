@@ -73,6 +73,7 @@ func saveChunk(ctx context.Context, db *sql.DB, chunkID int, instanceID, schema,
 	return nil
 }
 
+// loadFromCheckPoint returns true if we should use the history checkpoint
 func loadFromCheckPoint(ctx context.Context, db *sql.DB, schema, table, configHash string) (bool, error) {
 	query := fmt.Sprintf("SELECT `state`, `config_hash` FROM `%s`.`%s` WHERE `schema` = ? AND `table` = ? limit 1;", checkpointSchemaName, summaryTableName)
 	rows, err := db.QueryContext(ctx, query, schema, table)
