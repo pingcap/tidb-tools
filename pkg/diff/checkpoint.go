@@ -110,8 +110,8 @@ func loadFromCheckPoint(ctx context.Context, db *sql.DB, schema, table, configHa
 }
 
 func initTableSummary(ctx context.Context, db *sql.DB, schema, table string, configHash string) error {
-	sql := fmt.Sprintf("REPLACE INTO `%s`.`%s`(`schema`, `table`, `state`, `config_hash`, `update_time`) VALUES(?, ?, ?, ?, ?)", checkpointSchemaName, summaryTableName)
-	err := dbutil.ExecSQLWithRetry(ctx, db, sql, schema, table, notCheckedState, configHash, time.Now())
+	sql := fmt.Sprintf("REPLACE INTO `%s`.`%s`(`schema`, `table`, `state`, `config_hash`) VALUES(?, ?, ?, ?, ?)", checkpointSchemaName, summaryTableName)
+	err := dbutil.ExecSQLWithRetry(ctx, db, sql, schema, table, notCheckedState, configHash)
 	if err != nil {
 		log.Error("save summary info failed", zap.Error(err))
 		return err
@@ -200,8 +200,8 @@ func updateSummaryInfo(ctx context.Context, db *sql.DB, instanceID, schema, tabl
 		}
 	}
 
-	updateSQL := fmt.Sprintf("UPDATE `%s`.`%s` SET `chunk_num` = ?, `check_success_num` = ?, `check_failed_num` = ?, `check_ignore_num` = ?, `state` = ?, `update_time` = ? WHERE `schema` = ? AND `table` = ?", checkpointSchemaName, summaryTableName)
-	err = dbutil.ExecSQLWithRetry(ctx, db, updateSQL, total, successNum, failedNum, ignoreNum, state, time.Now(), schema, table)
+	updateSQL := fmt.Sprintf("UPDATE `%s`.`%s` SET `chunk_num` = ?, `check_success_num` = ?, `check_failed_num` = ?, `check_ignore_num` = ?, `state` = ? WHERE `schema` = ? AND `table` = ?", checkpointSchemaName, summaryTableName)
+	err = dbutil.ExecSQLWithRetry(ctx, db, updateSQL, total, successNum, failedNum, ignoreNum, state, schema, table)
 	if err != nil {
 		return err
 	}
@@ -224,6 +224,8 @@ func createCheckpointTable(ctx context.Context, db *sql.DB) error {
 	+--------+-------+-----------+-------------------+------------------+------------------+---------+----------------------------------+---------------------+
 	| diff   | test  |       112 |               104 |                0 |                8 | success | 91f302052783672b01af3e2b0e7d66ff | 2019-03-26 12:42:11 |
 	+--------+-------+-----------+-------------------+------------------+------------------+---------+----------------------------------+---------------------+
+	
+	note: config_hash is the hash value for the config, if config is changed, will clear the history checkpoint.
 	*/
 	createSummaryTableSQL :=
 		"CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`table_summary`(" +
@@ -233,7 +235,8 @@ func createCheckpointTable(ctx context.Context, db *sql.DB) error {
 			"`check_failed_num` int," +
 			"`check_ignore_num` int," +
 			"`state` enum('not_checked', 'checking', 'success', 'failed') DEFAULT 'not_checked'," +
-			"`config_hash` varchar(50), `update_time` datetime," +
+			"`config_hash` varchar(50)," +
+			"`update_time` datetime ON UPDATE CURRENT_TIMESTAMP," +
 			"PRIMARY KEY(`schema`, `table`));"
 
 	_, err = db.ExecContext(ctx, createSummaryTableSQL)
@@ -260,7 +263,7 @@ func createCheckpointTable(ctx context.Context, db *sql.DB) error {
 			"`checksum` varchar(20)," +
 			"`chunk_str` text," +
 			"`state` enum('not_checked', 'checking', 'success', 'failed', 'ignore', 'error') DEFAULT 'not_checked'," +
-			"`update_time` datetime," +
+			"`update_time` datetime ON UPDATE CURRENT_TIMESTAMP," +
 			"PRIMARY KEY(`chunk_id`, `instance_id`, `schema`, `table`));"
 	_, err = db.ExecContext(ctx, createChunkTableSQL)
 	if err != nil {
