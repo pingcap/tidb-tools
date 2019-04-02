@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -49,6 +50,12 @@ var (
 	// for chunk: this chunk is ignored. if sample is not 100%, will ignore some chunk
 	// for table: don't have this state
 	ignoreState = "ignore"
+
+	checkpointSchemaName = "sync_diff_inspector"
+
+	summaryTableName = "table_summary"
+
+	chunkTableName = "chunk"
 )
 
 func saveChunk(ctx context.Context, db *sql.DB, chunkID int, instanceID, schema, table, checksum string, chunk *ChunkRange) error {
@@ -57,7 +64,7 @@ func saveChunk(ctx context.Context, db *sql.DB, chunkID int, instanceID, schema,
 		return err
 	}
 
-	sql := "REPLACE INTO `sync_diff_inspector`.`chunk` VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?);"
+	sql := fmt.Sprintf("REPLACE INTO `%s`.`%s` VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?);", checkpointSchemaName, chunkTableName)
 	err = dbutil.ExecSQLWithRetry(ctx, db, sql, chunkID, instanceID, schema, table, chunk.Where, checksum, string(chunkBytes), chunk.State, time.Now())
 	if err != nil {
 		log.Error("save chunk info failed", zap.Error(err))
@@ -67,7 +74,7 @@ func saveChunk(ctx context.Context, db *sql.DB, chunkID int, instanceID, schema,
 }
 
 func loadFromCheckPoint(ctx context.Context, db *sql.DB, schema, table, configHash string) (bool, error) {
-	query := "SELECT `state`, `config_hash` FROM `sync_diff_inspector`.`table_summary` WHERE `schema` = ? AND `table` = ? limit 1"
+	query := fmt.Sprintf("SELECT `state`, `config_hash` FROM `%s`.`%s` WHERE `schema` = ? AND `table` = ? limit 1;", checkpointSchemaName, summaryTableName)
 	rows, err := db.QueryContext(ctx, query, schema, table)
 	if err != nil {
 		return false, errors.Trace(err)
@@ -103,7 +110,7 @@ func loadFromCheckPoint(ctx context.Context, db *sql.DB, schema, table, configHa
 }
 
 func initTableSummary(ctx context.Context, db *sql.DB, schema, table string, configHash string) error {
-	sql := "REPLACE INTO `sync_diff_inspector`.`table_summary`(`schema`, `table`, `state`, `config_hash`, `update_time`) VALUES(?, ?, ?, ?, ?)"
+	sql := fmt.Sprintf("REPLACE INTO `%s`.`%s`(`schema`, `table`, `state`, `config_hash`, `update_time`) VALUES(?, ?, ?, ?, ?)", checkpointSchemaName, summaryTableName)
 	err := dbutil.ExecSQLWithRetry(ctx, db, sql, schema, table, notCheckedState, configHash, time.Now())
 	if err != nil {
 		log.Error("save summary info failed", zap.Error(err))
@@ -118,7 +125,7 @@ func loadChunks(ctx context.Context, db *sql.DB, instanceID, schema, table strin
 
 	ctx, cancel := context.WithTimeout(context.Background(), dbutil.DefaultTimeout)
 	defer cancel()
-	query := "SELECT `chunk_str` FROM `sync_diff_inspector`.`chunk` WHERE `instance_id` = ? AND `schema` = ? AND `table` = ?"
+	query := fmt.Sprintf("SELECT `chunk_str` FROM `%s`.`%s` WHERE `instance_id` = ? AND `schema` = ? AND `table` = ?", checkpointSchemaName, chunkTableName)
 	rows, err := db.QueryContext(ctx, query, instanceID, schema, table)
 	if err != nil {
 		return nil, err
@@ -147,7 +154,7 @@ func updateSummaryInfo(ctx context.Context, db *sql.DB, instanceID, schema, tabl
 	ctx, cancel := context.WithTimeout(ctx, dbutil.DefaultTimeout)
 	defer cancel()
 
-	query := "SELECT `state`, COUNT(*) FROM `sync_diff_inspector`.`chunk` WHERE `instance_id` = ? AND `schema` = ? AND `table` = ? GROUP BY `state` ;"
+	query := fmt.Sprintf("SELECT `state`, COUNT(*) FROM `%s`.`%s` WHERE `instance_id` = ? AND `schema` = ? AND `table` = ? GROUP BY `state` ;", checkpointSchemaName, chunkTableName)
 	rows, err := db.QueryContext(ctx, query, instanceID, schema, table)
 	if err != nil {
 		return errors.Trace(err)
@@ -193,7 +200,7 @@ func updateSummaryInfo(ctx context.Context, db *sql.DB, instanceID, schema, tabl
 		}
 	}
 
-	updateSQL := "UPDATE `sync_diff_inspector`.`table_summary` SET `chunk_num` = ?, `check_success_num` = ?, `check_failed_num` = ?, `check_ignore_num` = ?, `state` = ?, `update_time` = ? WHERE `schema` = ? AND `table` = ?"
+	updateSQL := fmt.Sprintf("UPDATE `%s`.`%s` SET `chunk_num` = ?, `check_success_num` = ?, `check_failed_num` = ?, `check_ignore_num` = ?, `state` = ?, `update_time` = ? WHERE `schema` = ? AND `table` = ?", checkpointSchemaName, summaryTableName)
 	err = dbutil.ExecSQLWithRetry(ctx, db, updateSQL, total, successNum, failedNum, ignoreNum, state, time.Now(), schema, table)
 	if err != nil {
 		return err
@@ -203,7 +210,7 @@ func updateSummaryInfo(ctx context.Context, db *sql.DB, instanceID, schema, tabl
 }
 
 func createCheckpointTable(ctx context.Context, db *sql.DB) error {
-	createSchemaSQL := "CREATE DATABASE IF NOT EXISTS `sync_diff_inspector`;"
+	createSchemaSQL := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`;", checkpointSchemaName)
 	_, err := db.ExecContext(ctx, createSchemaSQL)
 	if err != nil {
 		log.Info("create schema", zap.Error(err))
@@ -218,7 +225,17 @@ func createCheckpointTable(ctx context.Context, db *sql.DB) error {
 	| diff   | test  |       112 |               104 |                0 |                8 | success | 91f302052783672b01af3e2b0e7d66ff | 2019-03-26 12:42:11 |
 	+--------+-------+-----------+-------------------+------------------+------------------+---------+----------------------------------+---------------------+
 	*/
-	createSummaryTableSQL := "CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`table_summary`(`schema` varchar(30), `table` varchar(30), `chunk_num` int, `check_success_num` int, `check_failed_num` int, `check_ignore_num` int, `state` enum('not_checked', 'checking', 'success', 'failed') DEFAULT 'not_checked', `config_hash` varchar(50), `update_time` datetime, PRIMARY KEY(`schema`, `table`));"
+	createSummaryTableSQL :=
+		"CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`table_summary`(" +
+			"`schema` varchar(30), `table` varchar(30)," +
+			"`chunk_num` int," +
+			"`check_success_num` int," +
+			"`check_failed_num` int," +
+			"`check_ignore_num` int," +
+			"`state` enum('not_checked', 'checking', 'success', 'failed') DEFAULT 'not_checked'," +
+			"`config_hash` varchar(50), `update_time` datetime," +
+			"PRIMARY KEY(`schema`, `table`));"
+
 	_, err = db.ExecContext(ctx, createSummaryTableSQL)
 	if err != nil {
 		log.Info("create chunk table", zap.Error(err))
@@ -233,7 +250,18 @@ func createCheckpointTable(ctx context.Context, db *sql.DB) error {
 	|        2 | target-1    | diff   | test1 | (`a` >= ? AND `a` < ? AND TRUE) |  91f3020527 |  .....    | success | 2019-03-26 12:41:42 |
 	+----------+-------------+--------+-------+---------------------------------+-------------+-----------+---------+---------------------+
 	*/
-	createChunkTableSQL := "CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`chunk`(`chunk_id` int, `instance_id` varchar(30), `schema` varchar(30), `table` varchar(30), `range` varchar(100), `checksum` varchar(20), `chunk_str` text, `state` enum('not_checked', 'checking', 'success', 'failed', 'ignore', 'error') DEFAULT 'not_checked', update_time datetime, PRIMARY KEY(`chunk_id`, `instance_id`, `schema`, `table`));"
+	createChunkTableSQL :=
+		"CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`chunk`(" +
+			"`chunk_id` int," +
+			"`instance_id` varchar(30)," +
+			"`schema` varchar(30)," +
+			"`table` varchar(30)," +
+			"`range` varchar(100)," +
+			"`checksum` varchar(20)," +
+			"`chunk_str` text," +
+			"`state` enum('not_checked', 'checking', 'success', 'failed', 'ignore', 'error') DEFAULT 'not_checked'," +
+			"`update_time` datetime," +
+			"PRIMARY KEY(`chunk_id`, `instance_id`, `schema`, `table`));"
 	_, err = db.ExecContext(ctx, createChunkTableSQL)
 	if err != nil {
 		log.Info("create chunk table", zap.Error(err))
@@ -244,13 +272,13 @@ func createCheckpointTable(ctx context.Context, db *sql.DB) error {
 }
 
 func cleanCheckpointInfo(ctx context.Context, db *sql.DB, schema, table string) error {
-	deleteTableSummarySQL := "DELETE FROM `sync_diff_inspector`.`table_summary` WHERE `schema` = ? AND `table` = ?;"
+	deleteTableSummarySQL := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `schema` = ? AND `table` = ?;", checkpointSchemaName, summaryTableName)
 	err := dbutil.ExecSQLWithRetry(ctx, db, deleteTableSummarySQL, schema, table)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	deleteChunkSQL := "DELETE FROM `sync_diff_inspector`.`chunk` WHERE `schema` = ? AND `table` = ?;"
+	deleteChunkSQL := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `schema` = ? AND `table` = ?;", checkpointSchemaName, chunkTableName)
 	err = dbutil.ExecSQLWithRetry(ctx, db, deleteChunkSQL, schema, table)
 	if err != nil {
 		return errors.Trace(err)
