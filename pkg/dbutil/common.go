@@ -26,6 +26,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
+	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/parser/terror"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb/ddl"
@@ -727,7 +728,7 @@ func ignoreError(err error) bool {
 }
 
 func ignoreDDLError(err error) bool {
-	err = utils.OriginError(err)
+	err = errors.Cause(err)
 	mysqlErr, ok := err.(*mysql.MySQLError)
 	if !ok {
 		return false
