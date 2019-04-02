@@ -655,11 +655,11 @@ func ExecSQLWithRetry(ctx context.Context, db *sql.DB, sql string, args ...inter
 		}
 
 		if !isRetryableError(err) {
-			return err
+			return errors.Trace(err)
 		}
 	}
 
-	return err
+	return errors.Trace(err)
 }
 
 // ExecuteSQLs executes some sqls in one transaction
@@ -727,7 +727,7 @@ func ignoreError(err error) bool {
 }
 
 func ignoreDDLError(err error) bool {
-	err = originError(err)
+	err = utils.OriginError(err)
 	mysqlErr, ok := err.(*mysql.MySQLError)
 	if !ok {
 		return false
@@ -744,16 +744,4 @@ func ignoreDDLError(err error) bool {
 	default:
 		return false
 	}
-}
-
-// originError return original error
-func originError(err error) error {
-	for {
-		e := errors.Cause(err)
-		if e == err {
-			break
-		}
-		err = e
-	}
-	return err
 }

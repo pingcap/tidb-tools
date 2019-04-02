@@ -61,14 +61,14 @@ var (
 func saveChunk(ctx context.Context, db *sql.DB, chunkID int, instanceID, schema, table, checksum string, chunk *ChunkRange) error {
 	chunkBytes, err := json.Marshal(chunk)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	sql := fmt.Sprintf("REPLACE INTO `%s`.`%s` VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?);", checkpointSchemaName, chunkTableName)
 	err = dbutil.ExecSQLWithRetry(ctx, db, sql, chunkID, instanceID, schema, table, chunk.Where, checksum, string(chunkBytes), chunk.State, time.Now())
 	if err != nil {
 		log.Error("save chunk info failed", zap.Error(err))
-		return err
+		return errors.Trace(err)
 	}
 	return nil
 }
@@ -115,7 +115,7 @@ func initTableSummary(ctx context.Context, db *sql.DB, schema, table string, con
 	err := dbutil.ExecSQLWithRetry(ctx, db, sql, schema, table, notCheckedState, configHash)
 	if err != nil {
 		log.Error("save summary info failed", zap.Error(err))
-		return err
+		return errors.Trace(err)
 	}
 
 	return nil
@@ -204,7 +204,7 @@ func updateSummaryInfo(ctx context.Context, db *sql.DB, instanceID, schema, tabl
 	updateSQL := fmt.Sprintf("UPDATE `%s`.`%s` SET `chunk_num` = ?, `check_success_num` = ?, `check_failed_num` = ?, `check_ignore_num` = ?, `state` = ? WHERE `schema` = ? AND `table` = ?", checkpointSchemaName, summaryTableName)
 	err = dbutil.ExecSQLWithRetry(ctx, db, updateSQL, total, successNum, failedNum, ignoreNum, state, schema, table)
 	if err != nil {
-		return err
+		return errors.Trace(err)
 	}
 
 	return nil

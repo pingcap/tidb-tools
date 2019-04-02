@@ -417,11 +417,11 @@ func (df *Diff) Equal() (err error) {
 
 			structEqual, dataEqual, err := td.Equal(df.ctx, func(dml string) error {
 				_, err := df.fixSQLFile.WriteString(fmt.Sprintf("%s\n", dml))
-				return err
+				return errors.Trace(err)
 			})
 			if err != nil {
 				log.Error("check failed", zap.String("table", dbutil.TableName(table.Schema, table.Table)), zap.Error(err))
-				return err
+				return errors.Trace(err)
 			}
 
 			df.report.SetTableStructCheckResult(table.Schema, table.Table, structEqual)

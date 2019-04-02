@@ -129,16 +129,3 @@ func (s *testDBSuite) TestIsIgnoreError(c *C) {
 		c.Assert(ignoreError(t.err), Equals, t.canIgnore)
 	}
 }
-
-func (s *testDBSuite) TestOriginError(c *C) {
-	c.Assert(originError(nil), IsNil)
-
-	err1 := errors.New("err1")
-	c.Assert(originError(err1), DeepEquals, err1)
-
-	err2 := errors.Trace(err1)
-	c.Assert(originError(err2), DeepEquals, err1)
-
-	err3 := errors.Trace(err2)
-	c.Assert(originError(err3), DeepEquals, err1)
-}
