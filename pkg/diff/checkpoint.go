@@ -53,7 +53,7 @@ var (
 
 	checkpointSchemaName = "sync_diff_inspector"
 
-	summaryTableName = "table_summary"
+	summaryTableName = "summary"
 
 	chunkTableName = "chunk"
 )
@@ -218,7 +218,7 @@ func createCheckpointTable(ctx context.Context, db *sql.DB) error {
 	}
 
 	/* example
-	mysql> select * from sync_diff_inspector.table_summary;
+	mysql> select * from sync_diff_inspector.summary;
 	+--------+-------+-----------+-------------------+------------------+------------------+---------+----------------------------------+---------------------+
 	| schema | table | chunk_num | check_success_num | check_failed_num | check_ignore_num | state   | config_hash                      | update_time         |
 	+--------+-------+-----------+-------------------+------------------+------------------+---------+----------------------------------+---------------------+
@@ -228,7 +228,7 @@ func createCheckpointTable(ctx context.Context, db *sql.DB) error {
 	note: config_hash is the hash value for the config, if config is changed, will clear the history checkpoint.
 	*/
 	createSummaryTableSQL :=
-		"CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`table_summary`(" +
+		"CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`summary`(" +
 			"`schema` varchar(30), `table` varchar(30)," +
 			"`chunk_num` int," +
 			"`check_success_num` int," +
@@ -264,7 +264,7 @@ func createCheckpointTable(ctx context.Context, db *sql.DB) error {
 			"`chunk_str` text," +
 			"`state` enum('not_checked', 'checking', 'success', 'failed', 'ignore', 'error') DEFAULT 'not_checked'," +
 			"`update_time` datetime ON UPDATE CURRENT_TIMESTAMP," +
-			"PRIMARY KEY(`chunk_id`, `instance_id`, `schema`, `table`));"
+			"PRIMARY KEY(`schema`, `table`, `instance_id`, `chunk_id`));"
 	_, err = db.ExecContext(ctx, createChunkTableSQL)
 	if err != nil {
 		log.Info("create chunk table", zap.Error(err))
