@@ -33,7 +33,7 @@ func (s *testCheckpointSuite) TestCheckpoint(c *C) {
 
 	s.testInitAndGetSummary(c, db)
 	s.testSaveAndLoadChunk(c, db)
-
+	s.testUpdateSummary(c, db)
 }
 
 func (s *testCheckpointSuite) testInitAndGetSummary(c *C, db *sql.DB) {
