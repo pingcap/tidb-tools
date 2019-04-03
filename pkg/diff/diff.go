@@ -194,7 +194,7 @@ func (t *TableDiff) Prepare(ctx context.Context) error {
 		return errors.Trace(err)
 	}
 
-	err = initSummary(ctx1, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
+	err = initTableSummary(ctx1, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -602,7 +602,7 @@ func (t *TableDiff) UpdateSummaryInfo(ctx context.Context) chan bool {
 			ctx1, cancel1 := context.WithTimeout(ctx, dbutil.DefaultTimeout)
 			defer cancel1()
 
-			err := updateSummary(ctx1, t.TargetTable.Conn, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table)
+			err := updateTableSummary(ctx1, t.TargetTable.Conn, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table)
 			if err != nil {
 				log.Error("save table summary info failed", zap.String("schema", t.TargetTable.Schema), zap.String("table", t.TargetTable.Table), zap.Error(err))
 			}

@@ -39,14 +39,14 @@ func (s *testCheckpointSuite) testInitAndGetSummary(c *C, db *sql.DB) {
 	err := createCheckpointTable(context.Background(), db)
 	c.Assert(err, IsNil)
 
-	_, _, _, _, _, err = getSummary(context.Background(), db, "test", "checkpoint")
+	_, _, _, _, _, err = getTableSummary(context.Background(), db, "test", "checkpoint")
 	c.Log(err)
 	c.Assert(err, ErrorMatches, "*not found*")
 
-	err = initSummary(context.Background(), db, "test", "checkpoint", "123")
+	err = initTableSummary(context.Background(), db, "test", "checkpoint", "123")
 	c.Assert(err, IsNil)
 
-	total, successNum, failedNum, ignoreNum, state, err := getSummary(context.Background(), db, "test", "checkpoint")
+	total, successNum, failedNum, ignoreNum, state, err := getTableSummary(context.Background(), db, "test", "checkpoint")
 	c.Assert(err, IsNil)
 	c.Assert(total, Equals, int64(0))
 	c.Assert(successNum, Equals, int64(0))
@@ -91,10 +91,10 @@ func (s *testCheckpointSuite) testUpdateSummary(c *C, db *sql.DB) {
 	err = saveChunk(context.Background(), db, ignoreChunk.ID, "target", "test", "checkpoint", "", ignoreChunk)
 	c.Assert(err, IsNil)
 
-	err = updateSummary(context.Background(), db, "target", "test", "checkpoint")
+	err = updateTableSummary(context.Background(), db, "target", "test", "checkpoint")
 	c.Assert(err, IsNil)
 
-	total, successNum, failedNum, ignoreNum, state, err := getSummary(context.Background(), db, "test", "checkpoint")
+	total, successNum, failedNum, ignoreNum, state, err := getTableSummary(context.Background(), db, "test", "checkpoint")
 	c.Assert(err, IsNil)
 	c.Assert(total, Equals, int64(3))
 	c.Assert(successNum, Equals, int64(1))

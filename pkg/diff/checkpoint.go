@@ -134,8 +134,8 @@ func loadChunks(ctx context.Context, db *sql.DB, instanceID, schema, table strin
 	return chunks, errors.Trace(rows.Err())
 }
 
-// getSummary returns a table's total chunk num, check success chunk num, check failed chunk num, check ignore chunk num and the state
-func getSummary(ctx context.Context, db *sql.DB, schema, table string) (int64, int64, int64, int64, string, error) {
+// getTableSummary returns a table's total chunk num, check success chunk num, check failed chunk num, check ignore chunk num and the state
+func getTableSummary(ctx context.Context, db *sql.DB, schema, table string) (total int64, success int64, failed int64, ignore int64, state string, err error) {
 	query := fmt.Sprintf("SELECT `chunk_num`, `check_success_num`, `check_failed_num`, `check_ignore_num`, `state` FROM `%s`.`%s` WHERE `schema` = ? AND `table` = ? LIMIT 1",
 		checkpointSchemaName, summaryTableName)
 	rows, err := db.QueryContext(ctx, query, schema, table)
@@ -144,19 +144,19 @@ func getSummary(ctx context.Context, db *sql.DB, schema, table string) (int64, i
 	}
 	defer rows.Close()
 
-	var total, successNum, failedNum, ignoreNum sql.NullInt64
-	var state sql.NullString
+	var totalNum, successNum, failedNum, ignoreNum sql.NullInt64
+	var stateStr sql.NullString
 	for rows.Next() {
-		err1 := rows.Scan(&total, &successNum, &failedNum, &ignoreNum, &state)
+		err1 := rows.Scan(&totalNum, &successNum, &failedNum, &ignoreNum, &stateStr)
 		if err1 != nil {
 			return 0, 0, 0, 0, "", errors.Trace(err1)
 		}
 
-		if !total.Valid || !successNum.Valid || !failedNum.Valid || !ignoreNum.Valid || !state.Valid {
+		if !totalNum.Valid || !successNum.Valid || !failedNum.Valid || !ignoreNum.Valid || !stateStr.Valid {
 			return 0, 0, 0, 0, "", errors.New("get summary failed, value is valid")
 		}
 
-		return total.Int64, successNum.Int64, failedNum.Int64, ignoreNum.Int64, state.String, nil
+		return totalNum.Int64, successNum.Int64, failedNum.Int64, ignoreNum.Int64, stateStr.String, nil
 
 	}
 	if rows.Err() != nil {
@@ -166,8 +166,8 @@ func getSummary(ctx context.Context, db *sql.DB, schema, table string) (int64, i
 	return 0, 0, 0, 0, "", errors.NotFoundf("schema %s, table %s summary info", schema, table)
 }
 
-// getSummaryFromChunk get the table's summary info from `chunk` table
-func getSummaryFromChunk(ctx context.Context, db *sql.DB, instanceID, schema, table string) (total, successNum, failedNum, ignoreNum int64, err error) {
+// getTableSummaryFromChunk get the table's summary info from `chunk` table
+func getTableSummaryFromChunk(ctx context.Context, db *sql.DB, instanceID, schema, table string) (total, successNum, failedNum, ignoreNum int64, err error) {
 	query := fmt.Sprintf("SELECT `state`, COUNT(*) FROM `%s`.`%s` WHERE `instance_id` = ? AND `schema` = ? AND `table` = ? GROUP BY `state` ;", checkpointSchemaName, chunkTableName)
 	rows, err := db.QueryContext(ctx, query, instanceID, schema, table)
 	if err != nil {
@@ -205,8 +205,8 @@ func getSummaryFromChunk(ctx context.Context, db *sql.DB, instanceID, schema, ta
 	return
 }
 
-// initSummary initials a table's summary info in table `summary`
-func initSummary(ctx context.Context, db *sql.DB, schema, table string, configHash string) error {
+// initTableSummary initials a table's summary info in table `summary`
+func initTableSummary(ctx context.Context, db *sql.DB, schema, table string, configHash string) error {
 	sql := fmt.Sprintf("REPLACE INTO `%s`.`%s`(`schema`, `table`, `state`, `config_hash`) VALUES(?, ?, ?, ?)", checkpointSchemaName, summaryTableName)
 	err := dbutil.ExecSQLWithRetry(ctx, db, sql, schema, table, notCheckedState, configHash)
 	if err != nil {
@@ -217,9 +217,9 @@ func initSummary(ctx context.Context, db *sql.DB, schema, table string, configHa
 	return nil
 }
 
-// updateSummary gets summary info from `chunk` table, and then update `summary` table
-func updateSummary(ctx context.Context, db *sql.DB, instanceID, schema, table string) error {
-	total, successNum, failedNum, ignoreNum, err := getSummaryFromChunk(ctx, db, instanceID, schema, table)
+// updateTableSummary gets summary info from `chunk` table, and then update `summary` table
+func updateTableSummary(ctx context.Context, db *sql.DB, instanceID, schema, table string) error {
+	total, successNum, failedNum, ignoreNum, err := getTableSummaryFromChunk(ctx, db, instanceID, schema, table)
 	if err != nil {
 		return errors.Trace(err)
 	}
