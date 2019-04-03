@@ -643,7 +643,7 @@ func ExecSQLWithRetry(ctx context.Context, db *sql.DB, sql string, args ...inter
 		if takeDuration > SlowWarnLog {
 			log.Warn("exec sql slow", zap.String("sql", sql), zap.Reflect("args", args), zap.Duration("take", takeDuration))
 		}
-		if err == nil {	
+		if err == nil {
 			return nil
 		}
 
