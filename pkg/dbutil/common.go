@@ -639,11 +639,11 @@ func ExecSQLWithRetry(ctx context.Context, db *sql.DB, sql string, args ...inter
 	for i := 0; i < DefaultRetryTime; i++ {
 		startTime := time.Now()
 		_, err = db.ExecContext(ctx, sql, args...)
-		if err == nil {
-			takeDuration := time.Since(startTime)
-			if takeDuration > SlowWarnLog {
-				log.Warn("exec sql slow", zap.String("sql", sql), zap.Reflect("args", args), zap.Duration("take", takeDuration))
-			}
+		takeDuration := time.Since(startTime)
+		if takeDuration > SlowWarnLog {
+			log.Warn("exec sql slow", zap.String("sql", sql), zap.Reflect("args", args), zap.Duration("take", takeDuration))
+		}
+		if err == nil {	
 			return nil
 		}
 
@@ -655,6 +655,9 @@ func ExecSQLWithRetry(ctx context.Context, db *sql.DB, sql string, args ...inter
 		if !isRetryableError(err) {
 			return errors.Trace(err)
 		}
+
+		log.Warn("exe sql failed, will try again", zap.String("sql", sql), zap.Reflect("args", args), zap.Error(err))
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	return errors.Trace(err)
