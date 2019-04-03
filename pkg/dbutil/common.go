@@ -635,13 +635,10 @@ func ReplacePlaceholder(str string, args []string) string {
 }
 
 // ExecSQLWithRetry executes sql with retry
-func ExecSQLWithRetry(ctx context.Context, db *sql.DB, timeout time.Duration, sql string, args ...interface{}) (err error) {
-	ctx1, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
+func ExecSQLWithRetry(ctx context.Context, db *sql.DB, sql string, args ...interface{}) (err error) {
 	for i := 0; i < DefaultRetryTime; i++ {
 		startTime := time.Now()
-		_, err = db.ExecContext(ctx1, sql, args...)
+		_, err = db.ExecContext(ctx, sql, args...)
 		if err == nil {
 			takeDuration := time.Since(startTime)
 			if takeDuration > SlowWarnLog {
@@ -664,10 +661,7 @@ func ExecSQLWithRetry(ctx context.Context, db *sql.DB, timeout time.Duration, sq
 }
 
 // ExecuteSQLs executes some sqls in one transaction
-func ExecuteSQLs(ctx context.Context, db *sql.DB, timeout time.Duration, sqls []string, args [][]interface{}) error {
-	ctx1, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
+func ExecuteSQLs(ctx context.Context, db *sql.DB, sqls []string, args [][]interface{}) error {
 	txn, err := db.Begin()
 	if err != nil {
 		log.Error("exec sqls begin", zap.Error(err))
@@ -677,7 +671,7 @@ func ExecuteSQLs(ctx context.Context, db *sql.DB, timeout time.Duration, sqls []
 	for i := range sqls {
 		startTime := time.Now()
 
-		_, err = txn.ExecContext(ctx1, sqls[i], args[i]...)
+		_, err = txn.ExecContext(ctx, sqls[i], args[i]...)
 		if err != nil {
 			log.Error("exec sql", zap.String("sql", sqls[i]), zap.Reflect("args", args[i]), zap.Error(err))
 			rerr := txn.Rollback()

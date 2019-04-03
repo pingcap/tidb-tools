@@ -19,7 +19,6 @@ import (
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
 )
 
 var _ = Suite(&testCheckpointSuite{})
@@ -29,7 +28,7 @@ type testCheckpointSuite struct{}
 func (s *testCheckpointSuite) TestCheckpoint(c *C) {
 	db, err := createConn()
 	c.Assert(err, IsNil)
-	defer dropCheckpoint(context.Background(), db, dbutil.DefaultTimeout)
+	defer dropCheckpoint(context.Background(), db)
 
 	s.testInitAndGetSummary(c, db)
 	s.testSaveAndLoadChunk(c, db)
@@ -37,17 +36,17 @@ func (s *testCheckpointSuite) TestCheckpoint(c *C) {
 }
 
 func (s *testCheckpointSuite) testInitAndGetSummary(c *C, db *sql.DB) {
-	err := createCheckpointTable(context.Background(), db, dbutil.DefaultTimeout)
+	err := createCheckpointTable(context.Background(), db)
 	c.Assert(err, IsNil)
 
-	_, _, _, _, _, err = getSummary(context.Background(), db, dbutil.DefaultTimeout, "test", "checkpoint")
+	_, _, _, _, _, err = getSummary(context.Background(), db, "test", "checkpoint")
 	c.Log(err)
 	c.Assert(err, ErrorMatches, "*not found*")
 
-	err = initSummary(context.Background(), db, dbutil.DefaultTimeout, "test", "checkpoint", "123")
+	err = initSummary(context.Background(), db, "test", "checkpoint", "123")
 	c.Assert(err, IsNil)
 
-	total, successNum, failedNum, ignoreNum, state, err := getSummary(context.Background(), db, dbutil.DefaultTimeout, "test", "checkpoint")
+	total, successNum, failedNum, ignoreNum, state, err := getSummary(context.Background(), db, "test", "checkpoint")
 	c.Assert(err, IsNil)
 	c.Assert(total, Equals, int64(0))
 	c.Assert(successNum, Equals, int64(0))
@@ -64,14 +63,14 @@ func (s *testCheckpointSuite) testSaveAndLoadChunk(c *C, db *sql.DB) {
 		State:  successState,
 	}
 
-	err := saveChunk(context.Background(), db, dbutil.DefaultTimeout, chunk.ID, "target", "test", "checkpoint", "", chunk)
+	err := saveChunk(context.Background(), db, chunk.ID, "target", "test", "checkpoint", "", chunk)
 	c.Assert(err, IsNil)
 
-	newChunk, err := getChunk(context.Background(), db, dbutil.DefaultTimeout, "target", "test", "checkpoint", chunk.ID)
+	newChunk, err := getChunk(context.Background(), db, "target", "test", "checkpoint", chunk.ID)
 	c.Assert(err, IsNil)
 	c.Assert(newChunk, DeepEquals, chunk)
 
-	chunks, err := loadChunks(context.Background(), db, dbutil.DefaultTimeout, "target", "test", "checkpoint")
+	chunks, err := loadChunks(context.Background(), db, "target", "test", "checkpoint")
 	c.Assert(err, IsNil)
 	c.Assert(chunks, HasLen, 1)
 	c.Assert(chunks[0], DeepEquals, chunk)
@@ -82,20 +81,20 @@ func (s *testCheckpointSuite) testUpdateSummary(c *C, db *sql.DB) {
 		ID:    2,
 		State: failedState,
 	}
-	err := saveChunk(context.Background(), db, dbutil.DefaultTimeout, failedChunk.ID, "target", "test", "checkpoint", "", failedChunk)
+	err := saveChunk(context.Background(), db, failedChunk.ID, "target", "test", "checkpoint", "", failedChunk)
 	c.Assert(err, IsNil)
 
 	ignoreChunk := &ChunkRange{
 		ID:    3,
 		State: ignoreState,
 	}
-	err = saveChunk(context.Background(), db, dbutil.DefaultTimeout, ignoreChunk.ID, "target", "test", "checkpoint", "", ignoreChunk)
+	err = saveChunk(context.Background(), db, ignoreChunk.ID, "target", "test", "checkpoint", "", ignoreChunk)
 	c.Assert(err, IsNil)
 
-	err = updateSummary(context.Background(), db, dbutil.DefaultTimeout, "target", "test", "checkpoint")
+	err = updateSummary(context.Background(), db, "target", "test", "checkpoint")
 	c.Assert(err, IsNil)
 
-	total, successNum, failedNum, ignoreNum, state, err := getSummary(context.Background(), db, dbutil.DefaultTimeout, "test", "checkpoint")
+	total, successNum, failedNum, ignoreNum, state, err := getSummary(context.Background(), db, "test", "checkpoint")
 	c.Assert(err, IsNil)
 	c.Assert(total, Equals, int64(3))
 	c.Assert(successNum, Equals, int64(1))
@@ -110,16 +109,16 @@ func (s *testUtilSuite) TestloadFromCheckPoint(c *C) {
 
 	rows := sqlmock.NewRows([]string{"state", "config_hash"}).AddRow("success", "123")
 	mock.ExpectQuery("SELECT").WillReturnRows(rows)
-	useCheckpoint, err := loadFromCheckPoint(context.Background(), db, dbutil.DefaultTimeout, "test", "test", "123")
+	useCheckpoint, err := loadFromCheckPoint(context.Background(), db, "test", "test", "123")
 	c.Assert(useCheckpoint, Equals, false)
 
 	rows = sqlmock.NewRows([]string{"state", "config_hash"}).AddRow("success", "123")
 	mock.ExpectQuery("SELECT").WillReturnRows(rows)
-	useCheckpoint, err = loadFromCheckPoint(context.Background(), db, dbutil.DefaultTimeout, "test", "test", "456")
+	useCheckpoint, err = loadFromCheckPoint(context.Background(), db, "test", "test", "456")
 	c.Assert(useCheckpoint, Equals, false)
 
 	rows = sqlmock.NewRows([]string{"state", "config_hash"}).AddRow("failed", "123")
 	mock.ExpectQuery("SELECT").WillReturnRows(rows)
-	useCheckpoint, err = loadFromCheckPoint(context.Background(), db, dbutil.DefaultTimeout, "test", "test", "123")
+	useCheckpoint, err = loadFromCheckPoint(context.Background(), db, "test", "test", "123")
 	c.Assert(useCheckpoint, Equals, true)
 }

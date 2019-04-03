@@ -518,7 +518,10 @@ func getSplitFields(table *model.TableInfo, splitFields []string) ([]*model.Colu
 
 // GetChunks gets some chunks.
 func GetChunks(ctx context.Context, table *TableInstance, splitFields, limits string, chunkSize int, collation string, useTiDBStatsInfo bool) (chunks []*ChunkRange, fromCheckpoint bool, err error) {
-	chunks, err = loadChunks(ctx, table.Conn, dbutil.DefaultTimeout, table.InstanceID, table.Schema, table.Table)
+	ctx1, cancel1 := context.WithTimeout(ctx, dbutil.DefaultTimeout)
+	defer cancel1()
+
+	chunks, err = loadChunks(ctx1, table.Conn, table.InstanceID, table.Schema, table.Table)
 	if err != nil {
 		log.Error("load chunks info", zap.Error(err))
 		return nil, false, errors.Trace(err)
@@ -561,7 +564,10 @@ func GetChunks(ctx context.Context, table *TableInstance, splitFields, limits st
 		chunk.Args = args
 		chunk.State = notCheckedState
 
-		err = saveChunk(ctx, table.Conn, dbutil.DefaultTimeout, i, table.InstanceID, table.Schema, table.Table, "", chunk)
+		ctx2, cancel2 := context.WithTimeout(ctx, dbutil.DefaultTimeout)
+		defer cancel2()
+
+		err = saveChunk(ctx2, table.Conn, i, table.InstanceID, table.Schema, table.Table, "", chunk)
 		if err != nil {
 			return nil, false, err
 		}
