@@ -40,11 +40,11 @@ var (
 	errorState = "error"
 
 	// for chunk: means this chunk is not in check
-	// for table: all the chunk in this table is not in check
+	// for table: this table is checking but not finished
 	notCheckedState = "not_checked"
 
 	// for chunk: means this chunk is checking
-	// for table: some chunks in this table is checking
+	// for table: don't have this state
 	checkingState = "checking"
 
 	// for chunk: this chunk is ignored. if sample is not 100%, will ignore some chunk
@@ -225,7 +225,7 @@ func updateTableSummary(ctx context.Context, db *sql.DB, instanceID, schema, tab
 	}
 	log.Info("summary info", zap.String("instance_id", instanceID), zap.String("schema", schema), zap.String("table", table), zap.Int64("chunk num", total), zap.Int64("success num", successNum), zap.Int64("failed num", failedNum), zap.Int64("ignore num", ignoreNum))
 
-	state := checkingState
+	state := notCheckedState
 	if total == successNum+failedNum+ignoreNum {
 		if total == successNum+ignoreNum {
 			state = successState
