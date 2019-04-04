@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -556,6 +557,8 @@ func GetChunks(ctx context.Context, table *TableInstance, splitFields, limits st
 		return nil, false, nil
 	}
 
+	ctx2, cancel2 := context.WithTimeout(ctx, time.Duration(len(chunks))*dbutil.DefaultTimeout)
+	defer cancel2()
 	for i, chunk := range chunks {
 		conditions, args := chunk.toString(collation)
 
@@ -563,9 +566,6 @@ func GetChunks(ctx context.Context, table *TableInstance, splitFields, limits st
 		chunk.Where = fmt.Sprintf("(%s AND %s)", conditions, limits)
 		chunk.Args = args
 		chunk.State = notCheckedState
-
-		ctx2, cancel2 := context.WithTimeout(ctx, dbutil.DefaultTimeout)
-		defer cancel2()
 
 		err = saveChunk(ctx2, table.Conn, i, table.InstanceID, table.Schema, table.Table, "", chunk)
 		if err != nil {

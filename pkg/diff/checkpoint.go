@@ -153,7 +153,7 @@ func getTableSummary(ctx context.Context, db *sql.DB, schema, table string) (tot
 		}
 
 		if !totalNum.Valid || !successNum.Valid || !failedNum.Valid || !ignoreNum.Valid || !stateStr.Valid {
-			return 0, 0, 0, 0, "", errors.New("get summary failed, value is valid")
+			return 0, 0, 0, 0, "", errors.Errorf("some values are invalid, query: %s, args: %v", query, []interface{}{schema, table})
 		}
 
 		return totalNum.Int64, successNum.Int64, failedNum.Int64, ignoreNum.Int64, stateStr.String, nil
@@ -184,7 +184,7 @@ func getChunkSummary(ctx context.Context, db *sql.DB, instanceID, schema, table 
 		}
 
 		if !chunkState.Valid || !num.Valid {
-			continue
+			return 0, 0, 0, 0, errors.Errorf("some values are invalid, query: %s, args: %v", query, []interface{}{instanceID, schema, table})
 		}
 
 		total += num.Int64
