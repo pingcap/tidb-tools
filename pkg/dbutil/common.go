@@ -657,7 +657,16 @@ func ExecSQLWithRetry(ctx context.Context, db *sql.DB, sql string, args ...inter
 		}
 
 		log.Warn("exe sql failed, will try again", zap.String("sql", sql), zap.Reflect("args", args), zap.Error(err))
-		time.Sleep(10 * time.Millisecond)
+
+		if i == DefaultRetryTime-1 {
+			break
+		}
+
+		select {
+		case <-ctx.Done():
+			return errors.Trace(ctx.Err())
+		case <-time.After(10 * time.Millisecond):
+		}
 	}
 
 	return errors.Trace(err)
