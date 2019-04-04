@@ -190,7 +190,7 @@ func getChunkSummary(ctx context.Context, db *sql.DB, instanceID, schema, table 
 		total += num.Int64
 		switch chunkState.String {
 		case successState:
-			successNum = num.Int64
+			successNum += num.Int64
 		case failedState, errorState:
 			failedNum += num.Int64
 		case ignoreState:
