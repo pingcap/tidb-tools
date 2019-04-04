@@ -517,22 +517,8 @@ func getSplitFields(table *model.TableInfo, splitFields []string) ([]*model.Colu
 	return cols, nil
 }
 
-// GetChunks gets some chunks.
-func GetChunks(ctx context.Context, table *TableInstance, splitFields, limits string, chunkSize int, collation string, useTiDBStatsInfo bool) (chunks []*ChunkRange, fromCheckpoint bool, err error) {
-	ctx1, cancel1 := context.WithTimeout(ctx, dbutil.DefaultTimeout)
-	defer cancel1()
-
-	chunks, err = loadChunks(ctx1, table.Conn, table.InstanceID, table.Schema, table.Table)
-	if err != nil {
-		log.Error("load chunks info", zap.Error(err))
-		return nil, false, errors.Trace(err)
-	}
-
-	if len(chunks) != 0 {
-		log.Info("load chunks info success", zap.Int("num", len(chunks)), zap.Stringer("first chunk", chunks[0]))
-		return chunks, true, nil
-	}
-
+// SplitChunks splits the table to some chunks.
+func SplitChunks(ctx context.Context, table *TableInstance, splitFields, limits string, chunkSize int, collation string, useTiDBStatsInfo bool) (chunks []*ChunkRange, err error) {
 	var splitFieldArr []string
 	if len(splitFields) != 0 {
 		splitFieldArr = strings.Split(splitFields, ",")
@@ -544,21 +530,20 @@ func GetChunks(ctx context.Context, table *TableInstance, splitFields, limits st
 
 	fields, err := getSplitFields(table.info, splitFieldArr)
 	if err != nil {
-		return nil, false, errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
 
-	log.Debug("don't have checkpoint info or config changed")
 	chunks, err = getChunksForTable(table, fields, chunkSize, limits, collation, useTiDBStatsInfo)
 	if err != nil {
-		return nil, false, errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
 
 	if chunks == nil {
-		return nil, false, nil
+		return nil, nil
 	}
 
-	ctx2, cancel2 := context.WithTimeout(ctx, time.Duration(len(chunks))*dbutil.DefaultTimeout)
-	defer cancel2()
+	ctx1, cancel1 := context.WithTimeout(ctx, time.Duration(len(chunks))*dbutil.DefaultTimeout)
+	defer cancel1()
 	for i, chunk := range chunks {
 		conditions, args := chunk.toString(collation)
 
@@ -567,11 +552,11 @@ func GetChunks(ctx context.Context, table *TableInstance, splitFields, limits st
 		chunk.Args = args
 		chunk.State = notCheckedState
 
-		err = saveChunk(ctx2, table.Conn, i, table.InstanceID, table.Schema, table.Table, "", chunk)
+		err = saveChunk(ctx1, table.Conn, i, table.InstanceID, table.Schema, table.Table, "", chunk)
 		if err != nil {
-			return nil, false, err
+			return nil, err
 		}
 	}
 
-	return chunks, false, nil
+	return chunks, nil
 }

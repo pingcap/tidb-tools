@@ -119,17 +119,14 @@ func (t *TableDiff) setConfigHash() error {
 
 // Equal tests whether two database have same data and schema.
 func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (bool, bool, error) {
-	err := t.Prepare(ctx)
-	if err != nil {
-		return false, false, err
-	}
+	t.adjustConfig()
 
 	t.sqlCh = make(chan string)
 
 	stopWriteSqlsCh := t.WriteSqls(ctx, writeFixSQL)
 	stopUpdateSummaryCh := t.UpdateSummaryInfo(ctx)
 
-	err = t.getTableInfo(ctx)
+	err := t.getTableInfo(ctx)
 	if err != nil {
 		return false, false, errors.Trace(err)
 	}
@@ -156,49 +153,6 @@ func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (
 
 	t.wg.Wait()
 	return structEqual, dataEqual, nil
-}
-
-// Prepare do some prepare work before check data, like adjust config and create checkpoint table
-func (t *TableDiff) Prepare(ctx context.Context) error {
-	ctx1, cancel1 := context.WithTimeout(ctx, 4*dbutil.DefaultTimeout)
-	defer cancel1()
-
-	t.adjustConfig()
-
-	err := t.setConfigHash()
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	err = createCheckpointTable(ctx1, t.TargetTable.Conn)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	if t.UseCheckpoint {
-		useCheckpoint, err := loadFromCheckPoint(ctx1, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
-		if err != nil {
-			return errors.Trace(err)
-		}
-
-		if useCheckpoint {
-			log.Info("use checkpoint", zap.Bool("usecheckpoint", t.UseCheckpoint))
-			return nil
-		}
-	}
-
-	// clean old checkpoint infomation, and initial table summary
-	err = cleanCheckpoint(ctx1, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	err = initTableSummary(ctx1, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	return nil
 }
 
 // CheckTableStruct checks table's struct
@@ -249,12 +203,7 @@ func (t *TableDiff) getTableInfo(ctx context.Context) error {
 }
 
 // CheckTableData checks table's data
-func (t *TableDiff) CheckTableData(ctx context.Context) (bool, error) {
-	return t.EqualTableData(ctx)
-}
-
-// EqualTableData checks data is equal or not.
-func (t *TableDiff) EqualTableData(ctx context.Context) (equal bool, err error) {
+func (t *TableDiff) CheckTableData(ctx context.Context) (equal bool, err error) {
 	table := t.TargetTable
 
 	useTiDB := false
@@ -263,10 +212,19 @@ func (t *TableDiff) EqualTableData(ctx context.Context) (equal bool, err error) 
 		useTiDB = true
 	}
 
-	chunks, fromCheckpoint, err := GetChunks(ctx, table, t.Fields, t.Range, t.ChunkSize, t.Collation, useTiDB)
+	fromCheckpoint := true
+	chunks, err := t.LoadCheckpoint(ctx)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
+
+	if len(chunks) == 0 {
+		log.Debug("don't have checkpoint info or config changed")
+
+		fromCheckpoint = false
+		chunks, err = SplitChunks(ctx, table, t.Fields, t.Range, t.ChunkSize, t.Collation, useTiDB)
+	}
+
 	if len(chunks) == 0 {
 		log.Warn("get 0 chunks, table is not checked", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)))
 		return true, nil
@@ -316,6 +274,53 @@ CheckResult:
 		}
 	}
 	return equal, nil
+}
+
+// LoadCheckpoint do some prepare work before check data, like adjust config and create checkpoint table
+func (t *TableDiff) LoadCheckpoint(ctx context.Context) ([]*ChunkRange, error) {
+	ctx1, cancel1 := context.WithTimeout(ctx, 5*dbutil.DefaultTimeout)
+	defer cancel1()
+
+	err := t.setConfigHash()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	err = createCheckpointTable(ctx1, t.TargetTable.Conn)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	if t.UseCheckpoint {
+		useCheckpoint, err := loadFromCheckPoint(ctx1, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+
+		if useCheckpoint {
+			log.Info("use checkpoint to load chunks")
+			chunks, err := loadChunks(ctx1, t.TargetTable.Conn, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table)
+			if err != nil {
+				log.Error("load chunks info", zap.Error(err))
+				return nil, errors.Trace(err)
+			}
+
+			return chunks, nil
+		}
+	}
+
+	// clean old checkpoint infomation, and initial table summary
+	err = cleanCheckpoint(ctx1, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	err = initTableSummary(ctx1, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return nil, nil
 }
 
 func (t *TableDiff) getSourceTableChecksum(ctx context.Context, chunk *ChunkRange) (int64, error) {
