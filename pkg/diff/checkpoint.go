@@ -202,6 +202,10 @@ func getChunkSummary(ctx context.Context, db *sql.DB, instanceID, schema, table 
 		return 0, 0, 0, 0, errors.Trace(rows.Err())
 	}
 
+	if total == 0 {
+		return 0, 0, 0, 0, errors.NotFoundf("chunks of instanceID %s schema %s table %s", instanceID, schema, table)
+	}
+
 	return
 }
 
