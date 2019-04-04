@@ -81,7 +81,7 @@ type TableDiff struct {
 	UseChecksum bool `json:"-"`
 
 	// set true if just want compare data by checksum, will skip select data when checksum is not equal
-	OnlyUseChecksum bool
+	OnlyUseChecksum bool `json:"-"`
 
 	// collation config in mysql/tidb, should corresponding to charset.
 	Collation string `json:"collation"`
@@ -126,7 +126,6 @@ func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (
 
 	t.sqlCh = make(chan string)
 
-	t.wg.Add(2)
 	stopWriteSqlsCh := t.WriteSqls(ctx, writeFixSQL)
 	stopUpdateSummaryCh := t.UpdateSummaryInfo(ctx)
 
@@ -176,7 +175,6 @@ func (t *TableDiff) Prepare(ctx context.Context) error {
 		return errors.Trace(err)
 	}
 
-	log.Info("use checkpoint", zap.Bool("usecheckpoint", t.UseCheckpoint))
 	if t.UseCheckpoint {
 		useCheckpoint, err := loadFromCheckPoint(ctx1, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
 		if err != nil {
@@ -184,6 +182,7 @@ func (t *TableDiff) Prepare(ctx context.Context) error {
 		}
 
 		if useCheckpoint {
+			log.Info("use checkpoint", zap.Bool("usecheckpoint", t.UseCheckpoint))
 			return nil
 		}
 	}
@@ -291,7 +290,11 @@ func (t *TableDiff) EqualTableData(ctx context.Context) (equal bool, err error) 
 	var checkedNum int
 	go func() {
 		for _, chunk := range chunks {
-			checkWorkerCh[chunk.ID%t.CheckThreadCount] <- chunk
+			select {
+			case checkWorkerCh[chunk.ID%t.CheckThreadCount] <- chunk:
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 
@@ -559,6 +562,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 
 // WriteSqls write sqls to file
 func (t *TableDiff) WriteSqls(ctx context.Context, writeFixSQL func(string) error) chan bool {
+	t.wg.Add(1)
 	stopWriteCh := make(chan bool)
 
 	go func() {
@@ -595,6 +599,7 @@ func (t *TableDiff) WriteSqls(ctx context.Context, writeFixSQL func(string) erro
 }
 
 func (t *TableDiff) UpdateSummaryInfo(ctx context.Context) chan bool {
+	t.wg.Add(1)
 	stopUpdateCh := make(chan bool)
 
 	go func() {
