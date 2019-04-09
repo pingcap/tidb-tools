@@ -25,6 +25,7 @@ import (
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 // Diff contains two sql DB, used for comparing.
@@ -36,6 +37,7 @@ type Diff struct {
 	checkThreadCount  int
 	useRowID          bool
 	useChecksum       bool
+	useCheckpoint     bool
 	onlyUseChecksum   bool
 	ignoreDataCheck   bool
 	ignoreStructCheck bool
@@ -57,6 +59,7 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 		checkThreadCount:  cfg.CheckThreadCount,
 		useRowID:          cfg.UseRowID,
 		useChecksum:       cfg.UseChecksum,
+		useCheckpoint:     cfg.UseCheckpoint,
 		onlyUseChecksum:   cfg.OnlyUseChecksum,
 		ignoreDataCheck:   cfg.IgnoreDataCheck,
 		ignoreStructCheck: cfg.IgnoreStructCheck,
@@ -366,9 +369,10 @@ func (df *Diff) Equal() (err error) {
 			sourceTables := make([]*diff.TableInstance, 0, len(table.SourceTables))
 			for _, sourceTable := range table.SourceTables {
 				sourceTableInstance := &diff.TableInstance{
-					Conn:   df.sourceDBs[sourceTable.InstanceID].Conn,
-					Schema: sourceTable.Schema,
-					Table:  sourceTable.Table,
+					Conn:       df.sourceDBs[sourceTable.InstanceID].Conn,
+					Schema:     sourceTable.Schema,
+					Table:      sourceTable.Table,
+					InstanceID: sourceTable.InstanceID,
 				}
 				sourceTables = append(sourceTables, sourceTableInstance)
 
@@ -378,9 +382,10 @@ func (df *Diff) Equal() (err error) {
 			}
 
 			targetTableInstance := &diff.TableInstance{
-				Conn:   df.targetDB.Conn,
-				Schema: table.Schema,
-				Table:  table.Table,
+				Conn:       df.targetDB.Conn,
+				Schema:     table.Schema,
+				Table:      table.Table,
+				InstanceID: df.targetDB.InstanceID,
 			}
 
 			if df.targetDB.InstanceID == df.tidbInstanceID {
@@ -406,6 +411,7 @@ func (df *Diff) Equal() (err error) {
 				CheckThreadCount:  df.checkThreadCount,
 				UseRowID:          df.useRowID,
 				UseChecksum:       df.useChecksum,
+				UseCheckpoint:     df.useCheckpoint,
 				OnlyUseChecksum:   df.onlyUseChecksum,
 				IgnoreStructCheck: df.ignoreStructCheck,
 				IgnoreDataCheck:   df.ignoreDataCheck,
@@ -414,11 +420,11 @@ func (df *Diff) Equal() (err error) {
 
 			structEqual, dataEqual, err := td.Equal(df.ctx, func(dml string) error {
 				_, err := df.fixSQLFile.WriteString(fmt.Sprintf("%s\n", dml))
-				return err
+				return errors.Trace(err)
 			})
 			if err != nil {
-				log.Errorf("check %s.%s equal failed, error %v", table.Schema, table.Table, errors.ErrorStack(err))
-				return err
+				log.Error("check failed", zap.String("table", dbutil.TableName(table.Schema, table.Table)), zap.Error(err))
+				return errors.Trace(err)
 			}
 
 			df.report.SetTableStructCheckResult(table.Schema, table.Table, structEqual)

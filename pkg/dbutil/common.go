@@ -20,12 +20,20 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser/model"
+	tmysql "github.com/pingcap/parser/mysql"
+	"github.com/pingcap/parser/terror"
 	"github.com/pingcap/tidb-tools/pkg/utils"
+	"github.com/pingcap/tidb/ddl"
+	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/types"
+	gmysql "github.com/siddontang/go-mysql/mysql"
 	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 const (
@@ -34,6 +42,15 @@ const (
 
 	// ImplicitColID is ID implicit column in TiDB
 	ImplicitColID = -1
+
+	// DefaultRetryTime is the default retry time to execute sql
+	DefaultRetryTime = 10
+
+	// DefaultTimeout is the default timeout for execute sql
+	DefaultTimeout time.Duration = 5 * time.Second
+
+	// SlowWarnLog defines the duration to log warn log of sql when exec time greater than
+	SlowWarnLog = 100 * time.Millisecond
 )
 
 var (
@@ -615,4 +632,123 @@ func ReplacePlaceholder(str string, args []string) string {
 	*/
 	newStr := strings.Replace(str, "?", "'%s'", -1)
 	return fmt.Sprintf(newStr, utils.StringsToInterfaces(args)...)
+}
+
+// ExecSQLWithRetry executes sql with retry
+func ExecSQLWithRetry(ctx context.Context, db *sql.DB, sql string, args ...interface{}) (err error) {
+	for i := 0; i < DefaultRetryTime; i++ {
+		startTime := time.Now()
+		_, err = db.ExecContext(ctx, sql, args...)
+		takeDuration := time.Since(startTime)
+		if takeDuration > SlowWarnLog {
+			log.Warn("exec sql slow", zap.String("sql", sql), zap.Reflect("args", args), zap.Duration("take", takeDuration))
+		}
+		if err == nil {
+			return nil
+		}
+
+		if ignoreError(err) {
+			log.Debug("ignore execute sql error", zap.Error(err))
+			return nil
+		}
+
+		if !isRetryableError(err) {
+			return errors.Trace(err)
+		}
+
+		log.Warn("exe sql failed, will try again", zap.String("sql", sql), zap.Reflect("args", args), zap.Error(err))
+
+		if i == DefaultRetryTime-1 {
+			break
+		}
+
+		select {
+		case <-ctx.Done():
+			return errors.Trace(ctx.Err())
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+
+	return errors.Trace(err)
+}
+
+// ExecuteSQLs executes some sqls in one transaction
+func ExecuteSQLs(ctx context.Context, db *sql.DB, sqls []string, args [][]interface{}) error {
+	txn, err := db.Begin()
+	if err != nil {
+		log.Error("exec sqls begin", zap.Error(err))
+		return errors.Trace(err)
+	}
+
+	for i := range sqls {
+		startTime := time.Now()
+
+		_, err = txn.ExecContext(ctx, sqls[i], args[i]...)
+		if err != nil {
+			log.Error("exec sql", zap.String("sql", sqls[i]), zap.Reflect("args", args[i]), zap.Error(err))
+			rerr := txn.Rollback()
+			if rerr != nil {
+				log.Error("rollback", zap.Error(err))
+			}
+			return errors.Trace(err)
+		}
+
+		takeDuration := time.Since(startTime)
+		if takeDuration > SlowWarnLog {
+			log.Warn("exec sql slow", zap.String("sql", sqls[i]), zap.Reflect("args", args[i]), zap.Duration("take", takeDuration))
+		}
+	}
+
+	err = txn.Commit()
+	if err != nil {
+		log.Error("exec sqls commit", zap.Error(err))
+		return errors.Trace(err)
+	}
+
+	return nil
+}
+
+func isRetryableError(err error) bool {
+	err = errors.Cause(err) // check the original error
+	mysqlErr, ok := err.(*mysql.MySQLError)
+	if !ok {
+		return false
+	}
+
+	switch mysqlErr.Number {
+	// ER_LOCK_DEADLOCK can retry to commit while meet deadlock
+	case tmysql.ErrUnknown, gmysql.ER_LOCK_DEADLOCK, tmysql.ErrPDServerTimeout, tmysql.ErrTiKVServerTimeout, tmysql.ErrTiKVServerBusy, tmysql.ErrResolveLockTimeout, tmysql.ErrRegionUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+func ignoreError(err error) bool {
+	// TODO: now only ignore some ddl error, add some dml error later
+	if ignoreDDLError(err) {
+		return true
+	}
+
+	return false
+}
+
+func ignoreDDLError(err error) bool {
+	err = errors.Cause(err)
+	mysqlErr, ok := err.(*mysql.MySQLError)
+	if !ok {
+		return false
+	}
+
+	errCode := terror.ErrCode(mysqlErr.Number)
+	switch errCode {
+	case infoschema.ErrDatabaseExists.Code(), infoschema.ErrDatabaseDropExists.Code(),
+		infoschema.ErrTableExists.Code(), infoschema.ErrTableDropExists.Code(),
+		infoschema.ErrColumnExists.Code(), infoschema.ErrIndexExists.Code():
+		return true
+	case ddl.ErrDupKeyName.Code():
+		return true
+	default:
+		return false
+	}
 }

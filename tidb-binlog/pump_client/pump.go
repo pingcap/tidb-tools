@@ -105,7 +105,7 @@ func (p *PumpStatus) createGrpcClient() error {
 	}
 	if err != nil {
 		atomic.AddInt64(&p.ErrNum, 1)
-		return err
+		return errors.Trace(err)
 	}
 
 	p.grpcConn = clientConn
