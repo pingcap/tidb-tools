@@ -350,9 +350,12 @@ func (t *TableDiff) checkChunksDataEqual(ctx context.Context, filterByRand bool,
 			}
 			eq, err := t.checkChunkDataEqual(ctx, filterByRand, chunk)
 			if err != nil {
-				log.Error("check chunk data equal", zap.Error(err))
+				log.Error("check chunk data equal failed", zap.String("chunk", chunk.String()), zap.Error(err))
 				resultCh <- false
 			} else {
+				if !eq {
+					log.Warn("check chunk data not equal", zap.String("chunk", chunk.String()))
+				}
 				resultCh <- eq
 			}
 		case <-ctx.Done():
@@ -446,15 +449,18 @@ func (t *TableDiff) compareChecksum(ctx context.Context, chunk *ChunkRange) (boo
 
 func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, error) {
 	sourceRows := make(map[string][]map[string]*dbutil.ColumnData)
+	args := utils.StringsToInterfaces(chunk.Args)
+	ignoreCloumns := utils.SliceToMap(t.IgnoreColumns)
+
 	for i, sourceTable := range t.SourceTables {
-		rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, chunk.Where, utils.StringsToInterfaces(chunk.Args), utils.SliceToMap(t.IgnoreColumns), t.Collation)
+		rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, chunk.Where, args, ignoreCloumns, t.Collation)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
 		sourceRows[fmt.Sprintf("source-%d", i)] = rows
 	}
 
-	targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, utils.StringsToInterfaces(chunk.Args), utils.SliceToMap(t.IgnoreColumns), t.Collation)
+	targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, args, ignoreCloumns, t.Collation)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
