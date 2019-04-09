@@ -26,9 +26,9 @@ var _ = Suite(&testChunkSuite{})
 type testChunkSuite struct{}
 
 type chunkTestCase struct {
-	chunk        *chunkRange
+	chunk        *ChunkRange
 	chunkCnt     int64
-	expectChunks []*chunkRange
+	expectChunks []*ChunkRange
 }
 
 func (*testChunkSuite) TestSplitRange(c *C) {
@@ -79,13 +79,13 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 	// split chunks
 	fields, err := getSplitFields(tableInstance.info, nil)
 	c.Assert(err, IsNil)
-	chunks, mode, err := getChunksForTable(tableInstance, fields, 100, "TRUE", "", false)
+	chunks, err := getChunksForTable(tableInstance, fields, 100, "TRUE", "", false)
 	c.Assert(err, IsNil)
 
 	// get data count from every chunk, and the sum of them should equal to the table's count.
 	chunkDataCount := 0
 	for _, chunk := range chunks {
-		conditions, args := chunk.toString(mode, "")
+		conditions, args := chunk.toString("")
 		count, err := dbutil.GetRowCount(context.Background(), tableInstance.Conn, tableInstance.Schema, tableInstance.Table, dbutil.ReplacePlaceholder(conditions, args))
 		c.Assert(err, IsNil)
 		chunkDataCount += int(count)
@@ -94,22 +94,23 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 }
 
 func (*testChunkSuite) TestChunkUpdate(c *C) {
-	chunk := &chunkRange{
-		bounds: []*bound{
+	chunk := &ChunkRange{
+		Bounds: []*Bound{
 			{
-				column:      "a",
-				lower:       "1",
-				lowerSymbol: ">",
-				upper:       "2",
-				upperSymbol: "<=",
+				Column:      "a",
+				Lower:       "1",
+				LowerSymbol: ">",
+				Upper:       "2",
+				UpperSymbol: "<=",
 			}, {
-				column:      "b",
-				lower:       "3",
-				lowerSymbol: ">=",
-				upper:       "4",
-				upperSymbol: "<",
+				Column:      "b",
+				Lower:       "3",
+				LowerSymbol: ">=",
+				Upper:       "4",
+				UpperSymbol: "<",
 			},
 		},
+		Mode: normalMode,
 	}
 
 	testCases := []struct {
@@ -134,13 +135,13 @@ func (*testChunkSuite) TestChunkUpdate(c *C) {
 
 	for _, cs := range testCases {
 		newChunk := chunk.copyAndUpdate(cs.boundArgs[0], cs.boundArgs[1], cs.boundArgs[2], cs.boundArgs[3], cs.boundArgs[4])
-		conditions, args := newChunk.toString(normalMode, "")
+		conditions, args := newChunk.toString("")
 		c.Assert(conditions, Equals, cs.expectStr)
 		c.Assert(args, DeepEquals, cs.expectArgs)
 	}
 
 	// the origin chunk is not changed
-	conditions, args := chunk.toString(normalMode, "")
+	conditions, args := chunk.toString("")
 	c.Assert(conditions, Equals, "`a` > ? AND `a` <= ? AND `b` >= ? AND `b` < ?")
 	expectArgs := []string{"1", "2", "3", "4"}
 	for i, arg := range args {
@@ -149,52 +150,54 @@ func (*testChunkSuite) TestChunkUpdate(c *C) {
 }
 
 func (*testChunkSuite) TestChunkToString(c *C) {
-	chunk := &chunkRange{
-		bounds: []*bound{
+	chunk := &ChunkRange{
+		Bounds: []*Bound{
 			{
-				column:      "a",
-				lower:       "1",
-				lowerSymbol: ">",
-				upper:       "2",
-				upperSymbol: "<",
+				Column:      "a",
+				Lower:       "1",
+				LowerSymbol: ">",
+				Upper:       "2",
+				UpperSymbol: "<",
 			}, {
-				column:      "b",
-				lower:       "3",
-				lowerSymbol: ">",
-				upper:       "4",
-				upperSymbol: "<",
+				Column:      "b",
+				Lower:       "3",
+				LowerSymbol: ">",
+				Upper:       "4",
+				UpperSymbol: "<",
 			}, {
-				column:      "c",
-				lower:       "5",
-				lowerSymbol: ">",
-				upper:       "6",
-				upperSymbol: "<",
+				Column:      "c",
+				Lower:       "5",
+				LowerSymbol: ">",
+				Upper:       "6",
+				UpperSymbol: "<",
 			},
 		},
+		Mode: normalMode,
 	}
 
-	conditions, args := chunk.toString(normalMode, "")
+	conditions, args := chunk.toString("")
 	c.Assert(conditions, Equals, "`a` > ? AND `a` < ? AND `b` > ? AND `b` < ? AND `c` > ? AND `c` < ?")
 	expectArgs := []string{"1", "2", "3", "4", "5", "6"}
 	for i, arg := range args {
 		c.Assert(arg, Equals, expectArgs[i])
 	}
 
-	conditions, args = chunk.toString(normalMode, "latin1")
+	conditions, args = chunk.toString("latin1")
 	c.Assert(conditions, Equals, "`a` COLLATE 'latin1' > ? AND `a` COLLATE 'latin1' < ? AND `b` COLLATE 'latin1' > ? AND `b` COLLATE 'latin1' < ? AND `c` COLLATE 'latin1' > ? AND `c` COLLATE 'latin1' < ?")
 	expectArgs = []string{"1", "2", "3", "4", "5", "6"}
 	for i, arg := range args {
 		c.Assert(arg, Equals, expectArgs[i])
 	}
 
-	conditions, args = chunk.toString(bucketMode, "")
+	chunk.Mode = bucketMode
+	conditions, args = chunk.toString("")
 	c.Assert(conditions, Equals, "((`a` > ?) OR (`a` = ? AND `b` > ?) OR (`a` = ? AND `b` = ? AND `c` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` < ?) OR (`a` = ? AND `b` = ? AND `c` < ?))")
 	expectArgs = []string{"1", "1", "3", "1", "3", "5", "2", "2", "4", "2", "4", "6"}
 	for i, arg := range args {
 		c.Assert(arg, Equals, expectArgs[i])
 	}
 
-	conditions, args = chunk.toString(bucketMode, "latin1")
+	conditions, args = chunk.toString("latin1")
 	c.Assert(conditions, Equals, "((`a` COLLATE 'latin1' > ?) OR (`a` = ? AND `b` COLLATE 'latin1' > ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE 'latin1' > ?)) AND ((`a` COLLATE 'latin1' < ?) OR (`a` = ? AND `b` COLLATE 'latin1' < ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE 'latin1' < ?))")
 	expectArgs = []string{"1", "1", "3", "1", "3", "5", "2", "2", "4", "2", "4", "6"}
 	for i, arg := range args {

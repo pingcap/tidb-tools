@@ -14,14 +14,10 @@
 package diff
 
 import (
-	"math/rand"
-
-	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb/types"
-	"go.uber.org/zap"
 )
 
 func equalStrings(str1, str2 []string) bool {
@@ -79,25 +75,6 @@ func getColumnsFromIndex(index *model.IndexInfo, tableInfo *model.TableInfo) []*
 	}
 
 	return indexColumns
-}
-
-func getRandomN(total, num int) []int {
-	if num > total {
-		log.Warn("the num is greater than total", zap.Int("num", num), zap.Int("total", total))
-		num = total
-	}
-
-	totalArray := make([]int, 0, total)
-	for i := 0; i < total; i++ {
-		totalArray = append(totalArray, i)
-	}
-
-	for j := 0; j < num; j++ {
-		r := j + rand.Intn(total-j)
-		totalArray[j], totalArray[r] = totalArray[r], totalArray[j]
-	}
-
-	return totalArray[:num]
 }
 
 func needQuotes(ft types.FieldType) bool {

@@ -16,11 +16,15 @@ package diff
 import (
 	"container/heap"
 	"context"
+	"crypto/md5"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"math/rand"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -32,67 +36,85 @@ import (
 
 // TableInstance record a table instance
 type TableInstance struct {
-	Conn   *sql.DB
-	Schema string
-	Table  string
-	info   *model.TableInfo
+	Conn       *sql.DB `json:"-"`
+	Schema     string  `json:"schema"`
+	Table      string  `json:"table"`
+	InstanceID string  `json:"instance-id"`
+	info       *model.TableInfo
 }
 
 // TableDiff saves config for diff table
 type TableDiff struct {
 	// source tables
-	SourceTables []*TableInstance
+	SourceTables []*TableInstance `json:"source-tables"`
 	// target table
-	TargetTable *TableInstance
+	TargetTable *TableInstance `json:"target-table"`
 
 	// columns be ignored
-	IgnoreColumns []string
+	IgnoreColumns []string `json:"-"`
 
 	// columns be removed
-	RemoveColumns []string
+	RemoveColumns []string `json:"-"`
 
 	// field should be the primary key, unique key or field with index
-	Fields string
+	Fields string `json:"fields"`
 
 	// select range, for example: "age > 10 AND age < 20"
-	Range string
+	Range string `json:"range"`
 
 	// for example, the whole data is [1...100]
 	// we can split these data to [1...10], [11...20], ..., [91...100]
 	// the [1...10] is a chunk, and it's chunk size is 10
 	// size of the split chunk
-	ChunkSize int
+	ChunkSize int `json:"chunk-size"`
 
 	// sampling check percent, for example 10 means only check 10% data
-	Sample int
+	Sample int `json:"sample"`
 
 	// how many goroutines are created to check data
-	CheckThreadCount int
+	CheckThreadCount int `json:"-"`
 
 	// set true if target-db and source-db all support tidb implicit column "_tidb_rowid"
-	UseRowID bool
+	UseRowID bool `json:"use-rowid"`
 
 	// set false if want to comapre the data directly
-	UseChecksum bool
+	UseChecksum bool `json:"-"`
 
 	// set true if just want compare data by checksum, will skip select data when checksum is not equal
-	OnlyUseChecksum bool
+	OnlyUseChecksum bool `json:"-"`
 
 	// collation config in mysql/tidb, should corresponding to charset.
-	Collation string
+	Collation string `json:"collation"`
 
 	// ignore check table's struct
-	IgnoreStructCheck bool
+	IgnoreStructCheck bool `json:"-"`
 
 	// ignore check table's data
-	IgnoreDataCheck bool
+	IgnoreDataCheck bool `json:"-"`
+
+	// set true will continue check from the latest checkpoint
+	UseCheckpoint bool `json:"use-checkpoint"`
 
 	// get tidb statistics information from which table instance. if is nil, will split chunk by random.
-	TiDBStatsSource *TableInstance
+	TiDBStatsSource *TableInstance `json:"tidb-stats-source"`
 
 	sqlCh chan string
 
 	wg sync.WaitGroup
+
+	configHash string
+}
+
+func (t *TableDiff) setConfigHash() error {
+	jsonBytes, err := json.Marshal(t)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	t.configHash = fmt.Sprintf("%x", md5.Sum(jsonBytes))
+	log.Debug("sync-diff-inspector config", zap.ByteString("config", jsonBytes), zap.String("hash", t.configHash))
+
+	return nil
 }
 
 // Equal tests whether two database have same data and schema.
@@ -100,11 +122,9 @@ func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (
 	t.adjustConfig()
 
 	t.sqlCh = make(chan string)
-	t.wg.Add(1)
-	go func() {
-		t.WriteSqls(ctx, writeFixSQL)
-		t.wg.Done()
-	}()
+
+	stopWriteSqlsCh := t.WriteSqls(ctx, writeFixSQL)
+	stopUpdateSummaryCh := t.UpdateSummaryInfo(ctx)
 
 	err := t.getTableInfo(ctx)
 	if err != nil {
@@ -128,7 +148,9 @@ func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (
 		}
 	}
 
-	t.sqlCh <- "end"
+	stopWriteSqlsCh <- true
+	stopUpdateSummaryCh <- true
+
 	t.wg.Wait()
 	return structEqual, dataEqual, nil
 }
@@ -181,64 +203,70 @@ func (t *TableDiff) getTableInfo(ctx context.Context) error {
 }
 
 // CheckTableData checks table's data
-func (t *TableDiff) CheckTableData(ctx context.Context) (bool, error) {
-	return t.EqualTableData(ctx)
-}
-
-// EqualTableData checks data is equal or not.
-func (t *TableDiff) EqualTableData(ctx context.Context) (equal bool, err error) {
-	var allJobs []*CheckJob
-
+func (t *TableDiff) CheckTableData(ctx context.Context) (equal bool, err error) {
 	table := t.TargetTable
-	useTiDB := false
 
+	useTiDB := false
 	if t.TiDBStatsSource != nil {
 		table = t.TiDBStatsSource
 		useTiDB = true
 	}
 
-	allJobs, err = GenerateCheckJob(table, t.Fields, t.Range, t.ChunkSize, t.Collation, useTiDB)
-
+	fromCheckpoint := true
+	chunks, err := t.LoadCheckpoint(ctx)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
 
-	checkNums := len(allJobs) * t.Sample / 100
-	checkNumArr := getRandomN(len(allJobs), checkNums)
-	log.Info("check jobs", zap.Int("total job num", len(allJobs)), zap.Int("check job num", len(checkNumArr)))
-	if checkNums == 0 {
+	if len(chunks) == 0 {
+		log.Debug("don't have checkpoint info or config changed")
+
+		fromCheckpoint = false
+		chunks, err = SplitChunks(ctx, table, t.Fields, t.Range, t.ChunkSize, t.Collation, useTiDB)
+	}
+
+	if len(chunks) == 0 {
+		log.Warn("get 0 chunks, table is not checked", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)))
 		return true, nil
 	}
 
 	checkResultCh := make(chan bool, t.CheckThreadCount)
 	defer close(checkResultCh)
 
+	checkWorkerCh := make([]chan *ChunkRange, 0, t.CheckThreadCount)
 	for i := 0; i < t.CheckThreadCount; i++ {
-		checkJobs := make([]*CheckJob, 0, len(checkNumArr))
-		for j := len(checkNumArr) * i / t.CheckThreadCount; j < len(checkNumArr)*(i+1)/t.CheckThreadCount && j < len(checkNumArr); j++ {
-			checkJobs = append(checkJobs, allJobs[checkNumArr[j]])
-		}
-		go func(checkJobs []*CheckJob) {
-			eq, err := t.checkChunkDataEqual(ctx, checkJobs)
-			if err != nil {
-				log.Error("check chunk data equal failed", zap.Error(err))
-			}
-			checkResultCh <- eq
-		}(checkJobs)
+		checkWorkerCh = append(checkWorkerCh, make(chan *ChunkRange, 10))
+		go t.checkChunksDataEqual(ctx, t.Sample < 100 && !fromCheckpoint, checkWorkerCh[i], checkResultCh)
 	}
 
-	num := 0
+	go func() {
+		defer func() {
+			for _, ch := range checkWorkerCh {
+				close(ch)
+			}
+		}()
+
+		for _, chunk := range chunks {
+			select {
+			case checkWorkerCh[chunk.ID%t.CheckThreadCount] <- chunk:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	checkedNum := 0
 	equal = true
 
 CheckResult:
 	for {
 		select {
 		case eq := <-checkResultCh:
-			num++
+			checkedNum++
 			if !eq {
 				equal = false
 			}
-			if num == t.CheckThreadCount {
+			if len(chunks) == checkedNum {
 				break CheckResult
 			}
 		case <-ctx.Done():
@@ -248,11 +276,58 @@ CheckResult:
 	return equal, nil
 }
 
-func (t *TableDiff) getSourceTableChecksum(ctx context.Context, job *CheckJob) (int64, error) {
+// LoadCheckpoint do some prepare work before check data, like adjust config and create checkpoint table
+func (t *TableDiff) LoadCheckpoint(ctx context.Context) ([]*ChunkRange, error) {
+	ctx1, cancel1 := context.WithTimeout(ctx, 5*dbutil.DefaultTimeout)
+	defer cancel1()
+
+	err := t.setConfigHash()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	err = createCheckpointTable(ctx1, t.TargetTable.Conn)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	if t.UseCheckpoint {
+		useCheckpoint, err := loadFromCheckPoint(ctx1, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+
+		if useCheckpoint {
+			log.Info("use checkpoint to load chunks")
+			chunks, err := loadChunks(ctx1, t.TargetTable.Conn, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table)
+			if err != nil {
+				log.Error("load chunks info", zap.Error(err))
+				return nil, errors.Trace(err)
+			}
+
+			return chunks, nil
+		}
+	}
+
+	// clean old checkpoint infomation, and initial table summary
+	err = cleanCheckpoint(ctx1, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	err = initTableSummary(ctx1, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return nil, nil
+}
+
+func (t *TableDiff) getSourceTableChecksum(ctx context.Context, chunk *ChunkRange) (int64, error) {
 	var checksum int64
 
 	for _, sourceTable := range t.SourceTables {
-		checksumTmp, err := dbutil.GetCRC32Checksum(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.info, job.Where, utils.StringsToInterfaces(job.Args), utils.SliceToMap(t.IgnoreColumns))
+		checksumTmp, err := dbutil.GetCRC32Checksum(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.info, chunk.Where, utils.StringsToInterfaces(chunk.Args), utils.SliceToMap(t.IgnoreColumns))
 		if err != nil {
 			return -1, errors.Trace(err)
 		}
@@ -262,68 +337,134 @@ func (t *TableDiff) getSourceTableChecksum(ctx context.Context, job *CheckJob) (
 	return checksum, nil
 }
 
-func (t *TableDiff) checkChunkDataEqual(ctx context.Context, checkJobs []*CheckJob) (bool, error) {
-	equal := true
-	if len(checkJobs) == 0 {
-		return true, nil
-	}
-
-	for _, job := range checkJobs {
-		if t.UseChecksum {
-			// first check the checksum is equal or not
-			sourceChecksum, err := t.getSourceTableChecksum(ctx, job)
-			if err != nil {
-				return false, errors.Trace(err)
+func (t *TableDiff) checkChunksDataEqual(ctx context.Context, filterByRand bool, chunks chan *ChunkRange, resultCh chan bool) {
+	for {
+		select {
+		case chunk, ok := <-chunks:
+			if !ok {
+				return
 			}
-
-			targetChecksum, err := dbutil.GetCRC32Checksum(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, job.Where, utils.StringsToInterfaces(job.Args), utils.SliceToMap(t.IgnoreColumns))
-			if err != nil {
-				return false, errors.Trace(err)
-			}
-			if sourceChecksum == targetChecksum {
-				log.Info("checksum is equal", zap.String("table", dbutil.TableName(job.Schema, job.Table)), zap.String("where", job.Where), zap.Reflect("args", job.Args), zap.Int64("checksum", sourceChecksum))
+			if chunk.State == successState || chunk.State == ignoreState {
+				resultCh <- true
 				continue
 			}
-
-			log.Warn("checksum is not equal", zap.String("table", dbutil.TableName(job.Schema, job.Table)), zap.String("where", job.Where), zap.Reflect("args", job.Args), zap.Int64("source checksum", sourceChecksum), zap.Int64("target checksum", targetChecksum))
-		}
-
-		if t.UseChecksum && t.OnlyUseChecksum {
-			equal = false
-			continue
-		}
-
-		// if checksum is not equal or don't need compare checksum, compare the data
-		log.Info("select data and then check data", zap.String("table", dbutil.TableName(job.Schema, job.Table)), zap.String("where", job.Where), zap.Reflect("args", job.Args))
-		sourceRows := make(map[string][]map[string]*dbutil.ColumnData)
-		for i, sourceTable := range t.SourceTables {
-			rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, job.Where, utils.StringsToInterfaces(job.Args), utils.SliceToMap(t.IgnoreColumns), t.Collation)
+			eq, err := t.checkChunkDataEqual(ctx, filterByRand, chunk)
 			if err != nil {
-				return false, errors.Trace(err)
+				log.Error("check chunk data equal failed", zap.String("chunk", chunk.String()), zap.Error(err))
+				resultCh <- false
+			} else {
+				if !eq {
+					log.Warn("check chunk data not equal", zap.String("chunk", chunk.String()))
+				}
+				resultCh <- eq
 			}
-			sourceRows[fmt.Sprintf("source-%d", i)] = rows
+		case <-ctx.Done():
+			return
 		}
+	}
+}
 
-		targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, job.Where, utils.StringsToInterfaces(job.Args), utils.SliceToMap(t.IgnoreColumns), t.Collation)
+func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, chunk *ChunkRange) (equal bool, err error) {
+	update := func() {
+		ctx1, cancel1 := context.WithTimeout(ctx, dbutil.DefaultTimeout)
+		defer cancel1()
+
+		err1 := saveChunk(ctx1, t.TargetTable.Conn, chunk.ID, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table, "", chunk)
+		if err1 != nil {
+			log.Warn("update chunk info", zap.Error(err1))
+		}
+	}
+
+	defer func() {
+		if chunk.State != ignoreState {
+			if err != nil {
+				chunk.State = errorState
+			} else if equal {
+				chunk.State = successState
+			} else {
+				chunk.State = failedState
+			}
+		}
+		update()
+	}()
+
+	if filterByRand {
+		rand.Seed(time.Now().UnixNano())
+		r := rand.Intn(100)
+		if r > t.Sample {
+			chunk.State = ignoreState
+			return true, nil
+		}
+	}
+
+	chunk.State = checkingState
+	update()
+
+	if t.UseChecksum {
+		// first check the checksum is equal or not
+		equal, err = t.compareChecksum(ctx, chunk)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
-
-		eq, err := t.compareRows(sourceRows, targetRows, orderKeyCols)
-		if err != nil {
-			return false, errors.Trace(err)
+		if equal {
+			return true, nil
 		}
+	}
 
-		// if equal is false, we continue check data, we should find all the different data just run once
-		if !eq {
-			equal = false
-		}
+	if t.UseChecksum && t.OnlyUseChecksum {
+		return false, nil
+	}
+
+	// if checksum is not equal or don't need compare checksum, compare the data
+	log.Info("select data and then check data", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", chunk.Where), zap.Reflect("args", chunk.Args))
+
+	equal, err = t.compareRows(ctx, chunk)
+	if err != nil {
+		return false, errors.Trace(err)
 	}
 
 	return equal, nil
 }
 
-func (t *TableDiff) compareRows(sourceRows map[string][]map[string]*dbutil.ColumnData, targetRows []map[string]*dbutil.ColumnData, orderKeyCols []*model.ColumnInfo) (bool, error) {
+func (t *TableDiff) compareChecksum(ctx context.Context, chunk *ChunkRange) (bool, error) {
+	// first check the checksum is equal or not
+	sourceChecksum, err := t.getSourceTableChecksum(ctx, chunk)
+	if err != nil {
+		return false, errors.Trace(err)
+	}
+
+	targetChecksum, err := dbutil.GetCRC32Checksum(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, utils.StringsToInterfaces(chunk.Args), utils.SliceToMap(t.IgnoreColumns))
+	if err != nil {
+		return false, errors.Trace(err)
+	}
+	if sourceChecksum == targetChecksum {
+		log.Info("checksum is equal", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", chunk.Where), zap.Reflect("args", chunk.Args), zap.Int64("checksum", sourceChecksum))
+		return true, nil
+	}
+
+	log.Warn("checksum is not equal", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", chunk.Where), zap.Reflect("args", chunk.Args), zap.Int64("source checksum", sourceChecksum), zap.Int64("target checksum", targetChecksum))
+
+	return false, nil
+}
+
+func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, error) {
+	sourceRows := make(map[string][]map[string]*dbutil.ColumnData)
+	args := utils.StringsToInterfaces(chunk.Args)
+	ignoreCloumns := utils.SliceToMap(t.IgnoreColumns)
+
+	for i, sourceTable := range t.SourceTables {
+		rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, chunk.Where, args, ignoreCloumns, t.Collation)
+		if err != nil {
+			return false, errors.Trace(err)
+		}
+		sourceRows[fmt.Sprintf("source-%d", i)] = rows
+	}
+
+	targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, args, ignoreCloumns, t.Collation)
+	if err != nil {
+		return false, errors.Trace(err)
+	}
+
 	var (
 		equal     = true
 		rowsData1 = make([]map[string]*dbutil.ColumnData, 0, 100)
@@ -431,23 +572,78 @@ func (t *TableDiff) compareRows(sourceRows map[string][]map[string]*dbutil.Colum
 }
 
 // WriteSqls write sqls to file
-func (t *TableDiff) WriteSqls(ctx context.Context, writeFixSQL func(string) error) {
-	for {
-		select {
-		case dml, ok := <-t.sqlCh:
-			if !ok || dml == "end" {
-				return
-			}
+func (t *TableDiff) WriteSqls(ctx context.Context, writeFixSQL func(string) error) chan bool {
+	t.wg.Add(1)
+	stopWriteCh := make(chan bool)
 
-			err := writeFixSQL(fmt.Sprintf("%s\n", dml))
-			if err != nil {
-				log.Error("write sql failed", zap.String("sql", dml), zap.Error(err))
+	go func() {
+		defer t.wg.Done()
+
+		stop := false
+		for {
+			select {
+			case dml, ok := <-t.sqlCh:
+				if !ok {
+					return
+				}
+
+				err := writeFixSQL(fmt.Sprintf("%s\n", dml))
+				if err != nil {
+					log.Error("write sql failed", zap.String("sql", dml), zap.Error(err))
+				}
+				t.wg.Done()
+			case <-stopWriteCh:
+				stop = true
+			case <-ctx.Done():
+				return
+			default:
+				if stop {
+					return
+				}
+
+				time.Sleep(100 * time.Millisecond)
 			}
-			t.wg.Done()
-		case <-ctx.Done():
-			return
 		}
-	}
+	}()
+
+	return stopWriteCh
+}
+
+func (t *TableDiff) UpdateSummaryInfo(ctx context.Context) chan bool {
+	t.wg.Add(1)
+	stopUpdateCh := make(chan bool)
+
+	go func() {
+		update := func() {
+			ctx1, cancel1 := context.WithTimeout(ctx, dbutil.DefaultTimeout)
+			defer cancel1()
+
+			err := updateTableSummary(ctx1, t.TargetTable.Conn, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table)
+			if err != nil {
+				log.Error("save table summary info failed", zap.String("schema", t.TargetTable.Schema), zap.String("table", t.TargetTable.Table), zap.Error(err))
+			}
+		}
+		defer func() {
+			update()
+			t.wg.Done()
+		}()
+
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-stopUpdateCh:
+				return
+			case <-ticker.C:
+				update()
+			}
+		}
+	}()
+
+	return stopUpdateCh
 }
 
 func generateDML(tp string, data map[string]*dbutil.ColumnData, keys []*model.ColumnInfo, table *model.TableInfo, schema string) (sql string) {

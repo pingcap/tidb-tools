@@ -202,6 +202,9 @@ type Config struct {
 	// ignore check table's data
 	IgnoreDataCheck bool `toml:"ignore-data-check" json:"ignore-data-check"`
 
+	// set true will continue check from the latest checkpoint
+	UseCheckpoint bool `toml:"use-checkpoint" json:"use-checkpoint"`
+
 	// use this tidb's statistics information to split chunk
 	TiDBInstanceID string `toml:"tidb-instance-id" json:"tidb-instance-id"`
 
@@ -229,6 +232,7 @@ func NewConfig() *Config {
 	fs.BoolVar(&cfg.PrintVersion, "V", false, "print version of sync_diff_inspector")
 	fs.BoolVar(&cfg.IgnoreDataCheck, "ignore-data-check", false, "ignore check table's data")
 	fs.BoolVar(&cfg.IgnoreStructCheck, "ignore-struct-check", false, "ignore check table's struct")
+	fs.BoolVar(&cfg.UseCheckpoint, "use-checkpoint", true, "set true will continue check from the latest checkpoint")
 
 	return cfg
 }

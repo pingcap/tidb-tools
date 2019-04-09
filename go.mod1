@@ -17,6 +17,7 @@ require (
 	github.com/pingcap/tidb v0.0.0-20190320062740-9071c7b5b9ed
 	github.com/pingcap/tipb v0.0.0-20190107072121-abbec73437b7
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
+	github.com/siddontang/go-mysql v0.0.0-20190312052122-c6ab05a85eb8
 	go.uber.org/atomic v1.3.2
 	go.uber.org/zap v1.9.1
 	golang.org/x/net v0.0.0-20190108225652-1e06a53dbb7e

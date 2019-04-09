@@ -295,7 +295,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 		} else {
 			if !isRetryableError(err) {
 				// this kind of error is not retryable, return directly.
-				return err
+				return errors.Trace(err)
 			}
 
 			// make sure already retry every avaliable pump.
