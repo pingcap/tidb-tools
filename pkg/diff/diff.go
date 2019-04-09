@@ -239,14 +239,13 @@ func (t *TableDiff) CheckTableData(ctx context.Context) (equal bool, err error) 
 		go t.checkChunksDataEqual(ctx, t.Sample < 100 && !fromCheckpoint, checkWorkerCh[i], checkResultCh)
 	}
 
-	defer func() {
-		for _, ch := range checkWorkerCh {
-			close(ch)
-		}
-	}()
-
-	var checkedNum int
 	go func() {
+		defer func() {
+			for _, ch := range checkWorkerCh {
+				close(ch)
+			}
+		}()
+
 		for _, chunk := range chunks {
 			select {
 			case checkWorkerCh[chunk.ID%t.CheckThreadCount] <- chunk:
@@ -256,6 +255,7 @@ func (t *TableDiff) CheckTableData(ctx context.Context) (equal bool, err error) 
 		}
 	}()
 
+	checkedNum := 0
 	equal = true
 
 CheckResult:
