@@ -180,6 +180,9 @@ type Config struct {
 	// set false if want to comapre the data directly
 	UseChecksum bool `toml:"use-checksum" json:"use-checksum"`
 
+	// set true if just want compare data by checksum, will skip select data when checksum is not equal.
+	OnlyUseChecksum bool `toml:"only-use-checksum" json:"only-use-checksum"`
+
 	// the name of the file which saves sqls used to fix different data
 	FixSQLFile string `toml:"fix-sql-file" json:"fix-sql-file"`
 
@@ -309,6 +312,18 @@ func (c *Config) checkConfig() bool {
 	for _, tableCfg := range c.TableCfgs {
 		if !tableCfg.Valid() {
 			return false
+		}
+	}
+
+	if c.OnlyUseChecksum {
+		if !c.UseChecksum {
+			log.Error("need set use-checksum = true")
+			return false
+		}
+	} else {
+		if len(c.FixSQLFile) == 0 {
+			log.Warn("fix-sql-file is invalid, will use default value 'fix.sql'")
+			c.FixSQLFile = "fix.sql"
 		}
 	}
 
