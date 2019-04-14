@@ -18,15 +18,16 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/pingcap/log"
 	pb "github.com/pingcap/tipb/go-binlog"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 const (
-	// Range means range algorithm.
+	// Range means range strategy.
 	Range = "range"
 
-	// Hash means hash algorithm.
+	// Hash means hash strategy.
 	Hash = "hash"
 
 	// Score means choose pump by it's score.
@@ -34,6 +35,14 @@ const (
 
 	// LocalUnix means will only use the local pump by unix socket.
 	LocalUnix = "local unix"
+)
+
+var (
+	// tsMap saves the map of start_ts with pump when send prepare binlog.
+	// And Commit binlog should send to the same pump.
+	tsMap = make(map[int64]*PumpStatus)
+
+	selectorLock sync.RWMutex
 )
 
 // PumpSelector selects pump for sending binlog.
@@ -50,12 +59,6 @@ type PumpSelector interface {
 
 // HashSelector select a pump by hash.
 type HashSelector struct {
-	sync.RWMutex
-
-	// TsMap saves the map of start_ts with pump when send prepare binlog.
-	// And Commit binlog should send to the same pump.
-	TsMap map[int64]*PumpStatus
-
 	// PumpMap saves the map of pump's node id with pump.
 	PumpMap map[string]*PumpStatus
 
@@ -66,7 +69,6 @@ type HashSelector struct {
 // NewHashSelector returns a new HashSelector.
 func NewHashSelector() PumpSelector {
 	return &HashSelector{
-		TsMap:   make(map[int64]*PumpStatus),
 		PumpMap: make(map[string]*PumpStatus),
 		Pumps:   make([]*PumpStatus, 0, 10),
 	}
@@ -74,29 +76,29 @@ func NewHashSelector() PumpSelector {
 
 // SetPumps implement PumpSelector.SetPumps.
 func (h *HashSelector) SetPumps(pumps []*PumpStatus) {
-	h.Lock()
+	selectorLock.Lock()
 	h.PumpMap = make(map[string]*PumpStatus)
 	h.Pumps = pumps
 	for _, pump := range pumps {
 		h.PumpMap[pump.NodeID] = pump
 	}
-	h.Unlock()
+	selectorLock.Unlock()
 }
 
 // Select implement PumpSelector.Select.
 func (h *HashSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 	// TODO: use status' label to match situale pump.
-	h.Lock()
-	defer h.Unlock()
+	selectorLock.Lock()
+	defer selectorLock.Unlock()
 
 	if binlog.Tp != pb.BinlogType_Prewrite {
 		// binlog is commit binlog or rollback binlog, choose the same pump by start ts map.
-		if pump, ok := h.TsMap[binlog.StartTs]; ok {
+		if pump, ok := tsMap[binlog.StartTs]; ok {
 			return pump
 		}
 
 		// this should never happened
-		log.Warnf("[pumps client] %s binlog with start ts %d don't have matched prewrite binlog", binlog.Tp, binlog.StartTs)
+		log.Warn("[pumps client] binlog don't have matched prewrite binlog", zap.Stringer("binlog type", binlog.Tp), zap.Int64("startTs", binlog.StartTs))
 		return nil
 	}
 
@@ -110,25 +112,19 @@ func (h *HashSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 
 // Feedback implement PumpSelector.Feedback
 func (h *HashSelector) Feedback(startTS int64, binlogType pb.BinlogType, pump *PumpStatus) {
-	h.Lock()
+	selectorLock.Lock()
 	if binlogType != pb.BinlogType_Prewrite {
-		delete(h.TsMap, startTS)
+		delete(tsMap, startTS)
 	} else {
-		h.TsMap[startTS] = pump
+		tsMap[startTS] = pump
 	}
-	h.Unlock()
+	selectorLock.Unlock()
 }
 
 // RangeSelector select a pump by range.
 type RangeSelector struct {
-	sync.RWMutex
-
 	// Offset saves the offset in Pumps.
 	Offset int
-
-	// TsMap saves the map of start_ts with pump when send prepare binlog.
-	// And Commit binlog should send to the same pump.
-	TsMap map[int64]*PumpStatus
 
 	// PumpMap saves the map of pump's node id with pump.
 	PumpMap map[string]*PumpStatus
@@ -141,7 +137,6 @@ type RangeSelector struct {
 func NewRangeSelector() PumpSelector {
 	return &RangeSelector{
 		Offset:  0,
-		TsMap:   make(map[int64]*PumpStatus),
 		PumpMap: make(map[string]*PumpStatus),
 		Pumps:   make([]*PumpStatus, 0, 10),
 	}
@@ -149,30 +144,30 @@ func NewRangeSelector() PumpSelector {
 
 // SetPumps implement PumpSelector.SetPumps.
 func (r *RangeSelector) SetPumps(pumps []*PumpStatus) {
-	r.Lock()
+	selectorLock.Lock()
 	r.PumpMap = make(map[string]*PumpStatus)
 	r.Pumps = pumps
 	for _, pump := range pumps {
 		r.PumpMap[pump.NodeID] = pump
 	}
 	r.Offset = 0
-	r.Unlock()
+	selectorLock.Unlock()
 }
 
 // Select implement PumpSelector.Select.
 func (r *RangeSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 	// TODO: use status' label to match situable pump.
-	r.Lock()
-	defer r.Unlock()
+	selectorLock.Lock()
+	defer selectorLock.Unlock()
 
 	if binlog.Tp != pb.BinlogType_Prewrite {
 		// binlog is commit binlog or rollback binlog, choose the same pump by start ts map.
-		if pump, ok := r.TsMap[binlog.StartTs]; ok {
+		if pump, ok := tsMap[binlog.StartTs]; ok {
 			return pump
 		}
 
 		// this should never happened
-		log.Warnf("[pumps client] %s binlog with start ts %d don't have matched prewrite binlog", binlog.Tp, binlog.StartTs)
+		log.Warn("[pumps client] binlog don't have matched prewrite binlog", zap.Stringer("binlog type", binlog.Tp), zap.Int64("startTs", binlog.StartTs))
 		return nil
 	}
 
@@ -192,19 +187,17 @@ func (r *RangeSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 
 // Feedback implement PumpSelector.Select
 func (r *RangeSelector) Feedback(startTS int64, binlogType pb.BinlogType, pump *PumpStatus) {
-	r.Lock()
+	selectorLock.Lock()
 	if binlogType != pb.BinlogType_Prewrite {
-		delete(r.TsMap, startTS)
+		delete(tsMap, startTS)
 	} else {
-		r.TsMap[startTS] = pump
+		tsMap[startTS] = pump
 	}
-	r.Unlock()
+	selectorLock.Unlock()
 }
 
 // LocalUnixSelector will always select the local pump, used for compatible with kafka version tidb-binlog.
 type LocalUnixSelector struct {
-	sync.RWMutex
-
 	// the pump to be selected.
 	Pump *PumpStatus
 }
@@ -216,19 +209,19 @@ func NewLocalUnixSelector() PumpSelector {
 
 // SetPumps implement PumpSelector.SetPumps.
 func (u *LocalUnixSelector) SetPumps(pumps []*PumpStatus) {
-	u.Lock()
+	selectorLock.Lock()
 	if len(pumps) == 0 {
 		u.Pump = nil
 	} else {
 		u.Pump = pumps[0]
 	}
-	u.Unlock()
+	selectorLock.Unlock()
 }
 
 // Select implement PumpSelector.Select.
 func (u *LocalUnixSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
-	u.RLock()
-	defer u.RUnlock()
+	selectorLock.RLock()
+	defer selectorLock.RUnlock()
 
 	return u.Pump
 }
@@ -262,10 +255,10 @@ func (s *ScoreSelector) Feedback(startTS int64, binlogType pb.BinlogType, pump *
 	// TODO
 }
 
-// NewSelector returns a PumpSelector according to the algorithm.
-func NewSelector(algorithm string) PumpSelector {
+// NewSelector returns a PumpSelector according to the strategy.
+func NewSelector(strategy string) PumpSelector {
 	var selector PumpSelector
-	switch algorithm {
+	switch strategy {
 	case Range:
 		selector = NewRangeSelector()
 	case Hash:
@@ -275,7 +268,7 @@ func NewSelector(algorithm string) PumpSelector {
 	case LocalUnix:
 		selector = NewLocalUnixSelector()
 	default:
-		log.Warnf("[pumps client] unknown algorithm %s, use range as default", algorithm)
+		log.Warn("[pumps client] unknown strategy, use range as default", zap.String("strategy", strategy))
 		selector = NewRangeSelector()
 	}
 

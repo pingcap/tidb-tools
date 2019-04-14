@@ -20,11 +20,12 @@ import (
 	"regexp"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/diff"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/pkg/utils"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 // Diff contains two sql DB, used for comparing.
@@ -36,6 +37,8 @@ type Diff struct {
 	checkThreadCount  int
 	useRowID          bool
 	useChecksum       bool
+	useCheckpoint     bool
+	onlyUseChecksum   bool
 	ignoreDataCheck   bool
 	ignoreStructCheck bool
 	tables            map[string]map[string]*TableConfig
@@ -56,6 +59,8 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 		checkThreadCount:  cfg.CheckThreadCount,
 		useRowID:          cfg.UseRowID,
 		useChecksum:       cfg.UseChecksum,
+		useCheckpoint:     cfg.UseCheckpoint,
+		onlyUseChecksum:   cfg.OnlyUseChecksum,
 		ignoreDataCheck:   cfg.IgnoreDataCheck,
 		ignoreStructCheck: cfg.IgnoreStructCheck,
 		tidbInstanceID:    cfg.TiDBInstanceID,
@@ -198,13 +203,13 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 			}
 
 			if _, ok := df.tables[schemaTables.Schema][tableName]; ok {
-				log.Errorf("duplicate config for %s.%s", schemaTables.Schema, tableName)
+				log.Error("duplicate config for one table", zap.String("table", dbutil.TableName(schemaTables.Schema, tableName)))
 				continue
 			}
 
 			sourceTables := make([]TableInstance, 0, 1)
 			if _, ok := sourceTablesMap[schemaTables.Schema][tableName]; ok {
-				log.Infof("find matched source tables %v for %s.%s", sourceTablesMap[schemaTables.Schema][tableName], schemaTables.Schema, tableName)
+				log.Info("find matched source tables", zap.Reflect("source tables", sourceTablesMap[schemaTables.Schema][tableName]), zap.String("target schema", schemaTables.Schema), zap.String("table", tableName))
 				sourceTables = sourceTablesMap[schemaTables.Schema][tableName]
 			} else {
 				// use same database name and table name
@@ -364,9 +369,10 @@ func (df *Diff) Equal() (err error) {
 			sourceTables := make([]*diff.TableInstance, 0, len(table.SourceTables))
 			for _, sourceTable := range table.SourceTables {
 				sourceTableInstance := &diff.TableInstance{
-					Conn:   df.sourceDBs[sourceTable.InstanceID].Conn,
-					Schema: sourceTable.Schema,
-					Table:  sourceTable.Table,
+					Conn:       df.sourceDBs[sourceTable.InstanceID].Conn,
+					Schema:     sourceTable.Schema,
+					Table:      sourceTable.Table,
+					InstanceID: sourceTable.InstanceID,
 				}
 				sourceTables = append(sourceTables, sourceTableInstance)
 
@@ -376,9 +382,10 @@ func (df *Diff) Equal() (err error) {
 			}
 
 			targetTableInstance := &diff.TableInstance{
-				Conn:   df.targetDB.Conn,
-				Schema: table.Schema,
-				Table:  table.Table,
+				Conn:       df.targetDB.Conn,
+				Schema:     table.Schema,
+				Table:      table.Table,
+				InstanceID: df.targetDB.InstanceID,
 			}
 
 			if df.targetDB.InstanceID == df.tidbInstanceID {
@@ -404,6 +411,8 @@ func (df *Diff) Equal() (err error) {
 				CheckThreadCount:  df.checkThreadCount,
 				UseRowID:          df.useRowID,
 				UseChecksum:       df.useChecksum,
+				UseCheckpoint:     df.useCheckpoint,
+				OnlyUseChecksum:   df.onlyUseChecksum,
 				IgnoreStructCheck: df.ignoreStructCheck,
 				IgnoreDataCheck:   df.ignoreDataCheck,
 				TiDBStatsSource:   tidbStatsSource,
@@ -411,11 +420,11 @@ func (df *Diff) Equal() (err error) {
 
 			structEqual, dataEqual, err := td.Equal(df.ctx, func(dml string) error {
 				_, err := df.fixSQLFile.WriteString(fmt.Sprintf("%s\n", dml))
-				return err
+				return errors.Trace(err)
 			})
 			if err != nil {
-				log.Errorf("check %s.%s equal failed, error %v", table.Schema, table.Table, errors.ErrorStack(err))
-				return err
+				log.Error("check failed", zap.String("table", dbutil.TableName(table.Schema, table.Table)), zap.Error(err))
+				return errors.Trace(err)
 			}
 
 			df.report.SetTableStructCheckResult(table.Schema, table.Table, structEqual)

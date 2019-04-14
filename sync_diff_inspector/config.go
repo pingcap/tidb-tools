@@ -20,10 +20,11 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 const (
@@ -137,7 +138,7 @@ func (t *TableInstance) Valid() bool {
 	}
 
 	if _, ok := sourceInstanceMap[t.InstanceID]; !ok {
-		log.Errorf("unknown database instance id %s", t.InstanceID)
+		log.Error("unknown database instance id", zap.String("instance id", t.InstanceID))
 		return false
 	}
 
@@ -180,6 +181,9 @@ type Config struct {
 	// set false if want to comapre the data directly
 	UseChecksum bool `toml:"use-checksum" json:"use-checksum"`
 
+	// set true if just want compare data by checksum, will skip select data when checksum is not equal.
+	OnlyUseChecksum bool `toml:"only-use-checksum" json:"only-use-checksum"`
+
 	// the name of the file which saves sqls used to fix different data
 	FixSQLFile string `toml:"fix-sql-file" json:"fix-sql-file"`
 
@@ -197,6 +201,9 @@ type Config struct {
 
 	// ignore check table's data
 	IgnoreDataCheck bool `toml:"ignore-data-check" json:"ignore-data-check"`
+
+	// set true will continue check from the latest checkpoint
+	UseCheckpoint bool `toml:"use-checkpoint" json:"use-checkpoint"`
 
 	// use this tidb's statistics information to split chunk
 	TiDBInstanceID string `toml:"tidb-instance-id" json:"tidb-instance-id"`
@@ -225,6 +232,7 @@ func NewConfig() *Config {
 	fs.BoolVar(&cfg.PrintVersion, "V", false, "print version of sync_diff_inspector")
 	fs.BoolVar(&cfg.IgnoreDataCheck, "ignore-data-check", false, "ignore check table's data")
 	fs.BoolVar(&cfg.IgnoreStructCheck, "ignore-struct-check", false, "ignore check table's struct")
+	fs.BoolVar(&cfg.UseCheckpoint, "use-checkpoint", true, "set true will continue check from the latest checkpoint")
 
 	return cfg
 }
@@ -273,12 +281,12 @@ func (c *Config) configFromFile(path string) error {
 
 func (c *Config) checkConfig() bool {
 	if c.Sample > percent100 || c.Sample < percent0 {
-		log.Errorf("sample must be greater than 0 and less than or equal to 100!")
+		log.Error("sample must be greater than 0 and less than or equal to 100!")
 		return false
 	}
 
 	if c.CheckThreadCount <= 0 {
-		log.Errorf("check-thcount must greater than 0!")
+		log.Error("check-thcount must greater than 0!")
 		return false
 	}
 
@@ -297,7 +305,7 @@ func (c *Config) checkConfig() bool {
 		c.TargetDBCfg.InstanceID = "target"
 	}
 	if _, ok := sourceInstanceMap[c.TargetDBCfg.InstanceID]; ok {
-		log.Errorf("target has same instance id %s in source", c.TargetDBCfg.InstanceID)
+		log.Error("target has same instance id in source", zap.String("instance id", c.TargetDBCfg.InstanceID))
 		return false
 	}
 
@@ -309,6 +317,18 @@ func (c *Config) checkConfig() bool {
 	for _, tableCfg := range c.TableCfgs {
 		if !tableCfg.Valid() {
 			return false
+		}
+	}
+
+	if c.OnlyUseChecksum {
+		if !c.UseChecksum {
+			log.Error("need set use-checksum = true")
+			return false
+		}
+	} else {
+		if len(c.FixSQLFile) == 0 {
+			log.Warn("fix-sql-file is invalid, will use default value 'fix.sql'")
+			c.FixSQLFile = "fix.sql"
 		}
 	}
 

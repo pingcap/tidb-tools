@@ -20,12 +20,20 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
+	tmysql "github.com/pingcap/parser/mysql"
+	"github.com/pingcap/parser/terror"
 	"github.com/pingcap/tidb-tools/pkg/utils"
+	"github.com/pingcap/tidb/ddl"
+	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/types"
-	log "github.com/sirupsen/logrus"
+	gmysql "github.com/siddontang/go-mysql/mysql"
+	"go.uber.org/zap"
 )
 
 const (
@@ -34,6 +42,15 @@ const (
 
 	// ImplicitColID is ID implicit column in TiDB
 	ImplicitColID = -1
+
+	// DefaultRetryTime is the default retry time to execute sql
+	DefaultRetryTime = 10
+
+	// DefaultTimeout is the default timeout for execute sql
+	DefaultTimeout time.Duration = 5 * time.Second
+
+	// SlowWarnLog defines the duration to log warn log of sql when exec time greater than
+	SlowWarnLog = 100 * time.Millisecond
 )
 
 var (
@@ -156,7 +173,7 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 	if len(where) > 0 {
 		query += fmt.Sprintf(" WHERE %s", where)
 	}
-	log.Debugf("get row count by sql %s", query)
+	log.Debug("get row count", zap.String("sql", query))
 
 	var cnt sql.NullInt64
 	err := db.QueryRowContext(ctx, query).Scan(&cnt)
@@ -199,7 +216,7 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 
 	query := fmt.Sprintf("SELECT %[1]s, COUNT(*) count FROM (SELECT %[1]s FROM %[2]s WHERE %[3]s ORDER BY RAND() LIMIT %[4]d)rand_tmp GROUP BY %[1]s ORDER BY %[1]s%[5]s",
 		escapeName(column), TableName(schemaName, table), limitRange, num, collation)
-	log.Debugf("get random values sql: %s, args: %v", query, limitArgs)
+	log.Debug("get random values", zap.String("sql", query), zap.Reflect("args", limitArgs))
 
 	rows, err := db.QueryContext(ctx, query, limitArgs...)
 	if err != nil {
@@ -243,7 +260,7 @@ func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column strin
 
 	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ MIN(`%s`%s) as MIN, MAX(`%s`%s) as MAX FROM `%s`.`%s` WHERE %s",
 		column, collation, column, collation, schema, table, limitRange)
-	log.Debugf("GetMinMaxValue query: %v, args: %v", query, limitArgs)
+	log.Debug("GetMinMaxValue", zap.String("sql", query), zap.Reflect("args", limitArgs))
 
 	var min, max sql.NullString
 	rows, err := db.QueryContext(ctx, query, limitArgs...)
@@ -363,7 +380,7 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName str
 
 	query := fmt.Sprintf("SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED)) AS checksum FROM %s WHERE %s;",
 		strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), TableName(schemaName, tableName), limitRange)
-	log.Debugf("checksum sql: %s, args: %v", query, args)
+	log.Debug("checksum", zap.String("sql", query), zap.Reflect("args", args))
 
 	var checksum sql.NullInt64
 	err := db.QueryRowContext(ctx, query, args...).Scan(&checksum)
@@ -372,7 +389,7 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName str
 	}
 	if !checksum.Valid {
 		// if don't have any data, the checksum will be `NULL`
-		log.Warnf("get empty checksum by query %s, args %v", query, args)
+		log.Warn("get empty checksum", zap.String("sql", query), zap.Reflect("args", args))
 		return 0, nil
 	}
 
@@ -400,7 +417,7 @@ func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string, table
 	*/
 	buckets := make(map[string][]Bucket)
 	query := "SHOW STATS_BUCKETS WHERE db_name= ? AND table_name= ?;"
-	log.Debugf("GetBucketsInfo query: %s", query)
+	log.Debug("GetBucketsInfo", zap.String("sql", query))
 
 	rows, err := db.QueryContext(ctx, query, schema, table)
 	if err != nil {
@@ -538,7 +555,7 @@ func GetTidbLatestTSO(ctx context.Context, db *sql.DB) (int64, error) {
 // SetSnapshot set the snapshot variable for tidb
 func SetSnapshot(ctx context.Context, db *sql.DB, snapshot string) error {
 	sql := fmt.Sprintf("SET @@tidb_snapshot='%s'", snapshot)
-	log.Infof("set history snapshot: %s", sql)
+	log.Info("set history snapshot", zap.String("sql", sql))
 	_, err := db.ExecContext(ctx, sql)
 	return errors.Trace(err)
 }
@@ -589,7 +606,7 @@ func GetDBVersion(ctx context.Context, db *sql.DB) (string, error) {
 func IsTiDB(ctx context.Context, db *sql.DB) (bool, error) {
 	version, err := GetDBVersion(ctx, db)
 	if err != nil {
-		log.Errorf("get database's version meets error %v", err)
+		log.Error("get database's version failed", zap.Error(err))
 		return false, errors.Trace(err)
 	}
 
@@ -615,4 +632,123 @@ func ReplacePlaceholder(str string, args []string) string {
 	*/
 	newStr := strings.Replace(str, "?", "'%s'", -1)
 	return fmt.Sprintf(newStr, utils.StringsToInterfaces(args)...)
+}
+
+// ExecSQLWithRetry executes sql with retry
+func ExecSQLWithRetry(ctx context.Context, db *sql.DB, sql string, args ...interface{}) (err error) {
+	for i := 0; i < DefaultRetryTime; i++ {
+		startTime := time.Now()
+		_, err = db.ExecContext(ctx, sql, args...)
+		takeDuration := time.Since(startTime)
+		if takeDuration > SlowWarnLog {
+			log.Warn("exec sql slow", zap.String("sql", sql), zap.Reflect("args", args), zap.Duration("take", takeDuration))
+		}
+		if err == nil {
+			return nil
+		}
+
+		if ignoreError(err) {
+			log.Debug("ignore execute sql error", zap.Error(err))
+			return nil
+		}
+
+		if !isRetryableError(err) {
+			return errors.Trace(err)
+		}
+
+		log.Warn("exe sql failed, will try again", zap.String("sql", sql), zap.Reflect("args", args), zap.Error(err))
+
+		if i == DefaultRetryTime-1 {
+			break
+		}
+
+		select {
+		case <-ctx.Done():
+			return errors.Trace(ctx.Err())
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+
+	return errors.Trace(err)
+}
+
+// ExecuteSQLs executes some sqls in one transaction
+func ExecuteSQLs(ctx context.Context, db *sql.DB, sqls []string, args [][]interface{}) error {
+	txn, err := db.Begin()
+	if err != nil {
+		log.Error("exec sqls begin", zap.Error(err))
+		return errors.Trace(err)
+	}
+
+	for i := range sqls {
+		startTime := time.Now()
+
+		_, err = txn.ExecContext(ctx, sqls[i], args[i]...)
+		if err != nil {
+			log.Error("exec sql", zap.String("sql", sqls[i]), zap.Reflect("args", args[i]), zap.Error(err))
+			rerr := txn.Rollback()
+			if rerr != nil {
+				log.Error("rollback", zap.Error(err))
+			}
+			return errors.Trace(err)
+		}
+
+		takeDuration := time.Since(startTime)
+		if takeDuration > SlowWarnLog {
+			log.Warn("exec sql slow", zap.String("sql", sqls[i]), zap.Reflect("args", args[i]), zap.Duration("take", takeDuration))
+		}
+	}
+
+	err = txn.Commit()
+	if err != nil {
+		log.Error("exec sqls commit", zap.Error(err))
+		return errors.Trace(err)
+	}
+
+	return nil
+}
+
+func isRetryableError(err error) bool {
+	err = errors.Cause(err) // check the original error
+	mysqlErr, ok := err.(*mysql.MySQLError)
+	if !ok {
+		return false
+	}
+
+	switch mysqlErr.Number {
+	// ER_LOCK_DEADLOCK can retry to commit while meet deadlock
+	case tmysql.ErrUnknown, gmysql.ER_LOCK_DEADLOCK, tmysql.ErrPDServerTimeout, tmysql.ErrTiKVServerTimeout, tmysql.ErrTiKVServerBusy, tmysql.ErrResolveLockTimeout, tmysql.ErrRegionUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+func ignoreError(err error) bool {
+	// TODO: now only ignore some ddl error, add some dml error later
+	if ignoreDDLError(err) {
+		return true
+	}
+
+	return false
+}
+
+func ignoreDDLError(err error) bool {
+	err = errors.Cause(err)
+	mysqlErr, ok := err.(*mysql.MySQLError)
+	if !ok {
+		return false
+	}
+
+	errCode := terror.ErrCode(mysqlErr.Number)
+	switch errCode {
+	case infoschema.ErrDatabaseExists.Code(), infoschema.ErrDatabaseDropExists.Code(),
+		infoschema.ErrTableExists.Code(), infoschema.ErrTableDropExists.Code(),
+		infoschema.ErrColumnExists.Code(), infoschema.ErrIndexExists.Code():
+		return true
+	case ddl.ErrDupKeyName.Code():
+		return true
+	default:
+		return false
+	}
 }

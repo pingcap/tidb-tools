@@ -21,9 +21,10 @@ import (
 
 	_ "github.com/go-sql-driver/mysql" // for mysql driver
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 func intRangeValue(column *column, min int64, max int64) (int64, int64) {
@@ -31,13 +32,13 @@ func intRangeValue(column *column, min int64, max int64) (int64, int64) {
 	if len(column.min) > 0 {
 		min, err = strconv.ParseInt(column.min, 10, 64)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal("intRangeValue", zap.Error(err))
 		}
 
 		if len(column.max) > 0 {
 			max, err = strconv.ParseInt(column.max, 10, 64)
 			if err != nil {
-				log.Fatal(err)
+				log.Fatal("intRangeValue", zap.Error(err))
 			}
 		}
 	}
@@ -257,7 +258,7 @@ func closeDBs(dbs []*sql.DB) {
 	for _, db := range dbs {
 		err := closeDB(db)
 		if err != nil {
-			log.Errorf("close db failed - %v", err)
+			log.Error("close db failed", zap.Error(err))
 		}
 	}
 }

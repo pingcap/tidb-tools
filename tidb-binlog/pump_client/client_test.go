@@ -50,16 +50,16 @@ var _ = Suite(&testClientSuite{})
 type testClientSuite struct{}
 
 func (t *testClientSuite) TestSelector(c *C) {
-	algorithms := []string{Hash, Range}
-	for _, algorithm := range algorithms {
-		t.testSelector(c, algorithm)
+	strategys := []string{Hash, Range}
+	for _, strategy := range strategys {
+		t.testSelector(c, strategy)
 	}
 }
 
-func (*testClientSuite) testSelector(c *C, algorithm string) {
+func (*testClientSuite) testSelector(c *C, strategy string) {
 	pumpsClient := &PumpsClient{
 		Pumps:              NewPumpInfos(),
-		Selector:           NewSelector(algorithm),
+		Selector:           NewSelector(strategy),
 		BinlogWriteTimeout: DefaultBinlogWriteTimeout,
 	}
 
@@ -139,6 +139,23 @@ func (*testClientSuite) testSelector(c *C, algorithm string) {
 		// prewrite binlog and commit binlog with same start ts should choose same pump
 		c.Assert(pump1.NodeID, Equals, pump2.NodeID)
 		pumpsClient.setPumpAvaliable(pump1, true)
+
+		// after change strategy, prewrite binlog and commit binlog will choose same pump
+		pump1 = pumpsClient.Selector.Select(prewriteBinlog, 0)
+		pumpsClient.Selector.Feedback(prewriteBinlog.StartTs, prewriteBinlog.Tp, pump1)
+		if strategy == Range {
+			err := pumpsClient.SetSelectStrategy(Hash)
+			c.Assert(err, IsNil)
+		} else {
+			err := pumpsClient.SetSelectStrategy(Range)
+			c.Assert(err, IsNil)
+		}
+		pump2 = pumpsClient.Selector.Select(commitBinlog, 0)
+		c.Assert(pump1.NodeID, Equals, pump2.NodeID)
+
+		// set back
+		err := pumpsClient.SetSelectStrategy(strategy)
+		c.Assert(err, IsNil)
 	}
 }
 
@@ -161,7 +178,7 @@ func (t *testClientSuite) TestWriteBinlog(c *C) {
 	CommitBinlogTimeout = time.Second
 
 	for _, cfg := range pumpServerConfig {
-		pumpServer, err := createMockPumpServer(cfg.addr, cfg.serverMode)
+		pumpServer, err := createMockPumpServer(cfg.addr, cfg.serverMode, true)
 		c.Assert(err, IsNil)
 
 		opt := grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
@@ -170,7 +187,7 @@ func (t *testClientSuite) TestWriteBinlog(c *C) {
 		clientCon, err := grpc.Dial(cfg.addr, opt, grpc.WithInsecure())
 		c.Assert(err, IsNil)
 		c.Assert(clientCon, NotNil)
-		pumpClient := mockPumpsClient(pb.NewPumpClient(clientCon))
+		pumpClient := mockPumpsClient(pb.NewPumpClient(clientCon), true)
 
 		// test binlog size bigger than grpc's MaxRecvMsgSize
 		blog := &pb.Binlog{
@@ -226,11 +243,16 @@ type mockPumpServer struct {
 	addr   string
 	server *grpc.Server
 
+	withError bool
 	retryTime int
 }
 
 // WriteBinlog implements PumpServer interface.
 func (p *mockPumpServer) WriteBinlog(ctx context.Context, req *binlog.WriteBinlogReq) (*binlog.WriteBinlogResp, error) {
+	if !p.withError {
+		return &binlog.WriteBinlogResp{}, nil
+	}
+
 	p.retryTime++
 	if p.retryTime < testRetryTime {
 		return &binlog.WriteBinlogResp{}, errors.New("fake error")
@@ -253,7 +275,7 @@ func (p *mockPumpServer) Close() {
 	}
 }
 
-func createMockPumpServer(addr string, mode string) (*mockPumpServer, error) {
+func createMockPumpServer(addr string, mode string, withError bool) (*mockPumpServer, error) {
 	if mode == "unix" {
 		os.Remove(addr)
 	}
@@ -264,9 +286,10 @@ func createMockPumpServer(addr string, mode string) (*mockPumpServer, error) {
 	}
 	serv := grpc.NewServer(grpc.MaxRecvMsgSize(testMaxRecvMsgSize))
 	pump := &mockPumpServer{
-		mode:   mode,
-		addr:   addr,
-		server: serv,
+		mode:      mode,
+		addr:      addr,
+		server:    serv,
+		withError: withError,
 	}
 	pb.RegisterPumpServer(serv, pump)
 	go serv.Serve(l)
@@ -275,7 +298,7 @@ func createMockPumpServer(addr string, mode string) (*mockPumpServer, error) {
 }
 
 // mockPumpsClient creates a PumpsClient, used for test.
-func mockPumpsClient(client pb.PumpClient) *PumpsClient {
+func mockPumpsClient(client pb.PumpClient, withBadPump bool) *PumpsClient {
 	// add a avaliable pump
 	nodeID1 := "pump-1"
 	pump1 := &PumpStatus{
@@ -285,6 +308,8 @@ func mockPumpsClient(client pb.PumpClient) *PumpsClient {
 		},
 		Client: client,
 	}
+
+	pumps := []*PumpStatus{pump1}
 
 	// add a pump without grpc client
 	nodeID2 := "pump-2"
@@ -298,8 +323,12 @@ func mockPumpsClient(client pb.PumpClient) *PumpsClient {
 	pumpInfos := NewPumpInfos()
 	pumpInfos.Pumps[nodeID1] = pump1
 	pumpInfos.AvaliablePumps[nodeID1] = pump1
-	pumpInfos.Pumps[nodeID2] = pump2
-	pumpInfos.AvaliablePumps[nodeID2] = pump2
+
+	if withBadPump {
+		pumpInfos.Pumps[nodeID2] = pump2
+		pumpInfos.AvaliablePumps[nodeID2] = pump2
+		pumps = append(pumps, pump2)
+	}
 
 	pCli := &PumpsClient{
 		ClusterID:          1,
@@ -307,7 +336,7 @@ func mockPumpsClient(client pb.PumpClient) *PumpsClient {
 		Selector:           NewSelector(Range),
 		BinlogWriteTimeout: time.Second,
 	}
-	pCli.Selector.SetPumps([]*PumpStatus{pump1, pump2})
+	pCli.Selector.SetPumps(pumps)
 
 	return pCli
 }

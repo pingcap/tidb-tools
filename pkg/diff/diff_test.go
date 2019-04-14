@@ -332,3 +332,22 @@ func updateData(dbConn *sql.DB, table string) error {
 
 	return nil
 }
+
+func (*testDiffSuite) TestConfigHash(c *C) {
+	tbDiff := &TableDiff{
+		Range:     "a > 1",
+		ChunkSize: 1000,
+	}
+	tbDiff.setConfigHash()
+	hash1 := tbDiff.configHash
+
+	tbDiff.CheckThreadCount = 10
+	tbDiff.setConfigHash()
+	hash2 := tbDiff.configHash
+	c.Assert(hash1, Equals, hash2)
+
+	tbDiff.Range = "b < 10"
+	tbDiff.setConfigHash()
+	hash3 := tbDiff.configHash
+	c.Assert(hash1 == hash3, Equals, false)
+}
