@@ -284,22 +284,8 @@ func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column strin
 	return min.String, max.String, errors.Trace(rows.Err())
 }
 
-// GetTables returns name of all tables in the specified schema
-func GetTables(ctx context.Context, db *sql.DB, schemaName string) (tables []string, err error) {
-	/*
-		show tables without view: https://dev.mysql.com/doc/refman/5.7/en/show-tables.html
-
-		example:
-		mysql> show full tables in test where Table_Type != 'VIEW';
-		+----------------+------------+
-		| Tables_in_test | Table_type |
-		+----------------+------------+
-		| NTEST          | BASE TABLE |
-		+----------------+------------+
-	*/
-
-	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type != 'VIEW';", schemaName)
-	rows, err := db.QueryContext(ctx, query)
+func queryTables(ctx context.Context, db *sql.DB, q string) (tables []string, err error) {
+	rows, err := db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -321,6 +307,29 @@ func GetTables(ctx context.Context, db *sql.DB, schemaName string) (tables []str
 	}
 
 	return tables, errors.Trace(rows.Err())
+}
+
+// GetTables returns name of all tables in the specified schema
+func GetTables(ctx context.Context, db *sql.DB, schemaName string) (tables []string, err error) {
+	/*
+		show tables without view: https://dev.mysql.com/doc/refman/5.7/en/show-tables.html
+
+		example:
+		mysql> show full tables in test where Table_Type != 'VIEW';
+		+----------------+------------+
+		| Tables_in_test | Table_type |
+		+----------------+------------+
+		| NTEST          | BASE TABLE |
+		+----------------+------------+
+	*/
+	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type != 'VIEW';", schemaName)
+	return queryTables(ctx, db, query)
+}
+
+// GetViews returns names of all views in the specified schema
+func GetViews(ctx context.Context, db *sql.DB, schemaName string) (tables []string, err error) {
+	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type = 'VIEW';", schemaName)
+	return queryTables(ctx, db, query)
 }
 
 // GetSchemas returns name of all schemas
