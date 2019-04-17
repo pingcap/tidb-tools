@@ -66,7 +66,7 @@ type HashSelector struct {
 // NewHashSelector returns a new HashSelector.
 func NewHashSelector() PumpSelector {
 	return &HashSelector{
-		Pumps:   make([]*PumpStatus, 0, 10),
+		Pumps: make([]*PumpStatus, 0, 10),
 	}
 }
 
@@ -104,13 +104,7 @@ func (h *HashSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 
 // Feedback implement PumpSelector.Feedback
 func (h *HashSelector) Feedback(startTS int64, binlogType pb.BinlogType, pump *PumpStatus) {
-	selectorLock.Lock()
-	if binlogType != pb.BinlogType_Prewrite {
-		delete(tsMap, startTS)
-	} else {
-		tsMap[startTS] = pump
-	}
-	selectorLock.Unlock()
+	maintainTSMap(startTS, binlogType, pump)
 }
 
 // RangeSelector select a pump by range.
@@ -125,8 +119,8 @@ type RangeSelector struct {
 // NewRangeSelector returns a new ScoreSelector.
 func NewRangeSelector() PumpSelector {
 	return &RangeSelector{
-		Offset:  0,
-		Pumps:   make([]*PumpStatus, 0, 10),
+		Offset: 0,
+		Pumps:  make([]*PumpStatus, 0, 10),
 	}
 }
 
@@ -171,13 +165,7 @@ func (r *RangeSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 
 // Feedback implement PumpSelector.Select
 func (r *RangeSelector) Feedback(startTS int64, binlogType pb.BinlogType, pump *PumpStatus) {
-	selectorLock.Lock()
-	if binlogType != pb.BinlogType_Prewrite {
-		delete(tsMap, startTS)
-	} else {
-		tsMap[startTS] = pump
-	}
-	selectorLock.Unlock()
+	maintainTSMap(startTS, binlogType, pump)
 }
 
 // LocalUnixSelector will always select the local pump, used for compatible with kafka version tidb-binlog.
@@ -260,4 +248,14 @@ func hashTs(ts int64) int {
 	h := fnv.New32a()
 	h.Write([]byte(strconv.FormatInt(ts, 10)))
 	return int(h.Sum32())
+}
+
+func maintainTSMap(startTS int64, binlogType pb.BinlogType, pump *PumpStatus) {
+	selectorLock.Lock()
+	if binlogType != pb.BinlogType_Prewrite {
+		delete(tsMap, startTS)
+	} else {
+		tsMap[startTS] = pump
+	}
+	selectorLock.Unlock()
 }
