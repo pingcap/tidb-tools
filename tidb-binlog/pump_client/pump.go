@@ -73,7 +73,7 @@ type PumpStatus struct {
 // NewPumpStatus returns a new PumpStatus according to node's status.
 func NewPumpStatus(status *node.Status, security *tls.Config) *PumpStatus {
 	pumpStatus := PumpStatus{
-		Status: *status,
+		Status:   *status,
 		security: security,
 	}
 	return &pumpStatus
