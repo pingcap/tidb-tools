@@ -14,8 +14,8 @@
 package client
 
 import (
+	"encoding/binary"
 	"hash/fnv"
-	"strconv"
 	"sync"
 
 	"github.com/pingcap/log"
@@ -246,7 +246,9 @@ func NewSelector(strategy string) PumpSelector {
 
 func hashTs(ts int64) int {
 	h := fnv.New32a()
-	h.Write([]byte(strconv.FormatInt(ts, 10)))
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, uint64(ts))
+	h.Write(b)
 	return int(h.Sum32())
 }
 
