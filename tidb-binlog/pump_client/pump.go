@@ -72,11 +72,11 @@ type PumpStatus struct {
 
 // NewPumpStatus returns a new PumpStatus according to node's status.
 func NewPumpStatus(status *node.Status, security *tls.Config) *PumpStatus {
-	pumpStatus := &PumpStatus{}
-	pumpStatus.Status = *status
-	pumpStatus.security = security
-
-	return pumpStatus
+	pumpStatus := PumpStatus{
+		Status:   *status,
+		security: security,
+	}
+	return &pumpStatus
 }
 
 // createGrpcClient create grpc client for online pump.
@@ -141,16 +141,13 @@ func (p *PumpStatus) WriteBinlog(req *pb.WriteBinlogReq, timeout time.Duration) 
 	if client == nil {
 		p.Lock()
 
-		if p.Client != nil {
-			client = p.Client
-		} else {
-			err := p.createGrpcClient()
-			if err != nil {
+		if p.Client == nil {
+			if err := p.createGrpcClient(); err != nil {
 				p.Unlock()
 				return nil, errors.Errorf("create grpc connection for pump %s failed, error %v", p.NodeID, err)
 			}
-			client = p.Client
 		}
+		client = p.Client
 
 		p.Unlock()
 	}
