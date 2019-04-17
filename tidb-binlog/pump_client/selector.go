@@ -79,7 +79,7 @@ func (h *HashSelector) SetPumps(pumps []*PumpStatus) {
 
 // Select implement PumpSelector.Select.
 func (h *HashSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
-	// TODO: use status' label to match situale pump.
+	// TODO: use status' label to match suitable pump.
 	selectorLock.Lock()
 	defer selectorLock.Unlock()
 
@@ -140,7 +140,7 @@ func (r *RangeSelector) SetPumps(pumps []*PumpStatus) {
 
 // Select implement PumpSelector.Select.
 func (r *RangeSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
-	// TODO: use status' label to match situable pump.
+	// TODO: use status' label to match suitable pump.
 	selectorLock.Lock()
 	defer selectorLock.Unlock()
 
