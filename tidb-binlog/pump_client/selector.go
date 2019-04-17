@@ -59,9 +59,6 @@ type PumpSelector interface {
 
 // HashSelector select a pump by hash.
 type HashSelector struct {
-	// PumpMap saves the map of pump's node id with pump.
-	PumpMap map[string]*PumpStatus
-
 	// the pumps to be selected.
 	Pumps []*PumpStatus
 }
@@ -69,7 +66,6 @@ type HashSelector struct {
 // NewHashSelector returns a new HashSelector.
 func NewHashSelector() PumpSelector {
 	return &HashSelector{
-		PumpMap: make(map[string]*PumpStatus),
 		Pumps:   make([]*PumpStatus, 0, 10),
 	}
 }
@@ -77,11 +73,7 @@ func NewHashSelector() PumpSelector {
 // SetPumps implement PumpSelector.SetPumps.
 func (h *HashSelector) SetPumps(pumps []*PumpStatus) {
 	selectorLock.Lock()
-	h.PumpMap = make(map[string]*PumpStatus)
 	h.Pumps = pumps
-	for _, pump := range pumps {
-		h.PumpMap[pump.NodeID] = pump
-	}
 	selectorLock.Unlock()
 }
 
@@ -126,9 +118,6 @@ type RangeSelector struct {
 	// Offset saves the offset in Pumps.
 	Offset int
 
-	// PumpMap saves the map of pump's node id with pump.
-	PumpMap map[string]*PumpStatus
-
 	// the pumps to be selected.
 	Pumps []*PumpStatus
 }
@@ -137,7 +126,6 @@ type RangeSelector struct {
 func NewRangeSelector() PumpSelector {
 	return &RangeSelector{
 		Offset:  0,
-		PumpMap: make(map[string]*PumpStatus),
 		Pumps:   make([]*PumpStatus, 0, 10),
 	}
 }
@@ -145,11 +133,7 @@ func NewRangeSelector() PumpSelector {
 // SetPumps implement PumpSelector.SetPumps.
 func (r *RangeSelector) SetPumps(pumps []*PumpStatus) {
 	selectorLock.Lock()
-	r.PumpMap = make(map[string]*PumpStatus)
 	r.Pumps = pumps
-	for _, pump := range pumps {
-		r.PumpMap[pump.NodeID] = pump
-	}
 	r.Offset = 0
 	selectorLock.Unlock()
 }
