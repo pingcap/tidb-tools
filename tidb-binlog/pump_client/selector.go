@@ -241,22 +241,19 @@ func (s *ScoreSelector) Feedback(startTS int64, binlogType pb.BinlogType, pump *
 
 // NewSelector returns a PumpSelector according to the strategy.
 func NewSelector(strategy string) PumpSelector {
-	var selector PumpSelector
 	switch strategy {
 	case Range:
-		selector = NewRangeSelector()
+		return NewRangeSelector()
 	case Hash:
-		selector = NewHashSelector()
+		return NewHashSelector()
 	case Score:
-		selector = NewScoreSelector()
+		return NewScoreSelector()
 	case LocalUnix:
-		selector = NewLocalUnixSelector()
+		return NewLocalUnixSelector()
 	default:
 		log.Warn("[pumps client] unknown strategy, use range as default", zap.String("strategy", strategy))
-		selector = NewRangeSelector()
+		return NewRangeSelector()
 	}
-
-	return selector
 }
 
 func hashTs(ts int64) int {
