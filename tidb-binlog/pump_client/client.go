@@ -584,11 +584,7 @@ func isRetryableError(err error) bool {
 	// ResourceExhausted indicates some resource has been exhausted, perhaps
 	// a per-user quota, or perhaps the entire file system is out of space.
 	// https://github.com/grpc/grpc-go/blob/9cc4fdbde2304827ffdbc7896f49db40c5536600/codes/codes.go#L76
-	if strings.Contains(err.Error(), "ResourceExhausted") {
-		return false
-	}
-
-	return true
+	return !strings.Contains(err.Error(), "ResourceExhausted")
 }
 
 func isConnUnAvliable(err error) bool {
@@ -596,11 +592,7 @@ func isConnUnAvliable(err error) bool {
 	// This is a most likely a transient condition and may be corrected
 	// by retrying with a backoff.
 	// https://github.com/grpc/grpc-go/blob/76cc50721c5fde18bae10a36f4c202f5f2f95bb7/codes/codes.go#L139
-	if status.Code(err) == codes.Unavailable {
-		return true
-	}
-
-	return false
+	return status.Code(err) == codes.Unavailable
 }
 
 func copyPumps(pumps map[string]*PumpStatus) []*PumpStatus {
