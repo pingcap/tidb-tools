@@ -15,7 +15,7 @@ func (t *testSelectorSuite) TestHashTS(c *C) {
 	)
 	counter := [nPumps]int{}
 	for i := 0; i < nTS; i++ {
-		counter[hashTs(int64(i))%nPumps]++
+		counter[uint(hashTs(int64(i)))%nPumps]++
 	}
 	avg := nTS / 11
 	for i := 0; i < nPumps; i++ {
