@@ -39,8 +39,17 @@ func (r RowDatas) Less(i, j int) bool {
 	var data1, data2 []byte
 
 	for _, col := range r.OrderKeyCols {
-		data1 = r.Rows[i].Data[col.Name.O].Data
-		data2 = r.Rows[j].Data[col.Name.O].Data
+		col1, ok := r.Rows[i].Data[col.Name.O]
+		if !ok {
+			log.Fatal("data don't have column", zap.String("column", col.Name.O), zap.Reflect("data", r.Rows[i].Data))
+		}
+		col2, ok := r.Rows[j].Data[col.Name.O]
+		if !ok {
+			log.Fatal("data don't have column", zap.String("column", col.Name.O), zap.Reflect("data", r.Rows[j].Data))
+		}
+		data1 = col1.Data
+		data2 = col2.Data
+
 		if needQuotes(col.FieldType) {
 			strData1 := string(data1)
 			strData2 := string(data2)
