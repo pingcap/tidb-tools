@@ -14,8 +14,6 @@
 package client
 
 import (
-	"encoding/binary"
-	"hash/fnv"
 	"sync"
 
 	"github.com/pingcap/log"
@@ -98,7 +96,7 @@ func (h *HashSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 		return nil
 	}
 
-	pump := h.Pumps[(hashTs(binlog.StartTs)+int(retryTime))%len(h.Pumps)]
+	pump := h.Pumps[(int(binlog.StartTs)+retryTime)%len(h.Pumps)]
 	return pump
 }
 
@@ -242,14 +240,6 @@ func NewSelector(strategy string) PumpSelector {
 		log.Warn("[pumps client] unknown strategy, use range as default", zap.String("strategy", strategy))
 		return NewRangeSelector()
 	}
-}
-
-func hashTs(ts int64) int {
-	h := fnv.New32a()
-	b := make([]byte, 8)
-	binary.LittleEndian.PutUint64(b, uint64(ts))
-	h.Write(b)
-	return int(h.Sum32())
 }
 
 func maintainTSMap(startTS int64, binlogType pb.BinlogType, pump *PumpStatus) {
