@@ -14,8 +14,6 @@
 package client
 
 import (
-	"hash/fnv"
-	"strconv"
 	"sync"
 
 	"github.com/pingcap/log"
@@ -97,8 +95,8 @@ func (h *HashSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 	if len(h.Pumps) == 0 {
 		return nil
 	}
-
-	pump := h.Pumps[(hashTs(binlog.StartTs)+int(retryTime))%len(h.Pumps)]
+	i := (binlog.StartTs + int64(retryTime)) % int64(len(h.Pumps))
+	pump := h.Pumps[int(i)]
 	return pump
 }
 
@@ -242,12 +240,6 @@ func NewSelector(strategy string) PumpSelector {
 		log.Warn("[pumps client] unknown strategy, use range as default", zap.String("strategy", strategy))
 		return NewRangeSelector()
 	}
-}
-
-func hashTs(ts int64) int {
-	h := fnv.New32a()
-	h.Write([]byte(strconv.FormatInt(ts, 10)))
-	return int(h.Sum32())
 }
 
 func maintainTSMap(startTS int64, binlogType pb.BinlogType, pump *PumpStatus) {
