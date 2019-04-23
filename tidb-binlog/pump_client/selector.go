@@ -95,8 +95,8 @@ func (h *HashSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 	if len(h.Pumps) == 0 {
 		return nil
 	}
-
-	pump := h.Pumps[(int(binlog.StartTs)+retryTime)%len(h.Pumps)]
+	i := (binlog.StartTs + int64(retryTime)) % int64(len(h.Pumps))
+	pump := h.Pumps[int(i)]
 	return pump
 }
 
