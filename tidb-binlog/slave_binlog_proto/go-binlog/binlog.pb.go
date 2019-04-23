@@ -184,7 +184,7 @@ type ColumnInfo struct {
 	// https://dev.mysql.com/doc/refman/8.0/en/data-types.html
 	// for numeric type: int bigint smallint tinyint float double decimal bit
 	// for string type: text longtext mediumtext char tinytext varchar
-	// blob longblog mediumblog binary tinyblob varbinary
+	// blob longblob mediumblob binary tinyblob varbinary
 	// enum set
 	// for json type: json
 	MysqlType        string `protobuf:"bytes,2,opt,name=mysql_type,json=mysqlType" json:"mysql_type"`
