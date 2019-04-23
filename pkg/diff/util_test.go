@@ -16,6 +16,7 @@ package diff
 import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/parser/model"
 )
 
 var _ = Suite(&testUtilSuite{})
@@ -43,4 +44,29 @@ func (s *testUtilSuite) TestRemoveColumns(c *C) {
 	tbInfo = removeColumns(tableInfo3, []string{"b", "c"})
 	c.Assert(len(tbInfo.Columns), Equals, 2)
 	c.Assert(len(tbInfo.Indices), Equals, 1)
+}
+
+func (s *testUtilSuite) TestRowContainsCols(c *C) {
+	row := map[string]*dbutil.ColumnData {
+		"a": nil,
+		"b": nil,
+		"c": nil,
+	}
+
+	cols := []*model.ColumnInfo {
+		{
+			Name: model.NewCIStr("a"),
+		}, {
+			Name: model.NewCIStr("b"),
+		},{
+			Name: model.NewCIStr("c"),
+		},
+	}
+
+	contain := rowContainsCols(row, cols)
+	c.Assert(contain, Equals, true)
+
+	delete(row, "a")
+	contain = rowContainsCols(row, cols)
+	c.Assert(contain, Equals, false)
 }
