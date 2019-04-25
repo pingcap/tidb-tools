@@ -26,6 +26,7 @@ func StringsToInterfaces(strs []string) []interface{} {
 	return is
 }
 
+// SyncLog calls the underlying Core's Sync method, flushing any buffered log entries
 func SyncLog() {
 	syncErr := log.Sync()
 	if syncErr != nil {
