@@ -1,5 +1,12 @@
 package utils
 
+import (
+	"fmt"
+	"os"
+
+	"github.com/pingcap/log"
+)
+
 // SliceToMap converts slice to map
 func SliceToMap(slice []string) map[string]interface{} {
 	sMap := make(map[string]interface{})
@@ -17,4 +24,11 @@ func StringsToInterfaces(strs []string) []interface{} {
 	}
 
 	return is
+}
+
+func SyncLog() {
+	syncErr := log.Sync()
+	if syncErr != nil {
+		fmt.Fprintln(os.Stderr, "sync log failed", syncErr)
+	}
 }

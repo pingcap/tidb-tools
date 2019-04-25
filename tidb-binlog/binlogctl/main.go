@@ -18,7 +18,9 @@ import (
 	"os"
 
 	"github.com/pingcap/log"
+	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
+
 	"go.uber.org/zap"
 )
 
@@ -63,4 +65,6 @@ func main() {
 	if err != nil {
 		log.Fatal("fail to execute command", zap.String("command", cfg.Command), zap.Error(err))
 	}
+
+	utils.SyncLog()
 }
