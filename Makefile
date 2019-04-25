@@ -64,6 +64,11 @@ check:
 	@echo "gofmt (simplify)"
 	@ gofmt -s -l -w $(FILES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
 
+tidy:
+	@$(GO) mod tidy
+
+clean: prepare tidy finish
+
 finish:
 	cp go.mod go.mod1
 	cp go.sum go.sum1
