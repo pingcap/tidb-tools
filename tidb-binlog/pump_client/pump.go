@@ -22,9 +22,10 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
 	pb "github.com/pingcap/tipb/go-binlog"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -95,7 +96,7 @@ func (p *PumpStatus) createGrpcClient() error {
 			return net.DialTimeout("tcp", addr, timeout)
 		})
 	}
-	log.Debugf("[pumps client] create grpc client at %s", p.Addr)
+	log.Debug("[pumps client] create grpc client", zap.String("address", p.Addr))
 	var clientConn *grpc.ClientConn
 	var err error
 	if p.security != nil {
@@ -105,7 +106,7 @@ func (p *PumpStatus) createGrpcClient() error {
 	}
 	if err != nil {
 		atomic.AddInt64(&p.ErrNum, 1)
-		return err
+		return errors.Trace(err)
 	}
 
 	p.grpcConn = clientConn

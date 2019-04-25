@@ -17,8 +17,9 @@ import (
 	"flag"
 
 	"github.com/Shopify/sarama"
+	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/tidb-binlog/driver/reader"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 var (
@@ -47,7 +48,7 @@ func main() {
 	for {
 		select {
 		case msg := <-breader.Messages():
-			log.Info("recv: ", msg.Binlog.String())
+			log.Info("recv", zap.Stringer("message", msg.Binlog))
 		}
 	}
 }

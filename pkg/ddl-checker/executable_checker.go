@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb/session"
@@ -35,8 +36,10 @@ type ExecutableChecker struct {
 
 // NewExecutableChecker creates a new ExecutableChecker
 func NewExecutableChecker() (*ExecutableChecker, error) {
-	logutil.InitLogger(&logutil.LogConfig{
-		Level: "error",
+	logutil.InitZapLogger(&logutil.LogConfig{
+		Config: log.Config{
+			Level: "error",
+		},
 	})
 	mocktikv, err := mockstore.NewMockTikvStore()
 	if err != nil {

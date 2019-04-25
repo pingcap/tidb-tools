@@ -16,9 +16,10 @@ package diff
 import (
 	"strconv"
 
+	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	log "github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 // RowData is the struct of rows selected from mysql/tidb
@@ -60,9 +61,12 @@ func (r RowDatas) Less(i, j int) bool {
 			return true
 		}
 		num1, err1 := strconv.ParseFloat(string(data1), 64)
+		if err1 != nil {
+			log.Fatal("convert string to float failed", zap.ByteString("data", data1), zap.Error(err1))
+		}
 		num2, err2 := strconv.ParseFloat(string(data2), 64)
-		if err1 != nil || err2 != nil {
-			log.Fatalf("convert %s, %s to float failed, err1: %v, err2: %v", string(data1), string(data2), err1, err2)
+		if err2 != nil {
+			log.Fatal("convert string to float failed", zap.ByteString("data", data2), zap.Error(err2))
 		}
 
 		if num1 == num2 {

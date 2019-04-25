@@ -24,6 +24,9 @@ use-checksum = true
 # set true if just want compare data by checksum, will skip select data when checksum is not equal. 
 only-use-checksum = false
 
+# set true will continue check from the latest checkpoint
+use-checkpoint = true
+
 # ignore check table's data
 ignore-data-check = false
 
