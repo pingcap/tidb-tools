@@ -452,17 +452,32 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 	args := utils.StringsToInterfaces(chunk.Args)
 	ignoreCloumns := utils.SliceToMap(t.IgnoreColumns)
 
+	targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, args, ignoreCloumns, t.Collation)
+	if err != nil {
+		return false, errors.Trace(err)
+	}
+
+	// judge rows have all order keys to avoid panic
+	if len(targetRows) > 0 {
+		if !rowContainsCols(targetRows[0], orderKeyCols) {
+			return false, errors.Errorf("%s.%s.%s's data don't contain all keys %v", t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table, orderKeyCols)
+		}
+	}
+
 	for i, sourceTable := range t.SourceTables {
 		rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, chunk.Where, args, ignoreCloumns, t.Collation)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
-		sourceRows[fmt.Sprintf("source-%d", i)] = rows
-	}
 
-	targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, args, ignoreCloumns, t.Collation)
-	if err != nil {
-		return false, errors.Trace(err)
+		// judge rows have all order keys to avoid panic
+		if len(rows) > 0 {
+			if !rowContainsCols(rows[0], orderKeyCols) {
+				return false, errors.Errorf("%s.%s.%s's data don't contain all keys %v", sourceTable.InstanceID, sourceTable.Schema, sourceTable.Table, orderKeyCols)
+			}
+		}
+
+		sourceRows[fmt.Sprintf("source-%d", i)] = rows
 	}
 
 	var (
