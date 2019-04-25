@@ -1,5 +1,12 @@
 package utils
 
+import (
+	"fmt"
+	"os"
+
+	"github.com/pingcap/log"
+)
+
 // SliceToMap converts slice to map
 func SliceToMap(slice []string) map[string]interface{} {
 	sMap := make(map[string]interface{})
@@ -17,4 +24,12 @@ func StringsToInterfaces(strs []string) []interface{} {
 	}
 
 	return is
+}
+
+// SyncLog calls the underlying Core's Sync method, flushing any buffered log entries
+func SyncLog() {
+	syncErr := log.Sync()
+	if syncErr != nil {
+		fmt.Fprintln(os.Stderr, "sync log failed", syncErr)
+	}
 }
