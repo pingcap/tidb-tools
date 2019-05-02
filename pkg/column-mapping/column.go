@@ -506,7 +506,13 @@ func computePartitionID(schema, table string, rule *Rule) (instanceID int64, sch
 }
 
 func computeID(name string, prefix string, bitSize int, shiftCount uint) (int64, error) {
-	if len(prefix) >= len(name) || prefix != name[:len(prefix)] {
+	switch {
+	case len(prefix) >= len(name):
+		if prefix[:len(name)] == name {
+			return 0, nil
+		}
+		fallthrough
+	case prefix != name[:len(prefix)]:
 		return 0, errors.NotValidf("%s is not the prefix of %s", prefix, name)
 	}
 

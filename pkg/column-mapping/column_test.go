@@ -161,6 +161,28 @@ func (t *testColumnMappingSuit) TestComputePartitionID(c *C) {
 	c.Assert(schemaID, Equals, int64(1<<52))
 	c.Assert(tableID, Equals, int64(1<<44))
 
+	// test default partition ID to zero
+	instanceID, schemaID, tableID, err = computePartitionID("test", "t_3", rule)
+	c.Assert(err, IsNil)
+	c.Assert(instanceID, Equals, int64(2<<59))
+	c.Assert(schemaID, Equals, int64(0))
+	c.Assert(tableID, Equals, int64(3<<44))
+
+	instanceID, schemaID, tableID, err = computePartitionID("test_5", "t", rule)
+	c.Assert(err, IsNil)
+	c.Assert(instanceID, Equals, int64(2<<59))
+	c.Assert(schemaID, Equals, int64(5<<52))
+	c.Assert(tableID, Equals, int64(0))
+
+	_, _, _, err = computePartitionID("unrelated", "t_6", rule)
+	c.Assert(err, ErrorMatches, "test_ is not the prefix of unrelated.*")
+
+	_, _, _, err = computePartitionID("test", "x", rule)
+	c.Assert(err, ErrorMatches, "t_ is not the prefix of x.*")
+
+	_, _, _, err = computePartitionID("test_0", "t_0xa", rule)
+	c.Assert(err, ErrorMatches, "the suffix of 0xa can't be converted to int64.*")
+
 	SetPartitionRule(4, 0, 8)
 	rule = &Rule{
 		Arguments: []string{"2", "test_", "t_"},
