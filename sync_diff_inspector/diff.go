@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -83,6 +84,7 @@ func (df *Diff) init(cfg *Config) (err error) {
 		return errors.Trace(err)
 	}
 
+	time.Sleep(time.Second)
 	if err = df.AdjustTableConfig(cfg); err != nil {
 		return errors.Trace(err)
 	}
@@ -99,37 +101,20 @@ func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 	// SetMaxOpenConns and SetMaxIdleConns for connection to avoid error like
 	// `dial tcp 10.26.2.1:3306: connect: cannot assign requested address`
 	for _, source := range cfg.SourceDBCfg {
-		source.Conn, err = dbutil.OpenDB(source.DBConfig)
+		source.Conns, err = diff.NewConns(source.DBConfig, cfg.CheckThreadCount, source.Snapshot)
+		//source.Conn, err = dbutil.OpenDB(source.DBConfig)
 		if err != nil {
 			return errors.Errorf("create source db %+v error %v", source.DBConfig, err)
 		}
-		source.Conn.SetMaxOpenConns(cfg.CheckThreadCount)
-		source.Conn.SetMaxIdleConns(cfg.CheckThreadCount)
-
 		df.sourceDBs[source.InstanceID] = source
-		if source.Snapshot != "" {
-			err = dbutil.SetSnapshot(df.ctx, source.Conn, source.Snapshot)
-			if err != nil {
-				return errors.Errorf("set history snapshot %s for source db %+v error %v", source.Snapshot, source.DBConfig, err)
-			}
-		}
 	}
 
 	// create connection for target.
-	cfg.TargetDBCfg.Conn, err = dbutil.OpenDB(cfg.TargetDBCfg.DBConfig)
+	cfg.TargetDBCfg.Conns, err = diff.NewConns(cfg.TargetDBCfg.DBConfig, cfg.CheckThreadCount, cfg.TargetDBCfg.Snapshot)
 	if err != nil {
 		return errors.Errorf("create target db %+v error %v", cfg.TargetDBCfg, err)
 	}
-	cfg.TargetDBCfg.Conn.SetMaxOpenConns(cfg.CheckThreadCount)
-	cfg.TargetDBCfg.Conn.SetMaxIdleConns(cfg.CheckThreadCount)
-
 	df.targetDB = cfg.TargetDBCfg
-	if cfg.TargetDBCfg.Snapshot != "" {
-		err = dbutil.SetSnapshot(df.ctx, cfg.TargetDBCfg.Conn, cfg.TargetDBCfg.Snapshot)
-		if err != nil {
-			return errors.Errorf("set history snapshot %s for target db %+v error %v", cfg.TargetDBCfg.Snapshot, cfg.TargetDBCfg, err)
-		}
-	}
 
 	return nil
 }
@@ -197,7 +182,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 		}
 
 		for _, tableName := range tables {
-			tableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, df.targetDB.Conn, schemaTables.Schema, tableName, cfg.UseRowID)
+			tableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, df.targetDB.Conns.GetConn(), schemaTables.Schema, tableName, cfg.UseRowID)
 			if err != nil {
 				return errors.Errorf("get table %s.%s's inforamtion error %s", schemaTables.Schema, tableName, errors.ErrorStack(err))
 			}
@@ -287,12 +272,12 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]map[string]inte
 	allTablesMap := make(map[string]map[string]map[string]interface{})
 
 	allTablesMap[df.targetDB.InstanceID] = make(map[string]map[string]interface{})
-	targetSchemas, err := dbutil.GetSchemas(df.ctx, df.targetDB.Conn)
+	targetSchemas, err := dbutil.GetSchemas(df.ctx, df.targetDB.Conns.GetConn())
 	if err != nil {
 		return nil, errors.Annotatef(err, "get schemas from %s", df.targetDB.InstanceID)
 	}
 	for _, schema := range targetSchemas {
-		allTables, err := dbutil.GetTables(df.ctx, df.targetDB.Conn, schema)
+		allTables, err := dbutil.GetTables(df.ctx, df.targetDB.Conns.GetConn(), schema)
 		if err != nil {
 			return nil, errors.Annotatef(err, "get tables from %s.%s", df.targetDB.InstanceID, schema)
 		}
@@ -301,13 +286,13 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]map[string]inte
 
 	for _, source := range df.sourceDBs {
 		allTablesMap[source.InstanceID] = make(map[string]map[string]interface{})
-		sourceSchemas, err := dbutil.GetSchemas(df.ctx, source.Conn)
+		sourceSchemas, err := dbutil.GetSchemas(df.ctx, source.Conns.GetConn())
 		if err != nil {
 			return nil, errors.Annotatef(err, "get schemas from %s", source.InstanceID)
 		}
 
 		for _, schema := range sourceSchemas {
-			allTables, err := dbutil.GetTables(df.ctx, source.Conn, schema)
+			allTables, err := dbutil.GetTables(df.ctx, source.Conns.GetConn(), schema)
 			if err != nil {
 				return nil, errors.Annotatef(err, "get tables from %s.%s", source.InstanceID, schema)
 			}
@@ -348,13 +333,13 @@ func (df *Diff) Close() {
 	}
 
 	for _, db := range df.sourceDBs {
-		if db.Conn != nil {
-			db.Conn.Close()
+		if db.Conns != nil {
+			db.Conns.Close()
 		}
 	}
 
-	if df.targetDB.Conn != nil {
-		df.targetDB.Conn.Close()
+	if df.targetDB.Conns != nil {
+		df.targetDB.Conns.Close()
 	}
 }
 
@@ -369,7 +354,7 @@ func (df *Diff) Equal() (err error) {
 			sourceTables := make([]*diff.TableInstance, 0, len(table.SourceTables))
 			for _, sourceTable := range table.SourceTables {
 				sourceTableInstance := &diff.TableInstance{
-					Conn:       df.sourceDBs[sourceTable.InstanceID].Conn,
+					Conns:      df.sourceDBs[sourceTable.InstanceID].Conns,
 					Schema:     sourceTable.Schema,
 					Table:      sourceTable.Table,
 					InstanceID: sourceTable.InstanceID,
@@ -382,7 +367,7 @@ func (df *Diff) Equal() (err error) {
 			}
 
 			targetTableInstance := &diff.TableInstance{
-				Conn:       df.targetDB.Conn,
+				Conns:      df.targetDB.Conns,
 				Schema:     table.Schema,
 				Table:      table.Table,
 				InstanceID: df.targetDB.InstanceID,

@@ -129,7 +129,7 @@ func CloseDB(db *sql.DB) error {
 }
 
 // GetCreateTableSQL returns the create table statement.
-func GetCreateTableSQL(ctx context.Context, db *sql.DB, schemaName string, tableName string) (string, error) {
+func GetCreateTableSQL(ctx context.Context, conn *sql.Conn, schemaName string, tableName string) (string, error) {
 	/*
 		show create table example result:
 		mysql> SHOW CREATE TABLE `test`.`itest`;
@@ -145,7 +145,7 @@ func GetCreateTableSQL(ctx context.Context, db *sql.DB, schemaName string, table
 	query := fmt.Sprintf("SHOW CREATE TABLE `%s`.`%s`", schemaName, tableName)
 
 	var tbl, createTable sql.NullString
-	err := db.QueryRowContext(ctx, query).Scan(&tbl, &createTable)
+	err := conn.QueryRowContext(ctx, query).Scan(&tbl, &createTable)
 	if err != nil {
 		return "", errors.Trace(err)
 	}
@@ -158,7 +158,7 @@ func GetCreateTableSQL(ctx context.Context, db *sql.DB, schemaName string, table
 
 // GetRowCount returns row count of the table.
 // if not specify where condition, return total row count of the table.
-func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName string, where string) (int64, error) {
+func GetRowCount(ctx context.Context, conn *sql.Conn, schemaName string, tableName string, where string) (int64, error) {
 	/*
 		select count example result:
 		mysql> SELECT count(1) cnt from `test`.`itest` where id > 0;
@@ -176,7 +176,7 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 	log.Debug("get row count", zap.String("sql", query))
 
 	var cnt sql.NullInt64
-	err := db.QueryRowContext(ctx, query).Scan(&cnt)
+	err := conn.QueryRowContext(ctx, query).Scan(&cnt)
 	if err != nil {
 		return 0, errors.Trace(err)
 	}
@@ -188,7 +188,7 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 }
 
 // GetRandomValues returns some random value and these value's count of a column, just like sampling. Tips: limitArgs is the value in limitRange.
-func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int, limitRange string, limitArgs []interface{}, collation string) ([]string, []int, error) {
+func GetRandomValues(ctx context.Context, conn *sql.Conn, schemaName, table, column string, num int, limitRange string, limitArgs []interface{}, collation string) ([]string, []int, error) {
 	/*
 		example:
 		mysql> SELECT `id`, COUNT(*) count FROM (SELECT `id` FROM `test`.`test`  WHERE `id` COLLATE "latin1_bin" > 0 AND `id` COLLATE "latin1_bin" < 100 ORDER BY RAND() LIMIT 5) rand_tmp GROUP BY `id` ORDER BY `id` COLLATE "latin1_bin";
@@ -218,7 +218,7 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 		escapeName(column), TableName(schemaName, table), limitRange, num, collation)
 	log.Debug("get random values", zap.String("sql", query), zap.Reflect("args", limitArgs))
 
-	rows, err := db.QueryContext(ctx, query, limitArgs...)
+	rows, err := conn.QueryContext(ctx, query, limitArgs...)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
@@ -239,7 +239,7 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 }
 
 // GetMinMaxValue return min and max value of given column by specified limitRange condition.
-func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column string, limitRange string, limitArgs []interface{}, collation string) (string, string, error) {
+func GetMinMaxValue(ctx context.Context, conn *sql.Conn, schema, table, column string, limitRange string, limitArgs []interface{}, collation string) (string, string, error) {
 	/*
 		example:
 		mysql> SELECT MIN(`id`) as MIN, MAX(`id`) as MAX FROM `test`.`testa` WHERE id > 0 AND id < 10;
@@ -263,7 +263,7 @@ func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column strin
 	log.Debug("GetMinMaxValue", zap.String("sql", query), zap.Reflect("args", limitArgs))
 
 	var min, max sql.NullString
-	rows, err := db.QueryContext(ctx, query, limitArgs...)
+	rows, err := conn.QueryContext(ctx, query, limitArgs...)
 	if err != nil {
 		return "", "", errors.Trace(err)
 	}
@@ -284,8 +284,8 @@ func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column strin
 	return min.String, max.String, errors.Trace(rows.Err())
 }
 
-func queryTables(ctx context.Context, db *sql.DB, q string) (tables []string, err error) {
-	rows, err := db.QueryContext(ctx, q)
+func queryTables(ctx context.Context, conn *sql.Conn, q string) (tables []string, err error) {
+	rows, err := conn.QueryContext(ctx, q)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -310,7 +310,7 @@ func queryTables(ctx context.Context, db *sql.DB, q string) (tables []string, er
 }
 
 // GetTables returns name of all tables in the specified schema
-func GetTables(ctx context.Context, db *sql.DB, schemaName string) (tables []string, err error) {
+func GetTables(ctx context.Context, conn *sql.Conn, schemaName string) (tables []string, err error) {
 	/*
 		show tables without view: https://dev.mysql.com/doc/refman/5.7/en/show-tables.html
 
@@ -323,19 +323,19 @@ func GetTables(ctx context.Context, db *sql.DB, schemaName string) (tables []str
 		+----------------+------------+
 	*/
 	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type != 'VIEW';", schemaName)
-	return queryTables(ctx, db, query)
+	return queryTables(ctx, conn, query)
 }
 
 // GetViews returns names of all views in the specified schema
-func GetViews(ctx context.Context, db *sql.DB, schemaName string) (tables []string, err error) {
+func GetViews(ctx context.Context, conn *sql.Conn, schemaName string) (tables []string, err error) {
 	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type = 'VIEW';", schemaName)
-	return queryTables(ctx, db, query)
+	return queryTables(ctx, conn, query)
 }
 
 // GetSchemas returns name of all schemas
-func GetSchemas(ctx context.Context, db *sql.DB) ([]string, error) {
+func GetSchemas(ctx context.Context, conn *sql.Conn) ([]string, error) {
 	query := "SHOW DATABASES"
-	rows, err := db.QueryContext(ctx, query)
+	rows, err := conn.QueryContext(ctx, query)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -367,7 +367,7 @@ func GetSchemas(ctx context.Context, db *sql.DB) ([]string, error) {
 }
 
 // GetCRC32Checksum returns checksum code of some data by given condition
-func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}, ignoreColumns map[string]interface{}) (int64, error) {
+func GetCRC32Checksum(ctx context.Context, conn *sql.Conn, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}, ignoreColumns map[string]interface{}) (int64, error) {
 	/*
 		calculate CRC32 checksum example:
 		mysql> SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',', id, name, age, CONCAT(ISNULL(id), ISNULL(name), ISNULL(age))))AS UNSIGNED)) AS checksum FROM test.test WHERE id > 0 AND id < 10;
@@ -392,7 +392,7 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName str
 	log.Debug("checksum", zap.String("sql", query), zap.Reflect("args", args))
 
 	var checksum sql.NullInt64
-	err := db.QueryRowContext(ctx, query, args...).Scan(&checksum)
+	err := conn.QueryRowContext(ctx, query, args...).Scan(&checksum)
 	if err != nil {
 		return -1, errors.Trace(err)
 	}
@@ -413,7 +413,7 @@ type Bucket struct {
 }
 
 // GetBucketsInfo SHOW STATS_BUCKETS in TiDB.
-func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo) (map[string][]Bucket, error) {
+func GetBucketsInfo(ctx context.Context, db *sql.Conn, schema, table string, tableInfo *model.TableInfo) (map[string][]Bucket, error) {
 	/*
 		example in tidb:
 		mysql> SHOW STATS_BUCKETS WHERE db_name= "test" AND table_name="testa";
@@ -562,15 +562,15 @@ func GetTidbLatestTSO(ctx context.Context, db *sql.DB) (int64, error) {
 }
 
 // SetSnapshot set the snapshot variable for tidb
-func SetSnapshot(ctx context.Context, db *sql.DB, snapshot string) error {
+func SetSnapshot(ctx context.Context, conn *sql.Conn, snapshot string) error {
 	sql := fmt.Sprintf("SET @@tidb_snapshot='%s'", snapshot)
 	log.Info("set history snapshot", zap.String("sql", sql))
-	_, err := db.ExecContext(ctx, sql)
+	_, err := conn.ExecContext(ctx, sql)
 	return errors.Trace(err)
 }
 
 // GetDBVersion returns the database's version
-func GetDBVersion(ctx context.Context, db *sql.DB) (string, error) {
+func GetDBVersion(ctx context.Context, conn *sql.Conn) (string, error) {
 	/*
 		example in TiDB:
 		mysql> select version();
@@ -589,7 +589,7 @@ func GetDBVersion(ctx context.Context, db *sql.DB) (string, error) {
 		+-----------+
 	*/
 	query := "SELECT version()"
-	result, err := db.QueryContext(ctx, query)
+	result, err := conn.QueryContext(ctx, query)
 	if err != nil {
 		return "", errors.Trace(err)
 	}
@@ -612,8 +612,8 @@ func GetDBVersion(ctx context.Context, db *sql.DB) (string, error) {
 }
 
 // IsTiDB returns true if this database is tidb
-func IsTiDB(ctx context.Context, db *sql.DB) (bool, error) {
-	version, err := GetDBVersion(ctx, db)
+func IsTiDB(ctx context.Context, conn *sql.Conn) (bool, error) {
+	version, err := GetDBVersion(ctx, conn)
 	if err != nil {
 		log.Error("get database's version failed", zap.Error(err))
 		return false, errors.Trace(err)
@@ -644,7 +644,7 @@ func ReplacePlaceholder(str string, args []string) string {
 }
 
 // ExecSQLWithRetry executes sql with retry
-func ExecSQLWithRetry(ctx context.Context, db *sql.DB, sql string, args ...interface{}) (err error) {
+func ExecSQLWithRetry(ctx context.Context, db *sql.Conn, sql string, args ...interface{}) (err error) {
 	for i := 0; i < DefaultRetryTime; i++ {
 		startTime := time.Now()
 		_, err = db.ExecContext(ctx, sql, args...)
@@ -682,8 +682,8 @@ func ExecSQLWithRetry(ctx context.Context, db *sql.DB, sql string, args ...inter
 }
 
 // ExecuteSQLs executes some sqls in one transaction
-func ExecuteSQLs(ctx context.Context, db *sql.DB, sqls []string, args [][]interface{}) error {
-	txn, err := db.Begin()
+func ExecuteSQLs(ctx context.Context, conn *sql.Conn, sqls []string, args [][]interface{}) error {
+	txn, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		log.Error("exec sqls begin", zap.Error(err))
 		return errors.Trace(err)

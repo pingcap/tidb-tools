@@ -59,14 +59,14 @@ var (
 )
 
 // saveChunk saves the chunk's info to `chunk` table
-func saveChunk(ctx context.Context, db *sql.DB, chunkID int, instanceID, schema, table, checksum string, chunk *ChunkRange) error {
+func saveChunk(ctx context.Context, conn *sql.Conn, chunkID int, instanceID, schema, table, checksum string, chunk *ChunkRange) error {
 	chunkBytes, err := json.Marshal(chunk)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
 	sql := fmt.Sprintf("REPLACE INTO `%s`.`%s` VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?);", checkpointSchemaName, chunkTableName)
-	err = dbutil.ExecSQLWithRetry(ctx, db, sql, chunkID, instanceID, schema, table, chunk.Where, checksum, string(chunkBytes), chunk.State, time.Now())
+	err = dbutil.ExecSQLWithRetry(ctx, conn, sql, chunkID, instanceID, schema, table, chunk.Where, checksum, string(chunkBytes), chunk.State, time.Now())
 	if err != nil {
 		log.Error("save chunk info failed", zap.Error(err))
 		return errors.Trace(err)
@@ -75,9 +75,9 @@ func saveChunk(ctx context.Context, db *sql.DB, chunkID int, instanceID, schema,
 }
 
 // getChunk gets chunk info from table `chunk` by chunkID
-func getChunk(ctx context.Context, db *sql.DB, instanceID, schema, table string, chunkID int) (*ChunkRange, error) {
+func getChunk(ctx context.Context, conn *sql.Conn, instanceID, schema, table string, chunkID int) (*ChunkRange, error) {
 	query := fmt.Sprintf("SELECT `chunk_str` FROM `%s`.`%s` WHERE `instance_id` = ? AND `schema` = ? AND `table` = ? AND `chunk_id` = ? limit 1", checkpointSchemaName, chunkTableName)
-	rows, err := db.QueryContext(ctx, query, instanceID, schema, table, chunkID)
+	rows, err := conn.QueryContext(ctx, query, instanceID, schema, table, chunkID)
 	if err != nil {
 		return nil, err
 	}
@@ -106,11 +106,11 @@ func getChunk(ctx context.Context, db *sql.DB, instanceID, schema, table string,
 }
 
 // loadChunks loads chunk info from table `chunk`
-func loadChunks(ctx context.Context, db *sql.DB, instanceID, schema, table string) ([]*ChunkRange, error) {
+func loadChunks(ctx context.Context, conn *sql.Conn, instanceID, schema, table string) ([]*ChunkRange, error) {
 	chunks := make([]*ChunkRange, 0, 100)
 
 	query := fmt.Sprintf("SELECT `chunk_str` FROM `%s`.`%s` WHERE `instance_id` = ? AND `schema` = ? AND `table` = ?", checkpointSchemaName, chunkTableName)
-	rows, err := db.QueryContext(ctx, query, instanceID, schema, table)
+	rows, err := conn.QueryContext(ctx, query, instanceID, schema, table)
 	if err != nil {
 		return nil, err
 	}
@@ -135,10 +135,10 @@ func loadChunks(ctx context.Context, db *sql.DB, instanceID, schema, table strin
 }
 
 // getTableSummary returns a table's total chunk num, check success chunk num, check failed chunk num, check ignore chunk num and the state
-func getTableSummary(ctx context.Context, db *sql.DB, schema, table string) (total int64, success int64, failed int64, ignore int64, state string, err error) {
+func getTableSummary(ctx context.Context, conn *sql.Conn, schema, table string) (total int64, success int64, failed int64, ignore int64, state string, err error) {
 	query := fmt.Sprintf("SELECT `chunk_num`, `check_success_num`, `check_failed_num`, `check_ignore_num`, `state` FROM `%s`.`%s` WHERE `schema` = ? AND `table` = ? LIMIT 1",
 		checkpointSchemaName, summaryTableName)
-	rows, err := db.QueryContext(ctx, query, schema, table)
+	rows, err := conn.QueryContext(ctx, query, schema, table)
 	if err != nil {
 		return 0, 0, 0, 0, "", errors.Trace(err)
 	}
@@ -167,9 +167,9 @@ func getTableSummary(ctx context.Context, db *sql.DB, schema, table string) (tot
 }
 
 // getChunkSummary get the table's summary info from `chunk` table
-func getChunkSummary(ctx context.Context, db *sql.DB, instanceID, schema, table string) (total, successNum, failedNum, ignoreNum int64, err error) {
+func getChunkSummary(ctx context.Context, conn *sql.Conn, instanceID, schema, table string) (total, successNum, failedNum, ignoreNum int64, err error) {
 	query := fmt.Sprintf("SELECT `state`, COUNT(*) FROM `%s`.`%s` WHERE `instance_id` = ? AND `schema` = ? AND `table` = ? GROUP BY `state` ;", checkpointSchemaName, chunkTableName)
-	rows, err := db.QueryContext(ctx, query, instanceID, schema, table)
+	rows, err := conn.QueryContext(ctx, query, instanceID, schema, table)
 	if err != nil {
 		return 0, 0, 0, 0, errors.Trace(err)
 	}
@@ -210,9 +210,9 @@ func getChunkSummary(ctx context.Context, db *sql.DB, instanceID, schema, table 
 }
 
 // initTableSummary initials a table's summary info in table `summary`
-func initTableSummary(ctx context.Context, db *sql.DB, schema, table string, configHash string) error {
+func initTableSummary(ctx context.Context, conn *sql.Conn, schema, table string, configHash string) error {
 	sql := fmt.Sprintf("REPLACE INTO `%s`.`%s`(`schema`, `table`, `state`, `config_hash`) VALUES(?, ?, ?, ?)", checkpointSchemaName, summaryTableName)
-	err := dbutil.ExecSQLWithRetry(ctx, db, sql, schema, table, notCheckedState, configHash)
+	err := dbutil.ExecSQLWithRetry(ctx, conn, sql, schema, table, notCheckedState, configHash)
 	if err != nil {
 		log.Error("save summary info failed", zap.Error(err))
 		return errors.Trace(err)
@@ -222,8 +222,8 @@ func initTableSummary(ctx context.Context, db *sql.DB, schema, table string, con
 }
 
 // updateTableSummary gets summary info from `chunk` table, and then update `summary` table
-func updateTableSummary(ctx context.Context, db *sql.DB, instanceID, schema, table string) error {
-	total, successNum, failedNum, ignoreNum, err := getChunkSummary(ctx, db, instanceID, schema, table)
+func updateTableSummary(ctx context.Context, conn *sql.Conn, instanceID, schema, table string) error {
+	total, successNum, failedNum, ignoreNum, err := getChunkSummary(ctx, conn, instanceID, schema, table)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -239,7 +239,7 @@ func updateTableSummary(ctx context.Context, db *sql.DB, instanceID, schema, tab
 	}
 
 	updateSQL := fmt.Sprintf("UPDATE `%s`.`%s` SET `chunk_num` = ?, `check_success_num` = ?, `check_failed_num` = ?, `check_ignore_num` = ?, `state` = ? WHERE `schema` = ? AND `table` = ?", checkpointSchemaName, summaryTableName)
-	err = dbutil.ExecSQLWithRetry(ctx, db, updateSQL, total, successNum, failedNum, ignoreNum, state, schema, table)
+	err = dbutil.ExecSQLWithRetry(ctx, conn, updateSQL, total, successNum, failedNum, ignoreNum, state, schema, table)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -248,9 +248,9 @@ func updateTableSummary(ctx context.Context, db *sql.DB, instanceID, schema, tab
 }
 
 // createCheckpointTable creates checkpoint tables, include `summary` and `chunk`
-func createCheckpointTable(ctx context.Context, db *sql.DB) error {
+func createCheckpointTable(ctx context.Context, conn *sql.Conn) error {
 	createSchemaSQL := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`;", checkpointSchemaName)
-	_, err := db.ExecContext(ctx, createSchemaSQL)
+	_, err := conn.ExecContext(ctx, createSchemaSQL)
 	if err != nil {
 		log.Info("create schema", zap.Error(err))
 		return errors.Trace(err)
@@ -278,7 +278,7 @@ func createCheckpointTable(ctx context.Context, db *sql.DB) error {
 			"`update_time` datetime ON UPDATE CURRENT_TIMESTAMP," +
 			"PRIMARY KEY(`schema`, `table`));"
 
-	_, err = db.ExecContext(ctx, createSummaryTableSQL)
+	_, err = conn.ExecContext(ctx, createSummaryTableSQL)
 	if err != nil {
 		log.Error("create chunk table", zap.Error(err))
 		return errors.Trace(err)
@@ -304,7 +304,7 @@ func createCheckpointTable(ctx context.Context, db *sql.DB) error {
 			"`state` enum('not_checked', 'checking', 'success', 'failed', 'ignore', 'error') DEFAULT 'not_checked'," +
 			"`update_time` datetime ON UPDATE CURRENT_TIMESTAMP," +
 			"PRIMARY KEY(`schema`, `table`, `instance_id`, `chunk_id`));"
-	_, err = db.ExecContext(ctx, createChunkTableSQL)
+	_, err = conn.ExecContext(ctx, createChunkTableSQL)
 	if err != nil {
 		log.Error("create chunk table", zap.Error(err))
 		return errors.Trace(err)
@@ -314,7 +314,7 @@ func createCheckpointTable(ctx context.Context, db *sql.DB) error {
 }
 
 // cleanCheckpoint deletes the table's checkpoint info in table `summary` and `chunk`
-func cleanCheckpoint(ctx context.Context, db *sql.DB, schema, table string) error {
+func cleanCheckpoint(ctx context.Context, conn *sql.Conn, schema, table string) error {
 	deleteSummarySQL := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `schema` = ? AND `table` = ?;", checkpointSchemaName, summaryTableName)
 	args1 := []interface{}{schema, table}
 
@@ -324,7 +324,7 @@ func cleanCheckpoint(ctx context.Context, db *sql.DB, schema, table string) erro
 	sqls := []string{deleteSummarySQL, deleteChunkSQL}
 	args := [][]interface{}{args1, args2}
 
-	return errors.Trace(dbutil.ExecuteSQLs(ctx, db, sqls, args))
+	return errors.Trace(dbutil.ExecuteSQLs(ctx, conn, sqls, args))
 }
 
 // dropCheckpoint drops the database `sync_diff_inspector`
@@ -340,9 +340,9 @@ func dropCheckpoint(ctx context.Context, db *sql.DB) error {
 }
 
 // loadFromCheckPoint returns true if we should use the history checkpoint
-func loadFromCheckPoint(ctx context.Context, db *sql.DB, schema, table, configHash string) (bool, error) {
+func loadFromCheckPoint(ctx context.Context, conn *sql.Conn, schema, table, configHash string) (bool, error) {
 	query := fmt.Sprintf("SELECT `state`, `config_hash` FROM `%s`.`%s` WHERE `schema` = ? AND `table` = ? LIMIT 1;", checkpointSchemaName, summaryTableName)
-	rows, err := db.QueryContext(ctx, query, schema, table)
+	rows, err := conn.QueryContext(ctx, query, schema, table)
 	if err != nil {
 		return false, errors.Trace(err)
 	}

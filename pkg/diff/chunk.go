@@ -221,13 +221,13 @@ func (s *randomSpliter) split(table *TableInstance, columns []*model.ColumnInfo,
 	s.collation = collation
 
 	// get the chunk count by data count and chunk size
-	cnt, err := dbutil.GetRowCount(context.Background(), table.Conn, table.Schema, table.Table, limits)
+	cnt, err := dbutil.GetRowCount(context.Background(), table.Conns.conns[0], table.Schema, table.Table, limits)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
 	chunkCnt := (int(cnt) + chunkSize - 1) / chunkSize
-	chunks, err := s.splitRange(table.Conn, NewChunkRange(normalMode), chunkCnt, table.Schema, table.Table, columns)
+	chunks, err := s.splitRange(table.Conns.conns[0], NewChunkRange(normalMode), chunkCnt, table.Schema, table.Table, columns)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -236,7 +236,7 @@ func (s *randomSpliter) split(table *TableInstance, columns []*model.ColumnInfo,
 }
 
 // splitRange splits a chunk to multiple chunks.
-func (s *randomSpliter) splitRange(db *sql.DB, chunk *ChunkRange, count int, schema string, table string, columns []*model.ColumnInfo) ([]*ChunkRange, error) {
+func (s *randomSpliter) splitRange(conn *sql.Conn, chunk *ChunkRange, count int, schema string, table string, columns []*model.ColumnInfo) ([]*ChunkRange, error) {
 	var chunks []*ChunkRange
 
 	if count <= 1 {
@@ -271,7 +271,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *ChunkRange, count int, sch
 		useNewColumn = true
 		splitCol = columns[colNum].Name.O
 
-		min, max, err = dbutil.GetMinMaxValue(context.Background(), db, schema, table, splitCol, limitRange, utils.StringsToInterfaces(args), s.collation)
+		min, max, err = dbutil.GetMinMaxValue(context.Background(), conn, schema, table, splitCol, limitRange, utils.StringsToInterfaces(args), s.collation)
 		if err != nil {
 			if errors.Cause(err) == dbutil.ErrNoData {
 				log.Info("no data found", zap.String("table", dbutil.TableName(schema, table)), zap.String("range", limitRange), zap.Reflect("args", args))
@@ -288,7 +288,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *ChunkRange, count int, sch
 	valueCounts := make([]int, 0, count)
 
 	// get random value as split value
-	randomValues, randomValueCount, err := dbutil.GetRandomValues(context.Background(), db, schema, table, splitCol, count-1, limitRange, utils.StringsToInterfaces(args), s.collation)
+	randomValues, randomValueCount, err := dbutil.GetRandomValues(context.Background(), conn, schema, table, splitCol, count-1, limitRange, utils.StringsToInterfaces(args), s.collation)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -356,7 +356,7 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *ChunkRange, count int, sch
 		if valueCounts[i] > 1 {
 			// means should split it
 			newChunk := chunk.copyAndUpdate(splitCol, splitValues[i], equal, "", "")
-			splitChunks, err := s.splitRange(db, newChunk, valueCounts[i], schema, table, columns)
+			splitChunks, err := s.splitRange(conn, newChunk, valueCounts[i], schema, table, columns)
 			if err != nil {
 				return nil, errors.Trace(err)
 			}
@@ -402,7 +402,7 @@ func (s *bucketSpliter) split(table *TableInstance, columns []*model.ColumnInfo,
 	s.limits = limits
 	s.collation = collation
 
-	buckets, err := dbutil.GetBucketsInfo(context.Background(), s.table.Conn, s.table.Schema, s.table.Table, s.table.info)
+	buckets, err := dbutil.GetBucketsInfo(context.Background(), s.table.Conns.conns[0], s.table.Schema, s.table.Table, s.table.info)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -552,7 +552,7 @@ func SplitChunks(ctx context.Context, table *TableInstance, splitFields, limits 
 		chunk.Args = args
 		chunk.State = notCheckedState
 
-		err = saveChunk(ctx1, table.Conn, i, table.InstanceID, table.Schema, table.Table, "", chunk)
+		err = saveChunk(ctx1, table.Conns.cpConn, i, table.InstanceID, table.Schema, table.Table, "", chunk)
 		if err != nil {
 			return nil, err
 		}
