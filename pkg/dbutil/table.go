@@ -45,7 +45,7 @@ func GetTableInfoWithRowID(ctx context.Context, conn *sql.Conn, schemaName strin
 
 // GetTableInfo returns table information.
 func GetTableInfo(ctx context.Context, conn *sql.Conn, schemaName string, tableName string) (*model.TableInfo, error) {
-	createTableSQL, err := GetCreateTableSQL(ctx, conn, schemaName, tableName)
+	createTableSQL, err := GetCreateTableSQLByConn(ctx, conn, schemaName, tableName)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

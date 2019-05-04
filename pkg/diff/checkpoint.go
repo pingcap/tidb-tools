@@ -328,9 +328,9 @@ func cleanCheckpoint(ctx context.Context, conn *sql.Conn, schema, table string) 
 }
 
 // dropCheckpoint drops the database `sync_diff_inspector`
-func dropCheckpoint(ctx context.Context, db *sql.DB) error {
+func dropCheckpoint(ctx context.Context, conn *sql.Conn) error {
 	dropSchemaSQL := fmt.Sprintf("DROP DATABASE IF EXISTS `%s`;", checkpointSchemaName)
-	_, err := db.ExecContext(ctx, dropSchemaSQL)
+	_, err := conn.ExecContext(ctx, dropSchemaSQL)
 	if err != nil {
 		log.Error("drop schema", zap.Error(err))
 		return errors.Trace(err)

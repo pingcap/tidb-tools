@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -84,7 +83,6 @@ func (df *Diff) init(cfg *Config) (err error) {
 		return errors.Trace(err)
 	}
 
-	time.Sleep(time.Second)
 	if err = df.AdjustTableConfig(cfg); err != nil {
 		return errors.Trace(err)
 	}
@@ -102,7 +100,6 @@ func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 	// `dial tcp 10.26.2.1:3306: connect: cannot assign requested address`
 	for _, source := range cfg.SourceDBCfg {
 		source.Conns, err = diff.NewConns(source.DBConfig, cfg.CheckThreadCount, source.Snapshot)
-		//source.Conn, err = dbutil.OpenDB(source.DBConfig)
 		if err != nil {
 			return errors.Errorf("create source db %+v error %v", source.DBConfig, err)
 		}
@@ -277,7 +274,7 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]map[string]inte
 		return nil, errors.Annotatef(err, "get schemas from %s", df.targetDB.InstanceID)
 	}
 	for _, schema := range targetSchemas {
-		allTables, err := dbutil.GetTables(df.ctx, df.targetDB.Conns.GetConn(), schema)
+		allTables, err := dbutil.GetTablesFromConn(df.ctx, df.targetDB.Conns.GetConn(), schema)
 		if err != nil {
 			return nil, errors.Annotatef(err, "get tables from %s.%s", df.targetDB.InstanceID, schema)
 		}
@@ -292,7 +289,7 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]map[string]inte
 		}
 
 		for _, schema := range sourceSchemas {
-			allTables, err := dbutil.GetTables(df.ctx, source.Conns.GetConn(), schema)
+			allTables, err := dbutil.GetTablesFromConn(df.ctx, source.Conns.GetConn(), schema)
 			if err != nil {
 				return nil, errors.Annotatef(err, "get tables from %s.%s", source.InstanceID, schema)
 			}

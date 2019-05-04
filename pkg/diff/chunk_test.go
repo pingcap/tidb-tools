@@ -15,6 +15,7 @@ package diff
 
 import (
 	"context"
+	"time"
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -32,13 +33,16 @@ type chunkTestCase struct {
 }
 
 func (*testChunkSuite) TestSplitRange(c *C) {
-	dbConn, err := createConn()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conns, err := createConns()
 	c.Assert(err, IsNil)
 
-	_, err = dbConn.Query("CREATE DATABASE IF NOT EXISTS `test`")
+	_, err = conns.GetConn().QueryContext(ctx, "CREATE DATABASE IF NOT EXISTS `test`")
 	c.Assert(err, IsNil)
 
-	_, err = dbConn.Query("DROP TABLE IF EXISTS `test`.`testa`")
+	_, err = conns.GetConn().QueryContext(ctx, "DROP TABLE IF EXISTS `test`.`testa`")
 	c.Assert(err, IsNil)
 
 	createTableSQL := `CREATE TABLE test.testa (
@@ -61,16 +65,16 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 
 	// generate data for test.testa
 	importer.DoProcess(cfg)
-	defer dbConn.Query("DROP TABLE IF EXISTS `test`.`testa`")
+	defer conns.GetConn().QueryContext(ctx, "DROP TABLE IF EXISTS `test`.`testa`")
 
 	// only work on tidb, so don't assert err here
-	_, _ = dbConn.Query("ANALYZE TABLE `test`.`testa`")
+	_, _ = conns.GetConn().QueryContext(ctx, "ANALYZE TABLE `test`.`testa`")
 
-	tableInfo, err := dbutil.GetTableInfoWithRowID(context.Background(), dbConn, "test", "testa", false)
+	tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, conns.GetConn(), "test", "testa", false)
 	c.Assert(err, IsNil)
 
 	tableInstance := &TableInstance{
-		Conn:   dbConn,
+		Conns:  conns,
 		Schema: "test",
 		Table:  "testa",
 		info:   tableInfo,
@@ -86,7 +90,7 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 	chunkDataCount := 0
 	for _, chunk := range chunks {
 		conditions, args := chunk.toString("")
-		count, err := dbutil.GetRowCount(context.Background(), tableInstance.Conn, tableInstance.Schema, tableInstance.Table, dbutil.ReplacePlaceholder(conditions, args))
+		count, err := dbutil.GetRowCount(ctx, tableInstance.Conns.GetConn(), tableInstance.Schema, tableInstance.Table, dbutil.ReplacePlaceholder(conditions, args))
 		c.Assert(err, IsNil)
 		chunkDataCount += int(count)
 	}

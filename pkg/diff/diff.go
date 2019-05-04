@@ -185,14 +185,14 @@ func (t *TableDiff) adjustConfig() {
 }
 
 func (t *TableDiff) getTableInfo(ctx context.Context) error {
-	tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, t.TargetTable.Conns.conns[0], t.TargetTable.Schema, t.TargetTable.Table, t.UseRowID)
+	tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, t.TargetTable.Conns.GetConn(), t.TargetTable.Schema, t.TargetTable.Table, t.UseRowID)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	t.TargetTable.info = removeColumns(tableInfo, t.RemoveColumns)
 
 	for _, sourceTable := range t.SourceTables {
-		tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, sourceTable.Conns.conns[0], sourceTable.Schema, sourceTable.Table, t.UseRowID)
+		tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, sourceTable.Conns.GetConn(), sourceTable.Schema, sourceTable.Table, t.UseRowID)
 		if err != nil {
 			return errors.Trace(err)
 		}

@@ -129,7 +129,17 @@ func CloseDB(db *sql.DB) error {
 }
 
 // GetCreateTableSQL returns the create table statement.
-func GetCreateTableSQL(ctx context.Context, conn *sql.Conn, schemaName string, tableName string) (string, error) {
+func GetCreateTableSQL(ctx context.Context, db *sql.DB, schemaName string, tableName string) (string, error) {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+
+	return GetCreateTableSQLFromConn(ctx, conn, schemaName, tableName)
+}
+
+// GetCreateTableSQLFromConn returns the create table statement.
+func GetCreateTableSQLFromConn(ctx context.Context, conn *sql.Conn, schemaName string, tableName string) (string, error) {
 	/*
 		show create table example result:
 		mysql> SHOW CREATE TABLE `test`.`itest`;
@@ -310,7 +320,17 @@ func queryTables(ctx context.Context, conn *sql.Conn, q string) (tables []string
 }
 
 // GetTables returns name of all tables in the specified schema
-func GetTables(ctx context.Context, conn *sql.Conn, schemaName string) (tables []string, err error) {
+func GetTables(ctx context.Context, db *sql.DB, schemaName string) (tables []string, err error) {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return GetTablesFromConn(ctx, conn, schemaName)
+}
+
+// GetTablesFromConn returns name of all tables in the specified schema
+func GetTablesFromConn(ctx context.Context, conn *sql.Conn, schemaName string) (tables []string, err error) {
 	/*
 		show tables without view: https://dev.mysql.com/doc/refman/5.7/en/show-tables.html
 

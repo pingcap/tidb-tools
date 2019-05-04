@@ -26,27 +26,27 @@ var _ = Suite(&testCheckpointSuite{})
 type testCheckpointSuite struct{}
 
 func (s *testCheckpointSuite) TestCheckpoint(c *C) {
-	db, err := createConn()
+	conns, err := createConns()
 	c.Assert(err, IsNil)
-	defer dropCheckpoint(context.Background(), db)
+	defer dropCheckpoint(context.Background(), conns.cpConn)
 
-	s.testInitAndGetSummary(c, db)
-	s.testSaveAndLoadChunk(c, db)
-	s.testUpdateSummary(c, db)
+	s.testInitAndGetSummary(c, conns.cpConn)
+	s.testSaveAndLoadChunk(c, conns.cpConn)
+	s.testUpdateSummary(c, conns.cpConn)
 }
 
-func (s *testCheckpointSuite) testInitAndGetSummary(c *C, db *sql.DB) {
-	err := createCheckpointTable(context.Background(), db)
+func (s *testCheckpointSuite) testInitAndGetSummary(c *C, conn *sql.Conn) {
+	err := createCheckpointTable(context.Background(), conn)
 	c.Assert(err, IsNil)
 
-	_, _, _, _, _, err = getTableSummary(context.Background(), db, "test", "checkpoint")
+	_, _, _, _, _, err = getTableSummary(context.Background(), conn, "test", "checkpoint")
 	c.Log(err)
 	c.Assert(err, ErrorMatches, "*not found*")
 
-	err = initTableSummary(context.Background(), db, "test", "checkpoint", "123")
+	err = initTableSummary(context.Background(), conn, "test", "checkpoint", "123")
 	c.Assert(err, IsNil)
 
-	total, successNum, failedNum, ignoreNum, state, err := getTableSummary(context.Background(), db, "test", "checkpoint")
+	total, successNum, failedNum, ignoreNum, state, err := getTableSummary(context.Background(), conn, "test", "checkpoint")
 	c.Assert(err, IsNil)
 	c.Assert(total, Equals, int64(0))
 	c.Assert(successNum, Equals, int64(0))
@@ -55,7 +55,7 @@ func (s *testCheckpointSuite) testInitAndGetSummary(c *C, db *sql.DB) {
 	c.Assert(state, Equals, notCheckedState)
 }
 
-func (s *testCheckpointSuite) testSaveAndLoadChunk(c *C, db *sql.DB) {
+func (s *testCheckpointSuite) testSaveAndLoadChunk(c *C, conn *sql.Conn) {
 	chunk := &ChunkRange{
 		ID:     1,
 		Bounds: []*Bound{{Column: "a", Lower: "1", LowerSymbol: ">"}},
@@ -63,38 +63,38 @@ func (s *testCheckpointSuite) testSaveAndLoadChunk(c *C, db *sql.DB) {
 		State:  successState,
 	}
 
-	err := saveChunk(context.Background(), db, chunk.ID, "target", "test", "checkpoint", "", chunk)
+	err := saveChunk(context.Background(), conn, chunk.ID, "target", "test", "checkpoint", "", chunk)
 	c.Assert(err, IsNil)
 
-	newChunk, err := getChunk(context.Background(), db, "target", "test", "checkpoint", chunk.ID)
+	newChunk, err := getChunk(context.Background(), conn, "target", "test", "checkpoint", chunk.ID)
 	c.Assert(err, IsNil)
 	c.Assert(newChunk, DeepEquals, chunk)
 
-	chunks, err := loadChunks(context.Background(), db, "target", "test", "checkpoint")
+	chunks, err := loadChunks(context.Background(), conn, "target", "test", "checkpoint")
 	c.Assert(err, IsNil)
 	c.Assert(chunks, HasLen, 1)
 	c.Assert(chunks[0], DeepEquals, chunk)
 }
 
-func (s *testCheckpointSuite) testUpdateSummary(c *C, db *sql.DB) {
+func (s *testCheckpointSuite) testUpdateSummary(c *C, conn *sql.Conn) {
 	failedChunk := &ChunkRange{
 		ID:    2,
 		State: failedState,
 	}
-	err := saveChunk(context.Background(), db, failedChunk.ID, "target", "test", "checkpoint", "", failedChunk)
+	err := saveChunk(context.Background(), conn, failedChunk.ID, "target", "test", "checkpoint", "", failedChunk)
 	c.Assert(err, IsNil)
 
 	ignoreChunk := &ChunkRange{
 		ID:    3,
 		State: ignoreState,
 	}
-	err = saveChunk(context.Background(), db, ignoreChunk.ID, "target", "test", "checkpoint", "", ignoreChunk)
+	err = saveChunk(context.Background(), conn, ignoreChunk.ID, "target", "test", "checkpoint", "", ignoreChunk)
 	c.Assert(err, IsNil)
 
-	err = updateTableSummary(context.Background(), db, "target", "test", "checkpoint")
+	err = updateTableSummary(context.Background(), conn, "target", "test", "checkpoint")
 	c.Assert(err, IsNil)
 
-	total, successNum, failedNum, ignoreNum, state, err := getTableSummary(context.Background(), db, "test", "checkpoint")
+	total, successNum, failedNum, ignoreNum, state, err := getTableSummary(context.Background(), conn, "test", "checkpoint")
 	c.Assert(err, IsNil)
 	c.Assert(total, Equals, int64(3))
 	c.Assert(successNum, Equals, int64(1))
@@ -107,18 +107,21 @@ func (s *testUtilSuite) TestloadFromCheckPoint(c *C) {
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
 
+	conn, err := db.Conn(context.Background())
+	c.Assert(err, IsNil)
+
 	rows := sqlmock.NewRows([]string{"state", "config_hash"}).AddRow("success", "123")
 	mock.ExpectQuery("SELECT").WillReturnRows(rows)
-	useCheckpoint, err := loadFromCheckPoint(context.Background(), db, "test", "test", "123")
+	useCheckpoint, err := loadFromCheckPoint(context.Background(), conn, "test", "test", "123")
 	c.Assert(useCheckpoint, Equals, false)
 
 	rows = sqlmock.NewRows([]string{"state", "config_hash"}).AddRow("success", "123")
 	mock.ExpectQuery("SELECT").WillReturnRows(rows)
-	useCheckpoint, err = loadFromCheckPoint(context.Background(), db, "test", "test", "456")
+	useCheckpoint, err = loadFromCheckPoint(context.Background(), conn, "test", "test", "456")
 	c.Assert(useCheckpoint, Equals, false)
 
 	rows = sqlmock.NewRows([]string{"state", "config_hash"}).AddRow("failed", "123")
 	mock.ExpectQuery("SELECT").WillReturnRows(rows)
-	useCheckpoint, err = loadFromCheckPoint(context.Background(), db, "test", "test", "123")
+	useCheckpoint, err = loadFromCheckPoint(context.Background(), conn, "test", "test", "123")
 	c.Assert(useCheckpoint, Equals, true)
 }
