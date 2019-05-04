@@ -269,7 +269,7 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]map[string]inte
 	allTablesMap := make(map[string]map[string]map[string]interface{})
 
 	allTablesMap[df.targetDB.InstanceID] = make(map[string]map[string]interface{})
-	targetSchemas, err := dbutil.GetSchemas(df.ctx, df.targetDB.Conns.GetConn())
+	targetSchemas, err := dbutil.GetSchemasFromConn(df.ctx, df.targetDB.Conns.GetConn())
 	if err != nil {
 		return nil, errors.Annotatef(err, "get schemas from %s", df.targetDB.InstanceID)
 	}
@@ -283,7 +283,7 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]map[string]inte
 
 	for _, source := range df.sourceDBs {
 		allTablesMap[source.InstanceID] = make(map[string]map[string]interface{})
-		sourceSchemas, err := dbutil.GetSchemas(df.ctx, source.Conns.GetConn())
+		sourceSchemas, err := dbutil.GetSchemasFromConn(df.ctx, source.Conns.GetConn())
 		if err != nil {
 			return nil, errors.Annotatef(err, "get schemas from %s", source.InstanceID)
 		}

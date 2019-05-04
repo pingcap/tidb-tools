@@ -347,13 +347,33 @@ func GetTablesFromConn(ctx context.Context, conn *sql.Conn, schemaName string) (
 }
 
 // GetViews returns names of all views in the specified schema
-func GetViews(ctx context.Context, conn *sql.Conn, schemaName string) (tables []string, err error) {
+func GetViews(ctx context.Context, db *sql.DB, schemaName string) (tables []string, err error) {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return GetViewsFromConn(ctx, conn, schemaName)
+}
+
+// GetViewsFromConn returns names of all views in the specified schema
+func GetViewsFromConn(ctx context.Context, conn *sql.Conn, schemaName string) (tables []string, err error) {
 	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type = 'VIEW';", schemaName)
 	return queryTables(ctx, conn, query)
 }
 
 // GetSchemas returns name of all schemas
-func GetSchemas(ctx context.Context, conn *sql.Conn) ([]string, error) {
+func GetSchemas(ctx context.Context, db *sql.DB) ([]string, error) {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	return GetSchemasFromConn(ctx, conn)
+}
+
+// GetSchemasFromConn returns name of all schemas
+func GetSchemasFromConn(ctx context.Context, conn *sql.Conn) ([]string, error) {
 	query := "SHOW DATABASES"
 	rows, err := conn.QueryContext(ctx, query)
 	if err != nil {
