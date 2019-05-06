@@ -77,7 +77,7 @@ func (*testDiffSuite) TestGenerateSQLs(c *C) {
 	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` WHERE `id` is NULL;")
 }
 
-func (t *testDiffSuite) TestDiff(c *C) {
+func (t *testDiffSuite) testDiff(c *C) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 
