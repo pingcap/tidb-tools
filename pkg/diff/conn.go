@@ -16,7 +16,6 @@ package diff
 import (
 	"context"
 	"database/sql"
-	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -35,21 +34,20 @@ type Conns struct {
 }
 
 // NewConns returns a new Conns
-func NewConns(dbConfig dbutil.DBConfig, num int, snapshot string) (*Conns, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(num)*time.Second)
-	defer cancel()
-
+func NewConns(ctx context.Context, dbConfig dbutil.DBConfig, num int, snapshot string) (*Conns, error) {
 	conns := make([]*sql.Conn, 0, num)
 
 	db, err := dbutil.OpenDB(dbConfig)
 	if err != nil {
 		return nil, errors.Errorf("create db connections %+v error %v", dbConfig, err)
 	}
+	// SetMaxOpenConns and SetMaxIdleConns for connection to avoid error like
+	// `dial tcp 10.26.2.1:3306: connect: cannot assign requested address`
 	db.SetMaxOpenConns(num)
 	db.SetMaxIdleConns(num)
 
 	for i := 0; i < num; i++ {
-		conn, err := db.Conn(context.Background())
+		conn, err := db.Conn(ctx)
 		if err != nil {
 			return nil, errors.Errorf("create connection %+v error %v", dbConfig, err)
 		}
@@ -70,7 +68,7 @@ func NewConns(dbConfig dbutil.DBConfig, num int, snapshot string) (*Conns, error
 	}
 	cpDB.SetMaxOpenConns(1)
 	cpDB.SetMaxIdleConns(1)
-	cpConn, err := cpDB.Conn(context.Background())
+	cpConn, err := cpDB.Conn(ctx)
 	if err != nil {
 		return nil, errors.Errorf("create connection %+v error %v", dbConfig, err)
 	}

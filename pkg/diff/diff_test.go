@@ -78,13 +78,14 @@ func (*testDiffSuite) TestGenerateSQLs(c *C) {
 }
 
 func (t *testDiffSuite) TestDiff(c *C) {
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 
-	conns, err := createConns()
+	conns, err := createConns(ctx)
+	defer conns.Close()
 	c.Assert(err, IsNil)
 
-	_, err = conns.GetConn().QueryContext(ctx, "CREATE DATABASE IF NOT EXISTS `test`")
+	_, err = conns.GetConn().ExecContext(ctx, "CREATE DATABASE IF NOT EXISTS `test`")
 	c.Assert(err, IsNil)
 
 	testStructEqual(ctx, conns, c)
@@ -161,9 +162,9 @@ func testStructEqual(ctx context.Context, conns *Conns, c *C) {
 	}
 
 	for _, testCase := range testCases {
-		_, err := conns.GetConn().QueryContext(ctx, testCase.createSourceTable)
+		_, err := conns.GetConn().ExecContext(ctx, testCase.createSourceTable)
 		c.Assert(err, IsNil)
-		_, err = conns.GetConn().QueryContext(ctx, testCase.createTargetTable)
+		_, err = conns.GetConn().ExecContext(ctx, testCase.createTargetTable)
 		c.Assert(err, IsNil)
 
 		tableDiff := createTableDiff(conns, []string{"testa"}, "testb")
@@ -173,9 +174,9 @@ func testStructEqual(ctx context.Context, conns *Conns, c *C) {
 		})
 		c.Assert(structEqual, Equals, testCase.structEqual)
 
-		_, err = conns.GetConn().QueryContext(ctx, testCase.dropSourceTable)
+		_, err = conns.GetConn().ExecContext(ctx, testCase.dropSourceTable)
 		c.Assert(err, IsNil)
-		_, err = conns.GetConn().QueryContext(ctx, testCase.dropTargetTable)
+		_, err = conns.GetConn().ExecContext(ctx, testCase.dropTargetTable)
 		c.Assert(err, IsNil)
 	}
 }
@@ -183,9 +184,9 @@ func testStructEqual(ctx context.Context, conns *Conns, c *C) {
 func testDataEqual(ctx context.Context, conns *Conns, sourceTables []string, targetTable string, hasEmptyTable bool, c *C) {
 	defer func() {
 		for _, sourceTable := range sourceTables {
-			_, _ = conns.GetConn().QueryContext(ctx, fmt.Sprintf("DROP TABLE `test`.`%s`", sourceTable))
+			_, _ = conns.GetConn().ExecContext(ctx, fmt.Sprintf("DROP TABLE `test`.`%s`", sourceTable))
 		}
-		_, _ = conns.GetConn().QueryContext(ctx, fmt.Sprintf("DROP TABLE `test`.`%s`", targetTable))
+		_, _ = conns.GetConn().ExecContext(ctx, fmt.Sprintf("DROP TABLE `test`.`%s`", targetTable))
 	}()
 
 	err := generateData(ctx, conns.GetConn(), dbutil.GetDBConfigFromEnv("test"), sourceTables, targetTable, hasEmptyTable)
@@ -248,8 +249,8 @@ func createTableDiff(conns *Conns, sourceTableNames []string, targetTableName st
 	}
 }
 
-func createConns() (*Conns, error) {
-	return NewConns(dbutil.GetDBConfigFromEnv(""), 1, "")
+func createConns(ctx context.Context) (*Conns, error) {
+	return NewConns(ctx, dbutil.GetDBConfigFromEnv(""), 4, "")
 }
 
 func generateData(ctx context.Context, conn *sql.Conn, dbCfg dbutil.DBConfig, sourceTables []string, targetTable string, hasEmptyTable bool) error {
@@ -275,7 +276,7 @@ func generateData(ctx context.Context, conn *sql.Conn, dbCfg dbutil.DBConfig, so
 
 	// generate data for source tables
 	for _, sourceTable := range sourceTables {
-		_, err := conn.QueryContext(ctx, fmt.Sprintf("CREATE TABLE `test`.`%s` LIKE `test`.`%s`", sourceTable, targetTable))
+		_, err := conn.ExecContext(ctx, fmt.Sprintf("CREATE TABLE `test`.`%s` LIKE `test`.`%s`", sourceTable, targetTable))
 		if err != nil {
 			return err
 		}
@@ -304,7 +305,7 @@ func generateData(ctx context.Context, conn *sql.Conn, dbCfg dbutil.DBConfig, so
 
 	// if hasEmptyTable is true, the last source table will be empty.
 	for j, condition := range conditions {
-		_, err = conn.QueryContext(ctx, fmt.Sprintf("INSERT INTO `test`.`%s` (`a`, `b`, `c`, `d`, `e`, `h`) SELECT `a`, `b`, `c`, `d`, `e`, `h` FROM `test`.`%s` WHERE %s", sourceTables[j], targetTable, condition))
+		_, err = conn.ExecContext(ctx, fmt.Sprintf("INSERT INTO `test`.`%s` (`a`, `b`, `c`, `d`, `e`, `h`) SELECT `a`, `b`, `c`, `d`, `e`, `h` FROM `test`.`%s` WHERE %s", sourceTables[j], targetTable, condition))
 		if err != nil {
 			return err
 		}
