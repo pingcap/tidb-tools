@@ -82,8 +82,8 @@ func (t *testDiffSuite) TestDiff(c *C) {
 	defer cancel()
 
 	conns, err := createConns(ctx)
-	defer conns.Close()
 	c.Assert(err, IsNil)
+	defer conns.Close()
 
 	_, err = conns.GetConn().ExecContext(ctx, "CREATE DATABASE IF NOT EXISTS `test`")
 	c.Assert(err, IsNil)
