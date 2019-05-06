@@ -95,11 +95,10 @@ func (df *Diff) init(cfg *Config) (err error) {
 	return nil
 }
 
+// CreateDBConn creates db connections for source and target.
 func (df *Diff) CreateDBConn(cfg *Config) (err error) {
-	// SetMaxOpenConns and SetMaxIdleConns for connection to avoid error like
-	// `dial tcp 10.26.2.1:3306: connect: cannot assign requested address`
 	for _, source := range cfg.SourceDBCfg {
-		source.Conns, err = diff.NewConns(source.DBConfig, cfg.CheckThreadCount, source.Snapshot)
+		source.Conns, err = diff.NewConns(df.ctx, source.DBConfig, cfg.CheckThreadCount, source.Snapshot)
 		if err != nil {
 			return errors.Errorf("create source db %+v error %v", source.DBConfig, err)
 		}
@@ -107,7 +106,7 @@ func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 	}
 
 	// create connection for target.
-	cfg.TargetDBCfg.Conns, err = diff.NewConns(cfg.TargetDBCfg.DBConfig, cfg.CheckThreadCount, cfg.TargetDBCfg.Snapshot)
+	cfg.TargetDBCfg.Conns, err = diff.NewConns(df.ctx, cfg.TargetDBCfg.DBConfig, cfg.CheckThreadCount, cfg.TargetDBCfg.Snapshot)
 	if err != nil {
 		return errors.Errorf("create target db %+v error %v", cfg.TargetDBCfg, err)
 	}
