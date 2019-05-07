@@ -20,7 +20,6 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/importer"
-	"github.com/pingcap/tidb-tools/pkg/utils"
 	"go.uber.org/zap"
 )
 

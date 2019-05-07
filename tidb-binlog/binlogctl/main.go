@@ -18,7 +18,6 @@ import (
 	"os"
 
 	"github.com/pingcap/log"
-	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
 	"go.uber.org/zap"
 )

@@ -1,12 +1,5 @@
 package utils
 
-import (
-	"fmt"
-	"os"
-
-	"github.com/pingcap/log"
-)
-
 // SliceToMap converts slice to map
 func SliceToMap(slice []string) map[string]interface{} {
 	sMap := make(map[string]interface{})
