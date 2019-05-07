@@ -178,7 +178,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 		}
 
 		for _, tableName := range tables {
-			tableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, df.targetDB.Conns.GetConn(), schemaTables.Schema, tableName, cfg.UseRowID)
+			tableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, df.targetDB.Conns.DB, schemaTables.Schema, tableName, cfg.UseRowID)
 			if err != nil {
 				return errors.Errorf("get table %s.%s's inforamtion error %s", schemaTables.Schema, tableName, errors.ErrorStack(err))
 			}
@@ -268,12 +268,12 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]map[string]inte
 	allTablesMap := make(map[string]map[string]map[string]interface{})
 
 	allTablesMap[df.targetDB.InstanceID] = make(map[string]map[string]interface{})
-	targetSchemas, err := dbutil.GetSchemasFromConn(df.ctx, df.targetDB.Conns.GetConn())
+	targetSchemas, err := dbutil.GetSchemas(df.ctx, df.targetDB.Conns.DB)
 	if err != nil {
 		return nil, errors.Annotatef(err, "get schemas from %s", df.targetDB.InstanceID)
 	}
 	for _, schema := range targetSchemas {
-		allTables, err := dbutil.GetTablesFromConn(df.ctx, df.targetDB.Conns.GetConn(), schema)
+		allTables, err := dbutil.GetTables(df.ctx, df.targetDB.Conns.DB, schema)
 		if err != nil {
 			return nil, errors.Annotatef(err, "get tables from %s.%s", df.targetDB.InstanceID, schema)
 		}
@@ -282,13 +282,13 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]map[string]inte
 
 	for _, source := range df.sourceDBs {
 		allTablesMap[source.InstanceID] = make(map[string]map[string]interface{})
-		sourceSchemas, err := dbutil.GetSchemasFromConn(df.ctx, source.Conns.GetConn())
+		sourceSchemas, err := dbutil.GetSchemas(df.ctx, source.Conns.DB)
 		if err != nil {
 			return nil, errors.Annotatef(err, "get schemas from %s", source.InstanceID)
 		}
 
 		for _, schema := range sourceSchemas {
-			allTables, err := dbutil.GetTablesFromConn(df.ctx, source.Conns.GetConn(), schema)
+			allTables, err := dbutil.GetTables(df.ctx, source.Conns.DB, schema)
 			if err != nil {
 				return nil, errors.Annotatef(err, "get tables from %s.%s", source.InstanceID, schema)
 			}

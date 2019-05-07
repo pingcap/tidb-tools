@@ -85,7 +85,7 @@ func (t *testDiffSuite) testDiff(c *C) {
 	c.Assert(err, IsNil)
 	defer conns.Close()
 
-	_, err = conns.GetConn().ExecContext(ctx, "CREATE DATABASE IF NOT EXISTS `test`")
+	_, err = conns.DB.ExecContext(ctx, "CREATE DATABASE IF NOT EXISTS `test`")
 	c.Assert(err, IsNil)
 
 	testStructEqual(ctx, conns, c)
@@ -162,9 +162,9 @@ func testStructEqual(ctx context.Context, conns *Conns, c *C) {
 	}
 
 	for _, testCase := range testCases {
-		_, err := conns.GetConn().ExecContext(ctx, testCase.createSourceTable)
+		_, err := conns.DB.ExecContext(ctx, testCase.createSourceTable)
 		c.Assert(err, IsNil)
-		_, err = conns.GetConn().ExecContext(ctx, testCase.createTargetTable)
+		_, err = conns.DB.ExecContext(ctx, testCase.createTargetTable)
 		c.Assert(err, IsNil)
 
 		tableDiff := createTableDiff(conns, []string{"testa"}, "testb")
@@ -174,9 +174,9 @@ func testStructEqual(ctx context.Context, conns *Conns, c *C) {
 		})
 		c.Assert(structEqual, Equals, testCase.structEqual)
 
-		_, err = conns.GetConn().ExecContext(ctx, testCase.dropSourceTable)
+		_, err = conns.DB.ExecContext(ctx, testCase.dropSourceTable)
 		c.Assert(err, IsNil)
-		_, err = conns.GetConn().ExecContext(ctx, testCase.dropTargetTable)
+		_, err = conns.DB.ExecContext(ctx, testCase.dropTargetTable)
 		c.Assert(err, IsNil)
 	}
 }
@@ -184,12 +184,12 @@ func testStructEqual(ctx context.Context, conns *Conns, c *C) {
 func testDataEqual(ctx context.Context, conns *Conns, sourceTables []string, targetTable string, hasEmptyTable bool, c *C) {
 	defer func() {
 		for _, sourceTable := range sourceTables {
-			_, _ = conns.GetConn().ExecContext(ctx, fmt.Sprintf("DROP TABLE `test`.`%s`", sourceTable))
+			_, _ = conns.DB.ExecContext(ctx, fmt.Sprintf("DROP TABLE `test`.`%s`", sourceTable))
 		}
-		_, _ = conns.GetConn().ExecContext(ctx, fmt.Sprintf("DROP TABLE `test`.`%s`", targetTable))
+		_, _ = conns.DB.ExecContext(ctx, fmt.Sprintf("DROP TABLE `test`.`%s`", targetTable))
 	}()
 
-	err := generateData(ctx, conns.GetConn(), dbutil.GetDBConfigFromEnv("test"), sourceTables, targetTable, hasEmptyTable)
+	err := generateData(ctx, conns.DB, dbutil.GetDBConfigFromEnv("test"), sourceTables, targetTable, hasEmptyTable)
 	c.Assert(err, IsNil)
 
 	// compare data, should be equal
@@ -206,7 +206,7 @@ func testDataEqual(ctx context.Context, conns *Conns, sourceTables []string, tar
 	c.Assert(dataEqual, Equals, true)
 
 	// update data and then compare data, dataEqual should be false
-	err = updateData(ctx, conns.GetConn(), targetTable)
+	err = updateData(ctx, conns.DB, targetTable)
 	c.Assert(err, IsNil)
 
 	structEqual, dataEqual, err = tableDiff.Equal(context.Background(), writeSqls)
@@ -216,7 +216,7 @@ func testDataEqual(ctx context.Context, conns *Conns, sourceTables []string, tar
 
 	// use fixSqls to fix data, and then compare data
 	for _, sql := range fixSqls {
-		_, err = conns.GetConn().ExecContext(ctx, sql)
+		_, err = conns.DB.ExecContext(ctx, sql)
 		c.Assert(err, IsNil)
 	}
 	structEqual, dataEqual, err = tableDiff.Equal(ctx, writeSqls)
@@ -253,7 +253,7 @@ func createConns(ctx context.Context) (*Conns, error) {
 	return NewConns(ctx, dbutil.GetDBConfigFromEnv(""), 4, "")
 }
 
-func generateData(ctx context.Context, conn *sql.Conn, dbCfg dbutil.DBConfig, sourceTables []string, targetTable string, hasEmptyTable bool) error {
+func generateData(ctx context.Context, db *sql.DB, dbCfg dbutil.DBConfig, sourceTables []string, targetTable string, hasEmptyTable bool) error {
 	createTableSQL := fmt.Sprintf(`CREATE TABLE test.%s (
 		a date NOT NULL,
 		b datetime DEFAULT NULL,
@@ -276,7 +276,7 @@ func generateData(ctx context.Context, conn *sql.Conn, dbCfg dbutil.DBConfig, so
 
 	// generate data for source tables
 	for _, sourceTable := range sourceTables {
-		_, err := conn.ExecContext(ctx, fmt.Sprintf("CREATE TABLE `test`.`%s` LIKE `test`.`%s`", sourceTable, targetTable))
+		_, err := db.ExecContext(ctx, fmt.Sprintf("CREATE TABLE `test`.`%s` LIKE `test`.`%s`", sourceTable, targetTable))
 		if err != nil {
 			return err
 		}
@@ -287,7 +287,7 @@ func generateData(ctx context.Context, conn *sql.Conn, dbCfg dbutil.DBConfig, so
 		randomValueNum--
 	}
 
-	values, _, err := dbutil.GetRandomValues(context.Background(), conn, "test", targetTable, "e", int(randomValueNum), "TRUE", nil, "")
+	values, _, err := dbutil.GetRandomValues(context.Background(), db, "test", targetTable, "e", int(randomValueNum), "TRUE", nil, "")
 	if err != nil {
 		return err
 	}
@@ -305,7 +305,7 @@ func generateData(ctx context.Context, conn *sql.Conn, dbCfg dbutil.DBConfig, so
 
 	// if hasEmptyTable is true, the last source table will be empty.
 	for j, condition := range conditions {
-		_, err = conn.ExecContext(ctx, fmt.Sprintf("INSERT INTO `test`.`%s` (`a`, `b`, `c`, `d`, `e`, `h`) SELECT `a`, `b`, `c`, `d`, `e`, `h` FROM `test`.`%s` WHERE %s", sourceTables[j], targetTable, condition))
+		_, err = db.ExecContext(ctx, fmt.Sprintf("INSERT INTO `test`.`%s` (`a`, `b`, `c`, `d`, `e`, `h`) SELECT `a`, `b`, `c`, `d`, `e`, `h` FROM `test`.`%s` WHERE %s", sourceTables[j], targetTable, condition))
 		if err != nil {
 			return err
 		}
@@ -314,23 +314,23 @@ func generateData(ctx context.Context, conn *sql.Conn, dbCfg dbutil.DBConfig, so
 	return nil
 }
 
-func updateData(ctx context.Context, conn *sql.Conn, table string) error {
-	values, _, err := dbutil.GetRandomValues(context.Background(), conn, "test", table, "e", 3, "TRUE", nil, "")
+func updateData(ctx context.Context, db *sql.DB, table string) error {
+	values, _, err := dbutil.GetRandomValues(context.Background(), db, "test", table, "e", 3, "TRUE", nil, "")
 	if err != nil {
 		return err
 	}
 
-	_, err = conn.ExecContext(ctx, fmt.Sprintf("UPDATE `test`.`%s` SET `e` = `e`+1 WHERE `e` = %v", table, values[0]))
+	_, err = db.ExecContext(ctx, fmt.Sprintf("UPDATE `test`.`%s` SET `e` = `e`+1 WHERE `e` = %v", table, values[0]))
 	if err != nil {
 		return err
 	}
 
-	_, err = conn.ExecContext(ctx, fmt.Sprintf("DELETE FROM `test`.`%s` where `e` = %v", table, values[1]))
+	_, err = db.ExecContext(ctx, fmt.Sprintf("DELETE FROM `test`.`%s` where `e` = %v", table, values[1]))
 	if err != nil {
 		return err
 	}
 
-	_, err = conn.ExecContext(ctx, fmt.Sprintf("REPLACE INTO `test`.`%s` VALUES('1992-09-27','2018-09-03 16:26:27','14:45:33','i',2048790075,2008)", table))
+	_, err = db.ExecContext(ctx, fmt.Sprintf("REPLACE INTO `test`.`%s` VALUES('1992-09-27','2018-09-03 16:26:27','14:45:33','i',2048790075,2008)", table))
 	if err != nil {
 		return err
 	}

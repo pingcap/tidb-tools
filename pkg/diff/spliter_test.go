@@ -14,8 +14,6 @@
 package diff
 
 import (
-	"context"
-	"database/sql"
 	"fmt"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
@@ -31,12 +29,8 @@ func (s *testSpliterSuite) TestRandomSpliter(c *C) {
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
 
-	conn, err := db.Conn(context.Background())
-	c.Assert(err, IsNil)
-
 	conns := &Conns{
-		db:    db,
-		conns: []*sql.Conn{conn},
+		DB: db,
 	}
 
 	createTableSQL := "create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
@@ -189,7 +183,7 @@ func (s *testSpliterSuite) TestRandomSpliter(c *C) {
 	}
 
 	oriChunk := NewChunkRange(normalMode).copyAndUpdate("a", "0", gt, "10", lt)
-	chunks, err := r.splitRange(conns.GetConn(), oriChunk, 2, "test", "test", tableInfo.Columns)
+	chunks, err := r.splitRange(conns.DB, oriChunk, 2, "test", "test", tableInfo.Columns)
 	c.Assert(err, IsNil)
 	for i, chunk := range chunks {
 		chunkStr, args := chunk.toString("")
@@ -252,12 +246,8 @@ func (s *testSpliterSuite) TestBucketSpliter(c *C) {
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
 
-	conn, err := db.Conn(context.Background())
-	c.Assert(err, IsNil)
-
 	conns := &Conns{
-		db:    db,
-		conns: []*sql.Conn{conn},
+		DB: db,
 	}
 
 	createTableSQL := "create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"

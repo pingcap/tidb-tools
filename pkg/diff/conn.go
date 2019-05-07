@@ -25,42 +25,50 @@ import (
 
 // Conns keeps some connections
 type Conns struct {
-	db    *sql.DB
-	conns []*sql.Conn
+	DB *sql.DB
+	//conns []*sql.Conn
 
 	// cann't write data when set snapshot, so need create another connection for write checkpoint
-	cpDB   *sql.DB
-	cpConn *sql.Conn
+	CpDB *sql.DB
+	//cpConn *sql.Conn
 }
 
 // NewConns returns a new Conns
-func NewConns(ctx context.Context, dbConfig dbutil.DBConfig, num int, snapshot string) (*Conns, error) {
-	conns := make([]*sql.Conn, 0, num)
+func NewConns(ctx context.Context, dbConfig dbutil.DBConfig, num int, snapshot string) (conns *Conns, err error) {
+	var db *sql.DB
+	//conns := make([]*sql.Conn, 0, num)
 
-	db, err := dbutil.OpenDB(dbConfig)
+	if snapshot != "" {
+		db, err = dbutil.OpenDBWithSnapshot(dbConfig, snapshot)
+	} else {
+		db, err = dbutil.OpenDB(dbConfig)
+	}
 	if err != nil {
 		return nil, errors.Errorf("create db connections %+v error %v", dbConfig, err)
 	}
+
 	// SetMaxOpenConns and SetMaxIdleConns for connection to avoid error like
 	// `dial tcp 10.26.2.1:3306: connect: cannot assign requested address`
 	db.SetMaxOpenConns(num)
 	db.SetMaxIdleConns(num)
 
-	for i := 0; i < num; i++ {
-		conn, err := db.Conn(ctx)
-		if err != nil {
-			return nil, errors.Errorf("create connection %+v error %v", dbConfig, err)
-		}
-		conns = append(conns, conn)
+	/*
+		for i := 0; i < num; i++ {
+			conn, err := db.Conn(ctx)
+			if err != nil {
+				return nil, errors.Errorf("create connection %+v error %v", dbConfig, err)
+			}
+			conns = append(conns, conn)
 
-		if snapshot == "" {
-			continue
+			if snapshot == "" {
+				continue
+			}
+			err = dbutil.SetSnapshot(ctx, conn, snapshot)
+			if err != nil {
+				return nil, errors.Errorf("set history snapshot %s for source db %+v error %v", snapshot, dbConfig, err)
+			}
 		}
-		err = dbutil.SetSnapshot(ctx, conn, snapshot)
-		if err != nil {
-			return nil, errors.Errorf("set history snapshot %s for source db %+v error %v", snapshot, dbConfig, err)
-		}
-	}
+	*/
 
 	cpDB, err := dbutil.OpenDB(dbConfig)
 	if err != nil {
@@ -68,19 +76,22 @@ func NewConns(ctx context.Context, dbConfig dbutil.DBConfig, num int, snapshot s
 	}
 	cpDB.SetMaxOpenConns(1)
 	cpDB.SetMaxIdleConns(1)
-	cpConn, err := cpDB.Conn(ctx)
-	if err != nil {
-		return nil, errors.Errorf("create connection %+v error %v", dbConfig, err)
-	}
+	/*
+		cpConn, err := cpDB.Conn(ctx)
+		if err != nil {
+			return nil, errors.Errorf("create connection %+v error %v", dbConfig, err)
+		}
+	*/
 
 	return &Conns{
-		db:     db,
-		conns:  conns,
-		cpDB:   cpDB,
-		cpConn: cpConn,
+		DB: db,
+		//conns:  conns,
+		CpDB: cpDB,
+		//cpConn: cpConn,
 	}, nil
 }
 
+/*
 // GetConn returns the first connection
 func (c *Conns) GetConn() *sql.Conn {
 	if c == nil || len(c.conns) == 0 {
@@ -90,24 +101,29 @@ func (c *Conns) GetConn() *sql.Conn {
 
 	return c.conns[0]
 }
+*/
 
 // Close closes all the connections
 func (c *Conns) Close() {
-	for _, conn := range c.conns {
-		if err := conn.Close(); err != nil {
-			log.Warn("close connection failed", zap.Error(err))
+	/*
+		for _, conn := range c.conns {
+			if err := conn.Close(); err != nil {
+				log.Warn("close connection failed", zap.Error(err))
+			}
 		}
-	}
+	*/
 
-	if err := c.db.Close(); err != nil {
+	if err := c.DB.Close(); err != nil {
 		log.Warn("close db connection failed", zap.Error(err))
 	}
 
-	if err := c.cpConn.Close(); err != nil {
-		log.Warn("close connection failed", zap.Error(err))
-	}
+	/*
+		if err := c.cpConn.Close(); err != nil {
+			log.Warn("close connection failed", zap.Error(err))
+		}
+	*/
 
-	if err := c.cpDB.Close(); err != nil {
+	if err := c.CpDB.Close(); err != nil {
 		log.Warn("close db connection failed", zap.Error(err))
 	}
 }
