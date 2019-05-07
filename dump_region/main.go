@@ -121,6 +121,4 @@ func main() {
 
 		fmt.Println(string(infos))
 	}
-
-	utils.SyncLog()
 }

@@ -64,6 +64,4 @@ func main() {
 	if err != nil {
 		log.Fatal("fail to execute command", zap.String("command", cfg.Command), zap.Error(err))
 	}
-
-	utils.SyncLog()
 }

@@ -65,8 +65,6 @@ func main() {
 	initialise()
 	mainLoop()
 	destroy()
-
-	utils.SyncLog()
 }
 
 func initialise() {

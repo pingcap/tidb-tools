@@ -47,6 +47,4 @@ func main() {
 	}
 
 	importer.DoProcess(importerCfg)
-
-	utils.SyncLog()
 }
