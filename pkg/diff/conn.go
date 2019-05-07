@@ -57,7 +57,7 @@ func NewConns(ctx context.Context, dbConfig dbutil.DBConfig, num int, snapshot s
 	cpDB.SetMaxIdleConns(1)
 
 	return &Conns{
-		DB: db,
+		DB:   db,
 		CpDB: cpDB,
 	}, nil
 }
