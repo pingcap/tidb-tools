@@ -223,6 +223,9 @@ func (t *TableDiff) CheckTableData(ctx context.Context) (equal bool, err error) 
 
 		fromCheckpoint = false
 		chunks, err = SplitChunks(ctx, table, t.Fields, t.Range, t.ChunkSize, t.Collation, useTiDB)
+		if err != nil {
+			return false, errors.Trace(err)
+		}
 	}
 
 	if len(chunks) == 0 {
