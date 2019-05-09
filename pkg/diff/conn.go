@@ -68,7 +68,7 @@ func (c *Conns) Close() {
 		if err := c.DB.Close(); err != nil {
 			log.Warn("close db connection failed", zap.Error(err))
 		}
-	}	
+	}
 
 	if c.CpDB != nil {
 		if err := c.CpDB.Close(); err != nil {
