@@ -64,11 +64,15 @@ func NewConns(ctx context.Context, dbConfig dbutil.DBConfig, num int, snapshot s
 
 // Close closes all the connections
 func (c *Conns) Close() {
-	if err := c.DB.Close(); err != nil {
-		log.Warn("close db connection failed", zap.Error(err))
-	}
+	if c.DB != nil {
+		if err := c.DB.Close(); err != nil {
+			log.Warn("close db connection failed", zap.Error(err))
+		}
+	}	
 
-	if err := c.CpDB.Close(); err != nil {
-		log.Warn("close db connection failed", zap.Error(err))
+	if c.CpDB != nil {
+		if err := c.CpDB.Close(); err != nil {
+			log.Warn("close db connection failed", zap.Error(err))
+		}
 	}
 }
