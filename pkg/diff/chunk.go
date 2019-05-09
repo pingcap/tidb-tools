@@ -554,7 +554,7 @@ func SplitChunks(ctx context.Context, table *TableInstance, splitFields, limits 
 
 		err = saveChunk(ctx1, table.Conns.CpDB, i, table.InstanceID, table.Schema, table.Table, "", chunk)
 		if err != nil {
-			return nil, err
+			log.Warn("save chunk failed", zap.Error(err), zap.Stringer("chunk", chunk))
 		}
 	}
 
