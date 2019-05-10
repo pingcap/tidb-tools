@@ -153,7 +153,7 @@ func (t *testColumnMappingSuit) TestComputePartitionID(c *C) {
 	c.Assert(err, NotNil)
 
 	rule = &Rule{
-		Arguments: []string{"2", "test_", "t_"},
+		Arguments: []string{"2", "test", "t", "_"},
 	}
 	instanceID, schemaID, tableID, err := computePartitionID("test_1", "t_1", rule)
 	c.Assert(err, IsNil)
@@ -183,6 +183,12 @@ func (t *testColumnMappingSuit) TestComputePartitionID(c *C) {
 	_, _, _, err = computePartitionID("test_0", "t_0xa", rule)
 	c.Assert(err, ErrorMatches, "the suffix of 0xa can't be converted to int64.*")
 
+	_, _, _, err = computePartitionID("test_0", "t_", rule)
+	c.Assert(err, ErrorMatches, "t_ is not the prefix of t_.*") // needs a better error message
+
+	_, _, _, err = computePartitionID("testx", "t_3", rule)
+	c.Assert(err, ErrorMatches, "test_ is not the prefix of testx.*")
+
 	SetPartitionRule(4, 0, 8)
 	rule = &Rule{
 		Arguments: []string{"2", "test_", "t_"},
@@ -192,6 +198,12 @@ func (t *testColumnMappingSuit) TestComputePartitionID(c *C) {
 	c.Assert(instanceID, Equals, int64(2<<59))
 	c.Assert(schemaID, Equals, int64(0))
 	c.Assert(tableID, Equals, int64(1<<51))
+
+	instanceID, schemaID, tableID, err = computePartitionID("test_", "t_", rule)
+	c.Assert(err, IsNil)
+	c.Assert(instanceID, Equals, int64(2<<59))
+	c.Assert(schemaID, Equals, int64(0))
+	c.Assert(tableID, Equals, int64(0))
 
 	// test ignore instance ID
 	SetPartitionRule(4, 7, 8)

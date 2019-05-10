@@ -63,10 +63,12 @@ var Exprs = map[Expr]func(*mappingInfo, []interface{}) ([]interface{}, error){
 	// # 3 table ID (table suffix)
 	// # 4 origin ID (>= 0, <= 17592186044415)
 	//
-	// others: schema = arguments[1] + schema suffix
-	//         table = arguments[2] + table suffix
-	//  example: schema = schema_1 table = t_1  => arguments[1] = "schema_", arguments[2] = "t_"
+	// others: schema = arguments[1]  or  arguments[1] + arguments[3] + schema suffix
+	//         table  = arguments[2]  or  arguments[2] + arguments[3] + table suffix
+	//  example: schema = schema_1 table = t_1
+	//        => arguments[1] = "schema", arguments[2] = "t", arguments[3] = "_"
 	//  if arguments[1]/arguments[2] == "", it means we don't use schemaID/tableID to compute partition ID
+	//  if length of arguments is < 4, arguments[3] is set to "" (empty string)
 	PartitionID: partitionID,
 }
 
@@ -90,7 +92,7 @@ func (r *Rule) ToLower() {
 
 // Valid checks validity of rule.
 // add prefix/suffix: it should have target column and one argument
-// partition id: it should have 3 arguments
+// partition id: it should have 3 to 4 arguments
 func (r *Rule) Valid() error {
 	if _, ok := Exprs[r.Expression]; !ok {
 		return errors.NotFoundf("expression %s", r.Expression)
@@ -107,7 +109,10 @@ func (r *Rule) Valid() error {
 	}
 
 	if r.Expression == PartitionID {
-		if len(r.Arguments) != 3 {
+		switch len(r.Arguments) {
+		case 3, 4:
+			break
+		default:
 			return errors.NotValidf("arguments %v for patition id", r.Arguments)
 		}
 	}
@@ -490,9 +495,14 @@ func computePartitionID(schema, table string, rule *Rule) (instanceID int64, sch
 		instanceID = int64(instanceIDUnsign << shiftCnt)
 	}
 
+	var sep string
+	if len(rule.Arguments) > 3 {
+		sep = rule.Arguments[3]
+	}
+
 	if schemaIDBitSize > 0 && len(rule.Arguments[1]) > 0 {
 		shiftCnt = shiftCnt - uint(schemaIDBitSize)
-		schemaID, err = computeID(schema, rule.Arguments[1], schemaIDBitSize, shiftCnt)
+		schemaID, err = computeID(schema, rule.Arguments[1], sep, schemaIDBitSize, shiftCnt)
 		if err != nil {
 			return
 		}
@@ -500,19 +510,19 @@ func computePartitionID(schema, table string, rule *Rule) (instanceID int64, sch
 
 	if tableIDBitSize > 0 && len(rule.Arguments[2]) > 0 {
 		shiftCnt = shiftCnt - uint(tableIDBitSize)
-		tableID, err = computeID(table, rule.Arguments[2], tableIDBitSize, shiftCnt)
+		tableID, err = computeID(table, rule.Arguments[2], sep, tableIDBitSize, shiftCnt)
 	}
+
 	return
 }
 
-func computeID(name string, prefix string, bitSize int, shiftCount uint) (int64, error) {
-	switch {
-	case len(prefix) >= len(name):
-		if prefix[:len(name)] == name {
-			return 0, nil
-		}
-		fallthrough
-	case prefix != name[:len(prefix)]:
+func computeID(name string, prefix, sep string, bitSize int, shiftCount uint) (int64, error) {
+	if name == prefix {
+		return 0, nil
+	}
+
+	prefix += sep
+	if len(prefix) >= len(name) || prefix != name[:len(prefix)] {
 		return 0, errors.NotValidf("%s is not the prefix of %s", prefix, name)
 	}
 
