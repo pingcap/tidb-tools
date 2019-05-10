@@ -33,7 +33,24 @@ type Conns struct {
 
 // NewConns returns a new Conns
 func NewConns(ctx context.Context, dbConfig dbutil.DBConfig, num int, snapshot string) (conns *Conns, err error) {
-	var db *sql.DB
+	var db, cpDB *sql.DB
+	defer func() {
+		if err == nil {
+			return
+		}
+
+		if db != nil {
+			if err1 := db.Close(); err != nil {
+				log.Warn("close db connection failed", zap.Error(err1))
+			}
+		}
+
+		if cpDB != nil {
+			if err1 := cpDB.Close(); err != nil {
+				log.Warn("close db connection failed", zap.Error(err1))
+			}
+		}
+	}()
 
 	if snapshot != "" {
 		db, err = dbutil.OpenDBWithSnapshot(dbConfig, snapshot)
@@ -49,7 +66,7 @@ func NewConns(ctx context.Context, dbConfig dbutil.DBConfig, num int, snapshot s
 	db.SetMaxOpenConns(num)
 	db.SetMaxIdleConns(num)
 
-	cpDB, err := dbutil.OpenDB(dbConfig)
+	cpDB, err = dbutil.OpenDB(dbConfig)
 	if err != nil {
 		return nil, errors.Errorf("create db connections %+v error %v", dbConfig, err)
 	}
