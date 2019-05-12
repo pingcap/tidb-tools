@@ -170,8 +170,7 @@ func NewMapping(caseSensitive bool, rules []*Rule) (*Mapping, error) {
 	return m, nil
 }
 
-// AddRule adds a rule into mapping
-func (m *Mapping) AddRule(rule *Rule) error {
+func (m *Mapping) addOrUpdateRule(rule *Rule, isUpdate bool) error {
 	if m == nil || rule == nil {
 		return nil
 	}
@@ -183,37 +182,33 @@ func (m *Mapping) AddRule(rule *Rule) error {
 	if !m.caseSensitive {
 		rule.ToLower()
 	}
+	if rule.Expression == PartitionID && len(rule.Arguments) == 3 {
+		rule.Arguments = append(rule.Arguments, "")
+	}
 
 	m.resetCache()
-	err = m.Insert(rule.PatternSchema, rule.PatternTable, rule, false)
+	err = m.Insert(rule.PatternSchema, rule.PatternTable, rule, isUpdate)
 	if err != nil {
-		return errors.Annotatef(err, "add rule %+v into mapping", rule)
+		var method string
+		if isUpdate {
+			method = "update"
+		} else {
+			method = "add"
+		}
+		return errors.Annotatef(err, "%s rule %+v into mapping", method, rule)
 	}
 
 	return nil
 }
 
+// AddRule adds a rule into mapping
+func (m *Mapping) AddRule(rule *Rule) error {
+	return m.addOrUpdateRule(rule, false)
+}
+
 // UpdateRule updates mapping rule
 func (m *Mapping) UpdateRule(rule *Rule) error {
-	if m == nil || rule == nil {
-		return nil
-	}
-
-	err := rule.Valid()
-	if err != nil {
-		return errors.Trace(err)
-	}
-	if !m.caseSensitive {
-		rule.ToLower()
-	}
-
-	m.resetCache()
-	err = m.Insert(rule.PatternSchema, rule.PatternTable, rule, true)
-	if err != nil {
-		return errors.Annotatef(err, "update rule %+v in mapping", rule)
-	}
-
-	return nil
+	return m.addOrUpdateRule(rule, true)
 }
 
 // RemoveRule removes a rule from mapping
@@ -495,10 +490,7 @@ func computePartitionID(schema, table string, rule *Rule) (instanceID int64, sch
 		instanceID = int64(instanceIDUnsign << shiftCnt)
 	}
 
-	var sep string
-	if len(rule.Arguments) > 3 {
-		sep = rule.Arguments[3]
-	}
+	sep := rule.Arguments[3]
 
 	if schemaIDBitSize > 0 && len(rule.Arguments[1]) > 0 {
 		shiftCnt = shiftCnt - uint(schemaIDBitSize)

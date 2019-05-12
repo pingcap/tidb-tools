@@ -191,7 +191,7 @@ func (t *testColumnMappingSuit) TestComputePartitionID(c *C) {
 
 	SetPartitionRule(4, 0, 8)
 	rule = &Rule{
-		Arguments: []string{"2", "test_", "t_"},
+		Arguments: []string{"2", "test_", "t_", ""},
 	}
 	instanceID, schemaID, tableID, err = computePartitionID("test_1", "t_1", rule)
 	c.Assert(err, IsNil)
@@ -208,7 +208,7 @@ func (t *testColumnMappingSuit) TestComputePartitionID(c *C) {
 	// test ignore instance ID
 	SetPartitionRule(4, 7, 8)
 	rule = &Rule{
-		Arguments: []string{"", "test_", "t_"},
+		Arguments: []string{"", "test_", "t_", ""},
 	}
 	instanceID, schemaID, tableID, err = computePartitionID("test_1", "t_1", rule)
 	c.Assert(err, IsNil)
@@ -218,7 +218,7 @@ func (t *testColumnMappingSuit) TestComputePartitionID(c *C) {
 
 	// test ignore schema ID
 	rule = &Rule{
-		Arguments: []string{"2", "", "t_"},
+		Arguments: []string{"2", "", "t_", ""},
 	}
 	instanceID, schemaID, tableID, err = computePartitionID("test_1", "t_1", rule)
 	c.Assert(err, IsNil)
@@ -228,7 +228,7 @@ func (t *testColumnMappingSuit) TestComputePartitionID(c *C) {
 
 	// test ignore schema ID
 	rule = &Rule{
-		Arguments: []string{"2", "test_", ""},
+		Arguments: []string{"2", "test_", "", ""},
 	}
 	instanceID, schemaID, tableID, err = computePartitionID("test_1", "t_1", rule)
 	c.Assert(err, IsNil)
