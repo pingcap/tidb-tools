@@ -89,5 +89,7 @@ func (s *testUtilSuite) TestRowToString(c *C) {
 	}
 
 	rowStr := rowToString(row)
-	c.Assert(rowStr, Equals, "{ id: 1, name: abc, info: IsNull,  }")
+	c.Assert(rowStr, Matches, ".*id: 1.*")
+	c.Assert(rowStr, Matches, ".*name: abc.*")
+	c.Assert(rowStr, Matches, ".*info: IsNull.*")
 }
