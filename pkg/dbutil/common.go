@@ -112,11 +112,14 @@ func OpenDB(cfg DBConfig) (*sql.DB, error) {
 	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4", cfg.User, cfg.Password, cfg.Host, cfg.Port)
 	dbConn, err := sql.Open("mysql", dbDSN)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.Annotatef(err, "fail to open mysql dsn %s:@%s:%d", cfg.User, cfg.Host, cfg.Port)
 	}
 
 	err = dbConn.Ping()
-	return dbConn, errors.Trace(err)
+	if err != nil {
+		return nil, errors.Annotatef(err, "fail to ping mysql dsn %s:@%s:%d", cfg.User, cfg.Host, cfg.Port)
+	}
+	return dbConn, nil
 }
 
 // CloseDB closes the mysql fd
