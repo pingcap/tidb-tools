@@ -120,6 +120,14 @@ func (r *Rule) Valid() error {
 	return nil
 }
 
+// Adjust normalizes the rule into an easier-to-process form, e.g. filling in
+// optional arguments with the default values.
+func (r *Rule) Adjust() {
+	if r.Expression == PartitionID && len(r.Arguments) == 3 {
+		r.Arguments = append(r.Arguments, "")
+	}
+}
+
 // check source and target position
 func (r *Rule) adjustColumnPosition(source, target int) (int, int, error) {
 	// if not found target, ignore it
@@ -182,9 +190,7 @@ func (m *Mapping) addOrUpdateRule(rule *Rule, isUpdate bool) error {
 	if !m.caseSensitive {
 		rule.ToLower()
 	}
-	if rule.Expression == PartitionID && len(rule.Arguments) == 3 {
-		rule.Arguments = append(rule.Arguments, "")
-	}
+	rule.Adjust()
 
 	m.resetCache()
 	err = m.Insert(rule.PatternSchema, rule.PatternTable, rule, isUpdate)

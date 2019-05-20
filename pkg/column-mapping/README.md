@@ -33,13 +33,16 @@ add prefix, with arguments[prefix]
 
 add suffix, with arguments[suffix]
 
-partition id, with arguments [instance_id, prefix of schema, prefix of table]
+partition id, with arguments [instance_id, prefix of schema, prefix of table, separator]
 [1:1 bit][2:9 bits][3:10 bits][4:44 bits] int64  (using default bits length)
 - 1: useless, no reason
 - 2: schema ID (schema suffix)
 - 3: table ID (table suffix)
 - 4: origin ID (>= 0, <= 17592186044415)
-And schema = arguments[1] + schema suffix, table = arguments[2] + table suffix
+And
+- schema = arguments[1] + arguments[3] + schema suffix    or    arguments[1]
+- table  = arguments[2] + arguments[3] + table suffix     or    arguments[2]
+The separator argument defaults to an empty string if omitted.
 ```
 
 ## notice
