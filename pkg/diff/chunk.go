@@ -221,13 +221,13 @@ func (s *randomSpliter) split(table *TableInstance, columns []*model.ColumnInfo,
 	s.collation = collation
 
 	// get the chunk count by data count and chunk size
-	cnt, err := dbutil.GetRowCount(context.Background(), table.Conns.DB, table.Schema, table.Table, limits)
+	cnt, err := dbutil.GetRowCount(context.Background(), table.Conn, table.Schema, table.Table, limits)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
 	chunkCnt := (int(cnt) + chunkSize - 1) / chunkSize
-	chunks, err := s.splitRange(table.Conns.DB, NewChunkRange(normalMode), chunkCnt, table.Schema, table.Table, columns)
+	chunks, err := s.splitRange(table.Conn, NewChunkRange(normalMode), chunkCnt, table.Schema, table.Table, columns)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -402,7 +402,7 @@ func (s *bucketSpliter) split(table *TableInstance, columns []*model.ColumnInfo,
 	s.limits = limits
 	s.collation = collation
 
-	buckets, err := dbutil.GetBucketsInfo(context.Background(), s.table.Conns.DB, s.table.Schema, s.table.Table, s.table.info)
+	buckets, err := dbutil.GetBucketsInfo(context.Background(), s.table.Conn, s.table.Schema, s.table.Table, s.table.info)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -552,7 +552,7 @@ func SplitChunks(ctx context.Context, table *TableInstance, splitFields, limits 
 		chunk.Args = args
 		chunk.State = notCheckedState
 
-		err = saveChunk(ctx1, table.Conns.CpDB, i, table.InstanceID, table.Schema, table.Table, "", chunk)
+		err = saveChunk(ctx1, table.Conn, i, table.InstanceID, table.Schema, table.Table, "", chunk)
 		if err != nil {
 			log.Warn("save chunk failed", zap.Error(err), zap.Stringer("chunk", chunk))
 		}

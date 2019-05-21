@@ -98,7 +98,7 @@ func (df *Diff) init(cfg *Config) (err error) {
 // CreateDBConn creates db connections for source and target.
 func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 	for _, source := range cfg.SourceDBCfg {
-		source.Conns, err = diff.NewConns(df.ctx, source.DBConfig, cfg.CheckThreadCount, source.Snapshot)
+		source.Conn, err = diff.CreateDB(df.ctx, source.DBConfig, cfg.CheckThreadCount)
 		if err != nil {
 			return errors.Errorf("create source db %+v error %v", source.DBConfig, err)
 		}
@@ -106,7 +106,7 @@ func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 	}
 
 	// create connection for target.
-	cfg.TargetDBCfg.Conns, err = diff.NewConns(df.ctx, cfg.TargetDBCfg.DBConfig, cfg.CheckThreadCount, cfg.TargetDBCfg.Snapshot)
+	cfg.TargetDBCfg.Conn, err = diff.CreateDB(df.ctx, cfg.TargetDBCfg.DBConfig, cfg.CheckThreadCount)
 	if err != nil {
 		return errors.Errorf("create target db %+v error %v", cfg.TargetDBCfg, err)
 	}
@@ -178,7 +178,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 		}
 
 		for _, tableName := range tables {
-			tableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, df.targetDB.Conns.DB, schemaTables.Schema, tableName, cfg.UseRowID)
+			tableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, df.targetDB.Conn, schemaTables.Schema, tableName, cfg.UseRowID)
 			if err != nil {
 				return errors.Errorf("get table %s.%s's inforamtion error %s", schemaTables.Schema, tableName, errors.ErrorStack(err))
 			}
@@ -268,12 +268,12 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]map[string]inte
 	allTablesMap := make(map[string]map[string]map[string]interface{})
 
 	allTablesMap[df.targetDB.InstanceID] = make(map[string]map[string]interface{})
-	targetSchemas, err := dbutil.GetSchemas(df.ctx, df.targetDB.Conns.DB)
+	targetSchemas, err := dbutil.GetSchemas(df.ctx, df.targetDB.Conn)
 	if err != nil {
 		return nil, errors.Annotatef(err, "get schemas from %s", df.targetDB.InstanceID)
 	}
 	for _, schema := range targetSchemas {
-		allTables, err := dbutil.GetTables(df.ctx, df.targetDB.Conns.DB, schema)
+		allTables, err := dbutil.GetTables(df.ctx, df.targetDB.Conn, schema)
 		if err != nil {
 			return nil, errors.Annotatef(err, "get tables from %s.%s", df.targetDB.InstanceID, schema)
 		}
@@ -282,13 +282,13 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]map[string]inte
 
 	for _, source := range df.sourceDBs {
 		allTablesMap[source.InstanceID] = make(map[string]map[string]interface{})
-		sourceSchemas, err := dbutil.GetSchemas(df.ctx, source.Conns.DB)
+		sourceSchemas, err := dbutil.GetSchemas(df.ctx, source.Conn)
 		if err != nil {
 			return nil, errors.Annotatef(err, "get schemas from %s", source.InstanceID)
 		}
 
 		for _, schema := range sourceSchemas {
-			allTables, err := dbutil.GetTables(df.ctx, source.Conns.DB, schema)
+			allTables, err := dbutil.GetTables(df.ctx, source.Conn, schema)
 			if err != nil {
 				return nil, errors.Annotatef(err, "get tables from %s.%s", source.InstanceID, schema)
 			}
@@ -329,13 +329,13 @@ func (df *Diff) Close() {
 	}
 
 	for _, db := range df.sourceDBs {
-		if db.Conns != nil {
-			db.Conns.Close()
+		if db.Conn != nil {
+			db.Conn.Close()
 		}
 	}
 
-	if df.targetDB.Conns != nil {
-		df.targetDB.Conns.Close()
+	if df.targetDB.Conn != nil {
+		df.targetDB.Conn.Close()
 	}
 }
 
@@ -350,7 +350,7 @@ func (df *Diff) Equal() (err error) {
 			sourceTables := make([]*diff.TableInstance, 0, len(table.SourceTables))
 			for _, sourceTable := range table.SourceTables {
 				sourceTableInstance := &diff.TableInstance{
-					Conns:      df.sourceDBs[sourceTable.InstanceID].Conns,
+					Conn:       df.sourceDBs[sourceTable.InstanceID].Conn,
 					Schema:     sourceTable.Schema,
 					Table:      sourceTable.Table,
 					InstanceID: sourceTable.InstanceID,
@@ -363,7 +363,7 @@ func (df *Diff) Equal() (err error) {
 			}
 
 			targetTableInstance := &diff.TableInstance{
-				Conns:      df.targetDB.Conns,
+				Conn:       df.targetDB.Conn,
 				Schema:     table.Schema,
 				Table:      table.Table,
 				InstanceID: df.targetDB.InstanceID,

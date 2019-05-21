@@ -14,6 +14,7 @@
 package main
 
 import (
+	"database/sql"
 	"flag"
 	"fmt"
 
@@ -22,7 +23,6 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pingcap/tidb-tools/pkg/diff"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"go.uber.org/zap"
 )
@@ -40,9 +40,7 @@ type DBConfig struct {
 
 	InstanceID string `toml:"instance-id" json:"instance-id"`
 
-	Snapshot string `toml:"snapshot" json:"snapshot"`
-
-	Conns *diff.Conns
+	Conn *sql.DB
 }
 
 // Valid returns true if database's config is valide.

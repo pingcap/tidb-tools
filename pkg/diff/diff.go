@@ -36,10 +36,10 @@ import (
 
 // TableInstance record a table instance
 type TableInstance struct {
-	Conns      *Conns `json:"-"`
-	Schema     string `json:"schema"`
-	Table      string `json:"table"`
-	InstanceID string `json:"instance-id"`
+	Conn       *sql.DB `json:"-"`
+	Schema     string  `json:"schema"`
+	Table      string  `json:"table"`
+	InstanceID string  `json:"instance-id"`
 	info       *model.TableInfo
 }
 
@@ -185,14 +185,14 @@ func (t *TableDiff) adjustConfig() {
 }
 
 func (t *TableDiff) getTableInfo(ctx context.Context) error {
-	tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, t.TargetTable.Conns.DB, t.TargetTable.Schema, t.TargetTable.Table, t.UseRowID)
+	tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.UseRowID)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	t.TargetTable.info = removeColumns(tableInfo, t.RemoveColumns)
 
 	for _, sourceTable := range t.SourceTables {
-		tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, sourceTable.Conns.DB, sourceTable.Schema, sourceTable.Table, t.UseRowID)
+		tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.UseRowID)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -289,20 +289,20 @@ func (t *TableDiff) LoadCheckpoint(ctx context.Context) ([]*ChunkRange, error) {
 		return nil, errors.Trace(err)
 	}
 
-	err = createCheckpointTable(ctx1, t.TargetTable.Conns.CpDB)
+	err = createCheckpointTable(ctx1, t.TargetTable.Conn)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
 	if t.UseCheckpoint {
-		useCheckpoint, err := loadFromCheckPoint(ctx1, t.TargetTable.Conns.CpDB, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
+		useCheckpoint, err := loadFromCheckPoint(ctx1, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 
 		if useCheckpoint {
 			log.Info("use checkpoint to load chunks")
-			chunks, err := loadChunks(ctx1, t.TargetTable.Conns.CpDB, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table)
+			chunks, err := loadChunks(ctx1, t.TargetTable.Conn, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table)
 			if err != nil {
 				log.Error("load chunks info", zap.Error(err))
 				return nil, errors.Trace(err)
@@ -313,12 +313,12 @@ func (t *TableDiff) LoadCheckpoint(ctx context.Context) ([]*ChunkRange, error) {
 	}
 
 	// clean old checkpoint infomation, and initial table summary
-	err = cleanCheckpoint(ctx1, t.TargetTable.Conns.CpDB, t.TargetTable.Schema, t.TargetTable.Table)
+	err = cleanCheckpoint(ctx1, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	err = initTableSummary(ctx1, t.TargetTable.Conns.CpDB, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
+	err = initTableSummary(ctx1, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -330,7 +330,7 @@ func (t *TableDiff) getSourceTableChecksum(ctx context.Context, chunk *ChunkRang
 	var checksum int64
 
 	for _, sourceTable := range t.SourceTables {
-		checksumTmp, err := dbutil.GetCRC32Checksum(ctx, sourceTable.Conns.DB, sourceTable.Schema, sourceTable.Table, t.TargetTable.info, chunk.Where, utils.StringsToInterfaces(chunk.Args), utils.SliceToMap(t.IgnoreColumns))
+		checksumTmp, err := dbutil.GetCRC32Checksum(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.info, chunk.Where, utils.StringsToInterfaces(chunk.Args), utils.SliceToMap(t.IgnoreColumns))
 		if err != nil {
 			return -1, errors.Trace(err)
 		}
@@ -372,7 +372,7 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, 
 		ctx1, cancel1 := context.WithTimeout(ctx, dbutil.DefaultTimeout)
 		defer cancel1()
 
-		err1 := saveChunk(ctx1, t.TargetTable.Conns.CpDB, chunk.ID, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table, "", chunk)
+		err1 := saveChunk(ctx1, t.TargetTable.Conn, chunk.ID, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table, "", chunk)
 		if err1 != nil {
 			log.Warn("update chunk info", zap.Error(err1))
 		}
@@ -436,7 +436,7 @@ func (t *TableDiff) compareChecksum(ctx context.Context, chunk *ChunkRange) (boo
 		return false, errors.Trace(err)
 	}
 
-	targetChecksum, err := dbutil.GetCRC32Checksum(ctx, t.TargetTable.Conns.DB, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, utils.StringsToInterfaces(chunk.Args), utils.SliceToMap(t.IgnoreColumns))
+	targetChecksum, err := dbutil.GetCRC32Checksum(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, utils.StringsToInterfaces(chunk.Args), utils.SliceToMap(t.IgnoreColumns))
 	if err != nil {
 		return false, errors.Trace(err)
 	}
@@ -455,7 +455,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 	args := utils.StringsToInterfaces(chunk.Args)
 	ignoreCloumns := utils.SliceToMap(t.IgnoreColumns)
 
-	targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conns.DB, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, args, ignoreCloumns, t.Collation)
+	targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, args, ignoreCloumns, t.Collation)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
@@ -468,7 +468,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 	}
 
 	for i, sourceTable := range t.SourceTables {
-		rows, _, err := getChunkRows(ctx, sourceTable.Conns.DB, sourceTable.Schema, sourceTable.Table, sourceTable.info, chunk.Where, args, ignoreCloumns, t.Collation)
+		rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, chunk.Where, args, ignoreCloumns, t.Collation)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -637,7 +637,7 @@ func (t *TableDiff) UpdateSummaryInfo(ctx context.Context) chan bool {
 			ctx1, cancel1 := context.WithTimeout(ctx, dbutil.DefaultTimeout)
 			defer cancel1()
 
-			err := updateTableSummary(ctx1, t.TargetTable.Conns.CpDB, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table)
+			err := updateTableSummary(ctx1, t.TargetTable.Conn, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table)
 			if err != nil {
 				log.Error("save table summary info failed", zap.String("schema", t.TargetTable.Schema), zap.String("table", t.TargetTable.Table), zap.Error(err))
 			}
