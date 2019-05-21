@@ -36,14 +36,14 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	conns, err := createConns(ctx)
+	conn, err := createConn(ctx)
 	c.Assert(err, IsNil)
-	defer conns.Close()
+	defer conn.Close()
 
-	_, err = conns.DB.ExecContext(ctx, "CREATE DATABASE IF NOT EXISTS `test`")
+	_, err = conn.ExecContext(ctx, "CREATE DATABASE IF NOT EXISTS `test`")
 	c.Assert(err, IsNil)
 
-	_, err = conns.DB.ExecContext(ctx, "DROP TABLE IF EXISTS `test`.`testa`")
+	_, err = conn.ExecContext(ctx, "DROP TABLE IF EXISTS `test`.`testa`")
 	c.Assert(err, IsNil)
 
 	createTableSQL := `CREATE TABLE test.testa (
@@ -66,16 +66,16 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 
 	// generate data for test.testa
 	importer.DoProcess(cfg)
-	defer conns.DB.ExecContext(ctx, "DROP TABLE IF EXISTS `test`.`testa`")
+	defer conn.ExecContext(ctx, "DROP TABLE IF EXISTS `test`.`testa`")
 
 	// only work on tidb, so don't assert err here
-	_, _ = conns.DB.ExecContext(ctx, "ANALYZE TABLE `test`.`testa`")
+	_, _ = conn.ExecContext(ctx, "ANALYZE TABLE `test`.`testa`")
 
-	tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, conns.DB, "test", "testa", false)
+	tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, conn, "test", "testa", false)
 	c.Assert(err, IsNil)
 
 	tableInstance := &TableInstance{
-		Conns:  conns,
+		Conn:   conn,
 		Schema: "test",
 		Table:  "testa",
 		info:   tableInfo,
@@ -91,7 +91,7 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 	chunkDataCount := 0
 	for _, chunk := range chunks {
 		conditions, args := chunk.toString("")
-		count, err := dbutil.GetRowCount(ctx, tableInstance.Conns.DB, tableInstance.Schema, tableInstance.Table, dbutil.ReplacePlaceholder(conditions, args))
+		count, err := dbutil.GetRowCount(ctx, tableInstance.Conn, tableInstance.Schema, tableInstance.Table, dbutil.ReplacePlaceholder(conditions, args))
 		c.Assert(err, IsNil)
 		chunkDataCount += int(count)
 	}

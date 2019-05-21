@@ -81,14 +81,14 @@ func (t *testDiffSuite) testDiff(c *C) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 
-	conns, err := createConns(ctx)
+	conn, err := createConn(ctx)
 	c.Assert(err, IsNil)
-	defer conns.Close()
+	defer conn.Close()
 
-	_, err = conns.DB.ExecContext(ctx, "CREATE DATABASE IF NOT EXISTS `test`")
+	_, err = conn.ExecContext(ctx, "CREATE DATABASE IF NOT EXISTS `test`")
 	c.Assert(err, IsNil)
 
-	testStructEqual(ctx, conns, c)
+	testStructEqual(ctx, conn, c)
 	testCases := []struct {
 		sourceTables  []string
 		targetTable   string
@@ -116,11 +116,11 @@ func (t *testDiffSuite) testDiff(c *C) {
 		},
 	}
 	for _, testCase := range testCases {
-		testDataEqual(ctx, conns, testCase.sourceTables, testCase.targetTable, testCase.hasEmptyTable, c)
+		testDataEqual(ctx, conn, testCase.sourceTables, testCase.targetTable, testCase.hasEmptyTable, c)
 	}
 }
 
-func testStructEqual(ctx context.Context, conns *Conns, c *C) {
+func testStructEqual(ctx context.Context, conn *sql.DB, c *C) {
 	testCases := []struct {
 		createSourceTable string
 		createTargetTable string
@@ -162,34 +162,34 @@ func testStructEqual(ctx context.Context, conns *Conns, c *C) {
 	}
 
 	for _, testCase := range testCases {
-		_, err := conns.DB.ExecContext(ctx, testCase.createSourceTable)
+		_, err := conn.ExecContext(ctx, testCase.createSourceTable)
 		c.Assert(err, IsNil)
-		_, err = conns.DB.ExecContext(ctx, testCase.createTargetTable)
+		_, err = conn.ExecContext(ctx, testCase.createTargetTable)
 		c.Assert(err, IsNil)
 
-		tableDiff := createTableDiff(conns, []string{"testa"}, "testb")
+		tableDiff := createTableDiff(conn, []string{"testa"}, "testb")
 		structEqual, _, err := tableDiff.Equal(context.Background(), func(sql string) error {
 			fmt.Println(sql)
 			return nil
 		})
 		c.Assert(structEqual, Equals, testCase.structEqual)
 
-		_, err = conns.DB.ExecContext(ctx, testCase.dropSourceTable)
+		_, err = conn.ExecContext(ctx, testCase.dropSourceTable)
 		c.Assert(err, IsNil)
-		_, err = conns.DB.ExecContext(ctx, testCase.dropTargetTable)
+		_, err = conn.ExecContext(ctx, testCase.dropTargetTable)
 		c.Assert(err, IsNil)
 	}
 }
 
-func testDataEqual(ctx context.Context, conns *Conns, sourceTables []string, targetTable string, hasEmptyTable bool, c *C) {
+func testDataEqual(ctx context.Context, conn *sql.DB, sourceTables []string, targetTable string, hasEmptyTable bool, c *C) {
 	defer func() {
 		for _, sourceTable := range sourceTables {
-			_, _ = conns.DB.ExecContext(ctx, fmt.Sprintf("DROP TABLE `test`.`%s`", sourceTable))
+			_, _ = conn.ExecContext(ctx, fmt.Sprintf("DROP TABLE `test`.`%s`", sourceTable))
 		}
-		_, _ = conns.DB.ExecContext(ctx, fmt.Sprintf("DROP TABLE `test`.`%s`", targetTable))
+		_, _ = conn.ExecContext(ctx, fmt.Sprintf("DROP TABLE `test`.`%s`", targetTable))
 	}()
 
-	err := generateData(ctx, conns.DB, dbutil.GetDBConfigFromEnv("test"), sourceTables, targetTable, hasEmptyTable)
+	err := generateData(ctx, conn, dbutil.GetDBConfigFromEnv("test"), sourceTables, targetTable, hasEmptyTable)
 	c.Assert(err, IsNil)
 
 	// compare data, should be equal
@@ -199,14 +199,14 @@ func testDataEqual(ctx context.Context, conns *Conns, sourceTables []string, tar
 		return nil
 	}
 
-	tableDiff := createTableDiff(conns, sourceTables, targetTable)
+	tableDiff := createTableDiff(conn, sourceTables, targetTable)
 	structEqual, dataEqual, err := tableDiff.Equal(context.Background(), writeSqls)
 	c.Assert(err, IsNil)
 	c.Assert(structEqual, Equals, true)
 	c.Assert(dataEqual, Equals, true)
 
 	// update data and then compare data, dataEqual should be false
-	err = updateData(ctx, conns.DB, targetTable)
+	err = updateData(ctx, conn, targetTable)
 	c.Assert(err, IsNil)
 
 	structEqual, dataEqual, err = tableDiff.Equal(context.Background(), writeSqls)
@@ -216,7 +216,7 @@ func testDataEqual(ctx context.Context, conns *Conns, sourceTables []string, tar
 
 	// use fixSqls to fix data, and then compare data
 	for _, sql := range fixSqls {
-		_, err = conns.DB.ExecContext(ctx, sql)
+		_, err = conn.ExecContext(ctx, sql)
 		c.Assert(err, IsNil)
 	}
 	structEqual, dataEqual, err = tableDiff.Equal(ctx, writeSqls)
@@ -225,11 +225,11 @@ func testDataEqual(ctx context.Context, conns *Conns, sourceTables []string, tar
 	c.Assert(dataEqual, Equals, true)
 }
 
-func createTableDiff(conns *Conns, sourceTableNames []string, targetTableName string) *TableDiff {
+func createTableDiff(conn *sql.DB, sourceTableNames []string, targetTableName string) *TableDiff {
 	sourceTables := []*TableInstance{}
 	for _, table := range sourceTableNames {
 		sourceTableInstance := &TableInstance{
-			Conns:  conns,
+			Conn:   conn,
 			Schema: "test",
 			Table:  table,
 		}
@@ -238,7 +238,7 @@ func createTableDiff(conns *Conns, sourceTableNames []string, targetTableName st
 	}
 
 	targetTableInstance := &TableInstance{
-		Conns:  conns,
+		Conn:   conn,
 		Schema: "test",
 		Table:  targetTableName,
 	}
@@ -249,8 +249,8 @@ func createTableDiff(conns *Conns, sourceTableNames []string, targetTableName st
 	}
 }
 
-func createConns(ctx context.Context) (*Conns, error) {
-	return NewConns(ctx, dbutil.GetDBConfigFromEnv(""), 4, "")
+func createConn(ctx context.Context) (*sql.DB, error) {
+	return dbutil.OpenDB(dbutil.GetDBConfigFromEnv(""))
 }
 
 func generateData(ctx context.Context, db *sql.DB, dbCfg dbutil.DBConfig, sourceTables []string, targetTable string, hasEmptyTable bool) error {

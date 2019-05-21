@@ -30,15 +30,15 @@ func (s *testCheckpointSuite) TestCheckpoint(c *C) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	conns, err := createConns(ctx)
+	conn, err := createConn(ctx)
 	c.Assert(err, IsNil)
-	defer conns.Close()
+	defer conn.Close()
 
-	s.testInitAndGetSummary(c, conns.CpDB)
-	s.testSaveAndLoadChunk(c, conns.CpDB)
-	s.testUpdateSummary(c, conns.CpDB)
+	s.testInitAndGetSummary(c, conn)
+	s.testSaveAndLoadChunk(c, conn)
+	s.testUpdateSummary(c, conn)
 
-	dropCheckpoint(ctx, conns.CpDB)
+	dropCheckpoint(ctx, conn)
 }
 
 func (s *testCheckpointSuite) testInitAndGetSummary(c *C, db *sql.DB) {

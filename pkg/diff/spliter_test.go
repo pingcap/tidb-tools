@@ -29,16 +29,12 @@ func (s *testSpliterSuite) TestRandomSpliter(c *C) {
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
 
-	conns := &Conns{
-		DB: db,
-	}
-
 	createTableSQL := "create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
 	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL)
 	c.Assert(err, IsNil)
 
 	tableInstance := &TableInstance{
-		Conns:  conns,
+		Conn:   db,
 		Schema: "test",
 		Table:  "test",
 		info:   tableInfo,
@@ -183,7 +179,7 @@ func (s *testSpliterSuite) TestRandomSpliter(c *C) {
 	}
 
 	oriChunk := NewChunkRange(normalMode).copyAndUpdate("a", "0", gt, "10", lt)
-	chunks, err := r.splitRange(conns.DB, oriChunk, 2, "test", "test", tableInfo.Columns)
+	chunks, err := r.splitRange(db, oriChunk, 2, "test", "test", tableInfo.Columns)
 	c.Assert(err, IsNil)
 	for i, chunk := range chunks {
 		chunkStr, args := chunk.toString("")
@@ -246,10 +242,6 @@ func (s *testSpliterSuite) TestBucketSpliter(c *C) {
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
 
-	conns := &Conns{
-		DB: db,
-	}
-
 	createTableSQL := "create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
 	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL)
 	c.Assert(err, IsNil)
@@ -283,7 +275,7 @@ func (s *testSpliterSuite) TestBucketSpliter(c *C) {
 	}
 
 	tableInstance := &TableInstance{
-		Conns:  conns,
+		Conn:   db,
 		Schema: "test",
 		Table:  "test",
 		info:   tableInfo,
