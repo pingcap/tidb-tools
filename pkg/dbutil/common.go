@@ -113,6 +113,7 @@ func GetDBConfigFromEnv(schema string) DBConfig {
 func OpenDB(cfg DBConfig) (*sql.DB, error) {
 	var dbDSN string
 	if len(cfg.Snapshot) != 0 {
+		log.Info("create connection with snapshot", zap.String("snapshot", cfg.Snapshot))
 		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&tidb_snapshot=%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Snapshot)
 	} else {
 		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4", cfg.User, cfg.Password, cfg.Host, cfg.Port)
@@ -567,14 +568,6 @@ func GetTidbLatestTSO(ctx context.Context, db *sql.DB) (int64, error) {
 		return ts, nil
 	}
 	return 0, errors.New("get slave cluster's ts failed")
-}
-
-// SetSnapshot set the snapshot variable for tidb
-func SetSnapshot(ctx context.Context, db *sql.DB, snapshot string) error {
-	sql := fmt.Sprintf("SET @@tidb_snapshot='%s'", snapshot)
-	log.Info("set history snapshot", zap.String("sql", sql))
-	_, err := db.ExecContext(ctx, sql)
-	return errors.Trace(err)
 }
 
 // GetDBVersion returns the database's version

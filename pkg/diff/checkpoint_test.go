@@ -34,11 +34,10 @@ func (s *testCheckpointSuite) TestCheckpoint(c *C) {
 	c.Assert(err, IsNil)
 	defer conn.Close()
 
+	defer dropCheckpoint(ctx, conn)
 	s.testInitAndGetSummary(c, conn)
 	s.testSaveAndLoadChunk(c, conn)
 	s.testUpdateSummary(c, conn)
-
-	dropCheckpoint(ctx, conn)
 }
 
 func (s *testCheckpointSuite) testInitAndGetSummary(c *C, db *sql.DB) {

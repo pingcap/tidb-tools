@@ -344,6 +344,10 @@ func (df *Diff) Close() {
 	if df.targetDB.Conn != nil {
 		df.targetDB.Conn.Close()
 	}
+
+	if df.cpDB != nil {
+		df.cpDB.Close()
+	}
 }
 
 // Equal tests whether two database have same data and schema.
