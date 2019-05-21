@@ -72,6 +72,8 @@ type DBConfig struct {
 	Password string `toml:"password" json:"password"`
 
 	Schema string `toml:"schema" json:"schema"`
+
+	Snapshot string `toml:"snapshot" json:"snapshot"`
 }
 
 // String returns native format of database configuration
@@ -109,19 +111,14 @@ func GetDBConfigFromEnv(schema string) DBConfig {
 
 // OpenDB opens a mysql connection FD
 func OpenDB(cfg DBConfig) (*sql.DB, error) {
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4", cfg.User, cfg.Password, cfg.Host, cfg.Port)
-	return OpenDBByDSN(dbDSN)
-}
+	var dbDSN string
+	if len(cfg.Snapshot) != 0 {
+		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&tidb_snapshot=%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Snapshot)
+	} else {
+		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4", cfg.User, cfg.Password, cfg.Host, cfg.Port)
+	}
 
-// OpenDBWithSnapshot opens a mysql connection FD with tidb_snapshot set
-func OpenDBWithSnapshot(cfg DBConfig, snapshot string) (*sql.DB, error) {
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&tidb_snapshot=%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, snapshot)
-	return OpenDBByDSN(dbDSN)
-}
-
-// OpenDBByDSN opens a mysql connection FD by DSN
-func OpenDBByDSN(dsn string) (*sql.DB, error) {
-	dbConn, err := sql.Open("mysql", dsn)
+	dbConn, err := sql.Open("mysql", dbDSN)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

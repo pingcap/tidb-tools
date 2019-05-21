@@ -15,6 +15,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"regexp"
@@ -46,6 +47,7 @@ type Diff struct {
 	report            *Report
 	tidbInstanceID    string
 	tableRouter       *router.Table
+	cpDB              *sql.DB
 
 	ctx context.Context
 }
@@ -111,6 +113,11 @@ func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 		return errors.Errorf("create target db %+v error %v", cfg.TargetDBCfg, err)
 	}
 	df.targetDB = cfg.TargetDBCfg
+
+	df.cpDB, err = diff.CreateDBForCP(df.ctx, cfg.TargetDBCfg.DBConfig)
+	if err != nil {
+		return errors.Errorf("create checkpoint db %+v error %v", cfg.TargetDBCfg, err)
+	}
 
 	return nil
 }
@@ -397,6 +404,7 @@ func (df *Diff) Equal() (err error) {
 				IgnoreStructCheck: df.ignoreStructCheck,
 				IgnoreDataCheck:   df.ignoreDataCheck,
 				TiDBStatsSource:   tidbStatsSource,
+				CpDB:              df.cpDB,
 			}
 
 			structEqual, dataEqual, err := td.Equal(df.ctx, func(dml string) error {

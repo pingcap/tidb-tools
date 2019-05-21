@@ -37,7 +37,7 @@ func CreateDB(ctx context.Context, dbConfig dbutil.DBConfig, num int) (db *sql.D
 }
 
 // CreateDBForCP creates sql.DB used for write data for checkpoint
-func CreateDBForCP(ctx context.Context, dbConfig dbutil.DBConfig, num int) (cpDB *sql.DB, err error) {
+func CreateDBForCP(ctx context.Context, dbConfig dbutil.DBConfig) (cpDB *sql.DB, err error) {
 	snapshot := dbConfig.Snapshot
 	defer func() {
 		dbConfig.Snapshot = snapshot

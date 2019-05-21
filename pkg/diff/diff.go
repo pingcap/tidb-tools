@@ -103,6 +103,8 @@ type TableDiff struct {
 	wg sync.WaitGroup
 
 	configHash string
+
+	CpDB *sql.DB
 }
 
 func (t *TableDiff) setConfigHash() error {
@@ -222,7 +224,7 @@ func (t *TableDiff) CheckTableData(ctx context.Context) (equal bool, err error) 
 		log.Debug("don't have checkpoint info or config changed")
 
 		fromCheckpoint = false
-		chunks, err = SplitChunks(ctx, table, t.Fields, t.Range, t.ChunkSize, t.Collation, useTiDB)
+		chunks, err = SplitChunks(ctx, table, t.Fields, t.Range, t.ChunkSize, t.Collation, useTiDB, t.CpDB)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -289,20 +291,20 @@ func (t *TableDiff) LoadCheckpoint(ctx context.Context) ([]*ChunkRange, error) {
 		return nil, errors.Trace(err)
 	}
 
-	err = createCheckpointTable(ctx1, t.TargetTable.Conn)
+	err = createCheckpointTable(ctx1, t.CpDB)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
 	if t.UseCheckpoint {
-		useCheckpoint, err := loadFromCheckPoint(ctx1, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
+		useCheckpoint, err := loadFromCheckPoint(ctx1, t.CpDB, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 
 		if useCheckpoint {
 			log.Info("use checkpoint to load chunks")
-			chunks, err := loadChunks(ctx1, t.TargetTable.Conn, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table)
+			chunks, err := loadChunks(ctx1, t.CpDB, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table)
 			if err != nil {
 				log.Error("load chunks info", zap.Error(err))
 				return nil, errors.Trace(err)
@@ -313,12 +315,12 @@ func (t *TableDiff) LoadCheckpoint(ctx context.Context) ([]*ChunkRange, error) {
 	}
 
 	// clean old checkpoint infomation, and initial table summary
-	err = cleanCheckpoint(ctx1, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table)
+	err = cleanCheckpoint(ctx1, t.CpDB, t.TargetTable.Schema, t.TargetTable.Table)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	err = initTableSummary(ctx1, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
+	err = initTableSummary(ctx1, t.CpDB, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -372,7 +374,7 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, 
 		ctx1, cancel1 := context.WithTimeout(ctx, dbutil.DefaultTimeout)
 		defer cancel1()
 
-		err1 := saveChunk(ctx1, t.TargetTable.Conn, chunk.ID, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table, "", chunk)
+		err1 := saveChunk(ctx1, t.CpDB, chunk.ID, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table, "", chunk)
 		if err1 != nil {
 			log.Warn("update chunk info", zap.Error(err1))
 		}
@@ -637,7 +639,7 @@ func (t *TableDiff) UpdateSummaryInfo(ctx context.Context) chan bool {
 			ctx1, cancel1 := context.WithTimeout(ctx, dbutil.DefaultTimeout)
 			defer cancel1()
 
-			err := updateTableSummary(ctx1, t.TargetTable.Conn, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table)
+			err := updateTableSummary(ctx1, t.CpDB, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table)
 			if err != nil {
 				log.Error("save table summary info failed", zap.String("schema", t.TargetTable.Schema), zap.String("table", t.TargetTable.Table), zap.Error(err))
 			}
