@@ -63,10 +63,12 @@ var Exprs = map[Expr]func(*mappingInfo, []interface{}) ([]interface{}, error){
 	// # 3 table ID (table suffix)
 	// # 4 origin ID (>= 0, <= 17592186044415)
 	//
-	// others: schema = arguments[1] + schema suffix
-	//         table = arguments[2] + table suffix
-	//  example: schema = schema_1 table = t_1  => arguments[1] = "schema_", arguments[2] = "t_"
+	// others: schema = arguments[1]  or  arguments[1] + arguments[3] + schema suffix
+	//         table  = arguments[2]  or  arguments[2] + arguments[3] + table suffix
+	//  example: schema = schema_1 table = t_1
+	//        => arguments[1] = "schema", arguments[2] = "t", arguments[3] = "_"
 	//  if arguments[1]/arguments[2] == "", it means we don't use schemaID/tableID to compute partition ID
+	//  if length of arguments is < 4, arguments[3] is set to "" (empty string)
 	PartitionID: partitionID,
 }
 
@@ -90,7 +92,7 @@ func (r *Rule) ToLower() {
 
 // Valid checks validity of rule.
 // add prefix/suffix: it should have target column and one argument
-// partition id: it should have 3 arguments
+// partition id: it should have 3 to 4 arguments
 func (r *Rule) Valid() error {
 	if _, ok := Exprs[r.Expression]; !ok {
 		return errors.NotFoundf("expression %s", r.Expression)
@@ -107,12 +109,23 @@ func (r *Rule) Valid() error {
 	}
 
 	if r.Expression == PartitionID {
-		if len(r.Arguments) != 3 {
+		switch len(r.Arguments) {
+		case 3, 4:
+			break
+		default:
 			return errors.NotValidf("arguments %v for patition id", r.Arguments)
 		}
 	}
 
 	return nil
+}
+
+// Adjust normalizes the rule into an easier-to-process form, e.g. filling in
+// optional arguments with the default values.
+func (r *Rule) Adjust() {
+	if r.Expression == PartitionID && len(r.Arguments) == 3 {
+		r.Arguments = append(r.Arguments, "")
+	}
 }
 
 // check source and target position
@@ -165,8 +178,7 @@ func NewMapping(caseSensitive bool, rules []*Rule) (*Mapping, error) {
 	return m, nil
 }
 
-// AddRule adds a rule into mapping
-func (m *Mapping) AddRule(rule *Rule) error {
+func (m *Mapping) addOrUpdateRule(rule *Rule, isUpdate bool) error {
 	if m == nil || rule == nil {
 		return nil
 	}
@@ -178,37 +190,31 @@ func (m *Mapping) AddRule(rule *Rule) error {
 	if !m.caseSensitive {
 		rule.ToLower()
 	}
+	rule.Adjust()
 
 	m.resetCache()
-	err = m.Insert(rule.PatternSchema, rule.PatternTable, rule, false)
+	err = m.Insert(rule.PatternSchema, rule.PatternTable, rule, isUpdate)
 	if err != nil {
-		return errors.Annotatef(err, "add rule %+v into mapping", rule)
+		var method string
+		if isUpdate {
+			method = "update"
+		} else {
+			method = "add"
+		}
+		return errors.Annotatef(err, "%s rule %+v into mapping", method, rule)
 	}
 
 	return nil
 }
 
+// AddRule adds a rule into mapping
+func (m *Mapping) AddRule(rule *Rule) error {
+	return m.addOrUpdateRule(rule, false)
+}
+
 // UpdateRule updates mapping rule
 func (m *Mapping) UpdateRule(rule *Rule) error {
-	if m == nil || rule == nil {
-		return nil
-	}
-
-	err := rule.Valid()
-	if err != nil {
-		return errors.Trace(err)
-	}
-	if !m.caseSensitive {
-		rule.ToLower()
-	}
-
-	m.resetCache()
-	err = m.Insert(rule.PatternSchema, rule.PatternTable, rule, true)
-	if err != nil {
-		return errors.Annotatef(err, "update rule %+v in mapping", rule)
-	}
-
-	return nil
+	return m.addOrUpdateRule(rule, true)
 }
 
 // RemoveRule removes a rule from mapping
@@ -490,9 +496,11 @@ func computePartitionID(schema, table string, rule *Rule) (instanceID int64, sch
 		instanceID = int64(instanceIDUnsign << shiftCnt)
 	}
 
+	sep := rule.Arguments[3]
+
 	if schemaIDBitSize > 0 && len(rule.Arguments[1]) > 0 {
 		shiftCnt = shiftCnt - uint(schemaIDBitSize)
-		schemaID, err = computeID(schema, rule.Arguments[1], schemaIDBitSize, shiftCnt)
+		schemaID, err = computeID(schema, rule.Arguments[1], sep, schemaIDBitSize, shiftCnt)
 		if err != nil {
 			return
 		}
@@ -500,12 +508,18 @@ func computePartitionID(schema, table string, rule *Rule) (instanceID int64, sch
 
 	if tableIDBitSize > 0 && len(rule.Arguments[2]) > 0 {
 		shiftCnt = shiftCnt - uint(tableIDBitSize)
-		tableID, err = computeID(table, rule.Arguments[2], tableIDBitSize, shiftCnt)
+		tableID, err = computeID(table, rule.Arguments[2], sep, tableIDBitSize, shiftCnt)
 	}
+
 	return
 }
 
-func computeID(name string, prefix string, bitSize int, shiftCount uint) (int64, error) {
+func computeID(name string, prefix, sep string, bitSize int, shiftCount uint) (int64, error) {
+	if name == prefix {
+		return 0, nil
+	}
+
+	prefix += sep
 	if len(prefix) >= len(name) || prefix != name[:len(prefix)] {
 		return 0, errors.NotValidf("%s is not the prefix of %s", prefix, name)
 	}
