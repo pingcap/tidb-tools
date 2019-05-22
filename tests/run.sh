@@ -16,7 +16,7 @@ export PATH=$PATH:$(dirname $pwd)/bin
 rm -rf $OUT_DIR || true
 
 # set to the case name you want to run only for debug
-do_case=""
+do_case="sync_diff_inspector"
 
 for script in ./*/run.sh; do
     test_name="$(basename "$(dirname "$script")")"

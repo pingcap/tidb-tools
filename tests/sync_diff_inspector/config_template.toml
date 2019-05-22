@@ -27,10 +27,10 @@ tidb-instance-id = "target-1"
 # tables need to check.
 [[check-tables]]
 # schema name in target database.
-schema = "test"
+schema = "diff_test"
 
 # table list which need check in target database.
-tables = ["diff_test"]
+tables = ["test"]
 
 [[source-db]]
 host = "127.0.0.1"

@@ -50,7 +50,7 @@ test:
 	@export log_level=error; \
 	$(GOTEST) -cover $(PACKAGES)
 
-integration_test: sync_diff_inspector importer
+integration_test: build
 	@which bin/tidb-server
 	@which bin/tikv-server
 	@which bin/pd-server
