@@ -14,6 +14,9 @@
 package diff
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
@@ -89,4 +92,19 @@ func rowContainsCols(row map[string]*dbutil.ColumnData, cols []*model.ColumnInfo
 	}
 
 	return true
+}
+
+func rowToString(row map[string]*dbutil.ColumnData) string {
+	var s strings.Builder
+	s.WriteString("{ ")
+	for key, val := range row {
+		if val.IsNull {
+			s.WriteString(fmt.Sprintf("%s: IsNull, ", key))
+		} else {
+			s.WriteString(fmt.Sprintf("%s: %s, ", key, val.Data))
+		}
+	}
+	s.WriteString(" }")
+
+	return s.String()
 }

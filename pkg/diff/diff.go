@@ -103,6 +103,8 @@ type TableDiff struct {
 	wg sync.WaitGroup
 
 	configHash string
+
+	CpDB *sql.DB
 }
 
 func (t *TableDiff) setConfigHash() error {
@@ -222,7 +224,10 @@ func (t *TableDiff) CheckTableData(ctx context.Context) (equal bool, err error) 
 		log.Debug("don't have checkpoint info or config changed")
 
 		fromCheckpoint = false
-		chunks, err = SplitChunks(ctx, table, t.Fields, t.Range, t.ChunkSize, t.Collation, useTiDB)
+		chunks, err = SplitChunks(ctx, table, t.Fields, t.Range, t.ChunkSize, t.Collation, useTiDB, t.CpDB)
+		if err != nil {
+			return false, errors.Trace(err)
+		}
 	}
 
 	if len(chunks) == 0 {
@@ -286,20 +291,20 @@ func (t *TableDiff) LoadCheckpoint(ctx context.Context) ([]*ChunkRange, error) {
 		return nil, errors.Trace(err)
 	}
 
-	err = createCheckpointTable(ctx1, t.TargetTable.Conn)
+	err = createCheckpointTable(ctx1, t.CpDB)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
 	if t.UseCheckpoint {
-		useCheckpoint, err := loadFromCheckPoint(ctx1, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
+		useCheckpoint, err := loadFromCheckPoint(ctx1, t.CpDB, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 
 		if useCheckpoint {
 			log.Info("use checkpoint to load chunks")
-			chunks, err := loadChunks(ctx1, t.TargetTable.Conn, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table)
+			chunks, err := loadChunks(ctx1, t.CpDB, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table)
 			if err != nil {
 				log.Error("load chunks info", zap.Error(err))
 				return nil, errors.Trace(err)
@@ -310,12 +315,12 @@ func (t *TableDiff) LoadCheckpoint(ctx context.Context) ([]*ChunkRange, error) {
 	}
 
 	// clean old checkpoint infomation, and initial table summary
-	err = cleanCheckpoint(ctx1, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table)
+	err = cleanCheckpoint(ctx1, t.CpDB, t.TargetTable.Schema, t.TargetTable.Table)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	err = initTableSummary(ctx1, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
+	err = initTableSummary(ctx1, t.CpDB, t.TargetTable.Schema, t.TargetTable.Table, t.configHash)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -369,7 +374,7 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, 
 		ctx1, cancel1 := context.WithTimeout(ctx, dbutil.DefaultTimeout)
 		defer cancel1()
 
-		err1 := saveChunk(ctx1, t.TargetTable.Conn, chunk.ID, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table, "", chunk)
+		err1 := saveChunk(ctx1, t.CpDB, chunk.ID, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table, "", chunk)
 		if err1 != nil {
 			log.Warn("update chunk info", zap.Error(err1))
 		}
@@ -624,6 +629,7 @@ func (t *TableDiff) WriteSqls(ctx context.Context, writeFixSQL func(string) erro
 	return stopWriteCh
 }
 
+// UpdateSummaryInfo updaets summary infomation
 func (t *TableDiff) UpdateSummaryInfo(ctx context.Context) chan bool {
 	t.wg.Add(1)
 	stopUpdateCh := make(chan bool)
@@ -633,7 +639,7 @@ func (t *TableDiff) UpdateSummaryInfo(ctx context.Context) chan bool {
 			ctx1, cancel1 := context.WithTimeout(ctx, dbutil.DefaultTimeout)
 			defer cancel1()
 
-			err := updateTableSummary(ctx1, t.TargetTable.Conn, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table)
+			err := updateTableSummary(ctx1, t.CpDB, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table)
 			if err != nil {
 				log.Error("save table summary info failed", zap.String("schema", t.TargetTable.Schema), zap.String("table", t.TargetTable.Table), zap.Error(err))
 			}
@@ -703,14 +709,28 @@ func generateDML(tp string, data map[string]*dbutil.ColumnData, keys []*model.Co
 	return
 }
 
-func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model.ColumnInfo) (bool, int32, error) {
+func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model.ColumnInfo) (equal bool, cmp int32, err error) {
 	var (
-		equal        = true
 		data1, data2 *dbutil.ColumnData
 		key          string
 		ok           bool
-		cmp          int32
 	)
+
+	equal = true
+
+	defer func() {
+		if equal || err != nil {
+			return
+		}
+
+		if cmp == 0 {
+			log.Warn("find different row", zap.String("column", key), zap.String("row1", rowToString(map1)), zap.String("row2", rowToString(map2)))
+		} else if cmp > 0 {
+			log.Warn("target had superfluous data", zap.String("row", rowToString(map2)))
+		} else {
+			log.Warn("target lack data", zap.String("row", rowToString(map1)))
+		}
+	}()
 
 	for key, data1 = range map1 {
 		if data2, ok = map2[key]; !ok {
@@ -720,23 +740,21 @@ func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model
 			continue
 		}
 		equal = false
-		if data1.IsNull == data2.IsNull {
-			log.Error("find difference data", zap.String("column", key), zap.Reflect("data1", map1), zap.Reflect("data2", map2))
-		} else {
-			log.Error("find difference data, one of them is NULL", zap.String("column", key), zap.Reflect("data1", map1), zap.Reflect("data2", map2))
-		}
+
 		break
 	}
 	if equal {
-		return true, 0, nil
+		return
 	}
 
 	for _, col := range orderKeyCols {
 		if data1, ok = map1[col.Name.O]; !ok {
-			return false, 0, errors.Errorf("don't have key %s", col.Name.O)
+			err = errors.Errorf("don't have key %s", col.Name.O)
+			return
 		}
 		if data2, ok = map2[col.Name.O]; !ok {
-			return false, 0, errors.Errorf("don't have key %s", col.Name.O)
+			err = errors.Errorf("don't have key %s", col.Name.O)
+			return
 		}
 		if needQuotes(col.FieldType) {
 			strData1 := string(data1.Data)
@@ -757,7 +775,8 @@ func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model
 			num1, err1 := strconv.ParseFloat(string(data1.Data), 64)
 			num2, err2 := strconv.ParseFloat(string(data2.Data), 64)
 			if err1 != nil || err2 != nil {
-				return false, 0, errors.Errorf("convert %s, %s to float failed, err1: %v, err2: %v", string(data1.Data), string(data2.Data), err1, err2)
+				err = errors.Errorf("convert %s, %s to float failed, err1: %v, err2: %v", string(data1.Data), string(data2.Data), err1, err2)
+				return
 			}
 
 			if num1 == num2 {
@@ -773,7 +792,7 @@ func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model
 		}
 	}
 
-	return false, cmp, nil
+	return
 }
 
 func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo, where string,
