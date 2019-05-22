@@ -70,3 +70,26 @@ func (s *testUtilSuite) TestRowContainsCols(c *C) {
 	contain = rowContainsCols(row, cols)
 	c.Assert(contain, Equals, false)
 }
+
+func (s *testUtilSuite) TestRowToString(c *C) {
+	row := make(map[string]*dbutil.ColumnData)
+	row["id"] = &dbutil.ColumnData{
+		Data:   []byte("1"),
+		IsNull: false,
+	}
+
+	row["name"] = &dbutil.ColumnData{
+		Data:   []byte("abc"),
+		IsNull: false,
+	}
+
+	row["info"] = &dbutil.ColumnData{
+		Data:   nil,
+		IsNull: true,
+	}
+
+	rowStr := rowToString(row)
+	c.Assert(rowStr, Matches, ".*id: 1.*")
+	c.Assert(rowStr, Matches, ".*name: abc.*")
+	c.Assert(rowStr, Matches, ".*info: IsNull.*")
+}

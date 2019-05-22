@@ -26,7 +26,6 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/ddl-checker"
-	"github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 var (
@@ -65,8 +64,6 @@ func main() {
 	initialise()
 	mainLoop()
 	destroy()
-
-	utils.SyncLog()
 }
 
 func initialise() {
