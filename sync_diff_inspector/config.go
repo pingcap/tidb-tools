@@ -40,8 +40,6 @@ type DBConfig struct {
 
 	InstanceID string `toml:"instance-id" json:"instance-id"`
 
-	Snapshot string `toml:"snapshot" json:"snapshot"`
-
 	Conn *sql.DB
 }
 

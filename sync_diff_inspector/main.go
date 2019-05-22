@@ -63,8 +63,6 @@ func main() {
 		log.Fatal("sourceDB don't equal targetDB")
 	}
 	log.Info("test pass!!!")
-
-	utils.SyncLog()
 }
 
 func checkSyncState(ctx context.Context, cfg *Config) bool {

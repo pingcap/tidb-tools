@@ -518,7 +518,7 @@ func getSplitFields(table *model.TableInfo, splitFields []string) ([]*model.Colu
 }
 
 // SplitChunks splits the table to some chunks.
-func SplitChunks(ctx context.Context, table *TableInstance, splitFields, limits string, chunkSize int, collation string, useTiDBStatsInfo bool) (chunks []*ChunkRange, err error) {
+func SplitChunks(ctx context.Context, table *TableInstance, splitFields, limits string, chunkSize int, collation string, useTiDBStatsInfo bool, cpDB *sql.DB) (chunks []*ChunkRange, err error) {
 	var splitFieldArr []string
 	if len(splitFields) != 0 {
 		splitFieldArr = strings.Split(splitFields, ",")
@@ -552,9 +552,9 @@ func SplitChunks(ctx context.Context, table *TableInstance, splitFields, limits 
 		chunk.Args = args
 		chunk.State = notCheckedState
 
-		err = saveChunk(ctx1, table.Conn, i, table.InstanceID, table.Schema, table.Table, "", chunk)
+		err = saveChunk(ctx1, cpDB, i, table.InstanceID, table.Schema, table.Table, "", chunk)
 		if err != nil {
-			return nil, err
+			log.Warn("save chunk failed", zap.Error(err), zap.Stringer("chunk", chunk))
 		}
 	}
 
