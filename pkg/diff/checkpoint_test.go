@@ -30,7 +30,7 @@ func (s *testCheckpointSuite) TestCheckpoint(c *C) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	conn, err := createConn(ctx)
+	conn, err := createConn()
 	c.Assert(err, IsNil)
 	defer conn.Close()
 

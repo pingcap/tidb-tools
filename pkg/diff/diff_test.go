@@ -81,7 +81,7 @@ func (t *testDiffSuite) testDiff(c *C) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
 
-	conn, err := createConn(ctx)
+	conn, err := createConn()
 	c.Assert(err, IsNil)
 	defer conn.Close()
 
@@ -249,7 +249,7 @@ func createTableDiff(conn *sql.DB, sourceTableNames []string, targetTableName st
 	}
 }
 
-func createConn(ctx context.Context) (*sql.DB, error) {
+func createConn() (*sql.DB, error) {
 	return dbutil.OpenDB(dbutil.GetDBConfigFromEnv(""))
 }
 
