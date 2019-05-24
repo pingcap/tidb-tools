@@ -37,12 +37,6 @@ import (
 )
 
 const (
-	// ImplicitColName is name of implicit column in TiDB
-	ImplicitColName = "_tidb_rowid"
-
-	// ImplicitColID is ID implicit column in TiDB
-	ImplicitColID = -1
-
 	// DefaultRetryTime is the default retry time to execute sql
 	DefaultRetryTime = 10
 

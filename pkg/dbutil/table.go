@@ -29,20 +29,6 @@ import (
 	_ "github.com/pingcap/tidb/types/parser_driver" // for parser driver
 )
 
-// GetTableInfoWithRowID returns table information with _tidb_rowid column if useRowID is true
-func GetTableInfoWithRowID(ctx context.Context, db *sql.DB, schemaName string, tableName string, useRowID bool) (*model.TableInfo, error) {
-	table, err := GetTableInfo(ctx, db, schemaName, tableName)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	if useRowID && !table.PKIsHandle {
-		setImplicitColumn(table)
-	}
-
-	return table, nil
-}
-
 // GetTableInfo returns table information.
 func GetTableInfo(ctx context.Context, db *sql.DB, schemaName string, tableName string) (*model.TableInfo, error) {
 	createTableSQL, err := GetCreateTableSQL(ctx, db, schemaName, tableName)
@@ -269,17 +255,6 @@ func FindColumnByName(cols []*model.ColumnInfo, name string) *model.ColumnInfo {
 	}
 
 	return nil
-}
-
-func setImplicitColumn(table *model.TableInfo) {
-	newColumn := model.NewExtraHandleColInfo()
-	table.Columns = append(table.Columns, newColumn)
-
-	newIndex := &model.IndexInfo{
-		Primary: true,
-		Columns: []*model.IndexColumn{{Name: model.NewCIStr(ImplicitColName)}},
-	}
-	table.Indices = []*model.IndexInfo{newIndex}
 }
 
 // EqualTableInfo returns true if this two table info have same columns and indices
