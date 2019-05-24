@@ -18,6 +18,9 @@ sample-percent = 100
 # set false if want to comapre the data directly
 use-checksum = true
 
+# set true will continue check from the latest checkpoint
+use-checkpoint = false
+
 # the name of the file which saves sqls used to fix different data.
 fix-sql-file = "fix.sql"
 

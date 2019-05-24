@@ -108,16 +108,14 @@ sync_diff_inspector --config=./config.toml > $OUT_DIR/diff.log
 check_contains "test pass!!!" $OUT_DIR/diff.log
 get_ts
 
-echo "delete one data, and use snapshot compare data"
-mysql -uroot -h 127.0.0.1 -P 4001 -e "delete from diff_test.test limit 1"
+echo "delete one data, diff should not passed"
+mysql -uroot -h 127.0.0.1 -P 4000 -e "delete from diff_test.test limit 1"
 
-echo "snapshot = \"$ts\"" >> config.toml
-
-sync_diff_inspector --config=./config.toml > $OUT_DIR/diff.log
-check_contains "test pass!!!" $OUT_DIR/diff.log
-
-echo "remove snapshot, diff should not passed"
-cp config_template.toml config
 sync_diff_inspector --config=./config.toml > $OUT_DIR/diff.log
 check_contains "sourceDB don't equal targetDB" $OUT_DIR/diff.log
+
+echo "use snapshot compare data, data should be equal"
+echo "snapshot = \"$ts\"" >> config.toml
+sync_diff_inspector --config=./config.toml > $OUT_DIR/diff.log
+check_contains "test pass!!!" $OUT_DIR/diff.log
 
