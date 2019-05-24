@@ -111,7 +111,8 @@ get_ts
 echo "delete one data, diff should not passed"
 mysql -uroot -h 127.0.0.1 -P 4000 -e "delete from diff_test.test limit 1"
 
-sync_diff_inspector --config=./config.toml > $OUT_DIR/diff.log
+sync_diff_inspector --config=./config.toml > $OUT_DIR/diff.log || true
+tail -5 $OUT_DIR/diff.log
 check_contains "sourceDB don't equal targetDB" $OUT_DIR/diff.log
 
 echo "use snapshot compare data, data should be equal"
