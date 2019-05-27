@@ -673,6 +673,10 @@ func generateDML(tp string, data map[string]*dbutil.ColumnData, keys []*model.Co
 		colNames := make([]string, 0, len(table.Columns))
 		values := make([]string, 0, len(table.Columns))
 		for _, col := range table.Columns {
+			if col.IsGenerated() {
+				continue
+			}
+
 			colNames = append(colNames, fmt.Sprintf("`%s`", col.Name.O))
 			if data[col.Name.O].IsNull {
 				values = append(values, "NULL")
@@ -690,6 +694,10 @@ func generateDML(tp string, data map[string]*dbutil.ColumnData, keys []*model.Co
 	case "delete":
 		kvs := make([]string, 0, len(keys))
 		for _, col := range keys {
+			if col.IsGenerated() {
+				continue
+			}
+
 			if data[col.Name.O].IsNull {
 				kvs = append(kvs, fmt.Sprintf("`%s` is NULL", col.Name.O))
 				continue
