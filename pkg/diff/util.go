@@ -17,10 +17,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb/types"
+	"go.uber.org/zap"
 )
 
 func equalStrings(str1, str2 []string) bool {
@@ -59,8 +61,29 @@ func removeColumns(tableInfo *model.TableInfo, columns []string) *model.TableInf
 	for j := 0; j < len(tableInfo.Columns); j++ {
 		col := tableInfo.Columns[j]
 		if _, ok := removeColMap[col.Name.O]; ok {
+			//for _, column := range tableInfo.Columns[j+1:] {
+			//	column.Offset--
+			//}
 			tableInfo.Columns = append(tableInfo.Columns[:j], tableInfo.Columns[j+1:]...)
 			j--
+		}
+	}
+
+	// calculate column offset
+	colMap := make(map[string]int)
+	for i, col := range tableInfo.Columns {
+		col.Offset = i
+		colMap[col.Name.O] = i
+	}
+
+	for _, index := range tableInfo.Indices {
+		for _, col := range index.Columns {
+			offset, ok := colMap[col.Name.O]
+			if !ok {
+				// this should never happened
+				log.Fatal("column not exists", zap.String("column", col.Name.O))
+			}
+			col.Offset = offset
 		}
 	}
 
