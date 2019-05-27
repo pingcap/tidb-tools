@@ -75,6 +75,11 @@ func (*testDiffSuite) TestGenerateSQLs(c *C) {
 	deleteSQL = generateDML("delete", rowsData, orderKeyCols, tableInfo, "test")
 	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (NULL,NULL,'2018-01-01 00:00:00','10:10:10',11.1111);")
 	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` WHERE `id` is NULL;")
+
+	// test value with "'"
+	rowsData["name"] = &dbutil.ColumnData{Data: []byte("a'a"), IsNull: true}
+	replaceSQL = generateDML("replace", rowsData, orderKeyCols, tableInfo, "test")
+	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (NULL,'a\'a','2018-01-01 00:00:00','10:10:10',11.1111);")
 }
 
 func (t *testDiffSuite) testDiff(c *C) {

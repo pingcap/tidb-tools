@@ -61,9 +61,6 @@ func removeColumns(tableInfo *model.TableInfo, columns []string) *model.TableInf
 	for j := 0; j < len(tableInfo.Columns); j++ {
 		col := tableInfo.Columns[j]
 		if _, ok := removeColMap[col.Name.O]; ok {
-			//for _, column := range tableInfo.Columns[j+1:] {
-			//	column.Offset--
-			//}
 			tableInfo.Columns = append(tableInfo.Columns[:j], tableInfo.Columns[j+1:]...)
 			j--
 		}
