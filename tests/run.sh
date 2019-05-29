@@ -23,8 +23,9 @@ for script in ./*/run.sh; do
     if [[ $do_case != "" && $test_name != $do_case ]]; then
         continue
     fi
-
+    echo "*******************************************"
     echo "Running test $script..."
+    echo "*******************************************"
     PATH="$pwd/../bin:$pwd/_utils:$PATH" \
     OUT_DIR=$OUT_DIR \
     TEST_NAME=$test_name \
