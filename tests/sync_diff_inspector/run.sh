@@ -93,7 +93,7 @@ start_services
 
 echo "use importer to generate test data"
 mysql -uroot -h 127.0.0.1 -P 4000 -e "create database if not exists diff_test"
-importer -t "create table diff_test.test(a int, b varchar(10), c float, d datetime);" -c 10 -n 10000 -P 4000 -h 127.0.0.1 -D diff_test -b 1000
+importer -t "create table diff_test.test(a int, b varchar(10), c float, d datetime, primary key(a));" -c 10 -n 10000 -P 4000 -h 127.0.0.1 -D diff_test -b 1000
 
 echo "dump data and then load to tidb"
 mydumper --host 127.0.0.1 --port 4000 --user root --outputdir $OUT_DIR/dump_diff -B diff_test -T test

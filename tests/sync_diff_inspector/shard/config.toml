@@ -15,27 +15,23 @@ check-thread-count = 4
 sample-percent = 100
 
 # calculate the data's checksum, and compare data by checksum.
-# set false if want to comapre the data directly
 use-checksum = true
 
-# set true will continue check from the latest checkpoint
-use-checkpoint = false
-
-# the name of the file which saves sqls used to fix different data.
-fix-sql-file = "fix.sql"
-
-# use this tidb's statistics information to split chunk
-tidb-instance-id = "target-1"
+# the name of the file which saves sqls used to fix different data
+fix-sql-file = "/tmp/tidb_tools_test/sync_diff_inspector/fix.sql"
 
 # tables need to check.
 [[check-tables]]
 # schema name in target database.
 schema = "diff_test"
 
-# table list which need check in target database.
+# table list which need check in target database. 
+# in sharding mode, you must set config for every table in table-config, otherwise will not check the table.
 tables = ["test"]
 
-# a example for comparing table with different name.
+
+# schema and table in check-tables must be contained in check-tables.
+# a example for sharding tables.
 [[table-config]]
 # target schema name.
 schema = "diff_test"
@@ -43,9 +39,20 @@ schema = "diff_test"
 # target table name.
 table = "test"
 
-# columns be ignored, will not check this column's data, 
-# but may use these columns as split field or order by key.
-ignore-columns = ["b"]
+# set true if comparing sharding tables with target table
+is-sharding = true
+
+# source tables.
+[[table-config.source-tables]]
+instance-id = "source-1"
+schema = "diff_test"
+table  = "shard_test1"
+
+[[table-config.source-tables]]
+instance-id = "source-1"
+schema = "diff_test"
+table  = "shard_test2"
+
 
 [[source-db]]
 host = "127.0.0.1"
