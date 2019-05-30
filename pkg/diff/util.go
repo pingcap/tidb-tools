@@ -67,7 +67,7 @@ func removeColumns(tableInfo *model.TableInfo, columns []string) *model.TableInf
 	}
 
 	// calculate column offset
-	colMap := make(map[string]int)
+	colMap := make(map[string]int, len(tableInfo.Columns))
 	for i, col := range tableInfo.Columns {
 		col.Offset = i
 		colMap[col.Name.O] = i
