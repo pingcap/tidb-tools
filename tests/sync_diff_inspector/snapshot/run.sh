@@ -18,7 +18,7 @@ mysql -uroot -h 127.0.0.1 -P 4000 -e "delete from diff_test.test limit 1"
 sync_diff_inspector --config=./config_base.toml > $OUT_DIR/snapshot_diff.log || true
 check_contains "sourceDB don't equal targetDB" $OUT_DIR/snapshot_diff.log
 # fix.sql will be empty after check below, so backup it
-cat $OUT_DIR/fix.sql cat $OUT_DIR/fix.sql.bak
+cp $OUT_DIR/fix.sql $OUT_DIR/fix.sql.bak
 
 echo "use snapshot compare data, data should be equal"
 cp config_base.toml config.toml
