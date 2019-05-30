@@ -101,9 +101,8 @@ mydumper --host 127.0.0.1 --port 4000 --user root --outputdir $OUT_DIR/dump_diff
 loader -h 127.0.0.1 -P 4001 -u root -d $OUT_DIR/dump_diff
 
 echo "use sync_diff_inspector to compare data"
-cp config_template.toml config.toml
 
-sync_diff_inspector --config=./config.toml > $OUT_DIR/diff.log
+sync_diff_inspector --config=./config_base.toml > $OUT_DIR/diff.log
 
 check_contains "test pass!!!" $OUT_DIR/diff.log
 get_ts
@@ -113,6 +112,6 @@ for script in ./*/run.sh; do
     echo "---------------------------------------"
     echo "Running test $script..."
     echo "---------------------------------------"
-    cp config_template.toml $test_name/
+    cp config_base.toml $test_name/
     sh "$script"
 done
