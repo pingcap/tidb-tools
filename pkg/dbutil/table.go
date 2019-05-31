@@ -120,6 +120,8 @@ func columnDefToCol(offset int, colDef *ast.ColumnDef) (*model.ColumnInfo, []*as
 			case ast.ColumnOptionComment:
 				// do nothing
 			case ast.ColumnOptionGenerated:
+				// FIXME: use a default string now to make col.IsGenerated() return true, will use real generated expr string later
+				col.GeneratedExprString = "Generated"
 				// do nothing
 			case ast.ColumnOptionFulltext:
 				// do nothing
