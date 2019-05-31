@@ -673,6 +673,10 @@ func generateDML(tp string, data map[string]*dbutil.ColumnData, keys []*model.Co
 		colNames := make([]string, 0, len(table.Columns))
 		values := make([]string, 0, len(table.Columns))
 		for _, col := range table.Columns {
+			if col.IsGenerated() {
+				continue
+			}
+
 			colNames = append(colNames, fmt.Sprintf("`%s`", col.Name.O))
 			if data[col.Name.O].IsNull {
 				values = append(values, "NULL")
@@ -680,7 +684,7 @@ func generateDML(tp string, data map[string]*dbutil.ColumnData, keys []*model.Co
 			}
 
 			if needQuotes(col.FieldType) {
-				values = append(values, fmt.Sprintf("'%s'", string(data[col.Name.O].Data)))
+				values = append(values, fmt.Sprintf("'%s'", strings.Replace(string(data[col.Name.O].Data), "'", "\\'", -1)))
 			} else {
 				values = append(values, string(data[col.Name.O].Data))
 			}
@@ -690,13 +694,17 @@ func generateDML(tp string, data map[string]*dbutil.ColumnData, keys []*model.Co
 	case "delete":
 		kvs := make([]string, 0, len(keys))
 		for _, col := range keys {
+			if col.IsGenerated() {
+				continue
+			}
+
 			if data[col.Name.O].IsNull {
 				kvs = append(kvs, fmt.Sprintf("`%s` is NULL", col.Name.O))
 				continue
 			}
 
 			if needQuotes(col.FieldType) {
-				kvs = append(kvs, fmt.Sprintf("`%s` = '%s'", col.Name.O, string(data[col.Name.O].Data)))
+				kvs = append(kvs, fmt.Sprintf("`%s` = '%s'", col.Name.O, strings.Replace(string(data[col.Name.O].Data), "'", "\\'", -1)))
 			} else {
 				kvs = append(kvs, fmt.Sprintf("`%s` = %s", col.Name.O, string(data[col.Name.O].Data)))
 			}
