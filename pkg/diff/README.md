@@ -42,9 +42,6 @@ type TableDiff struct {
 	// how many goroutines are created to check data
 	CheckThreadCount int
 
-	// set true if target-db and source-db all support tidb implicit column "_tidb_rowid"
-	UseRowID bool
-
 	// set false if want to comapre the data directly
     UseChecksum bool
     
