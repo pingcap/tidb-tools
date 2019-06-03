@@ -23,8 +23,6 @@ Usage of sync_diff_inspector:
         source database's snapshot config
   -target-snapshot string
         target database's snapshot config
-  -use-rowid
-        set true if target-db and source-db all support tidb implicit column _tidb_rowid
 ```
 
 For more details you can read the config.toml.

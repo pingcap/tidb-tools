@@ -36,7 +36,6 @@ type Diff struct {
 	chunkSize         int
 	sample            int
 	checkThreadCount  int
-	useRowID          bool
 	useChecksum       bool
 	useCheckpoint     bool
 	onlyUseChecksum   bool
@@ -59,7 +58,6 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 		chunkSize:         cfg.ChunkSize,
 		sample:            cfg.Sample,
 		checkThreadCount:  cfg.CheckThreadCount,
-		useRowID:          cfg.UseRowID,
 		useChecksum:       cfg.UseChecksum,
 		useCheckpoint:     cfg.UseCheckpoint,
 		onlyUseChecksum:   cfg.OnlyUseChecksum,
@@ -185,7 +183,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 		}
 
 		for _, tableName := range tables {
-			tableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, df.targetDB.Conn, schemaTables.Schema, tableName, cfg.UseRowID)
+			tableInfo, err := dbutil.GetTableInfo(df.ctx, df.targetDB.Conn, schemaTables.Schema, tableName)
 			if err != nil {
 				return errors.Errorf("get table %s.%s's inforamtion error %s", schemaTables.Schema, tableName, errors.ErrorStack(err))
 			}
@@ -401,7 +399,6 @@ func (df *Diff) Equal() (err error) {
 				ChunkSize:         df.chunkSize,
 				Sample:            df.sample,
 				CheckThreadCount:  df.checkThreadCount,
-				UseRowID:          df.useRowID,
 				UseChecksum:       df.useChecksum,
 				UseCheckpoint:     df.useCheckpoint,
 				OnlyUseChecksum:   df.onlyUseChecksum,
