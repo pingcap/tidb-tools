@@ -35,7 +35,8 @@ import (
 )
 
 var (
-	testMaxRecvMsgSize = 1024
+	testMaxRecvMsgSize    = 1024
+	testServerWriteSecond = 1
 )
 
 func TestClient(t *testing.T) {
@@ -213,6 +214,12 @@ func (t *testClientSuite) TestWriteBinlog(c *C) {
 		},
 	}
 
+	originDefaultMaxFailedSecond := defaultMaxFailedSecond
+	defaultMaxFailedSecond = int64(10 * testServerWriteSecond)
+	defer func() {
+		defaultMaxFailedSecond = originDefaultMaxFailedSecond
+	}()
+
 	// make test faster
 	RetryInterval = 100 * time.Millisecond
 	CommitBinlogTimeout = time.Second
@@ -294,6 +301,7 @@ func (p *mockPumpServer) WriteBinlog(ctx context.Context, req *binlog.WriteBinlo
 	if p.writeCount%atomic.LoadInt64(&p.writeSuccessPer) == 0 {
 		return &binlog.WriteBinlogResp{}, nil
 	} else {
+		time.Sleep(time.Duration(testServerWriteSecond) * time.Second)
 		return &binlog.WriteBinlogResp{}, errors.New("fake error")
 	}
 }
@@ -362,7 +370,7 @@ func mockPumpsClient(instances []pumpInstance) *PumpsClient {
 		ClusterID:          1,
 		Pumps:              pumpInfos,
 		Selector:           NewSelector(Range),
-		BinlogWriteTimeout: time.Second,
+		BinlogWriteTimeout: 5 * time.Second,
 	}
 
 	pCli.Selector.SetPumps(pumps)
