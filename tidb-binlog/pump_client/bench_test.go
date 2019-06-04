@@ -14,13 +14,11 @@
 package client
 
 import (
-	"net"
 	"sync"
 	"testing"
-	"time"
 
+	"github.com/pingcap/tidb-tools/tidb-binlog/node"
 	pb "github.com/pingcap/tipb/go-binlog"
-	"google.golang.org/grpc"
 )
 
 func Benchmark100Thread(b *testing.B) {
@@ -79,23 +77,20 @@ func writeFakeBinlog(b *testing.B, pumpClient *PumpsClient, threadCount int, num
 
 func createMockPumpsClientAndServer(b *testing.B) (*PumpsClient, *mockPumpServer) {
 	addr := "127.0.0.1:15049"
-	pumpServer, err := createMockPumpServer(addr, "tcp", false)
+	pumpServer, err := createMockPumpServer(addr, "tcp", 1)
 	if err != nil {
 		b.Fatal(err)
 	}
 
-	opt := grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
-		return net.DialTimeout("tcp", addr, timeout)
+	pumpClient := mockPumpsClient([]pumpInstance{
+		{
+			"Node-1",
+			node.Online,
+			addr,
+			"tcp",
+			1,
+		},
 	})
-
-	clientCon, err := grpc.Dial(addr, opt, grpc.WithInsecure())
-	if err != nil {
-		b.Fatal(err)
-	}
-	if clientCon == nil {
-		b.Fatal("grpc client is nil")
-	}
-	pumpClient := mockPumpsClient(pb.NewPumpClient(clientCon), false)
 
 	return pumpClient, pumpServer
 }

@@ -64,6 +64,8 @@ type PumpStatus struct {
 
 	grpcConn *grpc.ClientConn
 
+	reCreateClient bool
+
 	// the client of this pump
 	Client pb.PumpClient
 
@@ -73,10 +75,22 @@ type PumpStatus struct {
 // NewPumpStatus returns a new PumpStatus according to node's status.
 func NewPumpStatus(status *node.Status, security *tls.Config) *PumpStatus {
 	pumpStatus := PumpStatus{
-		Status:   *status,
-		security: security,
+		Status:         *status,
+		security:       security,
+		reCreateClient: true,
 	}
 	return &pumpStatus
+}
+
+func (p *PumpStatus) markReCreateClient() {
+	p.reCreateClient = true
+}
+
+func (p *PumpStatus) close() {
+	if p.grpcConn != nil {
+		p.grpcConn.Close()
+		p.grpcConn = nil
+	}
 }
 
 // createGrpcClient create grpc client for online pump.
@@ -115,45 +129,35 @@ func (p *PumpStatus) createGrpcClient() error {
 	return nil
 }
 
-// ResetGrpcClient closes the pump's grpc connection.
-func (p *PumpStatus) ResetGrpcClient() {
-	p.Lock()
-	defer p.Unlock()
-
-	if p.grpcConn != nil {
-		p.grpcConn.Close()
-		p.Client = nil
-	}
-}
-
-// Reset resets the pump's grpc conn and err num.
+// Reset resets the pump's err num.
 func (p *PumpStatus) Reset() {
-	p.ResetGrpcClient()
 	atomic.StoreInt64(&p.ErrNum, 0)
 }
 
 // WriteBinlog write binlog by grpc client.
 func (p *PumpStatus) WriteBinlog(req *pb.WriteBinlogReq, timeout time.Duration) (*pb.WriteBinlogResp, error) {
 	p.RLock()
-	client := p.Client
-	p.RUnlock()
-
-	if client == nil {
+	if p.reCreateClient || p.grpcConn == nil {
+		p.RUnlock()
 		p.Lock()
-
-		if p.Client == nil {
-			if err := p.createGrpcClient(); err != nil {
+		if p.reCreateClient || p.grpcConn == nil {
+			p.reCreateClient = true
+			err := p.createGrpcClient()
+			if err != nil {
 				p.Unlock()
-				return nil, errors.Errorf("create grpc connection for pump %s failed, error %v", p.NodeID, err)
+				log.Info("[pumps client] write binlog to unavailable pump success, set this pump to avaliable", zap.String("NodeID", p.NodeID))
+				return nil, errors.Trace(err)
 			}
-		}
-		client = p.Client
 
-		p.Unlock()
+			p.Unlock()
+			p.RLock()
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	resp, err := client.WriteBinlog(ctx, req)
+	resp, err := p.Client.WriteBinlog(ctx, req)
+	p.RUnlock()
+
 	cancel()
 
 	if err != nil {
@@ -167,11 +171,20 @@ func (p *PumpStatus) WriteBinlog(req *pb.WriteBinlogReq, timeout time.Duration) 
 
 // IsUsable returns true if pump is usable.
 func (p *PumpStatus) IsUsable() bool {
-	if p.Status.State != node.Online {
+	if !p.ShouldBeUsable() {
 		return false
 	}
 
 	if atomic.LoadInt64(&p.ErrNum) > defaultMaxErrNums {
+		return false
+	}
+
+	return true
+}
+
+// ShouldBeUsable returns true if pump should be usable
+func (p *PumpStatus) ShouldBeUsable() bool {
+	if p.Status.State != node.Online {
 		return false
 	}
 

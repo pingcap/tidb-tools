@@ -32,8 +32,6 @@ import (
 	"github.com/pingcap/tidb/util/logutil"
 	pb "github.com/pingcap/tipb/go-binlog"
 	"go.uber.org/zap"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -170,8 +168,15 @@ func NewPumpsClient(etcdURLs, strategy string, timeout time.Duration, securityOp
 	newPumpsClient.Selector.SetPumps(copyPumps(newPumpsClient.Pumps.AvaliablePumps))
 
 	newPumpsClient.wg.Add(2)
-	go newPumpsClient.watchStatus(revision)
-	go newPumpsClient.detect()
+	go func() {
+		newPumpsClient.watchStatus(revision)
+		newPumpsClient.wg.Done()
+	}()
+
+	go func() {
+		newPumpsClient.detect()
+		newPumpsClient.wg.Done()
+	}()
 
 	return newPumpsClient, nil
 }
@@ -238,7 +243,7 @@ func (c *PumpsClient) getPumpStatus(pctx context.Context) (revision int64, err e
 	return revision, nil
 }
 
-// WriteBinlog writes binlog to a situable pump. Tips: will never return error for commit/rollback binlog.
+// WriteBinlog writes binlog to a suitable pump. Tips: will never return error for commit/rollback binlog.
 func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 	c.RLock()
 	pumpNum := len(c.Pumps.AvaliablePumps)
@@ -275,11 +280,13 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 			break
 		}
 
+		log.Debug("[pumps client] try write to pump", zap.String("NodeID", pump.NodeID))
 		resp, err = pump.WriteBinlog(req, c.BinlogWriteTimeout)
 		if err == nil && resp.Errmsg != "" {
 			err = errors.New(resp.Errmsg)
 		}
 		if err == nil {
+			log.Debug("write success", zap.String("NodeID", pump.NodeID))
 			choosePump = pump
 			return nil
 		}
@@ -303,11 +310,6 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 				break
 			}
 
-			if isConnUnAvliable(err) {
-				// this kind of error indicate that the grpc connection is not avaliable, may be create the connection again can write success.
-				pump.ResetGrpcClient()
-			}
-
 			retryTime++
 		}
 
@@ -321,34 +323,34 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 	log.Info("[pumps client] write binlog to avaliable pumps all failed, will try unavaliable pumps")
 	pump, err1 := c.backoffWriteBinlog(req, binlog.Tp, binlog.StartTs)
 	if err1 == nil {
+		choosePump = pump
 		return nil
 	}
-	choosePump = pump
 
 	return errors.Errorf("write binlog failed, the last error %v", err)
 }
 
+// return directly for non p-binlog
+// try every online pump for p-binlog
 func (c *PumpsClient) backoffWriteBinlog(req *pb.WriteBinlogReq, binlogType pb.BinlogType, startTS int64) (pump *PumpStatus, err error) {
 	if binlogType != pb.BinlogType_Prewrite {
 		// never return error for commit/rollback binlog.
 		return nil, nil
 	}
 
-	unAvaliablePumps := make([]*PumpStatus, 0, 3)
+	allPumps := make([]*PumpStatus, 0, 3)
 	c.RLock()
-	for _, pump := range c.Pumps.UnAvaliablePumps {
-		unAvaliablePumps = append(unAvaliablePumps, pump)
+	for _, pump := range c.Pumps.Pumps {
+		allPumps = append(allPumps, pump)
 	}
 	c.RUnlock()
 
 	var resp *pb.WriteBinlogResp
 	// send binlog to unavaliable pumps to retry again.
-	for _, pump := range unAvaliablePumps {
-		if !pump.IsUsable() {
+	for _, pump := range allPumps {
+		if !pump.ShouldBeUsable() {
 			continue
 		}
-
-		pump.ResetGrpcClient()
 
 		resp, err = pump.WriteBinlog(req, c.BinlogWriteTimeout)
 		if err == nil {
@@ -356,7 +358,7 @@ func (c *PumpsClient) backoffWriteBinlog(req *pb.WriteBinlogReq, binlogType pb.B
 				err = errors.New(resp.Errmsg)
 			} else {
 				// if this pump can write binlog success, set this pump to avaliable.
-				log.Debug("[pumps client] write binlog to unavaliable pump success, set this pump to avaliable", zap.String("NodeID", pump.NodeID))
+				log.Info("[pumps client] write binlog to unavaliable pump success, set this pump to avaliable", zap.String("NodeID", pump.NodeID))
 				c.setPumpAvaliable(pump, true)
 				return pump, nil
 			}
@@ -390,7 +392,6 @@ func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 		if _, ok := c.Pumps.Pumps[pump.NodeID]; ok {
 			c.Pumps.AvaliablePumps[pump.NodeID] = pump
 		}
-
 	} else {
 		delete(c.Pumps.AvaliablePumps, pump.NodeID)
 		if _, ok := c.Pumps.Pumps[pump.NodeID]; ok {
@@ -404,8 +405,9 @@ func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 // addPump add a new pump.
 func (c *PumpsClient) addPump(pump *PumpStatus, updateSelector bool) {
 	c.Lock()
+	defer c.Unlock()
 
-	if pump.IsUsable() {
+	if pump.ShouldBeUsable() {
 		c.Pumps.AvaliablePumps[pump.NodeID] = pump
 	} else {
 		c.Pumps.UnAvaliablePumps[pump.NodeID] = pump
@@ -415,8 +417,6 @@ func (c *PumpsClient) addPump(pump *PumpStatus, updateSelector bool) {
 	if updateSelector {
 		c.Selector.SetPumps(copyPumps(c.Pumps.AvaliablePumps))
 	}
-
-	c.Unlock()
 }
 
 // SetSelectStrategy sets the selector's strategy, strategy should be 'range' or 'hash' now.
@@ -432,23 +432,31 @@ func (c *PumpsClient) SetSelectStrategy(strategy string) error {
 	return nil
 }
 
-// updatePump update pump's status, and return whether pump's IsAvaliable should be changed.
+// updatePump update pump's status, and return whether pump's status is changed.
 func (c *PumpsClient) updatePump(status *node.Status) (pump *PumpStatus, avaliableChanged, avaliable bool) {
 	var ok bool
 	c.Lock()
-	if pump, ok = c.Pumps.Pumps[status.NodeID]; ok {
-		if pump.Status.State != status.State {
-			if status.State == node.Online {
-				avaliableChanged = true
-				avaliable = true
-			} else if pump.IsUsable() {
-				avaliableChanged = true
-				avaliable = false
-			}
-		}
-		pump.Status = *status
+	defer c.Unlock()
+
+	pump, ok = c.Pumps.Pumps[status.NodeID]
+	if !ok {
+		return
 	}
-	c.Unlock()
+
+	if pump.Status.State != status.State {
+		avaliableChanged = true
+		avaliable = true
+		if pump.ShouldBeUsable() {
+			avaliable = true
+		} else {
+			avaliable = false
+		}
+	}
+
+	if status.Addr != pump.Status.Addr {
+		pump.markReCreateClient()
+	}
+	pump.Status = *status
 
 	return
 }
@@ -457,7 +465,7 @@ func (c *PumpsClient) updatePump(status *node.Status) (pump *PumpStatus, avaliab
 func (c *PumpsClient) removePump(nodeID string) {
 	c.Lock()
 	if pump, ok := c.Pumps.Pumps[nodeID]; ok {
-		pump.Reset()
+		pump.close()
 	}
 	delete(c.Pumps.Pumps, nodeID)
 	delete(c.Pumps.UnAvaliablePumps, nodeID)
@@ -476,7 +484,6 @@ func (c *PumpsClient) exist(nodeID string) bool {
 
 // watchStatus watchs pump's status in etcd.
 func (c *PumpsClient) watchStatus(revision int64) {
-	defer c.wg.Done()
 	rch := c.EtcdRegistry.WatchNode(c.ctx, c.nodePath, revision)
 
 	for {
@@ -518,7 +525,7 @@ func (c *PumpsClient) watchStatus(revision int64) {
 
 				case mvccpb.DELETE:
 					// now will not delete pump node in fact, just for compatibility.
-					nodeID := node.AnalyzeNodeID(string(ev.Kv.Key))
+					nodeID := status.NodeID
 					log.Info("[pumps client] remove pump", zap.String("NodeID", nodeID))
 					c.removePump(nodeID)
 				}
@@ -530,10 +537,7 @@ func (c *PumpsClient) watchStatus(revision int64) {
 // detect send detect binlog to pumps with online state in UnAvaliablePumps,
 func (c *PumpsClient) detect() {
 	checkTick := time.NewTicker(CheckInterval)
-	defer func() {
-		checkTick.Stop()
-		c.wg.Done()
-	}()
+	defer checkTick.Stop()
 
 	for {
 		select {
@@ -542,9 +546,11 @@ func (c *PumpsClient) detect() {
 			return
 		case <-checkTick.C:
 			// send detect binlog to pump, if this pump can return response without error
-			// means this pump is avaliable.
+			// means this pump is available.
 			needCheckPumps := make([]*PumpStatus, 0, len(c.Pumps.UnAvaliablePumps))
 			checkPassPumps := make([]*PumpStatus, 0, 1)
+			// TODO: send a more normal request, currently pump will just return success for this empty payload
+			// not write to Storage
 			req := &pb.WriteBinlogReq{ClusterID: c.ClusterID, Payload: nil}
 			c.RLock()
 			for _, pump := range c.Pumps.UnAvaliablePumps {
@@ -557,10 +563,10 @@ func (c *PumpsClient) detect() {
 			for _, pump := range needCheckPumps {
 				_, err := pump.WriteBinlog(req, c.BinlogWriteTimeout)
 				if err == nil {
-					log.Debug("[pumps client] write detect binlog to unavaliable pump success", zap.String("NodeID", pump.NodeID))
+					log.Info("[pumps client] write detect binlog to unavaliable pump success", zap.String("NodeID", pump.NodeID))
 					checkPassPumps = append(checkPassPumps, pump)
 				} else {
-					log.Debug("[pumps client] write detect binlog to pump failed", zap.String("NodeID", pump.NodeID), zap.Error(err))
+					log.Warn("[pumps client] write detect binlog to pump failed", zap.String("NodeID", pump.NodeID), zap.Error(err))
 				}
 			}
 
@@ -573,6 +579,7 @@ func (c *PumpsClient) detect() {
 
 // Close closes the PumpsClient.
 func (c *PumpsClient) Close() {
+	// TODO: Close all grpc connection to pump
 	log.Info("[pumps client] is closing")
 	c.cancel()
 	c.wg.Wait()
@@ -585,14 +592,6 @@ func isRetryableError(err error) bool {
 	// a per-user quota, or perhaps the entire file system is out of space.
 	// https://github.com/grpc/grpc-go/blob/9cc4fdbde2304827ffdbc7896f49db40c5536600/codes/codes.go#L76
 	return !strings.Contains(err.Error(), "ResourceExhausted")
-}
-
-func isConnUnAvliable(err error) bool {
-	// Unavailable indicates the service is currently unavailable.
-	// This is a most likely a transient condition and may be corrected
-	// by retrying with a backoff.
-	// https://github.com/grpc/grpc-go/blob/76cc50721c5fde18bae10a36f4c202f5f2f95bb7/codes/codes.go#L139
-	return status.Code(err) == codes.Unavailable
 }
 
 func copyPumps(pumps map[string]*PumpStatus) []*PumpStatus {
