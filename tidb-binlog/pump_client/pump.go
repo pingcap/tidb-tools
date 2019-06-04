@@ -141,7 +141,7 @@ func (p *PumpStatus) WriteBinlog(req *pb.WriteBinlogReq, timeout time.Duration) 
 		p.RUnlock()
 		p.Lock()
 		if p.reCreateClient || p.grpcConn == nil {
-			p.reCreateClient = true
+			p.reCreateClient = false
 			err := p.createGrpcClient()
 			if err != nil {
 				p.Unlock()
