@@ -358,7 +358,7 @@ func (c *PumpsClient) backoffWriteBinlog(req *pb.WriteBinlogReq, binlogType pb.B
 				err = errors.New(resp.Errmsg)
 			} else {
 				// if this pump can write binlog success, set this pump to avaliable.
-				log.Info("[pumps client] write binlog to unavaliable pump success, set this pump to avaliable", zap.String("NodeID", pump.NodeID))
+				log.Info("[pumps client] write binlog to pump success, set this pump to avaliable", zap.String("NodeID", pump.NodeID))
 				c.setPumpAvaliable(pump, true)
 				return pump, nil
 			}
