@@ -83,7 +83,9 @@ func NewPumpStatus(status *node.Status, security *tls.Config) *PumpStatus {
 }
 
 func (p *PumpStatus) markReCreateClient() {
+	p.Lock()
 	p.reCreateClient = true
+	p.Unlock()
 }
 
 func (p *PumpStatus) close() {
