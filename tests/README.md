@@ -2,7 +2,7 @@
 
 This folder contains all tests which relies on external service such as TiDB.
 
-## Preprations
+## Preparations
 
 1. The following three executables must be copied or linked into these locations:
 
