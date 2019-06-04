@@ -16,6 +16,7 @@ package client
 import (
 	"context"
 	"crypto/tls"
+	"math"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -34,9 +35,42 @@ var (
 	// localPump is used to write local pump through unix socket connection.
 	localPump = "localPump"
 
-	// if pump failed more than defaultMaxErrNums times, this pump can treated as unavaliable.
-	defaultMaxErrNums int64 = 10
+	// if pump failed more than defaultMaxFailedSecond seconds, this pump can treated as unavaliable.
+	defaultMaxFailedSecond int64 = 300
 )
+
+type realPumpState struct {
+	// the failed start unix timestamp of pump
+	failedTS int64
+}
+
+func (p *realPumpState) isAvaliable() bool {
+	return atomic.LoadInt64(&p.failedTS) != math.MaxInt64
+}
+
+func (p *realPumpState) markAvailable() {
+	atomic.StoreInt64(&p.failedTS, 0)
+}
+
+func (p *realPumpState) markUnAvailable() {
+	atomic.StoreInt64(&p.failedTS, math.MaxInt64)
+}
+
+func (p *realPumpState) updateFailedTS(ts int64) {
+	var (
+		originTS = atomic.LoadInt64(&p.failedTS)
+		targetTS int64
+	)
+	if originTS == 0 {
+		targetTS = ts
+	} else if ts-originTS > defaultMaxFailedSecond {
+		targetTS = math.MaxInt64
+	}
+
+	if targetTS > 0 {
+		atomic.CompareAndSwapInt64(&p.failedTS, originTS, targetTS)
+	}
+}
 
 // PumpStatus saves pump's status.
 type PumpStatus struct {
@@ -69,7 +103,7 @@ type PumpStatus struct {
 	// the client of this pump
 	Client pb.PumpClient
 
-	ErrNum int64
+	state *realPumpState
 }
 
 // NewPumpStatus returns a new PumpStatus according to node's status.
@@ -78,17 +112,20 @@ func NewPumpStatus(status *node.Status, security *tls.Config) *PumpStatus {
 		Status:         *status,
 		security:       security,
 		reCreateClient: true,
+		state:          &realPumpState{},
 	}
 	return &pumpStatus
 }
 
-func (p *PumpStatus) markReCreateClient() {
+// MarkReCreateClient marks that we need to re-create grpc connection
+func (p *PumpStatus) MarkReCreateClient() {
 	p.Lock()
 	p.reCreateClient = true
 	p.Unlock()
 }
 
-func (p *PumpStatus) close() {
+// Close close pumps
+func (p *PumpStatus) Close() {
 	if p.grpcConn != nil {
 		p.grpcConn.Close()
 		p.grpcConn = nil
@@ -122,7 +159,7 @@ func (p *PumpStatus) createGrpcClient() error {
 		clientConn, err = grpc.Dial(p.Addr, dialerOpt, grpc.WithInsecure())
 	}
 	if err != nil {
-		atomic.AddInt64(&p.ErrNum, 1)
+		p.state.updateFailedTS(int64(time.Now().Second()))
 		return errors.Trace(err)
 	}
 
@@ -134,7 +171,7 @@ func (p *PumpStatus) createGrpcClient() error {
 
 // Reset resets the pump's err num.
 func (p *PumpStatus) Reset() {
-	atomic.StoreInt64(&p.ErrNum, 0)
+	p.state.markAvailable()
 }
 
 // WriteBinlog write binlog by grpc client.
@@ -163,10 +200,10 @@ func (p *PumpStatus) WriteBinlog(req *pb.WriteBinlogReq, timeout time.Duration) 
 
 	cancel()
 
-	if err != nil {
-		atomic.AddInt64(&p.ErrNum, 1)
+	if err == nil {
+		p.state.markAvailable()
 	} else {
-		atomic.StoreInt64(&p.ErrNum, 0)
+		p.state.updateFailedTS(int64(time.Now().Second()))
 	}
 
 	return resp, err
@@ -178,11 +215,7 @@ func (p *PumpStatus) IsUsable() bool {
 		return false
 	}
 
-	if atomic.LoadInt64(&p.ErrNum) > defaultMaxErrNums {
-		return false
-	}
-
-	return true
+	return p.state.isAvaliable()
 }
 
 // ShouldBeUsable returns true if pump should be usable

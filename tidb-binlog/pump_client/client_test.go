@@ -67,7 +67,11 @@ func (*testClientSuite) testSelector(c *C, strategy string) {
 		BinlogWriteTimeout: DefaultBinlogWriteTimeout,
 	}
 
-	pumps := []*PumpStatus{{}, {}, {}}
+	pumps := []*PumpStatus{
+		NewPumpStatus(&node.Status{}, nil),
+		NewPumpStatus(&node.Status{}, nil),
+		NewPumpStatus(&node.Status{}, nil),
+	}
 	for i, pump := range pumps {
 		pump.NodeID = fmt.Sprintf("pump%d", i)
 		pump.State = node.Offline

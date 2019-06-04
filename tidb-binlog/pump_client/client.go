@@ -285,7 +285,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 		log.Debug("[pumps client] try write to pump", zap.String("NodeID", pump.NodeID))
 		for i := 0; i < 3; i++ {
 			if i > 0 {
-				time.Sleep(time.Second * time.Duration(i))
+				time.Sleep(RetryInterval)
 			}
 
 			resp, err = pump.WriteBinlog(req, c.BinlogWriteTimeout)
@@ -475,7 +475,7 @@ func (c *PumpsClient) updatePump(status *node.Status) (pump *PumpStatus, avaliab
 	}
 
 	if status.Addr != pump.Status.Addr {
-		pump.markReCreateClient()
+		pump.MarkReCreateClient()
 	}
 	pump.Status = *status
 
@@ -486,7 +486,7 @@ func (c *PumpsClient) updatePump(status *node.Status) (pump *PumpStatus, avaliab
 func (c *PumpsClient) removePump(nodeID string) {
 	c.Lock()
 	if pump, ok := c.Pumps.Pumps[nodeID]; ok {
-		pump.close()
+		pump.Close()
 	}
 	delete(c.Pumps.Pumps, nodeID)
 	delete(c.Pumps.UnAvaliablePumps, nodeID)
@@ -575,7 +575,7 @@ func (c *PumpsClient) detect() {
 			req := &pb.WriteBinlogReq{ClusterID: c.ClusterID, Payload: nil}
 			c.RLock()
 			for _, pump := range c.Pumps.UnAvaliablePumps {
-				if pump.IsUsable() {
+				if pump.ShouldBeUsable() {
 					needCheckPumps = append(needCheckPumps, pump)
 				}
 			}
@@ -626,5 +626,6 @@ func copyPumps(pumps map[string]*PumpStatus) []*PumpStatus {
 
 // InitLogger initializes logger.
 func InitLogger(cfg *logutil.LogConfig) error {
-	return logutil.InitZapLogger(cfg)
+	//return logutil.InitZapLogger(cfg)
+	return nil
 }
