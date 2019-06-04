@@ -149,10 +149,10 @@ func (p *PumpStatus) WriteBinlog(req *pb.WriteBinlogReq, timeout time.Duration) 
 				log.Info("[pumps client] write binlog to unavailable pump success, set this pump to avaliable", zap.String("NodeID", p.NodeID))
 				return nil, errors.Trace(err)
 			}
-
-			p.Unlock()
-			p.RLock()
 		}
+
+		p.Unlock()
+		p.RLock()
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
