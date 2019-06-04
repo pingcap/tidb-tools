@@ -14,9 +14,6 @@ check-thread-count = 4
 # sampling check percent, for example 10 means only check 10% data
 sample-percent = 100
 
-# set true if target-db and source-db all support tidb implicit column "_tidb_rowid"
-use-rowid = false
-
 # calculate the data's checksum, and compare data by checksum.
 # set false if want to comapre the data directly
 use-checksum = true
