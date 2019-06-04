@@ -29,6 +29,7 @@ import (
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
 	binlog "github.com/pingcap/tipb/go-binlog"
 	pb "github.com/pingcap/tipb/go-binlog"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 )
@@ -323,7 +324,12 @@ func createMockPumpServer(addr string, mode string, writeSuccessPer int64) (*moc
 		writeSuccessPer: writeSuccessPer,
 	}
 	pb.RegisterPumpServer(serv, pump)
-	go serv.Serve(l)
+	go func() {
+		err := serv.Serve(l)
+		if err != nil {
+			log.Error("serve err", zap.Error(err))
+		}
+	}()
 
 	return pump, nil
 }

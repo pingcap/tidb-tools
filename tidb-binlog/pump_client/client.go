@@ -32,6 +32,8 @@ import (
 	"github.com/pingcap/tidb/util/logutil"
 	pb "github.com/pingcap/tipb/go-binlog"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -281,10 +283,27 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 		}
 
 		log.Debug("[pumps client] try write to pump", zap.String("NodeID", pump.NodeID))
-		resp, err = pump.WriteBinlog(req, c.BinlogWriteTimeout)
-		if err == nil && resp.Errmsg != "" {
-			err = errors.New(resp.Errmsg)
+		for i := 0; i < 3; i++ {
+			if i > 0 {
+				time.Sleep(time.Second * time.Duration(i))
+			}
+
+			resp, err = pump.WriteBinlog(req, c.BinlogWriteTimeout)
+			if err == nil && resp.Errmsg != "" {
+				err = errors.New(resp.Errmsg)
+			}
+
+			// Retry on this pump if err code is `codes.Unavailable`
+			// This is a most likely a transient condition and may be corrected
+			// by retrying with a backoff.
+			if status.Code(err) == codes.Unavailable {
+				log.Warn("[pump client] write binlog unavailable", zap.String("NodeID", pump.NodeID))
+				continue
+			} else {
+				break
+			}
 		}
+
 		if err == nil {
 			log.Debug("write success", zap.String("NodeID", pump.NodeID))
 			choosePump = pump
@@ -384,6 +403,8 @@ func (c *PumpsClient) checkPumpAvaliable() {
 func (c *PumpsClient) setPumpAvaliable(pump *PumpStatus, avaliable bool) {
 	c.Lock()
 	defer c.Unlock()
+
+	log.Info("[pump clinet] set pump available", zap.String("NodeID", pump.NodeID), zap.Bool("available", avaliable))
 
 	pump.Reset()
 

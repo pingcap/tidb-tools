@@ -107,6 +107,7 @@ func (p *PumpStatus) createGrpcClient() error {
 		})
 	} else {
 		dialerOpt = grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
+			log.Debug("dial tcp", zap.String("addr", addr))
 			return net.DialTimeout("tcp", addr, timeout)
 		})
 	}
