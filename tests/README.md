@@ -17,6 +17,7 @@ This folder contains all tests which relies on external service such as TiDB.
 2. The following programs must be installed:
 
    - `mysql`(the CLI client)
+   - `mysqladmin`
 
 3. The user executing the tests must have permission to create the folder
 

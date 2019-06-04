@@ -21,19 +21,6 @@ stop_services() {
     killall -9 tidb-server || true
 }
 
-start_upstream_tidb() {
-    port=${1-4000}
-    echo "Starting TiDB at port: $port..."
-    tidb-server \
-        -P $port \
-        --store tikv \
-        --path 127.0.0.1:2379 \
-        --log-file "$OUT_DIR/tidb.log" &
-
-    echo "Verifying TiDB is started..."
-    check_db_status "127.0.0.1" $port "tidb"
-}
-
 start_services() {
     stop_services
 
