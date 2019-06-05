@@ -296,8 +296,8 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 			// Retry on this pump if err code is `codes.Unavailable`
 			// This is a most likely a transient condition and may be corrected
 			// by retrying with a backoff.
-			if status.Code(err) == codes.Unavailable {
-				log.Warn("[pump client] write binlog unavailable", zap.String("NodeID", pump.NodeID))
+			if status.Code(err) == codes.Unavailable || status.Code(err) == codes.DeadlineExceeded {
+				log.Warn("[pump client] write binlog undetermined failed", zap.String("NodeID", pump.NodeID))
 				continue
 			} else {
 				break
