@@ -49,7 +49,7 @@ type PumpSelector interface {
 	SetPumps([]*PumpStatus)
 
 	// Select returns a situable pump. Tips: should call this function only one time for commit/rollback binlog.
-	Select(binlog *pb.Binlog, retryTime int) *PumpStatus
+	Select(binlog *pb.Binlog) *PumpStatus
 
 	// Feedback set the corresponding relations between startTS and pump.
 	Feedback(startTS int64, binlogType pb.BinlogType, pump *PumpStatus)
@@ -76,7 +76,7 @@ func (h *HashSelector) SetPumps(pumps []*PumpStatus) {
 }
 
 // Select implement PumpSelector.Select.
-func (h *HashSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
+func (h *HashSelector) Select(binlog *pb.Binlog) *PumpStatus {
 	// TODO: use status' label to match suitable pump.
 	selectorLock.Lock()
 	defer selectorLock.Unlock()
@@ -95,7 +95,7 @@ func (h *HashSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 	if len(h.Pumps) == 0 {
 		return nil
 	}
-	i := (binlog.StartTs + int64(retryTime)) % int64(len(h.Pumps))
+	i := binlog.StartTs % int64(len(h.Pumps))
 	pump := h.Pumps[int(i)]
 	return pump
 }
@@ -131,7 +131,7 @@ func (r *RangeSelector) SetPumps(pumps []*PumpStatus) {
 }
 
 // Select implement PumpSelector.Select.
-func (r *RangeSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
+func (r *RangeSelector) Select(binlog *pb.Binlog) *PumpStatus {
 	// TODO: use status' label to match suitable pump.
 	// FIXME: for concurrent Write, may return the same pump instance for one binlog, so will not
 	// try every pump instance if call Select to get another pump instance an retry.
@@ -191,7 +191,7 @@ func (u *LocalUnixSelector) SetPumps(pumps []*PumpStatus) {
 }
 
 // Select implement PumpSelector.Select.
-func (u *LocalUnixSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
+func (u *LocalUnixSelector) Select(binlog *pb.Binlog) *PumpStatus {
 	selectorLock.RLock()
 	defer selectorLock.RUnlock()
 
@@ -217,7 +217,7 @@ func (s *ScoreSelector) SetPumps(pumps []*PumpStatus) {
 }
 
 // Select implement PumpSelector.Select.
-func (s *ScoreSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
+func (s *ScoreSelector) Select(binlog *pb.Binlog) *PumpStatus {
 	// TODO
 	return nil
 }

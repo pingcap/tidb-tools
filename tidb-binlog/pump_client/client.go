@@ -32,8 +32,6 @@ import (
 	"github.com/pingcap/tidb/util/logutil"
 	pb "github.com/pingcap/tipb/go-binlog"
 	"go.uber.org/zap"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -248,18 +246,19 @@ func (c *PumpsClient) getPumpStatus(pctx context.Context) (revision int64, err e
 // WriteBinlog writes binlog to a suitable pump. Tips: will never return error for commit/rollback binlog.
 func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 	c.RLock()
-	pumpNum := len(c.Pumps.AvaliablePumps)
 	selector := c.Selector
 	c.RUnlock()
 
-	var choosePump *PumpStatus
+	var pump *PumpStatus
 	meetError := false
 	defer func() {
 		if meetError {
 			c.checkPumpAvaliable()
 		}
 
-		selector.Feedback(binlog.StartTs, binlog.Tp, choosePump)
+		if pump != nil && (!meetError || binlog.Tp != pb.BinlogType_Prewrite) {
+			selector.Feedback(binlog.StartTs, binlog.Tp, pump)
+		}
 	}()
 
 	commitData, err := binlog.Marshal()
@@ -268,45 +267,23 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 	}
 	req := &pb.WriteBinlogReq{ClusterID: c.ClusterID, Payload: commitData}
 
-	retryTime := 0
-	var pump *PumpStatus
 	var resp *pb.WriteBinlogResp
+	pump = selector.Select(binlog)
+	if pump == nil {
+		log.Error("[pumps client] no available pumps", zap.Stringer("binlog type", binlog.Tp), zap.Int64("start ts", binlog.StartTs))
+	}
+
 	startTime := time.Now()
+	for pump != nil {
+		log.Debug("[pumps client] try write to pump", zap.String("NodeID", pump.NodeID), zap.Stringer("binlog type", binlog.Tp), zap.Int64("start ts", binlog.StartTs))
 
-	for {
-		if pump == nil || binlog.Tp == pb.BinlogType_Prewrite {
-			pump = selector.Select(binlog, retryTime)
-		}
-		if pump == nil {
-			err = ErrNoAvaliablePump
-			break
-		}
-
-		log.Debug("[pumps client] try write to pump", zap.String("NodeID", pump.NodeID))
-		for i := 0; i < 3; i++ {
-			if i > 0 {
-				time.Sleep(RetryInterval)
-			}
-
-			resp, err = pump.WriteBinlog(req, c.BinlogWriteTimeout)
-			if err == nil && resp.Errmsg != "" {
-				err = errors.New(resp.Errmsg)
-			}
-
-			// Retry on this pump if err code is `codes.Unavailable`
-			// This is a most likely a transient condition and may be corrected
-			// by retrying with a backoff.
-			if status.Code(err) == codes.Unavailable || status.Code(err) == codes.DeadlineExceeded {
-				log.Warn("[pump client] write binlog undetermined failed", zap.String("NodeID", pump.NodeID))
-				continue
-			} else {
-				break
-			}
+		resp, err = pump.WriteBinlog(req, c.BinlogWriteTimeout)
+		if err == nil && resp.Errmsg != "" {
+			err = errors.New(resp.Errmsg)
 		}
 
 		if err == nil {
-			log.Debug("write success", zap.String("NodeID", pump.NodeID))
-			choosePump = pump
+			log.Debug("[pumps client] write success", zap.String("NodeID", pump.NodeID), zap.Stringer("binlog type", binlog.Tp), zap.Int64("start ts", binlog.StartTs))
 			return nil
 		}
 
@@ -318,45 +295,41 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 			if time.Since(startTime) > CommitBinlogTimeout {
 				break
 			}
+
+			time.Sleep(RetryInterval * 10)
 		} else {
 			if !isRetryableError(err) {
 				// this kind of error is not retryable, return directly.
 				return errors.Trace(err)
 			}
 
-			// make sure already retry every avaliable pump.
-			if time.Since(startTime) > c.BinlogWriteTimeout && retryTime > pumpNum {
+			if time.Since(startTime) > c.BinlogWriteTimeout {
 				break
 			}
 
-			retryTime++
-		}
-
-		if binlog.Tp != pb.BinlogType_Prewrite {
-			time.Sleep(RetryInterval * 10)
-		} else {
 			time.Sleep(RetryInterval)
 		}
 	}
 
-	log.Info("[pumps client] write binlog to avaliable pumps all failed, will try unavaliable pumps")
-	pump, err1 := c.backoffWriteBinlog(req, binlog.Tp, binlog.StartTs)
+	log.Info("[pumps client] write binlog to pump failed, will try all pumps in our best", zap.Stringer("binlog type", binlog.Tp), zap.Int64("start ts", binlog.StartTs))
+
+	// never return error for commit/rollback binlog.
+	if binlog.Tp != pb.BinlogType_Prewrite {
+		return nil
+	}
+
+	var err1 error
+	pump, err1 = c.backoffWriteBinlog(req, binlog.Tp, binlog.StartTs)
 	if err1 == nil {
-		choosePump = pump
+		log.Info("[pumps client] backoff write binlog successfully", zap.Stringer("binlog type", binlog.Tp), zap.Int64("start ts", binlog.StartTs))
 		return nil
 	}
 
 	return errors.Errorf("write binlog failed, the last error %v", err)
 }
 
-// return directly for non p-binlog
 // try every online pump for p-binlog
 func (c *PumpsClient) backoffWriteBinlog(req *pb.WriteBinlogReq, binlogType pb.BinlogType, startTS int64) (pump *PumpStatus, err error) {
-	if binlogType != pb.BinlogType_Prewrite {
-		// never return error for commit/rollback binlog.
-		return nil, nil
-	}
-
 	allPumps := make([]*PumpStatus, 0, 3)
 	c.RLock()
 	for _, pump := range c.Pumps.Pumps {

@@ -121,7 +121,7 @@ func (*testClientSuite) testSelector(c *C, strategy string) {
 		if nodeID != "" {
 			pumpsClient.setPumpAvaliable(pumpsClient.Pumps.Pumps[nodeID], tCase.setAvliable[i])
 		}
-		pump := pumpsClient.Selector.Select(tCase.binlogs[i], 0)
+		pump := pumpsClient.Selector.Select(tCase.binlogs[i])
 		pumpsClient.Selector.Feedback(tCase.binlogs[i].StartTs, tCase.binlogs[i].Tp, pump)
 		c.Assert(pump, Equals, tCase.choosePumps[i])
 	}
@@ -136,21 +136,18 @@ func (*testClientSuite) testSelector(c *C, strategy string) {
 			StartTs: int64(j),
 		}
 
-		pump1 := pumpsClient.Selector.Select(prewriteBinlog, 0)
-		if j%2 == 0 {
-			pump1 = pumpsClient.Selector.Select(prewriteBinlog, 1)
-		}
+		pump1 := pumpsClient.Selector.Select(prewriteBinlog)
 		pumpsClient.Selector.Feedback(prewriteBinlog.StartTs, prewriteBinlog.Tp, pump1)
 
 		pumpsClient.setPumpAvaliable(pump1, false)
-		pump2 := pumpsClient.Selector.Select(commitBinlog, 0)
+		pump2 := pumpsClient.Selector.Select(commitBinlog)
 		pumpsClient.Selector.Feedback(commitBinlog.StartTs, commitBinlog.Tp, pump2)
 		// prewrite binlog and commit binlog with same start ts should choose same pump
 		c.Assert(pump1.NodeID, Equals, pump2.NodeID)
 		pumpsClient.setPumpAvaliable(pump1, true)
 
 		// after change strategy, prewrite binlog and commit binlog will choose same pump
-		pump1 = pumpsClient.Selector.Select(prewriteBinlog, 0)
+		pump1 = pumpsClient.Selector.Select(prewriteBinlog)
 		pumpsClient.Selector.Feedback(prewriteBinlog.StartTs, prewriteBinlog.Tp, pump1)
 		if strategy == Range {
 			err := pumpsClient.SetSelectStrategy(Hash)
@@ -159,17 +156,13 @@ func (*testClientSuite) testSelector(c *C, strategy string) {
 			err := pumpsClient.SetSelectStrategy(Range)
 			c.Assert(err, IsNil)
 		}
-		pump2 = pumpsClient.Selector.Select(commitBinlog, 0)
+		pump2 = pumpsClient.Selector.Select(commitBinlog)
 		c.Assert(pump1.NodeID, Equals, pump2.NodeID)
 
 		// set back
 		err := pumpsClient.SetSelectStrategy(strategy)
 		c.Assert(err, IsNil)
 	}
-}
-
-func (t *testClientSuite) TestNormalWriteBinlog(c *C) {
-
 }
 
 type pumpInstance struct {
@@ -272,12 +265,16 @@ func (t *testClientSuite) TestWriteBinlog(c *C) {
 	}
 
 	// write commit binlog failed will not return error
+	// CommitBinlogTimeout is 1s, the related pump would not be unavailable, but would unavailable at L275
 	err = pumpClient.WriteBinlog(commitBinlog)
 	c.Assert(err, IsNil)
+	c.Assert(len(pumpClient.Pumps.UnAvaliablePumps), Equals, 1)
 
 	err = pumpClient.WriteBinlog(blog)
 	c.Assert(err, NotNil)
+	c.Assert(len(pumpClient.Pumps.UnAvaliablePumps), Equals, 3)
 
+	pumpClient.setPumpAvaliable(pumpClient.Pumps.UnAvaliablePumps[localPump], true)
 	// recover after recreate servers
 	servers = mustCreateServers(c, pumpServerConfig)
 	err = pumpClient.WriteBinlog(blog)
@@ -370,7 +367,7 @@ func mockPumpsClient(instances []pumpInstance) *PumpsClient {
 		ClusterID:          1,
 		Pumps:              pumpInfos,
 		Selector:           NewSelector(Range),
-		BinlogWriteTimeout: 5 * time.Second,
+		BinlogWriteTimeout: 15 * time.Second,
 	}
 
 	pCli.Selector.SetPumps(pumps)
