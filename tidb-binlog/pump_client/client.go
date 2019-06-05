@@ -439,12 +439,7 @@ func (c *PumpsClient) updatePump(status *node.Status) (pump *PumpStatus, avaliab
 
 	if pump.Status.State != status.State {
 		avaliableChanged = true
-		avaliable = true
-		if pump.ShouldBeUsable() {
-			avaliable = true
-		} else {
-			avaliable = false
-		}
+		avaliable = pump.ShouldBeUsable()
 	}
 
 	if status.Addr != pump.Status.Addr {

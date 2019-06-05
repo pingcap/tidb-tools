@@ -187,23 +187,23 @@ func (t *testClientSuite) TestWriteBinlog(c *C) {
 	log.SetLevel(zapcore.DebugLevel)
 	pumpServerConfig := []pumpInstance{
 		{
-			localPump,
-			node.Online,
-			"/tmp/mock-pump.sock",
-			"unix",
-			1,
+			nodeID:          localPump,
+			Status:          node.Online,
+			addr:            "/tmp/mock-pump.sock",
+			serverMode:      "unix",
+			writeSuccessPer: 1,
 		}, {
-			"Node-1",
-			node.Online,
-			"127.0.0.1:15049",
-			"tcp",
-			1,
+			nodeID:          "Node-1",
+			Status:          node.Online,
+			addr:            "127.0.0.1:15049",
+			serverMode:      "tcp",
+			writeSuccessPer: 1,
 		}, {
-			"Node-2",
-			node.Online,
-			"127.0.0.1:15050",
-			"tcp",
-			math.MinInt64, // never return success
+			nodeID:          "Node-2",
+			Status:          node.Online,
+			addr:            "127.0.0.1:15050",
+			serverMode:      "tcp",
+			writeSuccessPer: math.MinInt64, // never return success
 		},
 	}
 

@@ -169,7 +169,7 @@ func (p *PumpStatus) createGrpcClient() error {
 	return nil
 }
 
-// Reset resets the pump's err num.
+// Reset resets the pump's real state.
 func (p *PumpStatus) Reset() {
 	p.state.markAvailable()
 }
@@ -185,7 +185,7 @@ func (p *PumpStatus) WriteBinlog(req *pb.WriteBinlogReq, timeout time.Duration) 
 			err := p.createGrpcClient()
 			if err != nil {
 				p.Unlock()
-				log.Info("[pumps client] write binlog to unavailable pump success, set this pump to avaliable", zap.String("NodeID", p.NodeID))
+				log.Info("[pumps client] fail to create grpc client", zap.String("NodeID", p.NodeID))
 				return nil, errors.Trace(err)
 			}
 		}
@@ -220,9 +220,5 @@ func (p *PumpStatus) IsUsable() bool {
 
 // ShouldBeUsable returns true if pump should be usable
 func (p *PumpStatus) ShouldBeUsable() bool {
-	if p.Status.State != node.Online {
-		return false
-	}
-
-	return true
+	return p.Status.State == node.Online
 }
