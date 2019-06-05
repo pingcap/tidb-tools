@@ -323,6 +323,8 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 	if err1 == nil {
 		log.Info("[pumps client] backoff write binlog successfully", zap.Stringer("binlog type", binlog.Tp), zap.Int64("start ts", binlog.StartTs))
 		return nil
+	} else {
+		log.Error("[pumps client] backoff write binlog failed", zap.Stringer("binlog type", binlog.Tp), zap.Int64("start ts", binlog.StartTs))
 	}
 
 	return errors.Errorf("write binlog failed, the last error %v", err)
@@ -330,11 +332,8 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 
 // try every online pump for p-binlog
 func (c *PumpsClient) backoffWriteBinlog(req *pb.WriteBinlogReq, binlogType pb.BinlogType, startTS int64) (pump *PumpStatus, err error) {
-	allPumps := make([]*PumpStatus, 0, 3)
 	c.RLock()
-	for _, pump := range c.Pumps.Pumps {
-		allPumps = append(allPumps, pump)
-	}
+	allPumps := copyPumps(c.Pumps.Pumps)
 	c.RUnlock()
 
 	var resp *pb.WriteBinlogResp
