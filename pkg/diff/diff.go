@@ -74,9 +74,6 @@ type TableDiff struct {
 	// how many goroutines are created to check data
 	CheckThreadCount int `json:"-"`
 
-	// set true if target-db and source-db all support tidb implicit column "_tidb_rowid"
-	UseRowID bool `json:"use-rowid"`
-
 	// set false if want to comapre the data directly
 	UseChecksum bool `json:"-"`
 
@@ -187,14 +184,14 @@ func (t *TableDiff) adjustConfig() {
 }
 
 func (t *TableDiff) getTableInfo(ctx context.Context) error {
-	tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.UseRowID)
+	tableInfo, err := dbutil.GetTableInfo(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	t.TargetTable.info = removeColumns(tableInfo, t.RemoveColumns)
 
 	for _, sourceTable := range t.SourceTables {
-		tableInfo, err := dbutil.GetTableInfoWithRowID(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.UseRowID)
+		tableInfo, err := dbutil.GetTableInfo(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -817,10 +814,6 @@ func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableIn
 			columnNames = append(columnNames, col.Name.O)
 		}
 		columns = strings.Join(columnNames, ", ")
-	}
-
-	if orderKeys[0] == dbutil.ImplicitColName {
-		columns = fmt.Sprintf("%s, %s", columns, dbutil.ImplicitColName)
 	}
 
 	if collation != "" {
