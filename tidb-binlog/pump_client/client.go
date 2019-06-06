@@ -321,6 +321,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 	var err1 error
 	pump, err1 = c.backoffWriteBinlog(req, binlog.Tp, binlog.StartTs)
 	if err1 == nil {
+		meetError = false
 		log.Info("[pumps client] backoff write binlog successfully", zap.Stringer("binlog type", binlog.Tp), zap.Int64("start ts", binlog.StartTs))
 		return nil
 	} else {
