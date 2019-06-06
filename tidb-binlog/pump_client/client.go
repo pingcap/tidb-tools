@@ -258,7 +258,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 			c.checkPumpAvaliable()
 		}
 
-		if pump != nil && meetError {
+		if pump != nil && !meetError {
 			selector.Feedback(binlog.StartTs, binlog.Tp, pump)
 		}
 	}()
