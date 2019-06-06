@@ -251,12 +251,14 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 
 	var pump *PumpStatus
 	meetError := false
+	pumpError := false
+
 	defer func() {
-		if meetError {
+		if pumpError {
 			c.checkPumpAvaliable()
 		}
 
-		if pump != nil && (!meetError || binlog.Tp != pb.BinlogType_Prewrite) {
+		if pump != nil && meetError {
 			selector.Feedback(binlog.StartTs, binlog.Tp, pump)
 		}
 	}()
@@ -287,7 +289,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 			return nil
 		}
 
-		meetError = true
+		pumpError = true
 		log.Warn("[pumps client] write binlog to pump failed", zap.String("NodeID", pump.NodeID), zap.Stringer("binlog type", binlog.Tp), zap.Int64("start ts", binlog.StartTs), zap.Int64("commit ts", binlog.CommitTs), zap.Int("length", len(commitData)), zap.Error(err))
 
 		if binlog.Tp != pb.BinlogType_Prewrite {
@@ -299,6 +301,7 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 			time.Sleep(RetryInterval * 10)
 		} else {
 			if !isRetryableError(err) {
+				meetError = true
 				// this kind of error is not retryable, return directly.
 				return errors.Trace(err)
 			}
@@ -321,12 +324,11 @@ func (c *PumpsClient) WriteBinlog(binlog *pb.Binlog) error {
 	var err1 error
 	pump, err1 = c.backoffWriteBinlog(req, binlog.Tp, binlog.StartTs)
 	if err1 == nil {
-		meetError = false
 		log.Info("[pumps client] backoff write binlog successfully", zap.Stringer("binlog type", binlog.Tp), zap.Int64("start ts", binlog.StartTs))
 		return nil
-	} else {
-		log.Error("[pumps client] backoff write binlog failed", zap.Stringer("binlog type", binlog.Tp), zap.Int64("start ts", binlog.StartTs))
 	}
+	meetError = true
+	log.Error("[pumps client] backoff write binlog failed", zap.Stringer("binlog type", binlog.Tp), zap.Int64("start ts", binlog.StartTs))
 
 	return errors.Errorf("write binlog failed, the last error %v", err)
 }
