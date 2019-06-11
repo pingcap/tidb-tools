@@ -31,6 +31,6 @@ Run `make integration_test` to execute the integration tests. This command will
 2. Check that all executables exist.
 3. Execute `tests/run.sh`
 
-If the first two steps are done before, you could also run `tests/run.sh directly.
+If the first two steps are done before, you could also run `tests/run.sh` directly.
 
 The scrip will find out all `tests/*/run.sh` and run it.
