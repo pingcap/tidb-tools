@@ -23,7 +23,7 @@ var _ = Suite(&testUtilSuite{})
 
 type testUtilSuite struct{}
 
-func (s *testUtilSuite) TestRemoveColumns(c *C) {
+func (s *testUtilSuite) TestIgnoreColumns(c *C) {
 	createTableSQL1 := "CREATE TABLE `test`.`atest` (`a` int, `b` int, `c` int, `d` int, primary key(`a`))"
 	tableInfo1, err := dbutil.GetTableInfoBySQL(createTableSQL1)
 	c.Assert(err, IsNil)

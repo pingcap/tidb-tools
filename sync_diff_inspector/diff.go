@@ -211,7 +211,6 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 					Schema: schemaTables.Schema,
 					Table:  tableName,
 				},
-				IgnoreColumns:   make([]string, 0, 1),
 				TargetTableInfo: tableInfo,
 				Range:           "TRUE",
 				SourceTables:    sourceTables,
@@ -259,7 +258,6 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 			df.tables[table.Schema][table.Table].Range = table.Range
 		}
 		df.tables[table.Schema][table.Table].IgnoreColumns = table.IgnoreColumns
-		df.tables[table.Schema][table.Table].RemoveColumns = table.RemoveColumns
 		df.tables[table.Schema][table.Table].Fields = table.Fields
 		df.tables[table.Schema][table.Table].Collation = table.Collation
 	}
@@ -391,7 +389,6 @@ func (df *Diff) Equal() (err error) {
 				TargetTable:  targetTableInstance,
 
 				IgnoreColumns: table.IgnoreColumns,
-				RemoveColumns: table.RemoveColumns,
 
 				Fields:            table.Fields,
 				Range:             table.Range,
