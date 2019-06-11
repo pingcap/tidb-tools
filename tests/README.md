@@ -4,7 +4,7 @@ This folder contains all tests which relies on external service such as TiDB.
 
 ## Preparations
 
-1. The following three executables must be copied or linked into these locations:
+1. The following seven executables must be copied or linked into these locations:
 
    - `bin/pd-server`
    - `bin/tikv-server`
