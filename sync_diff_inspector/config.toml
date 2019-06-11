@@ -94,7 +94,7 @@ table = "test2"
 is-sharding = false
 
 # columns be ignored, will not check this column's data
-# remove-columns = ["name"]
+# ignore-columns = ["name"]
 
 # source table.
 [[table-config.source-tables]]

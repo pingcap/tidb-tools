@@ -68,7 +68,7 @@ type TableConfig struct {
 	// table's origin information
 	TableInstance
 	// columns be ignored, will not check this column's data
-	IgnoreColumns []string `toml:"remove-columns"`
+	IgnoreColumns []string `toml:"ignore-columns"`
 	// field should be the primary key, unique key or field with index
 	Fields string `toml:"index-fields"`
 	// select range, for example: "age > 10 AND age < 20"
