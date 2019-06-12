@@ -686,7 +686,7 @@ func generateDML(tp string, data map[string]*dbutil.ColumnData, keys []*model.Co
 		sql = fmt.Sprintf("REPLACE INTO `%s`.`%s`(%s) VALUES (%s);", schema, table.Name, strings.Join(colNames, ","), strings.Join(values, ","))
 	case "delete":
 		kvs := make([]string, 0, len(keys))
-		for _, col := range keys {
+		for _, col := range table.Columns {
 			if col.IsGenerated() {
 				continue
 			}

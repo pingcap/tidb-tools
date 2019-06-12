@@ -48,10 +48,9 @@ func removeColumns(tableInfo *model.TableInfo, columns []string) *model.TableInf
 		for j := 0; j < len(index.Columns); j++ {
 			col := index.Columns[j]
 			if _, ok := removeColMap[col.Name.O]; ok {
-
-					tableInfo.Indices = append(tableInfo.Indices[:i], tableInfo.Indices[i+1:]...)
-					i--
-					break
+				tableInfo.Indices = append(tableInfo.Indices[:i], tableInfo.Indices[i+1:]...)
+				i--
+				break
 			}
 		}
 	}
