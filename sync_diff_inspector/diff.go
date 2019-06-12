@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strings"
 	"regexp"
 
 	"github.com/pingcap/errors"
@@ -43,6 +44,8 @@ type Diff struct {
 	ignoreStructCheck bool
 	tables            map[string]map[string]*TableConfig
 	fixSQLFile        *os.File
+	fixSQLFileTmp     *os.File
+
 	report            *Report
 	tidbInstanceID    string
 	tableRouter       *router.Table
@@ -88,6 +91,11 @@ func (df *Diff) init(cfg *Config) (err error) {
 	}
 
 	df.fixSQLFile, err = os.Create(cfg.FixSQLFile)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	df.fixSQLFileTmp, err = os.Create(cfg.FixSQLFile+".tmp")
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -331,6 +339,10 @@ func (df *Diff) Close() {
 		df.fixSQLFile.Close()
 	}
 
+	if df.fixSQLFileTmp != nil {
+		df.fixSQLFileTmp.Close()
+	}
+
 	for _, db := range df.sourceDBs {
 		if db.Conn != nil {
 			db.Conn.Close()
@@ -405,10 +417,38 @@ func (df *Diff) Equal() (err error) {
 				CpDB:              df.cpDB,
 			}
 
-			structEqual, dataEqual, err := td.Equal(df.ctx, func(dml string) error {
-				_, err := df.fixSQLFile.WriteString(fmt.Sprintf("%s\n", dml))
+			structEqual, dataEqual, err := td.Equal(df.ctx, func(dml string) (err error) {
+				if strings.HasPrefix(dml, "DELETE") {
+					log.Info("write dml to fixSQLFile", zap.String("dml", dml))
+					_, err = df.fixSQLFile.WriteString(fmt.Sprintf("%s\n", dml))
+				} else {
+					log.Info("write dml to fixSQLFileTmp", zap.String("dml", dml))
+					_, err = df.fixSQLFileTmp.WriteString(fmt.Sprintf("%s\n", dml))
+				}
 				return errors.Trace(err)
 			})
+
+			log.Info("will scan fixSQLFileTmp")
+			//scanner := bufio.NewScanner(df.fixSQLFileTmp)
+			
+			offset := int64(0)
+			for {
+				data := make([]byte, 100)
+				num, err := df.fixSQLFileTmp.ReadAt(data, offset)
+				log.Info("read file", zap.Int("num", num), zap.Error(err))
+				if num == 0 || err != nil {
+					break
+				}
+				offset += int64(num)
+
+				log.Info("write data from tmp", zap.String("data", string(data)))
+				_, err = df.fixSQLFile.Write(data)
+				if err != nil {
+					log.Error("write file", zap.Error(err))
+					break
+				}
+			}
+
 			if err != nil {
 				log.Error("check failed", zap.String("table", dbutil.TableName(table.Schema, table.Table)), zap.Error(err))
 				return errors.Trace(err)

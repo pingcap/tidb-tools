@@ -11,7 +11,7 @@ echo "update data in column c, data should not be equal"
 mysql -uroot -h 127.0.0.1 -P 4000 -e "update diff_test.test set b = 'abc' limit 1"
 
 rm $OUT_DIR/fix.sql || true
-sync_diff_inspector --config=./config_base.toml > $OUT_DIR/ignore_column_diff1.log || true
+sync_diff_inspector --config=./config_base.toml > $OUT_DIR/ignore_column_diff.log || true
 check_contains "sourceDB don't equal targetDB" $OUT_DIR/ignore_column_diff.log
 mv $OUT_DIR/fix.sql $OUT_DIR/fix.sql.bak
 
