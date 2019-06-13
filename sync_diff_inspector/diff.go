@@ -382,9 +382,7 @@ func (df *Diff) Equal() (err error) {
 				log.Warn("judge instance is tidb failed", zap.Error(err))
 			} else if isTiDB {
 				tidbStatsSource = targetTableInstance
-			}
-
-			if tidbStatsSource == nil && len(sourceTables) == 1 {
+			} else if len(sourceTables) == 1 {
 				isTiDB, err := dbutil.IsTiDB(ctx, sourceTables[0].Conn)
 				if err != nil {
 					log.Warn("judge instance is tidb failed", zap.Error(err))
