@@ -406,8 +406,8 @@ func (df *Diff) Equal() (err error) {
 				CpDB:              df.cpDB,
 			}
 
-			structEqual, dataEqual, err := td.Equal(df.ctx, func(dml string) (err error) {
-				_, err = df.fixSQLFile.WriteString(fmt.Sprintf("%s\n", dml))
+			structEqual, dataEqual, err := td.Equal(df.ctx, func(dml string) error {
+				_, err := df.fixSQLFile.WriteString(fmt.Sprintf("%s\n", dml))
 				return errors.Trace(err)
 			})
 
