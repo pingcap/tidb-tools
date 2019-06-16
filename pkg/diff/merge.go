@@ -36,8 +36,6 @@ type RowDatas struct {
 
 func (r RowDatas) Len() int { return len(r.Rows) }
 func (r RowDatas) Less(i, j int) bool {
-	var data1, data2 []byte
-
 	for _, col := range r.OrderKeyCols {
 		col1, ok := r.Rows[i].Data[col.Name.O]
 		if !ok {
@@ -47,21 +45,24 @@ func (r RowDatas) Less(i, j int) bool {
 		if !ok {
 			log.Fatal("data don't have column", zap.String("column", col.Name.O), zap.Reflect("data", r.Rows[j].Data))
 		}
-		data1 = col1.Data
-		data2 = col2.Data
+
+		strData1 := string(col1.Data)
+		strData2 := string(col2.Data)
+
+		if col1.IsNull {
+			if col2.IsNull {
+				continue
+			}
+
+			return true
+		}
+
+		if col2.IsNull {
+			return false
+		}
 
 		if needQuotes(col.FieldType) {
-			strData1 := string(data1)
-			strData2 := string(data2)
-
 			if strData1 == strData2 {
-				// `NULL` is less than ""
-				if r.Rows[i].Data[col.Name.O].IsNull {
-					return true
-				}
-				if r.Rows[j].Data[col.Name.O].IsNull {
-					return false
-				}
 				continue
 			}
 			if strData1 > strData2 {
@@ -69,13 +70,14 @@ func (r RowDatas) Less(i, j int) bool {
 			}
 			return true
 		}
-		num1, err1 := strconv.ParseFloat(string(data1), 64)
+
+		num1, err1 := strconv.ParseFloat(strData1, 64)
 		if err1 != nil {
-			log.Fatal("convert string to float failed", zap.ByteString("data", data1), zap.Error(err1))
+			log.Fatal("convert string to float failed", zap.String("data", strData1), zap.Error(err1))
 		}
-		num2, err2 := strconv.ParseFloat(string(data2), 64)
+		num2, err2 := strconv.ParseFloat(strData2, 64)
 		if err2 != nil {
-			log.Fatal("convert string to float failed", zap.ByteString("data", data2), zap.Error(err2))
+			log.Fatal("convert string to float failed", zap.String("data", strData2), zap.Error(err2))
 		}
 
 		if num1 == num2 {
@@ -88,7 +90,7 @@ func (r RowDatas) Less(i, j int) bool {
 
 	}
 
-	return true
+	return false
 }
 func (r RowDatas) Swap(i, j int) { r.Rows[i], r.Rows[j] = r.Rows[j], r.Rows[i] }
 
