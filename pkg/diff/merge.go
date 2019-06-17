@@ -46,9 +46,6 @@ func (r RowDatas) Less(i, j int) bool {
 			log.Fatal("data don't have column", zap.String("column", col.Name.O), zap.Reflect("data", r.Rows[j].Data))
 		}
 
-		strData1 := string(col1.Data)
-		strData2 := string(col2.Data)
-
 		if col1.IsNull {
 			if col2.IsNull {
 				continue
@@ -56,10 +53,12 @@ func (r RowDatas) Less(i, j int) bool {
 
 			return true
 		}
-
 		if col2.IsNull {
 			return false
 		}
+
+		strData1 := string(col1.Data)
+		strData2 := string(col2.Data)
 
 		if needQuotes(col.FieldType) {
 			if strData1 == strData2 {
@@ -73,11 +72,11 @@ func (r RowDatas) Less(i, j int) bool {
 
 		num1, err1 := strconv.ParseFloat(strData1, 64)
 		if err1 != nil {
-			log.Fatal("convert string to float failed", zap.String("data", strData1), zap.Error(err1))
+			log.Fatal("convert string to float failed", zap.String("column", col.Name.O), zap.String("data", strData1), zap.Error(err1))
 		}
 		num2, err2 := strconv.ParseFloat(strData2, 64)
 		if err2 != nil {
-			log.Fatal("convert string to float failed", zap.String("data", strData2), zap.Error(err2))
+			log.Fatal("convert string to float failed", zap.String("column", col.Name.O), zap.String("data", strData2), zap.Error(err2))
 		}
 
 		if num1 == num2 {
