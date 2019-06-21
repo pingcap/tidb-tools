@@ -73,6 +73,7 @@ func (t *testFilterSuite) TestFilter(c *C) {
 	// update rules
 	rules[0].Events = []EventType{}
 	rules[1].Action = Do
+	rules[2].Events = []EventType{"ALL DDL"}
 	for _, rule := range rules {
 		err = filter.UpdateRule(rule)
 		c.Assert(err, IsNil)
@@ -83,6 +84,8 @@ func (t *testFilterSuite) TestFilter(c *C) {
 	cases[3].action = Do      // create index
 	cases[9].action = Do      // match all event and insert
 	cases[10].action = Ignore // match none event and create index
+	cases[11].action = Ignore // no match
+	cases[12].action = Do     // match all ddl
 	for _, cs := range cases {
 		action, err := filter.Filter(cs.schema, cs.table, cs.event, cs.sql)
 		c.Assert(err, IsNil)
