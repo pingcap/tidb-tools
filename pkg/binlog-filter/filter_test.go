@@ -31,6 +31,7 @@ func (t *testFilterSuite) TestFilter(c *C) {
 	rules := []*BinlogEventRule{
 		{"Test_1_*", "abc*", []EventType{DeleteEvent, InsertEvent, CreateIndex, DropIndex}, []string{"^DROP\\s+PROCEDURE", "^CREATE\\s+PROCEDURE"}, nil, Ignore},
 		{"xxx_*", "abc_*", []EventType{AllDML, NoneDDL}, nil, nil, Ignore},
+		{"yyy_*", "abc_*", []EventType{EventType("ALL DML")}, nil, nil, Do},
 	}
 
 	cases := []struct {
@@ -50,6 +51,8 @@ func (t *testFilterSuite) TestFilter(c *C) {
 		{"xxx_1", "abc_1", NullEvent, "create function abc", Do},
 		{"xxx_1", "abc_1", InsertEvent, "", Ignore},
 		{"xxx_1", "abc_1", CreateIndex, "", Do},
+		{"yyy_1", "abc_1", InsertEvent, "", Do},
+		{"yyy_1", "abc_1", CreateIndex, "", Ignore},
 	}
 
 	// initial binlog event filter

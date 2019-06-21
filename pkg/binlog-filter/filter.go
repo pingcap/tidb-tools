@@ -265,7 +265,9 @@ func (b *BinlogEvent) Filter(schema, table string, event EventType, rawQuery str
 }
 
 func (b *BinlogEvent) matchEvent(tp, event EventType, rules []EventType) bool {
-	for _, rule := range rules {
+	for _, rawRule := range rules {
+		rule := EventType(strings.ToLower(string(rawRule)))
+
 		if rule == AllEvent {
 			return true
 		}
