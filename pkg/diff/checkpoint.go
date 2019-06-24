@@ -268,7 +268,7 @@ func createCheckpointTable(ctx context.Context, db *sql.DB) error {
 	*/
 	createSummaryTableSQL :=
 		"CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`summary`(" +
-			"`schema` varchar(30), `table` varchar(30)," +
+			"`schema` varchar(64), `table` varchar(64)," +
 			"`chunk_num` int not null default 0," +
 			"`check_success_num` int not null default 0," +
 			"`check_failed_num` int not null default 0," +
@@ -295,9 +295,9 @@ func createCheckpointTable(ctx context.Context, db *sql.DB) error {
 	createChunkTableSQL :=
 		"CREATE TABLE IF NOT EXISTS `sync_diff_inspector`.`chunk`(" +
 			"`chunk_id` int," +
-			"`instance_id` varchar(30)," +
-			"`schema` varchar(30)," +
-			"`table` varchar(30)," +
+			"`instance_id` varchar(64)," +
+			"`schema` varchar(64)," +
+			"`table` varchar(64)," +
 			"`range` varchar(100)," +
 			"`checksum` varchar(20)," +
 			"`chunk_str` text," +

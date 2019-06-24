@@ -15,7 +15,6 @@ package diff
 
 import (
 	"container/heap"
-	"strconv"
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -31,12 +30,12 @@ func (s *testMergerSuite) TestMerge(c *C) {
 	c.Assert(err, IsNil)
 
 	_, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
-	ids := []int{3, 2, 2, 4, 1}
-	names := []string{"d", "b", "c", "b", "a"}
-	ages := []int{1, 2, 3, 4, 5}
+	ids := []string{"3", "2", "2", "4", "1", "NULL"}
+	names := []string{"d", "NULL", "c", "b", "a", "e"}
+	ages := []string{"1", "2", "3", "NULL", "5", "4"}
 
-	expectIDs := []int64{1, 2, 2, 3, 4}
-	expectNames := []string{"a", "b", "c", "d", "b"}
+	expectIDs := []string{"NULL", "1", "2", "2", "3", "4"}
+	expectNames := []string{"e", "a", "NULL", "c", "d", "b"}
 
 	rowDatas := &RowDatas{
 		Rows:         make([]RowData, 0, len(ids)),
@@ -46,9 +45,9 @@ func (s *testMergerSuite) TestMerge(c *C) {
 	heap.Init(rowDatas)
 	for i, id := range ids {
 		data := map[string]*dbutil.ColumnData{
-			"id":   {Data: []byte(strconv.Itoa(id)), IsNull: false},
-			"name": {Data: []byte(names[i]), IsNull: false},
-			"age":  {Data: []byte(strconv.Itoa(ages[i])), IsNull: false},
+			"id":   {Data: []byte(id), IsNull: (id == "NULL")},
+			"name": {Data: []byte(names[i]), IsNull: (names[i] == "NULL")},
+			"age":  {Data: []byte(ages[i]), IsNull: (ages[i] == "NULL")},
 		}
 		heap.Push(rowDatas, RowData{
 			Data: data,
@@ -57,9 +56,7 @@ func (s *testMergerSuite) TestMerge(c *C) {
 
 	for i := 0; i < len(ids); i++ {
 		rowData := heap.Pop(rowDatas).(RowData)
-
-		id, err := strconv.ParseInt(string(rowData.Data["id"].Data), 10, 64)
-		c.Assert(err, IsNil)
+		id := string(rowData.Data["id"].Data)
 		name := string(rowData.Data["name"].Data)
 		c.Assert(id, Equals, expectIDs[i])
 		c.Assert(name, Equals, expectNames[i])

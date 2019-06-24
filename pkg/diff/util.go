@@ -14,10 +14,15 @@
 package diff
 
 import (
+	"fmt"
+	"strings"
+
+	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb/types"
+	"go.uber.org/zap"
 )
 
 func equalStrings(str1, str2 []string) bool {
@@ -61,6 +66,24 @@ func removeColumns(tableInfo *model.TableInfo, columns []string) *model.TableInf
 		}
 	}
 
+	// calculate column offset
+	colMap := make(map[string]int, len(tableInfo.Columns))
+	for i, col := range tableInfo.Columns {
+		col.Offset = i
+		colMap[col.Name.O] = i
+	}
+
+	for _, index := range tableInfo.Indices {
+		for _, col := range index.Columns {
+			offset, ok := colMap[col.Name.O]
+			if !ok {
+				// this should never happened
+				log.Fatal("column not exists", zap.String("column", col.Name.O))
+			}
+			col.Offset = offset
+		}
+	}
+
 	return tableInfo
 }
 
@@ -89,4 +112,19 @@ func rowContainsCols(row map[string]*dbutil.ColumnData, cols []*model.ColumnInfo
 	}
 
 	return true
+}
+
+func rowToString(row map[string]*dbutil.ColumnData) string {
+	var s strings.Builder
+	s.WriteString("{ ")
+	for key, val := range row {
+		if val.IsNull {
+			s.WriteString(fmt.Sprintf("%s: IsNull, ", key))
+		} else {
+			s.WriteString(fmt.Sprintf("%s: %s, ", key, val.Data))
+		}
+	}
+	s.WriteString(" }")
+
+	return s.String()
 }

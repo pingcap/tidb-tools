@@ -1,7 +1,5 @@
 #!/bin/bash
 
-source ./util.sh
-
 TEST_DATABASE_NAME=checker_test
 IMPORT_EXEC="../bin/importer -c 1 -h ${MYSQL_HOST} -P ${MYSQL_PORT} -D ${TEST_DATABASE_NAME}"
 MYSQL_EXEC="mysql -h ${MYSQL_HOST} -P ${MYSQL_PORT} -u root"

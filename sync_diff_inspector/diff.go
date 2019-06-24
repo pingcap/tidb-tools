@@ -15,6 +15,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"regexp"
@@ -35,7 +36,6 @@ type Diff struct {
 	chunkSize         int
 	sample            int
 	checkThreadCount  int
-	useRowID          bool
 	useChecksum       bool
 	useCheckpoint     bool
 	onlyUseChecksum   bool
@@ -46,6 +46,7 @@ type Diff struct {
 	report            *Report
 	tidbInstanceID    string
 	tableRouter       *router.Table
+	cpDB              *sql.DB
 
 	ctx context.Context
 }
@@ -57,7 +58,6 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 		chunkSize:         cfg.ChunkSize,
 		sample:            cfg.Sample,
 		checkThreadCount:  cfg.CheckThreadCount,
-		useRowID:          cfg.UseRowID,
 		useChecksum:       cfg.UseChecksum,
 		useCheckpoint:     cfg.UseCheckpoint,
 		onlyUseChecksum:   cfg.OnlyUseChecksum,
@@ -95,40 +95,26 @@ func (df *Diff) init(cfg *Config) (err error) {
 	return nil
 }
 
+// CreateDBConn creates db connections for source and target.
 func (df *Diff) CreateDBConn(cfg *Config) (err error) {
-	// SetMaxOpenConns and SetMaxIdleConns for connection to avoid error like
-	// `dial tcp 10.26.2.1:3306: connect: cannot assign requested address`
 	for _, source := range cfg.SourceDBCfg {
-		source.Conn, err = dbutil.OpenDB(source.DBConfig)
+		source.Conn, err = diff.CreateDB(df.ctx, source.DBConfig, cfg.CheckThreadCount)
 		if err != nil {
 			return errors.Errorf("create source db %+v error %v", source.DBConfig, err)
 		}
-		source.Conn.SetMaxOpenConns(cfg.CheckThreadCount)
-		source.Conn.SetMaxIdleConns(cfg.CheckThreadCount)
-
 		df.sourceDBs[source.InstanceID] = source
-		if source.Snapshot != "" {
-			err = dbutil.SetSnapshot(df.ctx, source.Conn, source.Snapshot)
-			if err != nil {
-				return errors.Errorf("set history snapshot %s for source db %+v error %v", source.Snapshot, source.DBConfig, err)
-			}
-		}
 	}
 
 	// create connection for target.
-	cfg.TargetDBCfg.Conn, err = dbutil.OpenDB(cfg.TargetDBCfg.DBConfig)
+	cfg.TargetDBCfg.Conn, err = diff.CreateDB(df.ctx, cfg.TargetDBCfg.DBConfig, cfg.CheckThreadCount)
 	if err != nil {
 		return errors.Errorf("create target db %+v error %v", cfg.TargetDBCfg, err)
 	}
-	cfg.TargetDBCfg.Conn.SetMaxOpenConns(cfg.CheckThreadCount)
-	cfg.TargetDBCfg.Conn.SetMaxIdleConns(cfg.CheckThreadCount)
-
 	df.targetDB = cfg.TargetDBCfg
-	if cfg.TargetDBCfg.Snapshot != "" {
-		err = dbutil.SetSnapshot(df.ctx, cfg.TargetDBCfg.Conn, cfg.TargetDBCfg.Snapshot)
-		if err != nil {
-			return errors.Errorf("set history snapshot %s for target db %+v error %v", cfg.TargetDBCfg.Snapshot, cfg.TargetDBCfg, err)
-		}
+
+	df.cpDB, err = diff.CreateDBForCP(df.ctx, cfg.TargetDBCfg.DBConfig)
+	if err != nil {
+		return errors.Errorf("create checkpoint db %+v error %v", cfg.TargetDBCfg, err)
 	}
 
 	return nil
@@ -197,7 +183,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 		}
 
 		for _, tableName := range tables {
-			tableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, df.targetDB.Conn, schemaTables.Schema, tableName, cfg.UseRowID)
+			tableInfo, err := dbutil.GetTableInfo(df.ctx, df.targetDB.Conn, schemaTables.Schema, tableName)
 			if err != nil {
 				return errors.Errorf("get table %s.%s's inforamtion error %s", schemaTables.Schema, tableName, errors.ErrorStack(err))
 			}
@@ -356,6 +342,10 @@ func (df *Diff) Close() {
 	if df.targetDB.Conn != nil {
 		df.targetDB.Conn.Close()
 	}
+
+	if df.cpDB != nil {
+		df.cpDB.Close()
+	}
 }
 
 // Equal tests whether two database have same data and schema.
@@ -409,13 +399,13 @@ func (df *Diff) Equal() (err error) {
 				ChunkSize:         df.chunkSize,
 				Sample:            df.sample,
 				CheckThreadCount:  df.checkThreadCount,
-				UseRowID:          df.useRowID,
 				UseChecksum:       df.useChecksum,
 				UseCheckpoint:     df.useCheckpoint,
 				OnlyUseChecksum:   df.onlyUseChecksum,
 				IgnoreStructCheck: df.ignoreStructCheck,
 				IgnoreDataCheck:   df.ignoreDataCheck,
 				TiDBStatsSource:   tidbStatsSource,
+				CpDB:              df.cpDB,
 			}
 
 			structEqual, dataEqual, err := td.Equal(df.ctx, func(dml string) error {
