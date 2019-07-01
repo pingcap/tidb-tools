@@ -217,7 +217,7 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 	randomValue := make([]string, 0, num)
 	valueCount := make([]int, 0, num)
 
-	query := fmt.Sprintf("SELECT %[1]s, COUNT(*) count FROM (SELECT %[1]s FROM %[2]s WHERE %[3]s ORDER BY RAND() LIMIT %[4]d)rand_tmp GROUP BY %[1]s ORDER BY %[1]s%[5]s",
+	query := fmt.Sprintf("SELECT %[1]s, COUNT(*) count FROM (SELECT %[1]s, rand() rand_value FROM %[2]s WHERE %[3]s ORDER BY rand_value LIMIT %[4]d)rand_tmp GROUP BY %[1]s ORDER BY %[1]s%[5]s",
 		escapeName(column), TableName(schemaName, table), limitRange, num, collation)
 	log.Debug("get random values", zap.String("sql", query), zap.Reflect("args", limitArgs))
 
@@ -288,6 +288,7 @@ func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column strin
 }
 
 func queryTables(ctx context.Context, db *sql.DB, q string) (tables []string, err error) {
+	log.Debug("query tables", zap.String("query", q))
 	rows, err := db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -325,13 +326,13 @@ func GetTables(ctx context.Context, db *sql.DB, schemaName string) (tables []str
 		| NTEST          | BASE TABLE |
 		+----------------+------------+
 	*/
-	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type != 'VIEW';", schemaName)
+	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type != 'VIEW';", escapeName(schemaName))
 	return queryTables(ctx, db, query)
 }
 
 // GetViews returns names of all views in the specified schema
 func GetViews(ctx context.Context, db *sql.DB, schemaName string) (tables []string, err error) {
-	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type = 'VIEW';", schemaName)
+	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type = 'VIEW';", escapeName(schemaName))
 	return queryTables(ctx, db, query)
 }
 
