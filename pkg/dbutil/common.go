@@ -194,7 +194,7 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int, limitRange string, limitArgs []interface{}, collation string) ([]string, []int, error) {
 	/*
 		example:
-		mysql> SELECT `id`, COUNT(*) count FROM (SELECT `id` FROM `test`.`test`  WHERE `id` COLLATE "latin1_bin" > 0 AND `id` COLLATE "latin1_bin" < 100 ORDER BY RAND() LIMIT 5) rand_tmp GROUP BY `id` ORDER BY `id` COLLATE "latin1_bin";
+		mysql> SELECT `id`, COUNT(*) count FROM (SELECT `id`, rand() rand_value FROM `test`.`test`  WHERE `id` COLLATE "latin1_bin" > 0 AND `id` COLLATE "latin1_bin" < 100 ORDER BY rand_value LIMIT 5) rand_tmp GROUP BY `id` ORDER BY `id` COLLATE "latin1_bin";
 		+------+-------+
 		| id   | count |
 		+------+-------+
@@ -430,7 +430,7 @@ func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string, table
 	*/
 	buckets := make(map[string][]Bucket)
 	query := "SHOW STATS_BUCKETS WHERE db_name= ? AND table_name= ?;"
-	log.Debug("GetBucketsInfo", zap.String("sql", query))
+	log.Debug("GetBucketsInfo", zap.String("sql", query), zap.String("schema", schema), zap.String("table", table))
 
 	rows, err := db.QueryContext(ctx, query, schema, table)
 	if err != nil {
@@ -470,6 +470,10 @@ func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string, table
 		})
 	}
 
+	for index, bs := range buckets  {
+		log.Info("GetBucketsInfo", zap.String("index", index), zap.Reflect("buckets", bs))
+	}
+
 	// when primary key is int type, the columnName will be column's name, not `PRIMARY`, check and transform here.
 	indices := FindAllIndex(tableInfo)
 	for _, index := range indices {
@@ -503,6 +507,7 @@ func AnalyzeValuesFromBuckets(valueString string, cols []*model.ColumnInfo) ([]s
 		if IsTimeTypeAndNeedDecode(col.Tp) {
 			value, err := DecodeTimeInBucket(values[i])
 			if err != nil {
+				log.Error("AnalyzeValuesFromBuckets", zap.String("column", col.Name.O), zap.String("value", values[i]), zap.Error(err))
 				return nil, errors.Trace(err)
 			}
 
