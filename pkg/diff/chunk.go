@@ -123,7 +123,7 @@ func (c *ChunkRange) toString(collation string) (string, []string) {
 	preConditionArgsForLower := make([]string, 0, 1)
 	preConditionArgsForUpper := make([]string, 0, 1)
 
-	for _, bound := range c.Bounds {
+	for i, bound := range c.Bounds {
 		if len(bound.Lower) != 0 {
 			if len(preConditionForLower) > 0 {
 				lowerCondition = append(lowerCondition, fmt.Sprintf("(%s AND `%s`%s %s ?)", strings.Join(preConditionForLower, " AND "), bound.Column, collation, bound.LowerSymbol))
@@ -137,6 +137,11 @@ func (c *ChunkRange) toString(collation string) (string, []string) {
 		}
 
 		if len(bound.Upper) != 0 {
+			if i == len(c.Bounds) - 1 {
+				bound.UpperSymbol = lte
+			} else {
+				bound.UpperSymbol = lt
+			}
 			if len(preConditionForUpper) > 0 {
 				upperCondition = append(upperCondition, fmt.Sprintf("(%s AND `%s`%s %s ?)", strings.Join(preConditionForUpper, " AND "), bound.Column, collation, bound.UpperSymbol))
 				upperArgs = append(append(upperArgs, preConditionArgsForUpper...), bound.Upper)
@@ -221,7 +226,7 @@ func (s *randomSpliter) split(table *TableInstance, columns []*model.ColumnInfo,
 	s.collation = collation
 
 	// get the chunk count by data count and chunk size
-	cnt, err := dbutil.GetRowCount(context.Background(), table.Conn, table.Schema, table.Table, limits)
+	cnt, err := dbutil.GetRowCount(context.Background(), table.Conn, table.Schema, table.Table, limits, nil)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -513,16 +518,21 @@ func (s *bucketSpliter) getChunksByBuckets() ([]*ChunkRange, error) {
 							lower = lowerValues[j]
 							lowerSymbol = gt
 						}
-						if i != len(buckets)-1 {
+						if i != len(buckets)-1 || k != minL{
 							upper = upperValuesTmp[j]
-							upperSymbol = lte
+							//upperSymbol = lte
+							upperSymbol = lt
+							//if j == len(index.Columns) -1 {
+							//	upperSymbol = lte
+							//}
 						}
 
 						chunk.update(col.Name.O, lower, lowerSymbol, upper, upperSymbol)
 
 					}
 
-					log.Info("split new chunk by random", zap.Stringer("chunk", chunk))
+					where, args := chunk.toString("bucket")
+					log.Info("split new chunk by random", zap.String("chunk", dbutil.ReplacePlaceholder(where, args)))
 					chunks = append(chunks, chunk)
 					lowerValues = upperValuesTmp
 					if isLast == true {
@@ -641,11 +651,11 @@ func getChunksForTable(table *TableInstance, columns []*model.ColumnInfo, chunkS
 			count := int64(0)
 			for _, chunk := range chunks {
 				where, args := chunk.toString("")
-				c, err := dbutil.GetRowCount(context.Background(), table.Conn, table.Schema, table.Table, dbutil.ReplacePlaceholder(where, args))
+				c, err := dbutil.GetRowCount(context.Background(), table.Conn, table.Schema, table.Table, where, stringSliceToInterfaceSlice(args))
 				if err != nil {
 					return nil, err
 				}
-				log.Info("", zap.Int64("rowcount", c))
+				log.Info("", zap.String("range", dbutil.ReplacePlaceholder(where, args)), zap.Int64("rowcount", c))
 				count += c
 			}
 			log.Info("row count", zap.String("schema", table.Schema), zap.String("table", table.Table), zap.Int64("count", count))

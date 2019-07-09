@@ -138,3 +138,12 @@ func minLen(slices [][]string) int {
 	}
 	return min
 }
+
+func stringSliceToInterfaceSlice(sli []string) []interface{} {
+	iSli := make([]interface{}, len(sli))
+	for i, item := range sli {
+		iSli[i] = item
+	}
+
+	return iSli
+}

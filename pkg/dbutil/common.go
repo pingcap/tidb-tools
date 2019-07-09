@@ -161,7 +161,7 @@ func GetCreateTableSQL(ctx context.Context, db *sql.DB, schemaName string, table
 
 // GetRowCount returns row count of the table.
 // if not specify where condition, return total row count of the table.
-func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName string, where string) (int64, error) {
+func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName string, where string, args []interface{}) (int64, error) {
 	/*
 		select count example result:
 		mysql> SELECT count(1) cnt from `test`.`itest` where id > 0;
@@ -176,10 +176,10 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 	if len(where) > 0 {
 		query += fmt.Sprintf(" WHERE %s", where)
 	}
-	log.Debug("get row count", zap.String("sql", query))
+	//log.Debug("get row count", zap.String("sql", query), zap.Reflect("args", args))
 
 	var cnt sql.NullInt64
-	err := db.QueryRowContext(ctx, query).Scan(&cnt)
+	err := db.QueryRowContext(ctx, query, args...).Scan(&cnt)
 	if err != nil {
 		return 0, errors.Trace(err)
 	}

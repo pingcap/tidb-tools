@@ -91,7 +91,7 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 	chunkDataCount := 0
 	for _, chunk := range chunks {
 		conditions, args := chunk.toString("")
-		count, err := dbutil.GetRowCount(ctx, tableInstance.Conn, tableInstance.Schema, tableInstance.Table, dbutil.ReplacePlaceholder(conditions, args))
+		count, err := dbutil.GetRowCount(ctx, tableInstance.Conn, tableInstance.Schema, tableInstance.Table, conditions, stringSliceToInterfaceSlice(args))
 		c.Assert(err, IsNil)
 		chunkDataCount += int(count)
 	}
