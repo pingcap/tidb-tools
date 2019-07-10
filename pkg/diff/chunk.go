@@ -42,18 +42,21 @@ var (
 
 // Bound represents a bound for a column
 type Bound struct {
-	Column      string `json:"column"`
-	Lower       string `json:"lower"`
-	LowerSymbol string `json:"lower-symbol"`
-	Upper       string `json:"upper"`
-	UpperSymbol string `json:"upper-symbol"`
+	Column string `json:"column"`
+	Lower  string `json:"lower"`
+	//LowerSymbol string `json:"lower-symbol"`
+	Upper string `json:"upper"`
+	//UpperSymbol string `json:"upper-symbol"`
 }
 
 // ChunkRange represents chunk range
 type ChunkRange struct {
 	ID     int      `json:"id"`
 	Bounds []*Bound `json:"bounds"`
-	Mode   string   `json:"mode"`
+	//Mode   string   `json:"mode"`
+	//Columns []string  `json:"columns"`
+	//Lowers  []string  `json:"lowers"`
+	//Uppers  []string  `json:"uppers"`
 
 	Where string   `json:"where"`
 	Args  []string `json:"args"`
@@ -62,10 +65,13 @@ type ChunkRange struct {
 }
 
 // NewChunkRange return a ChunkRange.
-func NewChunkRange(mode string) *ChunkRange {
+func NewChunkRange() *ChunkRange {
 	return &ChunkRange{
 		Bounds: make([]*Bound, 0, 2),
-		Mode:   mode,
+		//Mode:   mode,
+		//Columns: make([]string, 0, 2),
+		//Lowers:  make([]string, 0, 2),
+		//Uppers:  make([]string, 0, 2),
 	}
 }
 
@@ -85,31 +91,9 @@ func (c *ChunkRange) toString(collation string) (string, []string) {
 		collation = fmt.Sprintf(" COLLATE '%s'", collation)
 	}
 
-	if c.Mode != bucketMode {
-		conditions := make([]string, 0, 2)
-		args := make([]string, 0, 2)
-
-		for _, bound := range c.Bounds {
-			if len(bound.Lower) != 0 {
-				conditions = append(conditions, fmt.Sprintf("`%s`%s %s ?", bound.Column, collation, bound.LowerSymbol))
-				args = append(args, bound.Lower)
-			}
-			if len(bound.Upper) != 0 {
-				conditions = append(conditions, fmt.Sprintf("`%s`%s %s ?", bound.Column, collation, bound.UpperSymbol))
-				args = append(args, bound.Upper)
-			}
-		}
-
-		if len(conditions) == 0 {
-			return "TRUE", nil
-		}
-
-		return strings.Join(conditions, " AND "), args
-	}
-
-	/* for example:
+	/* for example: FIXME
 	there is a bucket in TiDB, and the lowerbound and upperbound are (v1, v3), (v2, v4), and the columns are `a` and `b`,
-	this bucket's data range is (a > v1 or (a == v1 and b >= v2)) and (a < v3 or (a == v3 and a <= v4)),
+	this bucket's data range is (a > v1 or (a == v1 and b > v2)) and (a < v3 or (a == v3 and a <= v4)),
 	not (a >= v1 and a <= v3 and b >= v2 and b <= v4)
 	*/
 
@@ -124,29 +108,30 @@ func (c *ChunkRange) toString(collation string) (string, []string) {
 	preConditionArgsForUpper := make([]string, 0, 1)
 
 	for i, bound := range c.Bounds {
-		if len(bound.Lower) != 0 {
+		lowerSymbol := gt
+		upperSymbol := lt
+		if i == len(c.Bounds) {
+			upperSymbol = lte
+		}
+
+		if len(bound.Lower) > 0 {
 			if len(preConditionForLower) > 0 {
-				lowerCondition = append(lowerCondition, fmt.Sprintf("(%s AND `%s`%s %s ?)", strings.Join(preConditionForLower, " AND "), bound.Column, collation, bound.LowerSymbol))
+				lowerCondition = append(lowerCondition, fmt.Sprintf("(%s AND `%s`%s %s ?)", strings.Join(preConditionForLower, " AND "), bound.Column, collation, lowerSymbol))
 				lowerArgs = append(append(lowerArgs, preConditionArgsForLower...), bound.Lower)
 			} else {
-				lowerCondition = append(lowerCondition, fmt.Sprintf("(`%s`%s %s ?)", bound.Column, collation, bound.LowerSymbol))
+				lowerCondition = append(lowerCondition, fmt.Sprintf("(`%s`%s %s ?)", bound.Column, collation, lowerSymbol))
 				lowerArgs = append(lowerArgs, bound.Lower)
 			}
 			preConditionForLower = append(preConditionForLower, fmt.Sprintf("`%s` = ?", bound.Column))
 			preConditionArgsForLower = append(preConditionArgsForLower, bound.Lower)
 		}
 
-		if len(bound.Upper) != 0 {
-			if i == len(c.Bounds) - 1 {
-				bound.UpperSymbol = lte
-			} else {
-				bound.UpperSymbol = lt
-			}
+		if len(bound.Upper) > 0 {
 			if len(preConditionForUpper) > 0 {
-				upperCondition = append(upperCondition, fmt.Sprintf("(%s AND `%s`%s %s ?)", strings.Join(preConditionForUpper, " AND "), bound.Column, collation, bound.UpperSymbol))
+				upperCondition = append(upperCondition, fmt.Sprintf("(%s AND `%s`%s %s ?)", strings.Join(preConditionForUpper, " AND "), bound.Column, collation, upperSymbol))
 				upperArgs = append(append(upperArgs, preConditionArgsForUpper...), bound.Upper)
 			} else {
-				upperCondition = append(upperCondition, fmt.Sprintf("(`%s`%s %s ?)", bound.Column, collation, bound.UpperSymbol))
+				upperCondition = append(upperCondition, fmt.Sprintf("(`%s`%s %s ?)", bound.Column, collation, upperSymbol))
 				upperArgs = append(upperArgs, bound.Upper)
 			}
 			preConditionForUpper = append(preConditionForUpper, fmt.Sprintf("`%s` = ?", bound.Column))
@@ -167,16 +152,13 @@ func (c *ChunkRange) toString(collation string) (string, []string) {
 	}
 
 	return fmt.Sprintf("(%s) AND (%s)", strings.Join(lowerCondition, " OR "), strings.Join(upperCondition, " OR ")), append(lowerArgs, upperArgs...)
-
 }
 
-func (c *ChunkRange) update(column, lower, lowerSymbol, upper, upperSymbol string) {
+func (c *ChunkRange) update(column, lower, upper string) {
 	newBound := &Bound{
-		Column:      column,
-		Lower:       lower,
-		LowerSymbol: lowerSymbol,
-		Upper:       upper,
-		UpperSymbol: upperSymbol,
+		Column: column,
+		Lower:  lower,
+		Upper:  upper,
 	}
 
 	for i, b := range c.Bounds {
@@ -193,7 +175,6 @@ func (c *ChunkRange) update(column, lower, lowerSymbol, upper, upperSymbol strin
 
 func (c *ChunkRange) copy() *ChunkRange {
 	newChunk := &ChunkRange{
-		Mode:   c.Mode,
 		Bounds: make([]*Bound, len(c.Bounds)),
 	}
 	copy(newChunk.Bounds, c.Bounds)
@@ -201,9 +182,9 @@ func (c *ChunkRange) copy() *ChunkRange {
 	return newChunk
 }
 
-func (c *ChunkRange) copyAndUpdate(column, lower, lowerSymbol, upper, upperSymbol string) *ChunkRange {
+func (c *ChunkRange) copyAndUpdate(column, lower, upper string) *ChunkRange {
 	newChunk := c.copy()
-	newChunk.update(column, lower, lowerSymbol, upper, upperSymbol)
+	newChunk.update(column, lower, upper)
 	return newChunk
 }
 
@@ -232,7 +213,7 @@ func (s *randomSpliter) split(table *TableInstance, columns []*model.ColumnInfo,
 	}
 
 	chunkCnt := (int(cnt) + chunkSize - 1) / chunkSize
-	chunks, err := s.splitRange(table.Conn, NewChunkRange(normalMode), chunkCnt, table.Schema, table.Table, columns)
+	chunks, err := s.splitRange(table.Conn, NewChunkRange(), chunkCnt, table.Schema, table.Table, columns)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -241,63 +222,95 @@ func (s *randomSpliter) split(table *TableInstance, columns []*model.ColumnInfo,
 }
 
 // splitRange splits a chunk to multiple chunks.
-func (s *randomSpliter) splitRange(db *sql.DB, chunk *ChunkRange, count int, schema string, table string, columns []*model.ColumnInfo) ([]*ChunkRange, error) {
-	var chunks []*ChunkRange
+func (s *randomSpliter) splitRange(db *sql.DB, chunk *ChunkRange, count int, schema string, table string, columns []*model.ColumnInfo) (chunks []*ChunkRange, err error) {
+	//var chunks []*ChunkRange
 
 	if count <= 1 {
 		chunks = append(chunks, chunk)
 		return chunks, nil
 	}
 
-	var (
-		splitCol, min, max, symbolMin, symbolMax string
-		err                                      error
-		useNewColumn                             bool
-	)
-
 	chunkLimits, args := chunk.toString(s.collation)
 	limitRange := fmt.Sprintf("%s AND %s", chunkLimits, s.limits)
 
-	// if the last column's condition is not '=', continue use this column split data.
-	colNum := len(chunk.Bounds)
-	if colNum != 0 && chunk.Bounds[colNum-1].LowerSymbol != equal {
-		splitCol = chunk.Bounds[colNum-1].Column
-		min = chunk.Bounds[colNum-1].Lower
-		max = chunk.Bounds[colNum-1].Upper
-		symbolMin = chunk.Bounds[colNum-1].LowerSymbol
-		symbolMax = chunk.Bounds[colNum-1].UpperSymbol
-	} else {
-		if len(columns) <= colNum {
-			log.Warn("chunk can't be splited", zap.Stringer("chunk", chunk))
-			return append(chunks, chunk), nil
-		}
-
-		// choose the next column to split data
-		useNewColumn = true
-		splitCol = columns[colNum].Name.O
-
-		min, max, err = dbutil.GetMinMaxValue(context.Background(), db, schema, table, splitCol, limitRange, utils.StringsToInterfaces(args), s.collation)
+	randomValues := make([][]string, len(columns))
+	for i, column := range columns {
+		randomValues[i], err = dbutil.GetRandomValues(context.Background(), db, schema, table, column.Name.O, count-1, limitRange, utils.StringsToInterfaces(args), s.collation)
 		if err != nil {
-			if errors.Cause(err) == dbutil.ErrNoData {
-				log.Info("no data found", zap.String("table", dbutil.TableName(schema, table)), zap.String("range", limitRange), zap.Reflect("args", args))
-				return append(chunks, chunk), nil
-			}
 			return nil, errors.Trace(err)
 		}
-
-		symbolMin = gte
-		symbolMax = lte
+		//log.Debug("get split values by random values", zap.Stringer("chunk", chunk), zap.Reflect("random values", randomValues))
+		log.Debug("get split values by random values", zap.String("column", column.Name.O), zap.Int("random values num", len(randomValues[i])))
 	}
 
-	splitValues := make([]string, 0, count)
-	valueCounts := make([]int, 0, count)
+	for i := 0; i <= len(randomValues[0]); i++ {
+		chunk := NewChunkRange()
 
-	// get random value as split value
-	randomValues, randomValueCount, err := dbutil.GetRandomValues(context.Background(), db, schema, table, splitCol, count-1, limitRange, utils.StringsToInterfaces(args), s.collation)
-	if err != nil {
-		return nil, errors.Trace(err)
+		for j, column := range columns {
+			log.Info("", zap.Int("i", i), zap.Int("j", j))
+			if i == 0 {
+				chunk.update(column.Name.O, "", randomValues[j][i])
+			} else if i == len(randomValues[0]) {
+				chunk.update(column.Name.O, randomValues[j][i-1], "")
+			} else {
+				chunk.update(column.Name.O, randomValues[j][i-1], randomValues[j][i])
+			}
+		}
+		chunks = append(chunks, chunk)
 	}
-	log.Debug("get split values by random values", zap.Stringer("chunk", chunk), zap.Reflect("random values", randomValues))
+
+	return chunks, nil
+
+	/*
+		var (
+			splitCol, min, max, symbolMin, symbolMax string
+			err                                      error
+			useNewColumn                             bool
+		)
+
+
+
+		// if the last column's condition is not '=', continue use this column split data.
+		colNum := len(chunk.Bounds)
+		if colNum != 0 && chunk.Bounds[colNum-1].LowerSymbol != equal {
+			splitCol = chunk.Bounds[colNum-1].Column
+			min = chunk.Bounds[colNum-1].Lower
+			max = chunk.Bounds[colNum-1].Upper
+			symbolMin = chunk.Bounds[colNum-1].LowerSymbol
+			symbolMax = chunk.Bounds[colNum-1].UpperSymbol
+		} else {
+			if len(columns) <= colNum {
+				log.Warn("chunk can't be splited", zap.Stringer("chunk", chunk))
+				return append(chunks, chunk), nil
+			}
+
+			// choose the next column to split data
+			useNewColumn = true
+			splitCol = columns[colNum].Name.O
+
+			min, max, err = dbutil.GetMinMaxValue(context.Background(), db, schema, table, splitCol, limitRange, utils.StringsToInterfaces(args), s.collation)
+			if err != nil {
+				if errors.Cause(err) == dbutil.ErrNoData {
+					log.Info("no data found", zap.String("table", dbutil.TableName(schema, table)), zap.String("range", limitRange), zap.Reflect("args", args))
+					return append(chunks, chunk), nil
+				}
+				return nil, errors.Trace(err)
+			}
+
+			symbolMin = gte
+			symbolMax = lte
+		}
+
+		splitValues := make([]string, 0, count)
+		valueCounts := make([]int, 0, count)
+
+		// get random value as split value
+		randomValues, randomValueCount, err := dbutil.GetRandomValues(context.Background(), db, schema, table, splitCol, count-1, limitRange, utils.StringsToInterfaces(args), s.collation)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		log.Debug("get split values by random values", zap.Stringer("chunk", chunk), zap.Reflect("random values", randomValues))
+	*/
 
 	/*
 		for examples:
@@ -317,21 +330,24 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *ChunkRange, count int, sch
 		just like [id = 3 AND cid > 10], [id = 3 AND cid >= 5 AND cid <= 10], [id = 3 AND cid < 5]...
 	*/
 
-	if len(randomValues) > 0 && randomValues[0] == min {
-		splitValues = append(splitValues, randomValues...)
-		valueCounts = append(valueCounts, randomValueCount...)
-		valueCounts[0]++
-	} else {
-		splitValues = append(append(splitValues, min), randomValues...)
-		valueCounts = append(append(valueCounts, 1), randomValueCount...)
-	}
+	/*
+		if len(randomValues) > 0 && randomValues[0] == min {
+			splitValues = append(splitValues, randomValues...)
+			valueCounts = append(valueCounts, randomValueCount...)
+			valueCounts[0]++
+		} else {
+			splitValues = append(append(splitValues, min), randomValues...)
+			valueCounts = append(append(valueCounts, 1), randomValueCount...)
+		}
 
-	if len(randomValues) > 0 && randomValues[len(randomValues)-1] == max {
-		valueCounts[len(valueCounts)-1]++
-	} else {
-		splitValues = append(splitValues, max)
-		valueCounts = append(valueCounts, 1)
-	}
+		if len(randomValues) > 0 && randomValues[len(randomValues)-1] == max {
+			valueCounts[len(valueCounts)-1]++
+		} else {
+			splitValues = append(splitValues, max)
+			valueCounts = append(valueCounts, 1)
+		}
+
+	*/
 
 	/*
 		for example:
@@ -348,49 +364,53 @@ func (s *randomSpliter) splitRange(db *sql.DB, chunk *ChunkRange, count int, sch
 		the chunk [`a` = 2] will split to [`a` = 2 AND `b` < 'x'], [`a` = 2 AND `b` >= 'x' AND `b` < 'y'] and [`a` = 2 AND `b` >= 'y']
 	*/
 
-	lowerSymbol := symbolMin
-	upperSymbol := lt
+	/*
 
-	for i := 0; i < len(splitValues); i++ {
-		if i == 0 && useNewColumn {
-			// create chunk less than min
-			newChunk := chunk.copyAndUpdate(splitCol, "", "", splitValues[i], lt)
-			chunks = append(chunks, newChunk)
-		}
+		lowerSymbol := symbolMin
+		upperSymbol := lt
 
-		if valueCounts[i] > 1 {
-			// means should split it
-			newChunk := chunk.copyAndUpdate(splitCol, splitValues[i], equal, "", "")
-			splitChunks, err := s.splitRange(db, newChunk, valueCounts[i], schema, table, columns)
-			if err != nil {
-				return nil, errors.Trace(err)
+		for i := 0; i < len(splitValues); i++ {
+			if i == 0 && useNewColumn {
+				// create chunk less than min
+				newChunk := chunk.copyAndUpdate(splitCol, "", "", splitValues[i], lt)
+				chunks = append(chunks, newChunk)
 			}
-			chunks = append(chunks, splitChunks...)
 
-			// already have the chunk [column = value], so next chunk should start with column > value
-			lowerSymbol = gt
+			if valueCounts[i] > 1 {
+				// means should split it
+				newChunk := chunk.copyAndUpdate(splitCol, splitValues[i], equal, "", "")
+				splitChunks, err := s.splitRange(db, newChunk, valueCounts[i], schema, table, columns)
+				if err != nil {
+					return nil, errors.Trace(err)
+				}
+				chunks = append(chunks, splitChunks...)
+
+				// already have the chunk [column = value], so next chunk should start with column > value
+				lowerSymbol = gt
+			}
+
+			if i == len(splitValues)-2 && valueCounts[i+1] == 1 {
+				upperSymbol = symbolMax
+			}
+
+			if i < len(splitValues)-1 {
+				newChunk := chunk.copyAndUpdate(splitCol, splitValues[i], lowerSymbol, splitValues[i+1], upperSymbol)
+				chunks = append(chunks, newChunk)
+			}
+
+			if i == len(splitValues)-1 && useNewColumn {
+				// create chunk greater than max
+				newChunk := chunk.copyAndUpdate(splitCol, splitValues[i], gt, "", "")
+				chunks = append(chunks, newChunk)
+			}
+
+			lowerSymbol = gte
 		}
 
-		if i == len(splitValues)-2 && valueCounts[i+1] == 1 {
-			upperSymbol = symbolMax
-		}
+		log.Debug("getChunksForTable cut table", zap.Int("count", count), zap.String("min", min), zap.String("max", max), zap.Int("chunk num", len(chunks)))
+		return chunks, nil
 
-		if i < len(splitValues)-1 {
-			newChunk := chunk.copyAndUpdate(splitCol, splitValues[i], lowerSymbol, splitValues[i+1], upperSymbol)
-			chunks = append(chunks, newChunk)
-		}
-
-		if i == len(splitValues)-1 && useNewColumn {
-			// create chunk greater than max
-			newChunk := chunk.copyAndUpdate(splitCol, splitValues[i], gt, "", "")
-			chunks = append(chunks, newChunk)
-		}
-
-		lowerSymbol = gte
-	}
-
-	log.Debug("getChunksForTable cut table", zap.Int("count", count), zap.String("min", min), zap.String("max", max), zap.Int("chunk num", len(chunks)))
-	return chunks, nil
+	*/
 }
 
 type bucketSpliter struct {
@@ -455,25 +475,25 @@ func (s *bucketSpliter) getChunksByBuckets() ([]*ChunkRange, error) {
 					// TODO: fix
 
 					/*
-					tmpChunk := NewChunkRange(bucketMode)
-					var lower, upper, lowerSymbol, upperSymbol string
-					for j, col := range index.Columns {
-						if len(lowerValues) != 0 {
-							lower = lowerValues[j]
-							lowerSymbol = gt
-						}
-						if i != len(buckets)-1 {
-							upper = upperValues[j]
-							upperSymbol = lte
+						tmpChunk := NewChunkRange(bucketMode)
+						var lower, upper, lowerSymbol, upperSymbol string
+						for j, col := range index.Columns {
+							if len(lowerValues) != 0 {
+								lower = lowerValues[j]
+								lowerSymbol = gt
+							}
+							if i != len(buckets)-1 {
+								upper = upperValues[j]
+								upperSymbol = lte
+							}
+
+							tmpChunk.update(col.Name.O, lower, lowerSymbol, upper, upperSymbol)
 						}
 
-						tmpChunk.update(col.Name.O, lower, lowerSymbol, upper, upperSymbol)
-					}
-
-					//chunk := bucketToChunk()
-					where, args := tmpChunk.toString(s.collation)
+						//chunk := bucketToChunk()
+						where, args := tmpChunk.toString(s.collation)
 					*/
-					
+
 					conditions := make([]string, 0, 2)
 					args := make([]string, 0, 2)
 					if len(lowerValues) > j {
@@ -484,10 +504,10 @@ func (s *bucketSpliter) getChunksByBuckets() ([]*ChunkRange, error) {
 						conditions = append(conditions, fmt.Sprintf(" %s < ?", col.Name.O))
 						args = append(args, upperValues[j])
 					}
-					
+
 					where := strings.Join(conditions, " AND ")
 					//strings.Replace(where, "<=", "<", -1)
-					rValues, _, err := dbutil.GetRandomValues(context.Background(), s.table.Conn, s.table.Schema, s.table.Table, col.Name.O, int(count-1), where, utils.StringsToInterfaces(args), s.collation)
+					rValues, err := dbutil.GetRandomValues(context.Background(), s.table.Conn, s.table.Schema, s.table.Table, col.Name.O, int(count-1), where, utils.StringsToInterfaces(args), s.collation)
 					if err != nil {
 						return nil, errors.Trace(err)
 					}
@@ -511,23 +531,23 @@ func (s *bucketSpliter) getChunksByBuckets() ([]*ChunkRange, error) {
 						}
 					}
 
-					chunk := NewChunkRange(bucketMode)
-					var lower, upper, lowerSymbol, upperSymbol string
+					chunk := NewChunkRange()
+					var lower, upper string
 					for j, col := range index.Columns {
 						if len(lowerValues) != 0 {
 							lower = lowerValues[j]
-							lowerSymbol = gt
+
 						}
-						if i != len(buckets)-1 || k != minL{
+						if i != len(buckets)-1 || k != minL {
 							upper = upperValuesTmp[j]
 							//upperSymbol = lte
-							upperSymbol = lt
+
 							//if j == len(index.Columns) -1 {
 							//	upperSymbol = lte
 							//}
 						}
 
-						chunk.update(col.Name.O, lower, lowerSymbol, upper, upperSymbol)
+						chunk.update(col.Name.O, lower, upper)
 
 					}
 
@@ -544,19 +564,17 @@ func (s *bucketSpliter) getChunksByBuckets() ([]*ChunkRange, error) {
 
 			} else if bucket.Count-latestCount > int64(s.chunkSize) || i == len(buckets)-1 {
 				// create a new chunk
-				chunk := NewChunkRange(bucketMode)
-				var lower, upper, lowerSymbol, upperSymbol string
+				chunk := NewChunkRange()
+				var lower, upper string
 				for j, col := range index.Columns {
 					if len(lowerValues) != 0 {
 						lower = lowerValues[j]
-						lowerSymbol = gt
 					}
 					if i != len(buckets)-1 {
 						upper = upperValues[j]
-						upperSymbol = lte
 					}
 
-					chunk.update(col.Name.O, lower, lowerSymbol, upper, upperSymbol)
+					chunk.update(col.Name.O, lower, upper)
 				}
 
 				chunks = append(chunks, chunk)
@@ -669,13 +687,25 @@ func getChunksForTable(table *TableInstance, columns []*model.ColumnInfo, chunkS
 	s := randomSpliter{}
 	chunks, err := s.split(table, columns, chunkSize, limits, collation)
 
+	count := int64(0)
+	for _, chunk := range chunks {
+		where, args := chunk.toString("")
+		c, err := dbutil.GetRowCount(context.Background(), table.Conn, table.Schema, table.Table, where, stringSliceToInterfaceSlice(args))
+		if err != nil {
+			return nil, err
+		}
+		log.Info("", zap.String("range", dbutil.ReplacePlaceholder(where, args)), zap.Int64("rowcount", c))
+		count += c
+	}
+	log.Info("row count", zap.String("schema", table.Schema), zap.String("table", table.Table), zap.Int64("count", count))
+
 	return chunks, err
 }
 
 // getSplitFields returns fields to split chunks, order by pk, uk, index, columns.
 func getSplitFields(table *model.TableInfo, splitFields []string) ([]*model.ColumnInfo, error) {
 	cols := make([]*model.ColumnInfo, 0, len(table.Columns))
-	colsMap := make(map[string]interface{})
+	colsMap := make(map[string]*model.ColumnInfo)
 
 	splitCols := make([]*model.ColumnInfo, 0, 2)
 	for _, splitField := range splitFields {
@@ -687,19 +717,22 @@ func getSplitFields(table *model.TableInfo, splitFields []string) ([]*model.Colu
 		splitCols = append(splitCols, col)
 	}
 
-	indexColumns := dbutil.FindAllColumnWithIndex(table)
-
-	// user's config had higher priorities
-	for _, col := range append(append(splitCols, indexColumns...), table.Columns...) {
-		if _, ok := colsMap[col.Name.O]; ok {
-			continue
-		}
-
-		colsMap[col.Name.O] = struct{}{}
-		cols = append(cols, col)
+	if len(splitCols) != 0 {
+		return splitCols, nil
 	}
 
-	return cols, nil
+	for _, col := range table.Columns {
+		colsMap[col.Name.O] = col
+	}
+	indices := dbutil.FindAllIndex(table)
+	if len(indices) != 0 {
+		for _, col := range indices[0].Columns {
+			cols = append(cols, colsMap[col.Name.O])
+		}
+		return cols, nil
+	}
+
+	return []*model.ColumnInfo{table.Columns[0]}, nil
 }
 
 // SplitChunks splits the table to some chunks.

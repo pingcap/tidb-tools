@@ -190,20 +190,18 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 	return cnt.Int64, nil
 }
 
-// GetRandomValues returns some random value and these value's count of a column, just like sampling. Tips: limitArgs is the value in limitRange.
-func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int, limitRange string, limitArgs []interface{}, collation string) ([]string, []int, error) {
+// GetRandomValues returns some random value. Tips: limitArgs is the value in limitRange.
+func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int, limitRange string, limitArgs []interface{}, collation string) ([]string, error) {
 	/*
 		example:
-		mysql> SELECT `id`, COUNT(*) count FROM (SELECT `id`, rand() rand_value FROM `test`.`test`  WHERE `id` COLLATE "latin1_bin" > 0 AND `id` COLLATE "latin1_bin" < 100 ORDER BY rand_value LIMIT 5) rand_tmp GROUP BY `id` ORDER BY `id` COLLATE "latin1_bin";
-		+------+-------+
-		| id   | count |
-		+------+-------+
-		|    1 |     2 |
-		|    2 |     2 |
-		|    3 |     1 |
-		+------+-------+
-
-		FIXME: TiDB now don't return rand value when use `ORDER BY RAND()`
+		mysql> SELECT `id` FROM (SELECT `id`, rand() rand_value FROM `test`.`test`  WHERE `id` COLLATE "latin1_bin" > 0 AND `id` COLLATE "latin1_bin" < 100 ORDER BY rand_value LIMIT 5) rand_tmp ORDER BY `id` COLLATE "latin1_bin";
+		+------+
+		| id   |
+		+------+
+		|    1 |
+		|    2 |
+		|    3 |
+		+------+
 	*/
 
 	if limitRange == "" {
@@ -214,31 +212,27 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
 	}
 
-	randomValue := make([]string, 0, num)
-	valueCount := make([]int, 0, num)
-
-	query := fmt.Sprintf("SELECT %[1]s, COUNT(*) count FROM (SELECT %[1]s, rand() rand_value FROM %[2]s WHERE %[3]s ORDER BY rand_value LIMIT %[4]d)rand_tmp GROUP BY %[1]s ORDER BY %[1]s%[5]s",
+	query := fmt.Sprintf("SELECT %[1]s FROM (SELECT %[1]s, rand() rand_value FROM %[2]s WHERE %[3]s ORDER BY rand_value LIMIT %[4]d)rand_tmp ORDER BY %[1]s%[5]s",
 		escapeName(column), TableName(schemaName, table), limitRange, num, collation)
 	log.Debug("get random values", zap.String("sql", query), zap.Reflect("args", limitArgs))
 
 	rows, err := db.QueryContext(ctx, query, limitArgs...)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
 	defer rows.Close()
 
+	randomValue := make([]string, 0, num)
 	for rows.Next() {
 		var value string
-		var count int
-		err = rows.Scan(&value, &count)
+		err = rows.Scan(&value)
 		if err != nil {
-			return nil, nil, errors.Trace(err)
+			return nil, errors.Trace(err)
 		}
 		randomValue = append(randomValue, value)
-		valueCount = append(valueCount, count)
 	}
 
-	return randomValue, valueCount, errors.Trace(rows.Err())
+	return randomValue, errors.Trace(rows.Err())
 }
 
 // GetMinMaxValue return min and max value of given column by specified limitRange condition.
@@ -470,7 +464,7 @@ func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string, table
 		})
 	}
 
-	for index, bs := range buckets  {
+	for index, bs := range buckets {
 		log.Info("GetBucketsInfo", zap.String("index", index), zap.Reflect("buckets", bs))
 	}
 
