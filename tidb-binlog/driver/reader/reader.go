@@ -154,13 +154,15 @@ func (r *Reader) run() {
 
 	// use variable msg to avoid message blocking while reading
 	var msg *Message
+	var destChan chan *Message
+	var sourceChan <-chan *sarama.ConsumerMessage
 	for {
-		var msgM chan *Message
-		var msgC <-chan *sarama.ConsumerMessage
+		destChan = nil
+		sourceChan = nil
 		if msg != nil {
-			msgM = r.msgs
+			destChan = r.msgs
 		} else {
-			msgC = partitionConsumer.Messages()
+			sourceChan = partitionConsumer.Messages()
 		}
 		select {
 		case <-r.stop:
@@ -168,7 +170,7 @@ func (r *Reader) run() {
 			close(r.msgs)
 			log.Info("reader stop to run")
 			return
-		case kmsg := <-msgC:
+		case kmsg := <-sourceChan:
 			log.Debug("get kafka message", zap.Int64("offset", kmsg.Offset))
 			binlog := new(pb.Binlog)
 			err := binlog.Unmarshal(kmsg.Value)
@@ -185,7 +187,7 @@ func (r *Reader) run() {
 				Binlog: binlog,
 				Offset: kmsg.Offset,
 			}
-		case msgM <- msg:
+		case destChan <- msg:
 			msg = nil
 		}
 
