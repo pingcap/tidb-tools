@@ -179,10 +179,10 @@ func (r *Reader) run() {
 				Offset: kmsg.Offset,
 			}
 			select {
-				case r.msgs <- msg:
-				case <-r.stop:
-					// In the next iteration, the <-r.stop would match again and prepare to quit
-					continue
+			case r.msgs <- msg:
+			case <-r.stop:
+				// In the next iteration, the <-r.stop would match again and prepare to quit
+				continue
 			}
 		}
 
