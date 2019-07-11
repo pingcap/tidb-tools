@@ -160,6 +160,7 @@ func (r *Reader) run() {
 			partitionConsumer.Close()
 			close(r.msgs)
 			log.Info("reader stop to run")
+			return
 		case kmsg := <-partitionConsumer.Messages():
 			log.Debug("get kafka message", zap.Int64("offset", kmsg.Offset))
 			binlog := new(pb.Binlog)
@@ -184,5 +185,6 @@ func (r *Reader) run() {
 					continue
 			}
 		}
+
 	}
 }
