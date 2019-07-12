@@ -405,7 +405,6 @@ func (s *testSpliterSuite) TestBucketSpliter(c *C) {
 			c.Assert(chunkStr, Equals, testCase.expectResult[j].chunkStr)
 			c.Assert(args, DeepEquals, testCase.expectResult[j].args)
 		}
-		c.Log("__________")
 	}
 }
 

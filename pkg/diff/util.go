@@ -129,16 +129,6 @@ func rowToString(row map[string]*dbutil.ColumnData) string {
 	return s.String()
 }
 
-func minLen(slices [][]string) int {
-	min := 0
-	for _, slice := range slices {
-		if min == 0 || len(slice) < min {
-			min = len(slice)
-		}
-	}
-	return min
-}
-
 func stringSliceToInterfaceSlice(sli []string) []interface{} {
 	iSli := make([]interface{}, len(sli))
 	for i, item := range sli {

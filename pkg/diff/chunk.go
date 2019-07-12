@@ -81,10 +81,10 @@ func (c *ChunkRange) toString(collation string) (string, []string) {
 		collation = fmt.Sprintf(" COLLATE '%s'", collation)
 	}
 
-	/* for example: FIXME
+	/* for example:
 	there is a bucket in TiDB, and the lowerbound and upperbound are (v1, v3), (v2, v4), and the columns are `a` and `b`,
-	this bucket's data range is (a > v1 or (a == v1 and b > v2)) and (a < v3 or (a == v3 and a <= v4)),
-	not (a >= v1 and a <= v3 and b >= v2 and b <= v4)
+	this bucket's data range is (a > v1 or (a == v1 and b > v3)) and (a < v2 or (a == v2 and a <= v4)),
+	not (a >= v1 and a <= v2 and b >= v3 and b <= v4)
 	*/
 
 	lowerCondition := make([]string, 0, 1)
@@ -371,17 +371,6 @@ func getChunksForTable(table *TableInstance, columns []*model.ColumnInfo, chunkS
 		s := bucketSpliter{}
 		chunks, err := s.split(table, columns, chunkSize, limits, collation)
 		if err == nil && len(chunks) > 0 {
-			count := int64(0)
-			for _, chunk := range chunks {
-				where, args := chunk.toString("")
-				c, err := dbutil.GetRowCount(context.Background(), table.Conn, table.Schema, table.Table, where, stringSliceToInterfaceSlice(args))
-				if err != nil {
-					return nil, err
-				}
-				log.Info("", zap.Stringer("chunk", chunk), zap.String("range", dbutil.ReplacePlaceholder(where, args)), zap.Int64("rowcount", c))
-				count += c
-			}
-			log.Info("row count", zap.String("schema", table.Schema), zap.String("table", table.Table), zap.Int64("count", count))
 			return chunks, nil
 		}
 
@@ -391,19 +380,6 @@ func getChunksForTable(table *TableInstance, columns []*model.ColumnInfo, chunkS
 	// get chunks from tidb bucket information failed, use random.
 	s := randomSpliter{}
 	chunks, err := s.split(table, columns, chunkSize, limits, collation)
-
-	count := int64(0)
-	for _, chunk := range chunks {
-		where, args := chunk.toString("")
-		c, err := dbutil.GetRowCount(context.Background(), table.Conn, table.Schema, table.Table, where, stringSliceToInterfaceSlice(args))
-		if err != nil {
-			return nil, err
-		}
-		log.Info("", zap.String("range", dbutil.ReplacePlaceholder(where, args)), zap.Int64("rowcount", c))
-		count += c
-	}
-	log.Info("row count", zap.String("schema", table.Schema), zap.String("table", table.Table), zap.Int64("count", count))
-
 	return chunks, err
 }
 
