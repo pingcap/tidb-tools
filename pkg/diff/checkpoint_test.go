@@ -63,8 +63,7 @@ func (s *testCheckpointSuite) testInitAndGetSummary(c *C, db *sql.DB) {
 func (s *testCheckpointSuite) testSaveAndLoadChunk(c *C, db *sql.DB) {
 	chunk := &ChunkRange{
 		ID:     1,
-		Bounds: []*Bound{{Column: "a", Lower: "1", LowerSymbol: ">"}},
-		Mode:   normalMode,
+		Bounds: []*Bound{{Column: "a", Lower: "1"}},
 		State:  successState,
 	}
 

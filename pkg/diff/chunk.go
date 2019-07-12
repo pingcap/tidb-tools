@@ -168,14 +168,14 @@ func (c *ChunkRange) update(column, lower, upper string) {
 
 func (c *ChunkRange) copy() *ChunkRange {
 	newChunk := &ChunkRange{
-		Bounds: make([]*Bound, len(c.Bounds)),
+		Bounds: make([]*Bound, 0, len(c.Bounds)),
 	}
-	for i, bound := range c.Bounds {
-		newChunk.Bounds[i] = &Bound{
+	for _, bound := range c.Bounds {
+		newChunk.Bounds = append(newChunk.Bounds, &Bound{
 			Column: bound.Column,
 			Lower:  bound.Lower,
 			Upper:  bound.Upper,
-		}
+		})
 	}
 
 	return newChunk
@@ -338,6 +338,10 @@ func (s *bucketSpliter) getChunksByBuckets() (chunks []*ChunkRange, err error) {
 			}
 
 			count := (buckets[i].Count - latestCount) / int64(s.chunkSize)
+
+			if s.chunkSize == 65 {
+				log.Info("", zap.Int64("count", count), zap.Int64("bucket'count", buckets[i].Count), zap.Int64("latest count", latestCount))
+			}
 			if count == 0 {
 				continue
 			} else if count >= 2 {

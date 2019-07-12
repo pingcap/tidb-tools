@@ -25,214 +25,194 @@ var _ = Suite(&testSpliterSuite{})
 
 type testSpliterSuite struct{}
 
+type chunkResult struct {
+	chunkStr string
+	args     []string
+}
+
+func (s *testSpliterSuite) TestSplitRangeByRandom(c *C) {
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+
+	testCases := []struct {
+		createTableSQL string
+		splitCount     int
+		originChunk    *ChunkRange
+		randomValues   [][]interface{}
+		expectResult   []chunkResult
+	}{
+		{
+			"create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))",
+			3,
+			NewChunkRange().copyAndUpdate("a", "0", "10").copyAndUpdate("b", "a", "z"),
+			[][]interface{}{
+				[]interface{}{5, 7},
+				[]interface{}{"g", "n"},
+			},
+			[]chunkResult{
+				{
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"0", "0", "a", "5", "5", "g"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"5", "5", "g", "7", "7", "n"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"7", "7", "n", "10", "10", "z"},
+				},
+			},
+		}, {
+			"create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`b`))",
+			3,
+			NewChunkRange().copyAndUpdate("b", "a", "z"),
+			[][]interface{}{
+				[]interface{}{"g", "n"},
+			},
+			[]chunkResult{
+				{
+					"((`b` > ?)) AND ((`b` <= ?))",
+					[]string{"a", "g"},
+				}, {
+					"((`b` > ?)) AND ((`b` <= ?))",
+					[]string{"g", "n"},
+				}, {
+					"((`b` > ?)) AND ((`b` <= ?))",
+					[]string{"n", "z"},
+				},
+			},
+		},
+	}
+
+	for i, testCase := range testCases {
+		tableInfo, err := dbutil.GetTableInfoBySQL(testCase.createTableSQL)
+		c.Assert(err, IsNil)
+
+		splitCols, err := getSplitFields(tableInfo, nil)
+		c.Assert(err, IsNil)
+		createFakeResultForRandomSplit(mock, 0, testCase.randomValues)
+
+		chunks, err := splitRangeByRandom(db, testCase.originChunk, testCase.splitCount, "test", "test", splitCols, "", "")
+		c.Assert(err, IsNil)
+		for j, chunk := range chunks {
+			chunkStr, args := chunk.toString("")
+			c.Log(i, j, chunkStr, args)
+			c.Assert(chunkStr, Equals, testCase.expectResult[j].chunkStr)
+			c.Assert(args, DeepEquals, testCase.expectResult[j].args)
+		}
+	}
+}
+
 func (s *testSpliterSuite) TestRandomSpliter(c *C) {
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
 
-	createTableSQL := "create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
-	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL)
-	c.Assert(err, IsNil)
-
-	tableInstance := &TableInstance{
-		Conn:   db,
-		Schema: "test",
-		Table:  "test",
-		info:   tableInfo,
-	}
-
 	testCases := []struct {
-		count              int
-		aMin               int
-		aMax               int
-		bMin               string
-		bMax               string
-		aRandomValues      []int
-		bRandomValues      []string
-		aRandomValueCounts []int
-	}{
-		// only use column a
-		{10, 0, 10, "x", "z", []int{1, 2, 3, 4}, nil, []int{1, 1, 1, 1}},
-		// will use column b
-		{10, 0, 10, "x", "z", []int{1, 2, 3, 4}, []string{"y"}, []int{1, 2, 1, 1}},
-		// will split the max value by column b
-		{10, 0, 10, "x", "z", []int{1, 2, 3, 10}, []string{"y"}, []int{1, 1, 1, 1}},
-		// will split the min value by column b
-		{10, 0, 10, "x", "z", []int{0, 2, 3, 4}, []string{"y"}, []int{1, 1, 1, 1}},
-		// will split the min value and max value by column b
-		{4, 0, 10, "x", "z", []int{0, 10}, []string{"y"}, []int{1, 1}},
-		// will split all values by column b
-		{4, 0, 10, "x", "z", []int{0, 5, 10}, []string{"y"}, []int{1, 2, 1}},
-	}
-
-	expectResult := [][]struct {
-		chunkStr string
-		args     []string
+		createTableSQL string
+		count          int
+		randomValues   [][]interface{}
+		expectResult   []chunkResult
 	}{
 		{
-			{"`a` < ?", []string{"0"}},
-			{"`a` >= ? AND `a` < ?", []string{"0", "1"}},
-			{"`a` >= ? AND `a` < ?", []string{"1", "2"}},
-			{"`a` >= ? AND `a` < ?", []string{"2", "3"}},
-			{"`a` >= ? AND `a` < ?", []string{"3", "4"}},
-			{"`a` >= ? AND `a` <= ?", []string{"4", "10"}},
-			{"`a` > ?", []string{"10"}},
-		},
-		{
-			{"`a` < ?", []string{"0"}},
-			{"`a` >= ? AND `a` < ?", []string{"0", "1"}},
-			{"`a` >= ? AND `a` < ?", []string{"1", "2"}},
-			{"`a` = ? AND `b` < ?", []string{"2", "x"}},
-			{"`a` = ? AND `b` >= ? AND `b` < ?", []string{"2", "x", "y"}},
-			{"`a` = ? AND `b` >= ? AND `b` <= ?", []string{"2", "y", "z"}},
-			{"`a` = ? AND `b` > ?", []string{"2", "z"}},
-			{"`a` > ? AND `a` < ?", []string{"2", "3"}},
-			{"`a` >= ? AND `a` < ?", []string{"3", "4"}},
-			{"`a` >= ? AND `a` <= ?", []string{"4", "10"}},
-			{"`a` > ?", []string{"10"}},
-		},
-		{
-			{"`a` < ?", []string{"0"}},
-			{"`a` >= ? AND `a` < ?", []string{"0", "1"}},
-			{"`a` >= ? AND `a` < ?", []string{"1", "2"}},
-			{"`a` >= ? AND `a` < ?", []string{"2", "3"}},
-			{"`a` >= ? AND `a` < ?", []string{"3", "10"}},
-			{"`a` = ? AND `b` < ?", []string{"10", "x"}},
-			{"`a` = ? AND `b` >= ? AND `b` < ?", []string{"10", "x", "y"}},
-			{"`a` = ? AND `b` >= ? AND `b` <= ?", []string{"10", "y", "z"}},
-			{"`a` = ? AND `b` > ?", []string{"10", "z"}},
-			{"`a` > ?", []string{"10"}},
-		},
-		{
-			{"`a` < ?", []string{"0"}},
-			{"`a` = ? AND `b` < ?", []string{"0", "x"}},
-			{"`a` = ? AND `b` >= ? AND `b` < ?", []string{"0", "x", "y"}},
-			{"`a` = ? AND `b` >= ? AND `b` <= ?", []string{"0", "y", "z"}},
-			{"`a` = ? AND `b` > ?", []string{"0", "z"}},
-			{"`a` > ? AND `a` < ?", []string{"0", "2"}},
-			{"`a` >= ? AND `a` < ?", []string{"2", "3"}},
-			{"`a` >= ? AND `a` < ?", []string{"3", "4"}},
-			{"`a` >= ? AND `a` <= ?", []string{"4", "10"}},
-			{"`a` > ?", []string{"10"}},
-		},
-		{
-			{"`a` < ?", []string{"0"}},
-			{"`a` = ? AND `b` < ?", []string{"0", "x"}},
-			{"`a` = ? AND `b` >= ? AND `b` < ?", []string{"0", "x", "y"}},
-			{"`a` = ? AND `b` >= ? AND `b` <= ?", []string{"0", "y", "z"}},
-			{"`a` = ? AND `b` > ?", []string{"0", "z"}},
-			{"`a` > ? AND `a` < ?", []string{"0", "10"}},
-			{"`a` = ? AND `b` < ?", []string{"10", "x"}},
-			{"`a` = ? AND `b` >= ? AND `b` < ?", []string{"10", "x", "y"}},
-			{"`a` = ? AND `b` >= ? AND `b` <= ?", []string{"10", "y", "z"}},
-			{"`a` = ? AND `b` > ?", []string{"10", "z"}},
-			{"`a` > ?", []string{"10"}},
-		},
-		{
-			{"`a` < ?", []string{"0"}},
-			{"`a` = ? AND `b` < ?", []string{"0", "x"}},
-			{"`a` = ? AND `b` >= ? AND `b` < ?", []string{"0", "x", "y"}},
-			{"`a` = ? AND `b` >= ? AND `b` <= ?", []string{"0", "y", "z"}},
-			{"`a` = ? AND `b` > ?", []string{"0", "z"}},
-			{"`a` > ? AND `a` < ?", []string{"0", "5"}},
-			{"`a` = ? AND `b` < ?", []string{"5", "x"}},
-			{"`a` = ? AND `b` >= ? AND `b` < ?", []string{"5", "x", "y"}},
-			{"`a` = ? AND `b` >= ? AND `b` <= ?", []string{"5", "y", "z"}},
-			{"`a` = ? AND `b` > ?", []string{"5", "z"}},
-			{"`a` > ? AND `a` < ?", []string{"5", "10"}},
-			{"`a` = ? AND `b` < ?", []string{"10", "x"}},
-			{"`a` = ? AND `b` >= ? AND `b` < ?", []string{"10", "x", "y"}},
-			{"`a` = ? AND `b` >= ? AND `b` <= ?", []string{"10", "y", "z"}},
-			{"`a` = ? AND `b` > ?", []string{"10", "z"}},
-			{"`a` > ?", []string{"10"}},
+			"create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))",
+			10,
+			[][]interface{}{
+				[]interface{}{1, 2, 3, 4, 5},
+				[]interface{}{"a", "b", "c", "d", "e"},
+			},
+			[]chunkResult{
+				{
+					"(`a` < ?) OR (`a` = ? AND `b` <= ?)",
+					[]string{"1", "1", "a"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"1", "1", "a", "2", "2", "b"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"2", "2", "b", "3", "3", "c"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"3", "3", "c", "4", "4", "d"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"4", "4", "d", "5", "5", "e"},
+				}, {
+					"(`a` > ?) OR (`a` = ? AND `b` > ?)",
+					[]string{"5", "5", "e"},
+				},
+			},
+		}, {
+			"create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`b`))",
+			10,
+			[][]interface{}{
+				[]interface{}{"a", "b", "c", "d", "e"},
+			},
+			[]chunkResult{
+				{
+					"(`b` <= ?)",
+					[]string{"a"},
+				}, {
+					"((`b` > ?)) AND ((`b` <= ?))",
+					[]string{"a", "b"},
+				}, {
+					"((`b` > ?)) AND ((`b` <= ?))",
+					[]string{"b", "c"},
+				}, {
+					"((`b` > ?)) AND ((`b` <= ?))",
+					[]string{"c", "d"},
+				}, {
+					"((`b` > ?)) AND ((`b` <= ?))",
+					[]string{"d", "e"},
+				}, {
+					"(`b` > ?)",
+					[]string{"e"},
+				},
+			},
 		},
 	}
 
-	for i, t := range testCases {
-		createFakeResultForRandomSplit(mock, t.count, t.aMin, t.aMax, t.bMin, t.bMax, t.aRandomValues, t.bRandomValues, t.aRandomValueCounts)
+	for i, testCase := range testCases {
+		tableInfo, err := dbutil.GetTableInfoBySQL(testCase.createTableSQL)
+		c.Assert(err, IsNil)
+
+		tableInstance := &TableInstance{
+			Conn:   db,
+			Schema: "test",
+			Table:  "test",
+			info:   tableInfo,
+		}
+
+		splitCols, err := getSplitFields(tableInfo, nil)
+		c.Assert(err, IsNil)
+
+		createFakeResultForRandomSplit(mock, testCase.count, testCase.randomValues)
 
 		rSpliter := new(randomSpliter)
-		chunks, err := rSpliter.split(tableInstance, tableInfo.Columns, 2, "TRUE", "")
+		chunks, err := rSpliter.split(tableInstance, splitCols, 2, "TRUE", "")
 		c.Assert(err, IsNil)
 
 		for j, chunk := range chunks {
 			chunkStr, args := chunk.toString("")
-			c.Assert(chunkStr, Equals, expectResult[i][j].chunkStr)
-			c.Assert(args, DeepEquals, expectResult[i][j].args)
+			c.Log(i, j, chunkStr, args)
+			c.Assert(chunkStr, Equals, testCase.expectResult[j].chunkStr)
+			c.Assert(args, DeepEquals, testCase.expectResult[j].args)
 		}
-	}
-
-	// test case for split a range use same column
-	// split (0, 10) to (0, 5) and [5, 10)
-	randomRows := sqlmock.NewRows([]string{"a", "count"}).AddRow("5", 1)
-	mock.ExpectQuery("ORDER BY RAND()").WillReturnRows(randomRows)
-
-	expectChunks := []struct {
-		chunkStr string
-		args     []string
-	}{
-		{"`a` > ? AND `a` < ?", []string{"0", "5"}},
-		{"`a` >= ? AND `a` < ?", []string{"5", "10"}},
-	}
-
-	r := &randomSpliter{
-		table: tableInstance,
-	}
-
-	oriChunk := NewChunkRange(normalMode).copyAndUpdate("a", "0", gt, "10", lt)
-	chunks, err := r.splitRange(db, oriChunk, 2, "test", "test", tableInfo.Columns)
-	c.Assert(err, IsNil)
-	for i, chunk := range chunks {
-		chunkStr, args := chunk.toString("")
-		c.Assert(chunkStr, Equals, expectChunks[i].chunkStr)
-		c.Assert(args, DeepEquals, expectChunks[i].args)
 	}
 }
 
-func createFakeResultForRandomSplit(mock sqlmock.Sqlmock, count, aMin, aMax int, bMin, bMax string, aRandomValues []int, bRandomValues []string, aRandomValueCounts []int) {
-	// generate fake result for get the row count of this table
-	countRows := sqlmock.NewRows([]string{"cnt"}).AddRow(count)
-	mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
-
-	// generate fake result for get min and max value for column a
-	aMinMaxRows := sqlmock.NewRows([]string{"MIN", "MAX"}).AddRow(aMin, aMax)
-	mock.ExpectQuery("SELECT .* MIN(.+a.+) as MIN, .*").WillReturnRows(aMinMaxRows)
+func createFakeResultForRandomSplit(mock sqlmock.Sqlmock, count int, randomValues [][]interface{}) {
+	if count > 0 {
+		// generate fake result for get the row count of this table
+		countRows := sqlmock.NewRows([]string{"cnt"}).AddRow(count)
+		mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
+	}
 
 	// generate fake result for get random value for column a
-	aRandomRows := sqlmock.NewRows([]string{"a", "count"})
-	for i, randomValue := range aRandomValues {
-		aRandomRows.AddRow(randomValue, aRandomValueCounts[i])
-	}
-	mock.ExpectQuery("ORDER BY RAND()").WillReturnRows(aRandomRows)
-
-	if len(bRandomValues) == 0 {
-		return
-	}
-
-	num := 0
-	splitValues := make(map[int]int)
-	for i, value := range aRandomValues {
-		splitValues[value] = aRandomValueCounts[i]
-	}
-	splitValues[aMin]++
-	splitValues[aMax]++
-	for _, count := range splitValues {
-		if count > 1 {
-			num += (count - 1)
+	for _, randomVs := range randomValues {
+		randomRows := sqlmock.NewRows([]string{"a"})
+		for _, value := range randomVs {
+			randomRows.AddRow(value)
 		}
-	}
-
-	// means need split more num times for column b
-	for i := 0; i < num; i++ {
-		// generate fake result for get min and max value for column b
-		bMinMaxRows := sqlmock.NewRows([]string{"MIN", "MAX"}).AddRow(bMin, bMax)
-		mock.ExpectQuery("SELECT .* MIN(.+b.+) as MIN, .*").WillReturnRows(bMinMaxRows)
-
-		// generate fake result for get random value for column b
-		bRandomRows := sqlmock.NewRows([]string{"b", "count"})
-		for _, randomValue := range bRandomValues {
-			bRandomRows.AddRow(randomValue, 1)
-		}
-		mock.ExpectQuery("SELECT b, COUNT.*").WillReturnRows(bRandomRows)
+		mock.ExpectQuery("ORDER BY rand_value").WillReturnRows(randomRows)
 	}
 
 	return
@@ -246,31 +226,164 @@ func (s *testSpliterSuite) TestBucketSpliter(c *C) {
 	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL)
 	c.Assert(err, IsNil)
 
-	chunkSizes := []int{2, 64, 127, 128}
-	expectResult := [][]struct {
-		chunkStr string
-		args     []string
+	testCases := []struct {
+		chunkSize     int
+		aRandomValues []interface{}
+		bRandomValues []interface{}
+		expectResult  []chunkResult
 	}{
 		{
-			{"(`a` <= ?) OR (`a` = ? AND `b` <= ?)", []string{"63", "63", "11"}},
-			{"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` <= ?) OR (`a` = ? AND `b` <= ?))", []string{"63", "63", "11", "127", "127", "23"}},
-			{"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` <= ?) OR (`a` = ? AND `b` <= ?))", []string{"127", "127", "23", "191", "191", "35"}},
-			{"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` <= ?) OR (`a` = ? AND `b` <= ?))", []string{"191", "191", "35", "255", "255", "47"}},
-			{"(`a` > ?) OR (`a` = ? AND `b` > ?)", []string{"255", "255", "47"}},
-		},
-		{
-			{"(`a` <= ?) OR (`a` = ? AND `b` <= ?)", []string{"127", "127", "23"}},
-			{"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` <= ?) OR (`a` = ? AND `b` <= ?))", []string{"127", "127", "23", "255", "255", "47"}},
-			{"(`a` > ?) OR (`a` = ? AND `b` > ?)", []string{"255", "255", "47"}},
-		},
-		{
-			{"(`a` <= ?) OR (`a` = ? AND `b` <= ?)", []string{"127", "127", "23"}},
-			{"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` <= ?) OR (`a` = ? AND `b` <= ?))", []string{"127", "127", "23", "255", "255", "47"}},
-			{"(`a` > ?) OR (`a` = ? AND `b` > ?)", []string{"255", "255", "47"}},
-		},
-		{
-			{"(`a` <= ?) OR (`a` = ? AND `b` <= ?)", []string{"191", "191", "35"}},
-			{"(`a` > ?) OR (`a` = ? AND `b` > ?)", []string{"191", "191", "35"}},
+			// chunk size less than the count of bucket 64, and the bucket's count 64 >= 32, so will split by random in every bucket
+			32,
+			[]interface{}{32, 32 * 3, 32 * 5, 32 * 7, 32 * 9},
+			[]interface{}{6, 6 * 3, 6 * 5, 6 * 7, 6 * 9},
+			[]chunkResult{
+				{
+					"(`a` < ?) OR (`a` = ? AND `b` <= ?)",
+					[]string{"32", "32", "6"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"32", "32", "6", "63", "63", "11"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"63", "63", "11", "96", "96", "18"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"96", "96", "18", "127", "127", "23"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"127", "127", "23", "160", "160", "30"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"160", "160", "30", "191", "191", "35"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"191", "191", "35", "224", "224", "42"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"224", "224", "42", "255", "255", "47"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"255", "255", "47", "288", "288", "54"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"288", "288", "54", "319", "319", "59"},
+				}, {
+					"(`a` > ?) OR (`a` = ? AND `b` > ?)",
+					[]string{"319", "319", "59"},
+				},
+			},
+		}, {
+			// chunk size less than the count of bucket 64, but 64 is  less than 2*40, so will not split every bucket
+			40,
+			nil,
+			nil,
+			[]chunkResult{
+				{
+					"(`a` < ?) OR (`a` = ? AND `b` <= ?)",
+					[]string{"63", "63", "11"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"63", "63", "11", "127", "127", "23"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"127", "127", "23", "191", "191", "35"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"191", "191", "35", "255", "255", "47"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"255", "255", "47", "319", "319", "59"},
+				}, {
+					"(`a` > ?) OR (`a` = ? AND `b` > ?)",
+					[]string{"319", "319", "59"},
+				},
+			},
+		}, {
+			// chunk size is equal to the count of bucket 64, so every becket will generate a chunk
+			64,
+			nil,
+			nil,
+			[]chunkResult{
+				{
+					"(`a` < ?) OR (`a` = ? AND `b` <= ?)",
+					[]string{"63", "63", "11"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"63", "63", "11", "127", "127", "23"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"127", "127", "23", "191", "191", "35"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"191", "191", "35", "255", "255", "47"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"255", "255", "47", "319", "319", "59"},
+				}, {
+					"(`a` > ?) OR (`a` = ? AND `b` > ?)",
+					[]string{"319", "319", "59"},
+				},
+			},
+		}, {
+			// chunk size is greater than the count of bucket 64, will combine two bucket into chunk
+			127,
+			nil,
+			nil,
+			[]chunkResult{
+				{
+					"(`a` < ?) OR (`a` = ? AND `b` <= ?)",
+					[]string{"127", "127", "23"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"127", "127", "23", "255", "255", "47"},
+				}, {
+					"(`a` > ?) OR (`a` = ? AND `b` > ?)",
+					[]string{"255", "255", "47"},
+				},
+			},
+		}, {
+			// chunk size is equal to the double count of bucket 64, will combine two bucket into one chunk
+			128,
+			nil,
+			nil,
+			[]chunkResult{
+				{
+					"(`a` < ?) OR (`a` = ? AND `b` <= ?)",
+					[]string{"127", "127", "23"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"127", "127", "23", "255", "255", "47"},
+				}, {
+					"(`a` > ?) OR (`a` = ? AND `b` > ?)",
+					[]string{"255", "255", "47"},
+				},
+			},
+		}, {
+			// chunk size is greate than the double count of bucket 64, will combine three bucket into one chunk
+			129,
+			nil,
+			nil,
+			[]chunkResult{
+				{
+					"(`a` < ?) OR (`a` = ? AND `b` <= ?)",
+					[]string{"191", "191", "35"},
+				}, {
+					"(`a` > ?) OR (`a` = ? AND `b` > ?)",
+					[]string{"191", "191", "35"},
+				},
+			},
+		}, {
+			// chunk size is greater than the total count, only generate one chunk
+			400,
+			nil,
+			nil,
+			[]chunkResult{
+				{
+					"TRUE",
+					nil,
+				},
+			},
 		},
 	}
 
@@ -281,22 +394,22 @@ func (s *testSpliterSuite) TestBucketSpliter(c *C) {
 		info:   tableInfo,
 	}
 
-	for i, chunkSize := range chunkSizes {
-		createFakeResultForBucketSplit(mock)
+	for i, testCase := range testCases {
+		createFakeResultForBucketSplit(mock, testCase.aRandomValues, testCase.bRandomValues)
 		bSpliter := new(bucketSpliter)
-		chunks, err := bSpliter.split(tableInstance, tableInfo.Columns, chunkSize, "TRUE", "")
+		chunks, err := bSpliter.split(tableInstance, tableInfo.Columns, testCase.chunkSize, "TRUE", "")
 		c.Assert(err, IsNil)
-
 		for j, chunk := range chunks {
 			chunkStr, args := chunk.toString("")
-			c.Assert(chunkStr, Equals, expectResult[i][j].chunkStr)
-			c.Assert(args, DeepEquals, expectResult[i][j].args)
+			c.Log(i, j, chunkStr, args)
+			c.Assert(chunkStr, Equals, testCase.expectResult[j].chunkStr)
+			c.Assert(args, DeepEquals, testCase.expectResult[j].args)
 		}
+		c.Log("__________")
 	}
-
 }
 
-func createFakeResultForBucketSplit(mock sqlmock.Sqlmock) {
+func createFakeResultForBucketSplit(mock sqlmock.Sqlmock, aRandomValues, bRandomValues []interface{}) {
 	/*
 		+---------+------------+-------------+----------+-----------+-------+---------+-------------+-------------+
 		| Db_name | Table_name | Column_name | Is_index | Bucket_id | Count | Repeats | Lower_Bound | Upper_Bound |
@@ -306,6 +419,7 @@ func createFakeResultForBucketSplit(mock sqlmock.Sqlmock) {
 		| test    | test       | PRIMARY     |        1 |         2 |   192 |       1 | (128, 24)   | (191, 35)   |
 		| test    | test       | PRIMARY     |        1 |         3 |   256 |       1 | (192, 36)   | (255, 47)   |
 		| test    | test       | PRIMARY     |        1 |         4 |   320 |       1 | (256, 48)   | (319, 59)   |
+		+---------+------------+-------------+----------+-----------+-------+---------+-------------+-------------+
 	*/
 
 	statsRows := sqlmock.NewRows([]string{"Db_name", "Table_name", "Column_name", "Is_index", "Bucket_id", "Count", "Repeats", "Lower_Bound", "Upper_Bound"})
@@ -313,6 +427,16 @@ func createFakeResultForBucketSplit(mock sqlmock.Sqlmock) {
 		statsRows.AddRow("test", "test", "PRIMARY", 1, (i+1)*64, (i+1)*64, 1, fmt.Sprintf("(%d, %d)", i*64, i*12), fmt.Sprintf("(%d, %d)", (i+1)*64-1, (i+1)*12-1))
 	}
 	mock.ExpectQuery("SHOW STATS_BUCKETS").WillReturnRows(statsRows)
+
+	for i := 0; i < len(aRandomValues); i++ {
+		aRandomRows := sqlmock.NewRows([]string{"a"})
+		aRandomRows.AddRow(aRandomValues[i])
+		mock.ExpectQuery("ORDER BY rand_value").WillReturnRows(aRandomRows)
+
+		bRandomRows := sqlmock.NewRows([]string{"b"})
+		bRandomRows.AddRow(bRandomValues[i])
+		mock.ExpectQuery("ORDER BY rand_value").WillReturnRows(bRandomRows)
+	}
 
 	return
 }
