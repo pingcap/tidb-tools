@@ -31,6 +31,7 @@ func (t *testFilterSuite) TestFilter(c *C) {
 	rules := []*BinlogEventRule{
 		{"Test_1_*", "abc*", []EventType{DeleteEvent, InsertEvent, CreateIndex, DropIndex}, []string{"^DROP\\s+PROCEDURE", "^CREATE\\s+PROCEDURE"}, nil, Ignore},
 		{"xxx_*", "abc_*", []EventType{AllDML, NoneDDL}, nil, nil, Ignore},
+		{"yyy_*", "abc_*", []EventType{EventType("ALL DML")}, nil, nil, Do},
 	}
 
 	cases := []struct {
@@ -50,6 +51,8 @@ func (t *testFilterSuite) TestFilter(c *C) {
 		{"xxx_1", "abc_1", NullEvent, "create function abc", Do},
 		{"xxx_1", "abc_1", InsertEvent, "", Ignore},
 		{"xxx_1", "abc_1", CreateIndex, "", Do},
+		{"yyy_1", "abc_1", InsertEvent, "", Do},
+		{"yyy_1", "abc_1", CreateIndex, "", Ignore},
 	}
 
 	// initial binlog event filter
@@ -70,6 +73,7 @@ func (t *testFilterSuite) TestFilter(c *C) {
 	// update rules
 	rules[0].Events = []EventType{}
 	rules[1].Action = Do
+	rules[2].Events = []EventType{"ALL DDL"}
 	for _, rule := range rules {
 		err = filter.UpdateRule(rule)
 		c.Assert(err, IsNil)
@@ -80,6 +84,8 @@ func (t *testFilterSuite) TestFilter(c *C) {
 	cases[3].action = Do      // create index
 	cases[9].action = Do      // match all event and insert
 	cases[10].action = Ignore // match none event and create index
+	cases[11].action = Ignore // no match
+	cases[12].action = Do     // match all ddl
 	for _, cs := range cases {
 		action, err := filter.Filter(cs.schema, cs.table, cs.event, cs.sql)
 		c.Assert(err, IsNil)
