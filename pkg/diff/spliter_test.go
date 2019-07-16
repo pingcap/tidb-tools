@@ -46,8 +46,8 @@ func (s *testSpliterSuite) TestSplitRangeByRandom(c *C) {
 			3,
 			NewChunkRange().copyAndUpdate("a", "0", "10").copyAndUpdate("b", "a", "z"),
 			[][]interface{}{
-				[]interface{}{5, 7},
-				[]interface{}{"g", "n"},
+				{5, 7},
+				{"g", "n"},
 			},
 			[]chunkResult{
 				{
@@ -66,7 +66,7 @@ func (s *testSpliterSuite) TestSplitRangeByRandom(c *C) {
 			3,
 			NewChunkRange().copyAndUpdate("b", "a", "z"),
 			[][]interface{}{
-				[]interface{}{"g", "n"},
+				{"g", "n"},
 			},
 			[]chunkResult{
 				{
@@ -116,8 +116,8 @@ func (s *testSpliterSuite) TestRandomSpliter(c *C) {
 			"create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))",
 			10,
 			[][]interface{}{
-				[]interface{}{1, 2, 3, 4, 5},
-				[]interface{}{"a", "b", "c", "d", "e"},
+				{1, 2, 3, 4, 5},
+				{"a", "b", "c", "d", "e"},
 			},
 			[]chunkResult{
 				{
@@ -144,7 +144,7 @@ func (s *testSpliterSuite) TestRandomSpliter(c *C) {
 			"create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`b`))",
 			10,
 			[][]interface{}{
-				[]interface{}{"a", "b", "c", "d", "e"},
+				{"a", "b", "c", "d", "e"},
 			},
 			[]chunkResult{
 				{
