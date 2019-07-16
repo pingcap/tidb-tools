@@ -255,7 +255,7 @@ func splitRangeByRandom(db *sql.DB, chunk *ChunkRange, count int, schema string,
 		chunks = append(chunks, newChunk)
 	}
 
-	log.Info("split range by random", zap.Stringer("origion chunk", chunk), zap.Reflect("chunks", chunks))
+	log.Debug("split range by random", zap.Stringer("origin chunk", chunk), zap.Reflect("chunks", chunks))
 
 	return chunks, nil
 }
@@ -301,7 +301,6 @@ func (s *bucketSpliter) getChunksByBuckets() (chunks []*ChunkRange, err error) {
 		)
 
 		indexColumns := getColumnsFromIndex(index, s.table.info)
-		log.Debug("", zap.Reflect("index columns", indexColumns))
 
 		for i := 0; i <= len(buckets); i++ {
 			if i != len(buckets) {
@@ -311,7 +310,6 @@ func (s *bucketSpliter) getChunksByBuckets() (chunks []*ChunkRange, err error) {
 				}
 			}
 
-			log.Info("", zap.Strings("lower values", lowerValues), zap.Strings("upper values", upperValues))
 			chunk := NewChunkRange()
 			for j, column := range indexColumns {
 				if i == 0 {
@@ -338,10 +336,6 @@ func (s *bucketSpliter) getChunksByBuckets() (chunks []*ChunkRange, err error) {
 			}
 
 			count := (buckets[i].Count - latestCount) / int64(s.chunkSize)
-
-			if s.chunkSize == 65 {
-				log.Info("", zap.Int64("count", count), zap.Int64("bucket'count", buckets[i].Count), zap.Int64("latest count", latestCount))
-			}
 			if count == 0 {
 				continue
 			} else if count >= 2 {

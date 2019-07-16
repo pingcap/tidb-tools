@@ -176,7 +176,7 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 	if len(where) > 0 {
 		query += fmt.Sprintf(" WHERE %s", where)
 	}
-	//log.Debug("get row count", zap.String("sql", query), zap.Reflect("args", args))
+	log.Debug("get row count", zap.String("sql", query), zap.Reflect("args", args))
 
 	var cnt sql.NullInt64
 	err := db.QueryRowContext(ctx, query, args...).Scan(&cnt)
@@ -464,10 +464,6 @@ func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string, table
 		})
 	}
 
-	for index, bs := range buckets {
-		log.Info("GetBucketsInfo", zap.String("index", index), zap.Reflect("buckets", bs))
-	}
-
 	// when primary key is int type, the columnName will be column's name, not `PRIMARY`, check and transform here.
 	indices := FindAllIndex(tableInfo)
 	for _, index := range indices {
@@ -501,7 +497,7 @@ func AnalyzeValuesFromBuckets(valueString string, cols []*model.ColumnInfo) ([]s
 		if IsTimeTypeAndNeedDecode(col.Tp) {
 			value, err := DecodeTimeInBucket(values[i])
 			if err != nil {
-				log.Error("AnalyzeValuesFromBuckets", zap.String("column", col.Name.O), zap.String("value", values[i]), zap.Error(err))
+				log.Error("analyze values from buckets", zap.String("column", col.Name.O), zap.String("value", values[i]), zap.Error(err))
 				return nil, errors.Trace(err)
 			}
 
