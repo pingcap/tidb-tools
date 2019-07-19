@@ -33,8 +33,6 @@ ignore-struct-check = false
 # the name of the file which saves sqls used to fix different data.
 fix-sql-file = "fix.sql"
 
-# use this tidb's statistics information to split chunk
-# tidb-instance-id = ""
 
 # uncomment this if comparing data with different database name or table name
 #[[table-rules]]
