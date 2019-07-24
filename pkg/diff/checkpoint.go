@@ -315,16 +315,20 @@ func createCheckpointTable(ctx context.Context, db *sql.DB) error {
 
 // cleanCheckpoint deletes the table's checkpoint info in table `summary` and `chunk`
 func cleanCheckpoint(ctx context.Context, db *sql.DB, schema, table string) error {
-	deleteSummarySQL := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `schema` = ? AND `table` = ?;", checkpointSchemaName, summaryTableName)
-	args1 := []interface{}{schema, table}
+	where := "`schema` = ? AND `table` = ?"
+	args := []interface{}{schema, table}
 
-	deleteChunkSQL := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE `schema` = ? AND `table` = ?;", checkpointSchemaName, chunkTableName)
-	args2 := []interface{}{schema, table}
+	err := dbutil.DeleteRows(ctx, db, checkpointSchemaName, summaryTableName, where, args)
+	if err != nil {
+		return errors.Trace(err)
+	}
 
-	sqls := []string{deleteSummarySQL, deleteChunkSQL}
-	args := [][]interface{}{args1, args2}
+	err = dbutil.DeleteRows(ctx, db, checkpointSchemaName, chunkTableName, where, args)
+	if err != nil {
+		return errors.Trace(err)
+	}
 
-	return errors.Trace(dbutil.ExecuteSQLs(ctx, db, sqls, args))
+	return nil
 }
 
 // dropCheckpoint drops the database `sync_diff_inspector`

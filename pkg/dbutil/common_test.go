@@ -14,8 +14,10 @@
 package dbutil
 
 import (
+	"context"
 	"database/sql/driver"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
@@ -128,4 +130,20 @@ func (s *testDBSuite) TestIsIgnoreError(c *C) {
 		c.Logf("err %v, expected %v", t.err, t.canIgnore)
 		c.Assert(ignoreError(t.err), Equals, t.canIgnore)
 	}
+}
+
+func (s *testDBSuite) TestDeleteRows(c *C) {
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+
+	// delete and select twice
+	mock.ExpectExec("DELETE FROM").WillReturnResult(sqlmock.NewResult(0, 1))
+	countRows := sqlmock.NewRows([]string{"cnt"}).AddRow(199999)
+	mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
+	mock.ExpectExec("DELETE FROM").WillReturnResult(sqlmock.NewResult(0, 1))
+	countRows = sqlmock.NewRows([]string{"cnt"}).AddRow(0)
+	mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
+
+	err = DeleteRows(context.Background(), db, "test", "t", "", nil)
+	c.Assert(err, IsNil)
 }
