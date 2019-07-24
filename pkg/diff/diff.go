@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -102,6 +103,9 @@ type TableDiff struct {
 	configHash string
 
 	CpDB *sql.DB
+
+	// 1 means true, 0 means false
+	checkpointLoaded int32
 }
 
 func (t *TableDiff) setConfigHash() error {
@@ -119,11 +123,7 @@ func (t *TableDiff) setConfigHash() error {
 // Equal tests whether two database have same data and schema.
 func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (bool, bool, error) {
 	t.adjustConfig()
-
 	t.sqlCh = make(chan string)
-
-	stopWriteSqlsCh := t.WriteSqls(ctx, writeFixSQL)
-	stopUpdateSummaryCh := t.UpdateSummaryInfo(ctx)
 
 	err := t.getTableInfo(ctx)
 	if err != nil {
@@ -141,14 +141,17 @@ func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (
 	}
 
 	if !t.IgnoreDataCheck {
+		stopWriteSqlsCh := t.WriteSqls(ctx, writeFixSQL)
+		stopUpdateSummaryCh := t.UpdateSummaryInfo(ctx)
+
 		dataEqual, err = t.CheckTableData(ctx)
 		if err != nil {
 			return false, false, errors.Trace(err)
 		}
-	}
 
-	stopWriteSqlsCh <- true
-	stopUpdateSummaryCh <- true
+		stopWriteSqlsCh <- true
+		stopUpdateSummaryCh <- true
+	}
 
 	t.wg.Wait()
 	return structEqual, dataEqual, nil
@@ -307,6 +310,7 @@ func (t *TableDiff) LoadCheckpoint(ctx context.Context) ([]*ChunkRange, error) {
 				return nil, errors.Trace(err)
 			}
 
+			atomic.StoreInt32(&t.checkpointLoaded, 1)
 			return chunks, nil
 		}
 	}
@@ -322,6 +326,7 @@ func (t *TableDiff) LoadCheckpoint(ctx context.Context) ([]*ChunkRange, error) {
 		return nil, errors.Trace(err)
 	}
 
+	atomic.StoreInt32(&t.checkpointLoaded, 1)
 	return nil, nil
 }
 
@@ -656,7 +661,9 @@ func (t *TableDiff) UpdateSummaryInfo(ctx context.Context) chan bool {
 			case <-stopUpdateCh:
 				return
 			case <-ticker.C:
-				update()
+				if atomic.LoadInt32(&t.checkpointLoaded) == 1 {
+					update()
+				}
 			}
 		}
 	}()
