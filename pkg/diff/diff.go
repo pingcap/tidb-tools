@@ -171,7 +171,12 @@ func (t *TableDiff) CheckTableStruct(ctx context.Context) (bool, error) {
 
 func (t *TableDiff) adjustConfig() {
 	if t.ChunkSize <= 0 {
-		t.ChunkSize = 100
+		log.Warn("chunk size is less than 0, will use default value 1000", zap.Int("chunk size", t.ChunkSize))
+		t.ChunkSize = 1000
+	}
+
+	if t.ChunkSize < 1000 || t.ChunkSize > 10000 {
+		log.Warn("chunk size is suggest in range [1000, 10000]", zap.Int("chunk size", t.ChunkSize))
 	}
 
 	if len(t.Range) == 0 {
