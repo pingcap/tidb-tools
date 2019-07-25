@@ -221,7 +221,7 @@ func (s *randomSpliter) split(table *TableInstance, columns []*model.ColumnInfo,
 	s.collation = collation
 
 	// get the chunk count by data count and chunk size
-	cnt, err := dbutil.GetRowCount(context.Background(), table.Conn, table.Schema, table.Table, limits)
+	cnt, err := dbutil.GetRowCount(context.Background(), table.Conn, table.Schema, table.Table, limits, nil)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
