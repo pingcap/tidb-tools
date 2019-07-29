@@ -136,13 +136,9 @@ func (s *testDBSuite) TestDeleteRows(c *C) {
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
 
-	// delete and select twice
-	mock.ExpectExec("DELETE FROM").WillReturnResult(sqlmock.NewResult(0, 1))
-	countRows := sqlmock.NewRows([]string{"cnt"}).AddRow(199999)
-	mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
-	mock.ExpectExec("DELETE FROM").WillReturnResult(sqlmock.NewResult(0, 1))
-	countRows = sqlmock.NewRows([]string{"cnt"}).AddRow(0)
-	mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
+	// delete twice
+	mock.ExpectExec("DELETE FROM").WillReturnResult(sqlmock.NewResult(0, DefaultDeleteRowsNum))
+	mock.ExpectExec("DELETE FROM").WillReturnResult(sqlmock.NewResult(0, DefaultDeleteRowsNum-1))
 
 	err = DeleteRows(context.Background(), db, "test", "t", "", nil)
 	c.Assert(err, IsNil)

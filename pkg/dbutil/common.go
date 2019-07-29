@@ -45,6 +45,9 @@ const (
 
 	// SlowWarnLog defines the duration to log warn log of sql when exec time greater than
 	SlowWarnLog = 100 * time.Millisecond
+
+	// DefaultDeleteRowsNum is the default rows num for delete one time
+	DefaultDeleteRowsNum = 100000
 )
 
 var (
@@ -759,17 +762,18 @@ func ignoreDDLError(err error) bool {
 
 // DeleteRows delete rows in several times. Only can delete less than 300,000 one time in TiDB.
 func DeleteRows(ctx context.Context, db *sql.DB, schemaName string, tableName string, where string, args []interface{}) error {
-	deleteSQL := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE %s limit 100000;", schemaName, tableName, where)
-	_, err := db.ExecContext(ctx, deleteSQL, args...)
+	deleteSQL := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE %s limit %d;", schemaName, tableName, where, DefaultDeleteRowsNum)
+	result, err := db.ExecContext(ctx, deleteSQL, args...)
 	if err != nil {
 		return errors.Trace(err)
 	}
 
-	count, err := GetRowCount(ctx, db, schemaName, tableName, where, args)
+	rows, err := result.RowsAffected()
 	if err != nil {
 		return errors.Trace(err)
 	}
-	if count == 0 {
+
+	if int(rows) < DefaultDeleteRowsNum {
 		return nil
 	}
 
