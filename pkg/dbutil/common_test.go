@@ -146,4 +146,8 @@ func (s *testDBSuite) TestDeleteRows(c *C) {
 
 	err = DeleteRows(context.Background(), db, "test", "t", "", nil)
 	c.Assert(err, IsNil)
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		c.Errorf("there were unfulfilled expectations: %s", err)
+	}
 }
