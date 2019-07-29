@@ -25,4 +25,4 @@ Usage of sync_diff_inspector:
         target database's snapshot config
 ```
 
-For more details you can read the config.toml.
+For more details you can read the [config.toml](./config.toml) and [config_sharding.toml](./config_sharding.toml).
