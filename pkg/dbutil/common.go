@@ -47,7 +47,7 @@ const (
 	SlowWarnLog = 100 * time.Millisecond
 
 	// DefaultDeleteRowsNum is the default rows num for delete one time
-	DefaultDeleteRowsNum = 100000
+	DefaultDeleteRowsNum int64 = 100000
 )
 
 var (
