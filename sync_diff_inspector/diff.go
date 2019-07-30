@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -64,7 +65,6 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 		onlyUseChecksum:   cfg.OnlyUseChecksum,
 		ignoreDataCheck:   cfg.IgnoreDataCheck,
 		ignoreStructCheck: cfg.IgnoreStructCheck,
-		tidbInstanceID:    cfg.TiDBInstanceID,
 		tables:            make(map[string]map[string]*TableConfig),
 		report:            NewReport(),
 		ctx:               ctx,
@@ -353,8 +353,6 @@ func (df *Diff) Equal() (err error) {
 
 	for _, schema := range df.tables {
 		for _, table := range schema {
-			var tidbStatsSource *diff.TableInstance
-
 			sourceTables := make([]*diff.TableInstance, 0, len(table.SourceTables))
 			for _, sourceTable := range table.SourceTables {
 				sourceTableInstance := &diff.TableInstance{
@@ -364,10 +362,6 @@ func (df *Diff) Equal() (err error) {
 					InstanceID: sourceTable.InstanceID,
 				}
 				sourceTables = append(sourceTables, sourceTableInstance)
-
-				if sourceTable.InstanceID == df.tidbInstanceID {
-					tidbStatsSource = sourceTableInstance
-				}
 			}
 
 			targetTableInstance := &diff.TableInstance{
@@ -377,12 +371,23 @@ func (df *Diff) Equal() (err error) {
 				InstanceID: df.targetDB.InstanceID,
 			}
 
-			if df.targetDB.InstanceID == df.tidbInstanceID {
-				tidbStatsSource = targetTableInstance
-			}
+			// find tidb instance for getting statistical information to split chunk
+			var tidbStatsSource *diff.TableInstance
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
 
-			if len(df.tidbInstanceID) != 0 && tidbStatsSource == nil {
-				return errors.NotFoundf("tidb instance id %s", df.tidbInstanceID)
+			isTiDB, err := dbutil.IsTiDB(ctx, targetTableInstance.Conn)
+			if err != nil {
+				log.Warn("judge instance is tidb failed", zap.Error(err))
+			} else if isTiDB {
+				tidbStatsSource = targetTableInstance
+			} else if len(sourceTables) == 1 {
+				isTiDB, err := dbutil.IsTiDB(ctx, sourceTables[0].Conn)
+				if err != nil {
+					log.Warn("judge instance is tidb failed", zap.Error(err))
+				} else if isTiDB {
+					tidbStatsSource = sourceTables[0]
+				}
 			}
 
 			td := &diff.TableDiff{
