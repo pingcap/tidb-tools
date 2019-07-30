@@ -176,7 +176,7 @@ func (t *TableDiff) adjustConfig() {
 	}
 
 	if t.ChunkSize < 1000 || t.ChunkSize > 10000 {
-		log.Warn("chunk size is suggest in range [1000, 10000]", zap.Int("chunk size", t.ChunkSize))
+		log.Warn("chunk size is recommend in range [1000, 10000]", zap.Int("chunk size", t.ChunkSize))
 	}
 
 	if len(t.Range) == 0 {
