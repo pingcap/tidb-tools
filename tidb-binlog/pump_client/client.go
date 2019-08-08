@@ -343,11 +343,8 @@ func (c *PumpsClient) backoffWriteBinlog(req *pb.WriteBinlogReq, binlogType pb.B
 		return nil, nil
 	}
 
-	allPumps := make([]*PumpStatus, 0, 3)
 	c.RLock()
-	for _, pump := range c.Pumps.Pumps {
-		allPumps = append(allPumps, pump)
-	}
+	allPumps := copyPumps(c.Pumps.Pumps)
 	c.RUnlock()
 
 	var resp *pb.WriteBinlogResp
