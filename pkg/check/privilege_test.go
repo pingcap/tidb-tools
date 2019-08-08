@@ -90,7 +90,28 @@ func (t *testCheckSuite) TestVerifyPrivileges(c *tc.C) {
 		},
 		{
 			grants: []string{ // IDENTIFIED BY PASSWORD
+				"GRANT ALL PRIVILEGES ON *.* TO 'user'@'%' IDENTIFIED BY PASSWORD",
+			},
+			dumpState:       StateSuccess,
+			replcationState: StateSuccess,
+		},
+		{
+			grants: []string{ // IDENTIFIED BY PASSWORD
+				"GRANT ALL PRIVILEGES ON *.* TO 'user'@'%' IDENTIFIED BY PASSWORD WITH GRANT OPTION",
+			},
+			dumpState:       StateSuccess,
+			replcationState: StateSuccess,
+		},
+		{
+			grants: []string{ // IDENTIFIED BY PASSWORD
 				"GRANT ALL PRIVILEGES ON *.* TO 'user'@'%' IDENTIFIED BY PASSWORD 'password'",
+			},
+			dumpState:       StateSuccess,
+			replcationState: StateSuccess,
+		},
+		{
+			grants: []string{ // IDENTIFIED BY PASSWORD
+				"GRANT ALL PRIVILEGES ON *.* TO 'user'@'%' IDENTIFIED BY PASSWORD 'password' WITH GRANT OPTION",
 			},
 			dumpState:       StateSuccess,
 			replcationState: StateSuccess,
@@ -98,6 +119,13 @@ func (t *testCheckSuite) TestVerifyPrivileges(c *tc.C) {
 		{
 			grants: []string{ // IDENTIFIED BY PASSWORD with <secret> mark
 				"GRANT ALL PRIVILEGES ON *.* TO 'user'@'%' IDENTIFIED BY PASSWORD <secret>",
+			},
+			dumpState:       StateSuccess,
+			replcationState: StateSuccess,
+		},
+		{
+			grants: []string{ // IDENTIFIED BY PASSWORD with <secret> mark
+				"GRANT ALL PRIVILEGES ON *.* TO 'user'@'%' IDENTIFIED BY PASSWORD <secret> WITH GRANT OPTION",
 			},
 			dumpState:       StateSuccess,
 			replcationState: StateSuccess,
