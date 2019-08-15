@@ -1,5 +1,7 @@
 # diff Configuration.
 
+######################### Global config #########################
+
 log-level = "info"
 
 # for example, the whole data is [1...100]
@@ -33,95 +35,96 @@ ignore-struct-check = false
 # the name of the file which saves sqls used to fix different data.
 fix-sql-file = "fix.sql"
 
-# use this tidb's statistics information to split chunk
-# tidb-instance-id = ""
+
+######################### Tables config #########################
 
 # uncomment this if comparing data with different database name or table name
 #[[table-rules]]
-#schema-pattern = "test_*"
-#table-pattern = "t_*"
-#target-schema = "test"
-#target-table = "t"
+    #schema-pattern = "test_*"
+    #table-pattern = "t_*"
+    #target-schema = "test"
+    #target-table = "t"
 
 
 # tables need to check.
 [[check-tables]]
-# schema name in target database.
-schema = "test"
+    # schema name in target database.
+    schema = "test"
 
-# table list which need check in target database.
-tables = ["test1", "test2", "test3"]
+    # table list which need check in target database.
+    tables = ["test1", "test2", "test3"]
 
-# support regular expression, must start with '~'.
-# for example, this config will check tables with prefix 'test'.
-# tables = ["~^test.*"]
+    # support regular expression, must start with '~'.
+    # for example, this config will check tables with prefix 'test'.
+    # tables = ["~^test.*"]
 
 
 # schema and table in table-config must be contained in check-tables.
 # a example for comparing table with same schema and table name. 
 [[table-config]]
-# schema name.
-schema = "test"
+    # schema name.
+    schema = "test"
 
-# table name.
-table = "test3"
+    # table name.
+    table = "test3"
 
-# field should be the primary key, unique key or field with index. 
-# if comment this, diff will find a suitable field.
-index-fields = "id"
+    # field should be the primary key, unique key or field with index. 
+    # if comment this, diff will find a suitable field.
+    index-fields = "id"
 
-# can set multiple fields split by ','
-# index-fields = "id,age"
+    # can set multiple fields split by ','
+    # index-fields = "id,age"
 
-# check data's range.
-range = "age > 10 AND age < 20"
+    # check data's range.
+    range = "age > 10 AND age < 20"
 
-# set true if comparing sharding tables with target table
-is-sharding = false
+    # set true if comparing sharding tables with target table
+    is-sharding = false
 
-# collation config in mysql/tidb, should corresponding to charset.
-# collation = "latin1_bin"
+    # collation config in mysql/tidb, should corresponding to charset.
+    # collation = "latin1_bin"
 
 # a example for comparing table with different name.
 [[table-config]]
-# target schema name.
-schema = "test"
+    # target schema name.
+    schema = "test"
 
-# target table name.
-table = "test2"
+    # target table name.
+    table = "test2"
 
-# set true if comparing sharding tables with target table
-is-sharding = false
+    # set true if comparing sharding tables with target table
+    is-sharding = false
 
-# columns be ignored, will not check this column's data, 
-# but may use these columns as split field or order by key.
-# ignore-columns = ["name"]
+    # columns be ignored, will not check this column's data, 
+    # but may use these columns as split field or order by key.
+    # ignore-columns = ["name"]
 
-# columns be removed, will remove these columns from table info, 
-# and will not check these columns' data, will not use these columns as split field or order by key too.
-# remove-columns = ["name"]
+    # columns be removed, will remove these columns from table info, 
+    # and will not check these columns' data, will not use these columns as split field or order by key too.
+    # remove-columns = ["name"]
 
-# source table.
-[[table-config.source-tables]]
-instance-id = "source-1"
-schema = "test"
-table  = "test1"
+    # source table.
+    [[table-config.source-tables]]
+        instance-id = "source-1"
+        schema = "test"
+        table  = "test1"
 
+######################### Databases config #########################
 
 [[source-db]]
-host = "127.0.0.1"
-port = 3306
-user = "root"
-password = ""
-instance-id = "source-1"
-# remove comment if use tidb's snapshot data
-# snapshot = "2016-10-08 16:45:26"
+    host = "127.0.0.1"
+    port = 3306
+    user = "root"
+    password = ""
+    instance-id = "source-1"
+    # remove comment if use tidb's snapshot data
+    # snapshot = "2016-10-08 16:45:26"
 
 [target-db]
-host = "127.0.0.1"
-port = 4000
-user = "root"
-password = ""
-instance-id = "target-1"
-# remove comment if use tidb's snapshot data
-# snapshot = "2016-10-08 16:45:26"
+    host = "127.0.0.1"
+    port = 4000
+    user = "root"
+    password = ""
+    instance-id = "target-1"
+    # remove comment if use tidb's snapshot data
+    # snapshot = "2016-10-08 16:45:26"
