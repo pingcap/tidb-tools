@@ -37,7 +37,7 @@ func equalStrings(str1, str2 []string) bool {
 	return true
 }
 
-func removeColumns(tableInfo *model.TableInfo, columns []string) *model.TableInfo {
+func ignoreColumns(tableInfo *model.TableInfo, columns []string) *model.TableInfo {
 	if len(columns) == 0 {
 		return tableInfo
 	}
@@ -48,12 +48,9 @@ func removeColumns(tableInfo *model.TableInfo, columns []string) *model.TableInf
 		for j := 0; j < len(index.Columns); j++ {
 			col := index.Columns[j]
 			if _, ok := removeColMap[col.Name.O]; ok {
-				index.Columns = append(index.Columns[:j], index.Columns[j+1:]...)
-				j--
-				if len(index.Columns) == 0 {
-					tableInfo.Indices = append(tableInfo.Indices[:i], tableInfo.Indices[i+1:]...)
-					i--
-				}
+				tableInfo.Indices = append(tableInfo.Indices[:i], tableInfo.Indices[i+1:]...)
+				i--
+				break
 			}
 		}
 	}
