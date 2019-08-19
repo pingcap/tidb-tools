@@ -48,7 +48,6 @@ func (*testDiffSuite) TestGenerateSQLs(c *C) {
 		"id_gen":      {Data: []byte("2"), IsNull: false}, // generated column should not be contained in fix sql
 	}
 
-	_, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
 	replaceSQL := generateDML("replace", rowsData, tableInfo, "test")
 	deleteSQL := generateDML("delete", rowsData, tableInfo, "test")
 	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (1,'xxx','2018-01-01 00:00:00','10:10:10',11.1111);")
@@ -58,7 +57,6 @@ func (*testDiffSuite) TestGenerateSQLs(c *C) {
 	createTableSQL2 := "CREATE TABLE `test`.`atest` (`id` int(24), `name` varchar(24), `birthday` datetime, `update_time` time, `money` decimal(20,2), unique key(`id`, `name`))"
 	tableInfo2, err := dbutil.GetTableInfoBySQL(createTableSQL2)
 	c.Assert(err, IsNil)
-	_, orderKeyCols2 := dbutil.SelectUniqueOrderKey(tableInfo2)
 	replaceSQL = generateDML("replace", rowsData, tableInfo2, "test")
 	deleteSQL = generateDML("delete", rowsData, tableInfo2, "test")
 	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (1,'xxx','2018-01-01 00:00:00','10:10:10',11.1111);")
