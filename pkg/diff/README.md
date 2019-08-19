@@ -16,13 +16,8 @@ type TableDiff struct {
 	// target table
 	TargetTable *TableInstance
 
-	// columns be ignored, will not check this column's data, 
-	// but may use these columns as split field or order by key.
+	// columns be ignored, will not check this column's data
 	IgnoreColumns []string
-
-	// columns be removed, will remove these columns from table info,
-	// and will not check these columns' data, will not use these columns as split field or order by key too.
-	RemoveColumns []string
 
 	// field should be the primary key, unique key or field with index
 	Field string
