@@ -1,0 +1,61 @@
+# diff Configuration.
+
+log-level = "debug"
+
+# for example, the whole data is [1...100]
+# we can split these data to [1...10], [11...20], ..., [91...100]
+# the [1...10] is a chunk, and it's chunk size is 10
+# size of the split chunk
+chunk-size = 1000
+
+# how many goroutines are created to check data
+check-thread-count = 4
+
+# sampling check percent, for example 10 means only check 10% data
+sample-percent = 100
+
+# calculate the data's checksum, and compare data by checksum.
+# set false if want to comapre the data directly
+use-checksum = true
+
+# set true will continue check from the latest checkpoint
+use-checkpoint = false
+
+# the name of the file which saves sqls used to fix different data.
+fix-sql-file = "/tmp/tidb_tools_test/sync_diff_inspector/fix.sql"
+
+# use this tidb's statistics information to split chunk
+tidb-instance-id = "target-1"
+
+# tables need to check.
+[[check-tables]]
+# schema name in target database.
+schema = "diff_test"
+
+# table list which need check in target database.
+tables = ["test"]
+
+# a example for comparing table with different name.
+[[table-config]]
+# target schema name.
+schema = "diff_test"
+
+# target table name.
+table = "test"
+
+# columns be ignored, will not check this column's data
+ignore-columns = ["b"]
+
+[[source-db]]
+host = "127.0.0.1"
+port = 4001
+user = "root"
+password = ""
+instance-id = "source-1"
+
+[target-db]
+host = "127.0.0.1"
+port = 4000
+user = "root"
+password = ""
+instance-id = "target-1"
