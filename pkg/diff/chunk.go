@@ -83,7 +83,7 @@ func (c *ChunkRange) toString(collation string) (string, []string) {
 
 	/* for example:
 	there is a bucket in TiDB, and the lowerbound and upperbound are (v1, v3), (v2, v4), and the columns are `a` and `b`,
-	this bucket's data range is (a > v1 or (a == v1 and b > v3)) and (a < v2 or (a == v2 and a <= v4))
+	this bucket's data range is (a > v1 or (a == v1 and b > v3)) and (a < v2 or (a == v2 and b <= v4))
 	*/
 
 	lowerCondition := make([]string, 0, 1)
