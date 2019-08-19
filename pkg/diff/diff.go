@@ -185,14 +185,14 @@ func (t *TableDiff) getTableInfo(ctx context.Context) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	t.TargetTable.info = removeColumns(tableInfo, t.IgnoreColumns)
+	t.TargetTable.info = ignoreColumns(tableInfo, t.IgnoreColumns)
 
 	for _, sourceTable := range t.SourceTables {
 		tableInfo, err := dbutil.GetTableInfo(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table)
 		if err != nil {
 			return errors.Trace(err)
 		}
-		sourceTable.info = removeColumns(tableInfo, t.IgnoreColumns)
+		sourceTable.info = ignoreColumns(tableInfo, t.IgnoreColumns)
 	}
 
 	return nil

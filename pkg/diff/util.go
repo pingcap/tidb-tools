@@ -37,7 +37,7 @@ func equalStrings(str1, str2 []string) bool {
 	return true
 }
 
-func removeColumns(tableInfo *model.TableInfo, columns []string) *model.TableInfo {
+func ignoreColumns(tableInfo *model.TableInfo, columns []string) *model.TableInfo {
 	if len(columns) == 0 {
 		return tableInfo
 	}

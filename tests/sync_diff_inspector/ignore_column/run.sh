@@ -15,7 +15,7 @@ sync_diff_inspector --config=./config_base.toml > $OUT_DIR/ignore_column_diff.lo
 check_contains "sourceDB don't equal targetDB" $OUT_DIR/ignore_column_diff.log
 mv $OUT_DIR/fix.sql $OUT_DIR/fix.sql.bak
 
-echo "ignore check column c, check result should be pass"
+echo "ignore check column b, check result should be pass"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/ignore_column_diff.log || true
 check_contains "test pass!!!" $OUT_DIR/ignore_column_diff.log
 
