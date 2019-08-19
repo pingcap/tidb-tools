@@ -152,9 +152,11 @@ func (r *Reader) run() {
 	}
 	defer partitionConsumer.Close()
 
+	// add select to avoid message blocking while reading
 	for {
 		select {
 		case <-r.stop:
+			// clean environment
 			partitionConsumer.Close()
 			close(r.msgs)
 			log.Info("reader stop to run")
@@ -172,9 +174,15 @@ func (r *Reader) run() {
 				continue
 			}
 
-			r.msgs <- &Message{
+			msg := &Message{
 				Binlog: binlog,
 				Offset: kmsg.Offset,
+			}
+			select {
+			case r.msgs <- msg:
+			case <-r.stop:
+				// In the next iteration, the <-r.stop would match again and prepare to quit
+				continue
 			}
 		}
 

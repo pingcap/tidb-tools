@@ -298,7 +298,7 @@ func createCheckpointTable(ctx context.Context, db *sql.DB) error {
 			"`instance_id` varchar(64)," +
 			"`schema` varchar(64)," +
 			"`table` varchar(64)," +
-			"`range` varchar(100)," +
+			"`range` text," +
 			"`checksum` varchar(20)," +
 			"`chunk_str` text," +
 			"`state` enum('not_checked', 'checking', 'success', 'failed', 'ignore', 'error') DEFAULT 'not_checked'," +

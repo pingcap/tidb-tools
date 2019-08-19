@@ -24,8 +24,6 @@ use-checkpoint = false
 # the name of the file which saves sqls used to fix different data.
 fix-sql-file = "/tmp/tidb_tools_test/sync_diff_inspector/fix.sql"
 
-# use this tidb's statistics information to split chunk
-tidb-instance-id = "target-1"
 
 # tables need to check.
 [[check-tables]]

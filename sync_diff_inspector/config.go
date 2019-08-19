@@ -198,9 +198,6 @@ type Config struct {
 	// set true will continue check from the latest checkpoint
 	UseCheckpoint bool `toml:"use-checkpoint" json:"use-checkpoint"`
 
-	// use this tidb's statistics information to split chunk
-	TiDBInstanceID string `toml:"tidb-instance-id" json:"tidb-instance-id"`
-
 	// config file
 	ConfigFile string
 
