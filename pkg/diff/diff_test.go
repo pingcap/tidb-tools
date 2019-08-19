@@ -49,8 +49,8 @@ func (*testDiffSuite) TestGenerateSQLs(c *C) {
 	}
 
 	_, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
-	replaceSQL := generateDML("replace", rowsData, orderKeyCols, tableInfo, "test")
-	deleteSQL := generateDML("delete", rowsData, orderKeyCols, tableInfo, "test")
+	replaceSQL := generateDML("replace", rowsData, tableInfo, "test")
+	deleteSQL := generateDML("delete", rowsData, tableInfo, "test")
 	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (1,'xxx','2018-01-01 00:00:00','10:10:10',11.1111);")
 	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` WHERE `id` = 1 AND `name` = 'xxx' AND `birthday` = '2018-01-01 00:00:00' AND `update_time` = '10:10:10' AND `money` = 11.1111;")
 
@@ -59,28 +59,28 @@ func (*testDiffSuite) TestGenerateSQLs(c *C) {
 	tableInfo2, err := dbutil.GetTableInfoBySQL(createTableSQL2)
 	c.Assert(err, IsNil)
 	_, orderKeyCols2 := dbutil.SelectUniqueOrderKey(tableInfo2)
-	replaceSQL = generateDML("replace", rowsData, orderKeyCols2, tableInfo2, "test")
-	deleteSQL = generateDML("delete", rowsData, orderKeyCols2, tableInfo2, "test")
+	replaceSQL = generateDML("replace", rowsData, tableInfo2, "test")
+	deleteSQL = generateDML("delete", rowsData, tableInfo2, "test")
 	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (1,'xxx','2018-01-01 00:00:00','10:10:10',11.1111);")
 	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` WHERE `id` = 1 AND `name` = 'xxx' AND `birthday` = '2018-01-01 00:00:00' AND `update_time` = '10:10:10' AND `money` = 11.1111;")
 
 	// test value is nil
 	rowsData["name"] = &dbutil.ColumnData{Data: []byte(""), IsNull: true}
-	replaceSQL = generateDML("replace", rowsData, orderKeyCols, tableInfo, "test")
-	deleteSQL = generateDML("delete", rowsData, orderKeyCols, tableInfo, "test")
+	replaceSQL = generateDML("replace", rowsData, tableInfo, "test")
+	deleteSQL = generateDML("delete", rowsData, tableInfo, "test")
 	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (1,NULL,'2018-01-01 00:00:00','10:10:10',11.1111);")
 	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` WHERE `id` = 1 AND `name` is NULL AND `birthday` = '2018-01-01 00:00:00' AND `update_time` = '10:10:10' AND `money` = 11.1111;")
 
 	rowsData["id"] = &dbutil.ColumnData{Data: []byte(""), IsNull: true}
-	replaceSQL = generateDML("replace", rowsData, orderKeyCols, tableInfo, "test")
-	deleteSQL = generateDML("delete", rowsData, orderKeyCols, tableInfo, "test")
+	replaceSQL = generateDML("replace", rowsData, tableInfo, "test")
+	deleteSQL = generateDML("delete", rowsData, tableInfo, "test")
 	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (NULL,NULL,'2018-01-01 00:00:00','10:10:10',11.1111);")
 	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` WHERE `id` is NULL AND `name` is NULL AND `birthday` = '2018-01-01 00:00:00' AND `update_time` = '10:10:10' AND `money` = 11.1111;")
 
 	// test value with "'"
 	rowsData["name"] = &dbutil.ColumnData{Data: []byte("a'a"), IsNull: false}
-	replaceSQL = generateDML("replace", rowsData, orderKeyCols, tableInfo, "test")
-	deleteSQL = generateDML("delete", rowsData, orderKeyCols, tableInfo, "test")
+	replaceSQL = generateDML("replace", rowsData, tableInfo, "test")
+	deleteSQL = generateDML("delete", rowsData, tableInfo, "test")
 	c.Assert(replaceSQL, Equals, "REPLACE INTO `test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (NULL,'a\\'a','2018-01-01 00:00:00','10:10:10',11.1111);")
 	c.Assert(deleteSQL, Equals, "DELETE FROM `test`.`atest` WHERE `id` is NULL AND `name` = 'a\\'a' AND `birthday` = '2018-01-01 00:00:00' AND `update_time` = '10:10:10' AND `money` = 11.1111;")
 }
