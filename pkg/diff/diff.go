@@ -53,9 +53,6 @@ type TableDiff struct {
 	// columns be ignored
 	IgnoreColumns []string `json:"-"`
 
-	// columns be removed
-	RemoveColumns []string `json:"-"`
-
 	// field should be the primary key, unique key or field with index
 	Fields string `json:"fields"`
 
@@ -188,14 +185,14 @@ func (t *TableDiff) getTableInfo(ctx context.Context) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	t.TargetTable.info = removeColumns(tableInfo, t.RemoveColumns)
+	t.TargetTable.info = ignoreColumns(tableInfo, t.IgnoreColumns)
 
 	for _, sourceTable := range t.SourceTables {
 		tableInfo, err := dbutil.GetTableInfo(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table)
 		if err != nil {
 			return errors.Trace(err)
 		}
-		sourceTable.info = removeColumns(tableInfo, t.RemoveColumns)
+		sourceTable.info = ignoreColumns(tableInfo, t.IgnoreColumns)
 	}
 
 	return nil
@@ -329,7 +326,7 @@ func (t *TableDiff) getSourceTableChecksum(ctx context.Context, chunk *ChunkRang
 	var checksum int64
 
 	for _, sourceTable := range t.SourceTables {
-		checksumTmp, err := dbutil.GetCRC32Checksum(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.info, chunk.Where, utils.StringsToInterfaces(chunk.Args), utils.SliceToMap(t.IgnoreColumns))
+		checksumTmp, err := dbutil.GetCRC32Checksum(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
 		if err != nil {
 			return -1, errors.Trace(err)
 		}
@@ -435,7 +432,7 @@ func (t *TableDiff) compareChecksum(ctx context.Context, chunk *ChunkRange) (boo
 		return false, errors.Trace(err)
 	}
 
-	targetChecksum, err := dbutil.GetCRC32Checksum(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, utils.StringsToInterfaces(chunk.Args), utils.SliceToMap(t.IgnoreColumns))
+	targetChecksum, err := dbutil.GetCRC32Checksum(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
 	if err != nil {
 		return false, errors.Trace(err)
 	}
@@ -452,9 +449,8 @@ func (t *TableDiff) compareChecksum(ctx context.Context, chunk *ChunkRange) (boo
 func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, error) {
 	sourceRows := make(map[string][]map[string]*dbutil.ColumnData)
 	args := utils.StringsToInterfaces(chunk.Args)
-	ignoreCloumns := utils.SliceToMap(t.IgnoreColumns)
 
-	targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, args, ignoreCloumns, t.Collation)
+	targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, args, t.Collation)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
@@ -467,7 +463,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 	}
 
 	for i, sourceTable := range t.SourceTables {
-		rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, chunk.Where, args, ignoreCloumns, t.Collation)
+		rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, chunk.Where, args, t.Collation)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -530,7 +526,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 		if index1 == len(rowsData1) {
 			// all the rowsData2's data should be deleted
 			for ; index2 < len(rowsData2); index2++ {
-				sql := generateDML("delete", rowsData2[index2], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
+				sql := generateDML("delete", rowsData2[index2], t.TargetTable.info, t.TargetTable.Schema)
 				log.Info("[delete]", zap.String("sql", sql))
 				t.wg.Add(1)
 				t.sqlCh <- sql
@@ -541,7 +537,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 		if index2 == len(rowsData2) {
 			// rowsData2 lack some data, should insert them
 			for ; index1 < len(rowsData1); index1++ {
-				sql := generateDML("replace", rowsData1[index1], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
+				sql := generateDML("replace", rowsData1[index1], t.TargetTable.info, t.TargetTable.Schema)
 				log.Info("[insert]", zap.String("sql", sql))
 				t.wg.Add(1)
 				t.sqlCh <- sql
@@ -562,21 +558,21 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 		switch cmp {
 		case 1:
 			// delete
-			sql := generateDML("delete", rowsData2[index2], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
+			sql := generateDML("delete", rowsData2[index2], t.TargetTable.info, t.TargetTable.Schema)
 			log.Info("[delete]", zap.String("sql", sql))
 			t.wg.Add(1)
 			t.sqlCh <- sql
 			index2++
 		case -1:
 			// insert
-			sql := generateDML("replace", rowsData1[index1], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
+			sql := generateDML("replace", rowsData1[index1], t.TargetTable.info, t.TargetTable.Schema)
 			log.Info("[insert]", zap.String("sql", sql))
 			t.wg.Add(1)
 			t.sqlCh <- sql
 			index1++
 		case 0:
 			// update
-			sql := generateDML("replace", rowsData1[index1], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
+			sql := generateDML("replace", rowsData1[index1], t.TargetTable.info, t.TargetTable.Schema)
 			log.Info("[update]", zap.String("sql", sql))
 			t.wg.Add(1)
 			t.sqlCh <- sql
@@ -664,7 +660,7 @@ func (t *TableDiff) UpdateSummaryInfo(ctx context.Context) chan bool {
 	return stopUpdateCh
 }
 
-func generateDML(tp string, data map[string]*dbutil.ColumnData, keys []*model.ColumnInfo, table *model.TableInfo, schema string) (sql string) {
+func generateDML(tp string, data map[string]*dbutil.ColumnData, table *model.TableInfo, schema string) (sql string) {
 	switch tp {
 	case "replace":
 		colNames := make([]string, 0, len(table.Columns))
@@ -689,8 +685,8 @@ func generateDML(tp string, data map[string]*dbutil.ColumnData, keys []*model.Co
 
 		sql = fmt.Sprintf("REPLACE INTO `%s`.`%s`(%s) VALUES (%s);", schema, table.Name, strings.Join(colNames, ","), strings.Join(values, ","))
 	case "delete":
-		kvs := make([]string, 0, len(keys))
-		for _, col := range keys {
+		kvs := make([]string, 0, len(table.Columns))
+		for _, col := range table.Columns {
 			if col.IsGenerated() {
 				continue
 			}
@@ -801,20 +797,14 @@ func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model
 }
 
 func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo, where string,
-	args []interface{}, ignoreColumns map[string]interface{}, collation string) ([]map[string]*dbutil.ColumnData, []*model.ColumnInfo, error) {
+	args []interface{}, collation string) ([]map[string]*dbutil.ColumnData, []*model.ColumnInfo, error) {
 	orderKeys, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
-	columns := "*"
 
-	if len(ignoreColumns) != 0 {
-		columnNames := make([]string, 0, len(tableInfo.Columns))
-		for _, col := range tableInfo.Columns {
-			if _, ok := ignoreColumns[col.Name.O]; ok {
-				continue
-			}
-			columnNames = append(columnNames, col.Name.O)
-		}
-		columns = strings.Join(columnNames, ", ")
+	columnNames := make([]string, 0, len(tableInfo.Columns))
+	for _, col := range tableInfo.Columns {
+		columnNames = append(columnNames, col.Name.O)
 	}
+	columns := strings.Join(columnNames, ", ")
 
 	if collation != "" {
 		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
