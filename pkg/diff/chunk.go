@@ -56,6 +56,8 @@ type ChunkRange struct {
 	Args  []string `json:"args"`
 
 	State string `json:"state"`
+
+	columnOffset map[string]int `json:"-"`
 }
 
 // NewChunkRange return a ChunkRange.
@@ -143,22 +145,31 @@ func (c *ChunkRange) toString(collation string) (string, []string) {
 	return fmt.Sprintf("(%s) AND (%s)", strings.Join(lowerCondition, " OR "), strings.Join(upperCondition, " OR ")), append(lowerArgs, upperArgs...)
 }
 
+func (c *ChunkRange) addBound(bound *Bound) {
+	c.Bounds = append(c.Bounds, bound)
+	c.columnOffset[bound.Column] = len(c.Bounds) - 1
+}
+
+func (c *ChunkRange) updateColumnOffset() {
+	c.columnOffset = make(map[string]int)
+	for i, bound := range c.Bounds {
+		c.columnOffset[bound.Column] = i
+	}
+}
+
 func (c *ChunkRange) update(column, lower, upper string) {
-	for i, b := range c.Bounds {
-		if b.Column == column {
-			// update the bound
-			if len(lower) > 0 {
-				c.Bounds[i].Lower = lower
-			}
-			if len(upper) > 0 {
-				c.Bounds[i].Upper = upper
-			}
-			return
+	if offset, ok := c.columnOffset[column]; ok {
+		// update the bound
+		if len(lower) > 0 {
+			c.Bounds[offset].Lower = lower
+		}
+		if len(upper) > 0 {
+			c.Bounds[offset].Upper = upper
 		}
 	}
 
 	// add a new bound
-	c.Bounds = append(c.Bounds, &Bound{
+	c.addBound(&Bound{
 		Column: column,
 		Lower:  lower,
 		Upper:  upper,
@@ -170,7 +181,7 @@ func (c *ChunkRange) copy() *ChunkRange {
 		Bounds: make([]*Bound, 0, len(c.Bounds)),
 	}
 	for _, bound := range c.Bounds {
-		newChunk.Bounds = append(newChunk.Bounds, &Bound{
+		newChunk.addBound(&Bound{
 			Column: bound.Column,
 			Lower:  bound.Lower,
 			Upper:  bound.Upper,
