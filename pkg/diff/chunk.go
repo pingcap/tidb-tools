@@ -239,7 +239,7 @@ func splitRangeByRandom(db *sql.DB, chunk *ChunkRange, count int, schema string,
 		log.Debug("get split values by random", zap.Stringer("chunk", chunk), zap.String("column", column.Name.O), zap.Reflect("random values", randomValues[i]))
 	}
 
-	for i := 0; i <= len(randomValues[0]); i++ {
+	for i := 0; i <= minLenInSlices(randomValues); i++ {
 		newChunk := chunk.copy()
 
 		for j, column := range columns {
