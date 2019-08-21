@@ -331,7 +331,7 @@ func (s *bucketSpliter) getChunksByBuckets() (chunks []*ChunkRange, err error) {
 
 			if i == len(buckets) {
 				chunks = append(chunks, chunk)
-				continue
+				break
 			}
 
 			count := (buckets[i].Count - latestCount) / int64(s.chunkSize)
