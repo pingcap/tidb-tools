@@ -62,9 +62,10 @@ func (s *testCheckpointSuite) testInitAndGetSummary(c *C, db *sql.DB) {
 
 func (s *testCheckpointSuite) testSaveAndLoadChunk(c *C, db *sql.DB) {
 	chunk := &ChunkRange{
-		ID:     1,
-		Bounds: []*Bound{{Column: "a", Lower: "1"}},
-		State:  successState,
+		ID:           1,
+		Bounds:       []*Bound{{Column: "a", Lower: "1"}},
+		State:        successState,
+		columnOffset: map[string]int{"a": 0},
 	}
 
 	err := saveChunk(context.Background(), db, chunk.ID, "target", "test", "checkpoint", "", chunk)
@@ -72,6 +73,7 @@ func (s *testCheckpointSuite) testSaveAndLoadChunk(c *C, db *sql.DB) {
 
 	newChunk, err := getChunk(context.Background(), db, "target", "test", "checkpoint", chunk.ID)
 	c.Assert(err, IsNil)
+	newChunk.updateColumnOffset()
 	c.Assert(newChunk, DeepEquals, chunk)
 
 	chunks, err := loadChunks(context.Background(), db, "target", "test", "checkpoint")
