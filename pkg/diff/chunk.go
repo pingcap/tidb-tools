@@ -63,7 +63,8 @@ type ChunkRange struct {
 // NewChunkRange return a ChunkRange.
 func NewChunkRange() *ChunkRange {
 	return &ChunkRange{
-		Bounds: make([]*Bound, 0, 2),
+		Bounds:       make([]*Bound, 0, 2),
+		columnOffset: make(map[string]int),
 	}
 }
 
@@ -166,6 +167,8 @@ func (c *ChunkRange) update(column, lower, upper string) {
 		if len(upper) > 0 {
 			c.Bounds[offset].Upper = upper
 		}
+
+		return
 	}
 
 	// add a new bound
@@ -177,9 +180,7 @@ func (c *ChunkRange) update(column, lower, upper string) {
 }
 
 func (c *ChunkRange) copy() *ChunkRange {
-	newChunk := &ChunkRange{
-		Bounds: make([]*Bound, 0, len(c.Bounds)),
-	}
+	newChunk := NewChunkRange()
 	for _, bound := range c.Bounds {
 		newChunk.addBound(&Bound{
 			Column: bound.Column,
