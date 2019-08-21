@@ -117,6 +117,13 @@ func (s *testUtilSuite) TestMinLenInSlices(c *C) {
 		}, {
 			[][]string{},
 			0,
+		}, {
+			[][]string{
+				{"1", "2"},
+				{},
+				{"1", "2", "3"},
+			},
+			0,
 		},
 	}
 

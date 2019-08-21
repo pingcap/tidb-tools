@@ -140,8 +140,8 @@ func stringSliceToInterfaceSlice(sli []string) []interface{} {
 
 func minLenInSlices(slices [][]string) int {
 	min := 0
-	for _, slice := range slices {
-		if min == 0 || len(slice) < min {
+	for i, slice := range slices {
+		if i == 0 || len(slice) < min {
 			min = len(slice)
 		}
 	}
