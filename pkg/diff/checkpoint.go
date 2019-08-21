@@ -128,6 +128,7 @@ func loadChunks(ctx context.Context, db *sql.DB, instanceID, schema, table strin
 		if err != nil {
 			return nil, err
 		}
+		chunk.updateColumnOffset()
 		chunks = append(chunks, chunk)
 	}
 

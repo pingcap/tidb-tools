@@ -57,7 +57,7 @@ type ChunkRange struct {
 
 	State string `json:"state"`
 
-	columnOffset map[string]int `json:"-"`
+	columnOffset map[string]int
 }
 
 // NewChunkRange return a ChunkRange.
