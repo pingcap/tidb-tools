@@ -45,6 +45,9 @@ type Bound struct {
 	Column string `json:"column"`
 	Lower  string `json:"lower"`
 	Upper  string `json:"upper"`
+
+	HasLower bool `json:"has-lower"`
+	HasUpper bool `json:"has-upper"`
 }
 
 // ChunkRange represents chunk range
@@ -106,7 +109,7 @@ func (c *ChunkRange) toString(collation string) (string, []string) {
 			upperSymbol = lte
 		}
 
-		if len(bound.Lower) > 0 {
+		if bound.HasLower {
 			if len(preConditionForLower) > 0 {
 				lowerCondition = append(lowerCondition, fmt.Sprintf("(%s AND `%s`%s %s ?)", strings.Join(preConditionForLower, " AND "), bound.Column, collation, lowerSymbol))
 				lowerArgs = append(append(lowerArgs, preConditionArgsForLower...), bound.Lower)
@@ -118,7 +121,7 @@ func (c *ChunkRange) toString(collation string) (string, []string) {
 			preConditionArgsForLower = append(preConditionArgsForLower, bound.Lower)
 		}
 
-		if len(bound.Upper) > 0 {
+		if bound.HasUpper {
 			if len(preConditionForUpper) > 0 {
 				upperCondition = append(upperCondition, fmt.Sprintf("(%s AND `%s`%s %s ?)", strings.Join(preConditionForUpper, " AND "), bound.Column, collation, upperSymbol))
 				upperArgs = append(append(upperArgs, preConditionArgsForUpper...), bound.Upper)
@@ -158,14 +161,16 @@ func (c *ChunkRange) updateColumnOffset() {
 	}
 }
 
-func (c *ChunkRange) update(column, lower, upper string) {
+func (c *ChunkRange) update(column, lower, upper string, updateLower, updateUpper bool) {
 	if offset, ok := c.columnOffset[column]; ok {
 		// update the bound
-		if len(lower) > 0 {
+		if updateLower {
 			c.Bounds[offset].Lower = lower
+			c.Bounds[offset].HasLower = true
 		}
-		if len(upper) > 0 {
+		if updateUpper {
 			c.Bounds[offset].Upper = upper
+			c.Bounds[offset].HasUpper = true
 		}
 
 		return
@@ -173,9 +178,11 @@ func (c *ChunkRange) update(column, lower, upper string) {
 
 	// add a new bound
 	c.addBound(&Bound{
-		Column: column,
-		Lower:  lower,
-		Upper:  upper,
+		Column:   column,
+		Lower:    lower,
+		Upper:    upper,
+		HasLower: updateLower,
+		HasUpper: updateUpper,
 	})
 }
 
@@ -183,18 +190,20 @@ func (c *ChunkRange) copy() *ChunkRange {
 	newChunk := NewChunkRange()
 	for _, bound := range c.Bounds {
 		newChunk.addBound(&Bound{
-			Column: bound.Column,
-			Lower:  bound.Lower,
-			Upper:  bound.Upper,
+			Column:   bound.Column,
+			Lower:    bound.Lower,
+			Upper:    bound.Upper,
+			HasLower: bound.HasLower,
+			HasUpper: bound.HasUpper,
 		})
 	}
 
 	return newChunk
 }
 
-func (c *ChunkRange) copyAndUpdate(column, lower, upper string) *ChunkRange {
+func (c *ChunkRange) copyAndUpdate(column, lower, upper string, updateLower, updateUpper bool) *ChunkRange {
 	newChunk := c.copy()
-	newChunk.update(column, lower, upper)
+	newChunk.update(column, lower, upper, updateLower, updateUpper)
 	return newChunk
 }
 
@@ -256,11 +265,11 @@ func splitRangeByRandom(db *sql.DB, chunk *ChunkRange, count int, schema string,
 
 		for j, column := range columns {
 			if i == 0 {
-				newChunk.update(column.Name.O, "", randomValues[j][i])
+				newChunk.update(column.Name.O, "", randomValues[j][i], false, true)
 			} else if i == len(randomValues[0]) {
-				newChunk.update(column.Name.O, randomValues[j][i-1], "")
+				newChunk.update(column.Name.O, randomValues[j][i-1], "", true, false)
 			} else {
-				newChunk.update(column.Name.O, randomValues[j][i-1], randomValues[j][i])
+				newChunk.update(column.Name.O, randomValues[j][i-1], randomValues[j][i], true, true)
 			}
 		}
 		chunks = append(chunks, newChunk)
@@ -324,10 +333,10 @@ func (s *bucketSpliter) getChunksByBuckets() (chunks []*ChunkRange, err error) {
 			chunk := NewChunkRange()
 			for j, column := range indexColumns {
 				if i == 0 {
-					chunk.update(column.Name.O, "", upperValues[j])
+					chunk.update(column.Name.O, "", upperValues[j], false, true)
 				} else if i == len(buckets) {
 					if len(lowerValues) > 0 {
-						chunk.update(column.Name.O, lowerValues[j], "")
+						chunk.update(column.Name.O, lowerValues[j], "", true, false)
 					}
 				} else {
 					var lowerValue, upperValue string
@@ -337,7 +346,7 @@ func (s *bucketSpliter) getChunksByBuckets() (chunks []*ChunkRange, err error) {
 					if len(upperValues) > 0 {
 						upperValue = upperValues[j]
 					}
-					chunk.update(column.Name.O, lowerValue, upperValue)
+					chunk.update(column.Name.O, lowerValue, upperValue, len(lowerValues) > 0, len(upperValues) > 0)
 				}
 			}
 

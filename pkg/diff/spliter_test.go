@@ -44,7 +44,7 @@ func (s *testSpliterSuite) TestSplitRangeByRandom(c *C) {
 		{
 			"create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))",
 			3,
-			NewChunkRange().copyAndUpdate("a", "0", "10").copyAndUpdate("b", "a", "z"),
+			NewChunkRange().copyAndUpdate("a", "0", "10", true, true).copyAndUpdate("b", "a", "z", true, true),
 			[][]interface{}{
 				{5, 7},
 				{"g", "n"},
@@ -64,7 +64,7 @@ func (s *testSpliterSuite) TestSplitRangeByRandom(c *C) {
 		}, {
 			"create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`b`))",
 			3,
-			NewChunkRange().copyAndUpdate("b", "a", "z"),
+			NewChunkRange().copyAndUpdate("b", "a", "z", true, true),
 			[][]interface{}{
 				{"g", "n"},
 			},

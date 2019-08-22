@@ -102,13 +102,17 @@ func (*testChunkSuite) TestChunkUpdate(c *C) {
 	chunk := &ChunkRange{
 		Bounds: []*Bound{
 			{
-				Column: "a",
-				Lower:  "1",
-				Upper:  "2",
+				Column:   "a",
+				Lower:    "1",
+				Upper:    "2",
+				HasLower: true,
+				HasUpper: true,
 			}, {
-				Column: "b",
-				Lower:  "3",
-				Upper:  "4",
+				Column:   "b",
+				Lower:    "3",
+				Upper:    "4",
+				HasLower: true,
+				HasUpper: true,
 			},
 		},
 	}
@@ -134,7 +138,7 @@ func (*testChunkSuite) TestChunkUpdate(c *C) {
 	}
 
 	for _, cs := range testCases {
-		newChunk := chunk.copyAndUpdate(cs.boundArgs[0], cs.boundArgs[1], cs.boundArgs[2])
+		newChunk := chunk.copyAndUpdate(cs.boundArgs[0], cs.boundArgs[1], cs.boundArgs[2], true, true)
 		conditions, args := newChunk.toString("")
 		c.Assert(conditions, Equals, cs.expectStr)
 		c.Assert(args, DeepEquals, cs.expectArgs)
@@ -151,17 +155,23 @@ func (*testChunkSuite) TestChunkToString(c *C) {
 	chunk := &ChunkRange{
 		Bounds: []*Bound{
 			{
-				Column: "a",
-				Lower:  "1",
-				Upper:  "2",
+				Column:   "a",
+				Lower:    "1",
+				Upper:    "2",
+				HasLower: true,
+				HasUpper: true,
 			}, {
-				Column: "b",
-				Lower:  "3",
-				Upper:  "4",
+				Column:   "b",
+				Lower:    "3",
+				Upper:    "4",
+				HasLower: true,
+				HasUpper: true,
 			}, {
-				Column: "c",
-				Lower:  "5",
-				Upper:  "6",
+				Column:   "c",
+				Lower:    "5",
+				Upper:    "6",
+				HasLower: true,
+				HasUpper: true,
 			},
 		},
 	}
