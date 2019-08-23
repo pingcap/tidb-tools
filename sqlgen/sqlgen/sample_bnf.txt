@@ -3,4 +3,4 @@ start: a
 
 a: 'A'
 
-b: 'B'
+b: 'B' | 'C'

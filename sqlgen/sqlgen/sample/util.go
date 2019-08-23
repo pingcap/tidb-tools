@@ -119,7 +119,7 @@ func splitBranches(fns []Fn) [][]Fn {
 func findProductionAndUnwrap(name string, prodMap map[string]*Production) *Production {
 	ret, ok := prodMap[name]
 	if !ok {
-		log.Fatalf("Production '%s' not found", name)
+		return nil
 	}
 	return ret
 }
@@ -153,3 +153,4 @@ func Str(str string) Result {
 }
 
 var Or = Fn{isBranchTag: true}
+

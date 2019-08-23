@@ -15,8 +15,17 @@ func TestParser(t *testing.T) {
 | alter_procedure_stmt
 | alter_resource_group_stmt`
 	prod, _, _ := parser.Parse(bnf)
-	if fmt.Sprintf("%v", prod) != `&{simple_statement 3 [{[ test  alter_database_stmt] 5} {[ alter_event_stmt] 0} {[ alter_function_stmt] 0} {[ alter_instance_stmt] 2} {[ alter_logfile_stmt] 0} {[ alter_procedure_stmt] 0} {[ alter_resource_group_stmt] 0}]}` {
-		t.Fail()
+	expect := `simple_statement [3]: alter_database_stmt test
+| alter_event_stmt
+| alter_function_stmt
+| alter_instance_stmt
+| alter_logfile_stmt
+| alter_procedure_stmt
+| alter_resource_group_stmt
+`
+	res := fmt.Sprintf("%v", prod)
+	if res != expect {
+		t.Errorf("expect \n%s\n, but get \n%s\n", expect, res)
 	}
 }
 
