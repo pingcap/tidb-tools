@@ -41,3 +41,35 @@ func isBranch(fn Function) bool {
 }
 
 var Or = OrType{}
+
+type Branch struct {
+	fns          [][]Function
+	randomFactor []int
+}
+
+func Br(fns ...Function) *Branch {
+	brs := splitBranches(fns)
+	brsLen := len(brs)
+	rfs := make([]int, brsLen)
+	for i := 0; i < brsLen; i++ {
+		rfs[i] = 1
+	}
+	return &Branch{
+		fns:          brs,
+		randomFactor: rfs,
+	}
+}
+
+func (b *Branch) RandomFactor(factor ...int) *Branch {
+	if len(factor) != len(b.randomFactor) {
+		log.Fatalf("Incorrect random factor length in {%v}. Branches number: %d, random factor number: %d", b.fns, len(b.randomFactor), len(factor))
+	}
+	for i, _ := range b.randomFactor {
+		b.randomFactor[i] = factor[i]
+	}
+	return b
+}
+
+func (b *Branch) Eval() Result {
+	return randomBranch(b.fns, b.randomFactor)
+}

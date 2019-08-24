@@ -6,17 +6,11 @@ import (
 	"strings"
 )
 
-func Random(symbols ...Function) Result {
-	branches := splitBranches(symbols)
-	return randomBranch(branches)
-}
-
-func randomBranch(branches [][]Function) Result {
-	branchNum := len(branches)
-	if branchNum <= 0 {
+func randomBranch(branches [][]Function, randomFactors []int) Result {
+	if len(branches) <= 0 {
 		return Result{Tp: Invalid}
 	}
-	chosenBranchNum := rand.Intn(branchNum)
+	chosenBranchNum := randomSelectByFactor(randomFactors)
 	chosenBranch := branches[chosenBranchNum]
 
 	var doneF []Function
@@ -35,12 +29,25 @@ func randomBranch(branches [][]Function) Result {
 				df.Cancel()
 			}
 			branches[chosenBranchNum], branches[0] = branches[0], branches[chosenBranchNum]
-			return randomBranch(branches[1:])
+			randomFactors[chosenBranchNum], randomFactors[0] = randomFactors[0], randomFactors[chosenBranchNum]
+			return randomBranch(branches[1:], randomFactors[1:])
 		default:
 			log.Fatalf("Unsupported result type '%v'", res.Tp)
 		}
 	}
 	return Str(resStr.String())
+}
+
+func randomSelectByFactor(factors []int) int {
+	num := rand.Intn(len(factors))
+	acc := 0
+	for i, f := range factors {
+		acc += f
+		if acc > num {
+			return i
+		}
+	}
+	return len(factors) - 1
 }
 
 func splitBranches(fns []Function) [][]Function {

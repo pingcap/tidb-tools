@@ -159,8 +159,9 @@ const templateR = `
 	%s = Fn{
 		name: "%s",
 		f: func() Result {
-			return Random(%s
-			)
+			return Br(
+				%s
+			).Eval()
 		},
 	}
 `

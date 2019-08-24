@@ -31,27 +31,30 @@ func generate() func() string {
 	start = Fn{
 		name: "start",
 		f: func() Result {
-			return Random(A, Or, 
+			return Br(
+				A, Or, 
 				B, 
-			)
+			).Eval()
 		},
 	}
 
 	A = Fn{
 		name: "A",
 		f: func() Result {
-			return Random(Const("a"), Or, 
+			return Br(
+				Const("a"), Or, 
 				Const("a"), B, 
-			)
+			).RandomFactor(1, 0).Eval()
 		},
 	}
 
 	B = Fn{
 		name: "B",
 		f: func() Result {
-			return Random(Const("b"), Or, 
+			return Br(
+				Const("b"), Or, 
 				A, 
-			)
+			).Eval()
 		},
 	}
 

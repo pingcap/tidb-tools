@@ -3,14 +3,3 @@ start: A | B
 A: 'a' | 'a' B 
 
 B: 'b' | A 
-
-a
-a
-a a
-a
-a
-a a
-a
-a a b
-a a
-a

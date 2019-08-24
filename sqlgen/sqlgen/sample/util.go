@@ -5,7 +5,7 @@ import (
 )
 
 var counter = map[string]int{}
-const maxLoopback = 4
+const maxLoopback = 2
 
 type Fn struct {
 	name string
