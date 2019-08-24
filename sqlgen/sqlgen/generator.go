@@ -295,7 +295,7 @@ const templateS = `
 	%s = Fn{
 		name: "%s",
 		f: func() Result {
-			return Str(%s)
+			return Str("%s")
 		},
 	}
 `
@@ -347,7 +347,7 @@ func trimmedStrs(origin []string) []string {
 	ret := make([]string, len(origin))
 	for i, s := range origin {
 		if lit, ok := literal(s); ok {
-			ret[i] = fmt.Sprintf("\"%s\"", lit)
+			ret[i] = lit
 		}
 	}
 	return ret

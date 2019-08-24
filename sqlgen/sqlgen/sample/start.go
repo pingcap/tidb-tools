@@ -28,8 +28,8 @@ func generate() func() string {
 	start = Fn{
 		name: "start",
 		f: func() Result {
-			return random(a, Or, 
-				b, 
+			return random(a, b, Or, 
+				b, a, 
 			)
 		},
 	}
@@ -37,16 +37,14 @@ func generate() func() string {
 	a = Fn{
 		name: "a",
 		f: func() Result {
-			return Str("A")
+			return Str("A A")
 		},
 	}
 
 	b = Fn{
 		name: "b",
 		f: func() Result {
-			return random(constFn("B"), Or, 
-				constFn("C"), 
-			)
+			return Str("B")
 		},
 	}
 
