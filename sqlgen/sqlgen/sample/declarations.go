@@ -1,5 +1,5 @@
 package sample
 
+var A Fn
+var B Fn
 var start Fn
-var a Fn
-var b Fn

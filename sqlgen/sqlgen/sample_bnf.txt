@@ -1,6 +1,16 @@
-start: a b
-| b a
+start: A | B
 
-a: 'A' 'A'
+A: 'a' | 'a' B 
 
-b: 'B'
+B: 'b' | A 
+
+a
+a
+a a
+a
+a
+a a
+a
+a a b
+a a
+a

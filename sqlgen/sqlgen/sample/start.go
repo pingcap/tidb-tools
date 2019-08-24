@@ -1,14 +1,18 @@
 package sample
 
 import (
-	. "github.com/pingcap/tidb-tools/sqlgen/sqlgen"
 	"log"
+	"math/rand"
+	"time"
+
+	. "github.com/pingcap/tidb-tools/sqlgen/sqlgen"
 )
 
+// Generate is used to generate a string according to bnf grammar.
 var Generate = generate()
 
 func generate() func() string {
-	initState("/home/tangenta/go/src/github.com/pingcap/tidb-tools/sqlgen/sqlgen/sample_bnf.txt", "start")
+	rand.Seed(time.Now().UnixNano())
 	retFn := func() string {
 		res := start.f()
 		switch res.Tp {
@@ -17,36 +21,40 @@ func generate() func() string {
 		case Invalid:
 			log.Println("Invalid SQL")
 			return ""
-		case NonExist:
-			log.Fatalf("Production '%s' not found", start.name)
 		default:
 			log.Fatalf("Unsupported result type '%v'", res.Tp)
 		}
 		return "impossible to reach"
 	}
 
+	
 	start = Fn{
 		name: "start",
 		f: func() Result {
-			return random(a, b, Or, 
-				b, a, 
+			return Random(A, Or, 
+				B, 
 			)
 		},
 	}
 
-	a = Fn{
-		name: "a",
+	A = Fn{
+		name: "A",
 		f: func() Result {
-			return Str("A A")
+			return Random(Const("a"), Or, 
+				Const("a"), B, 
+			)
 		},
 	}
 
-	b = Fn{
-		name: "b",
+	B = Fn{
+		name: "B",
 		f: func() Result {
-			return Str("B")
+			return Random(Const("b"), Or, 
+				A, 
+			)
 		},
 	}
+
 
 	return retFn
 }

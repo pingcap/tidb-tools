@@ -9,257 +9,90 @@ import (
 	"strings"
 )
 
+// BuildLib is used to build a random generator library.
 func BuildLib(yaccFilePath, prodName, packageName, outputFilePath string) {
-	yaccFilePath = explicitPath(yaccFilePath)
-	outputFilePath = explicitPath(outputFilePath)
+	yaccFilePath = absolute(yaccFilePath)
+	outputFilePath = absolute(filepath.Join(outputFilePath, packageName))
 	prods, err := ParseYacc(yaccFilePath)
 	if err != nil {
 		log.Fatal(err)
 	}
 	prodMap := BuildProdMap(prods)
 
+	Must(os.Mkdir(outputFilePath, 0755))
 	Must(os.Chdir(outputFilePath))
-	Must(os.Mkdir(packageName, 0755))
-	Must(os.Chdir(packageName))
-	oFile, err := os.OpenFile(prodName + ".go", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer func() { _ = oFile.Close() }()
-	writer := bufio.NewWriter(oFile)
 
-	MustWrite(writer, packageDirective())
-	MustWrite(writer, importDirective)
-
-	MustWrite(writer, generateDirective)
-	MustWrite(writer, fmt.Sprintf("\nfunc generate() func() string {"))
-	MustWrite(writer, pubInterface(yaccFilePath, prodName))
-
-	visitor := func(p *Production) {
-		MustWrite(writer, convertProdToCode(p))
-	}
-	allProds, err := breadthFirstSearch(prodName, prodMap, visitor)
-	if err != nil {
-		log.Fatal(err)
-	}
-	MustWrite(writer, "\n\treturn retFn\n}\n")
-
-	utilFile, err := os.OpenFile("util.go", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer func() { _ = utilFile.Close() }()
-	Must(writer.Flush())
-	writer = bufio.NewWriter(utilFile)
-	MustWrite(writer, packageDirective())
-	MustWrite(writer, utilSnippet)
-
-	declareFile, err := os.OpenFile("declarations.go", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer func() { _ = declareFile.Close() }()
-	Must(writer.Flush())
-	writer = bufio.NewWriter(declareFile)
-	MustWrite(writer, packageDirective())
-	MustWrite(writer, "\n")
-	for p := range allProds {
-		p = convertHead(p)
-		MustWrite(writer, convertNameToDeclaration(p))
-	}
-
-	testFile, err := os.OpenFile(packageName + "_test.go", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer func() { _ = testFile.Close() }()
-	Must(writer.Flush())
-	writer = bufio.NewWriter(testFile)
-	MustWrite(writer, packageDirective())
-	MustWrite(writer, testSnippet)
-	Must(writer.Flush())
+	allProds := writeGenerate(prodName, prodMap, packageName)
+	writeUtil(packageName)
+	writeDeclarations(allProds, packageName)
+	writeTest(packageName)
 }
 
-func packageDirective() string {
-	dir, err := os.Getwd()
-	if err != nil {
-		log.Fatal("Cannot get working directory")
-	}
-	dirs := strings.Split(dir, "/")
-	packageName := dirs[len(dirs)-1]
-	return fmt.Sprintf("package %s\n", packageName)
+func writeGenerate(prodName string, prodMap map[string]*Production, packageName string) map[string]struct{} {
+	var allProds map[string]struct{}
+	openAndWrite(prodName+".go", packageName, func(w *bufio.Writer) {
+		var sb strings.Builder
+		visitor := func(p *Production) {
+			sb.WriteString(convertProdToCode(p))
+		}
+		ps, err := breadthFirstSearch(prodName, prodMap, visitor)
+		allProds = ps
+		if err != nil {
+			log.Fatal(err)
+		}
+		MustWrite(w, fmt.Sprintf(templateMain, prodName, sb.String()))
+	})
+	return allProds
 }
 
-const importDirective = `
-import (
-	. "github.com/pingcap/tidb-tools/sqlgen/sqlgen"
-	"log"
-)
-`
+func writeUtil(packageName string) {
+	openAndWrite("util.go", packageName, func(w *bufio.Writer) {
+		MustWrite(w, utilSnippet)
+	})
+}
 
-const generateDirective = `
-var Generate = generate()
-`
+func writeDeclarations(allProds map[string]struct{}, packageName string) {
+	openAndWrite("declarations.go", packageName, func(w *bufio.Writer) {
+		MustWrite(w, "\n")
+		for p := range allProds {
+			p = convertHead(p)
+			MustWrite(w, fmt.Sprintf("var %s Fn\n", p))
+		}
+	})
+}
 
-const utilSnippet = `
+func writeTest(packageName string) {
+	openAndWrite(packageName+"_test.go", packageName, func(w *bufio.Writer) {
+		MustWrite(w, testSnippet)
+	})
+}
+
+func openAndWrite(path string, pkgName string, doWrite func(*bufio.Writer)) {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() { _ = file.Close() }()
+	writer := bufio.NewWriter(file)
+	MustWrite(writer, fmt.Sprintf("package %s\n", pkgName))
+	doWrite(writer)
+	writer.Flush()
+}
+
+const templateMain = `
 import (
-	. "github.com/pingcap/tidb-tools/sqlgen/sqlgen"
 	"log"
 	"math/rand"
-	"strings"
 	"time"
+
+	. "github.com/pingcap/tidb-tools/sqlgen/sqlgen"
 )
 
-var state = State{
-	Choices:           nil,
-	Counter:           map[string]int{},
-	TotalCounter:      map[string]int{},
-	CurrentProduction: nil,
+// Generate is used to generate a string according to bnf grammar.
+var Generate = generate()
 
-	ProductionMap:       nil,
-	BeginProductionName: "",
-	IsInitialize:        false,
-}
-
-// Fn is able to manipulate global state, simulating calling stack.
-type Fn struct {
-	name        string
-	f           func() Result
-	isBranchTag bool // Mark for splitter '|'.
-}
-
-func (fn *Fn) callWithLoc(branchNum, SeqNum int) Result {
-	state.EnsureInitialized()
-	if fn.isBranchTag {
-		log.Fatal("Cannot call on Branch tag")
-	}
-
-	choice := Choice{Branch: branchNum, SeqNum: SeqNum}
-	state.Choices = append(state.Choices, choice)
-
-	fnName := fn.name
-	// Before calling function.
-	state.Counter[fnName] += 1
-	state.TotalCounter[fnName] += 1
-	state.CurrentProduction = findProductionAndUnwrap(fnName, state.ProductionMap)
-
-	ret := fn.f()
-	// After calling function.
-	parent := state.Parent()
-	state.Choices = state.Choices[:len(state.Choices)-1]
-	state.Counter[fnName] -= 1
-	state.CurrentProduction = parent
-	return ret
-}
-
-func (fn *Fn) discard() {
-	state.EnsureInitialized()
-
-	fnName := fn.name
-	state.Counter[fnName] -= 1
-	state.TotalCounter[fnName] -= 1
-}
-
-// ----- utilities ------
-
-func random(symbols ...Fn) Result {
-	branches := splitBranches(symbols)
-	return randomBranch(branches)
-}
-
-func randomBranch(branches [][]Fn) Result {
-	branchNum := len(branches)
-	if branchNum <= 0 {
-		return Result{Tp: Invalid}
-	}
-	chosenBranchNum := rand.Intn(branchNum)
-	chosenBranch := branches[chosenBranchNum]
-
-	var doneF []Fn
-	var resStr strings.Builder
-	for i, f := range chosenBranch {
-		res := f.callWithLoc(chosenBranchNum, i)
-		switch res.Tp {
-		case PlainString:
-			doneF = append(doneF, f)
-			if i != 0 {
-				resStr.WriteString(" ")
-			}
-			resStr.WriteString(res.Value)
-		case NonExist:
-			log.Fatalf("Production '%s' not found", f.name)
-		case Invalid:
-			for _, df := range doneF {
-				df.discard()
-			}
-			branches[chosenBranchNum], branches[0] = branches[0], branches[chosenBranchNum]
-			return randomBranch(branches[1:])
-		default:
-			log.Fatalf("Unsupported result type '%v'", res.Tp)
-		}
-	}
-	return Str(resStr.String())
-}
-
-func splitBranches(fns []Fn) [][]Fn {
-	var ret [][]Fn
-	var Branch []Fn
-	for _, f := range append(fns, Or) {
-		if f.isBranchTag {
-			if len(Branch) == 0 {
-				log.Fatal("Empty Branch is impossible to split")
-			}
-			ret = append(ret, Branch)
-			Branch = nil
-		} else {
-			Branch = append(Branch, f)
-		}
-	}
-	return ret
-}
-
-func findProductionAndUnwrap(name string, prodMap map[string]*Production) *Production {
-	ret, ok := prodMap[name]
-	if !ok {
-		return nil
-	}
-	return ret
-}
-
-func initState(bnfFileName string, beginProdName string) {
-	prods, err := ParseYacc(bnfFileName)
-	if err != nil {
-		log.Fatal(err)
-	}
-	prodMap := BuildProdMap(prods)
-	beginProd, ok := prodMap[beginProdName]
-	if !ok {
-		log.Fatalf("Begin production name '%s' not found", beginProdName)
-	}
-
-	state.ProductionMap = prodMap
-	state.CurrentProduction = beginProd
-	state.BeginProductionName = beginProdName
+func generate() func() string {
 	rand.Seed(time.Now().UnixNano())
-	state.IsInitialize = true
-}
-
-func constFn(str string) Fn {
-	return Fn{name: str, f: func() Result {
-		return Result{Tp: PlainString, Value: str}
-	}}
-}
-
-func Str(str string) Result {
-	return Result{Tp: PlainString, Value: str}
-}
-
-var Or = Fn{isBranchTag: true}
-
-`
-
-const templateDriver = `
-	initState("%s", "%s")
 	retFn := func() string {
 		res := %s.f()
 		switch res.Tp {
@@ -268,24 +101,65 @@ const templateDriver = `
 		case Invalid:
 			log.Println("Invalid SQL")
 			return ""
-		case NonExist:
-			log.Fatalf("Production '%%s' not found", %s.name)
 		default:
 			log.Fatalf("Unsupported result type '%%v'", res.Tp)
 		}
 		return "impossible to reach"
 	}
+
+	%s
+
+	return retFn
+}
 `
 
-func pubInterface(yaccFilePath, prodName string) string {
-	return fmt.Sprintf(templateDriver, yaccFilePath, prodName, prodName, prodName)
+const utilSnippet = `
+import (
+	. "github.com/pingcap/tidb-tools/sqlgen/sqlgen"
+)
+
+var counter = map[string]int{}
+const maxLoopback = 2
+
+type Fn struct {
+	name string
+	f    func() Result
 }
+
+func (fn Fn) Name() string {
+	return fn.name
+}
+
+func (fn Fn) Call() Result {
+	fnName := fn.name
+	// Before calling function.
+	counter[fnName]++
+	if counter[fnName] > maxLoopback {
+		return Result{Tp: Invalid}
+	}
+
+	ret := fn.f()
+	// After calling function.
+	counter[fnName]--
+	return ret
+}
+
+func (fn Fn) Cancel() {
+	counter[fn.name]--
+}
+
+func Const(str string) Fn {
+	return Fn{name: str, f: func() Result {
+		return Result{Tp: PlainString, Value: str}
+	}}
+}
+`
 
 const templateR = `
 	%s = Fn{
 		name: "%s",
 		f: func() Result {
-			return random(%s
+			return Random(%s
 			)
 		},
 	}
@@ -322,7 +196,7 @@ func convertProdToCode(p *Production) string {
 	for i, body := range p.bodyList {
 		for _, s := range body.seq {
 			if isLit, ok := literal(s); ok {
-				s = fmt.Sprintf("constFn(\"%s\")", isLit)
+				s = fmt.Sprintf("Const(\"%s\")", isLit)
 			} else {
 				s = convertHead(s)
 			}
@@ -335,12 +209,6 @@ func convertProdToCode(p *Production) string {
 	}
 
 	return fmt.Sprintf(templateR, prodHead, p.head, bodyStr.String())
-}
-
-const templateDecl = "var %s Fn\n"
-
-func convertNameToDeclaration(name string) string {
-	return fmt.Sprintf(templateDecl, name)
 }
 
 func trimmedStrs(origin []string) []string {
@@ -360,9 +228,12 @@ func convertHead(str string) string {
 	}
 
 	switch str {
-	case "type": return "utype"
-	case "%empty": return "empty"
-	default: return str
+	case "type":
+		return "utype"
+	case "%empty":
+		return "empty"
+	default:
+		return str
 	}
 }
 
@@ -379,7 +250,7 @@ func Must(err error) {
 	}
 }
 
-func explicitPath(p string) string {
+func absolute(p string) string {
 	abs, err := filepath.Abs(p)
 	if err != nil {
 		log.Fatal(err)
