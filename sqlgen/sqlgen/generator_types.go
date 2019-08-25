@@ -53,41 +53,25 @@ func isBranch(fn Function) bool {
 	return ok
 }
 
-// Or is a instance of OrType.
-var Or = OrType{}
-
-// Branch represents a branch of production.
-type Branch struct {
-	fns          [][]Function
-	randomFactor []int
+func Or(branches ...AndType) Result {
+	var rfs []int
+	for _, b := range branches {
+		rfs = append(rfs, b.randFactor)
+	}
+	return randomBranch(branches, rfs)
 }
 
-// Br is a constructor of Branch.
-func Br(fns ...Function) *Branch {
-	brs := splitBranches(fns)
-	brsLen := len(brs)
-	rfs := make([]int, brsLen)
-	for i := 0; i < brsLen; i++ {
-		rfs[i] = 1
-	}
-	return &Branch{
-		fns:          brs,
-		randomFactor: rfs,
-	}
+func And(item ...Function) AndType {
+	return AndType{item: item, randFactor: 1}
 }
 
-// RandomFactor is used to specifiy the random probability of each branch.
-func (b *Branch) RandomFactor(factor ...int) *Branch {
-	if len(factor) != len(b.randomFactor) {
-		log.Fatalf("Incorrect random factor length in {%v}. Branches number: %d, random factor number: %d", b.fns, len(b.randomFactor), len(factor))
-	}
-	for i := range b.randomFactor {
-		b.randomFactor[i] = factor[i]
-	}
-	return b
+type AndType struct {
+	item []Function
+	randFactor int
 }
 
-// Eval is used to drive the selection of a random branch.
-func (b *Branch) Eval() Result {
-	return randomBranch(b.fns, b.randomFactor)
+func (at AndType) RandomFactor(randomFactor int) AndType {
+	at.randFactor = randomFactor
+	return AndType{at.item, at.randFactor}
 }
+

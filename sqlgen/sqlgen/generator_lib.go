@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func randomBranch(branches [][]Function, randomFactors []int) Result {
+func randomBranch(branches []AndType, randomFactors []int) Result {
 	if len(branches) <= 0 {
 		return Result{Tp: Invalid}
 	}
@@ -15,7 +15,7 @@ func randomBranch(branches [][]Function, randomFactors []int) Result {
 
 	var doneF []Function
 	var resStr strings.Builder
-	for i, f := range chosenBranch {
+	for i, f := range chosenBranch.item {
 		res := f.Call()
 		switch res.Tp {
 		case PlainString:
@@ -39,7 +39,7 @@ func randomBranch(branches [][]Function, randomFactors []int) Result {
 }
 
 func randomSelectByFactor(factors []int) int {
-	num := rand.Intn(len(factors))
+	num := rand.Intn(sum(factors))
 	acc := 0
 	for i, f := range factors {
 		acc += f
@@ -50,19 +50,10 @@ func randomSelectByFactor(factors []int) int {
 	return len(factors) - 1
 }
 
-func splitBranches(fns []Function) [][]Function {
-	var ret [][]Function
-	var Branch []Function
-	for _, f := range append(fns, Or) {
-		if isBranch(f) {
-			if len(Branch) == 0 {
-				log.Fatal("Empty Branch is impossible to split")
-			}
-			ret = append(ret, Branch)
-			Branch = nil
-		} else {
-			Branch = append(Branch, f)
-		}
+func sum(is []int) int {
+	total := 0
+	for _, v := range is {
+		total += v
 	}
-	return ret
+	return total
 }

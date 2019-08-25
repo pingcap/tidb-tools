@@ -164,9 +164,9 @@ const templateR = `
 	%s = Fn{
 		name: "%s",
 		f: func() Result {
-			return Br(
+			return Or(
 				%s
-			).Eval()
+			)
 		},
 	}
 `
@@ -199,15 +199,19 @@ func convertProdToCode(p *Production) string {
 
 	var bodyStr strings.Builder
 	for i, body := range p.bodyList {
-		for _, s := range body.seq {
+		bodyStr.WriteString("And(")
+		for i, s := range body.seq {
 			if isLit, ok := literal(s); ok {
 				s = fmt.Sprintf("Const(\"%s\")", isLit)
 			}
 			bodyStr.WriteString(s)
-			bodyStr.WriteString(", ")
+			if i != len(body.seq) - 1 {
+				bodyStr.WriteString(", ")
+			}
 		}
-		if i != len(p.bodyList)-1 {
-			bodyStr.WriteString("Or, \n\t\t\t\t")
+		bodyStr.WriteString("),")
+		if i != len(p.bodyList) - 1 {
+			bodyStr.WriteString("\n\t\t\t\t")
 		}
 	}
 

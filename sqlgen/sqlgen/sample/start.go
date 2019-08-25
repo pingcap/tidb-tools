@@ -31,31 +31,31 @@ func generate() func() string {
 	start = Fn{
 		name: "start",
 		f: func() Result {
-			return Br(
-				A, Or, 
-				B, Or, 
-				C, 
-			).Eval()
+			return Or(
+				And(A),
+				And(B).RandomFactor(2),
+				And(C),
+			)
 		},
 	}
 
 	A = Fn{
 		name: "A",
 		f: func() Result {
-			return Br(
-				Const("a"), Or, 
-				Const("a"), B, 
-			).Eval()
+			return Or(
+				And(Const("a")),
+				And(Const("a"), B),
+			)
 		},
 	}
 
 	B = Fn{
 		name: "B",
 		f: func() Result {
-			return Br(
-				Const("b"), Or, 
-				A, 
-			).Eval()
+			return Or(
+				And(Const("b")),
+				And(A),
+			)
 		},
 	}
 
