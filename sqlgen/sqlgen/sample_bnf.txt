@@ -1,5 +1,7 @@
-start: A | B
+start: A | B | C
 
 A: 'a' | 'a' B 
 
 B: 'b' | A 
+
+C: 'C'

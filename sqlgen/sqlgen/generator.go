@@ -19,8 +19,8 @@ func BuildLib(yaccFilePath, prodName, packageName, outputFilePath string) {
 	}
 	prodMap := BuildProdMap(prods)
 
-	Must(os.Mkdir(outputFilePath, 0755))
-	Must(os.Chdir(outputFilePath))
+	must(os.Mkdir(outputFilePath, 0755))
+	must(os.Chdir(outputFilePath))
 
 	allProds := writeGenerate(prodName, prodMap, packageName)
 	writeUtil(packageName)
@@ -40,30 +40,30 @@ func writeGenerate(prodName string, prodMap map[string]*Production, packageName 
 		if err != nil {
 			log.Fatal(err)
 		}
-		MustWrite(w, fmt.Sprintf(templateMain, prodName, sb.String()))
+		mustWrite(w, fmt.Sprintf(templateMain, prodName, sb.String()))
 	})
 	return allProds
 }
 
 func writeUtil(packageName string) {
 	openAndWrite("util.go", packageName, func(w *bufio.Writer) {
-		MustWrite(w, utilSnippet)
+		mustWrite(w, utilSnippet)
 	})
 }
 
 func writeDeclarations(allProds map[string]struct{}, packageName string) {
 	openAndWrite("declarations.go", packageName, func(w *bufio.Writer) {
-		MustWrite(w, "\n")
+		mustWrite(w, "\n")
 		for p := range allProds {
 			p = convertHead(p)
-			MustWrite(w, fmt.Sprintf("var %s Fn\n", p))
+			mustWrite(w, fmt.Sprintf("var %s Fn\n", p))
 		}
 	})
 }
 
 func writeTest(packageName string) {
 	openAndWrite(packageName+"_test.go", packageName, func(w *bufio.Writer) {
-		MustWrite(w, testSnippet)
+		mustWrite(w, testSnippet)
 	})
 }
 
@@ -74,9 +74,9 @@ func openAndWrite(path string, pkgName string, doWrite func(*bufio.Writer)) {
 	}
 	defer func() { _ = file.Close() }()
 	writer := bufio.NewWriter(file)
-	MustWrite(writer, fmt.Sprintf("package %s\n", pkgName))
+	mustWrite(writer, fmt.Sprintf("package %s\n", pkgName))
 	doWrite(writer)
-	writer.Flush()
+	must(writer.Flush())
 }
 
 const templateMain = `
@@ -104,7 +104,7 @@ func generate() func() string {
 		default:
 			log.Fatalf("Unsupported result type '%%v'", res.Tp)
 		}
-		return "impossible to reach"
+		panic("impossible to reach")
 	}
 
 	%s
@@ -238,14 +238,14 @@ func convertHead(str string) string {
 	}
 }
 
-func MustWrite(oFile *bufio.Writer, str string) {
+func mustWrite(oFile *bufio.Writer, str string) {
 	_, err := oFile.WriteString(str)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func Must(err error) {
+func must(err error) {
 	if err != nil {
 		log.Fatal(err)
 	}

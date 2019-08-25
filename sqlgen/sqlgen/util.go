@@ -8,6 +8,7 @@ import (
 	"unicode"
 )
 
+// BuildProdMap convert an array of production into a map of production, extracting the name of prodcution as key.
 func BuildProdMap(prods []*Production) map[string]*Production {
 	ret := make(map[string]*Production)
 	for _, v := range prods {
@@ -63,12 +64,13 @@ func breadthFirstSearch(prodName string, prodMap map[string]*Production, visitor
 	return resultSet, nil
 }
 
+// ParseYacc parse the bnf file as an array of Production.
 func ParseYacc(yaccFilePath string) ([]*Production, error) {
 	file, err := os.Open(yaccFilePath)
 	if err != nil {
 		return nil, err
 	}
-	defer func() {_ = file.Close()}()
+	defer func() { _ = file.Close() }()
 
 	prodStrs := splitProdStr(bufio.NewReader(file))
 	return parseProdStr(prodStrs)

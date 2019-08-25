@@ -8,6 +8,7 @@ import (
 	"unicode"
 )
 
+// Production is a representation production in bnf file.
 type Production struct {
 	head     string
 	maxLoop  int
@@ -46,11 +47,13 @@ func writeOptNum(sb *strings.Builder, i int) {
 	sb.WriteString("]")
 }
 
+// Body is a branch production.
 type Body = struct {
 	seq          []string
 	randomFactor int
 }
 
+// BodyList is a list of body.
 type BodyList = []Body
 
 // Scanner implements the yyLexer interface.
@@ -89,22 +92,21 @@ func (s *Scanner) AppendError(err error) {
 	s.errs = append(s.errs, err)
 }
 
-func (s *Scanner) ReadRune() (rune, error) {
+func (s *Scanner) readRune() (rune, error) {
 	if s.curPos >= len(s.s) {
 		return 0, io.EOF
 	}
 	ret := s.s[s.curPos]
-	s.curPos += 1
+	s.curPos++
 	return rune(ret), nil
 }
 
-func (s *Scanner) UnreadRune() error {
+func (s *Scanner) unreadRune() error {
 	if s.curPos > 0 {
-		s.curPos -= 1
+		s.curPos--
 		return nil
-	} else {
-		return io.ErrNoProgress
 	}
+	return io.ErrNoProgress
 }
 
 // Lex returns a token and store the token Value in v.
@@ -118,7 +120,7 @@ func (s *Scanner) Lex(v *yySymType) int {
 	s.startPos = s.curPos
 	// Skip spaces.
 	for {
-		r, err = s.ReadRune()
+		r, err = s.readRune()
 		panicIfNonEOF(err)
 		if err == io.EOF {
 			return 0
@@ -126,7 +128,7 @@ func (s *Scanner) Lex(v *yySymType) int {
 		if !unicode.IsSpace(r) || s.q.isInsideStr() {
 			break
 		}
-		s.startPos += 1
+		s.startPos++
 	}
 
 	// Handle delimiter.
@@ -154,13 +156,13 @@ func (s *Scanner) Lex(v *yySymType) int {
 	// Handle identifier.
 	stringBuf := string(r)
 	for {
-		r, err = s.ReadRune()
+		r, err = s.readRune()
 		panicIfNonEOF(err)
 		if err == io.EOF {
 			break
 		}
 		if (unicode.IsSpace(r) || isDelimiter(r) || isBracket(r)) && !s.q.isInsideStr() {
-			if err := s.UnreadRune(); err != nil {
+			if err := s.unreadRune(); err != nil {
 				panic(fmt.Sprintf("Unable to unread rune: %s.", string(r)))
 			}
 			break
@@ -209,6 +211,7 @@ func NewParser() *Parser {
 	}
 }
 
+// Parse converts a bnf string into a list of Production.
 func (parser *Parser) Parse(bnf string) (result *Production, warns []error, err error) {
 	parser.src = bnf
 	parser.result = nil

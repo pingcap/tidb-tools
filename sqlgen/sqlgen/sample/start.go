@@ -24,7 +24,7 @@ func generate() func() string {
 		default:
 			log.Fatalf("Unsupported result type '%v'", res.Tp)
 		}
-		return "impossible to reach"
+		panic("impossible to reach")
 	}
 
 	
@@ -33,7 +33,8 @@ func generate() func() string {
 		f: func() Result {
 			return Br(
 				A, Or, 
-				B, 
+				B, Or, 
+				C, 
 			).Eval()
 		},
 	}
@@ -44,7 +45,7 @@ func generate() func() string {
 			return Br(
 				Const("a"), Or, 
 				Const("a"), B, 
-			).RandomFactor(1, 0).Eval()
+			).Eval()
 		},
 	}
 
@@ -55,6 +56,13 @@ func generate() func() string {
 				Const("b"), Or, 
 				A, 
 			).Eval()
+		},
+	}
+
+	C = Fn{
+		name: "C",
+		f: func() Result {
+			return Str("C")
 		},
 	}
 
