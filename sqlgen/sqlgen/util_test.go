@@ -57,11 +57,11 @@ func TestParseProdStr(t *testing.T) {
 		
 		D: 'D'`
 	expected := []Production{
-		{head:"start", bodyList: BodyList{body("A"), body("B"), body("C")}},
-		{head:"A", bodyList: BodyList{body("'a'"), body("'a'", "B")}},
-		{head:"B", bodyList: BodyList{body("'b'"), body("A")}},
-		{head:"C", bodyList: BodyList{body("'C'")}},
-		{head:"D", bodyList: BodyList{body("'D'")}},
+		{head: "start", bodyList: BodyList{body("A"), body("B"), body("C")}},
+		{head: "A", bodyList: BodyList{body("'a'"), body("'a'", "B")}},
+		{head: "B", bodyList: BodyList{body("'b'"), body("A")}},
+		{head: "C", bodyList: BodyList{body("'C'")}},
+		{head: "D", bodyList: BodyList{body("'D'")}},
 	}
 	prods, err := parseProdStr(bufio.NewReader(bytes.NewBufferString(bnf)))
 	if err != nil {
