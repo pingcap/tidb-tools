@@ -20,12 +20,23 @@ import (
 )
 
 func TestBreadthFirstSearch(t *testing.T) {
-	p, err := ParseYacc("mysql80_bnf_complete.txt")
+	bnf := `
+		start: A | B | C
+		
+		A: 'a' | 'a' B 
+		
+		B: 'b' | A 
+		
+		C: 'C'
+		
+		D: 'D'`
+	p, err := parseProdStr(bufio.NewReader(bytes.NewBufferString(bnf)))
+
 	if err != nil {
 		t.Error(err)
 	}
 	prodMap := BuildProdMap(p)
-	rs, err := breadthFirstSearch("create_table_stmt", prodMap)
+	rs, err := breadthFirstSearch("start", prodMap)
 	if err != nil {
 		t.Error(err)
 	}
@@ -34,12 +45,56 @@ func TestBreadthFirstSearch(t *testing.T) {
 	}
 }
 
-func TestParseYacc(t *testing.T) {
-	p, err := ParseYacc("mysql80_bnf_complete.txt")
-	if err != nil {
-		t.Errorf("%v %v", p, err)
+func TestParseProdStr(t *testing.T) {
+	bnf := `
+		start: A | B | C
+		
+		A: 'a' | 'a' B 
+		
+		B: 'b' | A 
+		
+		C: 'C'
+		
+		D: 'D'`
+	expected := []Production{
+		{head:"start", bodyList: BodyList{body("A"), body("B"), body("C")}},
+		{head:"A", bodyList: BodyList{body("'a'"), body("'a'", "B")}},
+		{head:"B", bodyList: BodyList{body("'b'"), body("A")}},
+		{head:"C", bodyList: BodyList{body("'C'")}},
+		{head:"D", bodyList: BodyList{body("'D'")}},
 	}
+	prods, err := parseProdStr(bufio.NewReader(bytes.NewBufferString(bnf)))
+	if err != nil {
+		t.Error(err)
+	}
+	if len(expected) != len(prods) {
+		t.Error("The length of parseProdStr result is not expected")
+	}
+	for i, e := range expected {
+		if prods[i].head != e.head || len(prods[i].bodyList) != len(e.bodyList) {
+			for j, b := range e.bodyList {
+				if !equalStrArr(prods[i].bodyList[j].seq, b.seq) {
+					t.Error("Incorrect body seq")
+				}
+			}
+		}
+	}
+}
 
+func body(str ...string) Body {
+	return Body{seq: str}
+}
+
+func equalStrArr(a1, a2 []string) bool {
+	if len(a1) != len(a2) {
+		return false
+	}
+	for i := range a1 {
+		if a1[i] != a2[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func TestProdSplitter(t *testing.T) {

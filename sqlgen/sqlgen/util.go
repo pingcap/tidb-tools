@@ -86,13 +86,14 @@ func ParseYacc(yaccFilePath string) ([]*Production, error) {
 	}
 	defer func() { _ = file.Close() }()
 
-	prodStrs := splitProdStr(bufio.NewReader(file))
-	return parseProdStr(prodStrs)
+	return parseProdStr(bufio.NewReader(file))
 }
 
-func parseProdStr(prodStrs []string) ([]*Production, error) {
+func parseProdStr(prodReader *bufio.Reader) ([]*Production, error) {
 	bnfParser := NewParser()
 	var ret []*Production
+
+	prodStrs := splitProdStr(prodReader)
 	for _, p := range prodStrs {
 		r, _, err := bnfParser.Parse(p)
 		if err != nil {
