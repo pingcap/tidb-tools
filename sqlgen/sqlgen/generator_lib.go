@@ -6,6 +6,25 @@ import (
 	"strings"
 )
 
+var GenPlugins []Plugin
+
+type Plugin interface{}
+
+type ProductionListener interface {
+	Plugin
+	BeforeProductionGen(fn *Fn)
+	AfterProductionGen(fn *Fn, result *Result)
+	ProductionCancel(fn *Fn)
+}
+
+func forEachProdListener(fn func(ProductionListener)) {
+	for _, p := range GenPlugins {
+		if lp, ok := p.(ProductionListener); ok {
+			fn(lp)
+		}
+	}
+}
+
 func randomBranch(branches []AndType, randomFactors []int) Result {
 	if len(branches) <= 0 {
 		return Result{Tp: Invalid}
@@ -13,10 +32,16 @@ func randomBranch(branches []AndType, randomFactors []int) Result {
 	chosenBranchNum := randomSelectByFactor(randomFactors)
 	chosenBranch := branches[chosenBranchNum]
 
-	var doneF []Function
+	var doneF []Fn
 	var resStr strings.Builder
 	for i, f := range chosenBranch.item {
-		res := f.Call()
+		forEachProdListener(func(p ProductionListener) {
+			p.BeforeProductionGen(&f)
+		})
+		res := f.F()
+		forEachProdListener(func(p ProductionListener) {
+			p.AfterProductionGen(&f, &res)
+		})
 		switch res.Tp {
 		case PlainString:
 			doneF = append(doneF, f)
@@ -26,7 +51,9 @@ func randomBranch(branches []AndType, randomFactors []int) Result {
 			resStr.WriteString(res.Value)
 		case Invalid:
 			for _, df := range doneF {
-				df.Cancel()
+				forEachProdListener(func(p ProductionListener) {
+					p.ProductionCancel(&df)
+				})
 			}
 			branches[chosenBranchNum], branches[0] = branches[0], branches[chosenBranchNum]
 			randomFactors[chosenBranchNum], randomFactors[0] = randomFactors[0], randomFactors[chosenBranchNum]

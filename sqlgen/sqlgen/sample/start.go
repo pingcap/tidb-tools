@@ -14,7 +14,7 @@ var Generate = generate()
 func generate() func() string {
 	rand.Seed(time.Now().UnixNano())
 	retFn := func() string {
-		res := start.f()
+		res := start.F()
 		switch res.Tp {
 		case PlainString:
 			return res.Value
@@ -27,21 +27,20 @@ func generate() func() string {
 		panic("impossible to reach")
 	}
 
-	
 	start = Fn{
-		name: "start",
-		f: func() Result {
+		Name: "start",
+		F: func() Result {
 			return Or(
 				And(A),
-				And(B).RandomFactor(2),
+				And(B),
 				And(C),
 			)
 		},
 	}
 
 	A = Fn{
-		name: "A",
-		f: func() Result {
+		Name: "A",
+		F: func() Result {
 			return Or(
 				And(Const("a")),
 				And(Const("a"), B),
@@ -50,8 +49,8 @@ func generate() func() string {
 	}
 
 	B = Fn{
-		name: "B",
-		f: func() Result {
+		Name: "B",
+		F: func() Result {
 			return Or(
 				And(Const("b")),
 				And(A),
@@ -60,12 +59,11 @@ func generate() func() string {
 	}
 
 	C = Fn{
-		name: "C",
-		f: func() Result {
+		Name: "C",
+		F: func() Result {
 			return Str("C")
 		},
 	}
-
 
 	return retFn
 }

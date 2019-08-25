@@ -53,7 +53,7 @@ func writeUtil(packageName string) {
 
 func writeDeclarations(allProds map[string]struct{}, packageName string) {
 	openAndWrite("declarations.go", packageName, func(w *bufio.Writer) {
-		mustWrite(w, "\n")
+		mustWrite(w, declarationsImport)
 		for p := range allProds {
 			mustWrite(w, fmt.Sprintf("var %s Fn\n", p))
 		}
@@ -93,7 +93,7 @@ var Generate = generate()
 func generate() func() string {
 	rand.Seed(time.Now().UnixNano())
 	retFn := func() string {
-		res := %s.f()
+		res := %s.F()
 		switch res.Tp {
 		case PlainString:
 			return res.Value
@@ -105,11 +105,16 @@ func generate() func() string {
 		}
 		panic("impossible to reach")
 	}
-
 	%s
-
 	return retFn
 }
+`
+
+const declarationsImport = `
+import (
+	. "github.com/pingcap/tidb-tools/sqlgen/sqlgen"
+)
+
 `
 
 const utilSnippet = `
@@ -117,53 +122,33 @@ import (
 	. "github.com/pingcap/tidb-tools/sqlgen/sqlgen"
 )
 
-var counter = map[string]int{}
-
-const maxLoopback = 2
-
-// Fn is callable object, an implementation for sqlgen.Function.
-type Fn struct {
-	name string
-	f    func() Result
+// MaxLoopCounter implements sqlgen.ProductionListener.
+type MaxLoopCounter struct {
+	counter     map[string]int
+	maxLoopback int
 }
 
-// Name implements Function.Name.
-func (fn Fn) Name() string {
-	return fn.name
-}
-
-// Call implements Function.Call.
-func (fn Fn) Call() Result {
-	fnName := fn.name
-	// Before calling function.
-	counter[fnName]++
-	if counter[fnName] > maxLoopback {
-		return Result{Tp: Invalid}
+func (pl *MaxLoopCounter) BeforeProductionGen(fn *Fn) {
+	fnName := fn.Name
+	pl.counter[fnName]++
+	if pl.counter[fnName] > pl.maxLoopback {
+		fn.F = InvalidF()
 	}
-
-	ret := fn.f()
-	// After calling function.
-	counter[fnName]--
-	return ret
 }
 
-// Cancel implements Function.Cancel.
-func (fn Fn) Cancel() {
-	counter[fn.name]--
+func (pl *MaxLoopCounter) AfterProductionGen(fn *Fn, result *Result) {
+	pl.counter[fn.Name]--
 }
 
-// Const is a Fn, which simply returns str.
-func Const(str string) Fn {
-	return Fn{name: str, f: func() Result {
-		return Result{Tp: PlainString, Value: str}
-	}}
+func (pl *MaxLoopCounter) ProductionCancel(fn *Fn) {
+	pl.counter[fn.Name]--
 }
 `
 
 const templateR = `
 	%s = Fn{
-		name: "%s",
-		f: func() Result {
+		Name: "%s",
+		F: func() Result {
 			return Or(
 				%s
 			)
@@ -173,8 +158,8 @@ const templateR = `
 
 const templateS = `
 	%s = Fn{
-		name: "%s",
-		f: func() Result {
+		Name: "%s",
+		F: func() Result {
 			return Str("%s")
 		},
 	}
@@ -205,12 +190,12 @@ func convertProdToCode(p *Production) string {
 				s = fmt.Sprintf("Const(\"%s\")", isLit)
 			}
 			bodyStr.WriteString(s)
-			if i != len(body.seq) - 1 {
+			if i != len(body.seq)-1 {
 				bodyStr.WriteString(", ")
 			}
 		}
 		bodyStr.WriteString("),")
-		if i != len(p.bodyList) - 1 {
+		if i != len(p.bodyList)-1 {
 			bodyStr.WriteString("\n\t\t\t\t")
 		}
 	}

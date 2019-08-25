@@ -18,16 +18,29 @@ type Result struct {
 	Value string
 }
 
+// InvalidF return a functions that returns invalid result.
+func InvalidF() func() Result {
+	return func() Result {
+		return Result{Tp: Invalid}
+	}
+}
+
 // Str returns a PlainString Result.
 func Str(str string) Result {
 	return Result{Tp: PlainString, Value: str}
 }
 
-// Function is a representation of a productions in bnf file.
-type Function interface {
-	Name() string
-	Call() Result
-	Cancel()
+// Fn is callable object, an implementation for sqlgen.Function.
+type Fn struct {
+	Name string
+	F    func() Result
+}
+
+// Const is a Fn, which simply returns str.
+func Const(str string) Fn {
+	return Fn{Name: str, F: func() Result {
+		return Result{Tp: PlainString, Value: str}
+	}}
 }
 
 // OrType is used to mark the end of a production body.
@@ -47,12 +60,6 @@ func (o OrType) Call() Result {
 // Cancel implement Function's Cancel.
 func (o OrType) Cancel() {}
 
-// isBranch is used to check whether a Function is OrType.
-func isBranch(fn Function) bool {
-	_, ok := fn.(OrType)
-	return ok
-}
-
 func Or(branches ...AndType) Result {
 	var rfs []int
 	for _, b := range branches {
@@ -61,12 +68,12 @@ func Or(branches ...AndType) Result {
 	return randomBranch(branches, rfs)
 }
 
-func And(item ...Function) AndType {
+func And(item ...Fn) AndType {
 	return AndType{item: item, randFactor: 1}
 }
 
 type AndType struct {
-	item []Function
+	item       []Fn
 	randFactor int
 }
 
@@ -74,4 +81,3 @@ func (at AndType) RandomFactor(randomFactor int) AndType {
 	at.randFactor = randomFactor
 	return AndType{at.item, at.randFactor}
 }
-
