@@ -67,6 +67,10 @@ Production:
 			yylex.AppendError(yylex.Errorf("%s is not an identifier", $1))
 			return 1
 		}
+		if isReservedKeyword($1) {
+			yylex.AppendError(yylex.Errorf("%s is a reserved keyword in golang", $1))
+			return 1
+		}
 		$$ = &Production{ head: $1, maxLoop: $2.(int), bodyList: $4.(BodyList) }
 	}
 

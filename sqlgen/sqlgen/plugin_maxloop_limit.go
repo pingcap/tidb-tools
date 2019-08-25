@@ -2,29 +2,33 @@ package sqlgen
 
 // MaxLoopCounter implements sqlgen.ProductionListener.
 type MaxLoopCounter struct {
-	counter     map[string]int
-	maxLoopback int
+	Counter     map[string]int
+	MaxLoopback int
 }
 
-func NewMaxLoopCounter(maxLoopback int) MaxLoopCounter {
-	return MaxLoopCounter{
-		counter:     map[string]int{},
-		maxLoopback: maxLoopback,
+// NewMaxLoopCounter is a constructor for MaxLoopCounter, specifying maxLoopback.
+func NewMaxLoopCounter(maxLoopback int) *MaxLoopCounter {
+	return &MaxLoopCounter{
+		Counter:     map[string]int{},
+		MaxLoopback: maxLoopback,
 	}
 }
 
+// BeforeProductionGen implements BeforeProductionGen for sqlgen.ProductionListener.
 func (pl *MaxLoopCounter) BeforeProductionGen(fn *Fn) {
 	fnName := fn.Name
-	pl.counter[fnName]++
-	if pl.counter[fnName] > pl.maxLoopback {
+	pl.Counter[fnName]++
+	if pl.Counter[fnName] > pl.MaxLoopback {
 		fn.F = InvalidF()
 	}
 }
 
+// AfterProductionGen implements AfterProductionGen for sqlgen.ProductionListener.
 func (pl *MaxLoopCounter) AfterProductionGen(fn *Fn, result *Result) {
-	pl.counter[fn.Name]--
+	pl.Counter[fn.Name]--
 }
 
+// ProductionCancel implements ProductionCancel for sqlgen.ProductionListener.
 func (pl *MaxLoopCounter) ProductionCancel(fn *Fn) {
-	pl.counter[fn.Name]--
+	pl.Counter[fn.Name]--
 }

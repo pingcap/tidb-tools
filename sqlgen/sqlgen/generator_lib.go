@@ -17,14 +17,6 @@ type ProductionListener interface {
 	ProductionCancel(fn *Fn)
 }
 
-func forEachProdListener(fn func(ProductionListener)) {
-	for _, p := range GenPlugins {
-		if lp, ok := p.(ProductionListener); ok {
-			fn(lp)
-		}
-	}
-}
-
 func randomBranch(branches []AndType, randomFactors []int) Result {
 	if len(branches) <= 0 {
 		return Result{Tp: Invalid}
@@ -75,6 +67,14 @@ func randomSelectByFactor(factors []int) int {
 		}
 	}
 	return len(factors) - 1
+}
+
+func forEachProdListener(fn func(ProductionListener)) {
+	for _, p := range GenPlugins {
+		if lp, ok := p.(ProductionListener); ok {
+			fn(lp)
+		}
+	}
 }
 
 func sum(is []int) int {

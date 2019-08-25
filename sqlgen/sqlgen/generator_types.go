@@ -1,7 +1,5 @@
 package sqlgen
 
-import "log"
-
 // ResultType is used to determine whether a Result is valid.
 type ResultType int
 
@@ -42,23 +40,6 @@ func Const(str string) Fn {
 		return Result{Tp: PlainString, Value: str}
 	}}
 }
-
-// OrType is used to mark the end of a production body.
-type OrType struct{}
-
-// Name implement Function's Name.
-func (o OrType) Name() string {
-	return "or"
-}
-
-// Call implement Function's Call.
-func (o OrType) Call() Result {
-	log.Fatal("Calling a OrType is impossible")
-	return Result{Tp: Invalid}
-}
-
-// Cancel implement Function's Cancel.
-func (o OrType) Cancel() {}
 
 func Or(branches ...AndType) Result {
 	var rfs []int

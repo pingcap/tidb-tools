@@ -144,3 +144,17 @@ func isIdentifier(str string) bool {
 	rs := idRegex.ReplaceAllLiteralString(str, "")
 	return len(rs) == 0
 }
+
+var reservedKeyword = map[string]struct{}{
+	"break": {}, "case": {}, "chan": {}, "const": {},
+	"continue": {}, "default": {}, "defer": {}, "else": {},
+	"fallthrough": {}, "for": {}, "func": {}, "go": {},
+	"goto": {}, "if": {}, "import": {}, "interface": {},
+	"map": {}, "package": {}, "range": {}, "return": {},
+	"select": {}, "struct": {}, "switch": {}, "type": {}, "var": {},
+}
+
+func isReservedKeyword(str string) bool {
+	_, ok := reservedKeyword[str]
+	return ok
+}

@@ -347,6 +347,10 @@ yynewstate:
 				yylex.AppendError(yylex.Errorf("%s is not an identifier", yyS[yypt-3].ident))
 				return 1
 			}
+			if isReservedKeyword(yyS[yypt-3].ident) {
+				yylex.AppendError(yylex.Errorf("%s is a reserved keyword in golang", yyS[yypt-3].ident))
+				return 1
+			}
 			parser.yyVAL.item = &Production{head: yyS[yypt-3].ident, maxLoop: yyS[yypt-2].item.(int), bodyList: yyS[yypt-0].item.(BodyList)}
 		}
 	case 3:

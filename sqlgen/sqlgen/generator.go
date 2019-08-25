@@ -96,8 +96,8 @@ func generate() func() string {
 			return ""
 		default:
 			log.Fatalf("Unsupported result type '%%v'", res.Tp)
+			return ""
 		}
-		panic("impossible to reach")
 	}
 	%s
 	return retFn
