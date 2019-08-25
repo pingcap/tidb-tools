@@ -13,6 +13,7 @@ var Generate = generate()
 
 func generate() func() string {
 	rand.Seed(time.Now().UnixNano())
+	GenPlugins = append(GenPlugins, NewMaxLoopCounter(3))
 	retFn := func() string {
 		res := start.F()
 		switch res.Tp {

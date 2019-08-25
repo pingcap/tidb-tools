@@ -36,6 +36,9 @@ When tidb-tools are built successfully, you can find the binary in the `bin` dir
 
     A tool for checking if DDL SQL can be successfully executed by TiDB.
 
+- [sqlgen](./sqlgen)
+
+    A tool for generating "random string generator" according to bnf grammar.
 ## License
 
 Apache 2.0 license. See the [LICENSE](./LICENSE) file for details.

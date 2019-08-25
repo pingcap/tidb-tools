@@ -10,7 +10,7 @@ import (
 )
 
 // BuildLib is used to build a random generator library.
-func BuildLib(yaccFilePath, prodName, packageName, outputFilePath string) {
+func BuildLib(yaccFilePath, prodName, packageName, outputFilePath string, pluginInitStr []string) {
 	yaccFilePath = absolute(yaccFilePath)
 	outputFilePath = absolute(filepath.Join(outputFilePath, packageName))
 	prods, err := ParseYacc(yaccFilePath)
@@ -22,13 +22,12 @@ func BuildLib(yaccFilePath, prodName, packageName, outputFilePath string) {
 	must(os.Mkdir(outputFilePath, 0755))
 	must(os.Chdir(outputFilePath))
 
-	allProds := writeGenerate(prodName, prodMap, packageName)
-	writeUtil(packageName)
+	allProds := writeGenerate(prodName, prodMap, packageName, pluginInitStr)
 	writeDeclarations(allProds, packageName)
 	writeTest(packageName)
 }
 
-func writeGenerate(prodName string, prodMap map[string]*Production, packageName string) map[string]struct{} {
+func writeGenerate(prodName string, prodMap map[string]*Production, packageName string, pluginInitStr []string) map[string]struct{} {
 	var allProds map[string]struct{}
 	openAndWrite(prodName+".go", packageName, func(w *bufio.Writer) {
 		var sb strings.Builder
@@ -40,15 +39,9 @@ func writeGenerate(prodName string, prodMap map[string]*Production, packageName 
 		if err != nil {
 			log.Fatal(err)
 		}
-		mustWrite(w, fmt.Sprintf(templateMain, prodName, sb.String()))
+		mustWrite(w, fmt.Sprintf(templateMain, strings.Join(pluginInitStr, "\n\t"), prodName, sb.String()))
 	})
 	return allProds
-}
-
-func writeUtil(packageName string) {
-	openAndWrite("util.go", packageName, func(w *bufio.Writer) {
-		mustWrite(w, utilSnippet)
-	})
 }
 
 func writeDeclarations(allProds map[string]struct{}, packageName string) {
@@ -92,6 +85,7 @@ var Generate = generate()
 
 func generate() func() string {
 	rand.Seed(time.Now().UnixNano())
+	%s
 	retFn := func() string {
 		res := %s.F()
 		switch res.Tp {
@@ -115,34 +109,6 @@ import (
 	. "github.com/pingcap/tidb-tools/sqlgen/sqlgen"
 )
 
-`
-
-const utilSnippet = `
-import (
-	. "github.com/pingcap/tidb-tools/sqlgen/sqlgen"
-)
-
-// MaxLoopCounter implements sqlgen.ProductionListener.
-type MaxLoopCounter struct {
-	counter     map[string]int
-	maxLoopback int
-}
-
-func (pl *MaxLoopCounter) BeforeProductionGen(fn *Fn) {
-	fnName := fn.Name
-	pl.counter[fnName]++
-	if pl.counter[fnName] > pl.maxLoopback {
-		fn.F = InvalidF()
-	}
-}
-
-func (pl *MaxLoopCounter) AfterProductionGen(fn *Fn, result *Result) {
-	pl.counter[fn.Name]--
-}
-
-func (pl *MaxLoopCounter) ProductionCancel(fn *Fn) {
-	pl.counter[fn.Name]--
-}
 `
 
 const templateR = `

@@ -2,7 +2,7 @@
 
 sqlgen is a tool for generating a random generator. 
 
-After the execution, a golang package named *pgkname* is generated, which contains a set of files. The `Generate()` locating in *production*.go can be used to generate a random string, according to the syntax described in *bnf*.
+After the execution, a golang package named *pkgname* is generated, which contains a set of files. The `Generate()` locating in *production*.go can be used to generate a random string, according to the syntax described in *bnf*.
 
 ## How to use
 
