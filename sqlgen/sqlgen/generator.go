@@ -55,7 +55,6 @@ func writeDeclarations(allProds map[string]struct{}, packageName string) {
 	openAndWrite("declarations.go", packageName, func(w *bufio.Writer) {
 		mustWrite(w, "\n")
 		for p := range allProds {
-			p = convertHead(p)
 			mustWrite(w, fmt.Sprintf("var %s Fn\n", p))
 		}
 	})
@@ -119,17 +118,21 @@ import (
 )
 
 var counter = map[string]int{}
+
 const maxLoopback = 2
 
+// Fn is callable object, an implementation for sqlgen.Function.
 type Fn struct {
 	name string
 	f    func() Result
 }
 
+// Name implements Function.Name.
 func (fn Fn) Name() string {
 	return fn.name
 }
 
+// Call implements Function.Call.
 func (fn Fn) Call() Result {
 	fnName := fn.name
 	// Before calling function.
@@ -144,10 +147,12 @@ func (fn Fn) Call() Result {
 	return ret
 }
 
+// Cancel implements Function.Cancel.
 func (fn Fn) Cancel() {
 	counter[fn.name]--
 }
 
+// Const is a Fn, which simply returns str.
 func Const(str string) Fn {
 	return Fn{name: str, f: func() Result {
 		return Result{Tp: PlainString, Value: str}
@@ -176,7 +181,6 @@ const templateS = `
 `
 
 func convertProdToCode(p *Production) string {
-	prodHead := convertHead(p.head)
 	if len(p.bodyList) == 1 {
 		allLiteral := true
 		seqs := p.bodyList[0].seq
@@ -189,7 +193,7 @@ func convertProdToCode(p *Production) string {
 
 		trimmedSeqs := trimmedStrs(seqs)
 		if allLiteral {
-			return fmt.Sprintf(templateS, prodHead, prodHead, strings.Join(trimmedSeqs, " "))
+			return fmt.Sprintf(templateS, p.head, p.head, strings.Join(trimmedSeqs, " "))
 		}
 	}
 
@@ -198,8 +202,6 @@ func convertProdToCode(p *Production) string {
 		for _, s := range body.seq {
 			if isLit, ok := literal(s); ok {
 				s = fmt.Sprintf("Const(\"%s\")", isLit)
-			} else {
-				s = convertHead(s)
 			}
 			bodyStr.WriteString(s)
 			bodyStr.WriteString(", ")
@@ -209,7 +211,7 @@ func convertProdToCode(p *Production) string {
 		}
 	}
 
-	return fmt.Sprintf(templateR, prodHead, p.head, bodyStr.String())
+	return fmt.Sprintf(templateR, p.head, p.head, bodyStr.String())
 }
 
 func trimmedStrs(origin []string) []string {
@@ -220,22 +222,6 @@ func trimmedStrs(origin []string) []string {
 		}
 	}
 	return ret
-}
-
-// convertHead to avoid keyword clash.
-func convertHead(str string) string {
-	if strings.HasPrefix(str, "$@") {
-		return "num" + strings.TrimPrefix(str, "$@")
-	}
-
-	switch str {
-	case "type":
-		return "utype"
-	case "%empty":
-		return "empty"
-	default:
-		return str
-	}
 }
 
 func mustWrite(oFile *bufio.Writer, str string) {

@@ -46,7 +46,7 @@ sync_diff_inspector:
 ddl_checker:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/ddl_checker ./ddl_checker
 
-sqlgen:
+sqlgen: sqlgen_bnf
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/sqlgen ./sqlgen
 
 sqlgen_bnf: bin/goyacc

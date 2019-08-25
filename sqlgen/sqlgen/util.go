@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"unicode"
 )
@@ -135,4 +136,11 @@ func literal(token string) (string, bool) {
 
 func isLiteral(token string) bool {
 	return strings.HasPrefix(token, "'") && strings.HasSuffix(token, "'")
+}
+
+var idRegex = regexp.MustCompile("^[a-zA-Z][0-9a-zA-Z_]*")
+
+func isIdentifier(str string) bool {
+	rs := idRegex.ReplaceAllLiteralString(str, "")
+	return len(rs) == 0
 }
