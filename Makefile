@@ -1,4 +1,4 @@
-.PHONY: build importer dump_region binlogctl sync_diff_inspector ddl_checker sqlgen test check deps
+.PHONY: build importer dump_region binlogctl sync_diff_inspector ddl_checker sqlgen sqlgen_bnf_helper test check deps
 
 # Ensure GOPATH is set before running build process.
 ifeq "$(GOPATH)" ""
@@ -67,6 +67,9 @@ sqlgen_bnf: bin/goyacc
 
 bin/goyacc: sqlgen/goyacc/main.go
 	$(GO) build -o bin/goyacc sqlgen/goyacc/main.go
+
+sqlgen_bnf_helper: sqlgen/bnf_helper/main.go sqlgen_bnf
+	$(GO) build -o bin/bnf_helper sqlgen/bnf_helper/main.go
 
 test:
 	@export log_level=error; \

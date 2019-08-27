@@ -30,7 +30,7 @@ func BuildLib(yaccFilePath, prodName, packageName, outputFilePath string, plugin
 	if err != nil {
 		log.Fatal(err)
 	}
-	prodMap := BuildProdMap(prods)
+	prodMap := BuildProdMapWithCheck(prods)
 
 	must(os.Mkdir(outputFilePath, 0755))
 	must(os.Chdir(outputFilePath))

@@ -35,7 +35,7 @@ func TestBreadthFirstSearch(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	prodMap := BuildProdMap(p)
+	prodMap := BuildProdMapWithCheck(p)
 	rs, err := breadthFirstSearch("start", prodMap)
 	if err != nil {
 		t.Error(err)

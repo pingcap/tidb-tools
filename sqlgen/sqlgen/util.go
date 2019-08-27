@@ -22,13 +22,18 @@ import (
 	"unicode"
 )
 
-// BuildProdMap convert an array of production into a map of production, extracting the name of prodcution as key.
+// BuildProdMapWithCheck convert an array of production into a map of production, extracting the name of production as key.
+func BuildProdMapWithCheck(prods []*Production) map[string]*Production {
+	ret := BuildProdMap(prods)
+	checkProductionMap(ret)
+	return ret
+}
+
 func BuildProdMap(prods []*Production) map[string]*Production {
 	ret := make(map[string]*Production)
 	for _, v := range prods {
 		ret[v.head] = v
 	}
-	checkProductionMap(ret)
 	return ret
 }
 
@@ -132,6 +137,53 @@ func splitProdStr(prodReader *bufio.Reader) []string {
 	return ret
 }
 
+// RemoveUnused remove all productions that unused in *start*
+func RemoveUnused(start string, allProds []*Production) []*Production {
+	prodMap := BuildProdMap(allProds)
+	markMap := map[string]bool{}
+	for _, p := range allProds {
+		markMap[p.head] = false
+	}
+	markMap[start] = true
+	pending := []string{start}
+	for len(pending) != 0 {
+		p := pending[0]
+		pending = pending[1:]
+
+		if foundInMap(prodMap, p) {
+			prodMap[p].ForEachNonTerm(func(s string) {
+				if !markMap[s] {
+					markMap[s] = true
+					pending = append(pending, s)
+				}
+			})
+		}
+	}
+
+	var newProds []*Production
+	for _, p := range allProds {
+		if markMap[p.head] {
+			newProds = append(newProds, p)
+		}
+	}
+	return newProds
+}
+
+// CompleteProds add all the productions that not found in the originProds from complementary.
+func CompleteProds(originProds []*Production, complementary map[string]*Production) []*Production {
+	newProdMap := BuildProdMap(originProds)
+	for i := 0; i < len(originProds); i++ {
+		originProds[i].ForEachNonTerm(func(nt string) {
+			if !foundInMap(newProdMap, nt) && foundInMap(complementary, nt) {
+				importProd := complementary[nt]
+				originProds = append(originProds, importProd)
+				newProdMap[nt] = importProd
+			}
+		})
+	}
+	return originProds
+}
+
 func isWhitespace(str string) bool {
 	for _, c := range str {
 		if !unicode.IsSpace(c) {
@@ -170,5 +222,10 @@ var reservedKeyword = map[string]struct{}{
 
 func isReservedKeyword(str string) bool {
 	_, ok := reservedKeyword[str]
+	return ok
+}
+
+func foundInMap(prodMap map[string]*Production, str string) bool {
+	_, ok := prodMap[str]
 	return ok
 }

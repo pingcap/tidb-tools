@@ -28,15 +28,39 @@ type Production struct {
 	bodyList BodyList
 }
 
+func (p *Production) Head() string {
+	return p.head
+}
+
+func (p *Production) ForEachNonTerm(fn func(string)) {
+	for _, body := range p.bodyList {
+		for _, s := range body.seq {
+			if !isLiteral(s) {
+				fn(s)
+			}
+		}
+	}
+}
+
 func (p *Production) String() string {
+	return p.toString(true)
+}
+
+func (p *Production) StringWithoutOptNum() string {
+	return p.toString(false)
+}
+
+func (p *Production) toString(withOpt bool) string {
 	var sb strings.Builder
 	sb.WriteString(p.head)
-	writeOptNum(&sb, p.maxLoop)
+	if withOpt {
+		writeOptNum(&sb, p.maxLoop)
+	}
 	sb.WriteString(": ")
 	firstBody := p.bodyList[0]
 	sb.WriteString(strings.Join(firstBody.seq, " "))
 
-	if isLiteral(firstBody.seq[0]) {
+	if withOpt && isLiteral(firstBody.seq[0]) {
 		writeOptNum(&sb, firstBody.randomFactor)
 	}
 
@@ -45,7 +69,7 @@ func (p *Production) String() string {
 		sb.WriteString("\n")
 		sb.WriteString("| ")
 		sb.WriteString(strings.Join(body.seq, " "))
-		if isLiteral(firstBody.seq[0]) {
+		if withOpt && isLiteral(firstBody.seq[0]) {
 			writeOptNum(&sb, firstBody.randomFactor)
 		}
 	}
