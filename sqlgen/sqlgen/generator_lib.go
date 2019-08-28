@@ -32,7 +32,7 @@ type ProductionListener interface {
 }
 
 func And(fn ...Fn) Fn {
-	return Fn{F: func() Result {
+	return Fn{RandomFactor: 1, F: func() Result {
 		return collectResult(fn...)
 	}}
 }
@@ -54,7 +54,7 @@ func RandomBool() bool {
 }
 
 func Or(fns ...Fn) Fn {
-	return Fn{F: func() Result {
+	return Fn{RandomFactor: 1, F: func() Result {
 		for len(fns) > 0 {
 			randNum := randomSelectByFactor(fns)
 			chosenFn := fns[randNum]

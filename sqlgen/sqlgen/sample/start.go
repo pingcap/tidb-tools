@@ -28,29 +28,29 @@ func generate() func() string {
 		}
 	}
 
-	start = NewFn("start",
-		Or(
+	start = NewFn("start", func() Fn {
+		return Or(
 			A,
 			B,
 			C,
-		),
-	)
+		)
+	})
 
-	A = NewFn("A",
-		Or(
+	A = NewFn("A", func() Fn {
+		return Or(
 			Str("a"),
 			And(Str("a"), B),
-		),
-	)
+		)
+	})
 
-	B = NewFn("B",
-		Or(
+	B = NewFn("B", func() Fn {
+		return Or(
 			Str("b"),
 			A,
-		),
-	)
+		)
+	})
 
-	C = NewFn("C", Str("C"))
+	C = NewConstFn("C", Str("C"))
 
 	return retFn
 }

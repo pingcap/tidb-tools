@@ -56,7 +56,17 @@ type Fn struct {
 	RandomFactor int
 }
 
-func NewFn(name string, fn Fn) Fn {
+func NewFn(name string, fn func() Fn) Fn {
+	return Fn{
+		Name: name,
+		F: func() Result {
+			return fn().F()
+		},
+		RandomFactor: 1,
+	}
+}
+
+func NewConstFn(name string, fn Fn) Fn {
 	return Fn{
 		Name: name,
 		F: func() Result {
@@ -88,6 +98,9 @@ func EmptyFn() Fn {
 	return innerEmptyFn
 }
 
-var innerEmptyFn = Fn{F: func() Result {
-	return Result{Tp: PlainString, Value: ""}
-}}
+var innerEmptyFn = Fn{
+	RandomFactor: 1,
+	F: func() Result {
+		return Result{Tp: PlainString, Value: ""}
+	},
+}

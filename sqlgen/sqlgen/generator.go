@@ -125,15 +125,15 @@ import (
 `
 
 const templateR = `
-	%s = NewFn("%s",
-		Or(
+	%s = NewFn("%s", func() Fn {
+		return Or(
 			%s
-		),
-	)
+		)
+	})
 `
 
 const templateS = `
-	%s = NewFn("%s", Str("%s"))
+	%s = NewConstFn("%s", Str("%s"))
 `
 
 func convertProdToCode(p *Production) string {
