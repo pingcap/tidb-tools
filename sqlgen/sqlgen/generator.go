@@ -112,7 +112,7 @@ func generate() func() string {
 			return ""
 		}
 	}
-	%s
+%s
 	return retFn
 }
 `
@@ -125,23 +125,15 @@ import (
 `
 
 const templateR = `
-	%s = Fn{
-		Name: "%s",
-		F: func() Result {
-			return Or(
-				%s
-			)
-		},
-	}
+	%s = NewFn("%s",
+		Or(
+			%s
+		),
+	)
 `
 
 const templateS = `
-	%s = Fn{
-		Name: "%s",
-		F: func() Result {
-			return Str("%s")
-		},
-	}
+	%s = NewFn("%s", Str("%s"))
 `
 
 func convertProdToCode(p *Production) string {
@@ -161,25 +153,21 @@ func convertProdToCode(p *Production) string {
 		}
 	}
 
-	var bodyStr strings.Builder
+	sb := &strings.Builder{}
 	for i, body := range p.bodyList {
-		bodyStr.WriteString("And(")
-		for i, s := range body.seq {
-			if isLit, ok := literal(s); ok {
-				s = fmt.Sprintf("Const(\"%s\")", isLit)
+		needsAnd := len(body.seq) > 1
+		wrapIf(sb, needsAnd, writeAnd, func() {
+			writeProdBody(sb, body.seq)
+			if !needsAnd {
+				sb.WriteString(",")
 			}
-			bodyStr.WriteString(s)
-			if i != len(body.seq)-1 {
-				bodyStr.WriteString(", ")
-			}
-		}
-		bodyStr.WriteString("),")
+		})
 		if i != len(p.bodyList)-1 {
-			bodyStr.WriteString("\n\t\t\t\t")
+			sb.WriteString("\n\t\t\t")
 		}
 	}
 
-	return fmt.Sprintf(templateR, p.head, p.head, bodyStr.String())
+	return fmt.Sprintf(templateR, p.head, p.head, sb.String())
 }
 
 func trimmedStrs(origin []string) []string {
@@ -190,6 +178,37 @@ func trimmedStrs(origin []string) []string {
 		}
 	}
 	return ret
+}
+
+func writeProdBody(sb *strings.Builder, strs []string) {
+	for i, s := range strs {
+		wrapIf(sb, isLiteral(s), writeStr, func() {
+			sb.WriteString(strings.Trim(s, "'"))
+		})
+		if i != len(strs)-1 {
+			sb.WriteString(", ")
+		}
+	}
+}
+
+func writeAnd(sb *strings.Builder, fn func()) {
+	sb.WriteString("And(")
+	fn()
+	sb.WriteString("),")
+}
+
+func writeStr(sb *strings.Builder, fn func()) {
+	sb.WriteString("Str(\"")
+	fn()
+	sb.WriteString("\")")
+}
+
+func wrapIf(sb *strings.Builder, condition bool, wrapper func(*strings.Builder, func()), beingWrap func()) {
+	if condition {
+		wrapper(sb, beingWrap)
+	} else {
+		beingWrap()
+	}
 }
 
 func mustWrite(oFile *bufio.Writer, str string) {

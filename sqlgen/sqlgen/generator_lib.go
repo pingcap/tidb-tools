@@ -16,6 +16,7 @@ package sqlgen
 import (
 	"log"
 	"math/rand"
+	"strconv"
 	"strings"
 )
 
@@ -30,56 +31,94 @@ type ProductionListener interface {
 	ProductionCancel(fn *Fn)
 }
 
-func randomBranch(branches []AndType, randomFactors []int) Result {
-	if len(branches) <= 0 {
-		return Result{Tp: Invalid}
-	}
-	chosenBranchNum := randomSelectByFactor(randomFactors)
-	chosenBranch := branches[chosenBranchNum]
+func And(fn ...Fn) Fn {
+	return Fn{F: func() Result {
+		return collectResult(fn...)
+	}}
+}
 
+func Opt(fn Fn) Fn {
+	if RandomBool() {
+		return fn
+	}
+	return EmptyFn()
+}
+
+func RandomNum(low, high int) string {
+	num := rand.Intn(high - low + 1)
+	return strconv.Itoa(num + low)
+}
+
+func RandomBool() bool {
+	return rand.Intn(2) == 0
+}
+
+func Or(fns ...Fn) Fn {
+	return Fn{F: func() Result {
+		for len(fns) > 0 {
+			randNum := randomSelectByFactor(fns)
+			chosenFn := fns[randNum]
+			rs := evaluateFn(chosenFn)
+			if rs.Tp == PlainString {
+				return rs
+			}
+			fns[0], fns[randNum] = fns[randNum], fns[0]
+			fns = fns[1:]
+		}
+		return InvalidResult()
+	}}
+}
+
+func collectResult(fns ...Fn) Result {
 	var doneF []Fn
 	var resStr strings.Builder
-	for i, f := range chosenBranch.item {
-		forEachProdListener(func(p ProductionListener) {
-			p.BeforeProductionGen(&f)
-		})
-		res := f.F()
-		forEachProdListener(func(p ProductionListener) {
-			p.AfterProductionGen(&f, &res)
-		})
+	for i, f := range fns {
+		res := evaluateFn(f)
 		switch res.Tp {
 		case PlainString:
 			doneF = append(doneF, f)
-			if i != 0 {
+			resStr.WriteString(res.Value)
+			if i != len(fns) {
 				resStr.WriteString(" ")
 			}
-			resStr.WriteString(res.Value)
 		case Invalid:
 			for _, df := range doneF {
 				forEachProdListener(func(p ProductionListener) {
 					p.ProductionCancel(&df)
 				})
 			}
-			branches[chosenBranchNum], branches[0] = branches[0], branches[chosenBranchNum]
-			randomFactors[chosenBranchNum], randomFactors[0] = randomFactors[0], randomFactors[chosenBranchNum]
-			return randomBranch(branches[1:], randomFactors[1:])
+			return InvalidResult()
 		default:
-			log.Fatalf("Unsupported result type '%v'", res.Tp)
+			log.Fatalf("Unsupport result type '%v'", res.Tp)
 		}
 	}
-	return Str(resStr.String())
+	return StrResult(resStr.String())
 }
 
-func randomSelectByFactor(factors []int) int {
-	num := rand.Intn(sum(factors))
+func evaluateFn(fn Fn) Result {
+	if len(fn.Name) == 0 {
+		return fn.F()
+	}
+	forEachProdListener(func(p ProductionListener) {
+		p.BeforeProductionGen(&fn)
+	})
+	res := fn.F()
+	forEachProdListener(func(p ProductionListener) {
+		p.AfterProductionGen(&fn, &res)
+	})
+	return res
+}
+
+func randomSelectByFactor(fns []Fn) int {
+	num := rand.Intn(sumRandFactor(fns))
 	acc := 0
-	for i, f := range factors {
-		acc += f
+	for i, f := range fns {
+		acc += f.RandomFactor
 		if acc > num {
 			return i
 		}
 	}
-	return len(factors) - 1
+	return len(fns) - 1
 }
 
 func forEachProdListener(fn func(ProductionListener)) {
@@ -90,10 +129,10 @@ func forEachProdListener(fn func(ProductionListener)) {
 	}
 }
 
-func sum(is []int) int {
+func sumRandFactor(fs []Fn) int {
 	total := 0
-	for _, v := range is {
-		total += v
+	for _, f := range fs {
+		total += f.RandomFactor
 	}
 	return total
 }

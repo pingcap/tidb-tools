@@ -29,49 +29,65 @@ type Result struct {
 	Value string
 }
 
-// InvalidF return a functions that returns invalid result.
-func InvalidF() func() Result {
-	return func() Result {
-		return Result{Tp: Invalid}
-	}
+func InvalidResult() Result {
+	return innerInvalidResult
 }
 
-// Str returns a PlainString Result.
-func Str(str string) Result {
+var innerInvalidResult = Result{Tp: Invalid}
+
+// InvalidFn return a functions that returns invalid result.
+func InvalidFn() func() Result {
+	return innerInvalidFn
+}
+
+var innerInvalidFn = func() Result {
+	return Result{Tp: Invalid}
+}
+
+// StrResult returns a PlainString Result.
+func StrResult(str string) Result {
 	return Result{Tp: PlainString, Value: str}
 }
 
 // Fn is callable object, an implementation for sqlgen.Function.
 type Fn struct {
-	Name string
-	F    func() Result
+	Name         string
+	F            func() Result
+	RandomFactor int
 }
 
-// Const is a Fn, which simply returns str.
-func Const(str string) Fn {
-	return Fn{Name: str, F: func() Result {
-		return Result{Tp: PlainString, Value: str}
-	}}
-}
-
-func Or(branches ...AndType) Result {
-	var rfs []int
-	for _, b := range branches {
-		rfs = append(rfs, b.randFactor)
+func NewFn(name string, fn Fn) Fn {
+	return Fn{
+		Name: name,
+		F: func() Result {
+			return fn.F()
+		},
+		RandomFactor: 1,
 	}
-	return randomBranch(branches, rfs)
 }
 
-func And(item ...Fn) AndType {
-	return AndType{item: item, randFactor: 1}
+func (f Fn) SetRF(randomFactor int) Fn {
+	return Fn{
+		Name:         f.Name,
+		F:            f.F,
+		RandomFactor: randomFactor,
+	}
 }
 
-type AndType struct {
-	item       []Fn
-	randFactor int
+// Str is a Fn which simply returns str.
+func Str(str string) Fn {
+	return Fn{
+		RandomFactor: 1,
+		F: func() Result {
+			return StrResult(str)
+		}}
 }
 
-func (at AndType) RandomFactor(randomFactor int) AndType {
-	at.randFactor = randomFactor
-	return AndType{at.item, at.randFactor}
+// EmptyFn is a Fn which simply returns empty string.
+func EmptyFn() Fn {
+	return innerEmptyFn
 }
+
+var innerEmptyFn = Fn{F: func() Result {
+	return Result{Tp: PlainString, Value: ""}
+}}

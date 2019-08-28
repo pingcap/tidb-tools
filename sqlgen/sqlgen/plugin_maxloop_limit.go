@@ -32,7 +32,7 @@ func (pl *MaxLoopCounter) BeforeProductionGen(fn *Fn) {
 	fnName := fn.Name
 	pl.Counter[fnName]++
 	if pl.Counter[fnName] > pl.MaxLoopback {
-		fn.F = InvalidF()
+		fn.F = InvalidFn()
 	}
 }
 
