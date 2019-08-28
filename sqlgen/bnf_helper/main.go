@@ -22,8 +22,8 @@ import (
 )
 
 var (
-	sourceBnfFile		string
-	rewriteBnfFile      string
+	sourceBnfFile  string
+	rewriteBnfFile string
 )
 
 func parseFlags() {
@@ -54,11 +54,11 @@ func main() {
 	newProds = sqlgen.RemoveUnused(newProds[0].Head(), newProds)
 	result := sqlgen.CompleteProds(newProds, prodMap)
 
-	oFile, err := os.OpenFile(rewriteBnfFile, os.O_WRONLY | os.O_TRUNC, 0755)
+	oFile, err := os.OpenFile(rewriteBnfFile, os.O_WRONLY|os.O_TRUNC, 0755)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer func() {_ = oFile.Close()}()
+	defer func() { _ = oFile.Close() }()
 	w := bufio.NewWriter(oFile)
 
 	for _, p := range result {
