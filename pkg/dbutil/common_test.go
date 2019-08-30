@@ -14,8 +14,10 @@
 package dbutil
 
 import (
+	"context"
 	"database/sql/driver"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
@@ -127,5 +129,21 @@ func (s *testDBSuite) TestIsIgnoreError(c *C) {
 	for _, t := range cases {
 		c.Logf("err %v, expected %v", t.err, t.canIgnore)
 		c.Assert(ignoreError(t.err), Equals, t.canIgnore)
+	}
+}
+
+func (s *testDBSuite) TestDeleteRows(c *C) {
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+
+	// delete twice
+	mock.ExpectExec("DELETE FROM").WillReturnResult(sqlmock.NewResult(0, DefaultDeleteRowsNum))
+	mock.ExpectExec("DELETE FROM").WillReturnResult(sqlmock.NewResult(0, DefaultDeleteRowsNum-1))
+
+	err = DeleteRows(context.Background(), db, "test", "t", "", nil)
+	c.Assert(err, IsNil)
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		c.Errorf("there were unfulfilled expectations: %s", err)
 	}
 }
