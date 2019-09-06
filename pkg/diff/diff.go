@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -52,9 +53,6 @@ type TableDiff struct {
 
 	// columns be ignored
 	IgnoreColumns []string `json:"-"`
-
-	// columns be removed
-	RemoveColumns []string `json:"-"`
 
 	// field should be the primary key, unique key or field with index
 	Fields string `json:"fields"`
@@ -102,6 +100,9 @@ type TableDiff struct {
 	configHash string
 
 	CpDB *sql.DB
+
+	// 1 means true, 0 means false
+	checkpointLoaded int32
 }
 
 func (t *TableDiff) setConfigHash() error {
@@ -119,11 +120,7 @@ func (t *TableDiff) setConfigHash() error {
 // Equal tests whether two database have same data and schema.
 func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (bool, bool, error) {
 	t.adjustConfig()
-
 	t.sqlCh = make(chan string)
-
-	stopWriteSqlsCh := t.WriteSqls(ctx, writeFixSQL)
-	stopUpdateSummaryCh := t.UpdateSummaryInfo(ctx)
 
 	err := t.getTableInfo(ctx)
 	if err != nil {
@@ -141,14 +138,17 @@ func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (
 	}
 
 	if !t.IgnoreDataCheck {
+		stopWriteSqlsCh := t.WriteSqls(ctx, writeFixSQL)
+		stopUpdateSummaryCh := t.UpdateSummaryInfo(ctx)
+
 		dataEqual, err = t.CheckTableData(ctx)
 		if err != nil {
 			return false, false, errors.Trace(err)
 		}
-	}
 
-	stopWriteSqlsCh <- true
-	stopUpdateSummaryCh <- true
+		stopWriteSqlsCh <- true
+		stopUpdateSummaryCh <- true
+	}
 
 	t.wg.Wait()
 	return structEqual, dataEqual, nil
@@ -168,7 +168,12 @@ func (t *TableDiff) CheckTableStruct(ctx context.Context) (bool, error) {
 
 func (t *TableDiff) adjustConfig() {
 	if t.ChunkSize <= 0 {
-		t.ChunkSize = 100
+		log.Warn("chunk size is less than 0, will use default value 1000", zap.Int("chunk size", t.ChunkSize))
+		t.ChunkSize = 1000
+	}
+
+	if t.ChunkSize < 1000 || t.ChunkSize > 10000 {
+		log.Warn("chunk size is recommend in range [1000, 10000]", zap.Int("chunk size", t.ChunkSize))
 	}
 
 	if len(t.Range) == 0 {
@@ -188,14 +193,14 @@ func (t *TableDiff) getTableInfo(ctx context.Context) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	t.TargetTable.info = removeColumns(tableInfo, t.RemoveColumns)
+	t.TargetTable.info = ignoreColumns(tableInfo, t.IgnoreColumns)
 
 	for _, sourceTable := range t.SourceTables {
 		tableInfo, err := dbutil.GetTableInfo(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table)
 		if err != nil {
 			return errors.Trace(err)
 		}
-		sourceTable.info = removeColumns(tableInfo, t.RemoveColumns)
+		sourceTable.info = ignoreColumns(tableInfo, t.IgnoreColumns)
 	}
 
 	return nil
@@ -307,6 +312,7 @@ func (t *TableDiff) LoadCheckpoint(ctx context.Context) ([]*ChunkRange, error) {
 				return nil, errors.Trace(err)
 			}
 
+			atomic.StoreInt32(&t.checkpointLoaded, 1)
 			return chunks, nil
 		}
 	}
@@ -322,6 +328,7 @@ func (t *TableDiff) LoadCheckpoint(ctx context.Context) ([]*ChunkRange, error) {
 		return nil, errors.Trace(err)
 	}
 
+	atomic.StoreInt32(&t.checkpointLoaded, 1)
 	return nil, nil
 }
 
@@ -329,7 +336,7 @@ func (t *TableDiff) getSourceTableChecksum(ctx context.Context, chunk *ChunkRang
 	var checksum int64
 
 	for _, sourceTable := range t.SourceTables {
-		checksumTmp, err := dbutil.GetCRC32Checksum(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.info, chunk.Where, utils.StringsToInterfaces(chunk.Args), utils.SliceToMap(t.IgnoreColumns))
+		checksumTmp, err := dbutil.GetCRC32Checksum(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
 		if err != nil {
 			return -1, errors.Trace(err)
 		}
@@ -435,7 +442,7 @@ func (t *TableDiff) compareChecksum(ctx context.Context, chunk *ChunkRange) (boo
 		return false, errors.Trace(err)
 	}
 
-	targetChecksum, err := dbutil.GetCRC32Checksum(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, utils.StringsToInterfaces(chunk.Args), utils.SliceToMap(t.IgnoreColumns))
+	targetChecksum, err := dbutil.GetCRC32Checksum(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
 	if err != nil {
 		return false, errors.Trace(err)
 	}
@@ -452,9 +459,8 @@ func (t *TableDiff) compareChecksum(ctx context.Context, chunk *ChunkRange) (boo
 func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, error) {
 	sourceRows := make(map[string][]map[string]*dbutil.ColumnData)
 	args := utils.StringsToInterfaces(chunk.Args)
-	ignoreCloumns := utils.SliceToMap(t.IgnoreColumns)
 
-	targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, args, ignoreCloumns, t.Collation)
+	targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, args, t.Collation)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
@@ -467,7 +473,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 	}
 
 	for i, sourceTable := range t.SourceTables {
-		rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, chunk.Where, args, ignoreCloumns, t.Collation)
+		rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, chunk.Where, args, t.Collation)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -530,7 +536,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 		if index1 == len(rowsData1) {
 			// all the rowsData2's data should be deleted
 			for ; index2 < len(rowsData2); index2++ {
-				sql := generateDML("delete", rowsData2[index2], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
+				sql := generateDML("delete", rowsData2[index2], t.TargetTable.info, t.TargetTable.Schema)
 				log.Info("[delete]", zap.String("sql", sql))
 				t.wg.Add(1)
 				t.sqlCh <- sql
@@ -541,7 +547,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 		if index2 == len(rowsData2) {
 			// rowsData2 lack some data, should insert them
 			for ; index1 < len(rowsData1); index1++ {
-				sql := generateDML("replace", rowsData1[index1], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
+				sql := generateDML("replace", rowsData1[index1], t.TargetTable.info, t.TargetTable.Schema)
 				log.Info("[insert]", zap.String("sql", sql))
 				t.wg.Add(1)
 				t.sqlCh <- sql
@@ -562,21 +568,21 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 		switch cmp {
 		case 1:
 			// delete
-			sql := generateDML("delete", rowsData2[index2], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
+			sql := generateDML("delete", rowsData2[index2], t.TargetTable.info, t.TargetTable.Schema)
 			log.Info("[delete]", zap.String("sql", sql))
 			t.wg.Add(1)
 			t.sqlCh <- sql
 			index2++
 		case -1:
 			// insert
-			sql := generateDML("replace", rowsData1[index1], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
+			sql := generateDML("replace", rowsData1[index1], t.TargetTable.info, t.TargetTable.Schema)
 			log.Info("[insert]", zap.String("sql", sql))
 			t.wg.Add(1)
 			t.sqlCh <- sql
 			index1++
 		case 0:
 			// update
-			sql := generateDML("replace", rowsData1[index1], orderKeyCols, t.TargetTable.info, t.TargetTable.Schema)
+			sql := generateDML("replace", rowsData1[index1], t.TargetTable.info, t.TargetTable.Schema)
 			log.Info("[update]", zap.String("sql", sql))
 			t.wg.Add(1)
 			t.sqlCh <- sql
@@ -656,7 +662,9 @@ func (t *TableDiff) UpdateSummaryInfo(ctx context.Context) chan bool {
 			case <-stopUpdateCh:
 				return
 			case <-ticker.C:
-				update()
+				if atomic.LoadInt32(&t.checkpointLoaded) == 1 {
+					update()
+				}
 			}
 		}
 	}()
@@ -664,7 +672,7 @@ func (t *TableDiff) UpdateSummaryInfo(ctx context.Context) chan bool {
 	return stopUpdateCh
 }
 
-func generateDML(tp string, data map[string]*dbutil.ColumnData, keys []*model.ColumnInfo, table *model.TableInfo, schema string) (sql string) {
+func generateDML(tp string, data map[string]*dbutil.ColumnData, table *model.TableInfo, schema string) (sql string) {
 	switch tp {
 	case "replace":
 		colNames := make([]string, 0, len(table.Columns))
@@ -689,8 +697,8 @@ func generateDML(tp string, data map[string]*dbutil.ColumnData, keys []*model.Co
 
 		sql = fmt.Sprintf("REPLACE INTO `%s`.`%s`(%s) VALUES (%s);", schema, table.Name, strings.Join(colNames, ","), strings.Join(values, ","))
 	case "delete":
-		kvs := make([]string, 0, len(keys))
-		for _, col := range keys {
+		kvs := make([]string, 0, len(table.Columns))
+		for _, col := range table.Columns {
 			if col.IsGenerated() {
 				continue
 			}
@@ -801,20 +809,14 @@ func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model
 }
 
 func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo, where string,
-	args []interface{}, ignoreColumns map[string]interface{}, collation string) ([]map[string]*dbutil.ColumnData, []*model.ColumnInfo, error) {
+	args []interface{}, collation string) ([]map[string]*dbutil.ColumnData, []*model.ColumnInfo, error) {
 	orderKeys, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
-	columns := "*"
 
-	if len(ignoreColumns) != 0 {
-		columnNames := make([]string, 0, len(tableInfo.Columns))
-		for _, col := range tableInfo.Columns {
-			if _, ok := ignoreColumns[col.Name.O]; ok {
-				continue
-			}
-			columnNames = append(columnNames, col.Name.O)
-		}
-		columns = strings.Join(columnNames, ", ")
+	columnNames := make([]string, 0, len(tableInfo.Columns))
+	for _, col := range tableInfo.Columns {
+		columnNames = append(columnNames, col.Name.O)
 	}
+	columns := strings.Join(columnNames, ", ")
 
 	if collation != "" {
 		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
