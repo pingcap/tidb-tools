@@ -1,4 +1,4 @@
-.PHONY: build importer dump_region binlogctl sync_diff_inspector ddl_checker test check deps
+.PHONY: build importer dump_region sync_diff_inspector ddl_checker test check deps
 
 # Ensure GOPATH is set before running build process.
 ifeq "$(GOPATH)" ""
@@ -25,9 +25,9 @@ PACKAGE_LIST  := go list ./...
 PACKAGES  := $$($(PACKAGE_LIST))
 FAIL_ON_STDOUT := awk '{ print } END { if (NR > 0) { exit 1 } }'
 
-build: prepare check importer binlogctl sync_diff_inspector ddl_checker finish
+build: prepare check importer sync_diff_inspector ddl_checker finish
 
-prepare:		
+prepare:
 	cp go.mod1 go.mod
 	cp go.sum1 go.sum
 
@@ -36,9 +36,6 @@ importer:
 
 dump_region:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/dump_region ./dump_region
-
-binlogctl:
-	$(GO) build -ldflags '$(LDFLAGS)' -o bin/binlogctl ./tidb-binlog/binlogctl
 
 sync_diff_inspector:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/sync_diff_inspector ./sync_diff_inspector
