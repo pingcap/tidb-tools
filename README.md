@@ -11,8 +11,6 @@ make importer # build importer
 
 make sync_diff_inspector # build sync_diff_inspector
 
-make binlogctl  # build binlogctl
-
 make ddl_checker  # build ddl_checker
 ```
 
@@ -27,10 +25,6 @@ When tidb-tools are built successfully, you can find the binary in the `bin` dir
 - [sync_diff_inspector](./sync_diff_inspector)
 
     A tool for comparing two databases' data and outputting a brief report about the differences.
-
-- [binlogctl](./tidb-binlog/binlogctl)
-
-    A tool for performing some tidb-binlog related operations, like querying the status of Pump/Drainer and pause/offline some Pump/Drainer.
 
 - [ddl_checker](./ddl_checker)
 
