@@ -47,4 +47,4 @@ The separator argument defaults to an empty string if omitted.
 
 ## notice
 * only support above poor expressions now
-* column mapping don't change column type and table structure now
+* column mapping doesn't change column type and table structure now
