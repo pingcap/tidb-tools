@@ -13,6 +13,8 @@
 
 package sqlgen
 
+import "strings"
+
 // ResultType is used to determine whether a Result is valid.
 type ResultType int
 
@@ -49,7 +51,7 @@ func StrResult(str string) Result {
 	return Result{Tp: PlainString, Value: str}
 }
 
-// Fn is callable object, an implementation for sqlgen.Function.
+// Fn is a callable object.
 type Fn struct {
 	Name         string
 	F            func() Result
@@ -91,6 +93,15 @@ func Str(str string) Fn {
 		F: func() Result {
 			return StrResult(str)
 		}}
+}
+
+func Strs(strs ...string) Fn {
+	return Fn{
+		RandomFactor: 1,
+		F: func() Result {
+			return StrResult(strings.Join(strs, " "))
+		},
+	}
 }
 
 // EmptyFn is a Fn which simply returns empty string.

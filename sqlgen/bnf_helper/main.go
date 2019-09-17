@@ -16,9 +16,10 @@ package main
 import (
 	"bufio"
 	"flag"
-	"github.com/pingcap/tidb-tools/sqlgen/sqlgen"
 	"log"
 	"os"
+
+	"github.com/pingcap/tidb-tools/sqlgen/sqlgen"
 )
 
 var (

@@ -39,16 +39,11 @@ func BuildProdMap(prods []*Production) map[string]*Production {
 
 func checkProductionMap(productionMap map[string]*Production) {
 	for _, production := range productionMap {
-		for _, seqs := range production.bodyList {
-			for _, seq := range seqs.seq {
-				if isLiteral(seq) {
-					continue
-				}
-				if _, exist := productionMap[seq]; !exist {
-					panic(fmt.Sprintf("Production '%s' not found", seq))
-				}
+		production.ForEachNonTerm(func(seq string) {
+			if _, exist := productionMap[seq]; !exist {
+				panic(fmt.Sprintf("Production '%s' not found", seq))
 			}
-		}
+		})
 	}
 }
 
@@ -66,13 +61,9 @@ func breadthFirstSearch(prodName string, prodMap map[string]*Production, visitor
 
 		if _, contains := resultSet[name]; !contains {
 			resultSet[name] = struct{}{}
-			for _, body := range prod.bodyList {
-				for _, s := range body.seq {
-					if !isLiteral(s) {
-						pendingSet = append(pendingSet, s)
-					}
-				}
-			}
+			prod.ForEachNonTerm(func(s string) {
+				pendingSet = append(pendingSet, s)
+			})
 			if len(visitors) != 0 {
 				for _, v := range visitors {
 					v(prod)
