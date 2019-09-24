@@ -374,7 +374,7 @@ func (c *ShardingTablesCheck) checkAutoIncrementKey(instance, schema, table stri
 		if !hasMatchedRule {
 			r.State = StateFailure
 			r.ErrorMsg = fmt.Sprintf("instance %s table `%s`.`%s` of sharding %s have auto-increment key, would conflict with each other to cause data corruption", instance, schema, table, c.name)
-			r.Instruction = "please set column mapping rules for them, or handle it by yourself"
+			r.Instruction = "please handle it by yourself, read https://pingcap.com/docs-cn/v3.0/reference/tools/data-migration/usage-scenarios/best-practice-dm-shard/#自增主键冲突处理 for more detail"
 			r.Extra = AutoIncrementKeyChecking
 			return false
 		}
