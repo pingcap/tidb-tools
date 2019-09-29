@@ -117,7 +117,10 @@ func New(caseSensitive bool, rules *Rules) (*Filter, error) {
 		items: make(map[string]ActionType),
 	}
 	err := f.genRegexMap()
-	return f, err
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
 }
 
 func (f *Filter) genRegexMap() (err error) {
