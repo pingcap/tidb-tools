@@ -110,7 +110,8 @@ func (s *testFilterSuite) TestFilterOnSchema(c *C) {
 	}
 
 	for _, t := range cases {
-		ft := New(false, t.rules)
+		ft, err := New(false, t.rules)
+		c.Assert(err, IsNil)
 		got := ft.ApplyOn(t.Input)
 		c.Logf("got %+v, expected %+v", got, t.Output)
 		c.Assert(got, DeepEquals, t.Output)
@@ -127,7 +128,8 @@ func (s *testFilterSuite) TestMaxBox(c *C) {
 		},
 	}
 
-	r := New(false, rules)
+	r, err := New(false, rules)
+	c.Assert(err, IsNil)
 
 	x := &Table{"test1", ""}
 	res := r.ApplyOn([]*Table{x})
@@ -141,11 +143,33 @@ func (s *testFilterSuite) TestCaseSensitive(c *C) {
 		IgnoreDBs:    []string{"~^FOO"},
 		IgnoreTables: []*Table{{"~.*", "~FoO$"}},
 	}
-	r := New(true, rules)
+	r, err := New(true, rules)
+	c.Assert(err, IsNil)
 
 	input := []*Table{{"FOO1", "a"}, {"foo2", "b"}, {"BoO3", "cFoO"}, {"Foo4", "dfoo"}, {"5", "5"}}
 	actual := r.ApplyOn(input)
 	expected := []*Table{{"foo2", "b"}, {"Foo4", "dfoo"}, {"5", "5"}}
 	c.Logf("got %+v, expected %+v", actual, expected)
 	c.Assert(actual, DeepEquals, expected)
+}
+
+func (s *testFilterSuite) TestInvalidRegex(c *C) {
+	cases := []struct {
+		rules *Rules
+	}{
+		{
+			rules: &Rules{
+				DoDBs: []string{"~^t[0-9]+((?!_copy).)*$"},
+			},
+		},
+		{
+			rules: &Rules{
+				DoDBs: []string{"~^t[0-9]+sp(?=copy).*"},
+			},
+		},
+	}
+	for _, tc := range cases {
+		_, err := New(true, tc.rules)
+		c.Assert(err, NotNil)
+	}
 }
