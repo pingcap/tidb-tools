@@ -293,7 +293,7 @@ func generateData(ctx context.Context, db *sql.DB, dbCfg dbutil.DBConfig, source
 		randomValueNum--
 	}
 
-	values, _, err := dbutil.GetRandomValues(context.Background(), db, "test", targetTable, "e", int(randomValueNum), "TRUE", nil, "")
+	values, err := dbutil.GetRandomValues(context.Background(), db, "test", targetTable, "e", int(randomValueNum), "TRUE", nil, "")
 	if err != nil {
 		return err
 	}
@@ -321,7 +321,7 @@ func generateData(ctx context.Context, db *sql.DB, dbCfg dbutil.DBConfig, source
 }
 
 func updateData(ctx context.Context, db *sql.DB, table string) error {
-	values, _, err := dbutil.GetRandomValues(context.Background(), db, "test", table, "e", 3, "TRUE", nil, "")
+	values, err := dbutil.GetRandomValues(context.Background(), db, "test", table, "e", 3, "TRUE", nil, "")
 	if err != nil {
 		return err
 	}

@@ -25,7 +25,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pingcap/tidb-tools/pkg/ddl-checker"
+	checker "github.com/pingcap/tidb-tools/pkg/ddl-checker"
 )
 
 var (
