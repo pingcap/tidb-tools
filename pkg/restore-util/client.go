@@ -1,6 +1,7 @@
-package region_util
+package restore_util
 
 import (
+	"bytes"
 	"context"
 
 	"github.com/pingcap/errors"
@@ -26,11 +27,7 @@ type pdClient struct {
 	storeCache map[uint64]*metapb.Store
 }
 
-func NewPDClient(pdAddrs []string, security pd.SecurityOption) (Client, error) {
-	client, err := pd.NewClient(pdAddrs, security)
-	if err != nil {
-		return nil, err
-	}
+func NewClient(client pd.Client) (Client, error) {
 	return &pdClient{
 		client:     client,
 		storeCache: make(map[uint64]*metapb.Store),
@@ -91,7 +88,7 @@ func (c *pdClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, key 
 	}
 	req := &kvrpcpb.SplitRegionRequest{
 		Context:  reqCtx,
-		SplitKey: key,
+		SplitKeys: [][]byte{key},
 	}
 	conn, err := grpc.Dial(store.GetAddress(), grpc.WithInsecure())
 	client := tikvpb.NewTikvClient(conn)
@@ -103,7 +100,17 @@ func (c *pdClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, key 
 		return nil, errors.Errorf("split region %d failed, got region error: %v", regionInfo.Region.GetId(), resp.RegionError)
 	}
 
-	newRegion := resp.GetLeft()
+	regions := resp.GetRegions()
+	var newRegion *metapb.Region
+	for _, r := range regions {
+		// Assume the new region is the left one.
+		if bytes.Compare(r.GetStartKey(), regionInfo.Region.GetStartKey()) == 0 {
+			newRegion = r
+		}
+	}
+	if newRegion == nil {
+		return nil, errors.Errorf("split region failed")
+	}
 	var leader *metapb.Peer
 	// Assume the leaders will be at the same store.
 	if regionInfo.Leader != nil {
