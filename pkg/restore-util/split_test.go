@@ -13,7 +13,7 @@ import (
 )
 
 type testClient struct {
-	mu sync.RWMutex
+	mu           sync.RWMutex
 	stores       map[uint64]*metapb.Store
 	regions      map[uint64]*RegionInfo
 	nextRegionID uint64
@@ -137,10 +137,10 @@ func initTestClient() *testClient {
 	for i := uint64(1); i < 6; i++ {
 		regions[i] = &RegionInfo{
 			Region: &metapb.Region{
-				Id:     i,
-				Peers:  peers,
+				Id:       i,
+				Peers:    peers,
 				StartKey: []byte(keys[i-1]),
-				EndKey: []byte(keys[i]),
+				EndKey:   []byte(keys[i]),
 			},
 		}
 	}

@@ -87,7 +87,7 @@ func (c *pdClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, key 
 		return nil, err
 	}
 	req := &kvrpcpb.SplitRegionRequest{
-		Context:  reqCtx,
+		Context:   reqCtx,
 		SplitKeys: [][]byte{key},
 	}
 	conn, err := grpc.Dial(store.GetAddress(), grpc.WithInsecure())

@@ -20,7 +20,7 @@ var ScatterWaitIntervalMillis = 50
 var ScatterMaxWaitIntervalMillis = 5000
 
 type RegionSplitter struct {
-	client Client
+	client    Client
 	rangeTree *RangeTree
 }
 
