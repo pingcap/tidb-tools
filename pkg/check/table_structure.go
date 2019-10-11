@@ -20,14 +20,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pingcap/tidb-tools/pkg/column-mapping"
-
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/charset"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/parser/mysql"
+	column "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 )
 
@@ -374,7 +373,7 @@ func (c *ShardingTablesCheck) checkAutoIncrementKey(instance, schema, table stri
 		if !hasMatchedRule {
 			r.State = StateFailure
 			r.ErrorMsg = fmt.Sprintf("instance %s table `%s`.`%s` of sharding %s have auto-increment key, would conflict with each other to cause data corruption", instance, schema, table, c.name)
-			r.Instruction = "please set column mapping rules for them, or handle it by yourself"
+			r.Instruction = "please handle it by yourself"
 			r.Extra = AutoIncrementKeyChecking
 			return false
 		}

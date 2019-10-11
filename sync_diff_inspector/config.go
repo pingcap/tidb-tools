@@ -40,8 +40,6 @@ type DBConfig struct {
 
 	InstanceID string `toml:"instance-id" json:"instance-id"`
 
-	Snapshot string `toml:"snapshot" json:"snapshot"`
-
 	Conn *sql.DB
 }
 
@@ -69,10 +67,8 @@ type CheckTables struct {
 type TableConfig struct {
 	// table's origin information
 	TableInstance
-	// columns be ignored, will not check this column's data, but may use these columns as split field or order by key.
+	// columns be ignored, will not check this column's data
 	IgnoreColumns []string `toml:"ignore-columns"`
-	// columns be removed, will remove these columns from table info, and will not check these columns' data.
-	RemoveColumns []string `toml:"remove-columns"`
 	// field should be the primary key, unique key or field with index
 	Fields string `toml:"index-fields"`
 	// select range, for example: "age > 10 AND age < 20"
@@ -175,9 +171,6 @@ type Config struct {
 	// how many goroutines are created to check data
 	CheckThreadCount int `toml:"check-thread-count" json:"check-thread-count"`
 
-	// set true if target-db and source-db all support tidb implicit column "_tidb_rowid"
-	UseRowID bool `toml:"use-rowid" json:"use-rowid"`
-
 	// set false if want to comapre the data directly
 	UseChecksum bool `toml:"use-checksum" json:"use-checksum"`
 
@@ -205,9 +198,6 @@ type Config struct {
 	// set true will continue check from the latest checkpoint
 	UseCheckpoint bool `toml:"use-checkpoint" json:"use-checkpoint"`
 
-	// use this tidb's statistics information to split chunk
-	TiDBInstanceID string `toml:"tidb-instance-id" json:"tidb-instance-id"`
-
 	// config file
 	ConfigFile string
 
@@ -226,7 +216,6 @@ func NewConfig() *Config {
 	fs.IntVar(&cfg.ChunkSize, "chunk-size", 1000, "diff check chunk size")
 	fs.IntVar(&cfg.Sample, "sample", 100, "the percent of sampling check")
 	fs.IntVar(&cfg.CheckThreadCount, "check-thread-count", 1, "how many goroutines are created to check data")
-	fs.BoolVar(&cfg.UseRowID, "use-rowid", false, "set true if target-db and source-db all support tidb implicit column _tidb_rowid")
 	fs.BoolVar(&cfg.UseChecksum, "use-checksum", true, "set false if want to comapre the data directly")
 	fs.StringVar(&cfg.FixSQLFile, "fix-sql-file", "fix.sql", "the name of the file which saves sqls used to fix different data")
 	fs.BoolVar(&cfg.PrintVersion, "V", false, "print version of sync_diff_inspector")

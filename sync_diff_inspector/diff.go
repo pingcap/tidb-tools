@@ -15,9 +15,11 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"regexp"
+	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -35,7 +37,6 @@ type Diff struct {
 	chunkSize         int
 	sample            int
 	checkThreadCount  int
-	useRowID          bool
 	useChecksum       bool
 	useCheckpoint     bool
 	onlyUseChecksum   bool
@@ -43,9 +44,11 @@ type Diff struct {
 	ignoreStructCheck bool
 	tables            map[string]map[string]*TableConfig
 	fixSQLFile        *os.File
-	report            *Report
-	tidbInstanceID    string
-	tableRouter       *router.Table
+
+	report         *Report
+	tidbInstanceID string
+	tableRouter    *router.Table
+	cpDB           *sql.DB
 
 	ctx context.Context
 }
@@ -57,13 +60,11 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 		chunkSize:         cfg.ChunkSize,
 		sample:            cfg.Sample,
 		checkThreadCount:  cfg.CheckThreadCount,
-		useRowID:          cfg.UseRowID,
 		useChecksum:       cfg.UseChecksum,
 		useCheckpoint:     cfg.UseCheckpoint,
 		onlyUseChecksum:   cfg.OnlyUseChecksum,
 		ignoreDataCheck:   cfg.IgnoreDataCheck,
 		ignoreStructCheck: cfg.IgnoreStructCheck,
-		tidbInstanceID:    cfg.TiDBInstanceID,
 		tables:            make(map[string]map[string]*TableConfig),
 		report:            NewReport(),
 		ctx:               ctx,
@@ -95,40 +96,26 @@ func (df *Diff) init(cfg *Config) (err error) {
 	return nil
 }
 
+// CreateDBConn creates db connections for source and target.
 func (df *Diff) CreateDBConn(cfg *Config) (err error) {
-	// SetMaxOpenConns and SetMaxIdleConns for connection to avoid error like
-	// `dial tcp 10.26.2.1:3306: connect: cannot assign requested address`
 	for _, source := range cfg.SourceDBCfg {
-		source.Conn, err = dbutil.OpenDB(source.DBConfig)
+		source.Conn, err = diff.CreateDB(df.ctx, source.DBConfig, cfg.CheckThreadCount)
 		if err != nil {
 			return errors.Errorf("create source db %+v error %v", source.DBConfig, err)
 		}
-		source.Conn.SetMaxOpenConns(cfg.CheckThreadCount)
-		source.Conn.SetMaxIdleConns(cfg.CheckThreadCount)
-
 		df.sourceDBs[source.InstanceID] = source
-		if source.Snapshot != "" {
-			err = dbutil.SetSnapshot(df.ctx, source.Conn, source.Snapshot)
-			if err != nil {
-				return errors.Errorf("set history snapshot %s for source db %+v error %v", source.Snapshot, source.DBConfig, err)
-			}
-		}
 	}
 
 	// create connection for target.
-	cfg.TargetDBCfg.Conn, err = dbutil.OpenDB(cfg.TargetDBCfg.DBConfig)
+	cfg.TargetDBCfg.Conn, err = diff.CreateDB(df.ctx, cfg.TargetDBCfg.DBConfig, cfg.CheckThreadCount)
 	if err != nil {
 		return errors.Errorf("create target db %+v error %v", cfg.TargetDBCfg, err)
 	}
-	cfg.TargetDBCfg.Conn.SetMaxOpenConns(cfg.CheckThreadCount)
-	cfg.TargetDBCfg.Conn.SetMaxIdleConns(cfg.CheckThreadCount)
-
 	df.targetDB = cfg.TargetDBCfg
-	if cfg.TargetDBCfg.Snapshot != "" {
-		err = dbutil.SetSnapshot(df.ctx, cfg.TargetDBCfg.Conn, cfg.TargetDBCfg.Snapshot)
-		if err != nil {
-			return errors.Errorf("set history snapshot %s for target db %+v error %v", cfg.TargetDBCfg.Snapshot, cfg.TargetDBCfg, err)
-		}
+
+	df.cpDB, err = diff.CreateDBForCP(df.ctx, cfg.TargetDBCfg.DBConfig)
+	if err != nil {
+		return errors.Errorf("create checkpoint db %+v error %v", cfg.TargetDBCfg, err)
 	}
 
 	return nil
@@ -197,7 +184,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 		}
 
 		for _, tableName := range tables {
-			tableInfo, err := dbutil.GetTableInfoWithRowID(df.ctx, df.targetDB.Conn, schemaTables.Schema, tableName, cfg.UseRowID)
+			tableInfo, err := dbutil.GetTableInfo(df.ctx, df.targetDB.Conn, schemaTables.Schema, tableName)
 			if err != nil {
 				return errors.Errorf("get table %s.%s's inforamtion error %s", schemaTables.Schema, tableName, errors.ErrorStack(err))
 			}
@@ -225,7 +212,6 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 					Schema: schemaTables.Schema,
 					Table:  tableName,
 				},
-				IgnoreColumns:   make([]string, 0, 1),
 				TargetTableInfo: tableInfo,
 				Range:           "TRUE",
 				SourceTables:    sourceTables,
@@ -273,7 +259,6 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 			df.tables[table.Schema][table.Table].Range = table.Range
 		}
 		df.tables[table.Schema][table.Table].IgnoreColumns = table.IgnoreColumns
-		df.tables[table.Schema][table.Table].RemoveColumns = table.RemoveColumns
 		df.tables[table.Schema][table.Table].Fields = table.Fields
 		df.tables[table.Schema][table.Table].Collation = table.Collation
 	}
@@ -356,6 +341,10 @@ func (df *Diff) Close() {
 	if df.targetDB.Conn != nil {
 		df.targetDB.Conn.Close()
 	}
+
+	if df.cpDB != nil {
+		df.cpDB.Close()
+	}
 }
 
 // Equal tests whether two database have same data and schema.
@@ -364,8 +353,6 @@ func (df *Diff) Equal() (err error) {
 
 	for _, schema := range df.tables {
 		for _, table := range schema {
-			var tidbStatsSource *diff.TableInstance
-
 			sourceTables := make([]*diff.TableInstance, 0, len(table.SourceTables))
 			for _, sourceTable := range table.SourceTables {
 				sourceTableInstance := &diff.TableInstance{
@@ -375,10 +362,6 @@ func (df *Diff) Equal() (err error) {
 					InstanceID: sourceTable.InstanceID,
 				}
 				sourceTables = append(sourceTables, sourceTableInstance)
-
-				if sourceTable.InstanceID == df.tidbInstanceID {
-					tidbStatsSource = sourceTableInstance
-				}
 			}
 
 			targetTableInstance := &diff.TableInstance{
@@ -388,12 +371,23 @@ func (df *Diff) Equal() (err error) {
 				InstanceID: df.targetDB.InstanceID,
 			}
 
-			if df.targetDB.InstanceID == df.tidbInstanceID {
-				tidbStatsSource = targetTableInstance
-			}
+			// find tidb instance for getting statistical information to split chunk
+			var tidbStatsSource *diff.TableInstance
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
 
-			if len(df.tidbInstanceID) != 0 && tidbStatsSource == nil {
-				return errors.NotFoundf("tidb instance id %s", df.tidbInstanceID)
+			isTiDB, err := dbutil.IsTiDB(ctx, targetTableInstance.Conn)
+			if err != nil {
+				log.Warn("judge instance is tidb failed", zap.Error(err))
+			} else if isTiDB {
+				tidbStatsSource = targetTableInstance
+			} else if len(sourceTables) == 1 {
+				isTiDB, err := dbutil.IsTiDB(ctx, sourceTables[0].Conn)
+				if err != nil {
+					log.Warn("judge instance is tidb failed", zap.Error(err))
+				} else if isTiDB {
+					tidbStatsSource = sourceTables[0]
+				}
 			}
 
 			td := &diff.TableDiff{
@@ -401,7 +395,6 @@ func (df *Diff) Equal() (err error) {
 				TargetTable:  targetTableInstance,
 
 				IgnoreColumns: table.IgnoreColumns,
-				RemoveColumns: table.RemoveColumns,
 
 				Fields:            table.Fields,
 				Range:             table.Range,
@@ -409,19 +402,20 @@ func (df *Diff) Equal() (err error) {
 				ChunkSize:         df.chunkSize,
 				Sample:            df.sample,
 				CheckThreadCount:  df.checkThreadCount,
-				UseRowID:          df.useRowID,
 				UseChecksum:       df.useChecksum,
 				UseCheckpoint:     df.useCheckpoint,
 				OnlyUseChecksum:   df.onlyUseChecksum,
 				IgnoreStructCheck: df.ignoreStructCheck,
 				IgnoreDataCheck:   df.ignoreDataCheck,
 				TiDBStatsSource:   tidbStatsSource,
+				CpDB:              df.cpDB,
 			}
 
 			structEqual, dataEqual, err := td.Equal(df.ctx, func(dml string) error {
 				_, err := df.fixSQLFile.WriteString(fmt.Sprintf("%s\n", dml))
 				return errors.Trace(err)
 			})
+
 			if err != nil {
 				log.Error("check failed", zap.String("table", dbutil.TableName(table.Schema, table.Table)), zap.Error(err))
 				return errors.Trace(err)

@@ -18,7 +18,7 @@ import (
 	"strings"
 
 	"github.com/pingcap/errors"
-	"github.com/pingcap/tidb-tools/pkg/table-rule-selector"
+	selector "github.com/pingcap/tidb-tools/pkg/table-rule-selector"
 )
 
 // ActionType indicates how to handle matched items
@@ -99,7 +99,6 @@ func (b *BinlogEventRule) ToLower() {
 }
 
 // Valid checks validity of rule.
-// TODO: check validity of dml/ddl event.
 func (b *BinlogEventRule) Valid() error {
 	if len(b.SQLPattern) > 0 {
 		reg, err := regexp.Compile("(?i)" + strings.Join(b.SQLPattern, "|"))
@@ -111,6 +110,11 @@ func (b *BinlogEventRule) Valid() error {
 
 	if b.Action != Do && b.Action != Ignore {
 		return errors.Errorf("action of binlog event rule %+v should not be empty", b)
+	}
+
+	// TODO: check validity of dml/ddl event.
+	for i := range b.Events {
+		b.Events[i] = EventType(strings.ToLower(string(b.Events[i])))
 	}
 
 	return nil

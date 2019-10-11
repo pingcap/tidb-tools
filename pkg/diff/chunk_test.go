@@ -15,6 +15,7 @@ package diff
 
 import (
 	"context"
+	"time"
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -32,13 +33,17 @@ type chunkTestCase struct {
 }
 
 func (*testChunkSuite) TestSplitRange(c *C) {
-	dbConn, err := createConn()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := createConn()
+	c.Assert(err, IsNil)
+	defer conn.Close()
+
+	_, err = conn.ExecContext(ctx, "CREATE DATABASE IF NOT EXISTS `test`")
 	c.Assert(err, IsNil)
 
-	_, err = dbConn.Query("CREATE DATABASE IF NOT EXISTS `test`")
-	c.Assert(err, IsNil)
-
-	_, err = dbConn.Query("DROP TABLE IF EXISTS `test`.`testa`")
+	_, err = conn.ExecContext(ctx, "DROP TABLE IF EXISTS `test`.`testa`")
 	c.Assert(err, IsNil)
 
 	createTableSQL := `CREATE TABLE test.testa (
@@ -61,16 +66,16 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 
 	// generate data for test.testa
 	importer.DoProcess(cfg)
-	defer dbConn.Query("DROP TABLE IF EXISTS `test`.`testa`")
+	defer conn.ExecContext(ctx, "DROP TABLE IF EXISTS `test`.`testa`")
 
 	// only work on tidb, so don't assert err here
-	_, _ = dbConn.Query("ANALYZE TABLE `test`.`testa`")
+	_, _ = conn.ExecContext(ctx, "ANALYZE TABLE `test`.`testa`")
 
-	tableInfo, err := dbutil.GetTableInfoWithRowID(context.Background(), dbConn, "test", "testa", false)
+	tableInfo, err := dbutil.GetTableInfo(ctx, conn, "test", "testa")
 	c.Assert(err, IsNil)
 
 	tableInstance := &TableInstance{
-		Conn:   dbConn,
+		Conn:   conn,
 		Schema: "test",
 		Table:  "testa",
 		info:   tableInfo,
@@ -86,7 +91,7 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 	chunkDataCount := 0
 	for _, chunk := range chunks {
 		conditions, args := chunk.toString("")
-		count, err := dbutil.GetRowCount(context.Background(), tableInstance.Conn, tableInstance.Schema, tableInstance.Table, dbutil.ReplacePlaceholder(conditions, args))
+		count, err := dbutil.GetRowCount(ctx, tableInstance.Conn, tableInstance.Schema, tableInstance.Table, conditions, stringSliceToInterfaceSlice(args))
 		c.Assert(err, IsNil)
 		chunkDataCount += int(count)
 	}
@@ -97,20 +102,19 @@ func (*testChunkSuite) TestChunkUpdate(c *C) {
 	chunk := &ChunkRange{
 		Bounds: []*Bound{
 			{
-				Column:      "a",
-				Lower:       "1",
-				LowerSymbol: ">",
-				Upper:       "2",
-				UpperSymbol: "<=",
+				Column:   "a",
+				Lower:    "1",
+				Upper:    "2",
+				HasLower: true,
+				HasUpper: true,
 			}, {
-				Column:      "b",
-				Lower:       "3",
-				LowerSymbol: ">=",
-				Upper:       "4",
-				UpperSymbol: "<",
+				Column:   "b",
+				Lower:    "3",
+				Upper:    "4",
+				HasLower: true,
+				HasUpper: true,
 			},
 		},
-		Mode: normalMode,
 	}
 
 	testCases := []struct {
@@ -119,22 +123,22 @@ func (*testChunkSuite) TestChunkUpdate(c *C) {
 		expectArgs []string
 	}{
 		{
-			[]string{"a", "5", ">=", "6", "<="},
-			"`a` >= ? AND `a` <= ? AND `b` >= ? AND `b` < ?",
-			[]string{"5", "6", "3", "4"},
+			[]string{"a", "5", "6"},
+			"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+			[]string{"5", "5", "3", "6", "6", "4"},
 		}, {
-			[]string{"a", "5", ">=", "6", "<"},
-			"`a` >= ? AND `a` < ? AND `b` >= ? AND `b` < ?",
-			[]string{"5", "6", "3", "4"},
+			[]string{"b", "5", "6"},
+			"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+			[]string{"1", "1", "5", "2", "2", "6"},
 		}, {
-			[]string{"c", "7", ">", "8", "<"},
-			"`a` > ? AND `a` <= ? AND `b` >= ? AND `b` < ? AND `c` > ? AND `c` < ?",
-			[]string{"1", "2", "3", "4", "7", "8"},
+			[]string{"c", "7", "8"},
+			"((`a` > ?) OR (`a` = ? AND `b` > ?) OR (`a` = ? AND `b` = ? AND `c` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` < ?) OR (`a` = ? AND `b` = ? AND `c` <= ?))",
+			[]string{"1", "1", "3", "1", "3", "7", "2", "2", "4", "2", "4", "8"},
 		},
 	}
 
 	for _, cs := range testCases {
-		newChunk := chunk.copyAndUpdate(cs.boundArgs[0], cs.boundArgs[1], cs.boundArgs[2], cs.boundArgs[3], cs.boundArgs[4])
+		newChunk := chunk.copyAndUpdate(cs.boundArgs[0], cs.boundArgs[1], cs.boundArgs[2], true, true)
 		conditions, args := newChunk.toString("")
 		c.Assert(conditions, Equals, cs.expectStr)
 		c.Assert(args, DeepEquals, cs.expectArgs)
@@ -142,63 +146,45 @@ func (*testChunkSuite) TestChunkUpdate(c *C) {
 
 	// the origin chunk is not changed
 	conditions, args := chunk.toString("")
-	c.Assert(conditions, Equals, "`a` > ? AND `a` <= ? AND `b` >= ? AND `b` < ?")
-	expectArgs := []string{"1", "2", "3", "4"}
-	for i, arg := range args {
-		c.Assert(arg, Equals, expectArgs[i])
-	}
+	c.Assert(conditions, Equals, "((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))")
+	expectArgs := []string{"1", "1", "3", "2", "2", "4"}
+	c.Assert(args, DeepEquals, expectArgs)
 }
 
 func (*testChunkSuite) TestChunkToString(c *C) {
 	chunk := &ChunkRange{
 		Bounds: []*Bound{
 			{
-				Column:      "a",
-				Lower:       "1",
-				LowerSymbol: ">",
-				Upper:       "2",
-				UpperSymbol: "<",
+				Column:   "a",
+				Lower:    "1",
+				Upper:    "2",
+				HasLower: true,
+				HasUpper: true,
 			}, {
-				Column:      "b",
-				Lower:       "3",
-				LowerSymbol: ">",
-				Upper:       "4",
-				UpperSymbol: "<",
+				Column:   "b",
+				Lower:    "3",
+				Upper:    "4",
+				HasLower: true,
+				HasUpper: true,
 			}, {
-				Column:      "c",
-				Lower:       "5",
-				LowerSymbol: ">",
-				Upper:       "6",
-				UpperSymbol: "<",
+				Column:   "c",
+				Lower:    "5",
+				Upper:    "6",
+				HasLower: true,
+				HasUpper: true,
 			},
 		},
-		Mode: normalMode,
 	}
 
 	conditions, args := chunk.toString("")
-	c.Assert(conditions, Equals, "`a` > ? AND `a` < ? AND `b` > ? AND `b` < ? AND `c` > ? AND `c` < ?")
-	expectArgs := []string{"1", "2", "3", "4", "5", "6"}
+	c.Assert(conditions, Equals, "((`a` > ?) OR (`a` = ? AND `b` > ?) OR (`a` = ? AND `b` = ? AND `c` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` < ?) OR (`a` = ? AND `b` = ? AND `c` <= ?))")
+	expectArgs := []string{"1", "1", "3", "1", "3", "5", "2", "2", "4", "2", "4", "6"}
 	for i, arg := range args {
 		c.Assert(arg, Equals, expectArgs[i])
 	}
 
 	conditions, args = chunk.toString("latin1")
-	c.Assert(conditions, Equals, "`a` COLLATE 'latin1' > ? AND `a` COLLATE 'latin1' < ? AND `b` COLLATE 'latin1' > ? AND `b` COLLATE 'latin1' < ? AND `c` COLLATE 'latin1' > ? AND `c` COLLATE 'latin1' < ?")
-	expectArgs = []string{"1", "2", "3", "4", "5", "6"}
-	for i, arg := range args {
-		c.Assert(arg, Equals, expectArgs[i])
-	}
-
-	chunk.Mode = bucketMode
-	conditions, args = chunk.toString("")
-	c.Assert(conditions, Equals, "((`a` > ?) OR (`a` = ? AND `b` > ?) OR (`a` = ? AND `b` = ? AND `c` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` < ?) OR (`a` = ? AND `b` = ? AND `c` < ?))")
-	expectArgs = []string{"1", "1", "3", "1", "3", "5", "2", "2", "4", "2", "4", "6"}
-	for i, arg := range args {
-		c.Assert(arg, Equals, expectArgs[i])
-	}
-
-	conditions, args = chunk.toString("latin1")
-	c.Assert(conditions, Equals, "((`a` COLLATE 'latin1' > ?) OR (`a` = ? AND `b` COLLATE 'latin1' > ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE 'latin1' > ?)) AND ((`a` COLLATE 'latin1' < ?) OR (`a` = ? AND `b` COLLATE 'latin1' < ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE 'latin1' < ?))")
+	c.Assert(conditions, Equals, "((`a` COLLATE 'latin1' > ?) OR (`a` = ? AND `b` COLLATE 'latin1' > ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE 'latin1' > ?)) AND ((`a` COLLATE 'latin1' < ?) OR (`a` = ? AND `b` COLLATE 'latin1' < ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE 'latin1' <= ?))")
 	expectArgs = []string{"1", "1", "3", "1", "3", "5", "2", "2", "4", "2", "4", "6"}
 	for i, arg := range args {
 		c.Assert(arg, Equals, expectArgs[i])

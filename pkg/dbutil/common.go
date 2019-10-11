@@ -37,12 +37,6 @@ import (
 )
 
 const (
-	// ImplicitColName is name of implicit column in TiDB
-	ImplicitColName = "_tidb_rowid"
-
-	// ImplicitColID is ID implicit column in TiDB
-	ImplicitColID = -1
-
 	// DefaultRetryTime is the default retry time to execute sql
 	DefaultRetryTime = 10
 
@@ -51,6 +45,9 @@ const (
 
 	// SlowWarnLog defines the duration to log warn log of sql when exec time greater than
 	SlowWarnLog = 100 * time.Millisecond
+
+	// DefaultDeleteRowsNum is the default rows num for delete one time
+	DefaultDeleteRowsNum int64 = 100000
 )
 
 var (
@@ -72,6 +69,8 @@ type DBConfig struct {
 	Password string `toml:"password" json:"password"`
 
 	Schema string `toml:"schema" json:"schema"`
+
+	Snapshot string `toml:"snapshot" json:"snapshot"`
 }
 
 // String returns native format of database configuration
@@ -109,7 +108,14 @@ func GetDBConfigFromEnv(schema string) DBConfig {
 
 // OpenDB opens a mysql connection FD
 func OpenDB(cfg DBConfig) (*sql.DB, error) {
-	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4", cfg.User, cfg.Password, cfg.Host, cfg.Port)
+	var dbDSN string
+	if len(cfg.Snapshot) != 0 {
+		log.Info("create connection with snapshot", zap.String("snapshot", cfg.Snapshot))
+		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&tidb_snapshot=%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Snapshot)
+	} else {
+		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4", cfg.User, cfg.Password, cfg.Host, cfg.Port)
+	}
+
 	dbConn, err := sql.Open("mysql", dbDSN)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -158,7 +164,7 @@ func GetCreateTableSQL(ctx context.Context, db *sql.DB, schemaName string, table
 
 // GetRowCount returns row count of the table.
 // if not specify where condition, return total row count of the table.
-func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName string, where string) (int64, error) {
+func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName string, where string, args []interface{}) (int64, error) {
 	/*
 		select count example result:
 		mysql> SELECT count(1) cnt from `test`.`itest` where id > 0;
@@ -173,10 +179,10 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 	if len(where) > 0 {
 		query += fmt.Sprintf(" WHERE %s", where)
 	}
-	log.Debug("get row count", zap.String("sql", query))
+	log.Debug("get row count", zap.String("sql", query), zap.Reflect("args", args))
 
 	var cnt sql.NullInt64
-	err := db.QueryRowContext(ctx, query).Scan(&cnt)
+	err := db.QueryRowContext(ctx, query, args...).Scan(&cnt)
 	if err != nil {
 		return 0, errors.Trace(err)
 	}
@@ -187,20 +193,18 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 	return cnt.Int64, nil
 }
 
-// GetRandomValues returns some random value and these value's count of a column, just like sampling. Tips: limitArgs is the value in limitRange.
-func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int, limitRange string, limitArgs []interface{}, collation string) ([]string, []int, error) {
+// GetRandomValues returns some random value. Tips: limitArgs is the value in limitRange.
+func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int, limitRange string, limitArgs []interface{}, collation string) ([]string, error) {
 	/*
 		example:
-		mysql> SELECT `id`, COUNT(*) count FROM (SELECT `id` FROM `test`.`test`  WHERE `id` COLLATE "latin1_bin" > 0 AND `id` COLLATE "latin1_bin" < 100 ORDER BY RAND() LIMIT 5) rand_tmp GROUP BY `id` ORDER BY `id` COLLATE "latin1_bin";
-		+------+-------+
-		| id   | count |
-		+------+-------+
-		|    1 |     2 |
-		|    2 |     2 |
-		|    3 |     1 |
-		+------+-------+
-
-		FIXME: TiDB now don't return rand value when use `ORDER BY RAND()`
+		mysql> SELECT `id` FROM (SELECT `id`, rand() rand_value FROM `test`.`test`  WHERE `id` COLLATE "latin1_bin" > 0 AND `id` COLLATE "latin1_bin" < 100 ORDER BY rand_value LIMIT 5) rand_tmp ORDER BY `id` COLLATE "latin1_bin";
+		+------+
+		| id   |
+		+------+
+		|    1 |
+		|    2 |
+		|    3 |
+		+------+
 	*/
 
 	if limitRange == "" {
@@ -211,31 +215,27 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
 	}
 
-	randomValue := make([]string, 0, num)
-	valueCount := make([]int, 0, num)
-
-	query := fmt.Sprintf("SELECT %[1]s, COUNT(*) count FROM (SELECT %[1]s FROM %[2]s WHERE %[3]s ORDER BY RAND() LIMIT %[4]d)rand_tmp GROUP BY %[1]s ORDER BY %[1]s%[5]s",
+	query := fmt.Sprintf("SELECT %[1]s FROM (SELECT %[1]s, rand() rand_value FROM %[2]s WHERE %[3]s ORDER BY rand_value LIMIT %[4]d)rand_tmp ORDER BY %[1]s%[5]s",
 		escapeName(column), TableName(schemaName, table), limitRange, num, collation)
 	log.Debug("get random values", zap.String("sql", query), zap.Reflect("args", limitArgs))
 
 	rows, err := db.QueryContext(ctx, query, limitArgs...)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
 	defer rows.Close()
 
+	randomValue := make([]string, 0, num)
 	for rows.Next() {
 		var value string
-		var count int
-		err = rows.Scan(&value, &count)
+		err = rows.Scan(&value)
 		if err != nil {
-			return nil, nil, errors.Trace(err)
+			return nil, errors.Trace(err)
 		}
 		randomValue = append(randomValue, value)
-		valueCount = append(valueCount, count)
 	}
 
-	return randomValue, valueCount, errors.Trace(rows.Err())
+	return randomValue, errors.Trace(rows.Err())
 }
 
 // GetMinMaxValue return min and max value of given column by specified limitRange condition.
@@ -284,22 +284,9 @@ func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column strin
 	return min.String, max.String, errors.Trace(rows.Err())
 }
 
-// GetTables returns name of all tables in the specified schema
-func GetTables(ctx context.Context, db *sql.DB, schemaName string) (tables []string, err error) {
-	/*
-		show tables without view: https://dev.mysql.com/doc/refman/5.7/en/show-tables.html
-
-		example:
-		mysql> show full tables in test where Table_Type != 'VIEW';
-		+----------------+------------+
-		| Tables_in_test | Table_type |
-		+----------------+------------+
-		| NTEST          | BASE TABLE |
-		+----------------+------------+
-	*/
-
-	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type != 'VIEW';", schemaName)
-	rows, err := db.QueryContext(ctx, query)
+func queryTables(ctx context.Context, db *sql.DB, q string) (tables []string, err error) {
+	log.Debug("query tables", zap.String("query", q))
+	rows, err := db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -321,6 +308,29 @@ func GetTables(ctx context.Context, db *sql.DB, schemaName string) (tables []str
 	}
 
 	return tables, errors.Trace(rows.Err())
+}
+
+// GetTables returns name of all tables in the specified schema
+func GetTables(ctx context.Context, db *sql.DB, schemaName string) (tables []string, err error) {
+	/*
+		show tables without view: https://dev.mysql.com/doc/refman/5.7/en/show-tables.html
+
+		example:
+		mysql> show full tables in test where Table_Type != 'VIEW';
+		+----------------+------------+
+		| Tables_in_test | Table_type |
+		+----------------+------------+
+		| NTEST          | BASE TABLE |
+		+----------------+------------+
+	*/
+	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type != 'VIEW';", escapeName(schemaName))
+	return queryTables(ctx, db, query)
+}
+
+// GetViews returns names of all views in the specified schema
+func GetViews(ctx context.Context, db *sql.DB, schemaName string) (tables []string, err error) {
+	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type = 'VIEW';", escapeName(schemaName))
+	return queryTables(ctx, db, query)
 }
 
 // GetSchemas returns name of all schemas
@@ -358,7 +368,7 @@ func GetSchemas(ctx context.Context, db *sql.DB) ([]string, error) {
 }
 
 // GetCRC32Checksum returns checksum code of some data by given condition
-func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}, ignoreColumns map[string]interface{}) (int64, error) {
+func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, error) {
 	/*
 		calculate CRC32 checksum example:
 		mysql> SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',', id, name, age, CONCAT(ISNULL(id), ISNULL(name), ISNULL(age))))AS UNSIGNED)) AS checksum FROM test.test WHERE id > 0 AND id < 10;
@@ -371,9 +381,6 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName str
 	columnNames := make([]string, 0, len(tbInfo.Columns))
 	columnIsNull := make([]string, 0, len(tbInfo.Columns))
 	for _, col := range tbInfo.Columns {
-		if _, ok := ignoreColumns[col.Name.O]; ok {
-			continue
-		}
 		columnNames = append(columnNames, fmt.Sprintf("`%s`", col.Name.O))
 		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(`%s`)", col.Name.O))
 	}
@@ -417,7 +424,7 @@ func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string, table
 	*/
 	buckets := make(map[string][]Bucket)
 	query := "SHOW STATS_BUCKETS WHERE db_name= ? AND table_name= ?;"
-	log.Debug("GetBucketsInfo", zap.String("sql", query))
+	log.Debug("GetBucketsInfo", zap.String("sql", query), zap.String("schema", schema), zap.String("table", table))
 
 	rows, err := db.QueryContext(ctx, query, schema, table)
 	if err != nil {
@@ -490,6 +497,7 @@ func AnalyzeValuesFromBuckets(valueString string, cols []*model.ColumnInfo) ([]s
 		if IsTimeTypeAndNeedDecode(col.Tp) {
 			value, err := DecodeTimeInBucket(values[i])
 			if err != nil {
+				log.Error("analyze values from buckets", zap.String("column", col.Name.O), zap.String("value", values[i]), zap.Error(err))
 				return nil, errors.Trace(err)
 			}
 
@@ -550,14 +558,6 @@ func GetTidbLatestTSO(ctx context.Context, db *sql.DB) (int64, error) {
 		return ts, nil
 	}
 	return 0, errors.New("get slave cluster's ts failed")
-}
-
-// SetSnapshot set the snapshot variable for tidb
-func SetSnapshot(ctx context.Context, db *sql.DB, snapshot string) error {
-	sql := fmt.Sprintf("SET @@tidb_snapshot='%s'", snapshot)
-	log.Info("set history snapshot", zap.String("sql", sql))
-	_, err := db.ExecContext(ctx, sql)
-	return errors.Trace(err)
 }
 
 // GetDBVersion returns the database's version
@@ -751,4 +751,24 @@ func ignoreDDLError(err error) bool {
 	default:
 		return false
 	}
+}
+
+// DeleteRows delete rows in several times. Only can delete less than 300,000 one time in TiDB.
+func DeleteRows(ctx context.Context, db *sql.DB, schemaName string, tableName string, where string, args []interface{}) error {
+	deleteSQL := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE %s limit %d;", schemaName, tableName, where, DefaultDeleteRowsNum)
+	result, err := db.ExecContext(ctx, deleteSQL, args...)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	if rows < DefaultDeleteRowsNum {
+		return nil
+	}
+
+	return DeleteRows(ctx, db, schemaName, tableName, where, args)
 }

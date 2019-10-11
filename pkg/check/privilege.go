@@ -113,6 +113,14 @@ func verifyPrivileges(result *Result, grants []string, expectedGrants []string) 
 	// We do not need the password in grant statement, so we can replace it.
 	firstGrant := strings.Replace(grants[0], "IDENTIFIED BY PASSWORD <secret>", "IDENTIFIED BY PASSWORD 'secret'", 1)
 
+	// support parse `IDENTIFIED BY PASSWORD WITH {GRANT OPTION | resource_option} ...`
+	firstGrant = strings.Replace(firstGrant, "IDENTIFIED BY PASSWORD WITH", "IDENTIFIED BY PASSWORD 'secret' WITH", 1)
+
+	// support parse `IDENTIFIED BY PASSWORD`
+	if strings.HasSuffix(firstGrant, "IDENTIFIED BY PASSWORD") {
+		firstGrant = firstGrant + " 'secret'"
+	}
+
 	// get username and hostname
 	node, err := parser.New().ParseOneStmt(firstGrant, "", "")
 	if err != nil {

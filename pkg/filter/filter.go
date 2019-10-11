@@ -18,6 +18,8 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/pingcap/errors"
 )
 
 // ActionType is do or ignore something
@@ -104,7 +106,7 @@ type Filter struct {
 }
 
 // New creates a filter use the rules.
-func New(caseSensitive bool, rules *Rules) *Filter {
+func New(caseSensitive bool, rules *Rules) (*Filter, error) {
 	f := &Filter{
 		caseSensitive: caseSensitive,
 		rules:         rules,
@@ -114,35 +116,58 @@ func New(caseSensitive bool, rules *Rules) *Filter {
 	f.c = &cache{
 		items: make(map[string]ActionType),
 	}
-	f.genRegexMap()
-	return f
+	err := f.genRegexMap()
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
 }
 
-func (f *Filter) genRegexMap() {
+func (f *Filter) genRegexMap() (err error) {
 	if f.rules == nil {
 		return
 	}
 
 	for _, db := range f.rules.DoDBs {
-		f.addOneRegex(db)
+		err = f.addOneRegex(db)
+		if err != nil {
+			return
+		}
 	}
 
 	for _, table := range f.rules.DoTables {
-		f.addOneRegex(table.Schema)
-		f.addOneRegex(table.Name)
+		err = f.addOneRegex(table.Schema)
+		if err != nil {
+			return
+		}
+		err = f.addOneRegex(table.Name)
+		if err != nil {
+			return
+		}
 	}
 
 	for _, db := range f.rules.IgnoreDBs {
-		f.addOneRegex(db)
+		err = f.addOneRegex(db)
+		if err != nil {
+			return
+		}
 	}
 
 	for _, table := range f.rules.IgnoreTables {
-		f.addOneRegex(table.Schema)
-		f.addOneRegex(table.Name)
+		err = f.addOneRegex(table.Schema)
+		if err != nil {
+			return
+		}
+		err = f.addOneRegex(table.Name)
+		if err != nil {
+			return
+		}
 	}
+
+	return
 }
 
-func (f *Filter) addOneRegex(originStr string) {
+func (f *Filter) addOneRegex(originStr string) error {
 	if _, ok := f.patternMap[originStr]; !ok {
 		var pattern string
 		if strings.HasPrefix(originStr, "~") {
@@ -153,8 +178,13 @@ func (f *Filter) addOneRegex(originStr string) {
 		if !f.caseSensitive {
 			pattern = "(?i)" + pattern
 		}
-		f.patternMap[originStr] = regexp.MustCompile(pattern)
+		reg, err := regexp.Compile(pattern)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		f.patternMap[originStr] = reg
 	}
+	return nil
 }
 
 // ApplyOn applies filter rules on tables

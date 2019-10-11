@@ -14,8 +14,6 @@
 package client
 
 import (
-	"hash/fnv"
-	"strconv"
 	"sync"
 
 	"github.com/pingcap/log"
@@ -59,9 +57,6 @@ type PumpSelector interface {
 
 // HashSelector select a pump by hash.
 type HashSelector struct {
-	// PumpMap saves the map of pump's node id with pump.
-	PumpMap map[string]*PumpStatus
-
 	// the pumps to be selected.
 	Pumps []*PumpStatus
 }
@@ -69,25 +64,20 @@ type HashSelector struct {
 // NewHashSelector returns a new HashSelector.
 func NewHashSelector() PumpSelector {
 	return &HashSelector{
-		PumpMap: make(map[string]*PumpStatus),
-		Pumps:   make([]*PumpStatus, 0, 10),
+		Pumps: make([]*PumpStatus, 0, 10),
 	}
 }
 
 // SetPumps implement PumpSelector.SetPumps.
 func (h *HashSelector) SetPumps(pumps []*PumpStatus) {
 	selectorLock.Lock()
-	h.PumpMap = make(map[string]*PumpStatus)
 	h.Pumps = pumps
-	for _, pump := range pumps {
-		h.PumpMap[pump.NodeID] = pump
-	}
 	selectorLock.Unlock()
 }
 
 // Select implement PumpSelector.Select.
 func (h *HashSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
-	// TODO: use status' label to match situale pump.
+	// TODO: use status' label to match suitable pump.
 	selectorLock.Lock()
 	defer selectorLock.Unlock()
 
@@ -105,29 +95,20 @@ func (h *HashSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 	if len(h.Pumps) == 0 {
 		return nil
 	}
-
-	pump := h.Pumps[(hashTs(binlog.StartTs)+int(retryTime))%len(h.Pumps)]
+	i := (binlog.StartTs + int64(retryTime)) % int64(len(h.Pumps))
+	pump := h.Pumps[int(i)]
 	return pump
 }
 
 // Feedback implement PumpSelector.Feedback
 func (h *HashSelector) Feedback(startTS int64, binlogType pb.BinlogType, pump *PumpStatus) {
-	selectorLock.Lock()
-	if binlogType != pb.BinlogType_Prewrite {
-		delete(tsMap, startTS)
-	} else {
-		tsMap[startTS] = pump
-	}
-	selectorLock.Unlock()
+	maintainTSMap(startTS, binlogType, pump)
 }
 
 // RangeSelector select a pump by range.
 type RangeSelector struct {
 	// Offset saves the offset in Pumps.
 	Offset int
-
-	// PumpMap saves the map of pump's node id with pump.
-	PumpMap map[string]*PumpStatus
 
 	// the pumps to be selected.
 	Pumps []*PumpStatus
@@ -136,27 +117,22 @@ type RangeSelector struct {
 // NewRangeSelector returns a new ScoreSelector.
 func NewRangeSelector() PumpSelector {
 	return &RangeSelector{
-		Offset:  0,
-		PumpMap: make(map[string]*PumpStatus),
-		Pumps:   make([]*PumpStatus, 0, 10),
+		Offset: 0,
+		Pumps:  make([]*PumpStatus, 0, 10),
 	}
 }
 
 // SetPumps implement PumpSelector.SetPumps.
 func (r *RangeSelector) SetPumps(pumps []*PumpStatus) {
 	selectorLock.Lock()
-	r.PumpMap = make(map[string]*PumpStatus)
 	r.Pumps = pumps
-	for _, pump := range pumps {
-		r.PumpMap[pump.NodeID] = pump
-	}
 	r.Offset = 0
 	selectorLock.Unlock()
 }
 
 // Select implement PumpSelector.Select.
 func (r *RangeSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
-	// TODO: use status' label to match situable pump.
+	// TODO: use status' label to match suitable pump.
 	selectorLock.Lock()
 	defer selectorLock.Unlock()
 
@@ -187,13 +163,7 @@ func (r *RangeSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus {
 
 // Feedback implement PumpSelector.Select
 func (r *RangeSelector) Feedback(startTS int64, binlogType pb.BinlogType, pump *PumpStatus) {
-	selectorLock.Lock()
-	if binlogType != pb.BinlogType_Prewrite {
-		delete(tsMap, startTS)
-	} else {
-		tsMap[startTS] = pump
-	}
-	selectorLock.Unlock()
+	maintainTSMap(startTS, binlogType, pump)
 }
 
 // LocalUnixSelector will always select the local pump, used for compatible with kafka version tidb-binlog.
@@ -228,7 +198,6 @@ func (u *LocalUnixSelector) Select(binlog *pb.Binlog, retryTime int) *PumpStatus
 
 // Feedback implement PumpSelector.Feedback
 func (u *LocalUnixSelector) Feedback(startTS int64, binlogType pb.BinlogType, pump *PumpStatus) {
-	return
 }
 
 // ScoreSelector select a pump by pump's score.
@@ -257,26 +226,27 @@ func (s *ScoreSelector) Feedback(startTS int64, binlogType pb.BinlogType, pump *
 
 // NewSelector returns a PumpSelector according to the strategy.
 func NewSelector(strategy string) PumpSelector {
-	var selector PumpSelector
 	switch strategy {
 	case Range:
-		selector = NewRangeSelector()
+		return NewRangeSelector()
 	case Hash:
-		selector = NewHashSelector()
+		return NewHashSelector()
 	case Score:
-		selector = NewScoreSelector()
+		return NewScoreSelector()
 	case LocalUnix:
-		selector = NewLocalUnixSelector()
+		return NewLocalUnixSelector()
 	default:
 		log.Warn("[pumps client] unknown strategy, use range as default", zap.String("strategy", strategy))
-		selector = NewRangeSelector()
+		return NewRangeSelector()
 	}
-
-	return selector
 }
 
-func hashTs(ts int64) int {
-	h := fnv.New32a()
-	h.Write([]byte(strconv.FormatInt(ts, 10)))
-	return int(h.Sum32())
+func maintainTSMap(startTS int64, binlogType pb.BinlogType, pump *PumpStatus) {
+	selectorLock.Lock()
+	if binlogType != pb.BinlogType_Prewrite {
+		delete(tsMap, startTS)
+	} else {
+		tsMap[startTS] = pump
+	}
+	selectorLock.Unlock()
 }

@@ -15,6 +15,7 @@ package diff
 
 import (
 	. "github.com/pingcap/check"
+	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 )
 
@@ -22,25 +23,110 @@ var _ = Suite(&testUtilSuite{})
 
 type testUtilSuite struct{}
 
-func (s *testUtilSuite) TestRemoveColumns(c *C) {
+func (s *testUtilSuite) TestIgnoreColumns(c *C) {
 	createTableSQL1 := "CREATE TABLE `test`.`atest` (`a` int, `b` int, `c` int, `d` int, primary key(`a`))"
 	tableInfo1, err := dbutil.GetTableInfoBySQL(createTableSQL1)
 	c.Assert(err, IsNil)
-	tbInfo := removeColumns(tableInfo1, []string{"a"})
-	c.Assert(len(tbInfo.Columns), Equals, 3)
-	c.Assert(len(tbInfo.Indices), Equals, 0)
+	tbInfo := ignoreColumns(tableInfo1, []string{"a"})
+	c.Assert(tbInfo.Columns, HasLen, 3)
+	c.Assert(tbInfo.Indices, HasLen, 0)
+	c.Assert(tbInfo.Columns[2].Offset, Equals, 2)
 
 	createTableSQL2 := "CREATE TABLE `test`.`atest` (`a` int, `b` int, `c` int, `d` int, primary key(`a`), index idx(`b`, `c`))"
 	tableInfo2, err := dbutil.GetTableInfoBySQL(createTableSQL2)
 	c.Assert(err, IsNil)
-	tbInfo = removeColumns(tableInfo2, []string{"a", "b"})
-	c.Assert(len(tbInfo.Columns), Equals, 2)
-	c.Assert(len(tbInfo.Indices), Equals, 1)
+	tbInfo = ignoreColumns(tableInfo2, []string{"a", "b"})
+	c.Assert(tbInfo.Columns, HasLen, 2)
+	c.Assert(tbInfo.Indices, HasLen, 0)
 
 	createTableSQL3 := "CREATE TABLE `test`.`atest` (`a` int, `b` int, `c` int, `d` int, primary key(`a`), index idx(`b`, `c`))"
 	tableInfo3, err := dbutil.GetTableInfoBySQL(createTableSQL3)
 	c.Assert(err, IsNil)
-	tbInfo = removeColumns(tableInfo3, []string{"b", "c"})
-	c.Assert(len(tbInfo.Columns), Equals, 2)
-	c.Assert(len(tbInfo.Indices), Equals, 1)
+	tbInfo = ignoreColumns(tableInfo3, []string{"b", "c"})
+	c.Assert(tbInfo.Columns, HasLen, 2)
+	c.Assert(tbInfo.Indices, HasLen, 1)
+}
+
+func (s *testUtilSuite) TestRowContainsCols(c *C) {
+	row := map[string]*dbutil.ColumnData{
+		"a": nil,
+		"b": nil,
+		"c": nil,
+	}
+
+	cols := []*model.ColumnInfo{
+		{
+			Name: model.NewCIStr("a"),
+		}, {
+			Name: model.NewCIStr("b"),
+		}, {
+			Name: model.NewCIStr("c"),
+		},
+	}
+
+	contain := rowContainsCols(row, cols)
+	c.Assert(contain, Equals, true)
+
+	delete(row, "a")
+	contain = rowContainsCols(row, cols)
+	c.Assert(contain, Equals, false)
+}
+
+func (s *testUtilSuite) TestRowToString(c *C) {
+	row := make(map[string]*dbutil.ColumnData)
+	row["id"] = &dbutil.ColumnData{
+		Data:   []byte("1"),
+		IsNull: false,
+	}
+
+	row["name"] = &dbutil.ColumnData{
+		Data:   []byte("abc"),
+		IsNull: false,
+	}
+
+	row["info"] = &dbutil.ColumnData{
+		Data:   nil,
+		IsNull: true,
+	}
+
+	rowStr := rowToString(row)
+	c.Assert(rowStr, Matches, ".*id: 1.*")
+	c.Assert(rowStr, Matches, ".*name: abc.*")
+	c.Assert(rowStr, Matches, ".*info: IsNull.*")
+}
+
+func (s *testUtilSuite) TestMinLenInSlices(c *C) {
+	testCases := []struct {
+		slices [][]string
+		expect int
+	}{
+		{
+			[][]string{
+				{"1", "2"},
+				{"1", "2", "3"},
+			},
+			2,
+		}, {
+			[][]string{
+				{"1", "2"},
+				{},
+			},
+			0,
+		}, {
+			[][]string{},
+			0,
+		}, {
+			[][]string{
+				{"1", "2"},
+				{},
+				{"1", "2", "3"},
+			},
+			0,
+		},
+	}
+
+	for _, testCase := range testCases {
+		minLen := minLenInSlices(testCase.slices)
+		c.Assert(minLen, Equals, testCase.expect)
+	}
 }

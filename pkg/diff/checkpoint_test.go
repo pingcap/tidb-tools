@@ -16,6 +16,7 @@ package diff
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
@@ -26,13 +27,17 @@ var _ = Suite(&testCheckpointSuite{})
 type testCheckpointSuite struct{}
 
 func (s *testCheckpointSuite) TestCheckpoint(c *C) {
-	db, err := createConn()
-	c.Assert(err, IsNil)
-	defer dropCheckpoint(context.Background(), db)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	s.testInitAndGetSummary(c, db)
-	s.testSaveAndLoadChunk(c, db)
-	s.testUpdateSummary(c, db)
+	conn, err := createConn()
+	c.Assert(err, IsNil)
+	defer conn.Close()
+
+	defer dropCheckpoint(ctx, conn)
+	s.testInitAndGetSummary(c, conn)
+	s.testSaveAndLoadChunk(c, conn)
+	s.testUpdateSummary(c, conn)
 }
 
 func (s *testCheckpointSuite) testInitAndGetSummary(c *C, db *sql.DB) {
@@ -57,10 +62,10 @@ func (s *testCheckpointSuite) testInitAndGetSummary(c *C, db *sql.DB) {
 
 func (s *testCheckpointSuite) testSaveAndLoadChunk(c *C, db *sql.DB) {
 	chunk := &ChunkRange{
-		ID:     1,
-		Bounds: []*Bound{{Column: "a", Lower: "1", LowerSymbol: ">"}},
-		Mode:   normalMode,
-		State:  successState,
+		ID:           1,
+		Bounds:       []*Bound{{Column: "a", Lower: "1"}},
+		State:        successState,
+		columnOffset: map[string]int{"a": 0},
 	}
 
 	err := saveChunk(context.Background(), db, chunk.ID, "target", "test", "checkpoint", "", chunk)
@@ -68,6 +73,7 @@ func (s *testCheckpointSuite) testSaveAndLoadChunk(c *C, db *sql.DB) {
 
 	newChunk, err := getChunk(context.Background(), db, "target", "test", "checkpoint", chunk.ID)
 	c.Assert(err, IsNil)
+	newChunk.updateColumnOffset()
 	c.Assert(newChunk, DeepEquals, chunk)
 
 	chunks, err := loadChunks(context.Background(), db, "target", "test", "checkpoint")

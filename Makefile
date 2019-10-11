@@ -1,4 +1,4 @@
-.PHONY: build importer dump_region binlogctl sync_diff_inspector ddl_checker test check deps
+.PHONY: build importer dump_region sync_diff_inspector ddl_checker test check deps
 
 # Ensure GOPATH is set before running build process.
 ifeq "$(GOPATH)" ""
@@ -25,9 +25,9 @@ PACKAGE_LIST  := go list ./...
 PACKAGES  := $$($(PACKAGE_LIST))
 FAIL_ON_STDOUT := awk '{ print } END { if (NR > 0) { exit 1 } }'
 
-build: prepare check importer binlogctl sync_diff_inspector ddl_checker finish
+build: prepare check importer sync_diff_inspector ddl_checker finish
 
-prepare:		
+prepare:
 	cp go.mod1 go.mod
 	cp go.sum1 go.sum
 
@@ -36,9 +36,6 @@ importer:
 
 dump_region:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/dump_region ./dump_region
-
-binlogctl:
-	$(GO) build -ldflags '$(LDFLAGS)' -o bin/binlogctl ./tidb-binlog/binlogctl
 
 sync_diff_inspector:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/sync_diff_inspector ./sync_diff_inspector
@@ -49,6 +46,16 @@ ddl_checker:
 test:
 	@export log_level=error; \
 	$(GOTEST) -cover $(PACKAGES)
+
+integration_test: build
+	@which bin/tidb-server
+	@which bin/tikv-server
+	@which bin/pd-server
+	@which bin/sync_diff_inspector
+	@which bin/mydumper
+	@which bin/loader
+	@which bin/importer
+	tests/run.sh
 
 fmt:
 	go fmt ./...
@@ -63,6 +70,11 @@ check:
 	#@ golint ./... 2>&1 | grep -vE '\.pb\.go' | grep -vE 'vendor' | awk '{print} END{if(NR>0) {exit 1}}'
 	@echo "gofmt (simplify)"
 	@ gofmt -s -l -w $(FILES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
+
+tidy:
+	@$(GO) mod tidy
+
+clean: prepare tidy finish
 
 finish:
 	cp go.mod go.mod1
