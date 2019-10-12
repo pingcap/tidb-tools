@@ -13,20 +13,29 @@ import (
 	"google.golang.org/grpc"
 )
 
+// Client is a external client used by RegionSplitter.
 type Client interface {
+	// GetStore gets a store by a store id.
 	GetStore(ctx context.Context, storeID uint64) (*metapb.Store, error)
+	// GetRegion gets a region which includes a specified key.
 	GetRegion(ctx context.Context, key []byte) (*RegionInfo, error)
+	// GetRegionByID gets a region by a region id.
 	GetRegionByID(ctx context.Context, regionID uint64) (*RegionInfo, error)
+	// SplitRegion splits a region from a key, if key is not included in the region, it will return nil.
 	SplitRegion(ctx context.Context, regionInfo *RegionInfo, key []byte) (*RegionInfo, error)
+	// ScatterRegion scatters a specified region.
 	ScatterRegion(ctx context.Context, regionInfo *RegionInfo) error
+	// GetOperator gets the status of operator of the specified region.
 	GetOperator(ctx context.Context, regionID uint64) (*pdpb.GetOperatorResponse, error)
 }
 
+// pdClient is a wrapper of pd client, can be used by RegionSplitter.
 type pdClient struct {
 	client     pd.Client
 	storeCache map[uint64]*metapb.Store
 }
 
+// NewClient returns a client used by RegionSplitter.
 func NewClient(client pd.Client) (Client, error) {
 	return &pdClient{
 		client:     client,

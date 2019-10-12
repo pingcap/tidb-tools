@@ -7,6 +7,7 @@ import (
 	"github.com/pingcap/kvproto/pkg/metapb"
 )
 
+// Range represents a range of keys.
 type Range struct {
 	StartKey []byte
 	EndKey   []byte
@@ -18,16 +19,20 @@ func (r *Range) Less(than btree.Item) bool {
 	return len(r.EndKey) != 0 && bytes.Compare(r.EndKey, t.StartKey) <= 0
 }
 
+// contains returns if a key is included in the range.
 func (r *Range) contains(key []byte) bool {
 	start, end := r.StartKey, r.EndKey
 	return bytes.Compare(key, start) >= 0 &&
 		(len(end) == 0 || bytes.Compare(key, end) < 0)
 }
 
+// RangeTree stores the ranges in an orderly manner.
+// All the ranges it stored do not overlap.
 type RangeTree struct {
 	tree *btree.BTree
 }
 
+// NewRangeTree returns a new RangeTree.
 func NewRangeTree() *RangeTree {
 	return &RangeTree{tree: btree.New(32)}
 }
@@ -48,9 +53,9 @@ func (rt *RangeTree) Find(key []byte) *Range {
 	return ret
 }
 
-// InsertRanges inserts ranges into the range tree
-// return true if all ranges inserted successfully
-// return false if there are some overlapped ranges
+// InsertRanges inserts ranges into the range tree.
+// it returns true if all ranges inserted successfully.
+// it returns false if there are some overlapped ranges.
 func (rt *RangeTree) InsertRange(rg Range) bool {
 	if rt.tree.ReplaceOrInsert(&rg) != nil {
 		return false
@@ -58,15 +63,20 @@ func (rt *RangeTree) InsertRange(rg Range) bool {
 	return true
 }
 
+// RangeIterator allows callers of Ascend to iterate in-order over portions of
+// the tree. When this function returns false, iteration will stop and the
+// associated Ascend function will immediately return.
 type RangeIterator func(rg *Range) bool
 
+// Ascend calls the iterator for every value in the tree within [first, last],
+// util the iterator returns false.
 func (rt *RangeTree) Ascend(iterator RangeIterator) {
 	rt.tree.Ascend(func(i btree.Item) bool {
 		return iterator(i.(*Range))
 	})
 }
 
-// RegionInfo includes a region and the meta of its leader.
+// RegionInfo includes a region and the leader of the region.
 type RegionInfo struct {
 	Region *metapb.Region
 	Leader *metapb.Peer

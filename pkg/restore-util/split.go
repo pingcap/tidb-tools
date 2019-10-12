@@ -19,17 +19,21 @@ var ScatterWaitMaxRetryTimes = 128
 var ScatterWaitIntervalMillis = 50
 var ScatterMaxWaitIntervalMillis = 5000
 
+// RegionSplitter is a executor of region split by rules.
 type RegionSplitter struct {
 	client    Client
 	rangeTree *RangeTree
 }
 
+// NewRegionSplitter returns a new RegionSplitter.
 func NewRegionSplitter(client Client) *RegionSplitter {
 	return &RegionSplitter{
 		client: client,
 	}
 }
 
+// Split executes a region split. It will split regions by the rewrite rules,
+// then it will split regions by the end key of each range.
 func (rs *RegionSplitter) Split(ctx context.Context, ranges []Range, rules []*import_sstpb.RewriteRule) error {
 	var wg sync.WaitGroup
 	rangeTree, ok := newRangeTreeWithRewrite(ranges, rules)
