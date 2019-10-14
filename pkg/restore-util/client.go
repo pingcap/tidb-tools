@@ -27,6 +27,9 @@ type Client interface {
 	ScatterRegion(ctx context.Context, regionInfo *RegionInfo) error
 	// GetOperator gets the status of operator of the specified region.
 	GetOperator(ctx context.Context, regionID uint64) (*pdpb.GetOperatorResponse, error)
+	// ScanRegion gets a list of regions, starts from the region that contains key.
+	// Limit limits the maximum number of regions returned.
+	ScanRegions(ctx context.Context, key []byte, limit int) ([]*RegionInfo, error)
 }
 
 // pdClient is a wrapper of pd client, can be used by RegionSplitter.
@@ -141,4 +144,19 @@ func (c *pdClient) ScatterRegion(ctx context.Context, regionInfo *RegionInfo) er
 
 func (c *pdClient) GetOperator(ctx context.Context, regionID uint64) (*pdpb.GetOperatorResponse, error) {
 	return c.client.GetOperator(ctx, regionID)
+}
+
+func (c *pdClient) ScanRegions(ctx context.Context, key []byte, limit int) ([]*RegionInfo, error) {
+	regions, leaders, err := c.client.ScanRegions(ctx, key, limit)
+	if err != nil {
+		return nil, err
+	}
+	regionInfos := make([]*RegionInfo, 0, len(regions))
+	for i := range regions {
+		regionInfos = append(regionInfos, &RegionInfo{
+			Region: regions[i],
+			Leader: leaders[i],
+		})
+	}
+	return regionInfos, nil
 }

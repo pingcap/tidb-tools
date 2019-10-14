@@ -103,6 +103,10 @@ func (c *testClient) GetOperator(ctx context.Context, regionID uint64) (*pdpb.Ge
 	}, nil
 }
 
+func (c *testClient) ScanRegions(ctx context.Context, key []byte, limit int) ([]*RegionInfo, error) {
+	return nil, nil
+}
+
 // region: [, aay), [aay, bba), [bba, bbh), [bbh, cca), [cca, )
 // range: [aaa, aae), [aae, aaz), [ccd, ccf), [ccf, ccj)
 // rewrite rules: aa -> xx,  cc -> bb
