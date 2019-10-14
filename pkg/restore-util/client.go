@@ -3,6 +3,7 @@ package restore_util
 import (
 	"bytes"
 	"context"
+	"sync"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/kvproto/pkg/kvrpcpb"
@@ -34,6 +35,7 @@ type Client interface {
 
 // pdClient is a wrapper of pd client, can be used by RegionSplitter.
 type pdClient struct {
+	mu sync.Mutex
 	client     pd.Client
 	storeCache map[uint64]*metapb.Store
 }
@@ -47,6 +49,8 @@ func NewClient(client pd.Client) (Client, error) {
 }
 
 func (c *pdClient) GetStore(ctx context.Context, storeID uint64) (*metapb.Store, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	store, ok := c.storeCache[storeID]
 	if ok {
 		return store, nil
@@ -55,6 +59,7 @@ func (c *pdClient) GetStore(ctx context.Context, storeID uint64) (*metapb.Store,
 	if err != nil {
 		return nil, err
 	}
+	c.storeCache[storeID] = store
 	return store, nil
 
 }
