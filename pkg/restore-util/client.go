@@ -41,11 +41,11 @@ type pdClient struct {
 }
 
 // NewClient returns a client used by RegionSplitter.
-func NewClient(client pd.Client) (Client, error) {
+func NewClient(client pd.Client) Client {
 	return &pdClient{
 		client:     client,
 		storeCache: make(map[uint64]*metapb.Store),
-	}, nil
+	}
 }
 
 func (c *pdClient) GetStore(ctx context.Context, storeID uint64) (*metapb.Store, error) {
