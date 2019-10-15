@@ -36,13 +36,14 @@ func NewRegionSplitter(client Client) *RegionSplitter {
 
 // Split executes a region split. It will split regions by the rewrite rules,
 // then it will split regions by the end key of each range.
-func (rs *RegionSplitter) Split(ctx context.Context, ranges []Range, rules []*import_sstpb.RewriteRule) error {
+// tableRules includes the prefix of a table, since some ranges may have a prefix with record sequence or index sequence.
+func (rs *RegionSplitter) Split(ctx context.Context, ranges []Range, tableRules []*import_sstpb.RewriteRule, dataRules []*import_sstpb.RewriteRule) error {
 	var wg sync.WaitGroup
-	rangeTree, ok := newRangeTreeWithRewrite(ranges, rules)
+	rangeTree, ok := newRangeTreeWithRewrite(ranges, tableRules, dataRules)
 	if !ok {
 		return errors.New("ranges overlapped")
 	}
-	err := rs.splitByRewriteRules(ctx, &wg, rules)
+	err := rs.splitByRewriteRules(ctx, &wg, dataRules)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -78,11 +79,11 @@ func (rs *RegionSplitter) splitByRewriteRules(ctx context.Context, wg *sync.Wait
 	return nil
 }
 
-func newRangeTreeWithRewrite(ranges []Range, rules []*import_sstpb.RewriteRule) (*RangeTree, bool) {
+func newRangeTreeWithRewrite(ranges []Range, tableRules []*import_sstpb.RewriteRule, dataRules []*import_sstpb.RewriteRule) (*RangeTree, bool) {
 	rangeTree := NewRangeTree()
 	for _, rg := range ranges {
-		rg.StartKey = replacePrefix(rg.StartKey, rules)
-		rg.EndKey = replacePrefix(rg.EndKey, rules)
+		rg.StartKey = replacePrefix(rg.StartKey, tableRules, dataRules)
+		rg.EndKey = replacePrefix(rg.EndKey, tableRules, dataRules)
 		if !rangeTree.InsertRange(rg) {
 			return nil, false
 		}
@@ -207,8 +208,14 @@ func beforeEnd(key []byte, end []byte) bool {
 	return bytes.Compare(key, end) < 0 || len(end) == 0
 }
 
-func replacePrefix(s []byte, rules []*import_sstpb.RewriteRule) []byte {
-	for _, rule := range rules {
+func replacePrefix(s []byte, tableRules []*import_sstpb.RewriteRule, dataRules []*import_sstpb.RewriteRule) []byte {
+	// We should search the dataRules firstly
+	for _, rule := range dataRules {
+		if bytes.HasPrefix(s, rule.GetOldKeyPrefix()) {
+			return append(rule.GetNewKeyPrefix(), s[len(rule.GetOldKeyPrefix()):]...)
+		}
+	}
+	for _, rule := range tableRules {
 		if bytes.HasPrefix(s, rule.GetOldKeyPrefix()) {
 			return append(rule.GetNewKeyPrefix(), s[len(rule.GetOldKeyPrefix()):]...)
 		}
