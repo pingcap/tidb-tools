@@ -30,7 +30,7 @@ type Client interface {
 	GetOperator(ctx context.Context, regionID uint64) (*pdpb.GetOperatorResponse, error)
 	// ScanRegion gets a list of regions, starts from the region that contains key.
 	// Limit limits the maximum number of regions returned.
-	ScanRegions(ctx context.Context, key []byte, limit int) ([]*RegionInfo, error)
+	ScanRegions(ctx context.Context, key, endKey []byte, limit int) ([]*RegionInfo, error)
 }
 
 // pdClient is a wrapper of pd client, can be used by RegionSplitter.
@@ -154,8 +154,8 @@ func (c *pdClient) GetOperator(ctx context.Context, regionID uint64) (*pdpb.GetO
 	return c.client.GetOperator(ctx, regionID)
 }
 
-func (c *pdClient) ScanRegions(ctx context.Context, key []byte, limit int) ([]*RegionInfo, error) {
-	regions, leaders, err := c.client.ScanRegions(ctx, key, limit)
+func (c *pdClient) ScanRegions(ctx context.Context, key, endKey []byte, limit int) ([]*RegionInfo, error) {
+	regions, leaders, err := c.client.ScanRegions(ctx, key, endKey, limit)
 	if err != nil {
 		return nil, err
 	}

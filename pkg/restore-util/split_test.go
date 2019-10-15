@@ -103,7 +103,7 @@ func (c *testClient) GetOperator(ctx context.Context, regionID uint64) (*pdpb.Ge
 	}, nil
 }
 
-func (c *testClient) ScanRegions(ctx context.Context, key []byte, limit int) ([]*RegionInfo, error) {
+func (c *testClient) ScanRegions(ctx context.Context, key, endKey []byte, limit int) ([]*RegionInfo, error) {
 	return nil, nil
 }
 
