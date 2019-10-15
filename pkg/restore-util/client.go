@@ -136,6 +136,7 @@ func (c *pdClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, key 
 		for _, p := range newRegion.GetPeers() {
 			if p.GetStoreId() == regionInfo.Leader.GetStoreId() {
 				leader = p
+				break
 			}
 		}
 	}
