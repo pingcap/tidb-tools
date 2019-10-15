@@ -32,10 +32,10 @@ require (
 	github.com/pingcap/failpoint v0.0.0-20190708053854-e7b1061e6e81 // indirect
 	github.com/pingcap/kvproto v0.0.0-20191011042334-8ee4fd8fb4ca
 	github.com/pingcap/log v0.0.0-20190715063458-479153f07ebd
-	github.com/pingcap/parser v0.0.0-20190910041007-2a177b291004
+	github.com/pingcap/parser v0.0.0-20190923031704-33636bc5e5d6
 	github.com/pingcap/pd v1.1.0-beta.0.20190923032047-5c648dc365e0
-	github.com/pingcap/tidb v0.0.0-20191010093852-32bd4a7f4bfa
-	github.com/pingcap/tipb v0.0.0-20190801052434-b2d318af5e8a
+	github.com/pingcap/tidb v0.0.0-20191010035248-d82a94fe5ea7
+	github.com/pingcap/tipb v0.0.0-20191008064422-018b2fadf414
 	github.com/prometheus/client_golang v1.1.0 // indirect
 	github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4 // indirect
 	github.com/prometheus/common v0.7.0 // indirect
@@ -63,10 +63,11 @@ require (
 	google.golang.org/appengine v1.6.5 // indirect
 	google.golang.org/genproto v0.0.0-20191009194640-548a555dbc03 // indirect
 	google.golang.org/grpc v1.24.0
-	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/yaml.v2 v2.2.4 // indirect
 	sigs.k8s.io/yaml v1.1.0 // indirect
 	sourcegraph.com/sourcegraph/appdash v0.0.0-20190731080439-ebfcffb1b5c0 // indirect
 )
 
 replace github.com/golang/lint => golang.org/x/lint v0.0.0-20190930215403-16217165b5de
+
+go 1.13

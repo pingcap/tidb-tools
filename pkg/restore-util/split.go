@@ -81,10 +81,8 @@ func (rs *RegionSplitter) splitByRewriteRules(ctx context.Context, wg *sync.Wait
 func newRangeTreeWithRewrite(ranges []Range, rules []*import_sstpb.RewriteRule) (*RangeTree, bool) {
 	rangeTree := NewRangeTree()
 	for _, rg := range ranges {
-		for _, rule := range rules {
-			rg.StartKey = replacePrefix(rg.StartKey, rule.GetOldKeyPrefix(), rule.GetNewKeyPrefix())
-			rg.EndKey = replacePrefix(rg.EndKey, rule.GetOldKeyPrefix(), rule.GetNewKeyPrefix())
-		}
+		rg.StartKey = replacePrefix(rg.StartKey, rules)
+		rg.EndKey = replacePrefix(rg.EndKey, rules)
 		if !rangeTree.InsertRange(rg) {
 			return nil, false
 		}
@@ -209,9 +207,11 @@ func beforeEnd(key []byte, end []byte) bool {
 	return bytes.Compare(key, end) < 0 || len(end) == 0
 }
 
-func replacePrefix(s []byte, oldPrefix []byte, newPrefix []byte) []byte {
-	if bytes.HasPrefix(s, oldPrefix) {
-		return append(newPrefix, s[len(oldPrefix):]...)
+func replacePrefix(s []byte, rules []*import_sstpb.RewriteRule) []byte {
+	for _, rule := range rules {
+		if bytes.HasPrefix(s, rule.GetOldKeyPrefix()) {
+			return append(rule.GetNewKeyPrefix(), s[len(rule.GetOldKeyPrefix()):]...)
+		}
 	}
 	return s
 }
