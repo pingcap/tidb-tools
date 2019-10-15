@@ -29,7 +29,7 @@ func TestRangeTreeNormal(t *testing.T) {
 	}
 	for i, rg := range ranges {
 		res := resRanges[i]
-		if bytes.Compare(rg.StartKey, res.StartKey) != 0 || bytes.Compare(rg.EndKey, res.EndKey) != 0 {
+		if !bytes.Equal(rg.StartKey, res.StartKey) || !bytes.Equal(rg.EndKey, res.EndKey) {
 			t.Fatalf("some inserted ranges missed: rg=%v res=%v", ranges, resRanges)
 		}
 	}

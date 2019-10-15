@@ -121,7 +121,7 @@ func (c *pdClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, key 
 	var newRegion *metapb.Region
 	for _, r := range regions {
 		// Assume the new region is the left one.
-		if bytes.Compare(r.GetStartKey(), regionInfo.Region.GetStartKey()) == 0 {
+		if bytes.Equal(r.GetStartKey(), regionInfo.Region.GetStartKey()) {
 			newRegion = r
 		}
 	}
