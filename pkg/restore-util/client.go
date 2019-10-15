@@ -93,23 +93,24 @@ func (c *pdClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, key 
 	} else {
 		peer = regionInfo.Region.Peers[0]
 	}
-	reqCtx := &kvrpcpb.Context{
-		RegionId:    regionInfo.Region.Id,
-		RegionEpoch: regionInfo.Region.RegionEpoch,
-		Peer:        peer,
-	}
 	storeID := peer.GetStoreId()
 	store, err := c.GetStore(ctx, storeID)
 	if err != nil {
 		return nil, err
 	}
-	req := &kvrpcpb.SplitRegionRequest{
-		Context:   reqCtx,
-		SplitKeys: [][]byte{key},
-	}
 	conn, err := grpc.Dial(store.GetAddress(), grpc.WithInsecure())
+	if err != nil {
+		return nil, err
+	}
 	client := tikvpb.NewTikvClient(conn)
-	resp, err := client.SplitRegion(ctx, req)
+	resp, err := client.SplitRegion(ctx, &kvrpcpb.SplitRegionRequest{
+		Context: &kvrpcpb.Context{
+			RegionId:    regionInfo.Region.Id,
+			RegionEpoch: regionInfo.Region.RegionEpoch,
+			Peer:        peer,
+		},
+		SplitKeys: [][]byte{key},
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -123,6 +124,7 @@ func (c *pdClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, key 
 		// Assume the new region is the left one.
 		if bytes.Equal(r.GetStartKey(), regionInfo.Region.GetStartKey()) {
 			newRegion = r
+			break
 		}
 	}
 	if newRegion == nil {

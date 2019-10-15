@@ -197,17 +197,15 @@ func validateRegions(regions map[uint64]*RegionInfo) bool {
 	if len(regions) != 10 {
 		return false
 	}
+FindRegion:
 	for i := 1; i < 11; i++ {
-		var found bool
 		for _, region := range regions {
 			if bytes.Equal(region.Region.GetStartKey(), []byte(keys[i-1])) &&
 				bytes.Equal(region.Region.GetEndKey(), []byte(keys[i])) {
-				found = true
+				continue FindRegion
 			}
 		}
-		if !found {
-			return false
-		}
+		return false
 	}
 	return true
 }
