@@ -126,7 +126,7 @@ func (c *pdClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, key 
 		}
 	}
 	if newRegion == nil {
-		return nil, errors.Errorf("split region failed")
+		return nil, errors.New("split region failed")
 	}
 	var leader *metapb.Peer
 	// Assume the leaders will be at the same store.
