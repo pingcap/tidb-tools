@@ -35,7 +35,7 @@ type Client interface {
 
 // pdClient is a wrapper of pd client, can be used by RegionSplitter.
 type pdClient struct {
-	mu sync.Mutex
+	mu         sync.Mutex
 	client     pd.Client
 	storeCache map[uint64]*metapb.Store
 }

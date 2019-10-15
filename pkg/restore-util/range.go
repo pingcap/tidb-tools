@@ -57,10 +57,7 @@ func (rt *RangeTree) Find(key []byte) *Range {
 // it returns true if all ranges inserted successfully.
 // it returns false if there are some overlapped ranges.
 func (rt *RangeTree) InsertRange(rg Range) bool {
-	if rt.tree.ReplaceOrInsert(&rg) != nil {
-		return false
-	}
-	return true
+	return rt.tree.ReplaceOrInsert(&rg) == nil
 }
 
 // RangeIterator allows callers of Ascend to iterate in-order over portions of
@@ -69,7 +66,7 @@ func (rt *RangeTree) InsertRange(rg Range) bool {
 type RangeIterator func(rg *Range) bool
 
 // Ascend calls the iterator for every value in the tree within [first, last],
-// util the iterator returns false.
+// until the iterator returns false.
 func (rt *RangeTree) Ascend(iterator RangeIterator) {
 	rt.tree.Ascend(func(i btree.Item) bool {
 		return iterator(i.(*Range))

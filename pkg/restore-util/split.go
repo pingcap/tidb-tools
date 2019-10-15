@@ -9,15 +9,17 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/kvproto/pkg/import_sstpb"
 	"github.com/pingcap/kvproto/pkg/pdpb"
+	"github.com/pingcap/log"
+	"go.uber.org/zap"
 )
 
-var SplitWaitMaxRetryTimes = 64
-var SplitWaitIntervalMillis = 8
-var SplitMaxWaitIntervalMillis = 1000
+const SplitWaitMaxRetryTimes = 64
+const SplitWaitIntervalMillis = 8 * time.Millisecond
+const SplitMaxWaitIntervalMillis = time.Second
 
-var ScatterWaitMaxRetryTimes = 128
-var ScatterWaitIntervalMillis = 50
-var ScatterMaxWaitIntervalMillis = 5000
+const ScatterWaitMaxRetryTimes = 128
+const ScatterWaitIntervalMillis = 50 * time.Millisecond
+const ScatterMaxWaitIntervalMillis = 5 * time.Second
 
 // RegionSplitter is a executor of region split by rules.
 type RegionSplitter struct {
@@ -38,7 +40,7 @@ func (rs *RegionSplitter) Split(ctx context.Context, ranges []Range, rules []*im
 	var wg sync.WaitGroup
 	rangeTree, ok := newRangeTreeWithRewrite(ranges, rules)
 	if !ok {
-		return errors.Errorf("ranges overlapped")
+		return errors.New("ranges overlapped")
 	}
 	err := rs.splitByRewriteRules(ctx, &wg, rules)
 	if err != nil {
@@ -49,10 +51,7 @@ func (rs *RegionSplitter) Split(ctx context.Context, ranges []Range, rules []*im
 			return false
 		}
 		err = rs.maybeSplitRegion(ctx, rg, &wg)
-		if err != nil {
-			return false
-		}
-		return true
+		return err == nil
 	})
 	if err != nil {
 		return errors.Trace(err)
@@ -98,10 +97,7 @@ func (rs *RegionSplitter) hasRegion(ctx context.Context, regionID uint64) (bool,
 	if err != nil {
 		return false, err
 	}
-	if regionInfo == nil {
-		return false, nil
-	}
-	return true, nil
+	return regionInfo != nil, nil
 }
 
 func (rs *RegionSplitter) isScatterRegionFinished(ctx context.Context, regionID uint64) (bool, error) {
@@ -133,7 +129,7 @@ func (rs *RegionSplitter) waitForSplit(ctx context.Context, regionID uint64) err
 			if interval > SplitMaxWaitIntervalMillis {
 				interval = SplitMaxWaitIntervalMillis
 			}
-			time.Sleep(time.Millisecond * time.Duration(interval))
+			time.Sleep(interval)
 		}
 	}
 	return nil
@@ -147,6 +143,7 @@ func (rs *RegionSplitter) waitForScatter(ctx context.Context, wg *sync.WaitGroup
 		for i := 0; i < ScatterWaitMaxRetryTimes; i++ {
 			ok, err := rs.hasRegion(ctx, regionID)
 			if err != nil {
+				log.Error("scatter region failed: do not has the region", zap.Uint64("region_id", regionID))
 				return
 			}
 			if ok {
@@ -156,7 +153,7 @@ func (rs *RegionSplitter) waitForScatter(ctx context.Context, wg *sync.WaitGroup
 				if interval > ScatterMaxWaitIntervalMillis {
 					interval = ScatterMaxWaitIntervalMillis
 				}
-				time.Sleep(time.Millisecond * time.Duration(interval))
+				time.Sleep(interval)
 			}
 		}
 	}()
@@ -214,7 +211,7 @@ func beforeEnd(key []byte, end []byte) bool {
 
 func replacePrefix(s []byte, oldPrefix []byte, newPrefix []byte) []byte {
 	if bytes.HasPrefix(s, oldPrefix) {
-		return append(newPrefix, bytes.TrimPrefix(s, oldPrefix)...)
+		return append(newPrefix, s[len(oldPrefix):]...)
 	}
 	return s
 }
