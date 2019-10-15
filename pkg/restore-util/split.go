@@ -14,12 +14,12 @@ import (
 )
 
 const SplitWaitMaxRetryTimes = 64
-const SplitWaitIntervalMillis = 8 * time.Millisecond
-const SplitMaxWaitIntervalMillis = time.Second
+const SplitWaitInterval = 8 * time.Millisecond
+const SplitMaxWaitInterval = time.Second
 
 const ScatterWaitMaxRetryTimes = 128
-const ScatterWaitIntervalMillis = 50 * time.Millisecond
-const ScatterMaxWaitIntervalMillis = 5 * time.Second
+const ScatterWaitInterval = 50 * time.Millisecond
+const ScatterMaxWaitInterval = 5 * time.Second
 
 // RegionSplitter is a executor of region split by rules.
 type RegionSplitter struct {
@@ -116,7 +116,7 @@ func (rs *RegionSplitter) isScatterRegionFinished(ctx context.Context, regionID 
 }
 
 func (rs *RegionSplitter) waitForSplit(ctx context.Context, regionID uint64) error {
-	interval := SplitWaitIntervalMillis
+	interval := SplitWaitInterval
 	for i := 0; i < SplitWaitMaxRetryTimes; i++ {
 		ok, err := rs.hasRegion(ctx, regionID)
 		if err != nil {
@@ -126,8 +126,8 @@ func (rs *RegionSplitter) waitForSplit(ctx context.Context, regionID uint64) err
 			break
 		} else {
 			interval = 2 * interval
-			if interval > SplitMaxWaitIntervalMillis {
-				interval = SplitMaxWaitIntervalMillis
+			if interval > SplitMaxWaitInterval {
+				interval = SplitMaxWaitInterval
 			}
 			time.Sleep(interval)
 		}
@@ -139,7 +139,7 @@ func (rs *RegionSplitter) waitForScatter(ctx context.Context, wg *sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		interval := ScatterWaitIntervalMillis
+		interval := ScatterWaitInterval
 		for i := 0; i < ScatterWaitMaxRetryTimes; i++ {
 			ok, err := rs.hasRegion(ctx, regionID)
 			if err != nil {
@@ -150,8 +150,8 @@ func (rs *RegionSplitter) waitForScatter(ctx context.Context, wg *sync.WaitGroup
 				break
 			} else {
 				interval = 2 * interval
-				if interval > ScatterMaxWaitIntervalMillis {
-					interval = ScatterMaxWaitIntervalMillis
+				if interval > ScatterMaxWaitInterval {
+					interval = ScatterMaxWaitInterval
 				}
 				time.Sleep(interval)
 			}
