@@ -10,6 +10,7 @@ import (
 	"github.com/pingcap/kvproto/pkg/import_sstpb"
 	"github.com/pingcap/kvproto/pkg/metapb"
 	"github.com/pingcap/kvproto/pkg/pdpb"
+	"github.com/pingcap/tidb/util/codec"
 )
 
 type testClient struct {
@@ -69,9 +70,10 @@ func (c *testClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, ke
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	var target *RegionInfo
+	splitKey := codec.EncodeBytes([]byte{}, key)
 	for _, region := range c.regions {
-		if bytes.Compare(key, region.Region.StartKey) >= 0 &&
-			(len(region.Region.EndKey) == 0 || bytes.Compare(key, region.Region.EndKey) < 0) {
+		if bytes.Compare(splitKey, region.Region.StartKey) >= 0 &&
+			(len(region.Region.EndKey) == 0 || bytes.Compare(splitKey, region.Region.EndKey) < 0) {
 			target = region
 		}
 	}
@@ -83,12 +85,12 @@ func (c *testClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, ke
 			Peers:    target.Region.Peers,
 			Id:       c.nextRegionID,
 			StartKey: target.Region.StartKey,
-			EndKey:   key,
+			EndKey:   splitKey,
 		},
 	}
 	c.regions[c.nextRegionID] = newRegion
 	c.nextRegionID++
-	target.Region.StartKey = key
+	target.Region.StartKey = splitKey
 	c.regions[target.Region.Id] = target
 	return newRegion, nil
 }
@@ -119,13 +121,16 @@ func TestSplit(t *testing.T) {
 	regionSplitter := NewRegionSplitter(client)
 
 	ctx := context.Background()
-	err := regionSplitter.Split(ctx, ranges, rewriteRules, rewriteRules)
+	err := regionSplitter.Split(ctx, ranges, rewriteRules)
 	if err != nil {
 		t.Fatalf("split regions failed: %v", err)
 	}
 	regions := client.GetAllRegions()
 	if !validateRegions(regions) {
-		t.Fatalf("get wrong result: %v", regions)
+		for _, region := range regions {
+			t.Errorf("region: %v", region.Region)
+		}
+		t.Fatalf("get wrong result")
 	}
 }
 
@@ -139,12 +144,20 @@ func initTestClient() *testClient {
 	keys := [6]string{"", "aay", "bba", "bbh", "cca", ""}
 	regions := make(map[uint64]*RegionInfo)
 	for i := uint64(1); i < 6; i++ {
+		startKey := []byte(keys[i-1])
+		if len(startKey) != 0 {
+			startKey = codec.EncodeBytes([]byte{}, startKey)
+		}
+		endKey := []byte(keys[i])
+		if len(endKey) != 0 {
+			endKey = codec.EncodeBytes([]byte{}, endKey)
+		}
 		regions[i] = &RegionInfo{
 			Region: &metapb.Region{
 				Id:       i,
 				Peers:    peers,
-				StartKey: []byte(keys[i-1]),
-				EndKey:   []byte(keys[i]),
+				StartKey: startKey,
+				EndKey:   endKey,
 			},
 		}
 	}
@@ -177,7 +190,7 @@ func initRanges() []Range {
 	return ranges[:]
 }
 
-func initRewriteRules() []*import_sstpb.RewriteRule {
+func initRewriteRules() *RewriteRules {
 	var rules [2]*import_sstpb.RewriteRule
 	rules[0] = &import_sstpb.RewriteRule{
 		OldKeyPrefix: []byte("aa"),
@@ -187,7 +200,10 @@ func initRewriteRules() []*import_sstpb.RewriteRule {
 		OldKeyPrefix: []byte("cc"),
 		NewKeyPrefix: []byte("bb"),
 	}
-	return rules[:]
+	return &RewriteRules{
+		Table: rules[:],
+		Data:  rules[:],
+	}
 }
 
 // expected regions after split:
@@ -200,8 +216,16 @@ func validateRegions(regions map[uint64]*RegionInfo) bool {
 FindRegion:
 	for i := 1; i < 11; i++ {
 		for _, region := range regions {
-			if bytes.Equal(region.Region.GetStartKey(), []byte(keys[i-1])) &&
-				bytes.Equal(region.Region.GetEndKey(), []byte(keys[i])) {
+			startKey := []byte(keys[i-1])
+			if len(startKey) != 0 {
+				startKey = codec.EncodeBytes([]byte{}, startKey)
+			}
+			endKey := []byte(keys[i])
+			if len(endKey) != 0 {
+				endKey = codec.EncodeBytes([]byte{}, endKey)
+			}
+			if bytes.Equal(region.Region.GetStartKey(), startKey) &&
+				bytes.Equal(region.Region.GetEndKey(), endKey) {
 				continue FindRegion
 			}
 		}

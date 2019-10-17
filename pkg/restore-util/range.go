@@ -90,4 +90,3 @@ type RewriteRules struct {
 	Table []*import_sstpb.RewriteRule
 	Data  []*import_sstpb.RewriteRule
 }
-

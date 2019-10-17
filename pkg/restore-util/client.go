@@ -23,6 +23,7 @@ type Client interface {
 	// GetRegionByID gets a region by a region id.
 	GetRegionByID(ctx context.Context, regionID uint64) (*RegionInfo, error)
 	// SplitRegion splits a region from a key, if key is not included in the region, it will return nil.
+	// note: the key should not be encoded
 	SplitRegion(ctx context.Context, regionInfo *RegionInfo, key []byte) (*RegionInfo, error)
 	// ScatterRegion scatters a specified region.
 	ScatterRegion(ctx context.Context, regionInfo *RegionInfo) error
