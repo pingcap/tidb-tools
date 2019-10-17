@@ -70,6 +70,9 @@ func (c *pdClient) GetRegion(ctx context.Context, key []byte) (*RegionInfo, erro
 	if err != nil {
 		return nil, err
 	}
+	if region == nil {
+		return nil, errors.New("region not found")
+	}
 	return &RegionInfo{
 		Region: region,
 		Leader: leader,
@@ -92,6 +95,9 @@ func (c *pdClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, key 
 	if regionInfo.Leader != nil {
 		peer = regionInfo.Leader
 	} else {
+		if len(regionInfo.Region.Peers) == 0 {
+			return nil, errors.New("region does not have peer")
+		}
 		peer = regionInfo.Region.Peers[0]
 	}
 	storeID := peer.GetStoreId()
