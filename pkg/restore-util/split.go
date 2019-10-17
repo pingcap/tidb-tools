@@ -10,16 +10,21 @@ import (
 	"github.com/pingcap/kvproto/pkg/import_sstpb"
 	"github.com/pingcap/kvproto/pkg/pdpb"
 	"github.com/pingcap/log"
+	"github.com/pingcap/tidb/util/codec"
 	"go.uber.org/zap"
 )
 
-const SplitWaitMaxRetryTimes = 64
-const SplitWaitInterval = 8 * time.Millisecond
-const SplitMaxWaitInterval = time.Second
+const (
+	SplitMaxRetryTimes = 8
 
-const ScatterWaitMaxRetryTimes = 128
-const ScatterWaitInterval = 50 * time.Millisecond
-const ScatterMaxWaitInterval = 5 * time.Second
+	SplitWaitMaxRetryTimes = 64
+	SplitWaitInterval      = 8 * time.Millisecond
+	SplitMaxWaitInterval   = time.Second
+
+	ScatterWaitMaxRetryTimes = 128
+	ScatterWaitInterval      = 50 * time.Millisecond
+	ScatterMaxWaitInterval   = 5 * time.Second
+)
 
 // RegionSplitter is a executor of region split by rules.
 type RegionSplitter struct {
@@ -37,13 +42,14 @@ func NewRegionSplitter(client Client) *RegionSplitter {
 // Split executes a region split. It will split regions by the rewrite rules,
 // then it will split regions by the end key of each range.
 // tableRules includes the prefix of a table, since some ranges may have a prefix with record sequence or index sequence.
-func (rs *RegionSplitter) Split(ctx context.Context, ranges []Range, tableRules []*import_sstpb.RewriteRule, dataRules []*import_sstpb.RewriteRule) error {
+// note: all ranges and rewrite rules must have raw key.
+func (rs *RegionSplitter) Split(ctx context.Context, ranges []Range, rewriteRules *RewriteRules) error {
 	var wg sync.WaitGroup
-	rangeTree, ok := newRangeTreeWithRewrite(ranges, tableRules, dataRules)
+	rangeTree, ok := newRangeTreeWithRewrite(ranges, rewriteRules)
 	if !ok {
 		return errors.New("ranges overlapped")
 	}
-	err := rs.splitByRewriteRules(ctx, &wg, dataRules)
+	err := rs.splitByRewriteRules(ctx, &wg, rewriteRules.Data)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -66,12 +72,10 @@ func (rs *RegionSplitter) Split(ctx context.Context, ranges []Range, tableRules 
 // Split regions by the rewrite rules, to ensure all keys of one region only have one prefix.
 func (rs *RegionSplitter) splitByRewriteRules(ctx context.Context, wg *sync.WaitGroup, rules []*import_sstpb.RewriteRule) error {
 	for _, rule := range rules {
-		key := rule.GetNewKeyPrefix()
-		regionInfo, err := rs.client.GetRegion(ctx, key)
-		if err != nil {
-			return errors.Trace(err)
-		}
-		err = rs.splitAndScatterRegion(ctx, regionInfo, key, wg)
+		err := rs.maybeSplitRegion(ctx, &Range{
+			StartKey: rule.GetNewKeyPrefix(),
+			EndKey:   rule.GetNewKeyPrefix(),
+		}, wg)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -79,11 +83,11 @@ func (rs *RegionSplitter) splitByRewriteRules(ctx context.Context, wg *sync.Wait
 	return nil
 }
 
-func newRangeTreeWithRewrite(ranges []Range, tableRules []*import_sstpb.RewriteRule, dataRules []*import_sstpb.RewriteRule) (*RangeTree, bool) {
+func newRangeTreeWithRewrite(ranges []Range, rewriteRules *RewriteRules) (*RangeTree, bool) {
 	rangeTree := NewRangeTree()
 	for _, rg := range ranges {
-		rg.StartKey = replacePrefix(rg.StartKey, tableRules, dataRules)
-		rg.EndKey = replacePrefix(rg.EndKey, tableRules, dataRules)
+		rg.StartKey = replacePrefix(rg.StartKey, rewriteRules)
+		rg.EndKey = replacePrefix(rg.EndKey, rewriteRules)
 		if !rangeTree.InsertRange(rg) {
 			return nil, false
 		}
@@ -119,7 +123,7 @@ func (rs *RegionSplitter) waitForSplit(ctx context.Context, regionID uint64) err
 	for i := 0; i < SplitWaitMaxRetryTimes; i++ {
 		ok, err := rs.hasRegion(ctx, regionID)
 		if err != nil {
-			return err
+			return errors.Trace(err)
 		}
 		if ok {
 			break
@@ -134,15 +138,21 @@ func (rs *RegionSplitter) waitForSplit(ctx context.Context, regionID uint64) err
 	return nil
 }
 
-func (rs *RegionSplitter) waitForScatter(ctx context.Context, wg *sync.WaitGroup, regionID uint64) {
+func (rs *RegionSplitter) tryToScatterRegion(ctx context.Context, wg *sync.WaitGroup, regionInfo *RegionInfo) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		err := rs.client.ScatterRegion(ctx, regionInfo)
+		if err != nil {
+			log.Warn("scatter regionInfo failed", zap.Error(err), zap.Reflect("regionInfo", regionInfo.Region))
+			return
+		}
 		interval := ScatterWaitInterval
+		regionID := regionInfo.Region.GetId()
 		for i := 0; i < ScatterWaitMaxRetryTimes; i++ {
 			ok, err := rs.hasRegion(ctx, regionID)
 			if err != nil {
-				log.Error("scatter region failed: do not has the region", zap.Uint64("region_id", regionID))
+				log.Error("scatter regionInfo failed: do not has the regionInfo", zap.Uint64("region_id", regionID))
 				return
 			}
 			if ok {
@@ -159,18 +169,25 @@ func (rs *RegionSplitter) waitForScatter(ctx context.Context, wg *sync.WaitGroup
 }
 
 func (rs *RegionSplitter) maybeSplitRegion(ctx context.Context, r *Range, wg *sync.WaitGroup) error {
-	regionInfo, err := rs.client.GetRegion(ctx, r.StartKey)
-	if err != nil {
-		return errors.Trace(err)
+	var i int
+	for {
+		regionInfo, err := rs.client.GetRegion(ctx, codec.EncodeBytes([]byte{}, r.StartKey))
+		if err != nil {
+			return errors.Trace(err)
+		}
+		splitKey := r.EndKey
+		if !needSplit(codec.EncodeBytes([]byte{}, splitKey), regionInfo) {
+			return nil
+		}
+		err = rs.splitAndScatterRegion(ctx, regionInfo, splitKey, wg)
+		if err == nil {
+			return nil
+		}
+		i++
+		if i >= SplitMaxRetryTimes {
+			return err
+		}
 	}
-	if !needSplit(r, regionInfo) {
-		return nil
-	}
-	err = rs.splitAndScatterRegion(ctx, regionInfo, r.EndKey, wg)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	return nil
 }
 
 func (rs *RegionSplitter) splitAndScatterRegion(ctx context.Context, regionInfo *RegionInfo, key []byte, wg *sync.WaitGroup) error {
@@ -178,26 +195,21 @@ func (rs *RegionSplitter) splitAndScatterRegion(ctx context.Context, regionInfo 
 	if err != nil {
 		return errors.Trace(err)
 	}
-	// Wait for a while until the region successfully splits
+	// Wait for a while until the region successfully splits.
 	err = rs.waitForSplit(ctx, newRegion.Region.GetId())
 	if err != nil {
 		return errors.Trace(err)
 	}
-	err = rs.client.ScatterRegion(ctx, newRegion)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	rs.waitForScatter(ctx, wg, newRegion.Region.GetId())
+	rs.tryToScatterRegion(ctx, wg, newRegion)
 	return err
 }
 
-func needSplit(r *Range, regionInfo *RegionInfo) bool {
-	splitKey := r.EndKey
-	// If splitKey is the max key
+func needSplit(splitKey []byte, regionInfo *RegionInfo) bool {
+	// If splitKey is the max key.
 	if len(splitKey) == 0 {
 		return false
 	}
-	// If splitKey is not in the region
+	// If splitKey is not in the region or is the boundary of the region.
 	if bytes.Compare(splitKey, regionInfo.Region.GetStartKey()) <= 0 {
 		return false
 	}
@@ -208,14 +220,14 @@ func beforeEnd(key []byte, end []byte) bool {
 	return bytes.Compare(key, end) < 0 || len(end) == 0
 }
 
-func replacePrefix(s []byte, tableRules []*import_sstpb.RewriteRule, dataRules []*import_sstpb.RewriteRule) []byte {
-	// We should search the dataRules firstly
-	for _, rule := range dataRules {
+func replacePrefix(s []byte, rewriteRules *RewriteRules) []byte {
+	// We should search the dataRules firstly.
+	for _, rule := range rewriteRules.Data {
 		if bytes.HasPrefix(s, rule.GetOldKeyPrefix()) {
 			return append(rule.GetNewKeyPrefix(), s[len(rule.GetOldKeyPrefix()):]...)
 		}
 	}
-	for _, rule := range tableRules {
+	for _, rule := range rewriteRules.Table {
 		if bytes.HasPrefix(s, rule.GetOldKeyPrefix()) {
 			return append(rule.GetNewKeyPrefix(), s[len(rule.GetOldKeyPrefix()):]...)
 		}

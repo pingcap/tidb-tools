@@ -115,7 +115,7 @@ func (c *pdClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, key 
 		return nil, err
 	}
 	if resp.RegionError != nil {
-		return nil, errors.Errorf("split region %d failed, got region error: %v", regionInfo.Region.GetId(), resp.RegionError)
+		return nil, errors.Errorf("split region failed: region=%v, key=%x, err=%v", regionInfo.Region, key, resp.RegionError)
 	}
 
 	regions := resp.GetRegions()

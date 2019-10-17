@@ -2,8 +2,10 @@ package restore_util
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/google/btree"
+	"github.com/pingcap/kvproto/pkg/import_sstpb"
 	"github.com/pingcap/kvproto/pkg/metapb"
 )
 
@@ -11,6 +13,11 @@ import (
 type Range struct {
 	StartKey []byte
 	EndKey   []byte
+}
+
+// String formats a range to a string
+func (r *Range) String() string {
+	return fmt.Sprintf("[%x %x]", r.StartKey, r.EndKey)
 }
 
 // Less compares a range with a btree.Item
@@ -78,3 +85,9 @@ type RegionInfo struct {
 	Region *metapb.Region
 	Leader *metapb.Peer
 }
+
+type RewriteRules struct {
+	Table []*import_sstpb.RewriteRule
+	Data  []*import_sstpb.RewriteRule
+}
+
