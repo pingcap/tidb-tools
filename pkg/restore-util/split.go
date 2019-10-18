@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	SplitMaxRetryTimes = 8
+	SplitRetryTimes = 16
 
 	SplitWaitMaxRetryTimes = 64
 	SplitWaitInterval      = 8 * time.Millisecond
@@ -47,7 +47,7 @@ func (rs *RegionSplitter) Split(ctx context.Context, ranges []Range, rewriteRule
 	var wg sync.WaitGroup
 	rangeTree, ok := newRangeTreeWithRewrite(ranges, rewriteRules)
 	if !ok {
-		return errors.New("ranges overlapped")
+		return errors.Errorf("ranges overlapped: %v", ranges)
 	}
 	err := rs.splitByRewriteRules(ctx, &wg, rewriteRules.Data)
 	if err != nil {
@@ -144,7 +144,7 @@ func (rs *RegionSplitter) tryToScatterRegion(ctx context.Context, wg *sync.WaitG
 		defer wg.Done()
 		err := rs.client.ScatterRegion(ctx, regionInfo)
 		if err != nil {
-			log.Warn("scatter regionInfo failed", zap.Error(err), zap.Reflect("regionInfo", regionInfo.Region))
+			log.Warn("scatter region failed", zap.Error(err), zap.Reflect("region", regionInfo.Region))
 			return
 		}
 		interval := ScatterWaitInterval
@@ -152,7 +152,7 @@ func (rs *RegionSplitter) tryToScatterRegion(ctx context.Context, wg *sync.WaitG
 		for i := 0; i < ScatterWaitMaxRetryTimes; i++ {
 			ok, err := rs.hasRegion(ctx, regionID)
 			if err != nil {
-				log.Error("scatter regionInfo failed: do not has the regionInfo", zap.Uint64("region_id", regionID))
+				log.Warn("scatter region failed: do not have the region", zap.Reflect("region", regionInfo.Region))
 				return
 			}
 			if ok {
@@ -184,8 +184,10 @@ func (rs *RegionSplitter) maybeSplitRegion(ctx context.Context, r *Range, wg *sy
 			return nil
 		}
 		i++
-		if i >= SplitMaxRetryTimes {
+		if i >= SplitRetryTimes {
 			return err
+		} else {
+			log.Warn("split region failed, retry it", zap.Error(err), zap.Reflect("region", regionInfo.Region))
 		}
 	}
 }
