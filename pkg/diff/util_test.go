@@ -94,3 +94,39 @@ func (s *testUtilSuite) TestRowToString(c *C) {
 	c.Assert(rowStr, Matches, ".*name: abc.*")
 	c.Assert(rowStr, Matches, ".*info: IsNull.*")
 }
+
+func (s *testUtilSuite) TestMinLenInSlices(c *C) {
+	testCases := []struct {
+		slices [][]string
+		expect int
+	}{
+		{
+			[][]string{
+				{"1", "2"},
+				{"1", "2", "3"},
+			},
+			2,
+		}, {
+			[][]string{
+				{"1", "2"},
+				{},
+			},
+			0,
+		}, {
+			[][]string{},
+			0,
+		}, {
+			[][]string{
+				{"1", "2"},
+				{},
+				{"1", "2", "3"},
+			},
+			0,
+		},
+	}
+
+	for _, testCase := range testCases {
+		minLen := minLenInSlices(testCase.slices)
+		c.Assert(minLen, Equals, testCase.expect)
+	}
+}

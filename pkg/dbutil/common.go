@@ -164,7 +164,7 @@ func GetCreateTableSQL(ctx context.Context, db *sql.DB, schemaName string, table
 
 // GetRowCount returns row count of the table.
 // if not specify where condition, return total row count of the table.
-func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName string, where string) (int64, error) {
+func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName string, where string, args []interface{}) (int64, error) {
 	/*
 		select count example result:
 		mysql> SELECT count(1) cnt from `test`.`itest` where id > 0;
@@ -179,10 +179,10 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 	if len(where) > 0 {
 		query += fmt.Sprintf(" WHERE %s", where)
 	}
-	log.Debug("get row count", zap.String("sql", query))
+	log.Debug("get row count", zap.String("sql", query), zap.Reflect("args", args))
 
 	var cnt sql.NullInt64
-	err := db.QueryRowContext(ctx, query).Scan(&cnt)
+	err := db.QueryRowContext(ctx, query, args...).Scan(&cnt)
 	if err != nil {
 		return 0, errors.Trace(err)
 	}
@@ -193,20 +193,18 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 	return cnt.Int64, nil
 }
 
-// GetRandomValues returns some random value and these value's count of a column, just like sampling. Tips: limitArgs is the value in limitRange.
-func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int, limitRange string, limitArgs []interface{}, collation string) ([]string, []int, error) {
+// GetRandomValues returns some random value. Tips: limitArgs is the value in limitRange.
+func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int, limitRange string, limitArgs []interface{}, collation string) ([]string, error) {
 	/*
 		example:
-		mysql> SELECT `id`, COUNT(*) count FROM (SELECT `id` FROM `test`.`test`  WHERE `id` COLLATE "latin1_bin" > 0 AND `id` COLLATE "latin1_bin" < 100 ORDER BY RAND() LIMIT 5) rand_tmp GROUP BY `id` ORDER BY `id` COLLATE "latin1_bin";
-		+------+-------+
-		| id   | count |
-		+------+-------+
-		|    1 |     2 |
-		|    2 |     2 |
-		|    3 |     1 |
-		+------+-------+
-
-		FIXME: TiDB now don't return rand value when use `ORDER BY RAND()`
+		mysql> SELECT `id` FROM (SELECT `id`, rand() rand_value FROM `test`.`test`  WHERE `id` COLLATE "latin1_bin" > 0 AND `id` COLLATE "latin1_bin" < 100 ORDER BY rand_value LIMIT 5) rand_tmp ORDER BY `id` COLLATE "latin1_bin";
+		+------+
+		| id   |
+		+------+
+		|    1 |
+		|    2 |
+		|    3 |
+		+------+
 	*/
 
 	if limitRange == "" {
@@ -217,31 +215,27 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
 	}
 
-	randomValue := make([]string, 0, num)
-	valueCount := make([]int, 0, num)
-
-	query := fmt.Sprintf("SELECT %[1]s, COUNT(*) count FROM (SELECT %[1]s FROM %[2]s WHERE %[3]s ORDER BY RAND() LIMIT %[4]d)rand_tmp GROUP BY %[1]s ORDER BY %[1]s%[5]s",
+	query := fmt.Sprintf("SELECT %[1]s FROM (SELECT %[1]s, rand() rand_value FROM %[2]s WHERE %[3]s ORDER BY rand_value LIMIT %[4]d)rand_tmp ORDER BY %[1]s%[5]s",
 		escapeName(column), TableName(schemaName, table), limitRange, num, collation)
 	log.Debug("get random values", zap.String("sql", query), zap.Reflect("args", limitArgs))
 
 	rows, err := db.QueryContext(ctx, query, limitArgs...)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
 	defer rows.Close()
 
+	randomValue := make([]string, 0, num)
 	for rows.Next() {
 		var value string
-		var count int
-		err = rows.Scan(&value, &count)
+		err = rows.Scan(&value)
 		if err != nil {
-			return nil, nil, errors.Trace(err)
+			return nil, errors.Trace(err)
 		}
 		randomValue = append(randomValue, value)
-		valueCount = append(valueCount, count)
 	}
 
-	return randomValue, valueCount, errors.Trace(rows.Err())
+	return randomValue, errors.Trace(rows.Err())
 }
 
 // GetMinMaxValue return min and max value of given column by specified limitRange condition.
@@ -291,6 +285,7 @@ func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column strin
 }
 
 func queryTables(ctx context.Context, db *sql.DB, q string) (tables []string, err error) {
+	log.Debug("query tables", zap.String("query", q))
 	rows, err := db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -328,13 +323,13 @@ func GetTables(ctx context.Context, db *sql.DB, schemaName string) (tables []str
 		| NTEST          | BASE TABLE |
 		+----------------+------------+
 	*/
-	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type != 'VIEW';", schemaName)
+	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type != 'VIEW';", escapeName(schemaName))
 	return queryTables(ctx, db, query)
 }
 
 // GetViews returns names of all views in the specified schema
 func GetViews(ctx context.Context, db *sql.DB, schemaName string) (tables []string, err error) {
-	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type = 'VIEW';", schemaName)
+	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type = 'VIEW';", escapeName(schemaName))
 	return queryTables(ctx, db, query)
 }
 
@@ -429,7 +424,7 @@ func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string, table
 	*/
 	buckets := make(map[string][]Bucket)
 	query := "SHOW STATS_BUCKETS WHERE db_name= ? AND table_name= ?;"
-	log.Debug("GetBucketsInfo", zap.String("sql", query))
+	log.Debug("GetBucketsInfo", zap.String("sql", query), zap.String("schema", schema), zap.String("table", table))
 
 	rows, err := db.QueryContext(ctx, query, schema, table)
 	if err != nil {
@@ -502,6 +497,7 @@ func AnalyzeValuesFromBuckets(valueString string, cols []*model.ColumnInfo) ([]s
 		if IsTimeTypeAndNeedDecode(col.Tp) {
 			value, err := DecodeTimeInBucket(values[i])
 			if err != nil {
+				log.Error("analyze values from buckets", zap.String("column", col.Name.O), zap.String("value", values[i]), zap.Error(err))
 				return nil, errors.Trace(err)
 			}
 
