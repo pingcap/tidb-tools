@@ -15,11 +15,13 @@ import (
 )
 
 const (
-	SplitRetryTimes = 16
+	SplitRetryTimes       = 32
+	SplitRetryInterval    = 50 * time.Millisecond
+	SplitMaxRetryInterval = time.Second
 
-	SplitWaitMaxRetryTimes = 64
-	SplitWaitInterval      = 8 * time.Millisecond
-	SplitMaxWaitInterval   = time.Second
+	SplitCheckMaxRetryTimes = 64
+	SplitCheckInterval      = 8 * time.Millisecond
+	SplitMaxCheckInterval   = time.Second
 
 	ScatterWaitMaxRetryTimes = 128
 	ScatterWaitInterval      = 50 * time.Millisecond
@@ -119,8 +121,8 @@ func (rs *RegionSplitter) isScatterRegionFinished(ctx context.Context, regionID 
 }
 
 func (rs *RegionSplitter) waitForSplit(ctx context.Context, regionID uint64) error {
-	interval := SplitWaitInterval
-	for i := 0; i < SplitWaitMaxRetryTimes; i++ {
+	interval := SplitCheckInterval
+	for i := 0; i < SplitCheckMaxRetryTimes; i++ {
 		ok, err := rs.hasRegion(ctx, regionID)
 		if err != nil {
 			return errors.Trace(err)
@@ -129,8 +131,8 @@ func (rs *RegionSplitter) waitForSplit(ctx context.Context, regionID uint64) err
 			break
 		} else {
 			interval = 2 * interval
-			if interval > SplitMaxWaitInterval {
-				interval = SplitMaxWaitInterval
+			if interval > SplitMaxCheckInterval {
+				interval = SplitMaxCheckInterval
 			}
 			time.Sleep(interval)
 		}
@@ -169,27 +171,31 @@ func (rs *RegionSplitter) tryToScatterRegion(ctx context.Context, wg *sync.WaitG
 }
 
 func (rs *RegionSplitter) maybeSplitRegion(ctx context.Context, r *Range, wg *sync.WaitGroup) error {
-	var i int
-	for {
-		regionInfo, err := rs.client.GetRegion(ctx, codec.EncodeBytes([]byte{}, r.StartKey))
-		if err != nil {
-			return errors.Trace(err)
+	interval := SplitRetryInterval
+	var err error
+	for i := 0; i < SplitRetryTimes; i++ {
+		if i > 0 {
+			log.Warn("split region failed, retry it", zap.Error(err), zap.Reflect("key", r.StartKey))
 		}
-		splitKey := r.EndKey
-		if !needSplit(codec.EncodeBytes([]byte{}, splitKey), regionInfo) {
-			return nil
-		}
-		err = rs.splitAndScatterRegion(ctx, regionInfo, splitKey, wg)
+		var regionInfo *RegionInfo
+		regionInfo, err = rs.client.GetRegion(ctx, codec.EncodeBytes([]byte{}, r.StartKey))
 		if err == nil {
-			return nil
+			splitKey := r.EndKey
+			if !needSplit(codec.EncodeBytes([]byte{}, splitKey), regionInfo) {
+				return nil
+			}
+			err = rs.splitAndScatterRegion(ctx, regionInfo, splitKey, wg)
+			if err == nil {
+				return nil
+			}
 		}
-		i++
-		if i >= SplitRetryTimes {
-			return err
-		} else {
-			log.Warn("split region failed, retry it", zap.Error(err), zap.Reflect("region", regionInfo.Region))
+		interval = 2 * interval
+		if interval > SplitMaxRetryInterval {
+			interval = SplitMaxRetryInterval
 		}
+		time.Sleep(interval)
 	}
+	return err
 }
 
 func (rs *RegionSplitter) splitAndScatterRegion(ctx context.Context, regionInfo *RegionInfo, key []byte, wg *sync.WaitGroup) error {
