@@ -119,7 +119,7 @@ func (c *pdClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, key 
 			RegionEpoch: regionInfo.Region.RegionEpoch,
 			Peer:        peer,
 		},
-		SplitKeys: [][]byte{key},
+		SplitKey: key,
 	})
 	if err != nil {
 		return nil, err
