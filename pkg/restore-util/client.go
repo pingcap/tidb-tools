@@ -109,6 +109,7 @@ func (c *pdClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, key 
 		return nil, err
 	}
 	conn, err := grpc.Dial(store.GetAddress(), grpc.WithInsecure())
+	defer conn.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +139,7 @@ func (c *pdClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, key 
 		}
 	}
 	if newRegion == nil {
-		return nil, errors.New("split region failed")
+		return nil, errors.New("split region failed: new region is nil")
 	}
 	var leader *metapb.Peer
 	// Assume the leaders will be at the same store.
