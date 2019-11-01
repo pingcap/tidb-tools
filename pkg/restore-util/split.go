@@ -59,12 +59,13 @@ func (rs *RegionSplitter) Split(ctx context.Context, ranges []Range, rewriteRule
 		}
 		var newRegion *RegionInfo
 		newRegion, err = rs.maybeSplitRegion(ctx, rg)
-		if err == nil {
-			if newRegion != nil {
-				scatterRegions = append(scatterRegions, newRegion)
-			}
+		if err != nil {
+			return false
 		}
-		return err == nil
+		if newRegion != nil {
+			scatterRegions = append(scatterRegions, newRegion)
+		}
+		return true
 	})
 	if err != nil {
 		return errors.Trace(err)
@@ -87,7 +88,6 @@ func (rs *RegionSplitter) splitByRewriteRules(ctx context.Context, rules []*impo
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		//fmt.Printf("split done, scatter region: %v\n", newRegion.Region)
 		if newRegion != nil {
 			scatterRegions = append(scatterRegions, newRegion)
 		}
