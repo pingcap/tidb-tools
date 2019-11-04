@@ -147,3 +147,37 @@ func (s *testDBSuite) TestDeleteRows(c *C) {
 		c.Errorf("there were unfulfilled expectations: %s", err)
 	}
 }
+
+func (s *testDBSuite) TestGetParser(c *C) {
+	testCases := []struct {
+		sqlModeStr string
+		hasErr     bool
+	}{
+		{
+			"",
+			false,
+		}, {
+			"ANSI_QUOTES",
+			false,
+		}, {
+			"ANSI_QUOTES,IGNORE_SPACE",
+			false,
+		}, {
+			"ANSI_QUOTES123",
+			true,
+		}, {
+			"ANSI_QUOTES,IGNORE_SPACE123",
+			true,
+		},
+	}
+
+	for _, testCase := range testCases {
+		parser, err := GetParser(testCase.sqlModeStr)
+		if testCase.hasErr {
+			c.Assert(err, NotNil)
+		} else {
+			c.Assert(err, IsNil)
+			c.Assert(parser, NotNil)
+		}
+	}
+}
