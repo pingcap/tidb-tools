@@ -81,7 +81,7 @@ func (*testDBSuite) TestIndex(c *C) {
 	}
 
 	for _, testCase := range testCases {
-		tableInfo, err := GetTableInfoBySQL(testCase.sql)
+		tableInfo, err := GetTableInfoBySQL(testCase.sql, "")
 		c.Assert(err, IsNil)
 
 		indices := FindAllIndex(tableInfo)

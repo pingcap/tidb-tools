@@ -258,10 +258,10 @@ type ShardingTablesCheck struct {
 // NewShardingTablesCheck returns a Checker
 func NewShardingTablesCheck(name string, dbs map[string]*sql.DB, tables map[string]map[string][]string, mapping map[string]*column.Mapping, checkAutoIncrementPrimaryKey bool) Checker {
 	return &ShardingTablesCheck{
-		name:                         name,
-		dbs:                          dbs,
-		tables:                       tables,
-		mapping:                      mapping,
+		name:    name,
+		dbs:     dbs,
+		tables:  tables,
+		mapping: mapping,
 		checkAutoIncrementPrimaryKey: checkAutoIncrementPrimaryKey,
 	}
 }
@@ -295,7 +295,7 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 					return r
 				}
 
-				info, err := dbutil.GetTableInfoBySQL(statement)
+				info, err := dbutil.GetTableInfoBySQL(statement, "")
 				if err != nil {
 					markCheckError(r, err)
 					r.Extra = fmt.Sprintf("instance %s on sharding %s", instance, c.name)

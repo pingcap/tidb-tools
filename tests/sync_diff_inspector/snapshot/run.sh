@@ -21,8 +21,11 @@ check_contains "sourceDB don't equal targetDB" $OUT_DIR/snapshot_diff.log
 cp $OUT_DIR/fix.sql $OUT_DIR/fix.sql.bak
 
 echo "use snapshot compare data, data should be equal"
+# test sql mode by the way
+mysql -uroot -h 127.0.0.1 -P 4000 -e "SET GLOBAL sql_mode = 'ANSI_QUOTES';"
 cp config_base.toml config.toml
 echo "snapshot = \"$ts\"" >> config.toml
+echo "sql-mode = 'ANSI_QUOTES'" >> config.toml
 sync_diff_inspector --config=./config.toml > $OUT_DIR/snapshot_diff.log
 check_contains "test pass!!!" $OUT_DIR/snapshot_diff.log
 

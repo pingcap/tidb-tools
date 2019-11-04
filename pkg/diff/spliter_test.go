@@ -171,7 +171,7 @@ func (s *testSpliterSuite) TestRandomSpliter(c *C) {
 	}
 
 	for i, testCase := range testCases {
-		tableInfo, err := dbutil.GetTableInfoBySQL(testCase.createTableSQL)
+		tableInfo, err := dbutil.GetTableInfoBySQL(testCase.createTableSQL, "")
 		c.Assert(err, IsNil)
 
 		tableInstance := &TableInstance{

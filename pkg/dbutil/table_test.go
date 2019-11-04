@@ -78,7 +78,7 @@ func (*testDBSuite) TestTable(c *C) {
 	}
 
 	for _, testCase := range testCases {
-		tableInfo, err := GetTableInfoBySQL(testCase.sql)
+		tableInfo, err := GetTableInfoBySQL(testCase.sql, "")
 		c.Assert(err, IsNil)
 		for i, column := range tableInfo.Columns {
 			c.Assert(testCase.columns[i], Equals, column.Name.O)
@@ -95,15 +95,15 @@ func (*testDBSuite) TestTable(c *C) {
 
 func (*testDBSuite) TestTableStructEqual(c *C) {
 	createTableSQL1 := "CREATE TABLE `test`.`atest` (`id` int(24), `name` varchar(24), `birthday` datetime, `update_time` time, `money` decimal(20,2), primary key(`id`))"
-	tableInfo1, err := GetTableInfoBySQL(createTableSQL1)
+	tableInfo1, err := GetTableInfoBySQL(createTableSQL1, "")
 	c.Assert(err, IsNil)
 
 	createTableSQL2 := "CREATE TABLE `test`.`atest` (`id` int(24) NOT NULL, `name` varchar(24), `birthday` datetime, `update_time` time, `money` decimal(20,2), primary key(`id`))"
-	tableInfo2, err := GetTableInfoBySQL(createTableSQL2)
+	tableInfo2, err := GetTableInfoBySQL(createTableSQL2, "")
 	c.Assert(err, IsNil)
 
-	createTableSQL3 := "CREATE TABLE `test`.`atest` (`id` int(24), `name` varchar(24), `birthday` datetime, `update_time` time, `money` decimal(20,2), unique key(`id`))"
-	tableInfo3, err := GetTableInfoBySQL(createTableSQL3)
+	createTableSQL3 := "CREATE TABLE \"test\".\"atest\" (\"id\" int(24), \"name\" varchar(24), \"birthday\" datetime, \"update_time\" time, \"money\" decimal(20,2), unique key(\"id\"))"
+	tableInfo3, err := GetTableInfoBySQL(createTableSQL3, "ANSI_QUOTES")
 	c.Assert(err, IsNil)
 
 	equal := EqualTableInfo(tableInfo1, tableInfo2)
