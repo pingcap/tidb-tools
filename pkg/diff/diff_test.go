@@ -36,7 +36,7 @@ type testDiffSuite struct{}
 
 func (*testDiffSuite) TestGenerateSQLs(c *C) {
 	createTableSQL := "CREATE TABLE `test`.`atest` (`id` int(24), `name` varchar(24), `birthday` datetime, `update_time` time, `money` decimal(20,2), `id_gen` int(11) GENERATED ALWAYS AS ((`id` + 1)) VIRTUAL, primary key(`id`, `name`))"
-	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL)
+	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, "")
 	c.Assert(err, IsNil)
 
 	rowsData := map[string]*dbutil.ColumnData{
@@ -55,7 +55,7 @@ func (*testDiffSuite) TestGenerateSQLs(c *C) {
 
 	// test the unique key
 	createTableSQL2 := "CREATE TABLE `test`.`atest` (`id` int(24), `name` varchar(24), `birthday` datetime, `update_time` time, `money` decimal(20,2), unique key(`id`, `name`))"
-	tableInfo2, err := dbutil.GetTableInfoBySQL(createTableSQL2)
+	tableInfo2, err := dbutil.GetTableInfoBySQL(createTableSQL2, "")
 	c.Assert(err, IsNil)
 	replaceSQL = generateDML("replace", rowsData, tableInfo2, "test")
 	deleteSQL = generateDML("delete", rowsData, tableInfo2, "test")
