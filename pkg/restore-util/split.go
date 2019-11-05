@@ -66,7 +66,9 @@ func (rs *RegionSplitter) Split(
 		if rg == nil {
 			return false
 		}
-		onSplit(rg)
+		if onSplit != nil {
+			onSplit(rg)
+		}
 
 		var newRegion *RegionInfo
 		newRegion, err = rs.maybeSplitRegion(ctx, rg)
