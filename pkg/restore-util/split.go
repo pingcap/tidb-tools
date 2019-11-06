@@ -45,6 +45,7 @@ func NewRegionSplitter(client Client) *RegionSplitter {
 // tableRules includes the prefix of a table, since some ranges may have a prefix with record sequence or index sequence.
 // note: all ranges and rewrite rules must have raw key.
 func (rs *RegionSplitter) Split(ctx context.Context, ranges []Range, rewriteRules *RewriteRules) error {
+	startTime := time.Now()
 	rangeTree, ok := newRangeTreeWithRewrite(ranges, rewriteRules)
 	if !ok {
 		return errors.Errorf("ranges overlapped: %v", ranges)
@@ -70,11 +71,14 @@ func (rs *RegionSplitter) Split(ctx context.Context, ranges []Range, rewriteRule
 	if err != nil {
 		return errors.Trace(err)
 	}
-
-	log.Info("splitting regions done, wait for scattering regions", zap.Int("regions", len(scatterRegions)))
+	log.Info("splitting regions done, wait for scattering regions",
+		zap.Int("regions", len(scatterRegions)), zap.Int64("cost_seconds", int64(time.Since(startTime)/time.Second)))
+	startTime = time.Now()
 	for _, region := range scatterRegions {
 		rs.waitForScatterRegion(ctx, region)
 	}
+	log.Info("waiting for scattering regions done",
+		zap.Int("regions", len(scatterRegions)), zap.Int64("cost_seconds", int64(time.Since(startTime)/time.Second)))
 	return nil
 }
 
