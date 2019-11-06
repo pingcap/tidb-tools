@@ -71,6 +71,7 @@ func (rs *RegionSplitter) Split(ctx context.Context, ranges []Range, rewriteRule
 		return errors.Trace(err)
 	}
 
+	log.Info("splitting regions done, wait for scattering regions", zap.Int("regions", len(scatterRegions)))
 	for _, region := range scatterRegions {
 		rs.waitForScatterRegion(ctx, region)
 	}
