@@ -54,7 +54,7 @@ func (rs *RegionSplitter) Split(
 	rewriteRules *RewriteRules,
 	onSplit OnSplitFunc,
 ) error {
-  startTime := time.Now()
+	startTime := time.Now()
 	rangeTree, ok := newRangeTreeWithRewrite(ranges, rewriteRules)
 	if !ok {
 		return errors.Errorf("ranges overlapped: %v", ranges)
