@@ -22,7 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/coreos/etcd/mvcc/mvccpb"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	pd "github.com/pingcap/pd/client"
@@ -31,6 +30,7 @@ import (
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
 	"github.com/pingcap/tidb/util/logutil"
 	pb "github.com/pingcap/tipb/go-binlog"
+	"go.etcd.io/etcd/mvcc/mvccpb"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

@@ -18,9 +18,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/coreos/etcd/integration"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/etcd"
+	"go.etcd.io/etcd/integration"
 	"golang.org/x/net/context"
 )
 

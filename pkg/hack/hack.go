@@ -14,5 +14,5 @@
 package hack
 
 import (
-	_ "github.com/coreos/etcd/integration" // for update vendor
+	_ "go.etcd.io/etcd/integration" // for update vendor
 )
