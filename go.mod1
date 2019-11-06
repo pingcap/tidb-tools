@@ -34,7 +34,7 @@ require (
 	github.com/pingcap/log v0.0.0-20190715063458-479153f07ebd
 	github.com/pingcap/parser v0.0.0-20191011160321-0c4055ef2c1d
 	github.com/pingcap/pd v1.1.0-beta.0.20191018040858-0d9d9d67d029
-	github.com/pingcap/tidb v1.1.0-beta.0.20191105153047-a7692af6cbe3
+	github.com/pingcap/tidb v1.1.0-beta.0.20191106020857-ec028acca421
 	github.com/pingcap/tipb v0.0.0-20191101114505-cbd0e985c780
 	github.com/prometheus/client_golang v1.1.0 // indirect
 	github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4 // indirect

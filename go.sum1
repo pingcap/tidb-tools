@@ -245,7 +245,10 @@ github.com/pingcap/pd v1.1.0-beta.0.20191018040858-0d9d9d67d029 h1:nJp6nnW70cGtm
 github.com/pingcap/pd v1.1.0-beta.0.20191018040858-0d9d9d67d029/go.mod h1:+F+Zp4BoMM7TbDKCeosXO+X9A+IWaw/T3/gRBo1sr6Q=
 github.com/pingcap/tidb v1.1.0-beta.0.20191105153047-a7692af6cbe3 h1:SGI7VWoQM7VcBdUdpQqhkPSc9CEjCRDCW+bn6lbsvYQ=
 github.com/pingcap/tidb v1.1.0-beta.0.20191105153047-a7692af6cbe3/go.mod h1:gwme1+tKnfmzPpCjjZi8NqqvCzGKNOgIObgBofkIsPo=
+github.com/pingcap/tidb v1.1.0-beta.0.20191106020857-ec028acca421 h1:LCE4Fz3BHMjYOKvW9fACta3OvUMO14M2dYpkRbovT8s=
+github.com/pingcap/tidb v1.1.0-beta.0.20191106020857-ec028acca421/go.mod h1:nb0Pv0lgF1kxg8ZgTivRd+Lba/zs1rFFV+799w0E+Sk=
 github.com/pingcap/tidb-tools v3.0.6-0.20191105150610-b651c81bb694+incompatible/go.mod h1:XGdcy9+yqlDSEMTpOXnwf3hiTeqrV6MN/u1se9N8yIM=
+github.com/pingcap/tidb-tools v3.0.6-0.20191105165017-36606ed6548f+incompatible/go.mod h1:XGdcy9+yqlDSEMTpOXnwf3hiTeqrV6MN/u1se9N8yIM=
 github.com/pingcap/tipb v0.0.0-20191101114505-cbd0e985c780 h1:SvFkjLhS/ou97Ey60r8Fq3ZF4wq6wuveWoiLtWLGpek=
 github.com/pingcap/tipb v0.0.0-20191101114505-cbd0e985c780/go.mod h1:RtkHW8WbcNxj8lsbzjaILci01CtYnYbIkQhjyZWrWVI=
 github.com/pkg/errors v0.8.0/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
