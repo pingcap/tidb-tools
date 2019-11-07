@@ -25,7 +25,10 @@ PACKAGE_LIST  := go list ./...
 PACKAGES  := $$($(PACKAGE_LIST))
 FAIL_ON_STDOUT := awk '{ print } END { if (NR > 0) { exit 1 } }'
 
-build: prepare check importer sync_diff_inspector ddl_checker finish
+build: prepare version check importer sync_diff_inspector ddl_checker finish
+
+version:
+	$(GO) version
 
 prepare:
 	cp go.mod1 go.mod
