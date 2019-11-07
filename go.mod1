@@ -30,12 +30,12 @@ require (
 	github.com/pingcap/errcode v0.3.0 // indirect
 	github.com/pingcap/errors v0.11.4
 	github.com/pingcap/failpoint v0.0.0-20190708053854-e7b1061e6e81 // indirect
-	github.com/pingcap/kvproto v0.0.0-20191101062931-76b56d6eb466
+	github.com/pingcap/kvproto v0.0.0-20191104103048-40f562012fb1
 	github.com/pingcap/log v0.0.0-20191012051959-b742a5d432e9
 	github.com/pingcap/parser v0.0.0-20191031081038-bfb0c3adf567
 	github.com/pingcap/pd v1.1.0-beta.0.20191018040858-0d9d9d67d029
-	github.com/pingcap/tidb v1.1.0-beta.0.20191106044120-f306de18a8ae
-	github.com/pingcap/tipb v0.0.0-20191029074152-e6f0f14af644
+	github.com/pingcap/tidb v1.1.0-beta.0.20191107112535-d81c131ddba1
+	github.com/pingcap/tipb v0.0.0-20191105120856-bd4b782c8393
 	github.com/prometheus/client_golang v1.1.0 // indirect
 	github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4 // indirect
 	github.com/prometheus/common v0.7.0 // indirect
@@ -51,7 +51,7 @@ require (
 	github.com/uber/jaeger-client-go v2.19.0+incompatible // indirect
 	github.com/uber/jaeger-lib v2.2.0+incompatible // indirect
 	github.com/unrolled/render v1.0.1 // indirect
-	go.etcd.io/etcd v0.5.0-alpha.5.0.20190320044326-77d4b742cdbf
+	go.etcd.io/etcd v0.5.0-alpha.5.0.20191023171146-3cf2f69b5738
 	go.uber.org/atomic v1.4.0
 	go.uber.org/zap v1.10.0
 	golang.org/x/net v0.0.0-20191009170851-d66e71096ffb
