@@ -85,13 +85,13 @@ func (rs *RegionSplitter) Split(
 		return errors.Trace(err)
 	}
 	log.Info("splitting regions done, wait for scattering regions",
-		zap.Int("regions", len(scatterRegions)), zap.Int64("cost_seconds", int64(time.Since(startTime)/time.Second)))
+		zap.Int("regions", len(scatterRegions)), zap.Duration("cost", time.Since(startTime)))
 	startTime = time.Now()
 	for _, region := range scatterRegions {
 		rs.waitForScatterRegion(ctx, region)
 	}
 	log.Info("waiting for scattering regions done",
-		zap.Int("regions", len(scatterRegions)), zap.Int64("cost_seconds", int64(time.Since(startTime)/time.Second)))
+		zap.Int("regions", len(scatterRegions)), zap.Duration("cost", time.Since(startTime)))
 	return nil
 }
 
