@@ -203,7 +203,8 @@ func (rs *RegionSplitter) maybeSplitRegion(ctx context.Context, r *Range) (*Regi
 			if !needSplit(codec.EncodeBytes([]byte{}, splitKey), regionInfo) {
 				return nil, nil
 			}
-			newRegion, err := rs.splitAndScatterRegion(ctx, regionInfo, splitKey)
+			var newRegion *RegionInfo
+			newRegion, err = rs.splitAndScatterRegion(ctx, regionInfo, splitKey)
 			if err == nil {
 				return newRegion, nil
 			}
