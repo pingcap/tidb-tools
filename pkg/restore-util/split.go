@@ -54,6 +54,7 @@ func (rs *RegionSplitter) Split(
 	rewriteRules *RewriteRules,
 	onSplit OnSplitFunc,
 ) error {
+	startTime := time.Now()
 	rangeTree, ok := newRangeTreeWithRewrite(ranges, rewriteRules)
 	if !ok {
 		return errors.Errorf("ranges overlapped: %v", ranges)
@@ -83,10 +84,14 @@ func (rs *RegionSplitter) Split(
 	if err != nil {
 		return errors.Trace(err)
 	}
-
+	log.Info("splitting regions done, wait for scattering regions",
+		zap.Int("regions", len(scatterRegions)), zap.Duration("cost", time.Since(startTime)))
+	startTime = time.Now()
 	for _, region := range scatterRegions {
 		rs.waitForScatterRegion(ctx, region)
 	}
+	log.Info("waiting for scattering regions done",
+		zap.Int("regions", len(scatterRegions)), zap.Duration("cost", time.Since(startTime)))
 	return nil
 }
 
@@ -198,7 +203,8 @@ func (rs *RegionSplitter) maybeSplitRegion(ctx context.Context, r *Range) (*Regi
 			if !needSplit(codec.EncodeBytes([]byte{}, splitKey), regionInfo) {
 				return nil, nil
 			}
-			newRegion, err := rs.splitAndScatterRegion(ctx, regionInfo, splitKey)
+			var newRegion *RegionInfo
+			newRegion, err = rs.splitAndScatterRegion(ctx, regionInfo, splitKey)
 			if err == nil {
 				return newRegion, nil
 			}
