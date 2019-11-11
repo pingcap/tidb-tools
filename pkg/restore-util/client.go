@@ -129,13 +129,15 @@ func (c *pdClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, key 
 		return nil, errors.Errorf("split region failed: region=%v, key=%x, err=%v", regionInfo.Region, key, resp.RegionError)
 	}
 
-	regions := resp.GetRegions()
-	var newRegion *metapb.Region
-	for _, r := range regions {
-		// Assume the new region is the left one.
-		if bytes.Equal(r.GetStartKey(), regionInfo.Region.GetStartKey()) {
-			newRegion = r
-			break
+	// Assume the new region is the left one.
+	newRegion := resp.GetLeft()
+	if newRegion == nil {
+		regions := resp.GetRegions()
+		for _, r := range regions {
+			if bytes.Equal(r.GetStartKey(), regionInfo.Region.GetStartKey()) {
+				newRegion = r
+				break
+			}
 		}
 	}
 	if newRegion == nil {

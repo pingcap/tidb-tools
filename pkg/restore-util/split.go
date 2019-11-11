@@ -40,11 +40,21 @@ func NewRegionSplitter(client Client) *RegionSplitter {
 	}
 }
 
+// OnSplitFunc is called before split a range.
+type OnSplitFunc func(*Range)
+
 // Split executes a region split. It will split regions by the rewrite rules,
 // then it will split regions by the end key of each range.
-// tableRules includes the prefix of a table, since some ranges may have a prefix with record sequence or index sequence.
+// tableRules includes the prefix of a table, since some ranges may have
+// a prefix with record sequence or index sequence.
 // note: all ranges and rewrite rules must have raw key.
-func (rs *RegionSplitter) Split(ctx context.Context, ranges []Range, rewriteRules *RewriteRules) error {
+func (rs *RegionSplitter) Split(
+	ctx context.Context,
+	ranges []Range,
+	rewriteRules *RewriteRules,
+	onSplit OnSplitFunc,
+) error {
+	startTime := time.Now()
 	rangeTree, ok := newRangeTreeWithRewrite(ranges, rewriteRules)
 	if !ok {
 		return errors.Errorf("ranges overlapped: %v", ranges)
@@ -57,6 +67,10 @@ func (rs *RegionSplitter) Split(ctx context.Context, ranges []Range, rewriteRule
 		if rg == nil {
 			return false
 		}
+		if onSplit != nil {
+			onSplit(rg)
+		}
+
 		var newRegion *RegionInfo
 		newRegion, err = rs.maybeSplitRegion(ctx, rg)
 		if err != nil {
@@ -70,10 +84,14 @@ func (rs *RegionSplitter) Split(ctx context.Context, ranges []Range, rewriteRule
 	if err != nil {
 		return errors.Trace(err)
 	}
-
+	log.Info("splitting regions done, wait for scattering regions",
+		zap.Int("regions", len(scatterRegions)), zap.Duration("cost", time.Since(startTime)))
+	startTime = time.Now()
 	for _, region := range scatterRegions {
 		rs.waitForScatterRegion(ctx, region)
 	}
+	log.Info("waiting for scattering regions done",
+		zap.Int("regions", len(scatterRegions)), zap.Duration("cost", time.Since(startTime)))
 	return nil
 }
 
@@ -185,7 +203,8 @@ func (rs *RegionSplitter) maybeSplitRegion(ctx context.Context, r *Range) (*Regi
 			if !needSplit(codec.EncodeBytes([]byte{}, splitKey), regionInfo) {
 				return nil, nil
 			}
-			newRegion, err := rs.splitAndScatterRegion(ctx, regionInfo, splitKey)
+			var newRegion *RegionInfo
+			newRegion, err = rs.splitAndScatterRegion(ctx, regionInfo, splitKey)
 			if err == nil {
 				return newRegion, nil
 			}
