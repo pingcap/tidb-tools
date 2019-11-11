@@ -22,10 +22,11 @@ cp $OUT_DIR/fix.sql $OUT_DIR/fix.sql.bak
 
 echo "use snapshot compare data, test sql mode by the way, will return error, diff should not passed"
 mysql -uroot -h 127.0.0.1 -P 4000 -e "SET GLOBAL sql_mode = 'ANSI_QUOTES';"
+sleep 5
 cp config_base.toml config.toml
 echo "snapshot = \"$ts\"" >> config.toml
-sync_diff_inspector --config=./config.toml > $OUT_DIR/snapshot_diff.log
-check_contains "sourceDB don't equal targetDB" $OUT_DIR/snapshot_diff.log
+sync_diff_inspector --config=./config.toml > $OUT_DIR/snapshot_diff.log || true
+check_contains "get table diff_test.test's inforamtion error" $OUT_DIR/snapshot_diff.log
 
 echo "use snapshot compare data, data should be equal"
 echo "sql-mode = 'ANSI_QUOTES'" >> config.toml
