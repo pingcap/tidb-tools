@@ -22,7 +22,9 @@ cp $OUT_DIR/fix.sql $OUT_DIR/fix.sql.bak
 
 echo "use snapshot compare data, test sql mode by the way, will return error, diff should not passed"
 mysql -uroot -h 127.0.0.1 -P 4000 -e "SET GLOBAL sql_mode = 'ANSI_QUOTES';"
-sleep 5
+sleep 10
+mysql -uroot -h 127.0.0.1 -P 4000 -e "show variables like '%sql_mode%'"
+mysql -uroot -h 127.0.0.1 -P 4000 -e "show create table diff_test.test"
 cp config_base.toml config.toml
 echo "snapshot = \"$ts\"" >> config.toml
 sync_diff_inspector --config=./config.toml > $OUT_DIR/snapshot_diff.log || true
