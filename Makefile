@@ -1,4 +1,4 @@
-.PHONY: build importer dump_region sync_diff_inspector ddl_checker test check deps
+.PHONY: build importer dump_region sync_diff_inspector ddl_checker test check deps version
 
 # Ensure GOPATH is set before running build process.
 ifeq "$(GOPATH)" ""
@@ -25,7 +25,10 @@ PACKAGE_LIST  := go list ./...
 PACKAGES  := $$($(PACKAGE_LIST))
 FAIL_ON_STDOUT := awk '{ print } END { if (NR > 0) { exit 1 } }'
 
-build: prepare check importer sync_diff_inspector ddl_checker finish
+build: prepare version check importer sync_diff_inspector ddl_checker finish
+
+version:
+	$(GO) version
 
 prepare:
 	cp go.mod1 go.mod
@@ -43,7 +46,7 @@ sync_diff_inspector:
 ddl_checker:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/ddl_checker ./ddl_checker
 
-test:
+test: version
 	@export log_level=error; \
 	$(GOTEST) -cover $(PACKAGES)
 
