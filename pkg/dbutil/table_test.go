@@ -102,7 +102,7 @@ func (*testDBSuite) TestTableStructEqual(c *C) {
 	tableInfo2, err := GetTableInfoBySQL(createTableSQL2, "")
 	c.Assert(err, IsNil)
 
-	createTableSQL3 := "CREATE TABLE \"test\".\"atest\" (\"id\" int(24), \"name\" varchar(24), \"birthday\" datetime, \"update_time\" time, \"money\" decimal(20,2), unique key(\"id\"))"
+	createTableSQL3 := `CREATE TABLE "test"."atest" ("id" int(24), "name" varchar(24), "birthday" datetime, "update_time" time, "money" decimal(20,2), unique key("id"))`
 	tableInfo3, err := GetTableInfoBySQL(createTableSQL3, "ANSI_QUOTES")
 	c.Assert(err, IsNil)
 

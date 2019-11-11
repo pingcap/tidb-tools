@@ -20,11 +20,15 @@ check_contains "sourceDB don't equal targetDB" $OUT_DIR/snapshot_diff.log
 # fix.sql will be empty after check below, so backup it
 cp $OUT_DIR/fix.sql $OUT_DIR/fix.sql.bak
 
-echo "use snapshot compare data, data should be equal"
-# test sql mode by the way
+echo "use snapshot compare data, test sql mode by the way, will return error, diff should not passed"
 mysql -uroot -h 127.0.0.1 -P 4000 -e "SET GLOBAL sql_mode = 'ANSI_QUOTES';"
 cp config_base.toml config.toml
 echo "snapshot = \"$ts\"" >> config.toml
+sync_diff_inspector --config=./config.toml > $OUT_DIR/snapshot_diff.log
+check_contains "sourceDB don't equal targetDB" $OUT_DIR/snapshot_diff.log
+
+echo "use snapshot compare data, data should be equal"
+mysql -uroot -h 127.0.0.1 -P 4000 -e "SET GLOBAL sql_mode = 'ANSI_QUOTES';"
 echo "sql-mode = 'ANSI_QUOTES'" >> config.toml
 sync_diff_inspector --config=./config.toml > $OUT_DIR/snapshot_diff.log
 check_contains "test pass!!!" $OUT_DIR/snapshot_diff.log
@@ -33,5 +37,8 @@ echo "execute fix.sql and use base config, and then compare data, data should be
 cat $OUT_DIR/fix.sql.bak | mysql -uroot -h127.0.0.1 -P 4000
 sync_diff_inspector --config=./config_base.toml > $OUT_DIR/snapshot_diff.log
 check_contains "test pass!!!" $OUT_DIR/snapshot_diff.log
+
+# reset sql mode
+mysql -uroot -h 127.0.0.1 -P 4000 -e "SET GLOBAL sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION';"
 
 echo "snapshot test passed"
