@@ -59,7 +59,8 @@ func (rs *RegionSplitter) Split(
 	if !ok {
 		return errors.Errorf("ranges overlapped: %v", ranges)
 	}
-	scatterRegions, err := rs.splitByRewriteRules(ctx, rewriteRules.Data)
+	scatterRegions, err := rs.splitByRewriteRules(
+		ctx, rewriteRules.Data, onSplit)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -96,13 +97,22 @@ func (rs *RegionSplitter) Split(
 }
 
 // Split regions by the rewrite rules, to ensure all keys of one region only have one prefix.
-func (rs *RegionSplitter) splitByRewriteRules(ctx context.Context, rules []*import_sstpb.RewriteRule) ([]*RegionInfo, error) {
+func (rs *RegionSplitter) splitByRewriteRules(
+	ctx context.Context,
+	rules []*import_sstpb.RewriteRule,
+	onSplit OnSplitFunc,
+) ([]*RegionInfo, error) {
 	scatterRegions := make([]*RegionInfo, 0)
 	for _, rule := range rules {
-		newRegion, err := rs.maybeSplitRegion(ctx, &Range{
+		rg := Range{
 			StartKey: rule.GetNewKeyPrefix(),
 			EndKey:   rule.GetNewKeyPrefix(),
-		})
+		}
+		if onSplit != nil {
+			onSplit(&rg)
+		}
+
+		newRegion, err := rs.maybeSplitRegion(ctx, &rg)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}

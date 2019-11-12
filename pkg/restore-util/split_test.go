@@ -129,7 +129,7 @@ func TestSplit(t *testing.T) {
 				t.Fatal("nil Range")
 			}
 		})
-	if length != 4 {
+	if length != 4+2 { // Ranges + Rules
 		t.Fatal("wrong length", length)
 	}
 	if err != nil {
