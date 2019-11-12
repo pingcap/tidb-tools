@@ -295,7 +295,7 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 					return r
 				}
 
-				info, err := dbutil.GetTableInfoBySQL(statement)
+				info, err := dbutil.GetTableInfoBySQL(statement, "")
 				if err != nil {
 					markCheckError(r, err)
 					r.Extra = fmt.Sprintf("instance %s on sharding %s", instance, c.name)

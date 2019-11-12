@@ -26,7 +26,7 @@ type testMergerSuite struct{}
 
 func (s *testMergerSuite) TestMerge(c *C) {
 	createTableSQL := "create table test.test(id int(24), name varchar(24), age int(24), primary key(id, name));"
-	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL)
+	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, "")
 	c.Assert(err, IsNil)
 
 	_, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)

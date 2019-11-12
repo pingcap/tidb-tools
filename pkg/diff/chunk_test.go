@@ -71,7 +71,7 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 	// only work on tidb, so don't assert err here
 	_, _ = conn.ExecContext(ctx, "ANALYZE TABLE `test`.`testa`")
 
-	tableInfo, err := dbutil.GetTableInfo(ctx, conn, "test", "testa")
+	tableInfo, err := dbutil.GetTableInfo(ctx, conn, "test", "testa", "")
 	c.Assert(err, IsNil)
 
 	tableInstance := &TableInstance{
