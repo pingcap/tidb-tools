@@ -139,12 +139,12 @@ func (c *TablesChecker) Check(ctx context.Context) *Result {
 		}
 
 		if len(errMessages) > 0 {
-			fmt.Fprint(&information, "---------- error options ----------\n")
+			fmt.Fprint(&information, "---------- error messages ----------\n")
 			fmt.Fprintf(&information, "%s\n", strings.Join(errMessages, "\n"))
 		}
 
 		if len(warningMessages) > 0 {
-			fmt.Fprint(&information, "---------- warning options ----------\n")
+			fmt.Fprint(&information, "---------- warning messages ----------\n")
 			fmt.Fprintf(&information, "%s\n", strings.Join(warningMessages, "\n"))
 		}
 	}
