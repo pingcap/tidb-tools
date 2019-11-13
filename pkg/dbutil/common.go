@@ -25,6 +25,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
+	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/model"
 	tmysql "github.com/pingcap/parser/mysql"
 	"github.com/pingcap/parser/terror"
@@ -71,6 +72,8 @@ type DBConfig struct {
 	Schema string `toml:"schema" json:"schema"`
 
 	Snapshot string `toml:"snapshot" json:"snapshot"`
+
+	SQLMode string `toml:"sql-mode" json:"sql-mode"`
 }
 
 // String returns native format of database configuration
@@ -771,4 +774,19 @@ func DeleteRows(ctx context.Context, db *sql.DB, schemaName string, tableName st
 	}
 
 	return DeleteRows(ctx, db, schemaName, tableName, where, args)
+}
+
+// GetParser gets parser according to sql mode
+func GetParser(sqlModeStr string) (*parser.Parser, error) {
+	if len(sqlModeStr) == 0 {
+		return parser.New(), nil
+	}
+
+	sqlMode, err := tmysql.GetSQLMode(tmysql.FormatSQLModeStr(sqlModeStr))
+	if err != nil {
+		return nil, errors.Annotatef(err, "invalid sql mode %s", sqlModeStr)
+	}
+	parser2 := parser.New()
+	parser2.SetSQLMode(sqlMode)
+	return parser2, nil
 }

@@ -184,7 +184,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 		}
 
 		for _, tableName := range tables {
-			tableInfo, err := dbutil.GetTableInfo(df.ctx, df.targetDB.Conn, schemaTables.Schema, tableName)
+			tableInfo, err := dbutil.GetTableInfo(df.ctx, df.targetDB.Conn, schemaTables.Schema, tableName, df.targetDB.SQLMode)
 			if err != nil {
 				return errors.Errorf("get table %s.%s's inforamtion error %s", schemaTables.Schema, tableName, errors.ErrorStack(err))
 			}
@@ -360,6 +360,7 @@ func (df *Diff) Equal() (err error) {
 					Schema:     sourceTable.Schema,
 					Table:      sourceTable.Table,
 					InstanceID: sourceTable.InstanceID,
+					SQLMode:    df.sourceDBs[sourceTable.InstanceID].SQLMode,
 				}
 				sourceTables = append(sourceTables, sourceTableInstance)
 			}
@@ -369,6 +370,7 @@ func (df *Diff) Equal() (err error) {
 				Schema:     table.Schema,
 				Table:      table.Table,
 				InstanceID: df.targetDB.InstanceID,
+				SQLMode:    df.targetDB.SQLMode,
 			}
 
 			// find tidb instance for getting statistical information to split chunk
