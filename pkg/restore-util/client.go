@@ -109,6 +109,7 @@ func (c *pdClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, key 
 		return nil, err
 	}
 	conn, err := grpc.Dial(store.GetAddress(), grpc.WithInsecure())
+	defer conn.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +120,7 @@ func (c *pdClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, key 
 			RegionEpoch: regionInfo.Region.RegionEpoch,
 			Peer:        peer,
 		},
-		SplitKeys: [][]byte{key},
+		SplitKey: key,
 	})
 	if err != nil {
 		return nil, err
@@ -128,17 +129,19 @@ func (c *pdClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, key 
 		return nil, errors.Errorf("split region failed: region=%v, key=%x, err=%v", regionInfo.Region, key, resp.RegionError)
 	}
 
-	regions := resp.GetRegions()
-	var newRegion *metapb.Region
-	for _, r := range regions {
-		// Assume the new region is the left one.
-		if bytes.Equal(r.GetStartKey(), regionInfo.Region.GetStartKey()) {
-			newRegion = r
-			break
+	// Assume the new region is the left one.
+	newRegion := resp.GetLeft()
+	if newRegion == nil {
+		regions := resp.GetRegions()
+		for _, r := range regions {
+			if bytes.Equal(r.GetStartKey(), regionInfo.Region.GetStartKey()) {
+				newRegion = r
+				break
+			}
 		}
 	}
 	if newRegion == nil {
-		return nil, errors.New("split region failed")
+		return nil, errors.New("split region failed: new region is nil")
 	}
 	var leader *metapb.Peer
 	// Assume the leaders will be at the same store.

@@ -19,7 +19,6 @@ import (
 	"strings"
 
 	"github.com/pingcap/errors"
-	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/parser/mysql"
@@ -30,18 +29,23 @@ import (
 )
 
 // GetTableInfo returns table information.
-func GetTableInfo(ctx context.Context, db *sql.DB, schemaName string, tableName string) (*model.TableInfo, error) {
+func GetTableInfo(ctx context.Context, db *sql.DB, schemaName string, tableName string, sqlMode string) (*model.TableInfo, error) {
 	createTableSQL, err := GetCreateTableSQL(ctx, db, schemaName, tableName)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	return GetTableInfoBySQL(createTableSQL)
+	return GetTableInfoBySQL(createTableSQL, sqlMode)
 }
 
 // GetTableInfoBySQL returns table information by given create table sql.
-func GetTableInfoBySQL(createTableSQL string) (table *model.TableInfo, err error) {
-	stmt, err := parser.New().ParseOneStmt(createTableSQL, "", "")
+func GetTableInfoBySQL(createTableSQL string, sqlMode string) (table *model.TableInfo, err error) {
+	parser2, err := GetParser(sqlMode)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	stmt, err := parser2.ParseOneStmt(createTableSQL, "", "")
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
