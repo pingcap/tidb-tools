@@ -52,7 +52,7 @@ func (t *testEtcdSuite) TestCreate(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(getResp.Kvs, HasLen, 0)
 
-	err = etcdCli.Create(ctx, key, obj, nil)
+	_, err = etcdCli.Create(ctx, key, obj, nil)
 	c.Assert(err, IsNil)
 
 	getResp, err = etcdClient.KV.Get(ctx, key)
@@ -68,7 +68,7 @@ func (t *testEtcdSuite) TestCreateWithTTL(c *C) {
 	c.Assert(err, IsNil)
 	opts := []clientv3.OpOption{clientv3.WithLease(clientv3.LeaseID(lcr.ID))}
 
-	err = etcdCli.Create(ctx, key, obj, opts)
+	_, err = etcdCli.Create(ctx, key, obj, opts)
 	c.Assert(err, IsNil)
 
 	time.Sleep(2 * time.Second)
@@ -84,7 +84,7 @@ func (t *testEtcdSuite) TestCreateWithKeyExist(c *C) {
 	_, err := etcdClient.KV.Put(ctx, key, obj, nil...)
 	c.Assert(err, IsNil)
 
-	err = etcdCli.Create(ctx, key, obj, nil)
+	_, err = etcdCli.Create(ctx, key, obj, nil)
 	c.Assert(errors.IsAlreadyExists(err), IsTrue)
 }
 
@@ -97,12 +97,13 @@ func (t *testEtcdSuite) TestUpdate(c *C) {
 	c.Assert(err, IsNil)
 
 	opts := []clientv3.OpOption{clientv3.WithLease(lcr.ID)}
-	err = etcdCli.Create(ctx, key, obj1, opts)
+	revision0, err := etcdCli.Create(ctx, key, obj1, opts)
 	c.Assert(err, IsNil)
 
 	res, revision1, err := etcdCli.Get(ctx, key)
 	c.Assert(err, IsNil)
 	c.Assert(string(res), Equals, obj1)
+	c.Assert(revision0, Equals, revision1)
 
 	time.Sleep(time.Second)
 
@@ -137,19 +138,22 @@ func (t *testEtcdSuite) TestList(c *C) {
 	k3 := key + "/level3"
 	k11 := key + "/level1/level1"
 
-	err := etcdCli.Create(ctx, k1, k1, nil)
+	revision1, err := etcdCli.Create(ctx, k1, k1, nil)
 	c.Assert(err, IsNil)
 
-	err = etcdCli.Create(ctx, k2, k2, nil)
+	revision2, err := etcdCli.Create(ctx, k2, k2, nil)
 	c.Assert(err, IsNil)
+	c.Assert(revision2 > revision1, IsTrue)
 
-	err = etcdCli.Create(ctx, k3, k3, nil)
+	revision3, err := etcdCli.Create(ctx, k3, k3, nil)
 	c.Assert(err, IsNil)
+	c.Assert(revision3 > revision2, IsTrue)
 
-	err = etcdCli.Create(ctx, k11, k11, nil)
+	revision4, err := etcdCli.Create(ctx, k11, k11, nil)
 	c.Assert(err, IsNil)
+	c.Assert(revision4 > revision3, IsTrue)
 
-	root, revision1, err := etcdCli.List(ctx, key)
+	root, revision5, err := etcdCli.List(ctx, key)
 	c.Assert(err, IsNil)
 	c.Assert(string(root.Childs["level1"].Value), Equals, k1)
 	c.Assert(string(root.Childs["level1"].Childs["level1"].Value), Equals, k11)
@@ -157,16 +161,16 @@ func (t *testEtcdSuite) TestList(c *C) {
 	c.Assert(string(root.Childs["level3"].Value), Equals, k3)
 
 	// the revision of list should equal to the latest update's revision
-	_, revision2, err := etcdCli.Get(ctx, k11)
+	_, revision6, err := etcdCli.Get(ctx, k11)
 	c.Assert(err, IsNil)
-	c.Assert(revision1, Equals, revision2)
+	c.Assert(revision5, Equals, revision6)
 }
 
 func (t *testEtcdSuite) TestDelete(c *C) {
 	key := "binlogdelete/testkey"
 	keys := []string{key + "/level1", key + "/level2", key + "/level1" + "/level1"}
 	for _, k := range keys {
-		err := etcdCli.Create(ctx, k, k, nil)
+		_, err := etcdCli.Create(ctx, k, k, nil)
 		c.Assert(err, IsNil)
 	}
 

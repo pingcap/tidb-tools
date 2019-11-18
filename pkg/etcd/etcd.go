@@ -70,7 +70,7 @@ func (e *Client) Close() error {
 }
 
 // Create guarantees to set a key = value with some options(like ttl)
-func (e *Client) Create(ctx context.Context, key string, val string, opts []clientv3.OpOption) error {
+func (e *Client) Create(ctx context.Context, key string, val string, opts []clientv3.OpOption) (int64, error) {
 	key = keyWithPrefix(e.rootPath, key)
 	txnResp, err := e.client.KV.Txn(ctx).If(
 		clientv3.Compare(clientv3.ModRevision(key), "=", 0),
@@ -78,14 +78,19 @@ func (e *Client) Create(ctx context.Context, key string, val string, opts []clie
 		clientv3.OpPut(key, val, opts...),
 	).Commit()
 	if err != nil {
-		return errors.Trace(err)
+		return 0, errors.Trace(err)
 	}
 
 	if !txnResp.Succeeded {
-		return errors.AlreadyExistsf("key %s in etcd", key)
+		return 0, errors.AlreadyExistsf("key %s in etcd", key)
 	}
 
-	return nil
+	if txnResp.Header != nil {
+		return txnResp.Header.Revision, nil
+	}
+
+	// impossible to happen
+	return 0, errors.New("revision is unknown")
 }
 
 // Get returns a key/value matchs the given key

@@ -129,7 +129,7 @@ func (r *EtcdRegistry) createNode(ctx context.Context, prefix string, status *St
 		return errors.Annotatef(err, "error marshal NodeStatus(%v)", status)
 	}
 	key := r.prefixed(prefix, status.NodeID)
-	err = r.client.Create(ctx, key, string(objstr), nil)
+	_, err = r.client.Create(ctx, key, string(objstr), nil)
 	return errors.Trace(err)
 }
 
