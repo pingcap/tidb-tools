@@ -90,7 +90,7 @@ func (e *Client) Create(ctx context.Context, key string, val string, opts []clie
 	}
 
 	// impossible to happen
-	return -1, nil
+	return 0, errors.New("revision is unknown")
 }
 
 // Get returns a key/value matchs the given key
