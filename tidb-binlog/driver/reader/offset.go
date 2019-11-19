@@ -104,7 +104,8 @@ func (ks *KafkaSeeker) seekOffsets(topic string, partitions []int32, pos int64) 
 			zap.String("topic", topic),
 			zap.Int32("partition", partition),
 			zap.Int64("start", start),
-			zap.Int64("end", end))
+			zap.Int64("end", end),
+			zap.Int64("target ts", pos))
 
 		offset, err := ks.seekOffset(topic, partition, start, end-1, pos)
 		if err != nil {
@@ -112,7 +113,7 @@ func (ks *KafkaSeeker) seekOffsets(topic string, partitions []int32, pos int64) 
 			return nil, err
 		}
 
-		log.Info("seek offset success", zap.Int64("offset", offset))
+		log.Info("seek offset success", zap.Int64("offset", offset), zap.Int64("target ts", pos))
 		offsets[partition] = offset
 	}
 
@@ -186,7 +187,8 @@ func (ks *KafkaSeeker) getTSAtOffset(topic string, partition int32, offset int64
 			log.Debug("get ts at offset success",
 				zap.String("topic", topic),
 				zap.Int32("partition", partition),
-				zap.Int64("ts", ts))
+				zap.Int64("ts", ts),
+				zap.Int64("at offset", offset))
 		}
 
 		err = errors.Trace(err)
