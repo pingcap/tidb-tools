@@ -125,6 +125,10 @@ func (r *Reader) getOffsetByTS(ts int64) (offset int64, err error) {
 	}
 
 	topic, partition := r.getTopic()
+	log.Debug("get offset",
+		zap.String("topic", topic),
+		zap.Int32("partition", partition),
+		zap.Int64("ts", ts))
 	offsets, err := seeker.Seek(topic, ts, []int32{partition})
 	if err != nil {
 		err = errors.Trace(err)
