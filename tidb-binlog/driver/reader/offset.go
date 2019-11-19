@@ -14,6 +14,8 @@
 package reader
 
 import (
+	"time"
+
 	"github.com/Shopify/sarama"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -109,6 +111,8 @@ func (ks *KafkaSeeker) seekOffsets(topic string, partitions []int32, pos int64) 
 			err = errors.Trace(err)
 			return nil, err
 		}
+
+		log.Info("seek offset success", zap.Int64("offset", offset))
 		offsets[partition] = offset
 	}
 
@@ -162,10 +166,11 @@ func (ks *KafkaSeeker) seekOffset(topic string, partition int32, start int64, en
 }
 
 func (ks *KafkaSeeker) getTSAtOffset(topic string, partition int32, offset int64) (ts int64, err error) {
-	log.Info("start consumer on kafka",
+	log.Debug("start consumer on kafka",
 		zap.String("topic", topic),
 		zap.Int32("partition", partition),
 		zap.Int64("offset", offset))
+
 	pc, err := ks.consumer.ConsumePartition(topic, partition, offset)
 	if err != nil {
 		err = errors.Trace(err)
@@ -173,15 +178,20 @@ func (ks *KafkaSeeker) getTSAtOffset(topic string, partition int32, offset int64
 	}
 	defer pc.Close()
 
-	for msg := range pc.Messages() {
+	select {
+	case msg := <-pc.Messages():
 		ts, err = ks.getTSFromMSG(msg)
-		log.Info("get ts from kafka",
-			zap.String("topic", topic),
-			zap.Int32("partition", partition),
-			zap.Int64("ts", ts))
+
+		if err == nil {
+			log.Debug("get ts at offset success",
+				zap.String("topic", topic),
+				zap.Int32("partition", partition),
+				zap.Int64("ts", ts))
+		}
+
 		err = errors.Trace(err)
 		return
+	case <-time.After(time.Minute):
+		return 0, errors.Errorf("timeout to consume from kafka, topic:%s, partition:%d, offset:%d", topic, partition, offset)
 	}
-
-	panic("unreachable")
 }
