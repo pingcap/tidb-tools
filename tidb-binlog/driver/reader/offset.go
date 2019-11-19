@@ -163,9 +163,9 @@ func (ks *KafkaSeeker) seekOffset(topic string, partition int32, start int64, en
 
 func (ks *KafkaSeeker) getTSAtOffset(topic string, partition int32, offset int64) (ts int64, err error) {
 	log.Info("start consumer on kafka",
-			zap.String("topic", topic),
-			zap.Int32("partition", partition),
-			zap.Int64("offset", offset))
+		zap.String("topic", topic),
+		zap.Int32("partition", partition),
+		zap.Int64("offset", offset))
 	pc, err := ks.consumer.ConsumePartition(topic, partition, offset)
 	if err != nil {
 		err = errors.Trace(err)
