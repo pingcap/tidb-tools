@@ -93,7 +93,6 @@ func NewReader(cfg *Config) (r *Reader, err error) {
 	conf := sarama.NewConfig()
 	// set to 10 minutes to prevent i/o timeout when reading huge message
 	conf.Net.ReadTimeout = KafkaReadTimeout
-	conf.Consumer.Return.Errors = true
 
 	r.client, err = sarama.NewClient(r.cfg.KafkaAddr, conf)
 	if err != nil {
@@ -130,6 +129,8 @@ func (r *Reader) Messages() (msgs <-chan *Message) {
 }
 
 func (r *Reader) getOffsetByTS(ts int64, conf *sarama.Config) (offset int64, err error) {
+	// set true to retrive error
+	conf.Consumer.Return.Errors = true
 	seeker, err := NewKafkaSeeker(r.cfg.KafkaAddr, conf)
 	if err != nil {
 		err = errors.Trace(err)
