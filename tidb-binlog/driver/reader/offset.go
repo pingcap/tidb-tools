@@ -179,21 +179,38 @@ func (ks *KafkaSeeker) getTSAtOffset(topic string, partition int32, offset int64
 	}
 	defer pc.Close()
 
-	select {
-	case msg := <-pc.Messages():
-		ts, err = ks.getTSFromMSG(msg)
+	errorCnt := 0
+	for {
+		select {
+		case msg := <-pc.Messages():
+			ts, err = ks.getTSFromMSG(msg)
 
-		if err == nil {
-			log.Debug("get ts at offset success",
+			if err == nil {
+				log.Debug("get ts at offset success",
+					zap.String("topic", topic),
+					zap.Int32("partition", partition),
+					zap.Int64("ts", ts),
+					zap.Int64("at offset", offset))
+			}
+
+			err = errors.Trace(err)
+			return
+
+		case msg := <-pc.Errors():
+			err = msg.Err
+			log.Error("get ts at offset failed",
 				zap.String("topic", topic),
 				zap.Int32("partition", partition),
 				zap.Int64("ts", ts),
 				zap.Int64("at offset", offset))
-		}
+			time.Sleep(time.Second)
+			errorCnt++
+			if errorCnt > 10 {
+				return
+			}
 
-		err = errors.Trace(err)
-		return
-	case <-time.After(time.Minute):
-		return 0, errors.Errorf("timeout to consume from kafka, topic:%s, partition:%d, offset:%d", topic, partition, offset)
+		case <-time.After(KafkaWaitTimeout):
+			return 0, errors.Errorf("timeout to consume from kafka, topic:%s, partition:%d, offset:%d", topic, partition, offset)
+		}
 	}
 }

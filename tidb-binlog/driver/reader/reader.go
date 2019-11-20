@@ -14,11 +14,18 @@
 package reader
 
 import (
+	"time"
+
 	"github.com/Shopify/sarama"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	pb "github.com/pingcap/tidb-tools/tidb-binlog/slave_binlog_proto/go-binlog"
 	"go.uber.org/zap"
+)
+
+const (
+	KafkaReadTimeout = 10 * time.Minute
+	KafkaWaitTimeout = 11 * time.Minute
 )
 
 func init() {
@@ -118,7 +125,11 @@ func (r *Reader) Messages() (msgs <-chan *Message) {
 }
 
 func (r *Reader) getOffsetByTS(ts int64) (offset int64, err error) {
-	seeker, err := NewKafkaSeeker(r.cfg.KafkaAddr, nil)
+	conf := sarama.NewConfig()
+	// set to 5 minutes to prevent i/o timeout when reading huge message
+	conf.Net.ReadTimeout = KafkaReadTimeout
+	conf.Consumer.Return.Errors = true
+	seeker, err := NewKafkaSeeker(r.cfg.KafkaAddr, conf)
 	if err != nil {
 		err = errors.Trace(err)
 		return
