@@ -179,6 +179,7 @@ func (ks *KafkaSeeker) getTSAtOffset(topic string, partition int32, offset int64
 	}
 	defer pc.Close()
 
+	errorCnt := 0
 	for {
 		select {
 		case msg := <-pc.Messages():
@@ -198,7 +199,15 @@ func (ks *KafkaSeeker) getTSAtOffset(topic string, partition int32, offset int64
 		case msg := <-pc.Errors():
 			err = msg.Err
 			time.Sleep(time.Second)
-			continue
+			errorCnt++
+			if errorCnt > 10 {
+				log.Error("get ts failed",
+					zap.String("topic", topic),
+					zap.Int32("partition", partition),
+					zap.Int64("ts", ts),
+					zap.Int64("at offset", offset))
+				return
+			}
 
 		case <-time.After(KafkaWaitTimeout):
 			return 0, errors.Errorf("timeout to consume from kafka, topic:%s, partition:%d, offset:%d", topic, partition, offset)
