@@ -193,7 +193,12 @@ func (ks *KafkaSeeker) getTSAtOffset(topic string, partition int32, offset int64
 
 		err = errors.Trace(err)
 		return
-	case <-time.After(time.Minute):
+
+	case msg := <-pc.Errors():
+		err = msg.Err
+		return
+
+	case <-time.After(KafkaWaitTimeout):
 		return 0, errors.Errorf("timeout to consume from kafka, topic:%s, partition:%d, offset:%d", topic, partition, offset)
 	}
 }
