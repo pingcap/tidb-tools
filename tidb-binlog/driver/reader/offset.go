@@ -198,14 +198,14 @@ func (ks *KafkaSeeker) getTSAtOffset(topic string, partition int32, offset int64
 
 		case msg := <-pc.Errors():
 			err = msg.Err
+			log.Error("get ts at offset failed",
+				zap.String("topic", topic),
+				zap.Int32("partition", partition),
+				zap.Int64("ts", ts),
+				zap.Int64("at offset", offset))
 			time.Sleep(time.Second)
 			errorCnt++
 			if errorCnt > 10 {
-				log.Error("get ts failed",
-					zap.String("topic", topic),
-					zap.Int32("partition", partition),
-					zap.Int64("ts", ts),
-					zap.Int64("at offset", offset))
 				return
 			}
 
