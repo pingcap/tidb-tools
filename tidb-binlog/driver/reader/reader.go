@@ -24,8 +24,8 @@ import (
 )
 
 const (
-	KafkaReadTimeout = 5 * time.Minute
-	KafkaWaitTimeout = 6 * time.Minute
+	KafkaReadTimeout = 10 * time.Minute
+	KafkaWaitTimeout = 11 * time.Minute
 )
 
 func init() {
