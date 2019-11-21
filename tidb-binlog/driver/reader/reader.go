@@ -90,7 +90,11 @@ func NewReader(cfg *Config) (r *Reader, err error) {
 		clusterID: cfg.ClusterID,
 	}
 
-	r.client, err = sarama.NewClient(r.cfg.KafkaAddr, nil)
+	conf := sarama.NewConfig()
+	// set to 10 minutes to prevent i/o timeout when reading huge message
+	conf.Net.ReadTimeout = KafkaReadTimeout
+
+	r.client, err = sarama.NewClient(r.cfg.KafkaAddr, conf)
 	if err != nil {
 		err = errors.Trace(err)
 		r = nil
@@ -98,7 +102,7 @@ func NewReader(cfg *Config) (r *Reader, err error) {
 	}
 
 	if r.cfg.CommitTS > 0 {
-		r.cfg.Offset, err = r.getOffsetByTS(r.cfg.CommitTS)
+		r.cfg.Offset, err = r.getOffsetByTS(r.cfg.CommitTS, conf)
 		if err != nil {
 			err = errors.Trace(err)
 			r = nil
@@ -124,10 +128,8 @@ func (r *Reader) Messages() (msgs <-chan *Message) {
 	return r.msgs
 }
 
-func (r *Reader) getOffsetByTS(ts int64) (offset int64, err error) {
-	conf := sarama.NewConfig()
-	// set to 5 minutes to prevent i/o timeout when reading huge message
-	conf.Net.ReadTimeout = KafkaReadTimeout
+func (r *Reader) getOffsetByTS(ts int64, conf *sarama.Config) (offset int64, err error) {
+	// set true to retrive error
 	conf.Consumer.Return.Errors = true
 	seeker, err := NewKafkaSeeker(r.cfg.KafkaAddr, conf)
 	if err != nil {
