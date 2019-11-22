@@ -30,7 +30,7 @@ const (
 
 func init() {
 	// log.SetLevel(log.LOG_LEVEL_NONE)
-	sarama.MaxResponseSize = 1 << 30
+	sarama.MaxResponseSize = 1 << 31 - 1
 }
 
 // Config for Reader
