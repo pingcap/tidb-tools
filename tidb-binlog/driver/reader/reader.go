@@ -14,24 +14,19 @@
 package reader
 
 import (
+	"context"
 	"time"
 
-	"github.com/Shopify/sarama"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	pb "github.com/pingcap/tidb-tools/tidb-binlog/slave_binlog_proto/go-binlog"
+	"github.com/segmentio/kafka-go"
 	"go.uber.org/zap"
 )
 
 const (
-	KafkaReadTimeout = 10 * time.Minute
-	KafkaWaitTimeout = 11 * time.Minute
+	KafkaWaitTimeout = 10 * time.Minute
 )
-
-func init() {
-	// log.SetLevel(log.LOG_LEVEL_NONE)
-	sarama.MaxResponseSize = 1<<31 - 1
-}
 
 // Config for Reader
 type Config struct {
@@ -83,8 +78,8 @@ type Message struct {
 
 // Reader to read binlog from kafka
 type Reader struct {
-	cfg    *Config
-	client sarama.Client
+	cfg       *Config
+	clientCfg kafka.ReaderConfig
 
 	msgs      chan *Message
 	stop      chan struct{}
@@ -113,22 +108,17 @@ func NewReader(cfg *Config) (r *Reader, err error) {
 		clusterID: cfg.ClusterID,
 	}
 
-	conf := sarama.NewConfig()
-	// set to 10 minutes to prevent i/o timeout when reading huge message
-	conf.Net.ReadTimeout = KafkaReadTimeout
-	if cfg.SaramaBufferSize > 0 {
-		conf.ChannelBufferSize = cfg.SaramaBufferSize
-	}
-
-	r.client, err = sarama.NewClient(r.cfg.KafkaAddr, conf)
-	if err != nil {
-		err = errors.Trace(err)
-		r = nil
-		return
+	topic, partition := r.getTopic()
+	r.clientCfg = kafka.ReaderConfig{
+		Brokers:   cfg.KafkaAddr,
+		Topic:     topic,
+		Partition: int(partition),
+		MinBytes:  10e3, // 1KB
+		MaxBytes:  10e6, // 1MB
 	}
 
 	if r.cfg.CommitTS > 0 {
-		r.cfg.Offset, err = r.getOffsetByTS(r.cfg.CommitTS, conf)
+		r.cfg.Offset, err = r.getOffsetByTS(r.cfg.CommitTS)
 		if err != nil {
 			err = errors.Trace(err)
 			r = nil
@@ -145,8 +135,6 @@ func NewReader(cfg *Config) (r *Reader, err error) {
 // Close shuts down the reader
 func (r *Reader) Close() {
 	close(r.stop)
-
-	r.client.Close()
 }
 
 // Messages returns a chan that contains unread buffered message
@@ -154,21 +142,17 @@ func (r *Reader) Messages() (msgs <-chan *Message) {
 	return r.msgs
 }
 
-func (r *Reader) getOffsetByTS(ts int64, conf *sarama.Config) (offset int64, err error) {
-	// set true to retrive error
-	conf.Consumer.Return.Errors = true
-	seeker, err := NewKafkaSeeker(r.cfg.KafkaAddr, conf)
+func (r *Reader) getOffsetByTS(ts int64) (offset int64, err error) {
+	seeker, err := NewKafkaSeeker(r.clientCfg)
 	if err != nil {
-		err = errors.Trace(err)
-		return
+		return 0, errors.Trace(err)
 	}
 
-	topic, partition := r.getTopic()
 	log.Debug("get offset",
-		zap.String("topic", topic),
-		zap.Int32("partition", partition),
+		zap.String("topic", r.clientCfg.Topic),
+		zap.Int("partition", r.clientCfg.Partition),
 		zap.Int64("ts", ts))
-	offsets, err := seeker.Seek(topic, ts, []int32{partition})
+	offsets, err := seeker.Seek(r.clientCfg.Topic, ts, []int32{int32(r.clientCfg.Partition)})
 	if err != nil {
 		err = errors.Trace(err)
 		return
@@ -183,31 +167,35 @@ func (r *Reader) run() {
 	offset := r.cfg.Offset
 	log.Debug("start at", zap.Int64("offset", offset))
 
-	consumer, err := sarama.NewConsumerFromClient(r.client)
+	consumer := kafka.NewReader(r.clientCfg)
+	err := consumer.SetOffset(offset)
 	if err != nil {
-		log.Fatal("create kafka consumer failed", zap.Error(err))
+		log.Fatal("consumer set offset failed", zap.Error(err))
 	}
+
 	defer consumer.Close()
-	topic, partition := r.getTopic()
-	partitionConsumer, err := consumer.ConsumePartition(topic, partition, offset)
-	if err != nil {
-		log.Fatal("create kafka partition consumer failed", zap.Error(err))
-	}
-	defer partitionConsumer.Close()
 
 	// add select to avoid message blocking while reading
 	for {
 		select {
 		case <-r.stop:
 			// clean environment
-			partitionConsumer.Close()
+			consumer.Close()
 			close(r.msgs)
 			log.Info("reader stop to run")
 			return
-		case kmsg := <-partitionConsumer.Messages():
+
+		default:
+			ctx, cancel := context.WithTimeout(context.Background(), KafkaWaitTimeout)
+			kmsg, err := consumer.ReadMessage(ctx)
+			cancel()
+			if err != nil {
+				log.Warn("unmarshal binlog failed", zap.Error(err))
+				continue
+			}
 			log.Debug("get kafka message", zap.Int64("offset", kmsg.Offset))
 			binlog := new(pb.Binlog)
-			err := binlog.Unmarshal(kmsg.Value)
+			err = binlog.Unmarshal(kmsg.Value)
 			if err != nil {
 				log.Warn("unmarshal binlog failed", zap.Error(err))
 				continue

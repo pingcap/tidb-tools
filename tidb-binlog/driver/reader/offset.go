@@ -14,54 +14,55 @@
 package reader
 
 import (
-	"time"
+	"context"
 
-	"github.com/Shopify/sarama"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
-	pb "github.com/pingcap/tidb-tools/tidb-binlog/slave_binlog_proto/go-binlog"
+	"github.com/segmentio/kafka-go"
 	"go.uber.org/zap"
+
+	pb "github.com/pingcap/tidb-tools/tidb-binlog/slave_binlog_proto/go-binlog"
 )
 
 // KafkaSeeker seeks offset in kafka topics by given condition
 type KafkaSeeker struct {
-	consumer sarama.Consumer
-	client   sarama.Client
+	conn   *kafka.Conn
+	reader *kafka.Reader
 }
 
 // NewKafkaSeeker creates an instance of KafkaSeeker
-func NewKafkaSeeker(addr []string, config *sarama.Config) (*KafkaSeeker, error) {
-	client, err := sarama.NewClient(addr, config)
+func NewKafkaSeeker(readCfg kafka.ReaderConfig) (*KafkaSeeker, error) {
+	if len(readCfg.Brokers) == 0 {
+		return nil, errors.New("there is no broker set in config")
+	}
+	conn, err := kafka.Dial("tcp", readCfg.Brokers[0])
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	consumer, err := sarama.NewConsumerFromClient(client)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
+	reader := kafka.NewReader(readCfg)
 	s := &KafkaSeeker{
-		client:   client,
-		consumer: consumer,
+		conn:   conn,
+		reader: reader,
 	}
-
 	return s, nil
 }
 
 // Close releases resources of KafkaSeeker
 func (ks *KafkaSeeker) Close() {
-	ks.consumer.Close()
-	ks.client.Close()
+	ks.conn.Close()
 }
 
 // Seek seeks the first offset which binlog CommitTs bigger than ts
 func (ks *KafkaSeeker) Seek(topic string, ts int64, partitions []int32) (offsets []int64, err error) {
 	if len(partitions) == 0 {
-		partitions, err = ks.consumer.Partitions(topic)
+		pts, err := ks.conn.ReadPartitions(topic)
 		if err != nil {
 			log.Error("get partitions from topic failed", zap.String("topic", topic), zap.Error(err))
 			return nil, errors.Trace(err)
+		}
+		for _, pt := range pts {
+			partitions = append(partitions, int32(pt.ID))
 		}
 	}
 
@@ -73,7 +74,7 @@ func (ks *KafkaSeeker) Seek(topic string, ts int64, partitions []int32) (offsets
 	return
 }
 
-func (ks *KafkaSeeker) getTSFromMSG(msg *sarama.ConsumerMessage) (ts int64, err error) {
+func (ks *KafkaSeeker) getTSFromMSG(msg kafka.Message) (ts int64, err error) {
 	binlog := new(pb.Binlog)
 	err = binlog.Unmarshal(msg.Value)
 	if err != nil {
@@ -88,13 +89,13 @@ func (ks *KafkaSeeker) getTSFromMSG(msg *sarama.ConsumerMessage) (ts int64, err 
 func (ks *KafkaSeeker) seekOffsets(topic string, partitions []int32, pos int64) ([]int64, error) {
 	offsets := make([]int64, len(partitions))
 	for _, partition := range partitions {
-		start, err := ks.client.GetOffset(topic, partition, sarama.OffsetOldest)
+		start, err := ks.conn.ReadFirstOffset()
 		if err != nil {
 			err = errors.Trace(err)
 			return nil, err
 		}
 
-		end, err := ks.client.GetOffset(topic, partition, sarama.OffsetNewest)
+		end, err := ks.conn.ReadLastOffset()
 		if err != nil {
 			err = errors.Trace(err)
 			return nil, err
@@ -172,45 +173,24 @@ func (ks *KafkaSeeker) getTSAtOffset(topic string, partition int32, offset int64
 		zap.Int32("partition", partition),
 		zap.Int64("offset", offset))
 
-	pc, err := ks.consumer.ConsumePartition(topic, partition, offset)
+	err = ks.reader.SetOffset(offset)
 	if err != nil {
 		err = errors.Trace(err)
 		return
 	}
-	defer pc.Close()
 
-	errorCnt := 0
-	for {
-		select {
-		case msg := <-pc.Messages():
-			ts, err = ks.getTSFromMSG(msg)
+	ctx, cancel := context.WithTimeout(context.Background(), KafkaWaitTimeout)
+	defer cancel()
+	msg, err := ks.reader.ReadMessage(ctx)
+	ts, err = ks.getTSFromMSG(msg)
 
-			if err == nil {
-				log.Debug("get ts at offset success",
-					zap.String("topic", topic),
-					zap.Int32("partition", partition),
-					zap.Int64("ts", ts),
-					zap.Int64("at offset", offset))
-			}
-
-			err = errors.Trace(err)
-			return
-
-		case msg := <-pc.Errors():
-			err = msg.Err
-			log.Error("get ts at offset failed",
-				zap.String("topic", topic),
-				zap.Int32("partition", partition),
-				zap.Int64("ts", ts),
-				zap.Int64("at offset", offset))
-			time.Sleep(time.Second)
-			errorCnt++
-			if errorCnt > 10 {
-				return
-			}
-
-		case <-time.After(KafkaWaitTimeout):
-			return 0, errors.Errorf("timeout to consume from kafka, topic:%s, partition:%d, offset:%d", topic, partition, offset)
-		}
+	if err == nil {
+		log.Debug("get ts at offset success",
+			zap.String("topic", topic),
+			zap.Int32("partition", partition),
+			zap.Int64("ts", ts),
+			zap.Int64("at offset", offset))
 	}
+
+	return
 }

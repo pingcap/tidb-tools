@@ -16,10 +16,10 @@ package reader
 import (
 	"os"
 	"testing"
-	"time"
 
-	"github.com/Shopify/sarama"
 	. "github.com/pingcap/check"
+	"github.com/segmentio/kafka-go"
+
 	pb "github.com/pingcap/tidb-tools/tidb-binlog/slave_binlog_proto/go-binlog"
 )
 
@@ -30,8 +30,7 @@ func TestClient(t *testing.T) {
 var _ = Suite(&testOffsetSuite{})
 
 type testOffsetSuite struct {
-	producer  sarama.SyncProducer
-	config    *sarama.Config
+	producer  *kafka.Conn
 	addr      string
 	available bool
 	topic     string
@@ -43,27 +42,20 @@ func (to *testOffsetSuite) SetUpSuite(c *C) {
 	if os.Getenv("HOSTIP") != "" {
 		to.addr = os.Getenv("HOSTIP")
 	}
-	to.config = sarama.NewConfig()
-	to.config.Producer.Partitioner = sarama.NewManualPartitioner
-	to.config.Producer.Return.Successes = true
-	to.config.Net.DialTimeout = time.Second * 3
-	to.config.Net.ReadTimeout = time.Second * 3
-	to.config.Net.WriteTimeout = time.Second * 3
-	// need at least version to delete topic
-	to.config.Version = sarama.V0_10_1_0
+	to.addr = to.addr + ":9092"
+
 	var err error
-	to.producer, err = sarama.NewSyncProducer([]string{to.addr + ":9092"}, to.config)
-	if err == nil {
+	if to.producer, err = kafka.Dial("tcp", to.addr); err == nil {
 		to.available = true
 	}
 }
 
 func (to *testOffsetSuite) deleteTopic(c *C) {
-	broker := sarama.NewBroker(to.addr + ":9092")
-	err := broker.Open(to.config)
+	conn, err := kafka.Dial("tcp", to.addr)
 	c.Assert(err, IsNil)
-	defer broker.Close()
-	broker.DeleteTopics(&sarama.DeleteTopicsRequest{Topics: []string{to.topic}, Timeout: 10 * time.Second})
+	defer conn.Close()
+
+	c.Assert(conn.DeleteTopics(to.topic), IsNil)
 }
 
 func (to *testOffsetSuite) TestOffset(c *C) {
@@ -75,13 +67,20 @@ func (to *testOffsetSuite) TestOffset(c *C) {
 	defer to.deleteTopic(c)
 
 	topic := to.topic
-
-	sk, err := NewKafkaSeeker([]string{to.addr + ":9092"}, to.config)
+	err := to.producer.CreateTopics(kafka.TopicConfig{
+		Topic: topic,
+	})
 	c.Assert(err, IsNil)
 
-	to.producer, err = sarama.NewSyncProducer([]string{to.addr + ":9092"}, to.config)
+	readCfg := kafka.ReaderConfig{
+		Brokers:   []string{to.addr},
+		Topic:     topic,
+		Partition: 0,
+		MinBytes:  10e3,
+		MaxBytes:  10e6,
+	}
+	sk, err := NewKafkaSeeker(readCfg)
 	c.Assert(err, IsNil)
-	defer to.producer.Close()
 
 	var testPoss = map[int64]int64{
 		10: 0,
@@ -89,7 +88,7 @@ func (to *testOffsetSuite) TestOffset(c *C) {
 		30: 0,
 	}
 	for ts := range testPoss {
-		testPoss[ts], err = to.procudeMessage(ts, topic)
+		testPoss[ts], err = to.produceMessage(ts, topic)
 		c.Assert(err, IsNil)
 		// c.Log("produce ", ts, " at ", testPoss[ts])
 	}
@@ -110,7 +109,7 @@ func (to *testOffsetSuite) TestOffset(c *C) {
 	}
 }
 
-func (to *testOffsetSuite) procudeMessage(ts int64, topic string) (offset int64, err error) {
+func (to *testOffsetSuite) produceMessage(ts int64, topic string) (offset int64, err error) {
 	binlog := new(pb.Binlog)
 	binlog.CommitTs = ts
 	var data []byte
@@ -119,16 +118,16 @@ func (to *testOffsetSuite) procudeMessage(ts int64, topic string) (offset int64,
 		return
 	}
 
-	msg := &sarama.ProducerMessage{
+	msg := kafka.Message{
 		Topic:     topic,
-		Partition: int32(0),
-		Key:       sarama.StringEncoder("key"),
-		Value:     sarama.ByteEncoder(data),
-	}
-	_, offset, err = to.producer.SendMessage(msg)
-	if err == nil {
-		return
+		Partition: 0,
+		Key:       []byte(""),
+		Value:     data,
 	}
 
-	return offset, err
+	_, _, offset, _, err = to.producer.WriteCompressedMessagesAt(nil, msg)
+	if err != nil {
+		return
+	}
+	return
 }
