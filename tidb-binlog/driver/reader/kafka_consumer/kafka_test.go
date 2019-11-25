@@ -149,6 +149,49 @@ func (to *testOffsetSuite) TestSaramaOffset(c *C) {
 	}
 }
 
+func (to *testOffsetSuite) TestSaramaConsumer(c *C) {
+	var err error
+	topic := to.topic + "_consumer_sarama"
+	to.saramaProducer, err = sarama.NewSyncProducer([]string{to.addr}, to.config)
+	c.Assert(err, IsNil)
+	defer to.saramaProducer.Close()
+
+	var testPoss = map[int64]int64{
+		10: 0,
+		20: 0,
+		30: 0,
+	}
+
+	for ts := range testPoss {
+		testPoss[ts], err = to.produceMessage(saramaType, ts, topic)
+		c.Assert(err, IsNil)
+		c.Log("produce ", ts, " at ", testPoss[ts])
+	}
+
+	kc, err := NewConsumer(&KafkaConfig{
+		ClientType: saramaType,
+		Addr:       []string{to.addr},
+		Topic:      topic,
+		Partition:  0,
+	})
+	c.Assert(err, IsNil)
+
+	consumerChan := make(chan *KafkaMsg)
+	err = kc.ConsumeFromOffset(0, consumerChan)
+	c.Assert(err, IsNil)
+
+	msgCnt := 0
+	for {
+		// TODO assert msg value
+		<-consumerChan
+		msgCnt++
+		if msgCnt > len(testPoss) {
+			break
+		}
+	}
+	c.Assert(testPoss, HasLen, msgCnt)
+}
+
 func (to *testOffsetSuite) TestKafkaGoOffset(c *C) {
 	if !to.available {
 		c.Skip("no kafka available")
@@ -199,6 +242,51 @@ func (to *testOffsetSuite) TestKafkaGoOffset(c *C) {
 		c.Assert(offsetFounds, HasLen, 1)
 		c.Assert(offsetFounds[0], Equals, offset)
 	}
+}
+
+func (to *testOffsetSuite) TestKafkaConsumer(c *C) {
+	var err error
+	topic := to.topic + "_consumer"
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	to.kafkaProducer, err = kafka.DialLeader(ctx, "tcp", to.addr, topic, 0)
+	c.Assert(err, IsNil)
+	defer to.kafkaProducer.Close()
+
+	var testPoss = map[int64]int64{
+		10: 0,
+		20: 0,
+		30: 0,
+	}
+	for ts := range testPoss {
+		testPoss[ts], err = to.produceMessage(kafkaGOType, ts, topic)
+		c.Assert(err, IsNil)
+		c.Log("produce ", ts, " at ", testPoss[ts])
+	}
+
+	kc, err := NewConsumer(&KafkaConfig{
+		ClientType: kafkaGOType,
+		Addr:       []string{to.addr},
+		Topic:      topic,
+		Partition:  0,
+	})
+	c.Assert(err, IsNil)
+
+	consumerChan := make(chan *KafkaMsg)
+	err = kc.ConsumeFromOffset(0, consumerChan)
+	c.Assert(err, IsNil)
+
+	msgCnt := 0
+	for {
+		// TODO assert msg value
+		<-consumerChan
+		msgCnt++
+		if msgCnt > len(testPoss) {
+			break
+		}
+	}
+	c.Assert(testPoss, HasLen, msgCnt)
 }
 
 func (to *testOffsetSuite) produceMessage(clientType string, ts int64, topic string) (offset int64, err error) {
