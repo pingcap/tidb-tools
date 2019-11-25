@@ -41,7 +41,7 @@ type KafkaMsg struct {
 
 type Consumer interface {
 	// ConsumeFromOffset consume message from specify offset
-	ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg) error
+	ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg, done chan struct{}) error
 
 	// SeekOffsetFromTS seeks the first offset which binlog CommitTs bigger than ts
 	SeekOffsetFromTS(ts int64, topic string, partitions []int32) ([]int64, error)

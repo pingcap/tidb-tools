@@ -152,6 +152,7 @@ func (r *Reader) run() {
 	offset := r.cfg.Offset
 	log.Debug("start at", zap.Int64("offset", offset))
 	consumerChan := make(chan *kafka_consumer.KafkaMsg)
+	done := make(chan struct{})
 
 	go func() {
 		// add select to avoid message blocking while reading
@@ -161,6 +162,7 @@ func (r *Reader) run() {
 				// clean environment
 				r.client.Close()
 				close(r.msgs)
+				close(done)
 				log.Info("reader stop to run")
 				return
 
@@ -196,7 +198,7 @@ func (r *Reader) run() {
 		}
 	}()
 
-	err := r.client.ConsumeFromOffset(offset, consumerChan)
+	err := r.client.ConsumeFromOffset(offset, consumerChan, done)
 	if err != nil {
 		log.Error("consume from offset failed",
 			zap.String("client", r.cfg.ClientType),
