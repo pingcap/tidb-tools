@@ -31,6 +31,9 @@ type KafkaGO struct {
 	client *kafka.Reader
 	// conn is low level api, which has createTopic DeleteTopic and other more function than *kafka.Reader
 	conn *kafka.Conn
+
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 // NewKafkaGoConsumer return kafka-go consumer on specify topic and partition
@@ -38,8 +41,10 @@ func NewKafkaGoConsumer(cfg *KafkaConfig) (Consumer, error) {
 	if len(cfg.Addr) == 0 {
 		return nil, errors.New("no available kafka address")
 	}
-	conn, err := kafka.Dial("tcp", cfg.Addr[0])
+	ctx, cancel := context.WithCancel(context.Background())
+	conn, err := kafka.DialLeader(ctx, "tcp", cfg.Addr[0], cfg.Topic, int(cfg.Partition))
 	if err != nil {
+		cancel()
 		return nil, errors.Trace(err)
 	}
 	return &KafkaGO{
@@ -50,7 +55,9 @@ func NewKafkaGoConsumer(cfg *KafkaConfig) (Consumer, error) {
 			MinBytes:  10e3, // 1KB
 			MaxBytes:  10e6, // 1MB
 		}),
-		conn: conn,
+		conn:   conn,
+		ctx:    ctx,
+		cancel: cancel,
 	}, nil
 }
 
@@ -61,14 +68,14 @@ func (k *KafkaGO) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg)
 		return errors.Trace(err)
 	}
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), KafkaWaitTimeout)
+		ctx, cancel := context.WithTimeout(k.ctx, KafkaWaitTimeout)
 		kmsg, err := k.client.ReadMessage(ctx)
 		cancel()
 		if err != nil {
 			log.Warn("kafka-go consume from offset failed",
 				zap.Int64("offset", k.client.Offset()),
 				zap.Error(err))
-			continue
+			return errors.Trace(err)
 		}
 		msg := &KafkaMsg{
 			Value:  kmsg.Value,
@@ -212,4 +219,5 @@ func (k *KafkaGO) ConsumerType() string {
 func (k *KafkaGO) Close() {
 	k.client.Close()
 	k.conn.Close()
+	k.cancel()
 }
