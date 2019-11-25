@@ -71,7 +71,7 @@ func (k *KafkaGO) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg,
 		select {
 		case <-done:
 			log.Info("finished consumer")
-			break
+			return nil
 		default:
 			ctx, cancel := context.WithTimeout(k.ctx, KafkaWaitTimeout)
 			kmsg, err := k.client.ReadMessage(ctx)
