@@ -180,7 +180,7 @@ func (to *testOffsetSuite) TestSaramaConsumer(c *C) {
 		return keys[i] < keys[j]
 	})
 
-	for _, ts := range testPoss {
+	for _, ts := range keys {
 		testPoss[ts], err = to.produceMessage(saramaType, ts, topic)
 		c.Assert(err, IsNil)
 		c.Log("produce ", ts, " at ", testPoss[ts])
@@ -253,7 +253,7 @@ func (to *testOffsetSuite) TestKafkaGoOffset(c *C) {
 		return keys[i] < keys[j]
 	})
 
-	for _, ts := range testPoss {
+	for _, ts := range keys {
 		testPoss[ts], err = to.produceMessage(kafkaGOType, ts, topic)
 		c.Assert(err, IsNil)
 		c.Log("produce ", ts, " at ", testPoss[ts])
@@ -299,7 +299,7 @@ func (to *testOffsetSuite) TestKafkaConsumer(c *C) {
 		return keys[i] < keys[j]
 	})
 
-	for _, ts := range testPoss {
+	for _, ts := range keys {
 		testPoss[ts], err = to.produceMessage(kafkaGOType, ts, topic)
 		c.Assert(err, IsNil)
 		c.Log("produce ", ts, " at ", testPoss[ts])
