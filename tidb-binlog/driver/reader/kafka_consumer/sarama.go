@@ -74,21 +74,17 @@ func (s *Sarama) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg) 
 }
 
 // SeekOffsetFromTS implements kafka.Consumer.SeekOffsetFromTS
-func (s *Sarama) SeekOffsetFromTS(ts int64, topic string, partitions []int32) (offsets []int64, err error) {
+func (s *Sarama) SeekOffsetFromTS(ts int64, topic string, partitions []int32) ([]int64, error) {
+	var err error
 	if len(partitions) == 0 {
-		partitions, err = s.client.Partitions(topic)
+		partitions, err = s.consumer.Partitions(topic)
 		if err != nil {
 			log.Error("get partitions from topic failed", zap.String("topic", topic), zap.Error(err))
 			return nil, errors.Trace(err)
 		}
 	}
 
-	offsets, err = s.seekOffsets(topic, partitions, ts)
-	if err != nil {
-		err = errors.Trace(err)
-		log.Error("seek offsets failed", zap.Error(err))
-	}
-	return nil, nil
+	return s.seekOffsets(topic, partitions, ts)
 }
 
 // seekOffsets returns all valid offsets in partitions
