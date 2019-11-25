@@ -37,6 +37,9 @@ func NewSaramaConsumer(cfg *KafkaConfig) (Consumer, error) {
 	conf := sarama.NewConfig()
 	// set to 10 minutes to prevent i/o timeout when reading huge message
 	conf.Net.ReadTimeout = KafkaWaitTimeout
+	if cfg.SaramaBufferSize > 0 {
+		conf.ChannelBufferSize = cfg.SaramaBufferSize
+	}
 
 	client, err := sarama.NewClient(cfg.Addr, conf)
 	if err != nil {
