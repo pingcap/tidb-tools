@@ -27,10 +27,11 @@ const (
 )
 
 type KafkaConfig struct {
-	ClientType string
-	Addr       []string
-	Topic      string
-	Partition  int32
+	ClientType       string
+	Addr             []string
+	Topic            string
+	Partition        int32
+	SaramaBufferSize int
 }
 
 type KafkaMsg struct {

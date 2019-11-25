@@ -106,10 +106,11 @@ func NewReader(cfg *Config) (r *Reader, err error) {
 
 	topic, partition := cfg.GetTopic()
 	r.client, err = kafka_consumer.NewConsumer(&kafka_consumer.KafkaConfig{
-		ClientType: cfg.ClientType,
-		Addr:       cfg.KafkaAddr,
-		Topic:      topic,
-		Partition:  partition,
+		ClientType:       cfg.ClientType,
+		Addr:             cfg.KafkaAddr,
+		Topic:            topic,
+		Partition:        partition,
+		SaramaBufferSize: cfg.getSaramaBuffserSize(),
 	})
 
 	if r.cfg.CommitTS > 0 {
