@@ -58,7 +58,7 @@ func NewSaramaConsumer(cfg *KafkaConfig) (Consumer, error) {
 }
 
 // ConsumeFromOffset implements kafka.Consumer.ConsumerFromOffset
-func (s *Sarama) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg) error {
+func (s *Sarama) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg, done chan struct{}) error {
 	partitionConsumer, err := s.consumer.ConsumePartition(s.topic, s.partition, offset)
 	if err != nil {
 		return errors.Trace(err)
@@ -67,12 +67,18 @@ func (s *Sarama) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg) 
 	defer partitionConsumer.Close()
 
 	for {
-		kmsg := <-partitionConsumer.Messages()
-		msg := &KafkaMsg{
-			Value:  kmsg.Value,
-			Offset: kmsg.Offset,
+		select {
+		case <-done:
+			log.Info("finish consumer")
+			return nil
+
+		case kmsg := <-partitionConsumer.Messages():
+			msg := &KafkaMsg{
+				Value:  kmsg.Value,
+				Offset: kmsg.Offset,
+			}
+			consumerChan <- msg
 		}
-		consumerChan <- msg
 	}
 }
 

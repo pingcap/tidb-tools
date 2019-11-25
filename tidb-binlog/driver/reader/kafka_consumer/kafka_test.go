@@ -16,6 +16,7 @@ package kafka_consumer
 import (
 	"context"
 	"os"
+	"sort"
 	"testing"
 	"time"
 
@@ -127,7 +128,16 @@ func (to *testOffsetSuite) TestSaramaOffset(c *C) {
 		20: 0,
 		30: 0,
 	}
-	for ts := range testPoss {
+
+	keys := make([]int64, 0)
+	for k := range testPoss {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return keys[i] < keys[j]
+	})
+
+	for _, ts := range keys {
 		testPoss[ts], err = to.produceMessage(saramaType, ts, topic)
 		c.Assert(err, IsNil)
 		c.Log("produce ", ts, " at ", testPoss[ts])
@@ -162,7 +172,15 @@ func (to *testOffsetSuite) TestSaramaConsumer(c *C) {
 		30: 0,
 	}
 
-	for ts := range testPoss {
+	keys := make([]int64, 0)
+	for k := range testPoss {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return keys[i] < keys[j]
+	})
+
+	for _, ts := range testPoss {
 		testPoss[ts], err = to.produceMessage(saramaType, ts, topic)
 		c.Assert(err, IsNil)
 		c.Log("produce ", ts, " at ", testPoss[ts])
@@ -177,18 +195,22 @@ func (to *testOffsetSuite) TestSaramaConsumer(c *C) {
 	c.Assert(err, IsNil)
 
 	consumerChan := make(chan *KafkaMsg)
-	err = kc.ConsumeFromOffset(0, consumerChan)
+	done := make(chan struct{})
+	msgCnt := 0
+	go func() {
+		for {
+			// TODO assert msg value
+			<-consumerChan
+			msgCnt++
+			if msgCnt >= len(testPoss) {
+				close(done)
+				break
+			}
+		}
+	}()
+	err = kc.ConsumeFromOffset(0, consumerChan, done)
 	c.Assert(err, IsNil)
 
-	msgCnt := 0
-	for {
-		// TODO assert msg value
-		<-consumerChan
-		msgCnt++
-		if msgCnt > len(testPoss) {
-			break
-		}
-	}
 	c.Assert(testPoss, HasLen, msgCnt)
 }
 
@@ -222,7 +244,16 @@ func (to *testOffsetSuite) TestKafkaGoOffset(c *C) {
 		20: 0,
 		30: 0,
 	}
-	for ts := range testPoss {
+
+	keys := make([]int64, 0)
+	for k := range testPoss {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return keys[i] < keys[j]
+	})
+
+	for _, ts := range testPoss {
 		testPoss[ts], err = to.produceMessage(kafkaGOType, ts, topic)
 		c.Assert(err, IsNil)
 		c.Log("produce ", ts, " at ", testPoss[ts])
@@ -259,7 +290,16 @@ func (to *testOffsetSuite) TestKafkaConsumer(c *C) {
 		20: 0,
 		30: 0,
 	}
-	for ts := range testPoss {
+
+	keys := make([]int64, 0)
+	for k := range testPoss {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return keys[i] < keys[j]
+	})
+
+	for _, ts := range testPoss {
 		testPoss[ts], err = to.produceMessage(kafkaGOType, ts, topic)
 		c.Assert(err, IsNil)
 		c.Log("produce ", ts, " at ", testPoss[ts])
@@ -274,19 +314,25 @@ func (to *testOffsetSuite) TestKafkaConsumer(c *C) {
 	c.Assert(err, IsNil)
 
 	consumerChan := make(chan *KafkaMsg)
-	err = kc.ConsumeFromOffset(0, consumerChan)
-	c.Assert(err, IsNil)
+	done := make(chan struct{})
 
 	msgCnt := 0
-	for {
-		// TODO assert msg value
-		<-consumerChan
-		msgCnt++
-		if msgCnt > len(testPoss) {
-			break
+	go func(){
+		for {
+			// TODO assert msg value
+			<-consumerChan
+			msgCnt++
+			if msgCnt >= len(testPoss) {
+				close(done)
+				break
+			}
 		}
-	}
-	c.Assert(testPoss, HasLen, msgCnt)
+		c.Assert(testPoss, HasLen, msgCnt)
+	}()
+	err = kc.ConsumeFromOffset(0, consumerChan, done)
+	c.Assert(err, IsNil)
+
+
 }
 
 func (to *testOffsetSuite) produceMessage(clientType string, ts int64, topic string) (offset int64, err error) {
@@ -308,6 +354,7 @@ func (to *testOffsetSuite) produceMessage(clientType string, ts int64, topic str
 		}
 		_, offset, err = to.saramaProducer.SendMessage(msg)
 	case kafkaGOType:
+		to.kafkaProducer.SetDeadline(time.Now().Add(time.Second))
 		_, _, offset, _, err = to.kafkaProducer.WriteCompressedMessagesAt(nil, kafka.Message{
 			Value: data,
 		})

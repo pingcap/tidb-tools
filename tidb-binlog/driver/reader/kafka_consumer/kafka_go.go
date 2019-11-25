@@ -62,26 +62,32 @@ func NewKafkaGoConsumer(cfg *KafkaConfig) (Consumer, error) {
 }
 
 // ConsumerFromOffset implements Consumer.ConsumerFromOffset
-func (k *KafkaGO) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg) error {
+func (k *KafkaGO) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg, done chan struct{}) error {
 	err := k.client.SetOffset(offset)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	for {
-		ctx, cancel := context.WithTimeout(k.ctx, KafkaWaitTimeout)
-		kmsg, err := k.client.ReadMessage(ctx)
-		cancel()
-		if err != nil {
-			log.Warn("kafka-go consume from offset failed",
-				zap.Int64("offset", k.client.Offset()),
-				zap.Error(err))
-			return errors.Trace(err)
+		select {
+		case <-done:
+			log.Info("finished consumer")
+			break
+		default:
+			ctx, cancel := context.WithTimeout(k.ctx, KafkaWaitTimeout)
+			kmsg, err := k.client.ReadMessage(ctx)
+			cancel()
+			if err != nil {
+				log.Warn("kafka-go consume from offset failed",
+					zap.Int64("offset", k.client.Offset()),
+					zap.Error(err))
+				return errors.Trace(err)
+			}
+			msg := &KafkaMsg{
+				Value:  kmsg.Value,
+				Offset: kmsg.Offset,
+			}
+			consumerChan <- msg
 		}
-		msg := &KafkaMsg{
-			Value:  kmsg.Value,
-			Offset: kmsg.Offset,
-		}
-		consumerChan <- msg
 	}
 }
 
