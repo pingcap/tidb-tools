@@ -14,18 +14,12 @@
 package reader
 
 import (
-	"context"
-	"time"
-
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
-	pb "github.com/pingcap/tidb-tools/tidb-binlog/slave_binlog_proto/go-binlog"
-	"github.com/segmentio/kafka-go"
 	"go.uber.org/zap"
-)
 
-const (
-	KafkaWaitTimeout = 10 * time.Minute
+	"github.com/pingcap/tidb-tools/tidb-binlog/driver/reader/kafka_consumer"
+	pb "github.com/pingcap/tidb-tools/tidb-binlog/slave_binlog_proto/go-binlog"
 )
 
 // Config for Reader
@@ -44,6 +38,9 @@ type Config struct {
 	MessageBufferSize int
 	// the sarama internal buffer size of messages.
 	SaramaBufferSize int
+
+	// which kafka client to use, support sarama/kafka-go for now
+	ClientType string
 }
 
 func (c *Config) getSaramaBuffserSize() int {
@@ -70,6 +67,13 @@ func (c *Config) valid() error {
 	return nil
 }
 
+func (c *Config) GetTopic() (string, int32) {
+	if c.Topic != "" {
+		return c.Topic, 0
+	}
+	return c.ClusterID + "_obinlog", 0
+}
+
 // Message read from reader
 type Message struct {
 	Binlog *pb.Binlog
@@ -78,20 +82,12 @@ type Message struct {
 
 // Reader to read binlog from kafka
 type Reader struct {
-	cfg       *Config
-	clientCfg kafka.ReaderConfig
+	cfg    *Config
+	client kafka_consumer.Consumer
 
 	msgs      chan *Message
 	stop      chan struct{}
 	clusterID string
-}
-
-func (r *Reader) getTopic() (string, int32) {
-	if r.cfg.Topic != "" {
-		return r.cfg.Topic, 0
-	}
-
-	return r.cfg.ClusterID + "_obinlog", 0
 }
 
 // NewReader creates an instance of Reader
@@ -108,17 +104,16 @@ func NewReader(cfg *Config) (r *Reader, err error) {
 		clusterID: cfg.ClusterID,
 	}
 
-	topic, partition := r.getTopic()
-	r.clientCfg = kafka.ReaderConfig{
-		Brokers:   cfg.KafkaAddr,
-		Topic:     topic,
-		Partition: int(partition),
-		MinBytes:  10e3, // 1KB
-		MaxBytes:  10e6, // 1MB
-	}
+	topic, partition := cfg.GetTopic()
+	r.client, err = kafka_consumer.NewConsumer(&kafka_consumer.KafkaConfig{
+		ClientType: cfg.ClientType,
+		Addr:       cfg.KafkaAddr,
+		Topic:      topic,
+		Partition:  partition,
+	})
 
 	if r.cfg.CommitTS > 0 {
-		r.cfg.Offset, err = r.getOffsetByTS(r.cfg.CommitTS)
+		r.cfg.Offset, err = r.getOffsetByTS(r.cfg.CommitTS, topic, []int32{partition})
 		if err != nil {
 			err = errors.Trace(err)
 			r = nil
@@ -142,79 +137,70 @@ func (r *Reader) Messages() (msgs <-chan *Message) {
 	return r.msgs
 }
 
-func (r *Reader) getOffsetByTS(ts int64) (offset int64, err error) {
-	seeker, err := NewKafkaSeeker(r.clientCfg)
-	if err != nil {
-		return 0, errors.Trace(err)
-	}
-
-	log.Debug("get offset",
-		zap.String("topic", r.clientCfg.Topic),
-		zap.Int("partition", r.clientCfg.Partition),
-		zap.Int64("ts", ts))
-	offsets, err := seeker.Seek(r.clientCfg.Topic, ts, []int32{int32(r.clientCfg.Partition)})
+func (r *Reader) getOffsetByTS(ts int64, topic string, partitions []int32) (offset int64, err error) {
+	offsets, err := r.client.SeekOffsetFromTS(ts, topic, partitions)
 	if err != nil {
 		err = errors.Trace(err)
 		return
 	}
-
 	offset = offsets[0]
-
 	return
 }
 
 func (r *Reader) run() {
 	offset := r.cfg.Offset
 	log.Debug("start at", zap.Int64("offset", offset))
+	consumerChan := make(chan *kafka_consumer.KafkaMsg)
 
-	consumer := kafka.NewReader(r.clientCfg)
-	err := consumer.SetOffset(offset)
-	if err != nil {
-		log.Fatal("consumer set offset failed", zap.Error(err))
-	}
-
-	defer consumer.Close()
-
-	// add select to avoid message blocking while reading
-	for {
-		select {
-		case <-r.stop:
-			// clean environment
-			consumer.Close()
-			close(r.msgs)
-			log.Info("reader stop to run")
-			return
-
-		default:
-			ctx, cancel := context.WithTimeout(context.Background(), KafkaWaitTimeout)
-			kmsg, err := consumer.ReadMessage(ctx)
-			cancel()
-			if err != nil {
-				log.Warn("unmarshal binlog failed", zap.Error(err))
-				continue
-			}
-			log.Debug("get kafka message", zap.Int64("offset", kmsg.Offset))
-			binlog := new(pb.Binlog)
-			err = binlog.Unmarshal(kmsg.Value)
-			if err != nil {
-				log.Warn("unmarshal binlog failed", zap.Error(err))
-				continue
-			}
-			if r.cfg.CommitTS > 0 && binlog.CommitTs <= r.cfg.CommitTS {
-				log.Warn("skip binlog CommitTs", zap.Int64("commitTS", binlog.CommitTs))
-				continue
-			}
-
-			msg := &Message{
-				Binlog: binlog,
-				Offset: kmsg.Offset,
-			}
+	go func() {
+		// add select to avoid message blocking while reading
+		for {
 			select {
-			case r.msgs <- msg:
 			case <-r.stop:
-				// In the next iteration, the <-r.stop would match again and prepare to quit
-				continue
+				// clean environment
+				r.client.Close()
+				close(r.msgs)
+				log.Info("reader stop to run")
+				return
+
+			case kmsg := <-consumerChan:
+				err := kafka_consumer.TransformMSG(r.client.ConsumerType(), kmsg)
+				if err != nil {
+					log.Warn("transform message failed", zap.Error(err))
+					continue
+				}
+				binlog := new(pb.Binlog)
+				err = binlog.Unmarshal(kmsg.Value)
+				if err != nil {
+					log.Warn("unmarshal binlog failed", zap.Error(err))
+					continue
+				}
+
+				if r.cfg.CommitTS > 0 && binlog.CommitTs <= r.cfg.CommitTS {
+					log.Warn("skip binlog CommitTs", zap.Int64("commitTS", binlog.CommitTs))
+					continue
+				}
+
+				msg := &Message{
+					Binlog: binlog,
+					Offset: binlog.CommitTs,
+				}
+				select {
+				case r.msgs <- msg:
+				case <-r.stop:
+					// In the next iteration, the <-r.stop would match again and prepare to quit
+					continue
+				}
 			}
 		}
+	}()
+
+	err := r.client.ConsumeFromOffset(offset, consumerChan)
+	if err != nil {
+		log.Error("consume from offset failed",
+			zap.String("client", r.cfg.ClientType),
+			zap.Int64("offset", offset),
+			zap.Error(err))
+		r.Close()
 	}
 }
