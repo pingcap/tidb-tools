@@ -82,9 +82,9 @@ func TransformMSG(consumerType string, msg *KafkaMsg) error {
 
 func NewConsumer(cfg *KafkaConfig) (Consumer, error) {
 	switch strings.ToLower(cfg.ClientType) {
-	case "sarama":
+	case saramaType:
 		return NewSaramaConsumer(cfg)
-	case "kafka-go":
+	case kafkaGOType:
 		return NewKafkaGoConsumer(cfg)
 	default:
 		return nil, errors.Errorf("Not support client:%s for now, please try sarama/kafka-go", cfg.ClientType)
