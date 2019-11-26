@@ -160,6 +160,7 @@ func (to *testOffsetSuite) TestSaramaOffset(c *C) {
 }
 
 func (to *testOffsetSuite) TestSaramaConsumer(c *C) {
+	c.Parallel()
 	var err error
 	topic := to.topic + "_consumer_sarama"
 	to.saramaProducer, err = sarama.NewSyncProducer([]string{to.addr}, to.config)
@@ -199,13 +200,15 @@ func (to *testOffsetSuite) TestSaramaConsumer(c *C) {
 	})
 	c.Assert(err, IsNil)
 
-	consumerChan := make(chan *KafkaMsg)
+	consumerChan := make(chan *KafkaMsg, 1)
 	done := make(chan struct{})
 	msgCnt := 0
 	go func() {
 		for {
-			// TODO assert msg value
-			<-consumerChan
+			msg := <-consumerChan
+			ts, err := getTSFromMSG(saramaType, msg)
+			c.Assert(err, IsNil)
+			c.Assert(ts, Equals, testPoss[msg.Offset])
 			msgCnt++
 			if msgCnt >= len(testPoss) {
 				close(done)
@@ -324,25 +327,26 @@ func (to *testOffsetSuite) TestKafkaConsumer(c *C) {
 	})
 	c.Assert(err, IsNil)
 
-	consumerChan := make(chan *KafkaMsg)
+	consumerChan := make(chan *KafkaMsg, 1)
 	done := make(chan struct{})
 
 	msgCnt := 0
 	go func() {
 		for {
-			// TODO assert msg value
-			<-consumerChan
+			msg := <-consumerChan
+			ts, err := getTSFromMSG(saramaType, msg)
+			c.Assert(err, IsNil)
+			c.Assert(ts, Equals, testPoss[msg.Offset])
 			msgCnt++
 			if msgCnt >= len(testPoss) {
 				close(done)
 				break
 			}
 		}
-		c.Assert(testPoss, HasLen, msgCnt)
 	}()
 	err = kc.ConsumeFromOffset(offset, consumerChan, done)
 	c.Assert(err, IsNil)
-
+	c.Assert(testPoss, HasLen, msgCnt)
 }
 
 func (to *testOffsetSuite) produceMessage(clientType string, ts int64, topic string) (offset int64, err error) {

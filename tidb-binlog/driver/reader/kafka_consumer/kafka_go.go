@@ -70,7 +70,7 @@ func (k *KafkaGO) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg,
 	for {
 		select {
 		case <-done:
-			log.Info("finished consumer")
+			log.Info("finish consumer")
 			return nil
 		default:
 			ctx, cancel := context.WithTimeout(k.ctx, KafkaWaitTimeout)
