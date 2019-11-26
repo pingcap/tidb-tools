@@ -186,7 +186,7 @@ func (r *Reader) run() {
 
 				msg := &Message{
 					Binlog: binlog,
-					Offset: binlog.CommitTs,
+					Offset: kmsg.Offset,
 				}
 				select {
 				case r.msgs <- msg:
