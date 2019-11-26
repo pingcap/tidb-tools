@@ -60,7 +60,6 @@ func (to *testOffsetSuite) SetUpSuite(c *C) {
 	to.config.Version = sarama.V0_10_1_0
 	var err error
 	to.saramaProducer, err = sarama.NewSyncProducer([]string{to.addr}, to.config)
-	c.Assert(err, IsNil)
 	if err == nil {
 		to.available = true
 	}
