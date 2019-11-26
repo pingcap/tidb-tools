@@ -100,7 +100,7 @@ func (c *pdClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, key 
 		peer = regionInfo.Leader
 	} else {
 		if len(regionInfo.Region.Peers) == 0 {
-			return nil, fmt.Errorf("region does not have peer")
+			return nil, errors.NewNoStackError("region does not have peer")
 		}
 		peer = regionInfo.Region.Peers[0]
 	}
@@ -142,7 +142,7 @@ func (c *pdClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, key 
 		}
 	}
 	if newRegion == nil {
-		return nil, fmt.Errorf("split region failed: new region is nil")
+		return nil, errors.NewNoStackError("split region failed: new region is nil")
 	}
 	var leader *metapb.Peer
 	// Assume the leaders will be at the same store.
