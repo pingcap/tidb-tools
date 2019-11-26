@@ -3,7 +3,6 @@ package restore_util
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/pingcap/errors"
@@ -100,7 +99,7 @@ func (c *pdClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, key 
 		peer = regionInfo.Leader
 	} else {
 		if len(regionInfo.Region.Peers) == 0 {
-			return nil, errors.NewNoStackError("region does not have peer")
+			return nil, errors.New("region does not have peer")
 		}
 		peer = regionInfo.Region.Peers[0]
 	}
@@ -127,7 +126,7 @@ func (c *pdClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, key 
 		return nil, err
 	}
 	if resp.RegionError != nil {
-		return nil, fmt.Errorf("split region failed: region=%v, key=%x, err=%v", regionInfo.Region, key, resp.RegionError)
+		return nil, errors.Errorf("split region failed: region=%v, key=%x, err=%v", regionInfo.Region, key, resp.RegionError)
 	}
 
 	// Assume the new region is the left one.
@@ -142,7 +141,7 @@ func (c *pdClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, key 
 		}
 	}
 	if newRegion == nil {
-		return nil, errors.NewNoStackError("split region failed: new region is nil")
+		return nil, errors.New("split region failed: new region is nil")
 	}
 	var leader *metapb.Peer
 	// Assume the leaders will be at the same store.

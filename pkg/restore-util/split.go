@@ -3,7 +3,6 @@ package restore_util
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -130,7 +129,7 @@ func newRangeTreeWithRewrite(ranges []Range, rewriteRules *RewriteRules) (*Range
 		rg.StartKey = replacePrefix(rg.StartKey, rewriteRules)
 		rg.EndKey = replacePrefix(rg.EndKey, rewriteRules)
 		if out := rangeTree.InsertRange(rg); out != nil {
-			return nil, fmt.Errorf("ranges overlapped: %v, %v", out.(*Range).String(), rg.String())
+			return nil, errors.Errorf("ranges overlapped: %v, %v", out.(*Range).String(), rg.String())
 		}
 	}
 	return rangeTree, nil
@@ -204,7 +203,7 @@ func (rs *RegionSplitter) maybeSplitRegion(ctx context.Context, r *Range) (*Regi
 	interval := SplitRetryInterval
 	var err error
 	for i := 0; i < SplitRetryTimes; i++ {
-		if i > 0 {
+		if i > SplitRetryTimes/2 {
 			log.Warn("split region failed, retry it", zap.Error(err), zap.Reflect("key", r.StartKey))
 		}
 		var regionInfo *RegionInfo
