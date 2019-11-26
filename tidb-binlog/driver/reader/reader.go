@@ -18,7 +18,7 @@ import (
 	"github.com/pingcap/log"
 	"go.uber.org/zap"
 
-	"github.com/pingcap/tidb-tools/tidb-binlog/driver/reader/kafka_consumer"
+	"github.com/3pointer/tidb-tools/tidb-binlog/driver/reader/kafka_consumer"
 	pb "github.com/pingcap/tidb-tools/tidb-binlog/slave_binlog_proto/go-binlog"
 )
 
