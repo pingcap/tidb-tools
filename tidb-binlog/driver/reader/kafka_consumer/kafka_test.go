@@ -159,7 +159,6 @@ func (to *testOffsetSuite) TestSaramaOffset(c *C) {
 }
 
 func (to *testOffsetSuite) TestSaramaConsumer(c *C) {
-	c.Parallel()
 	var err error
 	topic := to.topic + "_consumer_sarama"
 	to.saramaProducer, err = sarama.NewSyncProducer([]string{to.addr}, to.config)

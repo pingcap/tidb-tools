@@ -198,13 +198,11 @@ func (r *Reader) run() {
 		}
 	}()
 
-	for {
-		err := r.client.ConsumeFromOffset(offset, consumerChan, done)
-		if err != nil {
-			log.Error("consume from offset failed",
-				zap.String("client", r.cfg.ClientType),
-				zap.Int64("offset", offset),
-				zap.Error(err))
-		}
+	err := r.client.ConsumeFromOffset(offset, consumerChan, done)
+	if err != nil {
+		log.Error("consume from offset failed",
+			zap.String("client", r.cfg.ClientType),
+			zap.Int64("offset", offset),
+			zap.Error(err))
 	}
 }
