@@ -208,7 +208,7 @@ func (to *testOffsetSuite) TestSaramaConsumer(c *C) {
 			msg := <-consumerChan
 			ts, err := getTSFromMSG(saramaType, msg)
 			c.Assert(err, IsNil)
-			c.Assert(ts, Equals, testPoss[msg.Offset])
+			c.Assert(msg.Offset, Equals, testPoss[ts])
 			msgCnt++
 			if msgCnt >= len(testPoss) {
 				close(done)
@@ -339,7 +339,7 @@ func (to *testOffsetSuite) TestKafkaConsumer(c *C) {
 			msg := <-consumerChan
 			ts, err := getTSFromMSG(saramaType, msg)
 			c.Assert(err, IsNil)
-			c.Assert(ts, Equals, testPoss[msg.Offset])
+			c.Assert(msg.Offset, Equals, testPoss[ts])
 			msgCnt++
 			if msgCnt >= len(testPoss) {
 				close(done)
