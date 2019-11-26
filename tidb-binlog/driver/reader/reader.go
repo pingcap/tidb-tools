@@ -151,7 +151,7 @@ func (r *Reader) getOffsetByTS(ts int64, topic string, partitions []int32) (offs
 func (r *Reader) run() {
 	offset := r.cfg.Offset
 	log.Debug("start at", zap.Int64("offset", offset))
-	consumerChan := make(chan *kafka_consumer.KafkaMsg)
+	consumerChan := make(chan *kafka_consumer.KafkaMsg, r.cfg.getMessageBufferSize())
 	done := make(chan struct{})
 
 	go func() {

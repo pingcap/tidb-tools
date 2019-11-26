@@ -63,7 +63,6 @@ func (to *testOffsetSuite) SetUpSuite(c *C) {
 	if err == nil {
 		to.available = true
 	}
-	to.saramaProducer.Close()
 }
 
 func (to *testOffsetSuite) deleteTopic(c *C, topic string) {
