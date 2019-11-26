@@ -365,14 +365,17 @@ func (to *testOffsetSuite) produceMessage(clientType string, ts int64, topic str
 			Value:     sarama.ByteEncoder(data),
 		}
 		_, offset, err = to.saramaProducer.SendMessage(msg)
+		if err != nil {
+			return
+		}
+
 	case kafkaGOType:
-		to.kafkaProducer.SetDeadline(time.Now().Add(time.Second))
 		_, _, offset, _, err = to.kafkaProducer.WriteCompressedMessagesAt(nil, kafka.Message{
 			Value: data,
 		})
-	}
-	if err == nil {
-		return
+		if err != nil {
+			return
+		}
 	}
 
 	return offset, err
