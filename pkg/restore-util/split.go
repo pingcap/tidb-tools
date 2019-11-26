@@ -3,6 +3,7 @@ package restore_util
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -114,7 +115,7 @@ func (rs *RegionSplitter) splitByRewriteRules(
 
 		newRegion, err := rs.maybeSplitRegion(ctx, &rg)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, err
 		}
 		if newRegion != nil {
 			scatterRegions = append(scatterRegions, newRegion)
@@ -129,7 +130,7 @@ func newRangeTreeWithRewrite(ranges []Range, rewriteRules *RewriteRules) (*Range
 		rg.StartKey = replacePrefix(rg.StartKey, rewriteRules)
 		rg.EndKey = replacePrefix(rg.EndKey, rewriteRules)
 		if out := rangeTree.InsertRange(rg); out != nil {
-			return nil, errors.Errorf("ranges overlapped: %v, %v", out.(*Range).String(), rg.String())
+			return nil, fmt.Errorf("ranges overlapped: %v, %v", out.(*Range).String(), rg.String())
 		}
 	}
 	return rangeTree, nil
@@ -231,12 +232,12 @@ func (rs *RegionSplitter) maybeSplitRegion(ctx context.Context, r *Range) (*Regi
 func (rs *RegionSplitter) splitAndScatterRegion(ctx context.Context, regionInfo *RegionInfo, key []byte) (*RegionInfo, error) {
 	newRegion, err := rs.client.SplitRegion(ctx, regionInfo, key)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	// Wait for a while until the region successfully splits.
 	err = rs.waitForSplit(ctx, newRegion.Region.GetId())
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	return newRegion, rs.client.ScatterRegion(ctx, regionInfo)
 }
