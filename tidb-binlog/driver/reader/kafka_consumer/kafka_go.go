@@ -191,15 +191,13 @@ func (k *KafkaGO) getTSAtOffset(topic string, partition int32, offset int64) (ts
 		zap.Int32("partition", partition),
 		zap.Int64("offset", offset))
 
-	err = k.client.SetOffset(offset)
+	_, err = k.conn.Seek(offset, 1)
 	if err != nil {
 		err = errors.Trace(err)
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), KafkaWaitTimeout)
-	defer cancel()
-	msg, err := k.client.ReadMessage(ctx)
+	msg, err := k.conn.ReadMessage(10e6)
 	ts, err = getTSFromMSG(k.ConsumerType(), &KafkaMsg{
 		Offset: msg.Offset,
 		Value:  msg.Value,
