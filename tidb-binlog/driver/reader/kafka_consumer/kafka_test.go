@@ -158,6 +158,9 @@ func (to *testOffsetSuite) TestSaramaOffset(c *C) {
 }
 
 func (to *testOffsetSuite) TestSaramaConsumer(c *C) {
+	if !to.available {
+		c.Skip("no kafka available")
+	}
 	var err error
 	topic := to.topic + "_consumer_sarama"
 	to.saramaProducer, err = sarama.NewSyncProducer([]string{to.addr}, to.config)
@@ -280,6 +283,9 @@ func (to *testOffsetSuite) TestKafkaGoOffset(c *C) {
 }
 
 func (to *testOffsetSuite) TestKafkaConsumer(c *C) {
+	if !to.available {
+		c.Skip("no kafka available")
+	}
 	var err error
 	topic := to.topic + "_consumer"
 
