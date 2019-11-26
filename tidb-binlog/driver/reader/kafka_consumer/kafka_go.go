@@ -62,7 +62,7 @@ func NewKafkaGoConsumer(cfg *KafkaConfig) (Consumer, error) {
 }
 
 // ConsumerFromOffset implements Consumer.ConsumerFromOffset
-func (k *KafkaGO) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg, done chan struct{}) error {
+func (k *KafkaGO) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg, done <-chan struct{}) error {
 	err := k.client.SetOffset(offset)
 	if err != nil {
 		return errors.Trace(err)
