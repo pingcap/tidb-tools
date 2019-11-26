@@ -37,6 +37,9 @@ func NewSaramaConsumer(cfg *KafkaConfig) (Consumer, error) {
 	conf := sarama.NewConfig()
 	// set to 10 minutes to prevent i/o timeout when reading huge message
 	conf.Net.ReadTimeout = KafkaWaitTimeout
+
+	// open error
+	conf.Consumer.Return.Errors = true
 	if cfg.SaramaBufferSize > 0 {
 		conf.ChannelBufferSize = cfg.SaramaBufferSize
 	}
@@ -76,10 +79,18 @@ func (s *Sarama) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg, 
 			log.Info("finish consumer")
 			return nil
 
+		case emsg := <-partitionConsumer.Errors():
+			log.Error("consume partitionConsumer failed:",
+				zap.String("topic", emsg.Topic),
+				zap.Int32("partitiong", emsg.Partition),
+				zap.Error(emsg.Err))
+			continue
+
 		case kmsg, ok:= <-partitionConsumer.Messages():
 			if !ok {
 				log.Info("no message from partition consumer")
-				return nil
+				time.Sleep(time.Second)
+				continue
 			}
 			msg := &KafkaMsg{
 				Value:  kmsg.Value,
