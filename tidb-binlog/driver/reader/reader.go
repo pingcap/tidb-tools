@@ -42,6 +42,29 @@ type Config struct {
 	// if Topic is empty, use the default name in drainer <ClusterID>_obinlog
 	Topic     string
 	ClusterID string
+	// buffer size of messages of the reader internal.
+	// default value 1.
+	// suggest only setting the buffer size of this if you want the reader to buffer
+	// message internal and leave `SaramaBufferSize` as 1 default.
+	MessageBufferSize int
+	// the sarama internal buffer size of messages.
+	SaramaBufferSize int
+}
+
+func (c *Config) getSaramaBuffserSize() int {
+	if c.SaramaBufferSize > 0 {
+		return c.SaramaBufferSize
+	}
+
+	return 1
+}
+
+func (c *Config) getMessageBufferSize() int {
+	if c.MessageBufferSize > 0 {
+		return c.MessageBufferSize
+	}
+
+	return 1
 }
 
 func (c *Config) valid() error {
@@ -86,13 +109,16 @@ func NewReader(cfg *Config) (r *Reader, err error) {
 	r = &Reader{
 		cfg:       cfg,
 		stop:      make(chan struct{}),
-		msgs:      make(chan *Message, 1024),
+		msgs:      make(chan *Message, cfg.getMessageBufferSize()),
 		clusterID: cfg.ClusterID,
 	}
 
 	conf := sarama.NewConfig()
 	// set to 10 minutes to prevent i/o timeout when reading huge message
 	conf.Net.ReadTimeout = KafkaReadTimeout
+	if cfg.SaramaBufferSize > 0 {
+		conf.ChannelBufferSize = cfg.SaramaBufferSize
+	}
 
 	r.client, err = sarama.NewClient(r.cfg.KafkaAddr, conf)
 	if err != nil {
@@ -202,6 +228,5 @@ func (r *Reader) run() {
 				continue
 			}
 		}
-
 	}
 }
