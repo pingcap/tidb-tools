@@ -86,13 +86,13 @@ func (rs *RegionSplitter) Split(
 		return errors.Trace(err)
 	}
 	log.Info("splitting regions done, wait for scattering regions",
-		zap.Int("regions", len(scatterRegions)), zap.Duration("cost", time.Since(startTime)))
+		zap.Int("regions", len(scatterRegions)), zap.Duration("take", time.Since(startTime)))
 	startTime = time.Now()
 	for _, region := range scatterRegions {
 		rs.waitForScatterRegion(ctx, region)
 	}
 	log.Info("waiting for scattering regions done",
-		zap.Int("regions", len(scatterRegions)), zap.Duration("cost", time.Since(startTime)))
+		zap.Int("regions", len(scatterRegions)), zap.Duration("take", time.Since(startTime)))
 	return nil
 }
 
@@ -129,7 +129,7 @@ func newRangeTreeWithRewrite(ranges []Range, rewriteRules *RewriteRules) (*Range
 		rg.StartKey = replacePrefix(rg.StartKey, rewriteRules)
 		rg.EndKey = replacePrefix(rg.EndKey, rewriteRules)
 		if out := rangeTree.InsertRange(rg); out != nil {
-			return nil, errors.Errorf("ranges overlapped: %v, %v", out.(*Range), rg)
+			return nil, errors.Errorf("ranges overlapped: %v, %v", out.(*Range).String(), rg.String())
 		}
 	}
 	return rangeTree, nil
