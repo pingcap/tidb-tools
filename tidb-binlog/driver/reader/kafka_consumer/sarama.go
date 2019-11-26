@@ -86,7 +86,7 @@ func (s *Sarama) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg, 
 				zap.Error(emsg.Err))
 			continue
 
-		case kmsg, ok:= <-partitionConsumer.Messages():
+		case kmsg, ok := <-partitionConsumer.Messages():
 			if !ok {
 				log.Info("no message from partition consumer")
 				time.Sleep(time.Second)

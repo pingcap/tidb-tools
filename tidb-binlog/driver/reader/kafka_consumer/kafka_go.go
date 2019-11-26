@@ -80,7 +80,7 @@ func (k *KafkaGO) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg,
 				log.Warn("kafka-go consume from offset failed",
 					zap.Int64("offset", k.client.Offset()),
 					zap.Error(err))
-				return errors.Trace(err)
+				continue
 			}
 			msg := &KafkaMsg{
 				Value:  kmsg.Value,
