@@ -56,7 +56,7 @@ var (
 	ErrVersionNotFound = errors.New("can't get the database's version")
 
 	// ErrNoData means no data in table
-	ErrNoData = errors.New("no data found")
+	ErrNoData = errors.New("no data found in table")
 )
 
 // DBConfig is database configuration.

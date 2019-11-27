@@ -115,7 +115,7 @@ func (r *Table) RemoveRule(rule *TableRule) error {
 
 	err := r.Remove(rule.SchemaPattern, rule.TablePattern)
 	if err != nil {
-		return errors.Annotatef(err, "remove rule %+v", rule)
+		return errors.Annotatef(err, "remove rule %+v from table router", rule)
 	}
 
 	return nil
@@ -155,7 +155,7 @@ func (r *Table) Route(schema, table string) (string, string, error) {
 	)
 	if len(table) == 0 || len(tableRules) == 0 {
 		if len(schemaRules) > 1 {
-			return "", "", errors.NotSupportedf("route %s/%s to rule set(%d)", schema, table, len(schemaRules))
+			return "", "", errors.NotSupportedf("`%s`.`%s` matches %d route rules which is more than one. It's", schema, table, len(schemaRules))
 		}
 
 		if len(schemaRules) == 1 {
@@ -163,7 +163,7 @@ func (r *Table) Route(schema, table string) (string, string, error) {
 		}
 	} else {
 		if len(tableRules) > 1 {
-			return "", "", errors.NotSupportedf("route %s/%s to rule set(%d)", schema, table, len(tableRules))
+			return "", "", errors.NotSupportedf("`%s`.`%s` matches %d route rules which is more than one. It's", schema, table, len(tableRules))
 		}
 
 		targetSchema, targetTable = tableRules[0].TargetSchema, tableRules[0].TargetTable
