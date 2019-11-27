@@ -100,7 +100,7 @@ func seekOffset(topic string, partition int32, start int64, end int64, ts int64,
 		} else if midTS > ts {
 			end = mid
 		} else {
-			return mid, nil
+			return mid + 1, nil
 		}
 	}
 
