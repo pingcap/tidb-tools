@@ -87,6 +87,6 @@ func NewConsumer(cfg *KafkaConfig) (Consumer, error) {
 	case kafkaGOType:
 		return NewKafkaGoConsumer(cfg)
 	default:
-		return nil, errors.Errorf("Not support client:%s for now, please try sarama/kafka-go", cfg.ClientType)
+		return nil, errors.Errorf("Unsupported client:%s for now, please try sarama/kafka-go", cfg.ClientType)
 	}
 }
