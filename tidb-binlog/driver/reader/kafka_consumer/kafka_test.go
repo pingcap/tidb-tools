@@ -127,7 +127,7 @@ func (to *testOffsetSuite) TestSaramaOffset(c *C) {
 		30: 0,
 	}
 
-	keys := make([]int64, 0)
+	keys := make([]int64, 0, len(testPoss))
 	for k := range testPoss {
 		keys = append(keys, k)
 	}
