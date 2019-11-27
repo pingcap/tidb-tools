@@ -69,6 +69,11 @@ func (e *Client) Close() error {
 	return nil
 }
 
+// GetClient returns client
+func (e *Client) GetClient() *clientv3.Client {
+	return e.client
+}
+
 // Create guarantees to set a key = value with some options(like ttl)
 func (e *Client) Create(ctx context.Context, key string, val string, opts []clientv3.OpOption) (int64, error) {
 	key = keyWithPrefix(e.rootPath, key)
