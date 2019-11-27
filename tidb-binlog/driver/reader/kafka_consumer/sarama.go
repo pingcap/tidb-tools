@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	saramaType = "sarama"
+	SaramaType = "sarama"
 )
 
 type Sarama struct {
@@ -71,32 +71,32 @@ func (s *Sarama) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg, 
 		return errors.Trace(err)
 
 	}
-	defer partitionConsumer.Close()
+	defer partitionConsumer.AsyncClose()
 
 	for {
 		select {
 		case <-done:
-			log.Info("finish consumer")
+			log.Info("consuming process is done")
 			return nil
 
 		case emsg := <-partitionConsumer.Errors():
 			log.Error("consume partitionConsumer failed:",
 				zap.String("topic", emsg.Topic),
-				zap.Int32("partitiong", emsg.Partition),
+				zap.Int32("partition", emsg.Partition),
 				zap.Error(emsg.Err))
 			continue
 
-		case kmsg, ok := <-partitionConsumer.Messages():
-			if !ok {
-				log.Info("no message from partition consumer")
-				time.Sleep(time.Second)
-				continue
-			}
+		case kmsg := <-partitionConsumer.Messages():
 			msg := &KafkaMsg{
 				Value:  kmsg.Value,
 				Offset: kmsg.Offset,
 			}
-			consumerChan <- msg
+			select {
+			case consumerChan <- msg:
+			case <-done:
+				log.Info("consuming process is done")
+				return nil
+			}
 		}
 	}
 }
@@ -251,7 +251,7 @@ func (s *Sarama) getTSAtOffset(topic string, partition int32, offset int64) (ts 
 
 // ConsumerType implements kafka.Consumer.Consumer.Type
 func (s *Sarama) ConsumerType() string {
-	return saramaType
+	return SaramaType
 }
 
 // Close implements kafka.Consumer.Close
