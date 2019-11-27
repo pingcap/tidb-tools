@@ -55,9 +55,9 @@ func (rs *RegionSplitter) Split(
 	onSplit OnSplitFunc,
 ) error {
 	startTime := time.Now()
-	rangeTree, ok := newRangeTreeWithRewrite(ranges, rewriteRules)
-	if !ok {
-		return errors.Errorf("ranges overlapped: %v", ranges)
+	rangeTree, err := newRangeTreeWithRewrite(ranges, rewriteRules)
+	if err != nil {
+		return errors.Trace(err)
 	}
 	scatterRegions, err := rs.splitByRewriteRules(
 		ctx, rewriteRules.Data, onSplit)
@@ -86,13 +86,13 @@ func (rs *RegionSplitter) Split(
 		return errors.Trace(err)
 	}
 	log.Info("splitting regions done, wait for scattering regions",
-		zap.Int("regions", len(scatterRegions)), zap.Duration("cost", time.Since(startTime)))
+		zap.Int("regions", len(scatterRegions)), zap.Duration("take", time.Since(startTime)))
 	startTime = time.Now()
 	for _, region := range scatterRegions {
 		rs.waitForScatterRegion(ctx, region)
 	}
 	log.Info("waiting for scattering regions done",
-		zap.Int("regions", len(scatterRegions)), zap.Duration("cost", time.Since(startTime)))
+		zap.Int("regions", len(scatterRegions)), zap.Duration("take", time.Since(startTime)))
 	return nil
 }
 
@@ -114,7 +114,7 @@ func (rs *RegionSplitter) splitByRewriteRules(
 
 		newRegion, err := rs.maybeSplitRegion(ctx, &rg)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, err
 		}
 		if newRegion != nil {
 			scatterRegions = append(scatterRegions, newRegion)
@@ -123,16 +123,16 @@ func (rs *RegionSplitter) splitByRewriteRules(
 	return scatterRegions, nil
 }
 
-func newRangeTreeWithRewrite(ranges []Range, rewriteRules *RewriteRules) (*RangeTree, bool) {
+func newRangeTreeWithRewrite(ranges []Range, rewriteRules *RewriteRules) (*RangeTree, error) {
 	rangeTree := NewRangeTree()
 	for _, rg := range ranges {
 		rg.StartKey = replacePrefix(rg.StartKey, rewriteRules)
 		rg.EndKey = replacePrefix(rg.EndKey, rewriteRules)
-		if !rangeTree.InsertRange(rg) {
-			return nil, false
+		if out := rangeTree.InsertRange(rg); out != nil {
+			return nil, errors.Errorf("ranges overlapped: %v, %v", out.(*Range).String(), rg.String())
 		}
 	}
-	return rangeTree, true
+	return rangeTree, nil
 }
 
 func (rs *RegionSplitter) hasRegion(ctx context.Context, regionID uint64) (bool, error) {
@@ -203,7 +203,7 @@ func (rs *RegionSplitter) maybeSplitRegion(ctx context.Context, r *Range) (*Regi
 	interval := SplitRetryInterval
 	var err error
 	for i := 0; i < SplitRetryTimes; i++ {
-		if i > 0 {
+		if i > SplitRetryTimes/2 {
 			log.Warn("split region failed, retry it", zap.Error(err), zap.Reflect("key", r.StartKey))
 		}
 		var regionInfo *RegionInfo
@@ -231,12 +231,12 @@ func (rs *RegionSplitter) maybeSplitRegion(ctx context.Context, r *Range) (*Regi
 func (rs *RegionSplitter) splitAndScatterRegion(ctx context.Context, regionInfo *RegionInfo, key []byte) (*RegionInfo, error) {
 	newRegion, err := rs.client.SplitRegion(ctx, regionInfo, key)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	// Wait for a while until the region successfully splits.
 	err = rs.waitForSplit(ctx, newRegion.Region.GetId())
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
 	}
 	return newRegion, rs.client.ScatterRegion(ctx, regionInfo)
 }
@@ -261,13 +261,14 @@ func replacePrefix(s []byte, rewriteRules *RewriteRules) []byte {
 	// We should search the dataRules firstly.
 	for _, rule := range rewriteRules.Data {
 		if bytes.HasPrefix(s, rule.GetOldKeyPrefix()) {
-			return append(rule.GetNewKeyPrefix(), s[len(rule.GetOldKeyPrefix()):]...)
+			return append(append([]byte{}, rule.GetNewKeyPrefix()...), s[len(rule.GetOldKeyPrefix()):]...)
 		}
 	}
 	for _, rule := range rewriteRules.Table {
 		if bytes.HasPrefix(s, rule.GetOldKeyPrefix()) {
-			return append(rule.GetNewKeyPrefix(), s[len(rule.GetOldKeyPrefix()):]...)
+			return append(append([]byte{}, rule.GetNewKeyPrefix()...), s[len(rule.GetOldKeyPrefix()):]...)
 		}
 	}
+
 	return s
 }

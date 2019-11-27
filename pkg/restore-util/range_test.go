@@ -9,8 +9,8 @@ func TestRangeTreeNormal(t *testing.T) {
 	ranges := initRanges()
 	rangeTree := NewRangeTree()
 	for _, rg := range ranges {
-		if !rangeTree.InsertRange(rg) {
-			t.Fatalf("insert range failed")
+		if out := rangeTree.InsertRange(rg); out != nil {
+			t.Fatalf("insert range failed: %s %s", out.(*Range).String(), rg.String())
 		}
 	}
 	resRanges := make([]Range, 0)
@@ -45,10 +45,10 @@ func TestRangeOverlapped(t *testing.T) {
 		EndKey:   []byte("aag"),
 	}
 	rangeTree := NewRangeTree()
-	if !rangeTree.InsertRange(rg1) {
-		t.Fatalf("insert range failed")
+	if out := rangeTree.InsertRange(rg1); out != nil {
+		t.Fatalf("insert range failed: %s %s", out.(*Range).String(), rg1.String())
 	}
-	if rangeTree.InsertRange(rg2) {
-		t.Fatalf("overlapping not detected")
+	if out := rangeTree.InsertRange(rg2); out == nil {
+		t.Fatalf("overlapping not detected: %s %s", rg1.String(), rg2.String())
 	}
 }
