@@ -43,6 +43,13 @@ type Config struct {
 	ClientType string
 }
 
+func (c *Config) getClientType() string {
+	if len(c.ClientType) == 0 {
+		return kafka_consumer.SaramaType
+	}
+	return c.ClientType
+}
+
 func (c *Config) getSaramaBuffserSize() int {
 	if c.SaramaBufferSize > 0 {
 		return c.SaramaBufferSize
@@ -106,7 +113,7 @@ func NewReader(cfg *Config) (r *Reader, err error) {
 
 	topic, partition := cfg.GetTopic()
 	r.client, err = kafka_consumer.NewConsumer(&kafka_consumer.KafkaConfig{
-		ClientType:       cfg.ClientType,
+		ClientType:       cfg.getClientType(),
 		Addr:             cfg.KafkaAddr,
 		Topic:            topic,
 		Partition:        partition,
@@ -169,13 +176,13 @@ func (r *Reader) run() {
 			case kmsg := <-consumerChan:
 				err := kafka_consumer.TransformMSG(r.client.ConsumerType(), kmsg)
 				if err != nil {
-					log.Warn("transform message failed", zap.Error(err))
+					log.Error("transform message failed", zap.Error(err))
 					continue
 				}
 				binlog := new(pb.Binlog)
 				err = binlog.Unmarshal(kmsg.Value)
 				if err != nil {
-					log.Warn("unmarshal binlog failed", zap.Error(err))
+					log.Error("unmarshal binlog failed", zap.Error(err))
 					continue
 				}
 
@@ -205,4 +212,5 @@ func (r *Reader) run() {
 			zap.Int64("offset", offset),
 			zap.Error(err))
 	}
+	r.Close()
 }

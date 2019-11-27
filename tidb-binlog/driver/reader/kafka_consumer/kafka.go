@@ -71,9 +71,9 @@ func getTSFromMSG(consumerType string, msg *KafkaMsg) (ts int64, err error) {
 func TransformMSG(consumerType string, msg *KafkaMsg) error {
 	// TODO extract msg from kafka msg
 	switch consumerType {
-	case saramaType:
+	case SaramaType:
 		// parse msg to (*sarama.ConsumerMessage) then extract
-	case kafkaGOType:
+	case KafkaGOType:
 		// parse msg to (*kafka.Message) then extract
 	default:
 	}
@@ -82,9 +82,9 @@ func TransformMSG(consumerType string, msg *KafkaMsg) error {
 
 func NewConsumer(cfg *KafkaConfig) (Consumer, error) {
 	switch strings.ToLower(cfg.ClientType) {
-	case saramaType:
+	case SaramaType:
 		return NewSaramaConsumer(cfg)
-	case kafkaGOType:
+	case KafkaGOType:
 		return NewKafkaGoConsumer(cfg)
 	default:
 		return nil, errors.Errorf("Unsupported client:%s for now, please try sarama/kafka-go", cfg.ClientType)

@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	kafkaGOType = "kafka-go"
+	KafkaGOType = "kafka-go"
 )
 
 type KafkaGO struct {
@@ -36,13 +36,24 @@ type KafkaGO struct {
 	cancel context.CancelFunc
 }
 
+// TODO reconnect *kafka.Conn if broker is down
+func newConn(ctx context.Context, cfg *KafkaConfig) (conn *kafka.Conn, err error) {
+	for _, addr := range cfg.Addr {
+		conn, err = kafka.DialLeader(ctx, "tcp", addr, cfg.Topic, int(cfg.Partition))
+		if err == nil {
+			return
+		}
+	}
+	return
+}
+
 // NewKafkaGoConsumer return kafka-go consumer on specify topic and partition
 func NewKafkaGoConsumer(cfg *KafkaConfig) (Consumer, error) {
 	if len(cfg.Addr) == 0 {
 		return nil, errors.New("no available kafka address")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	conn, err := kafka.DialLeader(ctx, "tcp", cfg.Addr[0], cfg.Topic, int(cfg.Partition))
+	conn, err := newConn(ctx, cfg)
 	if err != nil {
 		cancel()
 		return nil, errors.Trace(err)
@@ -52,8 +63,10 @@ func NewKafkaGoConsumer(cfg *KafkaConfig) (Consumer, error) {
 			Brokers:   cfg.Addr,
 			Topic:     cfg.Topic,
 			Partition: int(cfg.Partition),
-			MinBytes:  10e3, // 1KB
-			MaxBytes:  10e6, // 1MB
+			// MinBytes and MaxBytes define the size of response in fetch request
+			// if one message is large than MaxBytes, it will consume in several batches
+			MinBytes: 10e3, // 1KB
+			MaxBytes: 10e6, // 1MB
 		}),
 		conn:   conn,
 		ctx:    ctx,
@@ -63,7 +76,14 @@ func NewKafkaGoConsumer(cfg *KafkaConfig) (Consumer, error) {
 
 // ConsumerFromOffset implements Consumer.ConsumerFromOffset
 func (k *KafkaGO) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg, done <-chan struct{}) error {
-	err := k.client.SetOffset(offset)
+	earlyOffset, err := k.conn.ReadFirstOffset()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	if earlyOffset > offset {
+		return errors.Errorf("early offset %d in topic is greater than %d", earlyOffset, offset)
+	}
+	err = k.client.SetOffset(offset)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -71,6 +91,9 @@ func (k *KafkaGO) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg,
 		select {
 		case <-done:
 			log.Info("consuming process is done")
+			return nil
+		case <-k.ctx.Done():
+			log.Info("consuming process is canceled")
 			return nil
 		default:
 			ctx, cancel := context.WithTimeout(k.ctx, KafkaWaitTimeout)
@@ -86,7 +109,15 @@ func (k *KafkaGO) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg,
 				Value:  kmsg.Value,
 				Offset: kmsg.Offset,
 			}
-			consumerChan <- msg
+			select {
+			case <-k.ctx.Done():
+				log.Info("consuming process is canceled")
+				return nil
+			case <-done:
+				log.Info("consuming process is done")
+				return nil
+			case consumerChan <- msg:
+			}
 		}
 	}
 }
@@ -191,7 +222,7 @@ func (k *KafkaGO) getTSAtOffset(topic string, partition int32, offset int64) (ts
 		zap.Int32("partition", partition),
 		zap.Int64("offset", offset))
 
-	_, err = k.conn.Seek(offset, 1)
+	_, err = k.conn.Seek(offset, kafka.SeekAbsolute)
 	if err != nil {
 		err = errors.Trace(err)
 		return
@@ -216,7 +247,7 @@ func (k *KafkaGO) getTSAtOffset(topic string, partition int32, offset int64) (ts
 
 // ConsumerType implements Consumer.ConsumerType
 func (k *KafkaGO) ConsumerType() string {
-	return kafkaGOType
+	return KafkaGOType
 }
 
 // Close release resource of this consumer

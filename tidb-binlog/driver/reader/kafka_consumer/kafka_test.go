@@ -110,7 +110,7 @@ func (to *testOffsetSuite) TestSaramaOffset(c *C) {
 	defer to.deleteTopic(c, topic)
 
 	sc, err := NewConsumer(&KafkaConfig{
-		ClientType: saramaType,
+		ClientType: SaramaType,
 		Addr:       []string{to.addr},
 		Topic:      topic,
 		Partition:  0,
@@ -136,7 +136,7 @@ func (to *testOffsetSuite) TestSaramaOffset(c *C) {
 	})
 
 	for _, ts := range keys {
-		testPoss[ts], err = to.produceMessage(saramaType, ts, topic)
+		testPoss[ts], err = to.produceMessage(SaramaType, ts, topic)
 		c.Assert(err, IsNil)
 		c.Log("produce ", ts, " at ", testPoss[ts])
 	}
@@ -183,7 +183,7 @@ func (to *testOffsetSuite) TestSaramaConsumer(c *C) {
 
 	offset := int64(-1)
 	for _, ts := range keys {
-		testPoss[ts], err = to.produceMessage(saramaType, ts, topic)
+		testPoss[ts], err = to.produceMessage(SaramaType, ts, topic)
 		if offset == -1 {
 			offset = testPoss[ts]
 		}
@@ -193,7 +193,7 @@ func (to *testOffsetSuite) TestSaramaConsumer(c *C) {
 
 	c.Log("start consumer from", offset)
 	kc, err := NewConsumer(&KafkaConfig{
-		ClientType: saramaType,
+		ClientType: SaramaType,
 		Addr:       []string{to.addr},
 		Topic:      topic,
 		Partition:  0,
@@ -206,7 +206,7 @@ func (to *testOffsetSuite) TestSaramaConsumer(c *C) {
 	go func() {
 		for {
 			msg := <-consumerChan
-			ts, err := getTSFromMSG(saramaType, msg)
+			ts, err := getTSFromMSG(SaramaType, msg)
 			c.Assert(err, IsNil)
 			c.Assert(msg.Offset, Equals, testPoss[ts])
 			msgCnt++
@@ -233,7 +233,7 @@ func (to *testOffsetSuite) TestKafkaGoOffset(c *C) {
 	defer to.deleteTopic(c, topic)
 
 	kc, err := NewConsumer(&KafkaConfig{
-		ClientType: kafkaGOType,
+		ClientType: KafkaGOType,
 		Addr:       []string{to.addr},
 		Topic:      topic,
 		Partition:  0,
@@ -261,7 +261,7 @@ func (to *testOffsetSuite) TestKafkaGoOffset(c *C) {
 	})
 
 	for _, ts := range keys {
-		testPoss[ts], err = to.produceMessage(kafkaGOType, ts, topic)
+		testPoss[ts], err = to.produceMessage(KafkaGOType, ts, topic)
 		c.Assert(err, IsNil)
 		c.Log("produce ", ts, " at ", testPoss[ts])
 	}
@@ -312,7 +312,7 @@ func (to *testOffsetSuite) TestKafkaConsumer(c *C) {
 	offset := int64(-1)
 
 	for _, ts := range keys {
-		testPoss[ts], err = to.produceMessage(kafkaGOType, ts, topic)
+		testPoss[ts], err = to.produceMessage(KafkaGOType, ts, topic)
 		if offset == -1 {
 			offset = testPoss[ts]
 		}
@@ -323,7 +323,7 @@ func (to *testOffsetSuite) TestKafkaConsumer(c *C) {
 
 	c.Log("start consumer from", offset)
 	kc, err := NewConsumer(&KafkaConfig{
-		ClientType: kafkaGOType,
+		ClientType: KafkaGOType,
 		Addr:       []string{to.addr},
 		Topic:      topic,
 		Partition:  0,
@@ -337,7 +337,7 @@ func (to *testOffsetSuite) TestKafkaConsumer(c *C) {
 	go func() {
 		for {
 			msg := <-consumerChan
-			ts, err := getTSFromMSG(saramaType, msg)
+			ts, err := getTSFromMSG(SaramaType, msg)
 			c.Assert(err, IsNil)
 			c.Assert(msg.Offset, Equals, testPoss[ts])
 			msgCnt++
@@ -362,7 +362,7 @@ func (to *testOffsetSuite) produceMessage(clientType string, ts int64, topic str
 	}
 
 	switch clientType {
-	case saramaType:
+	case SaramaType:
 		msg := &sarama.ProducerMessage{
 			Topic:     topic,
 			Partition: int32(0),
@@ -374,7 +374,7 @@ func (to *testOffsetSuite) produceMessage(clientType string, ts int64, topic str
 			return
 		}
 
-	case kafkaGOType:
+	case KafkaGOType:
 		_, _, offset, _, err = to.kafkaProducer.WriteCompressedMessagesAt(nil, kafka.Message{
 			Value: data,
 		})
