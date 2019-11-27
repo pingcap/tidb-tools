@@ -158,7 +158,7 @@ func (k *KafkaGO) seekOffsets(topic string, partitions []int32, pos int64) ([]in
 			zap.Int64("end", end),
 			zap.Int64("target ts", pos))
 
-		offset, err := k.seekOffset(topic, partition, start, end-1, pos)
+		offset, err := seekOffset(topic, partition, start, end-1, pos, k.getTSAtOffset)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -168,54 +168,6 @@ func (k *KafkaGO) seekOffsets(topic string, partitions []int32, pos int64) ([]in
 	}
 
 	return offsets, nil
-}
-
-func (k *KafkaGO) seekOffset(topic string, partition int32, start int64, end int64, ts int64) (offset int64, err error) {
-	startTS, err := k.getTSAtOffset(topic, partition, start)
-	if err != nil {
-		err = errors.Trace(err)
-		return
-	}
-
-	if ts < startTS {
-		log.Warn("given ts is smaller than oldest message's ts, some binlogs may lose", zap.Int64("given ts", ts), zap.Int64("oldest ts", startTS))
-		offset = start
-		return
-	} else if ts == startTS {
-		offset = start + 1
-		return
-	}
-
-	for start < end {
-		mid := (end-start)/2 + start
-		var midTS int64
-		midTS, err = k.getTSAtOffset(topic, partition, mid)
-		if err != nil {
-			err = errors.Trace(err)
-			return
-		}
-
-		if midTS < ts {
-			start = mid + 1
-		} else if midTS > ts {
-			end = mid
-		} else {
-			return mid, nil
-		}
-	}
-
-	var endTS int64
-	endTS, err = k.getTSAtOffset(topic, partition, end)
-	if err != nil {
-		err = errors.Trace(err)
-		return
-	}
-
-	if endTS <= ts {
-		return end + 1, nil
-	}
-
-	return end, nil
 }
 
 func (k *KafkaGO) getTSAtOffset(topic string, partition int32, offset int64) (ts int64, err error) {

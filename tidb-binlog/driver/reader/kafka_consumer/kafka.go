@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
+	"go.uber.org/zap"
 
 	pb "github.com/pingcap/tidb-tools/tidb-binlog/slave_binlog_proto/go-binlog"
 )
@@ -66,6 +68,54 @@ func getTSFromMSG(consumerType string, msg *KafkaMsg) (ts int64, err error) {
 		return
 	}
 	return binlog.CommitTs, nil
+}
+
+func seekOffset(topic string, partition int32, start int64, end int64, ts int64, getTS func(string, int32, int64) (int64, error)) (offset int64, err error) {
+	startTS, err := getTS(topic, partition, start)
+	if err != nil {
+		err = errors.Trace(err)
+		return
+	}
+
+	if ts < startTS {
+		log.Warn("given ts is smaller than oldest message's ts, some binlogs may lose", zap.Int64("given ts", ts), zap.Int64("oldest ts", startTS))
+		offset = start
+		return
+	} else if ts == startTS {
+		offset = start + 1
+		return
+	}
+
+	for start < end {
+		mid := (end-start)/2 + start
+		var midTS int64
+		midTS, err = getTS(topic, partition, mid)
+		if err != nil {
+			err = errors.Trace(err)
+			return
+		}
+
+		if midTS < ts {
+			start = mid + 1
+		} else if midTS > ts {
+			end = mid
+		} else {
+			return mid, nil
+		}
+	}
+
+	var endTS int64
+	endTS, err = getTS(topic, partition, end)
+	if err != nil {
+		err = errors.Trace(err)
+		return
+	}
+
+	if endTS <= ts {
+		return end + 1, nil
+	}
+
+	return end, nil
 }
 
 func TransformMSG(consumerType string, msg *KafkaMsg) error {

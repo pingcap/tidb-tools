@@ -142,10 +142,12 @@ func (to *testOffsetSuite) TestSaramaOffset(c *C) {
 	}
 
 	var testCases = map[int64]int64{
+		0:  testPoss[10],
 		1:  testPoss[10],
 		10: testPoss[20],
 		15: testPoss[20],
 		20: testPoss[30],
+		30: testPoss[30] + 1,
 		35: testPoss[30] + 1,
 	}
 	for ts, offset := range testCases {
@@ -267,10 +269,12 @@ func (to *testOffsetSuite) TestKafkaGoOffset(c *C) {
 	}
 
 	var testCases = map[int64]int64{
+		0:  testPoss[10],
 		1:  testPoss[10],
 		10: testPoss[20],
 		15: testPoss[20],
 		20: testPoss[30],
+		30: testPoss[30] + 1,
 		35: testPoss[30] + 1,
 	}
 	for ts, offset := range testCases {

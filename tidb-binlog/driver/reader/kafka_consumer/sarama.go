@@ -138,7 +138,7 @@ func (s *Sarama) seekOffsets(topic string, partitions []int32, pos int64) ([]int
 			zap.Int64("end", end),
 			zap.Int64("target ts", pos))
 
-		offset, err := s.seekOffset(topic, partition, start, end-1, pos)
+		offset, err := seekOffset(topic, partition, start, end-1, pos, s.getTSAtOffset)
 		if err != nil {
 			err = errors.Trace(err)
 			return nil, err
@@ -149,54 +149,6 @@ func (s *Sarama) seekOffsets(topic string, partitions []int32, pos int64) ([]int
 	}
 
 	return offsets, nil
-}
-
-func (s *Sarama) seekOffset(topic string, partition int32, start int64, end int64, ts int64) (offset int64, err error) {
-	startTS, err := s.getTSAtOffset(topic, partition, start)
-	if err != nil {
-		err = errors.Trace(err)
-		return
-	}
-
-	if ts < startTS {
-		log.Warn("given ts is smaller than oldest message's ts, some binlogs may lose", zap.Int64("given ts", ts), zap.Int64("oldest ts", startTS))
-		offset = start
-		return
-	} else if ts == startTS {
-		offset = start + 1
-		return
-	}
-
-	for start < end {
-		mid := (end-start)/2 + start
-		var midTS int64
-		midTS, err = s.getTSAtOffset(topic, partition, mid)
-		if err != nil {
-			err = errors.Trace(err)
-			return
-		}
-
-		if midTS < ts {
-			start = mid + 1
-		} else if midTS > ts {
-			end = mid
-		} else {
-			return mid, nil
-		}
-	}
-
-	var endTS int64
-	endTS, err = s.getTSAtOffset(topic, partition, end)
-	if err != nil {
-		err = errors.Trace(err)
-		return
-	}
-
-	if endTS <= ts {
-		return end + 1, nil
-	}
-
-	return end, nil
 }
 
 func (s *Sarama) getTSAtOffset(topic string, partition int32, offset int64) (ts int64, err error) {
@@ -258,5 +210,6 @@ func (s *Sarama) ConsumerType() string {
 
 // Close implements kafka.Consumer.Close
 func (s *Sarama) Close() {
+	s.consumer.Close()
 	s.client.Close()
 }
