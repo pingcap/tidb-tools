@@ -176,10 +176,12 @@ func (s *Sarama) seekOffset(topic string, partition int32, start int64, end int6
 			return
 		}
 
-		if midTS <= ts {
+		if midTS < ts {
 			start = mid + 1
-		} else {
+		} else if midTS > ts {
 			end = mid
+		} else {
+			return mid, nil
 		}
 	}
 
