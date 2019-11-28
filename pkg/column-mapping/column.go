@@ -335,13 +335,13 @@ func (m *Mapping) queryColumnInfo(schema, table string, columns []string) (*mapp
 	var rule *Rule
 	if len(table) == 0 || len(tableRules) == 0 {
 		if len(schemaRules) != 1 {
-			return nil, errors.NotSupportedf("`%s`.`%s` matches %d route rules which is more than one. It's", schema, table, len(schemaRules))
+			return nil, errors.NotSupportedf("`%s`.`%s` matches %d schema column mapping rules which should be one. It's", schema, table, len(schemaRules))
 		}
 
 		rule = schemaRules[0]
 	} else {
 		if len(tableRules) != 1 {
-			return nil, errors.NotSupportedf("`%s`.`%s` matches %d route rules which is more than one. It's", schema, table, len(tableRules))
+			return nil, errors.NotSupportedf("`%s`.`%s` matches %d table column mapping rules which should be one. It's", schema, table, len(tableRules))
 		}
 
 		rule = tableRules[0]
