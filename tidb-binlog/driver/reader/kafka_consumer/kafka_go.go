@@ -24,6 +24,8 @@ import (
 
 const (
 	KafkaGOType = "kafka-go"
+	fetchMinBytes = 10e3
+	fetchMaxBytes = 10e6
 )
 
 type KafkaGO struct {
@@ -65,8 +67,8 @@ func NewKafkaGoConsumer(cfg *KafkaConfig) (Consumer, error) {
 			Partition: int(cfg.Partition),
 			// MinBytes and MaxBytes define the size of response in fetch request
 			// if one message is large than MaxBytes, it will consume in several batches
-			MinBytes: 10e3, // 1KB
-			MaxBytes: 10e6, // 1MB
+			MinBytes: fetchMinBytes, // 1KB
+			MaxBytes: fetchMaxBytes, // 1MB
 		}),
 		conn:   conn,
 		ctx:    ctx,
@@ -182,7 +184,7 @@ func (k *KafkaGO) getTSAtOffset(topic string, partition int32, offset int64) (ts
 		return
 	}
 
-	msg, err := k.conn.ReadMessage(10e6)
+	msg, err := k.conn.ReadMessage(fetchMaxBytes)
 	ts, err = getTSFromMSG(k.ConsumerType(), &KafkaMsg{
 		Offset: msg.Offset,
 		Value:  msg.Value,
