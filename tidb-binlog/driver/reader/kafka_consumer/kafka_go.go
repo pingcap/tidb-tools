@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	KafkaGOType = "kafka-go"
+	KafkaGOType   = "kafka-go"
 	fetchMinBytes = 10e3
 	fetchMaxBytes = 10e6
 )
@@ -77,7 +77,7 @@ func NewKafkaGoConsumer(cfg *KafkaConfig) (Consumer, error) {
 }
 
 // ConsumerFromOffset implements Consumer.ConsumerFromOffset
-func (k *KafkaGO) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg, done <-chan struct{}) error {
+func (k *KafkaGO) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg) error {
 	earlyOffset, err := k.conn.ReadFirstOffset()
 	if err != nil {
 		return errors.Trace(err)
@@ -91,9 +91,6 @@ func (k *KafkaGO) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg,
 	}
 	for {
 		select {
-		case <-done:
-			log.Info("consuming process is done")
-			return nil
 		case <-k.ctx.Done():
 			log.Info("consuming process is canceled")
 			return nil
@@ -114,9 +111,6 @@ func (k *KafkaGO) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg,
 			select {
 			case <-k.ctx.Done():
 				log.Info("consuming process is canceled")
-				return nil
-			case <-done:
-				log.Info("consuming process is done")
 				return nil
 			case consumerChan <- msg:
 			}

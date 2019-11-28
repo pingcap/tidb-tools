@@ -27,10 +27,11 @@ const (
 )
 
 type Sarama struct {
-	client    sarama.Client
-	consumer  sarama.Consumer
-	topic     string
-	partition int32
+	client            sarama.Client
+	consumer          sarama.Consumer
+	partitionConsumer sarama.PartitionConsumer
+	topic             string
+	partition         int32
 }
 
 func NewSaramaConsumer(cfg *KafkaConfig) (Consumer, error) {
@@ -61,42 +62,40 @@ func NewSaramaConsumer(cfg *KafkaConfig) (Consumer, error) {
 }
 
 // ConsumeFromOffset implements kafka.Consumer.ConsumerFromOffset
-func (s *Sarama) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg, done <-chan struct{}) error {
+func (s *Sarama) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg) error {
+	var err error
 	log.Info("start consumer on",
 		zap.String("topic", s.topic),
 		zap.Int32("partition", s.partition),
 		zap.Int64("offset", offset))
-	partitionConsumer, err := s.consumer.ConsumePartition(s.topic, s.partition, offset)
+	s.partitionConsumer, err = s.consumer.ConsumePartition(s.topic, s.partition, offset)
 	if err != nil {
 		return errors.Trace(err)
-
 	}
-	defer partitionConsumer.AsyncClose()
 
 	for {
 		select {
-		case <-done:
-			log.Info("consuming process is done")
-			return nil
-
-		case emsg := <-partitionConsumer.Errors():
+		case emsg, ok := <-s.partitionConsumer.Errors():
+			if !ok {
+				log.Info("partitionConsumer closed...")
+				return nil
+			}
 			log.Error("consume partitionConsumer failed:",
 				zap.String("topic", emsg.Topic),
 				zap.Int32("partition", emsg.Partition),
 				zap.Error(emsg.Err))
 			continue
 
-		case kmsg := <-partitionConsumer.Messages():
+		case kmsg, ok := <-s.partitionConsumer.Messages():
+			if !ok {
+				log.Info("partitionConsumer closed...")
+				return nil
+			}
 			msg := &KafkaMsg{
 				Value:  kmsg.Value,
 				Offset: kmsg.Offset,
 			}
-			select {
-			case consumerChan <- msg:
-			case <-done:
-				log.Info("consuming process is done")
-				return nil
-			}
+			consumerChan <- msg
 		}
 	}
 }
@@ -212,4 +211,5 @@ func (s *Sarama) ConsumerType() string {
 func (s *Sarama) Close() {
 	s.consumer.Close()
 	s.client.Close()
+	s.partitionConsumer.AsyncClose()
 }

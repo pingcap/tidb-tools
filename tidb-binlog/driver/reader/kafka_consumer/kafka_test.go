@@ -203,7 +203,6 @@ func (to *testOffsetSuite) TestSaramaConsumer(c *C) {
 	c.Assert(err, IsNil)
 
 	consumerChan := make(chan *KafkaMsg, 1)
-	done := make(chan struct{})
 	msgCnt := 0
 	go func() {
 		for {
@@ -213,12 +212,12 @@ func (to *testOffsetSuite) TestSaramaConsumer(c *C) {
 			c.Assert(msg.Offset, Equals, testPoss[ts])
 			msgCnt++
 			if msgCnt >= len(testPoss) {
-				close(done)
+				kc.Close()
 				break
 			}
 		}
 	}()
-	err = kc.ConsumeFromOffset(offset, consumerChan, done)
+	err = kc.ConsumeFromOffset(offset, consumerChan)
 	c.Assert(err, IsNil)
 	c.Assert(testPoss, HasLen, msgCnt)
 }
@@ -335,7 +334,6 @@ func (to *testOffsetSuite) TestKafkaConsumer(c *C) {
 	c.Assert(err, IsNil)
 
 	consumerChan := make(chan *KafkaMsg, 1)
-	done := make(chan struct{})
 
 	msgCnt := 0
 	go func() {
@@ -346,12 +344,12 @@ func (to *testOffsetSuite) TestKafkaConsumer(c *C) {
 			c.Assert(msg.Offset, Equals, testPoss[ts])
 			msgCnt++
 			if msgCnt >= len(testPoss) {
-				close(done)
+				kc.Close()
 				break
 			}
 		}
 	}()
-	err = kc.ConsumeFromOffset(offset, consumerChan, done)
+	err = kc.ConsumeFromOffset(offset, consumerChan)
 	c.Assert(err, IsNil)
 	c.Assert(testPoss, HasLen, msgCnt)
 }
