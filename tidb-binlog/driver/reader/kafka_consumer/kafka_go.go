@@ -15,6 +15,7 @@ package kafka_consumer
 
 import (
 	"context"
+	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -102,6 +103,7 @@ func (k *KafkaGO) ConsumeFromOffset(offset int64, consumerChan chan<- *KafkaMsg)
 				log.Warn("kafka-go consume from offset failed",
 					zap.Int64("offset", k.client.Offset()),
 					zap.Error(err))
+				time.Sleep(time.Second)
 				continue
 			}
 			msg := &KafkaMsg{
