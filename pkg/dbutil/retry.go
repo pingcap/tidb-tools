@@ -54,7 +54,9 @@ func IsRetryableError(err error) bool {
 		return true // retryable error in MySQL
 	case tmysql.ErrPDServerTimeout,
 		tmysql.ErrTiKVServerBusy,
-		tmysql.ErrResolveLockTimeout:
+		tmysql.ErrResolveLockTimeout,
+		tmysql.ErrInfoSchemaExpired,
+		tmysql.ErrInfoSchemaChanged:
 		return true // retryable error in TiDB
 	case tmysql.ErrUnknown: // the old version of TiDB uses `1105` frequently, this should be compatible.
 		for _, msg := range Retryable1105Msgs {
