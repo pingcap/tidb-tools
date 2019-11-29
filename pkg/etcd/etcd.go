@@ -16,6 +16,7 @@ package etcd
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"path"
 	"strings"
 	"time"
@@ -53,6 +54,11 @@ type Operation struct {
 	WithPrefix bool
 
 	Opts []clientv3.OpOption
+}
+
+// String implements Stringer interface.
+func (o *Operation) String() string {
+	return fmt.Sprintf("{Tp: %s, Key: %s, Value: %s, TTL: %d, WithPrefix: %v, Opts: %v}", o.Tp, o.Key, o.Value, o.TTL, o.WithPrefix, o.Opts)
 }
 
 // Client is a wrapped etcd client that support some simple method
@@ -243,7 +249,8 @@ func (e *Client) Watch(ctx context.Context, prefix string, revision int64) clien
 }
 
 // DoTxn does some operation in one transaction.
-func (e *Client) DoTxn(ctx context.Context, operations []*Operation) error {
+// Note: should only have one opereration for one key, otherwise will get duplicate key error.
+func (e *Client) DoTxn(ctx context.Context, operations []*Operation) (int64, error) {
 	cmps := make([]clientv3.Cmp, 0, len(operations))
 	ops := make([]clientv3.Op, 0, len(operations))
 
@@ -253,9 +260,8 @@ func (e *Client) DoTxn(ctx context.Context, operations []*Operation) error {
 		if operation.TTL > 0 {
 			lcr, err := e.client.Lease.Grant(ctx, operation.TTL)
 			if err != nil {
-				return errors.Trace(err)
+				return 0, errors.Trace(err)
 			}
-
 			operation.Opts = append(operation.Opts, clientv3.WithLease(lcr.ID))
 		}
 
@@ -272,6 +278,8 @@ func (e *Client) DoTxn(ctx context.Context, operations []*Operation) error {
 			ops = append(ops, clientv3.OpPut(operation.Key, operation.Value, operation.Opts...))
 		case DeleteOp:
 			ops = append(ops, clientv3.OpDelete(operation.Key, operation.Opts...))
+		default:
+			return 0, errors.Errorf("unknown operation type %s", operation.Tp)
 		}
 	}
 
@@ -281,14 +289,14 @@ func (e *Client) DoTxn(ctx context.Context, operations []*Operation) error {
 		ops...,
 	).Commit()
 	if err != nil {
-		return errors.Trace(err)
+		return 0, errors.Trace(err)
 	}
 
 	if !txnResp.Succeeded {
-		return errors.Errorf("do transaction failed, operations: %v", operations)
+		return 0, errors.Errorf("do transaction failed, operations: %+v", operations)
 	}
 
-	return nil
+	return txnResp.Header.Revision, nil
 }
 
 func parseToDirTree(root *Node, path string) *Node {

@@ -193,6 +193,131 @@ func (t *testEtcdSuite) TestDelete(c *C) {
 	c.Assert(root.Childs, HasLen, 0)
 }
 
+func (t *testEtcdSuite) TestDoTxn(c *C) {
+	// case1: create two keys in one transaction
+	ops := []*Operation{
+		{
+			Tp:    CreateOp,
+			Key:   "test1",
+			Value: "1",
+		}, {
+			Tp:    CreateOp,
+			Key:   "test2",
+			Value: "2",
+		},
+	}
+	revision, err := etcdCli.DoTxn(context.Background(), ops)
+	c.Assert(err, IsNil)
+
+	value1, revision1, err := etcdCli.Get(context.Background(), "test1")
+	c.Assert(err, IsNil)
+	c.Assert(string(value1), Equals, "1")
+	c.Assert(revision1, Equals, revision)
+
+	value2, revision2, err := etcdCli.Get(context.Background(), "test2")
+	c.Assert(err, IsNil)
+	c.Assert(string(value2), Equals, "2")
+	c.Assert(revision2, Equals, revision)
+
+	// case2: delete, update and create in one transaction
+	ops = []*Operation{
+		{
+			Tp:  DeleteOp,
+			Key: "test1",
+		}, {
+			Tp:    UpdateOp,
+			Key:   "test2",
+			Value: "22",
+		}, {
+			Tp:    CreateOp,
+			Key:   "test3",
+			Value: "3",
+		},
+	}
+
+	revision, err = etcdCli.DoTxn(context.Background(), ops)
+	c.Assert(err, IsNil)
+
+	value1, _, err = etcdCli.Get(context.Background(), "test1")
+	c.Assert(err, ErrorMatches, ".* not found")
+
+	value2, revision2, err = etcdCli.Get(context.Background(), "test2")
+	c.Assert(err, IsNil)
+	c.Assert(string(value2), Equals, "22")
+	c.Assert(revision2, Equals, revision)
+
+	value3, revision3, err := etcdCli.Get(context.Background(), "test3")
+	c.Assert(err, IsNil)
+	c.Assert(string(value3), Equals, "3")
+	c.Assert(revision3, Equals, revision)
+
+	// case3: create keys with TTL
+	ops = []*Operation{
+		{
+			Tp:    CreateOp,
+			Key:   "test4",
+			Value: "4",
+			TTL:   1,
+		}, {
+			Tp:    CreateOp,
+			Key:   "test5",
+			Value: "5",
+		},
+	}
+	revision, err = etcdCli.DoTxn(context.Background(), ops)
+	c.Assert(err, IsNil)
+
+	value4, revision4, err := etcdCli.Get(context.Background(), "test4")
+	c.Assert(err, IsNil)
+	c.Assert(string(value4), Equals, "4")
+	c.Assert(revision4, Equals, revision)
+
+	value5, revision5, err := etcdCli.Get(context.Background(), "test5")
+	c.Assert(err, IsNil)
+	c.Assert(string(value5), Equals, "5")
+	c.Assert(revision5, Equals, revision)
+
+	// sleep 2 seconds and this key will be deleted
+	time.Sleep(2 * time.Second)
+	_, _, err = etcdCli.Get(context.Background(), "test4")
+	c.Assert(err, ErrorMatches, ".* not found")
+
+	// case4: do transaction failed because key is deleted, so can't update
+	ops = []*Operation{
+		{
+			Tp:    CreateOp,
+			Key:   "test4",
+			Value: "4",
+		}, {
+			Tp:    UpdateOp, // key test1 is deleted, so will update failed
+			Key:   "test1",
+			Value: "11",
+		},
+	}
+
+	revision, err = etcdCli.DoTxn(context.Background(), ops)
+	c.Assert(err, ErrorMatches, "do transaction failed.*")
+
+	_, _, err = etcdCli.Get(context.Background(), "test4")
+	c.Assert(err, ErrorMatches, ".* not found")
+
+	// case5: do transaction failed because can't operate one key in one transaction
+	ops = []*Operation{
+		{
+			Tp:    CreateOp,
+			Key:   "test5",
+			Value: "5",
+		}, {
+			Tp:    UpdateOp,
+			Key:   "test5",
+			Value: "55",
+		},
+	}
+
+	_, err = etcdCli.DoTxn(context.Background(), ops)
+	c.Assert(err, ErrorMatches, "etcdserver: duplicate key given in txn request")
+}
+
 func testSetup(t *testing.T) (context.Context, *Client, *integration.ClusterV3) {
 	cluster := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
 	etcd := NewClient(cluster.RandClient(), "binlog")
