@@ -305,17 +305,20 @@ func (t *testEtcdSuite) TestDoTxn(c *C) {
 	ops = []*Operation{
 		{
 			Tp:    CreateOp,
-			Key:   "test5",
-			Value: "5",
+			Key:   "test6",
+			Value: "6",
 		}, {
 			Tp:    UpdateOp,
-			Key:   "test5",
-			Value: "55",
+			Key:   "test6",
+			Value: "66",
 		},
 	}
 
 	_, err = etcdCli.DoTxn(context.Background(), ops)
 	c.Assert(err, ErrorMatches, "etcdserver: duplicate key given in txn request")
+
+	_, _, err = etcdCli.Get(context.Background(), "test6")
+	c.Assert(err, ErrorMatches, ".* not found")
 }
 
 func testSetup(t *testing.T) (context.Context, *Client, *integration.ClusterV3) {
