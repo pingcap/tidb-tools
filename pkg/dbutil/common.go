@@ -33,7 +33,6 @@ import (
 	"github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/types"
-	gmysql "github.com/siddontang/go-mysql/mysql"
 	"go.uber.org/zap"
 )
 
@@ -655,7 +654,7 @@ func ExecSQLWithRetry(ctx context.Context, db *sql.DB, sql string, args ...inter
 			return nil
 		}
 
-		if !isRetryableError(err) {
+		if !IsRetryableError(err) {
 			return errors.Trace(err)
 		}
 
@@ -709,22 +708,6 @@ func ExecuteSQLs(ctx context.Context, db *sql.DB, sqls []string, args [][]interf
 	}
 
 	return nil
-}
-
-func isRetryableError(err error) bool {
-	err = errors.Cause(err) // check the original error
-	mysqlErr, ok := err.(*mysql.MySQLError)
-	if !ok {
-		return false
-	}
-
-	switch mysqlErr.Number {
-	// ER_LOCK_DEADLOCK can retry to commit while meet deadlock
-	case tmysql.ErrUnknown, gmysql.ER_LOCK_DEADLOCK, tmysql.ErrPDServerTimeout, tmysql.ErrTiKVServerTimeout, tmysql.ErrTiKVServerBusy, tmysql.ErrResolveLockTimeout, tmysql.ErrRegionUnavailable:
-		return true
-	default:
-		return false
-	}
 }
 
 func ignoreError(err error) bool {
