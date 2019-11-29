@@ -30,6 +30,31 @@ type Node struct {
 	Childs map[string]*Node
 }
 
+// OpType is operation's type in etcd
+type OpType string
+
+var (
+	// CreateOp is create operation type
+	CreateOp OpType = "create"
+
+	// UpdateOp is update operation type
+	UpdateOp OpType = "update"
+
+	// DeleteOp is delete operation type
+	DeleteOp OpType = "delete"
+)
+
+// Operation represents an operation in etcd, include create, update and delete.
+type Operation struct {
+	Tp         OpType
+	Key        string
+	Value      string
+	TTL        int64
+	WithPrefix bool
+
+	Opts []clientv3.OpOption
+}
+
 // Client is a wrapped etcd client that support some simple method
 type Client struct {
 	client   *clientv3.Client
@@ -215,6 +240,55 @@ func (e *Client) Watch(ctx context.Context, prefix string, revision int64) clien
 		return e.client.Watch(ctx, prefix, clientv3.WithPrefix(), clientv3.WithRev(revision))
 	}
 	return e.client.Watch(ctx, prefix, clientv3.WithPrefix())
+}
+
+// DoTxn does some operation in one transaction.
+func (e *Client) DoTxn(ctx context.Context, operations []*Operation) error {
+	cmps := make([]clientv3.Cmp, 0, len(operations))
+	ops := make([]clientv3.Op, 0, len(operations))
+
+	for _, operation := range operations {
+		operation.Key = keyWithPrefix(e.rootPath, operation.Key)
+
+		if operation.TTL > 0 {
+			lcr, err := e.client.Lease.Grant(ctx, operation.TTL)
+			if err != nil {
+				return errors.Trace(err)
+			}
+
+			operation.Opts = append(operation.Opts, clientv3.WithLease(lcr.ID))
+		}
+
+		if operation.WithPrefix {
+			operation.Opts = append(operation.Opts, clientv3.WithPrefix())
+		}
+
+		switch operation.Tp {
+		case CreateOp:
+			cmps = append(cmps, clientv3.Compare(clientv3.ModRevision(operation.Key), "=", 0))
+			ops = append(ops, clientv3.OpPut(operation.Key, operation.Value, operation.Opts...))
+		case UpdateOp:
+			cmps = append(cmps, clientv3.Compare(clientv3.ModRevision(operation.Key), ">", 0))
+			ops = append(ops, clientv3.OpPut(operation.Key, operation.Value, operation.Opts...))
+		case DeleteOp:
+			ops = append(ops, clientv3.OpDelete(operation.Key, operation.Opts...))
+		}
+	}
+
+	txnResp, err := e.client.KV.Txn(ctx).If(
+		cmps...,
+	).Then(
+		ops...,
+	).Commit()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	if !txnResp.Succeeded {
+		return errors.Errorf("do transaction failed, operations: %v", operations)
+	}
+
+	return nil
 }
 
 func parseToDirTree(root *Node, path string) *Node {
