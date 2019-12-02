@@ -258,6 +258,10 @@ func (e *Client) DoTxn(ctx context.Context, operations []*Operation) (int64, err
 		operation.Key = keyWithPrefix(e.rootPath, operation.Key)
 
 		if operation.TTL > 0 {
+			if operation.Tp == DeleteOp {
+				return 0, errors.Errorf("unexpected TTL in delete operation")
+			}
+
 			lcr, err := e.client.Lease.Grant(ctx, operation.TTL)
 			if err != nil {
 				return 0, errors.Trace(err)

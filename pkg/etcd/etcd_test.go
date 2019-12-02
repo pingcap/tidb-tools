@@ -319,6 +319,61 @@ func (t *testEtcdSuite) TestDoTxn(c *C) {
 
 	_, _, err = etcdCli.Get(context.Background(), "test6")
 	c.Assert(err, ErrorMatches, ".* not found")
+
+	// case6: do transaction failed because can't create an existing key
+	ops = []*Operation{
+		{
+			Tp:    CreateOp,
+			Key:   "test2", // already exist
+			Value: "222",
+		}, {
+			Tp:    UpdateOp,
+			Key:   "test5",
+			Value: "555",
+		},
+	}
+
+	_, err = etcdCli.DoTxn(context.Background(), ops)
+	c.Assert(err, ErrorMatches, "do transaction failed.*")
+
+	value2, _, err = etcdCli.Get(context.Background(), "test2")
+	c.Assert(err, IsNil)
+	c.Assert(string(value2), Equals, "22")
+
+	value5, _, err = etcdCli.Get(context.Background(), "test5")
+	c.Assert(err, IsNil)
+	c.Assert(string(value5), Equals, "5")
+
+	// case7: delete not exist key but will do transaction success
+	ops = []*Operation{
+		{
+			Tp:  DeleteOp,
+			Key: "test7", // not exist
+		}, {
+			Tp:    CreateOp,
+			Key:   "test8",
+			Value: "8",
+		},
+	}
+
+	_, err = etcdCli.DoTxn(context.Background(), ops)
+	c.Assert(err, IsNil)
+
+	value8, _, err := etcdCli.Get(context.Background(), "test8")
+	c.Assert(err, IsNil)
+	c.Assert(string(value8), Equals, "8")
+
+	// case8: do transaction failed because can't set TTL for delete operation
+	ops = []*Operation{
+		{
+			Tp:  DeleteOp,
+			Key: "test8",
+			TTL: 1,
+		},
+	}
+
+	_, err = etcdCli.DoTxn(context.Background(), ops)
+	c.Assert(err, ErrorMatches, "unexpected TTL in delete operation")
 }
 
 func testSetup(t *testing.T) (context.Context, *Client, *integration.ClusterV3) {
