@@ -25,7 +25,6 @@ var (
 	// Retryable1105Msgs list the error messages of some retryable error with `1105` code (`ErrUnknown`).
 	Retryable1105Msgs = []string{
 		"Information schema is out of date",
-		"Information schema is changed",
 	}
 )
 
@@ -36,6 +35,7 @@ var (
 // - tmysql.ErrWriteConflictInTiDB
 // - tmysql.ErrTableLocked
 // - tmysql.ErrWriteConflict
+// - tmysql.ErrInfoSchemaChanged
 //
 // some errors are un-retryable:
 // - tmysql.ErrQueryInterrupted
@@ -55,8 +55,7 @@ func IsRetryableError(err error) bool {
 	case tmysql.ErrPDServerTimeout,
 		tmysql.ErrTiKVServerBusy,
 		tmysql.ErrResolveLockTimeout,
-		tmysql.ErrInfoSchemaExpired,
-		tmysql.ErrInfoSchemaChanged:
+		tmysql.ErrInfoSchemaExpired:
 		return true // retryable error in TiDB
 	case tmysql.ErrUnknown: // the old version of TiDB uses `1105` frequently, this should be compatible.
 		for _, msg := range Retryable1105Msgs {

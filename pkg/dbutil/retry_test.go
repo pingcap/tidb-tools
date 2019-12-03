@@ -85,6 +85,10 @@ func (t *testRetrySuite) TestIsRetryableError(c *C) {
 			err:       newMysqlErr(tmysql.ErrWriteConflict, "Write conflict, txnStartTS=412719757964869700, conflictStartTS=412719757964869700, conflictCommitTS=412719757964869950, key=488636541"),
 			retryable: false,
 		},
+		{
+			err:       newMysqlErr(tmysql.ErrInfoSchemaChanged, "Information schema is changed"),
+			retryable: false,
+		},
 		// un-retryable
 		{
 			err:       newMysqlErr(tmysql.ErrQueryInterrupted, "Query execution was interrupted"),
@@ -100,22 +104,18 @@ func (t *testRetrySuite) TestIsRetryableError(c *C) {
 			err:       newMysqlErr(tmysql.ErrUnknown, "i/o timeout"),
 			retryable: false,
 		},
+		{
+			err:       newMysqlErr(tmysql.ErrUnknown, "Information schema is changed"),
+			retryable: false,
+		},
 		// 1105, retryable
 		{
 			err:       newMysqlErr(tmysql.ErrUnknown, "Information schema is out of date"),
 			retryable: true,
 		},
-		{
-			err:       newMysqlErr(tmysql.ErrUnknown, "Information schema is changed"),
-			retryable: true,
-		},
 		// 1105 --> unique error code
 		{
 			err:       newMysqlErr(tmysql.ErrInfoSchemaExpired, "Information schema is out of date"),
-			retryable: true,
-		},
-		{
-			err:       newMysqlErr(tmysql.ErrInfoSchemaChanged, "Information schema is changed"),
 			retryable: true,
 		},
 	}
