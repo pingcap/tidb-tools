@@ -79,6 +79,9 @@ message DDLData {
 enum BinlogType {
   DML = 0; //  has dml_data
   DDL = 1; //  has ddl_query
+  // a resolved binlog signals that all binlogs with commit_ts
+  // smaller than the resolved commit_ts have already been sent
+  RESOLVED = 2;
 }
 
 // Binlog contains all the changes in a transaction.
