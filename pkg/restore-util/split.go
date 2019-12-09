@@ -126,8 +126,28 @@ func (rs *RegionSplitter) splitByRewriteRules(
 func newRangeTreeWithRewrite(ranges []Range, rewriteRules *RewriteRules) (*RangeTree, error) {
 	rangeTree := NewRangeTree()
 	for _, rg := range ranges {
-		rg.StartKey = replacePrefix(rg.StartKey, rewriteRules)
-		rg.EndKey = replacePrefix(rg.EndKey, rewriteRules)
+		if rewriteRules != nil {
+			var startRule *import_sstpb.RewriteRule
+			rg.StartKey, startRule = replacePrefix(rg.StartKey, rewriteRules)
+			if startRule != nil {
+				log.Warn("cannot find rewrite rule", zap.ByteString("key", rg.StartKey))
+			} else {
+				log.Debug(
+					"rewrite start key",
+					zap.ByteString("key", rg.StartKey),
+					zap.Stringer("rule", startRule))
+			}
+			var endRule *import_sstpb.RewriteRule
+			rg.EndKey, endRule = replacePrefix(rg.EndKey, rewriteRules)
+			if endRule != nil {
+				log.Warn("cannot find rewrite rule", zap.ByteString("key", rg.EndKey))
+			} else {
+				log.Debug(
+					"rewrite end key",
+					zap.ByteString("key", rg.EndKey),
+					zap.Stringer("rule", endRule))
+			}
+		}
 		if out := rangeTree.InsertRange(rg); out != nil {
 			return nil, errors.Errorf("ranges overlapped: %v, %v", out.(*Range).String(), rg.String())
 		}
@@ -257,18 +277,18 @@ func beforeEnd(key []byte, end []byte) bool {
 	return bytes.Compare(key, end) < 0 || len(end) == 0
 }
 
-func replacePrefix(s []byte, rewriteRules *RewriteRules) []byte {
+func replacePrefix(s []byte, rewriteRules *RewriteRules) ([]byte, *import_sstpb.RewriteRule) {
 	// We should search the dataRules firstly.
 	for _, rule := range rewriteRules.Data {
 		if bytes.HasPrefix(s, rule.GetOldKeyPrefix()) {
-			return append(append([]byte{}, rule.GetNewKeyPrefix()...), s[len(rule.GetOldKeyPrefix()):]...)
+			return append(append([]byte{}, rule.GetNewKeyPrefix()...), s[len(rule.GetOldKeyPrefix()):]...), rule
 		}
 	}
 	for _, rule := range rewriteRules.Table {
 		if bytes.HasPrefix(s, rule.GetOldKeyPrefix()) {
-			return append(append([]byte{}, rule.GetNewKeyPrefix()...), s[len(rule.GetOldKeyPrefix()):]...)
+			return append(append([]byte{}, rule.GetNewKeyPrefix()...), s[len(rule.GetOldKeyPrefix()):]...), rule
 		}
 	}
 
-	return s
+	return s, nil
 }
