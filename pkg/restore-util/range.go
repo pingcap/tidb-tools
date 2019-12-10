@@ -3,13 +3,13 @@ package restore_util
 import (
 	"bytes"
 	"fmt"
-	"github.com/pingcap/errors"
-	"github.com/pingcap/log"
-	"go.uber.org/zap"
 
 	"github.com/google/btree"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/kvproto/pkg/import_sstpb"
 	"github.com/pingcap/kvproto/pkg/metapb"
+	"github.com/pingcap/log"
+	"go.uber.org/zap"
 )
 
 // Range represents a range of keys.
@@ -20,7 +20,7 @@ type Range struct {
 
 // String formats a range to a string
 func (r *Range) String() string {
-	return fmt.Sprintf("[%s %s]", r.StartKey, r.EndKey)
+	return fmt.Sprintf("[%x %x]", r.StartKey, r.EndKey)
 }
 
 // Less compares a range with a btree.Item

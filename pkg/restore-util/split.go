@@ -3,13 +3,13 @@ package restore_util
 import (
 	"bytes"
 	"context"
-	"github.com/pingcap/tidb/util/codec"
 	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/kvproto/pkg/import_sstpb"
 	"github.com/pingcap/kvproto/pkg/pdpb"
 	"github.com/pingcap/log"
+	"github.com/pingcap/tidb/util/codec"
 	"go.uber.org/zap"
 )
 
@@ -217,7 +217,7 @@ func getSplitKeys(rewriteRules *RewriteRules, ranges []Range, regions []*RegionI
 		if region := needSplit(key, regions); region != nil {
 			_, ok := splitKeyMap[region.Region.GetId()]
 			if !ok {
-				splitKeyMap[region.Region.GetId()]= make([][]byte, 0, 1)
+				splitKeyMap[region.Region.GetId()] = make([][]byte, 0, 1)
 			}
 			splitKeyMap[region.Region.GetId()] = append(splitKeyMap[region.Region.GetId()], key)
 		}
