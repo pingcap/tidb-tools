@@ -25,14 +25,17 @@ func TestClient(t *testing.T) {
 
 var _ = Suite(&testSelectorSuite{
 	tables: map[string][]string{
-		"t*":      {"test*"},
-		"schema*": {"", "test*", "abc*", "xyz"},
-		"?bc":     {"t1_abc", "t1_ab?", "abc*"},
-		"a?c":     {"t2_abc", "t2_ab*", "a?b"},
-		"ab?":     {"t3_ab?", "t3_ab*", "ab?"},
-		"ab*":     {"t4_abc", "t4_abc*", "ab*"},
-		"abc":     {"abc"},
-		"abd":     {"abc"},
+		"t*":          {"test*"},
+		"schema*":     {"", "test*", "abc*", "xyz"},
+		"?bc":         {"t1_abc", "t1_ab?", "abc*"},
+		"a?c":         {"t2_abc", "t2_ab*", "a?b"},
+		"ab?":         {"t3_ab?", "t3_ab*", "ab?"},
+		"ab*":         {"t4_abc", "t4_abc*", "ab*"},
+		"abc":         {"abc"},
+		"abd":         {"abc"},
+		"ik[hjkl]":    {"ik[!zxc]"},
+		"ik[f-h]":     {"ik[!a-ce-g]"},
+		"i[x-z][1-3]": {"i?[x-z]", "ix*"},
 	},
 	matchCase: []struct {
 		schema, table string
@@ -52,6 +55,9 @@ var _ = Suite(&testSelectorSuite{
 		{"schema1", "test1", 2, []string{"schema*", "", "schema*", "test*"}},
 		{"t1", "test1", 1, []string{"t*", "test*"}},
 		{"schema1", "abc1", 2, []string{"schema*", "", "schema*", "abc*"}},
+		{"ikj", "ikb", 1, []string{"ik[hjkl]", "ik[!zxc]"}},
+		{"ikh", "iky", 2, []string{"ik[hjkl]", "ik[!zxc]", "ik[f-h]", "ik[!a-ce-g]"}},
+		{"iz3", "ixx", 2, []string{"i[x-z][1-3]", "i?[x-z]", "i[x-z][1-3]", "ix*"}},
 	},
 	removeCases: []string{"schema*", "", "a?c", "t2_ab*"},
 })
@@ -184,7 +190,6 @@ func (t *testSelectorSuite) testMatch(c *C, s Selector) {
 			rule := &dummyRule{quoteSchemaTable(mc.matchedRules[2*i], mc.matchedRules[2*i+1])}
 			expectedRules = append(expectedRules, rule)
 		}
-
 		c.Assert(rules, DeepEquals, expectedRules)
 		cache[quoteSchemaTable(mc.schema, mc.table)] = expectedRules
 	}

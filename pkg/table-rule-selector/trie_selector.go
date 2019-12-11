@@ -29,6 +29,14 @@ const (
 	asterisk = '*'
 	// question mark [ ? ]
 	question = '?'
+	// rangeOpen mark [ [ ]
+	rangeOpen = '['
+	// rangeClose mark [ ] ]
+	rangeClose = ']'
+	// rangeNot mark [ ! ]
+	rangeNot = '!'
+	// rangeBetween mark [ - ]
+	rangeBetween = '-'
 )
 
 const maxCacheNum = 1024
@@ -76,20 +84,111 @@ type trieSelector struct {
 }
 
 type node struct {
-	characters         map[byte]*item
-	asterisk, question *item
+	characters map[byte]item
+	asterisk   item
+	question   item
+	rItems     []item
 }
 
-type item struct {
-	child *node
+type item interface {
+	child() *node
+	setChild(*node)
+	getRule() interface{}
+	setRule(interface{})
+	getNextLevel() *node
+	setNextLevel(*node)
+}
+
+type baseItem struct {
+	ch *node
 
 	rule interface{}
 	// schema level ->(to) table level
 	nextLevel *node
 }
 
+func (i *baseItem) child() *node {
+	return i.ch
+}
+
+func (i *baseItem) setChild(c *node) {
+	i.ch = c
+}
+
+func (i *baseItem) getRule() interface{} {
+	return i.rule
+}
+
+func (i *baseItem) setRule(rule interface{}) {
+	i.rule = rule
+}
+
+func (i *baseItem) getNextLevel() *node {
+	return i.nextLevel
+}
+
+func (i *baseItem) setNextLevel(c *node) {
+	i.nextLevel = c
+}
+
 func newNode() *node {
-	return &node{characters: make(map[byte]*item)}
+	return &node{characters: make(map[byte]item)}
+}
+
+type ran struct {
+	start, end byte
+	hasBetween bool
+}
+
+type rangeItem struct {
+	*baseItem
+
+	hasNot bool
+	ranges []ran
+}
+
+func (i *rangeItem) match(i2 *rangeItem) bool {
+	if i.hasNot != i2.hasNot {
+		return false
+	}
+	for _, r := range i.ranges {
+		matched := false
+		for _, r2 := range i2.ranges {
+			if r2.start <= r.start && r.end <= r2.end {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
+}
+
+func (i *rangeItem) matchChar(c byte) bool {
+	for _, r := range i.ranges {
+		if r.start <= c && c <= r.end {
+			return !i.hasNot
+		}
+	}
+	return i.hasNot
+}
+
+func (i *rangeItem) str() string {
+	ret := "["
+	if i.hasNot {
+		ret += string([]byte{rangeNot})
+	}
+	for _, r := range i.ranges {
+		if r.hasBetween {
+			ret += string([]byte{r.start}) + string([]byte{rangeBetween}) + string([]byte{r.end})
+		} else {
+			ret += string([]byte{r.start})
+		}
+	}
+	ret += "]"
+	return ret
 }
 
 // NewTrieSelector returns a trie Selector
@@ -130,11 +229,11 @@ func (t *trieSelector) insertTable(schema, table string, rule interface{}, repla
 		return errors.Annotate(err, "insert into schema selector")
 	}
 
-	if schemaEntity.nextLevel == nil {
-		schemaEntity.nextLevel = newNode()
+	if schemaEntity.getNextLevel() == nil {
+		schemaEntity.setNextLevel(newNode())
 	}
 
-	_, err = t.insert(schemaEntity.nextLevel, table, rule, replace)
+	_, err = t.insert(schemaEntity.getNextLevel(), table, rule, replace)
 	if err != nil {
 		return errors.Annotate(err, "insert into table selector")
 	}
@@ -142,50 +241,104 @@ func (t *trieSelector) insertTable(schema, table string, rule interface{}, repla
 	return nil
 }
 
+func (t *trieSelector) getRangeItem(pattern string) (*rangeItem, int) {
+	nextI := -1
+	for i := range pattern {
+		if pattern[i] == rangeClose {
+			nextI = i
+			break
+		}
+	}
+	if nextI == -1 {
+		return nil, nextI
+	}
+	item := &rangeItem{}
+	startI := 1
+	if pattern[startI] == rangeNot {
+		startI++
+		item.hasNot = true
+	}
+	for i := startI; i < nextI; i++ {
+		if pattern[i+1] == rangeBetween {
+			item.ranges = append(item.ranges, ran{pattern[i], pattern[i+2], true})
+			i += 2
+		} else {
+			item.ranges = append(item.ranges, ran{pattern[i], pattern[i], false})
+		}
+	}
+	return item, nextI
+}
+
 // if rule is nil, just extract nodes
-func (t *trieSelector) insert(root *node, pattern string, rule interface{}, replace bool) (*item, error) {
+func (t *trieSelector) insert(root *node, pattern string, rule interface{}, replace bool) (item, error) {
 	var (
 		n           = root
 		hadAsterisk = false
-		entity      *item
+		entity      item
 	)
 
-	for i := range pattern {
+	for i := 0; i < len(pattern); i++ {
 		if hadAsterisk {
 			return nil, errors.NotValidf("pattern %s", pattern)
 		}
 
+		var rItem *rangeItem
+		var nextI int
 		switch pattern[i] {
 		case asterisk:
 			entity = n.asterisk
 			hadAsterisk = true
 		case question:
 			entity = n.question
+		case rangeOpen:
+			rItem, nextI = t.getRangeItem(pattern[i:])
+			if nextI == -1 {
+				entity = n.characters[pattern[i]]
+			} else {
+				entity = nil
+				for _, nrItem := range n.rItems {
+					if rItem.match(nrItem.(*rangeItem)) && nrItem.(*rangeItem).match(rItem) {
+						entity = nrItem
+						break
+					}
+				}
+			}
 		default:
 			entity = n.characters[pattern[i]]
 		}
 		if entity == nil {
-			entity = &item{}
+			entity = &baseItem{}
 			switch pattern[i] {
 			case asterisk:
 				n.asterisk = entity
 			case question:
 				n.question = entity
+			case rangeOpen:
+				if nextI == -1 {
+					n.characters[pattern[i]] = entity
+				} else {
+					n.rItems = append(n.rItems, rItem)
+					rItem.baseItem = entity.(*baseItem)
+					entity = rItem
+				}
 			default:
 				n.characters[pattern[i]] = entity
 			}
 		}
-		if entity.child == nil {
-			entity.child = newNode()
+		if entity.child() == nil {
+			entity.setChild(newNode())
 		}
-		n = entity.child
+		n = entity.child()
+		if nextI != -1 {
+			i += nextI
+		}
 	}
 
 	if rule != nil {
-		if !replace && entity.rule != nil {
+		if !replace && entity.getRule() != nil {
 			return nil, errors.AlreadyExistsf("pattern %s", pattern)
 		}
-		entity.rule = rule
+		entity.setRule(rule)
 		t.clearCache()
 	}
 
@@ -253,37 +406,37 @@ func (t *trieSelector) Remove(schema, table string) error {
 
 	schemaLeafItem := schemaItems[len(schemaItems)-1]
 	if len(table) > 0 {
-		if schemaLeafItem.nextLevel == nil {
+		if schemaLeafItem.getNextLevel() == nil {
 			return errors.NotFoundf("table level while we track chema/table %s/%s", schema, table)
 		}
 
-		tableItems, err := t.track(schemaLeafItem.nextLevel, table)
+		tableItems, err := t.track(schemaLeafItem.getNextLevel(), table)
 		if err != nil {
 			return errors.Annotatef(err, "track schema/table %s/%s in table level", schema, table)
 		}
 
-		if tableItems[len(tableItems)-1].rule == nil {
+		if tableItems[len(tableItems)-1].getRule() == nil {
 			return errors.NotFoundf("schema/table %s/%s in table level", schema, table)
 		}
 
 		// remove table level nodes
-		tableItems[len(tableItems)-1].rule = nil
+		tableItems[len(tableItems)-1].setRule(nil)
 		t.clearCache()
 		return nil
 	}
 
-	if schemaLeafItem.rule == nil {
+	if schemaLeafItem.getRule() == nil {
 		return errors.NotFoundf("schema/table %s/%s in schema level", schema, table)
 	}
 
-	schemaLeafItem.rule = nil
+	schemaLeafItem.setRule(nil)
 	t.clearCache()
 	return nil
 }
 
-func (t *trieSelector) track(n *node, pattern string) ([]*item, error) {
-	items := make([]*item, 0, len(pattern))
-	for i := range pattern {
+func (t *trieSelector) track(n *node, pattern string) ([]item, error) {
+	items := make([]item, 0, len(pattern))
+	for i := 0; i < len(pattern); i++ {
 		switch pattern[i] {
 		case asterisk:
 			if n.asterisk == nil {
@@ -301,14 +454,37 @@ func (t *trieSelector) track(n *node, pattern string) ([]*item, error) {
 			}
 
 			items = append(items, n.question)
-			n = n.question.child
+			n = n.question.child()
+		case rangeOpen:
+			rItem, nextI := t.getRangeItem(pattern[i:])
+			if nextI == -1 {
+				item, ok := n.characters[pattern[i]]
+				if !ok {
+					return nil, errors.NotFoundf("pattern %v", pattern)
+				}
+				items = append(items, item)
+				n = item.child()
+			} else {
+				matchIdx := -1
+				for i := range n.rItems {
+					if n.rItems[i].(*rangeItem).match(rItem) && rItem.match(n.rItems[i].(*rangeItem)) {
+						matchIdx = i
+						break
+					}
+				}
+				if matchIdx == -1 {
+					return nil, errors.NotFoundf("pattern %v", pattern)
+				}
+				items = append(items, n.rItems[i])
+				n = n.rItems[i].child()
+			}
 		default:
 			item, ok := n.characters[pattern[i]]
 			if !ok {
 				return nil, errors.NotFoundf("pattern %v", pattern)
 			}
 			items = append(items, item)
-			n = item.child
+			n = item.child()
 		}
 	}
 
@@ -355,14 +531,20 @@ func (t *trieSelector) travel(n *node, word []byte, rules map[string]interface{}
 	if n.question != nil {
 		pattern := append(word, question)
 		insertMatchedItemIntoMap(string(pattern), n.question, rules, nodes)
-		t.travel(n.question.child, pattern, rules, nodes)
+		t.travel(n.question.child(), pattern, rules, nodes)
 	}
 
-	for char, item := range n.characters {
+	for i := range n.rItems {
+		pattern := append(word, []byte(n.rItems[i].(*rangeItem).str())...)
+		insertMatchedItemIntoMap(string(pattern), n.rItems[i], rules, nodes)
+		t.travel(n.rItems[i].child(), pattern, rules, nodes)
+	}
+
+	for char, baseItem := range n.characters {
 		pattern := append(word, char)
-		if item != nil {
-			insertMatchedItemIntoMap(string(pattern), item, rules, nodes)
-			t.travel(item.child, pattern, rules, nodes)
+		if baseItem != nil {
+			insertMatchedItemIntoMap(string(pattern), baseItem, rules, nodes)
+			t.travel(baseItem.child(), pattern, rules, nodes)
 		}
 	}
 }
@@ -374,7 +556,7 @@ func (t *trieSelector) matchNode(n *node, s string, mr *matchedResult) {
 
 	var (
 		ok     bool
-		entity *item
+		entity item
 	)
 	for i := range s {
 		if n.asterisk != nil {
@@ -386,14 +568,24 @@ func (t *trieSelector) matchNode(n *node, s string, mr *matchedResult) {
 				appendMatchedItem(n.question, mr)
 			}
 
-			t.matchNode(n.question.child, s[i+1:], mr)
+			t.matchNode(n.question.child(), s[i+1:], mr)
+		}
+
+		for _, rItem := range n.rItems {
+			if rItem.(*rangeItem).matchChar(s[i]) {
+				if i == len(s)-1 {
+					appendMatchedItem(rItem, mr)
+				}
+
+				t.matchNode(rItem.child(), s[i+1:], mr)
+			}
 		}
 
 		entity, ok = n.characters[s[i]]
 		if !ok {
 			return
 		}
-		n = entity.child
+		n = entity.child()
 	}
 
 	if entity != nil {
@@ -405,23 +597,23 @@ func (t *trieSelector) matchNode(n *node, s string, mr *matchedResult) {
 	}
 }
 
-func appendMatchedItem(entity *item, mr *matchedResult) {
-	if entity.rule != nil {
-		mr.rules = append(mr.rules, entity.rule)
+func appendMatchedItem(entity item, mr *matchedResult) {
+	if entity.getRule() != nil {
+		mr.rules = append(mr.rules, entity.getRule())
 	}
 
-	if entity.nextLevel != nil {
-		mr.nodes = append(mr.nodes, entity.nextLevel)
+	if entity.getNextLevel() != nil {
+		mr.nodes = append(mr.nodes, entity.getNextLevel())
 	}
 }
 
-func insertMatchedItemIntoMap(pattern string, entity *item, rules map[string]interface{}, nodes map[string]*node) {
-	if rules != nil && entity.rule != nil {
-		rules[pattern] = entity.rule
+func insertMatchedItemIntoMap(pattern string, entity item, rules map[string]interface{}, nodes map[string]*node) {
+	if rules != nil && entity.getRule() != nil {
+		rules[pattern] = entity.getRule()
 	}
 
-	if nodes != nil && entity.nextLevel != nil {
-		nodes[pattern] = entity.nextLevel
+	if nodes != nil && entity.getNextLevel() != nil {
+		nodes[pattern] = entity.getNextLevel()
 	}
 }
 
