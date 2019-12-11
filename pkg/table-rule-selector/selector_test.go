@@ -57,7 +57,7 @@ var _ = Suite(&testSelectorSuite{
 		{"schema1", "abc1", 2, []string{"schema*", "", "schema*", "abc*"}},
 		{"ikj", "ikb", 1, []string{"ik[hjkl]", "ik[!zxc]"}},
 		{"ikh", "iky", 2, []string{"ik[hjkl]", "ik[!zxc]", "ik[f-h]", "ik[!a-ce-g]"}},
-		{"iz3", "ixx", 2, []string{"i[x-z][1-3]", "i?[x-z]", "i[x-z][1-3]", "ix*"}},
+		{"iz3", "iyx", 1, []string{"i[x-z][1-3]", "i?[x-z]"}},
 	},
 	removeCases: []string{"schema*", "", "a?c", "t2_ab*"},
 })
