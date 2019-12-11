@@ -45,8 +45,8 @@ func (*testDBSuite) TestIndex(c *C) {
  				PRIMARY KEY (a)
  			) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_bin
  			`,
-			[]string{"PRIMARY", "b", "c"},
-			[]string{"a", "b", "c"},
+			[]string{"b", "c"},
+			[]string{"b", "c"},
 		}, {
 			`
  			CREATE TABLE mtest (
