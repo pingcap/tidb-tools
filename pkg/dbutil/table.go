@@ -54,6 +54,22 @@ func GetTableInfoBySQL(createTableSQL string, sqlMode string) (table *model.Tabl
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
+
+		// put primary key in indices
+		if table.PKIsHandle {
+			pkIndex := &model.IndexInfo{
+				Name:    model.NewCIStr("PRIMARY"),
+				Primary: true,
+				Columns: []*model.IndexColumn{
+					{
+						Name: table.GetPkName(),
+					},
+				},
+			}
+
+			table.Indices = append(table.Indices, pkIndex)
+		}
+
 		return table, nil
 	}
 

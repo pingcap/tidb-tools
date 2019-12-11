@@ -44,7 +44,7 @@ func (s *testUtilSuite) TestIgnoreColumns(c *C) {
 	c.Assert(err, IsNil)
 	tbInfo = ignoreColumns(tableInfo3, []string{"b", "c"})
 	c.Assert(tbInfo.Columns, HasLen, 2)
-	c.Assert(tbInfo.Indices, HasLen, 0)
+	c.Assert(tbInfo.Indices, HasLen, 1)
 }
 
 func (s *testUtilSuite) TestRowContainsCols(c *C) {
