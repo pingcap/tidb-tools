@@ -109,6 +109,18 @@ func (c *testClient) ScanRegions(ctx context.Context, key, endKey []byte, limit 
 	return nil, nil
 }
 
+func (c *testClient) SetPlacementRule(ctx context.Context, rule Rule) error {
+	return nil
+}
+
+func (c *testClient) DeletePlacementRule(ctx context.Context, groupID, ruleID string) error {
+	return nil
+}
+
+func (c *testClient) SetStoresLabel(ctx context.Context, stores []uint64, labelKey, labelValue string) error {
+	return nil
+}
+
 // region: [, aay), [aay, bba), [bba, bbh), [bbh, cca), [cca, )
 // range: [aaa, aae), [aae, aaz), [ccd, ccf), [ccf, ccj)
 // rewrite rules: aa -> xx,  cc -> bb

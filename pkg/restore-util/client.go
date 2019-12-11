@@ -3,6 +3,13 @@ package restore_util
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"path"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/pingcap/errors"
@@ -14,7 +21,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-// Client is a external client used by RegionSplitter.
+// Client is an external client used by RegionSplitter.
 type Client interface {
 	// GetStore gets a store by a store id.
 	GetStore(ctx context.Context, storeID uint64) (*metapb.Store, error)
@@ -32,6 +39,13 @@ type Client interface {
 	// ScanRegion gets a list of regions, starts from the region that contains key.
 	// Limit limits the maximum number of regions returned.
 	ScanRegions(ctx context.Context, key, endKey []byte, limit int) ([]*RegionInfo, error)
+	// SetPlacementRule insert or update a placement rule to PD.
+	SetPlacementRule(ctx context.Context, rule Rule) error
+	// DeletePlacementRule removes a placement rule from PD.
+	DeletePlacementRule(ctx context.Context, groupID, ruleID string) error
+	// SetStoreLabel add or update specified label of stores. If labelValue
+	// is empty, it clears the label.
+	SetStoresLabel(ctx context.Context, stores []uint64, labelKey, labelValue string) error
 }
 
 // pdClient is a wrapper of pd client, can be used by RegionSplitter.
@@ -180,4 +194,85 @@ func (c *pdClient) ScanRegions(ctx context.Context, key, endKey []byte, limit in
 		})
 	}
 	return regionInfos, nil
+}
+
+// LabelConstraint is used to filter store when trying to place peer of a region.
+type LabelConstraint struct {
+	Key    string   `json:"key,omitempty"`
+	Op     string   `json:"op,omitempty"`
+	Values []string `json:"values,omitempty"`
+}
+
+// Rule is the placement rule that can be checked against a region. When
+// applying rules (apply means schedule regions to match selected rules), the
+// apply order is defined by the tuple [GroupID, Index, ID].
+type Rule struct {
+	GroupID          string            `json:"group_id"`                    // mark the source that add the rule
+	ID               string            `json:"id"`                          // unique ID within a group
+	Index            int               `json:"index,omitempty"`             // rule apply order in a group, rule with less ID is applied first when indexes are equal
+	Override         bool              `json:"override,omitempty"`          // when it is true, all rules with less indexes are disabled
+	StartKeyHex      string            `json:"start_key"`                   // hex format start key, for marshal/unmarshal
+	EndKeyHex        string            `json:"end_key"`                     // hex format end key, for marshal/unmarshal
+	Role             string            `json:"role"`                        // expected role of the peers
+	Count            int               `json:"count"`                       // expected count of the peers
+	LabelConstraints []LabelConstraint `json:"label_constraints,omitempty"` // used to select stores to place peers
+	LocationLabels   []string          `json:"location_labels,omitempty"`   // used to make peers isolated physically
+}
+
+func (c *pdClient) SetPlacementRule(ctx context.Context, rule Rule) error {
+	addr := c.getPDAPIAddr()
+	if addr == "" {
+		return errors.New("failed to add stores labels: no leader")
+	}
+	m, _ := json.Marshal(rule)
+	req, _ := http.NewRequestWithContext(ctx, "POST", path.Join(addr, "pd/api/v1/config/rule"), bytes.NewReader(m))
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	ioutil.ReadAll(res.Body)
+	res.Body.Close()
+	return nil
+}
+
+func (c *pdClient) DeletePlacementRule(ctx context.Context, groupID, ruleID string) error {
+	addr := c.getPDAPIAddr()
+	if addr == "" {
+		return errors.New("failed to add stores labels: no leader")
+	}
+	req, _ := http.NewRequestWithContext(ctx, "DELETE", path.Join(addr, "pd/api/v1/config/rule", groupID, ruleID), nil)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	ioutil.ReadAll(res.Body)
+	res.Body.Close()
+	return nil
+}
+
+func (c *pdClient) SetStoresLabel(ctx context.Context, stores []uint64, labelKey, labelValue string) error {
+	b := []byte(fmt.Sprintf(`{"%s": "%s"}`, labelKey, labelValue))
+	addr := c.getPDAPIAddr()
+	if addr == "" {
+		return errors.New("failed to add stores labels: no leader")
+	}
+	for _, id := range stores {
+		req, _ := http.NewRequestWithContext(ctx, "POST", path.Join(addr, "pd/api/v1/store", strconv.FormatUint(id, 10), "label"), bytes.NewReader(b))
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return errors.WithStack(err)
+		}
+		ioutil.ReadAll(res.Body)
+		res.Body.Close()
+
+	}
+	return nil
+}
+
+func (c *pdClient) getPDAPIAddr() string {
+	addr := c.client.GetLeaderAddr()
+	if !strings.HasPrefix(addr, "http") {
+		addr = "http://" + addr
+	}
+	return addr
 }
