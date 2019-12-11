@@ -44,26 +44,26 @@ func sortRanges(ranges []Range, rewriteRules *RewriteRules) ([]Range, error) {
 			var startRule *import_sstpb.RewriteRule
 			rg.StartKey, startRule = replacePrefix(rg.StartKey, rewriteRules)
 			if startRule == nil {
-				log.Warn("cannot find rewrite rule", zap.ByteString("key", rg.StartKey))
+				log.Warn("cannot find rewrite rule", zap.Binary("key", rg.StartKey))
 			} else {
 				log.Debug(
 					"rewrite start key",
-					zap.ByteString("key", rg.StartKey),
+					zap.Binary("key", rg.StartKey),
 					zap.Stringer("rule", startRule))
 			}
 			var endRule *import_sstpb.RewriteRule
 			rg.EndKey, endRule = replacePrefix(rg.EndKey, rewriteRules)
 			if endRule == nil {
-				log.Warn("cannot find rewrite rule", zap.ByteString("key", rg.EndKey))
+				log.Warn("cannot find rewrite rule", zap.Binary("key", rg.EndKey))
 			} else {
 				log.Debug(
 					"rewrite end key",
-					zap.ByteString("key", rg.EndKey),
+					zap.Binary("key", rg.EndKey),
 					zap.Stringer("rule", endRule))
 			}
 		}
 		if out := rangeTree.InsertRange(rg); out != nil {
-			return nil, errors.Errorf("ranges overlapped: %v, %v", out.(*Range).String(), rg.String())
+			return nil, errors.Errorf("ranges overlapped: %s, %s", out, rg)
 		}
 	}
 	sortedRanges := make([]Range, 0, len(ranges))

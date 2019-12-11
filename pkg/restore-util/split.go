@@ -62,7 +62,7 @@ func (rs *RegionSplitter) Split(ctx context.Context, ranges []Range, rewriteRule
 			minKey = rule.GetNewKeyPrefix()
 		}
 		if bytes.Compare(maxKey, rule.GetNewKeyPrefix()) < 0 {
-			maxKey = rule.GetOldKeyPrefix()
+			maxKey = rule.GetNewKeyPrefix()
 		}
 	}
 	for _, rule := range rewriteRules.Data {
@@ -70,7 +70,7 @@ func (rs *RegionSplitter) Split(ctx context.Context, ranges []Range, rewriteRule
 			minKey = rule.GetNewKeyPrefix()
 		}
 		if bytes.Compare(maxKey, rule.GetNewKeyPrefix()) < 0 {
-			maxKey = rule.GetOldKeyPrefix()
+			maxKey = rule.GetNewKeyPrefix()
 		}
 	}
 	interval := SplitRetryInterval

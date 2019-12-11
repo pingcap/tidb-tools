@@ -157,7 +157,7 @@ func (c *testClient) ScanRegions(ctx context.Context, key, endKey []byte, limit 
 // range: [aaa, aae), [aae, aaz), [ccd, ccf), [ccf, ccj)
 // rewrite rules: aa -> xx,  cc -> bb
 // expected regions after split:
-// 	[, aay), [aay, bb), [bb, bba), [bba, bbf), [bbf, bbj), [bbj, bbh] [bbh, cca), [cca, xx), [xx, xxe), [xxe, xxz), [xxz, )
+// 	[, aay), [aay, bb), [bb, bba), [bba, bbf), [bbf, bbh), [bbh, bbj), [bbj, cca), [cca, xx), [xx, xxe), [xxe, xxz), [xxz, )
 func TestSplit(t *testing.T) {
 	client := initTestClient()
 	ranges := initRanges()
@@ -251,7 +251,7 @@ func initRewriteRules() *RewriteRules {
 }
 
 // expected regions after split:
-// 	[, aay), [aay, bb), [bb, bba), [bba, bbf), [bbf, bbj), [bbj, bbh] [bbh, cca), [cca, xx), [xx, xxe), [xxe, xxz), [xxz, )
+// 	[, aay), [aay, bb), [bb, bba), [bba, bbf), [bbf, bbh), [bbh, bbj), [bbj, cca), [cca, xx), [xx, xxe), [xxe, xxz), [xxz, )
 func validateRegions(regions map[uint64]*RegionInfo) bool {
 	keys := [12]string{"", "aay", "bb", "bba", "bbf", "bbh", "bbj", "cca", "xx", "xxe", "xxz", ""}
 	if len(regions) != 11 {
