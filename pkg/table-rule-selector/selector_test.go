@@ -92,37 +92,37 @@ type dummyRule struct {
 func (t *testSelectorSuite) testInsert(c *C, s Selector) {
 	var err error
 	for schema, rule := range t.expectedSchemaRules {
-		err = s.Insert(schema, "", rule, false)
+		err = s.Insert(schema, "", rule, Insert)
 		c.Assert(err, IsNil)
 		// test duplicate error
-		err = s.Insert(schema, "", rule, false)
+		err = s.Insert(schema, "", rule, Insert)
 		c.Assert(err, NotNil)
 		// test simple replace
-		err = s.Insert(schema, "", rule, true)
+		err = s.Insert(schema, "", rule, Replace)
 		c.Assert(err, IsNil)
 	}
 
 	for schema, tables := range t.expectedTableRules {
 		for table, rule := range tables {
-			err = s.Insert(schema, table, rule, false)
+			err = s.Insert(schema, table, rule, Insert)
 			c.Assert(err, IsNil)
 			// test duplicate error
-			err = s.Insert(schema, table, rule, false)
+			err = s.Insert(schema, table, rule, Insert)
 			c.Assert(err, NotNil)
 			// test simple replace
-			err = s.Insert(schema, table, rule, true)
+			err = s.Insert(schema, table, rule, Replace)
 			c.Assert(err, IsNil)
 		}
 	}
 
 	// insert wrong pattern
 	// rule can't be nil
-	err = s.Insert("schema", "", nil, true)
+	err = s.Insert("schema", "", nil, Replace)
 	c.Assert(err, NotNil)
 	// asterisk must be the last character of pattern
-	err = s.Insert("ab**", "", &dummyRule{"error"}, true)
+	err = s.Insert("ab**", "", &dummyRule{"error"}, Replace)
 	c.Assert(err, NotNil)
-	err = s.Insert("abcd", "ab**", &dummyRule{"error"}, true)
+	err = s.Insert("abcd", "ab**", &dummyRule{"error"}, Replace)
 	c.Assert(err, NotNil)
 
 	schemas, tables := s.AllRules()
@@ -160,12 +160,12 @@ func (t *testSelectorSuite) testReplace(c *C, s Selector) {
 	for schema := range t.expectedSchemaRules {
 		t.expectedSchemaRules[schema] = replacedRule
 		// to prevent it doesn't exist
-		err = s.Insert(schema, "", replacedRule, true)
+		err = s.Insert(schema, "", replacedRule, Replace)
 		c.Assert(err, IsNil)
 		// test replace
-		err = s.Insert(schema, "", replacedRule, true)
+		err = s.Insert(schema, "", replacedRule, Replace)
 		c.Assert(err, IsNil)
-		err = s.Insert(schema, "", replacedRule, false)
+		err = s.Insert(schema, "", replacedRule, Insert)
 		c.Assert(err, NotNil)
 
 	}

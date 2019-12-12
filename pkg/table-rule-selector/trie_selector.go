@@ -38,7 +38,7 @@ type Selector interface {
 	// Insert will insert one rule into trie
 	// if table is empty, insert rule into schema level
 	// otherwise insert rule into table level
-	Insert(schema, table string, rule interface{}, replace bool) error
+	Insert(schema, table string, rule interface{}, insertType int) error
 	// Match will return all matched rules
 	Match(schema, table string) RuleSet
 	// Remove will remove one rule
@@ -83,7 +83,7 @@ type node struct {
 type item struct {
 	child *node
 
-	rule interface{}
+	rule []interface{}
 	// schema level ->(to) table level
 	nextLevel *node
 }
@@ -98,7 +98,7 @@ func NewTrieSelector() Selector {
 }
 
 // Insert implements Selector's interface.
-func (t *trieSelector) Insert(schema, table string, rule interface{}, replace bool) error {
+func (t *trieSelector) Insert(schema, table string, rule interface{}, insertType int) error {
 	if len(schema) == 0 || rule == nil {
 		return errors.Errorf("schema pattern %s or rule %v can't be empty", schema, rule)
 	}
@@ -106,17 +106,23 @@ func (t *trieSelector) Insert(schema, table string, rule interface{}, replace bo
 	var err error
 	t.Lock()
 	if len(table) == 0 {
-		err = t.insertSchema(schema, rule, replace)
+		err = t.insertSchema(schema, rule, insertType)
 	} else {
-		err = t.insertTable(schema, table, rule, replace)
+		err = t.insertTable(schema, table, rule, insertType)
 	}
 	t.Unlock()
 
 	return errors.Trace(err)
 }
 
-func (t *trieSelector) insertSchema(schema string, rule interface{}, replace bool) error {
-	_, err := t.insert(t.root, schema, rule, replace)
+const (
+	Insert int = iota
+	Replace
+	Append
+)
+
+func (t *trieSelector) insertSchema(schema string, rule interface{}, insertType int) error {
+	_, err := t.insert(t.root, schema, rule, insertType)
 	if err != nil {
 		return errors.Annotate(err, "insert into schema selector")
 	}
@@ -124,8 +130,8 @@ func (t *trieSelector) insertSchema(schema string, rule interface{}, replace boo
 	return nil
 }
 
-func (t *trieSelector) insertTable(schema, table string, rule interface{}, replace bool) error {
-	schemaEntity, err := t.insert(t.root, schema, nil, false)
+func (t *trieSelector) insertTable(schema, table string, rule interface{}, insertType int) error {
+	schemaEntity, err := t.insert(t.root, schema, nil, Insert)
 	if err != nil {
 		return errors.Annotate(err, "insert into schema selector")
 	}
@@ -134,7 +140,7 @@ func (t *trieSelector) insertTable(schema, table string, rule interface{}, repla
 		schemaEntity.nextLevel = newNode()
 	}
 
-	_, err = t.insert(schemaEntity.nextLevel, table, rule, replace)
+	_, err = t.insert(schemaEntity.nextLevel, table, rule, insertType)
 	if err != nil {
 		return errors.Annotate(err, "insert into table selector")
 	}
@@ -143,7 +149,7 @@ func (t *trieSelector) insertTable(schema, table string, rule interface{}, repla
 }
 
 // if rule is nil, just extract nodes
-func (t *trieSelector) insert(root *node, pattern string, rule interface{}, replace bool) (*item, error) {
+func (t *trieSelector) insert(root *node, pattern string, rule interface{}, insertType int) (*item, error) {
 	var (
 		n           = root
 		hadAsterisk = false
@@ -182,10 +188,14 @@ func (t *trieSelector) insert(root *node, pattern string, rule interface{}, repl
 	}
 
 	if rule != nil {
-		if !replace && entity.rule != nil {
+		if insertType == Insert && entity.rule != nil {
 			return nil, errors.AlreadyExistsf("pattern %s", pattern)
 		}
-		entity.rule = rule
+		if insertType == Replace {
+			entity.rule = []interface{}{rule}
+		} else {
+			entity.rule = append(entity.rule, rule)
+		}
 		t.clearCache()
 	}
 
@@ -407,7 +417,7 @@ func (t *trieSelector) matchNode(n *node, s string, mr *matchedResult) {
 
 func appendMatchedItem(entity *item, mr *matchedResult) {
 	if entity.rule != nil {
-		mr.rules = append(mr.rules, entity.rule)
+		mr.rules = append(mr.rules, entity.rule...)
 	}
 
 	if entity.nextLevel != nil {
