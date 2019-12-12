@@ -40,12 +40,20 @@ func NewRegionSplitter(client Client) *RegionSplitter {
 	}
 }
 
+// OnSplitFunc is called before split a range.
+type OnSplitFunc func(key [][]byte)
+
 // Split executes a region split. It will split regions by the rewrite rules,
 // then it will split regions by the end key of each range.
 // tableRules includes the prefix of a table, since some ranges may have
 // a prefix with record sequence or index sequence.
 // note: all ranges and rewrite rules must have raw key.
-func (rs *RegionSplitter) Split(ctx context.Context, ranges []Range, rewriteRules *RewriteRules) error {
+func (rs *RegionSplitter) Split(
+	ctx context.Context,
+	ranges []Range,
+	rewriteRules *RewriteRules,
+	onSplit OnSplitFunc,
+) error {
 	if len(ranges) == 0 {
 		return nil
 	}
@@ -105,6 +113,7 @@ SplitRegions:
 				}
 				continue SplitRegions
 			}
+			onSplit(keys)
 			scatterRegions = append(scatterRegions, newRegions...)
 		}
 		break
