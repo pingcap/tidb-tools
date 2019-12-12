@@ -60,6 +60,8 @@ func GetTableInfoBySQL(createTableSQL string, sqlMode string) (table *model.Tabl
 			pkIndex := &model.IndexInfo{
 				Name:    model.NewCIStr("PRIMARY"),
 				Primary: true,
+				State:   model.StatePublic,
+				Unique:  true,
 				Columns: []*model.IndexColumn{
 					{
 						Name: table.GetPkName(),
