@@ -28,9 +28,9 @@ require (
 	github.com/pingcap/failpoint v0.0.0-20190708053854-e7b1061e6e81 // indirect
 	github.com/pingcap/kvproto v0.0.0-20191210032720-9b94dc54ca2d
 	github.com/pingcap/log v0.0.0-20191012051959-b742a5d432e9
-	github.com/pingcap/parser v0.0.0-20191210130900-aa16cd26e3ae
+	github.com/pingcap/parser v0.0.0-20191210055545-753e13bfdbf0
 	github.com/pingcap/pd v1.1.0-beta.0.20191211031832-13ea87a019a5
-	github.com/pingcap/tidb v1.1.0-beta.0.20191211062958-af1d216cbe6d
+	github.com/pingcap/tidb v1.1.0-beta.0.20191211070559-a94cff903cd1
 	github.com/pingcap/tipb v0.0.0-20191209145133-44f75c9bef33
 	github.com/prometheus/client_golang v1.2.1 // indirect
 	github.com/prometheus/client_model v0.0.0-20191202183732-d1d2010b5bee // indirect
