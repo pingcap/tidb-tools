@@ -199,10 +199,10 @@ func (c *pdClient) BatchSplitRegions(ctx context.Context, regionInfo *RegionInfo
 		return nil, errors.Errorf("split region failed: region=%v, err=%v", regionInfo.Region, resp.RegionError)
 	}
 
-	// Assume the new region is the left one.
 	regions := resp.GetRegions()
 	newRegionInfos := make([]*RegionInfo, 0, len(regions))
 	for _, region := range regions {
+		// Skip the original region
 		if region.GetId() == regionInfo.Region.GetId() {
 			continue
 		}

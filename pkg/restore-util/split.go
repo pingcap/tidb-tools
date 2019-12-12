@@ -100,6 +100,9 @@ SplitRegions:
 					interval = SplitMaxRetryInterval
 				}
 				time.Sleep(interval)
+				if i > 3 {
+					log.Warn("splitting regions failed, retry it")
+				}
 				continue SplitRegions
 			}
 			scatterRegions = append(scatterRegions, newRegions...)
@@ -215,11 +218,11 @@ func getSplitKeys(rewriteRules *RewriteRules, ranges []Range, regions []*RegionI
 	}
 	for _, key := range checkKeys {
 		if region := needSplit(key, regions); region != nil {
-			_, ok := splitKeyMap[region.Region.GetId()]
+			splitKeys, ok := splitKeyMap[region.Region.GetId()]
 			if !ok {
-				splitKeyMap[region.Region.GetId()] = make([][]byte, 0, 1)
+				splitKeys = make([][]byte, 0, 1)
 			}
-			splitKeyMap[region.Region.GetId()] = append(splitKeyMap[region.Region.GetId()], key)
+			splitKeyMap[region.Region.GetId()] = append(splitKeys, key)
 		}
 	}
 	return splitKeyMap
