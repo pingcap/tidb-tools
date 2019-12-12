@@ -271,7 +271,7 @@ func (c *pdClient) SetStoresLabel(ctx context.Context, stores []uint64, labelKey
 
 func (c *pdClient) getPDAPIAddr() string {
 	addr := c.client.GetLeaderAddr()
-	if !strings.HasPrefix(addr, "http") {
+	if addr != "" && !strings.HasPrefix(addr, "http") {
 		addr = "http://" + addr
 	}
 	return addr
