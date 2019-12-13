@@ -147,6 +147,10 @@ type rangeItem struct {
 	ranges []ran
 }
 
+func (i *rangeItem) equal(i2 *rangeItem) bool {
+	return i.match(i2) && i2.match(i)
+}
+
 func (i *rangeItem) match(i2 *rangeItem) bool {
 	if i.hasNot != i2.hasNot {
 		return false
@@ -259,12 +263,17 @@ func (t *trieSelector) getRangeItem(pattern string) (*rangeItem, int) {
 		item.hasNot = true
 	}
 	for i := startI; i < nextI; i++ {
-		if pattern[i+1] == rangeBetween {
+		if pattern[i+1] == rangeBetween && i + 2 < nextI {
 			item.ranges = append(item.ranges, ran{pattern[i], pattern[i+2], true})
 			i += 2
 		} else {
 			item.ranges = append(item.ranges, ran{pattern[i], pattern[i], false})
 		}
+	}
+	// Change the `[!]` to `[\!-\!]`.
+	if len(item.ranges) == 0 && item.hasNot {
+		item.hasNot = false
+		item.ranges = append(item.ranges, ran{'!', '!', false})
 	}
 	return item, nextI
 }
@@ -297,7 +306,7 @@ func (t *trieSelector) insert(root *node, pattern string, rule interface{}, repl
 			} else {
 				entity = nil
 				for _, nrItem := range n.rItems {
-					if rItem.match(nrItem.(*rangeItem)) && nrItem.(*rangeItem).match(rItem) {
+					if rItem.equal(nrItem.(*rangeItem)) {
 						entity = nrItem
 						break
 					}
@@ -467,7 +476,7 @@ func (t *trieSelector) track(n *node, pattern string) ([]item, error) {
 			} else {
 				matchIdx := -1
 				for i := range n.rItems {
-					if n.rItems[i].(*rangeItem).match(rItem) && rItem.match(n.rItems[i].(*rangeItem)) {
+					if n.rItems[i].(*rangeItem).equal(rItem) {
 						matchIdx = i
 						break
 					}
