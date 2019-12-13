@@ -263,7 +263,7 @@ func (t *trieSelector) getRangeItem(pattern string) (*rangeItem, int) {
 		item.hasNot = true
 	}
 	for i := startI; i < nextI; i++ {
-		if pattern[i+1] == rangeBetween && i + 2 < nextI {
+		if pattern[i+1] == rangeBetween && i+2 < nextI {
 			item.ranges = append(item.ranges, ran{pattern[i], pattern[i+2], true})
 			i += 2
 		} else {
