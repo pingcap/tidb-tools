@@ -10,6 +10,7 @@ import (
 	"github.com/pingcap/kvproto/pkg/import_sstpb"
 	"github.com/pingcap/kvproto/pkg/metapb"
 	"github.com/pingcap/kvproto/pkg/pdpb"
+	"github.com/pingcap/pd/server/schedule/placement"
 	"github.com/pingcap/tidb/util/codec"
 )
 
@@ -109,7 +110,7 @@ func (c *testClient) ScanRegions(ctx context.Context, key, endKey []byte, limit 
 	return nil, nil
 }
 
-func (c *testClient) SetPlacementRule(ctx context.Context, rule Rule) error {
+func (c *testClient) SetPlacementRule(ctx context.Context, rule placement.Rule) error {
 	return nil
 }
 

@@ -18,6 +18,7 @@ import (
 	"github.com/pingcap/kvproto/pkg/pdpb"
 	"github.com/pingcap/kvproto/pkg/tikvpb"
 	pd "github.com/pingcap/pd/client"
+	"github.com/pingcap/pd/server/schedule/placement"
 	"google.golang.org/grpc"
 )
 
@@ -40,7 +41,7 @@ type Client interface {
 	// Limit limits the maximum number of regions returned.
 	ScanRegions(ctx context.Context, key, endKey []byte, limit int) ([]*RegionInfo, error)
 	// SetPlacementRule insert or update a placement rule to PD.
-	SetPlacementRule(ctx context.Context, rule Rule) error
+	SetPlacementRule(ctx context.Context, rule placement.Rule) error
 	// DeletePlacementRule removes a placement rule from PD.
 	DeletePlacementRule(ctx context.Context, groupID, ruleID string) error
 	// SetStoreLabel add or update specified label of stores. If labelValue
@@ -196,30 +197,7 @@ func (c *pdClient) ScanRegions(ctx context.Context, key, endKey []byte, limit in
 	return regionInfos, nil
 }
 
-// LabelConstraint is used to filter store when trying to place peer of a region.
-type LabelConstraint struct {
-	Key    string   `json:"key,omitempty"`
-	Op     string   `json:"op,omitempty"`
-	Values []string `json:"values,omitempty"`
-}
-
-// Rule is the placement rule that can be checked against a region. When
-// applying rules (apply means schedule regions to match selected rules), the
-// apply order is defined by the tuple [GroupID, Index, ID].
-type Rule struct {
-	GroupID          string            `json:"group_id"`                    // mark the source that add the rule
-	ID               string            `json:"id"`                          // unique ID within a group
-	Index            int               `json:"index,omitempty"`             // rule apply order in a group, rule with less ID is applied first when indexes are equal
-	Override         bool              `json:"override,omitempty"`          // when it is true, all rules with less indexes are disabled
-	StartKeyHex      string            `json:"start_key"`                   // hex format start key, for marshal/unmarshal
-	EndKeyHex        string            `json:"end_key"`                     // hex format end key, for marshal/unmarshal
-	Role             string            `json:"role"`                        // expected role of the peers
-	Count            int               `json:"count"`                       // expected count of the peers
-	LabelConstraints []LabelConstraint `json:"label_constraints,omitempty"` // used to select stores to place peers
-	LocationLabels   []string          `json:"location_labels,omitempty"`   // used to make peers isolated physically
-}
-
-func (c *pdClient) SetPlacementRule(ctx context.Context, rule Rule) error {
+func (c *pdClient) SetPlacementRule(ctx context.Context, rule placement.Rule) error {
 	addr := c.getPDAPIAddr()
 	if addr == "" {
 		return errors.New("failed to add stores labels: no leader")
