@@ -37,6 +37,12 @@ var _ = Suite(&testSelectorSuite{
 		"ik[hjkl]":    {"ik[!zxc]"},
 		"ik[f-h]":     {"ik[!a-ce-g]"},
 		"i[x-z][1-3]": {"i?[x-z]", "ix*"},
+		// [\!-\!], [a-a\--\-], [a-c\--\-f-f].
+		"[!]": {"[a-]", "[a-c-f]"},
+		// [!a-c\!-\!f-g]
+		"[!a-c!f-g]": {"*"},
+		// [] match nothing.
+		"[]*": {"*"},
 	},
 	matchCase: []struct {
 		schema, table string
@@ -59,6 +65,9 @@ var _ = Suite(&testSelectorSuite{
 		{"ikj", "ikb", 1, []string{"ik[hjkl]", "ik[!zxc]"}},
 		{"ikh", "iky", 2, []string{"ik[hjkl]", "ik[!zxc]", "ik[f-h]", "ik[!a-ce-g]"}},
 		{"iz3", "ixz", 2, []string{"i[x-z][1-3]", "i?[x-z]", "i[x-z][1-3]", "ix*"}},
+		{"!", "-", 2, []string{"[!]", "[a-]", "[!]", "[a-c-f]"}},
+		{"!", "c", 1, []string{"[!]", "[a-c-f]"}},
+		{"d", "zxcv", 1, []string{"[!a-c!f-g]", "*"}},
 	},
 	removeCases: []string{"schema*", "", "a?c", "t2_ab*"},
 })
