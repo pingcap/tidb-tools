@@ -44,7 +44,7 @@ type Selector interface {
 	// Remove will remove one rule
 	Remove(schema, table string) error
 	// AllRules will returns all rules
-	AllRules() (map[string]interface{}, map[string]map[string]interface{})
+	AllRules() (map[string][]interface{}, map[string]map[string][]interface{})
 }
 
 // RuleSet is a set of rules that selected
@@ -326,11 +326,11 @@ func (t *trieSelector) track(n *node, pattern string) ([]*item, error) {
 }
 
 // AllRules implements Selector's AllRules
-func (t *trieSelector) AllRules() (map[string]interface{}, map[string]map[string]interface{}) {
+func (t *trieSelector) AllRules() (map[string][]interface{}, map[string]map[string][]interface{}) {
 	var (
-		tableRules  = make(map[string]map[string]interface{})
+		tableRules  = make(map[string]map[string][]interface{})
 		schemaNodes = make(map[string]*node)
-		schemaRules = make(map[string]interface{})
+		schemaRules = make(map[string][]interface{})
 		word        []byte
 	)
 	t.RLock()
@@ -339,7 +339,7 @@ func (t *trieSelector) AllRules() (map[string]interface{}, map[string]map[string
 	for schema, n := range schemaNodes {
 		rules, ok := tableRules[schema]
 		if !ok {
-			rules = make(map[string]interface{})
+			rules = make(map[string][]interface{})
 		}
 
 		word = word[:0]
@@ -352,7 +352,7 @@ func (t *trieSelector) AllRules() (map[string]interface{}, map[string]map[string
 	return schemaRules, tableRules
 }
 
-func (t *trieSelector) travel(n *node, word []byte, rules map[string]interface{}, nodes map[string]*node) {
+func (t *trieSelector) travel(n *node, word []byte, rules map[string][]interface{}, nodes map[string]*node) {
 	if n == nil {
 		return
 	}
@@ -425,7 +425,7 @@ func appendMatchedItem(entity *item, mr *matchedResult) {
 	}
 }
 
-func insertMatchedItemIntoMap(pattern string, entity *item, rules map[string]interface{}, nodes map[string]*node) {
+func insertMatchedItemIntoMap(pattern string, entity *item, rules map[string][]interface{}, nodes map[string]*node) {
 	if rules != nil && entity.rule != nil {
 		rules[pattern] = entity.rule
 	}

@@ -71,8 +71,8 @@ type testSelectorSuite struct {
 
 	removeCases []string //schema, table, schema, table ...
 
-	expectedSchemaRules map[string]interface{}
-	expectedTableRules  map[string]map[string]interface{}
+	expectedSchemaRules map[string][]interface{}
+	expectedTableRules  map[string]map[string][]interface{}
 }
 
 func (t *testSelectorSuite) TestSelector(c *C) {
@@ -81,6 +81,7 @@ func (t *testSelectorSuite) TestSelector(c *C) {
 
 	t.testInsert(c, s)
 	t.testMatch(c, s)
+	t.testAppend(c, s)
 	t.testReplace(c, s)
 	t.testRemove(c, s)
 }
@@ -91,26 +92,26 @@ type dummyRule struct {
 
 func (t *testSelectorSuite) testInsert(c *C, s Selector) {
 	var err error
-	for schema, rule := range t.expectedSchemaRules {
-		err = s.Insert(schema, "", rule, Insert)
+	for schema, rules := range t.expectedSchemaRules {
+		err = s.Insert(schema, "", rules[0], Insert)
 		c.Assert(err, IsNil)
 		// test duplicate error
-		err = s.Insert(schema, "", rule, Insert)
+		err = s.Insert(schema, "", rules[0], Insert)
 		c.Assert(err, NotNil)
 		// test simple replace
-		err = s.Insert(schema, "", rule, Replace)
+		err = s.Insert(schema, "", rules[0], Replace)
 		c.Assert(err, IsNil)
 	}
 
 	for schema, tables := range t.expectedTableRules {
-		for table, rule := range tables {
-			err = s.Insert(schema, table, rule, Insert)
+		for table, rules := range tables {
+			err = s.Insert(schema, table, rules[0], Insert)
 			c.Assert(err, IsNil)
 			// test duplicate error
-			err = s.Insert(schema, table, rule, Insert)
+			err = s.Insert(schema, table, rules[0], Insert)
 			c.Assert(err, NotNil)
 			// test simple replace
-			err = s.Insert(schema, table, rule, Replace)
+			err = s.Insert(schema, table, rules[0], Replace)
 			c.Assert(err, IsNil)
 		}
 	}
@@ -152,13 +153,28 @@ func (t *testSelectorSuite) testRemove(c *C, s Selector) {
 	c.Assert(tables, DeepEquals, t.expectedTableRules)
 }
 
+func (t *testSelectorSuite) testAppend(c *C, s Selector) {
+	var (
+		err          error
+		appendedRule = &dummyRule{description: "append"}
+	)
+	for schema := range t.expectedSchemaRules {
+		t.expectedSchemaRules[schema] = append(t.expectedSchemaRules[schema], appendedRule)
+		err = s.Insert(schema, "", appendedRule, Append)
+		c.Assert(err, IsNil)
+	}
+	schemas, tables := s.AllRules()
+	c.Assert(schemas, DeepEquals, t.expectedSchemaRules)
+	c.Assert(tables, DeepEquals, t.expectedTableRules)
+}
+
 func (t *testSelectorSuite) testReplace(c *C, s Selector) {
 	var (
 		err          error
 		replacedRule = &dummyRule{"replace"}
 	)
 	for schema := range t.expectedSchemaRules {
-		t.expectedSchemaRules[schema] = replacedRule
+		t.expectedSchemaRules[schema] = []interface{}{replacedRule}
 		// to prevent it doesn't exist
 		err = s.Insert(schema, "", replacedRule, Replace)
 		c.Assert(err, IsNil)
@@ -209,19 +225,19 @@ func (t *testSelectorSuite) testMatch(c *C, s Selector) {
 	c.Assert(trie.cache, DeepEquals, cache)
 }
 
-func (t *testSelectorSuite) testGenerateExpectedRules() (map[string]interface{}, map[string]map[string]interface{}) {
-	schemaRules := make(map[string]interface{})
-	tableRules := make(map[string]map[string]interface{})
+func (t *testSelectorSuite) testGenerateExpectedRules() (map[string][]interface{}, map[string]map[string][]interface{}) {
+	schemaRules := make(map[string][]interface{})
+	tableRules := make(map[string]map[string][]interface{})
 	for schema, tables := range t.tables {
 		_, ok := tableRules[schema]
 		if !ok {
-			tableRules[schema] = make(map[string]interface{})
+			tableRules[schema] = make(map[string][]interface{})
 		}
 		for _, table := range tables {
 			if len(table) == 0 {
-				schemaRules[schema] = &dummyRule{quoteSchemaTable(schema, "")}
+				schemaRules[schema] = []interface{}{&dummyRule{quoteSchemaTable(schema, "")}}
 			} else {
-				tableRules[schema][table] = &dummyRule{quoteSchemaTable(schema, table)}
+				tableRules[schema][table] = []interface{}{&dummyRule{quoteSchemaTable(schema, table)}}
 			}
 		}
 	}
