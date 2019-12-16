@@ -40,6 +40,8 @@ type Client interface {
 	// ScanRegion gets a list of regions, starts from the region that contains key.
 	// Limit limits the maximum number of regions returned.
 	ScanRegions(ctx context.Context, key, endKey []byte, limit int) ([]*RegionInfo, error)
+	// GetPlacementRule loads a placement rule from PD.
+	GetPlacementRule(ctx context.Context, groupID, ruleID string) (placement.Rule, error)
 	// SetPlacementRule insert or update a placement rule to PD.
 	SetPlacementRule(ctx context.Context, rule placement.Rule) error
 	// DeletePlacementRule removes a placement rule from PD.
@@ -195,6 +197,29 @@ func (c *pdClient) ScanRegions(ctx context.Context, key, endKey []byte, limit in
 		})
 	}
 	return regionInfos, nil
+}
+
+func (c *pdClient) GetPlacementRule(ctx context.Context, groupID, ruleID string) (placement.Rule, error) {
+	var rule placement.Rule
+	addr := c.getPDAPIAddr()
+	if addr == "" {
+		return rule, errors.New("failed to add stores labels: no leader")
+	}
+	req, _ := http.NewRequestWithContext(ctx, "GET", path.Join(addr, "pd/api/v1/config/rule", groupID, ruleID), nil)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return rule, errors.WithStack(err)
+	}
+	b, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return rule, errors.WithStack(err)
+	}
+	res.Body.Close()
+	err = json.Unmarshal(b, &rule)
+	if err != nil {
+		return rule, errors.WithStack(err)
+	}
+	return rule, nil
 }
 
 func (c *pdClient) SetPlacementRule(ctx context.Context, rule placement.Rule) error {
