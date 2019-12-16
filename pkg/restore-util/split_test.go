@@ -110,6 +110,10 @@ func (c *testClient) ScanRegions(ctx context.Context, key, endKey []byte, limit 
 	return nil, nil
 }
 
+func (c *testClient) GetPlacementRule(ctx context.Context, groupID, ruleID string) (r placement.Rule, err error) {
+	return
+}
+
 func (c *testClient) SetPlacementRule(ctx context.Context, rule placement.Rule) error {
 	return nil
 }
