@@ -3,6 +3,13 @@ package restore_util
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"path"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/pingcap/errors"
@@ -11,10 +18,11 @@ import (
 	"github.com/pingcap/kvproto/pkg/pdpb"
 	"github.com/pingcap/kvproto/pkg/tikvpb"
 	pd "github.com/pingcap/pd/client"
+	"github.com/pingcap/pd/server/schedule/placement"
 	"google.golang.org/grpc"
 )
 
-// Client is a external client used by RegionSplitter.
+// Client is an external client used by RegionSplitter.
 type Client interface {
 	// GetStore gets a store by a store id.
 	GetStore(ctx context.Context, storeID uint64) (*metapb.Store, error)
@@ -32,6 +40,15 @@ type Client interface {
 	// ScanRegion gets a list of regions, starts from the region that contains key.
 	// Limit limits the maximum number of regions returned.
 	ScanRegions(ctx context.Context, key, endKey []byte, limit int) ([]*RegionInfo, error)
+	// GetPlacementRule loads a placement rule from PD.
+	GetPlacementRule(ctx context.Context, groupID, ruleID string) (placement.Rule, error)
+	// SetPlacementRule insert or update a placement rule to PD.
+	SetPlacementRule(ctx context.Context, rule placement.Rule) error
+	// DeletePlacementRule removes a placement rule from PD.
+	DeletePlacementRule(ctx context.Context, groupID, ruleID string) error
+	// SetStoreLabel add or update specified label of stores. If labelValue
+	// is empty, it clears the label.
+	SetStoresLabel(ctx context.Context, stores []uint64, labelKey, labelValue string) error
 }
 
 // pdClient is a wrapper of pd client, can be used by RegionSplitter.
@@ -180,4 +197,85 @@ func (c *pdClient) ScanRegions(ctx context.Context, key, endKey []byte, limit in
 		})
 	}
 	return regionInfos, nil
+}
+
+func (c *pdClient) GetPlacementRule(ctx context.Context, groupID, ruleID string) (placement.Rule, error) {
+	var rule placement.Rule
+	addr := c.getPDAPIAddr()
+	if addr == "" {
+		return rule, errors.New("failed to add stores labels: no leader")
+	}
+	req, _ := http.NewRequestWithContext(ctx, "GET", path.Join(addr, "pd/api/v1/config/rule", groupID, ruleID), nil)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return rule, errors.WithStack(err)
+	}
+	b, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return rule, errors.WithStack(err)
+	}
+	res.Body.Close()
+	err = json.Unmarshal(b, &rule)
+	if err != nil {
+		return rule, errors.WithStack(err)
+	}
+	return rule, nil
+}
+
+func (c *pdClient) SetPlacementRule(ctx context.Context, rule placement.Rule) error {
+	addr := c.getPDAPIAddr()
+	if addr == "" {
+		return errors.New("failed to add stores labels: no leader")
+	}
+	m, _ := json.Marshal(rule)
+	req, _ := http.NewRequestWithContext(ctx, "POST", path.Join(addr, "pd/api/v1/config/rule"), bytes.NewReader(m))
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	ioutil.ReadAll(res.Body)
+	res.Body.Close()
+	return nil
+}
+
+func (c *pdClient) DeletePlacementRule(ctx context.Context, groupID, ruleID string) error {
+	addr := c.getPDAPIAddr()
+	if addr == "" {
+		return errors.New("failed to add stores labels: no leader")
+	}
+	req, _ := http.NewRequestWithContext(ctx, "DELETE", path.Join(addr, "pd/api/v1/config/rule", groupID, ruleID), nil)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	ioutil.ReadAll(res.Body)
+	res.Body.Close()
+	return nil
+}
+
+func (c *pdClient) SetStoresLabel(ctx context.Context, stores []uint64, labelKey, labelValue string) error {
+	b := []byte(fmt.Sprintf(`{"%s": "%s"}`, labelKey, labelValue))
+	addr := c.getPDAPIAddr()
+	if addr == "" {
+		return errors.New("failed to add stores labels: no leader")
+	}
+	for _, id := range stores {
+		req, _ := http.NewRequestWithContext(ctx, "POST", path.Join(addr, "pd/api/v1/store", strconv.FormatUint(id, 10), "label"), bytes.NewReader(b))
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return errors.WithStack(err)
+		}
+		ioutil.ReadAll(res.Body)
+		res.Body.Close()
+
+	}
+	return nil
+}
+
+func (c *pdClient) getPDAPIAddr() string {
+	addr := c.client.GetLeaderAddr()
+	if addr != "" && !strings.HasPrefix(addr, "http") {
+		addr = "http://" + addr
+	}
+	return addr
 }
