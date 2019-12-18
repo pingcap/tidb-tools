@@ -196,10 +196,10 @@ func (c *pdClient) BatchSplitRegions(ctx context.Context, regionInfo *RegionInfo
 		return nil, err
 	}
 	conn, err := grpc.Dial(store.GetAddress(), grpc.WithInsecure())
-	defer conn.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer conn.Close()
 	client := tikvpb.NewTikvClient(conn)
 	resp, err := client.SplitRegion(ctx, &kvrpcpb.SplitRegionRequest{
 		Context: &kvrpcpb.Context{
