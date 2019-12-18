@@ -33,6 +33,9 @@ type Client interface {
 	// SplitRegion splits a region from a key, if key is not included in the region, it will return nil.
 	// note: the key should not be encoded
 	SplitRegion(ctx context.Context, regionInfo *RegionInfo, key []byte) (*RegionInfo, error)
+	// BatchSplitRegions splits a region from a batch of keys.
+	// note: the keys should not be encoded
+	BatchSplitRegions(ctx context.Context, regionInfo *RegionInfo, keys [][]byte) ([]*RegionInfo, error)
 	// ScatterRegion scatters a specified region.
 	ScatterRegion(ctx context.Context, regionInfo *RegionInfo) error
 	// GetOperator gets the status of operator of the specified region.
@@ -174,6 +177,68 @@ func (c *pdClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, key 
 		Region: newRegion,
 		Leader: leader,
 	}, nil
+}
+
+func (c *pdClient) BatchSplitRegions(ctx context.Context, regionInfo *RegionInfo, keys [][]byte) ([]*RegionInfo, error) {
+	var peer *metapb.Peer
+	if regionInfo.Leader != nil {
+		peer = regionInfo.Leader
+	} else {
+		if len(regionInfo.Region.Peers) == 0 {
+			return nil, errors.New("region does not have peer")
+		}
+		peer = regionInfo.Region.Peers[0]
+	}
+
+	storeID := peer.GetStoreId()
+	store, err := c.GetStore(ctx, storeID)
+	if err != nil {
+		return nil, err
+	}
+	conn, err := grpc.Dial(store.GetAddress(), grpc.WithInsecure())
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	client := tikvpb.NewTikvClient(conn)
+	resp, err := client.SplitRegion(ctx, &kvrpcpb.SplitRegionRequest{
+		Context: &kvrpcpb.Context{
+			RegionId:    regionInfo.Region.Id,
+			RegionEpoch: regionInfo.Region.RegionEpoch,
+			Peer:        peer,
+		},
+		SplitKeys: keys,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if resp.RegionError != nil {
+		return nil, errors.Errorf("split region failed: region=%v, err=%v", regionInfo.Region, resp.RegionError)
+	}
+
+	regions := resp.GetRegions()
+	newRegionInfos := make([]*RegionInfo, 0, len(regions))
+	for _, region := range regions {
+		// Skip the original region
+		if region.GetId() == regionInfo.Region.GetId() {
+			continue
+		}
+		var leader *metapb.Peer
+		// Assume the leaders will be at the same store.
+		if regionInfo.Leader != nil {
+			for _, p := range region.GetPeers() {
+				if p.GetStoreId() == regionInfo.Leader.GetStoreId() {
+					leader = p
+					break
+				}
+			}
+		}
+		newRegionInfos = append(newRegionInfos, &RegionInfo{
+			Region: region,
+			Leader: leader,
+		})
+	}
+	return newRegionInfos, nil
 }
 
 func (c *pdClient) ScatterRegion(ctx context.Context, regionInfo *RegionInfo) error {

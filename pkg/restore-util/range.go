@@ -5,8 +5,11 @@ import (
 	"fmt"
 
 	"github.com/google/btree"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/kvproto/pkg/import_sstpb"
 	"github.com/pingcap/kvproto/pkg/metapb"
+	"github.com/pingcap/log"
+	"go.uber.org/zap"
 )
 
 // Range represents a range of keys.
@@ -31,6 +34,47 @@ func (r *Range) contains(key []byte) bool {
 	start, end := r.StartKey, r.EndKey
 	return bytes.Compare(key, start) >= 0 &&
 		(len(end) == 0 || bytes.Compare(key, end) < 0)
+}
+
+// sortRanges checks if the range overlapped and sort them
+func sortRanges(ranges []Range, rewriteRules *RewriteRules) ([]Range, error) {
+	rangeTree := NewRangeTree()
+	for _, rg := range ranges {
+		if rewriteRules != nil {
+			var startRule *import_sstpb.RewriteRule
+			rg.StartKey, startRule = replacePrefix(rg.StartKey, rewriteRules)
+			if startRule == nil {
+				log.Warn("cannot find rewrite rule", zap.Binary("key", rg.StartKey))
+			} else {
+				log.Debug(
+					"rewrite start key",
+					zap.Binary("key", rg.StartKey),
+					zap.Stringer("rule", startRule))
+			}
+			var endRule *import_sstpb.RewriteRule
+			rg.EndKey, endRule = replacePrefix(rg.EndKey, rewriteRules)
+			if endRule == nil {
+				log.Warn("cannot find rewrite rule", zap.Binary("key", rg.EndKey))
+			} else {
+				log.Debug(
+					"rewrite end key",
+					zap.Binary("key", rg.EndKey),
+					zap.Stringer("rule", endRule))
+			}
+		}
+		if out := rangeTree.InsertRange(rg); out != nil {
+			return nil, errors.Errorf("ranges overlapped: %s, %s", out, rg)
+		}
+	}
+	sortedRanges := make([]Range, 0, len(ranges))
+	rangeTree.Ascend(func(rg *Range) bool {
+		if rg == nil {
+			return false
+		}
+		sortedRanges = append(sortedRanges, *rg)
+		return true
+	})
+	return sortedRanges, nil
 }
 
 // RangeTree stores the ranges in an orderly manner.
