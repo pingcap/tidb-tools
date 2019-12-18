@@ -69,7 +69,7 @@ var _ = Suite(&testSelectorSuite{
 		{"!", "c", 1, []string{"[!]", "[a-c-f]"}},
 		{"d", "zxcv", 1, []string{"[!a-c!f-g]", "*"}},
 	},
-	removeCases: []string{"schema*", "", "a?c", "t2_ab*"},
+	removeCases: []string{"schema*", "", "a?c", "t2_ab*", "i[x-z][1-3]", "i?[x-z]", "[!]", "[a-c-f]"},
 })
 
 type testSelectorSuite struct {

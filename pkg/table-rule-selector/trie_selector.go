@@ -475,17 +475,18 @@ func (t *trieSelector) track(n *node, pattern string) ([]item, error) {
 				n = item.child()
 			} else {
 				matchIdx := -1
-				for i := range n.rItems {
-					if n.rItems[i].(*rangeItem).equal(rItem) {
-						matchIdx = i
+				for idx := range n.rItems {
+					if n.rItems[idx].(*rangeItem).equal(rItem) {
+						matchIdx = idx
 						break
 					}
 				}
 				if matchIdx == -1 {
 					return nil, errors.NotFoundf("pattern %v", pattern)
 				}
-				items = append(items, n.rItems[i])
-				n = n.rItems[i].child()
+				items = append(items, n.rItems[matchIdx])
+				n = n.rItems[matchIdx].child()
+				i += nextI
 			}
 		default:
 			item, ok := n.characters[pattern[i]]
