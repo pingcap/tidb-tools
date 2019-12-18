@@ -10,6 +10,7 @@ import (
 	"github.com/pingcap/kvproto/pkg/import_sstpb"
 	"github.com/pingcap/kvproto/pkg/metapb"
 	"github.com/pingcap/kvproto/pkg/pdpb"
+	"github.com/pingcap/pd/server/schedule/placement"
 	"github.com/pingcap/tidb/util/codec"
 )
 
@@ -107,6 +108,22 @@ func (c *testClient) GetOperator(ctx context.Context, regionID uint64) (*pdpb.Ge
 
 func (c *testClient) ScanRegions(ctx context.Context, key, endKey []byte, limit int) ([]*RegionInfo, error) {
 	return nil, nil
+}
+
+func (c *testClient) GetPlacementRule(ctx context.Context, groupID, ruleID string) (r placement.Rule, err error) {
+	return
+}
+
+func (c *testClient) SetPlacementRule(ctx context.Context, rule placement.Rule) error {
+	return nil
+}
+
+func (c *testClient) DeletePlacementRule(ctx context.Context, groupID, ruleID string) error {
+	return nil
+}
+
+func (c *testClient) SetStoresLabel(ctx context.Context, stores []uint64, labelKey, labelValue string) error {
+	return nil
 }
 
 // region: [, aay), [aay, bba), [bba, bbh), [bbh, cca), [cca, )
