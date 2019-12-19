@@ -91,7 +91,7 @@ func (c *pdClient) GetRegion(ctx context.Context, key []byte) (*RegionInfo, erro
 		return nil, err
 	}
 	if region == nil {
-		return nil, errors.Errorf("region not found: key=%x", key)
+		return nil, nil
 	}
 	return &RegionInfo{
 		Region: region,
@@ -105,7 +105,7 @@ func (c *pdClient) GetRegionByID(ctx context.Context, regionID uint64) (*RegionI
 		return nil, err
 	}
 	if region == nil {
-		return nil, errors.Errorf("region not found: id=%d", regionID)
+		return nil, nil
 	}
 	return &RegionInfo{
 		Region: region,
@@ -217,16 +217,16 @@ func (c *pdClient) BatchSplitRegions(ctx context.Context, regionInfo *RegionInfo
 	}
 
 	regions := resp.GetRegions()
-	newRegionInfos := make([]*RegionInfo, 0, len(regions))
-	for _, region := range regions {
+	newRegionInfos := make([]*RegionInfo, 0)
+	for i := range regions {
 		// Skip the original region
-		if region.GetId() == regionInfo.Region.GetId() {
+		if regions[i].GetId() == regionInfo.Region.GetId() {
 			continue
 		}
 		var leader *metapb.Peer
 		// Assume the leaders will be at the same store.
 		if regionInfo.Leader != nil {
-			for _, p := range region.GetPeers() {
+			for _, p := range regions[i].GetPeers() {
 				if p.GetStoreId() == regionInfo.Leader.GetStoreId() {
 					leader = p
 					break
@@ -234,7 +234,7 @@ func (c *pdClient) BatchSplitRegions(ctx context.Context, regionInfo *RegionInfo
 			}
 		}
 		newRegionInfos = append(newRegionInfos, &RegionInfo{
-			Region: region,
+			Region: regions[i],
 			Leader: leader,
 		})
 	}
