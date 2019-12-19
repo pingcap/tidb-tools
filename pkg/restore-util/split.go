@@ -152,6 +152,10 @@ func (rs *RegionSplitter) isScatterRegionFinished(ctx context.Context, regionID 
 		}
 		return false, errors.Errorf("get operator error: %s", respErr.GetType())
 	}
+	retryTimes := ctx.Value("retryTimes").(int)
+	if retryTimes > 3 {
+		log.Warn("get operator", zap.Uint64("regionID", regionID), zap.Stringer("resp", resp))
+	}
 	// If the current operator of the region is not 'scatter-region', we could assume
 	// that 'scatter-operator' has finished or timeout
 	ok := string(resp.GetDesc()) != "scatter-region" || resp.GetStatus() != pdpb.OperatorStatus_RUNNING
@@ -183,6 +187,7 @@ func (rs *RegionSplitter) waitForScatterRegion(ctx context.Context, regionInfo *
 	interval := ScatterWaitInterval
 	regionID := regionInfo.Region.GetId()
 	for i := 0; i < ScatterWaitMaxRetryTimes; i++ {
+		ctx = context.WithValue(ctx, "retryTimes", i)
 		ok, err := rs.isScatterRegionFinished(ctx, regionID)
 		if err != nil {
 			log.Warn("scatter region failed: do not have the region", zap.Reflect("region", regionInfo.Region))
