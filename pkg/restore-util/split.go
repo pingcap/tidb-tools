@@ -22,9 +22,11 @@ const (
 	SplitCheckInterval      = 8 * time.Millisecond
 	SplitMaxCheckInterval   = time.Second
 
-	ScatterWaitMaxRetryTimes = 128
+	ScatterWaitMaxRetryTimes = 64
 	ScatterWaitInterval      = 50 * time.Millisecond
-	ScatterMaxWaitInterval   = 5 * time.Second
+	ScatterMaxWaitInterval   = time.Second
+
+	ScatterWaitUpperInterval = 180 * time.Second
 )
 
 // RegionSplitter is a executor of region split by rules.
@@ -124,11 +126,23 @@ SplitRegions:
 	log.Info("splitting regions done, wait for scattering regions",
 		zap.Int("regions", len(scatterRegions)), zap.Duration("take", time.Since(startTime)))
 	startTime = time.Now()
+	scatterCount := 0
 	for _, region := range scatterRegions {
 		rs.waitForScatterRegion(ctx, region)
+		if time.Since(startTime) > ScatterWaitUpperInterval {
+			break
+		}
+		scatterCount++
 	}
-	log.Info("waiting for scattering regions done",
-		zap.Int("regions", len(scatterRegions)), zap.Duration("take", time.Since(startTime)))
+	if scatterCount == len(scatterRegions) {
+		log.Info("waiting for scattering regions done",
+			zap.Int("regions", len(scatterRegions)), zap.Duration("take", time.Since(startTime)))
+	} else {
+		log.Warn("waiting for scattering regions timeout",
+			zap.Int("scatterCount", scatterCount),
+			zap.Int("regions", len(scatterRegions)),
+			zap.Duration("take", time.Since(startTime)))
+	}
 	return nil
 }
 
