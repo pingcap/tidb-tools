@@ -217,16 +217,16 @@ func (c *pdClient) BatchSplitRegions(ctx context.Context, regionInfo *RegionInfo
 	}
 
 	regions := resp.GetRegions()
-	newRegionInfos := make([]*RegionInfo, 0)
-	for i := range regions {
+	newRegionInfos := make([]*RegionInfo, 0, len(regions))
+	for _, region := range regions {
 		// Skip the original region
-		if regions[i].GetId() == regionInfo.Region.GetId() {
+		if region.GetId() == regionInfo.Region.GetId() {
 			continue
 		}
 		var leader *metapb.Peer
 		// Assume the leaders will be at the same store.
 		if regionInfo.Leader != nil {
-			for _, p := range regions[i].GetPeers() {
+			for _, p := range region.GetPeers() {
 				if p.GetStoreId() == regionInfo.Leader.GetStoreId() {
 					leader = p
 					break
@@ -234,7 +234,7 @@ func (c *pdClient) BatchSplitRegions(ctx context.Context, regionInfo *RegionInfo
 			}
 		}
 		newRegionInfos = append(newRegionInfos, &RegionInfo{
-			Region: regions[i],
+			Region: region,
 			Leader: leader,
 		})
 	}
