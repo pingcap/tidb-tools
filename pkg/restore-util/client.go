@@ -270,7 +270,7 @@ func (c *pdClient) GetPlacementRule(ctx context.Context, groupID, ruleID string)
 	if addr == "" {
 		return rule, errors.New("failed to add stores labels: no leader")
 	}
-	req, _ := http.NewRequestWithContext(ctx, "GET", path.Join(addr, "pd/api/v1/config/rule", groupID, ruleID), nil)
+	req, _ := http.NewRequestWithContext(ctx, "GET", addr+path.Join("/pd/api/v1/config/rule", groupID, ruleID), nil)
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return rule, errors.WithStack(err)
@@ -293,7 +293,7 @@ func (c *pdClient) SetPlacementRule(ctx context.Context, rule placement.Rule) er
 		return errors.New("failed to add stores labels: no leader")
 	}
 	m, _ := json.Marshal(rule)
-	req, _ := http.NewRequestWithContext(ctx, "POST", path.Join(addr, "pd/api/v1/config/rule"), bytes.NewReader(m))
+	req, _ := http.NewRequestWithContext(ctx, "POST", addr+path.Join("/pd/api/v1/config/rule"), bytes.NewReader(m))
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return errors.WithStack(err)
@@ -308,7 +308,7 @@ func (c *pdClient) DeletePlacementRule(ctx context.Context, groupID, ruleID stri
 	if addr == "" {
 		return errors.New("failed to add stores labels: no leader")
 	}
-	req, _ := http.NewRequestWithContext(ctx, "DELETE", path.Join(addr, "pd/api/v1/config/rule", groupID, ruleID), nil)
+	req, _ := http.NewRequestWithContext(ctx, "DELETE", addr+path.Join("/pd/api/v1/config/rule", groupID, ruleID), nil)
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return errors.WithStack(err)
@@ -325,7 +325,7 @@ func (c *pdClient) SetStoresLabel(ctx context.Context, stores []uint64, labelKey
 		return errors.New("failed to add stores labels: no leader")
 	}
 	for _, id := range stores {
-		req, _ := http.NewRequestWithContext(ctx, "POST", path.Join(addr, "pd/api/v1/store", strconv.FormatUint(id, 10), "label"), bytes.NewReader(b))
+		req, _ := http.NewRequestWithContext(ctx, "POST", addr+path.Join("/pd/api/v1/store", strconv.FormatUint(id, 10), "label"), bytes.NewReader(b))
 		res, err := http.DefaultClient.Do(req)
 		if err != nil {
 			return errors.WithStack(err)
@@ -342,5 +342,5 @@ func (c *pdClient) getPDAPIAddr() string {
 	if addr != "" && !strings.HasPrefix(addr, "http") {
 		addr = "http://" + addr
 	}
-	return addr
+	return strings.TrimRight(addr, "/")
 }
