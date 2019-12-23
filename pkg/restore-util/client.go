@@ -91,7 +91,7 @@ func (c *pdClient) GetRegion(ctx context.Context, key []byte) (*RegionInfo, erro
 		return nil, err
 	}
 	if region == nil {
-		return nil, errors.Errorf("region not found: key=%x", key)
+		return nil, nil
 	}
 	return &RegionInfo{
 		Region: region,
@@ -105,7 +105,7 @@ func (c *pdClient) GetRegionByID(ctx context.Context, regionID uint64) (*RegionI
 		return nil, err
 	}
 	if region == nil {
-		return nil, errors.Errorf("region not found: id=%d", regionID)
+		return nil, nil
 	}
 	return &RegionInfo{
 		Region: region,
