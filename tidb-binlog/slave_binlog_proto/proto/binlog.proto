@@ -89,5 +89,5 @@ message Binlog {
   optional DMLData dml_data = 3;
   optional DDLData ddl_data = 4;
   // utc_time_zone marks if the time zone is UTC
-  optional bool          utc_time_zone  = 5;
+  optional string  utc_time_zone  = 5;
 }
