@@ -198,19 +198,23 @@ func (f *Filter) ApplyOn(stbs []*Table) []*Table {
 
 	var tbs []*Table
 	for _, tb := range stbs {
-		name := tb.String()
-		do, exist := f.c.query(name)
-		if !exist {
-			do = ActionType(f.filterOnSchemas(tb) && f.filterOnTables(tb))
-			f.c.set(tb.String(), do)
-		}
-
-		if do {
+		if f.Match(tb) {
 			tbs = append(tbs, tb)
 		}
 	}
 
 	return tbs
+}
+
+// Match returns true if the specified table should not be removed.
+func (f *Filter) Match(tb *Table) bool {
+	name := tb.String()
+	do, exist := f.c.query(name)
+	if !exist {
+		do = ActionType(f.filterOnSchemas(tb) && f.filterOnTables(tb))
+		f.c.set(tb.String(), do)
+	}
+	return do == Do
 }
 
 func (f *Filter) filterOnSchemas(tb *Table) bool {
