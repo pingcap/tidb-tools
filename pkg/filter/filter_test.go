@@ -173,3 +173,13 @@ func (s *testFilterSuite) TestInvalidRegex(c *C) {
 		c.Assert(err, NotNil)
 	}
 }
+
+func (s *testFilterSuite) TestMatchReturnsBool(c *C) {
+	rules := &Rules{
+		DoDBs: []string{"sns"},
+	}
+	f, err := New(true, rules)
+	c.Assert(err, IsNil)
+	c.Assert(f.Match(&Table{Schema: "sns"}), IsTrue)
+	c.Assert(f.Match(&Table{Schema: "other"}), IsFalse)
+}
