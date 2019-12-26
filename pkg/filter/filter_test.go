@@ -91,7 +91,7 @@ func (s *testFilterSuite) TestFilterOnSchema(c *C) {
 				IgnoreDBs: []string{"foo[bar]", "foo?", "special\\"},
 			},
 			Input:  []*Table{{"foor", "a"}, {"foo[bar]", "b"}, {"fo", "c"}, {"foo?", "d"}, {"special\\", "e"}},
-			Output: []*Table{{"fo", "c"}},
+			Output: []*Table{{"foo[bar]", "b"}, {"fo", "c"}},
 		},
 		// ensure non case-insensitive
 		{
@@ -120,13 +120,28 @@ func (s *testFilterSuite) TestFilterOnSchema(c *C) {
 			Input:  []*Table{{"abbd", "f1"}, {"aaaa", "f2"}, {"5", "5"}, {"abbc", "fa"}},
 			Output: []*Table{{"aaaa", "f2"}, {"5", "5"}, {"abbc", "fa"}},
 		},
-		// test the rule whose schema part is regex abd the table part is not regex.
+		// test the rule whose schema part is regex and the table part is not regex.
 		{
 			rules: &Rules{
 				IgnoreTables: []*Table{{"~t[0-8]", "a??"}},
 			},
 			Input:  []*Table{{"t1", "a01"}, {"t9", "a02"}, {"5", "5"}, {"t9", "a001"}},
 			Output: []*Table{{"t9", "a02"}, {"5", "5"}, {"t9", "a001"}},
+		},
+		{
+			rules: &Rules{
+				IgnoreTables: []*Table{{"a*", "A*"}},
+			},
+			Input:         []*Table{{"aB", "Ab"}, {"AaB", "aab"}, {"acB", "Afb"}},
+			Output:        []*Table{{"AaB", "aab"}},
+			caseSensitive: true,
+		},
+		{
+			rules: &Rules{
+				IgnoreTables: []*Table{{"a*", "A*"}},
+			},
+			Input:  []*Table{{"aB", "Ab"}, {"AaB", "aab"}, {"acB", "Afb"}},
+			Output: []*Table(nil),
 		},
 	}
 

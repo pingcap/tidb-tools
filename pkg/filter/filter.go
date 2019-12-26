@@ -209,13 +209,7 @@ func (f *Filter) initOneRegex(originStr string) error {
 
 func (f *Filter) initSchemaRule(dbStr string, isWhiteList bool) error {
 	if strings.HasPrefix(dbStr, "~") {
-		err := f.initOneRegex(dbStr[1:])
-		if err != nil {
-			return err
-		}
-	}
-	if !f.caseSensitive {
-		dbStr = strings.ToLower(dbStr)
+		return f.initOneRegex(dbStr[1:])
 	}
 	return f.Selector.Insert(dbStr, "", &nodeEndRule{
 		kind:        dbRule,
@@ -226,10 +220,6 @@ func (f *Filter) initSchemaRule(dbStr string, isWhiteList bool) error {
 func (f *Filter) initTableRule(dbStr, tableStr string, isWhiteList bool) error {
 	dbIsRegex := strings.HasPrefix(dbStr, "~")
 	tblIsRegex := strings.HasPrefix(tableStr, "~")
-	if !f.caseSensitive {
-		dbStr = strings.ToLower(dbStr)
-		tableStr = strings.ToLower(tableStr)
-	}
 	if dbIsRegex && tblIsRegex {
 		err := f.initOneRegex(dbStr[1:])
 		if err != nil {
@@ -351,7 +341,7 @@ func (f *Filter) filterOnTables(tb *Table) bool {
 	return len(f.rules.DoTables) == 0
 }
 
-func (f *Filter) matchDB(patternDBS []string, a string, isWhileListCheck bool) bool {
+func (f *Filter) matchDB(patternDBS []string, a string, isWhiteListCheck bool) bool {
 	for _, b := range patternDBS {
 		isRegex := strings.HasPrefix(b, "~")
 		if isRegex && f.matchString(b[1:], a) {
@@ -361,7 +351,7 @@ func (f *Filter) matchDB(patternDBS []string, a string, isWhileListCheck bool) b
 	ruleSet := f.Selector.Match(a, "")
 	for _, r := range ruleSet {
 		rule := r.(*nodeEndRule)
-		if rule.kind == dbRule && rule.isWhiteList == isWhileListCheck {
+		if rule.kind == dbRule && rule.isWhiteList == isWhiteListCheck {
 			return true
 		}
 	}

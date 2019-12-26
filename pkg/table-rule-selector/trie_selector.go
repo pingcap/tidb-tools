@@ -95,6 +95,7 @@ type item interface {
 	setChild(*node)
 	getRule() []interface{}
 	setRule(...interface{})
+	resetRule()
 	appendRule(interface{})
 	getNextLevel() *node
 	setNextLevel(*node)
@@ -122,6 +123,10 @@ func (i *baseItem) getRule() []interface{} {
 
 func (i *baseItem) setRule(rules ...interface{}) {
 	i.rule = rules
+}
+
+func (i *baseItem) resetRule() {
+	i.rule = nil
 }
 
 func (i *baseItem) appendRule(rule interface{}) {
@@ -444,7 +449,7 @@ func (t *trieSelector) Remove(schema, table string) error {
 		}
 
 		// remove table level nodes
-		tableItems[len(tableItems)-1].setRule(nil)
+		tableItems[len(tableItems)-1].resetRule()
 		t.clearCache()
 		return nil
 	}
@@ -453,7 +458,7 @@ func (t *trieSelector) Remove(schema, table string) error {
 		return errors.NotFoundf("schema/table %s/%s in schema level", schema, table)
 	}
 
-	schemaLeafItem.setRule(nil)
+	schemaLeafItem.resetRule()
 	t.clearCache()
 	return nil
 }
