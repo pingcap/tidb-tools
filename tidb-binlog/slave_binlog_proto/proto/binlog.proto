@@ -53,13 +53,12 @@ message Table {
   optional string table_name = 2;
   repeated ColumnInfo column_info = 3;
   repeated TableMutation mutations = 4;
-  // will only be set with version.
-  // >= 3.0.9
+  // will only be set with version >= 3.0.9
   repeated Key unique_keys = 5;
 }
 
 
-// Index contains index info
+// Key contains Key info.
 message Key {
     // name will be PRIMARY if it's the primary key.
 	optional string name = 1;

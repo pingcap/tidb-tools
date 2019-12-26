@@ -242,8 +242,7 @@ type Table struct {
 	TableName  *string          `protobuf:"bytes,2,opt,name=table_name,json=tableName" json:"table_name,omitempty"`
 	ColumnInfo []*ColumnInfo    `protobuf:"bytes,3,rep,name=column_info,json=columnInfo" json:"column_info,omitempty"`
 	Mutations  []*TableMutation `protobuf:"bytes,4,rep,name=mutations" json:"mutations,omitempty"`
-	// will only be set with version.
-	// >= 3.0.9
+	// will only be set with version >= 3.0.9
 	UniqueKeys       []*Key `protobuf:"bytes,5,rep,name=unique_keys,json=uniqueKeys" json:"unique_keys,omitempty"`
 	XXX_unrecognized []byte `json:"-"`
 }
