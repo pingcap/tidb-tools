@@ -3,6 +3,13 @@ package restore_util
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"path"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/pingcap/errors"
@@ -11,10 +18,11 @@ import (
 	"github.com/pingcap/kvproto/pkg/pdpb"
 	"github.com/pingcap/kvproto/pkg/tikvpb"
 	pd "github.com/pingcap/pd/client"
+	"github.com/pingcap/pd/server/schedule/placement"
 	"google.golang.org/grpc"
 )
 
-// Client is a external client used by RegionSplitter.
+// Client is an external client used by RegionSplitter.
 type Client interface {
 	// GetStore gets a store by a store id.
 	GetStore(ctx context.Context, storeID uint64) (*metapb.Store, error)
@@ -25,6 +33,9 @@ type Client interface {
 	// SplitRegion splits a region from a key, if key is not included in the region, it will return nil.
 	// note: the key should not be encoded
 	SplitRegion(ctx context.Context, regionInfo *RegionInfo, key []byte) (*RegionInfo, error)
+	// BatchSplitRegions splits a region from a batch of keys.
+	// note: the keys should not be encoded
+	BatchSplitRegions(ctx context.Context, regionInfo *RegionInfo, keys [][]byte) ([]*RegionInfo, error)
 	// ScatterRegion scatters a specified region.
 	ScatterRegion(ctx context.Context, regionInfo *RegionInfo) error
 	// GetOperator gets the status of operator of the specified region.
@@ -32,6 +43,15 @@ type Client interface {
 	// ScanRegion gets a list of regions, starts from the region that contains key.
 	// Limit limits the maximum number of regions returned.
 	ScanRegions(ctx context.Context, key, endKey []byte, limit int) ([]*RegionInfo, error)
+	// GetPlacementRule loads a placement rule from PD.
+	GetPlacementRule(ctx context.Context, groupID, ruleID string) (placement.Rule, error)
+	// SetPlacementRule insert or update a placement rule to PD.
+	SetPlacementRule(ctx context.Context, rule placement.Rule) error
+	// DeletePlacementRule removes a placement rule from PD.
+	DeletePlacementRule(ctx context.Context, groupID, ruleID string) error
+	// SetStoreLabel add or update specified label of stores. If labelValue
+	// is empty, it clears the label.
+	SetStoresLabel(ctx context.Context, stores []uint64, labelKey, labelValue string) error
 }
 
 // pdClient is a wrapper of pd client, can be used by RegionSplitter.
@@ -71,7 +91,7 @@ func (c *pdClient) GetRegion(ctx context.Context, key []byte) (*RegionInfo, erro
 		return nil, err
 	}
 	if region == nil {
-		return nil, errors.Errorf("region not found: key=%x", key)
+		return nil, nil
 	}
 	return &RegionInfo{
 		Region: region,
@@ -85,7 +105,7 @@ func (c *pdClient) GetRegionByID(ctx context.Context, regionID uint64) (*RegionI
 		return nil, err
 	}
 	if region == nil {
-		return nil, errors.Errorf("region not found: id=%d", regionID)
+		return nil, nil
 	}
 	return &RegionInfo{
 		Region: region,
@@ -159,6 +179,68 @@ func (c *pdClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, key 
 	}, nil
 }
 
+func (c *pdClient) BatchSplitRegions(ctx context.Context, regionInfo *RegionInfo, keys [][]byte) ([]*RegionInfo, error) {
+	var peer *metapb.Peer
+	if regionInfo.Leader != nil {
+		peer = regionInfo.Leader
+	} else {
+		if len(regionInfo.Region.Peers) == 0 {
+			return nil, errors.New("region does not have peer")
+		}
+		peer = regionInfo.Region.Peers[0]
+	}
+
+	storeID := peer.GetStoreId()
+	store, err := c.GetStore(ctx, storeID)
+	if err != nil {
+		return nil, err
+	}
+	conn, err := grpc.Dial(store.GetAddress(), grpc.WithInsecure())
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	client := tikvpb.NewTikvClient(conn)
+	resp, err := client.SplitRegion(ctx, &kvrpcpb.SplitRegionRequest{
+		Context: &kvrpcpb.Context{
+			RegionId:    regionInfo.Region.Id,
+			RegionEpoch: regionInfo.Region.RegionEpoch,
+			Peer:        peer,
+		},
+		SplitKeys: keys,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if resp.RegionError != nil {
+		return nil, errors.Errorf("split region failed: region=%v, err=%v", regionInfo.Region, resp.RegionError)
+	}
+
+	regions := resp.GetRegions()
+	newRegionInfos := make([]*RegionInfo, 0, len(regions))
+	for _, region := range regions {
+		// Skip the original region
+		if region.GetId() == regionInfo.Region.GetId() {
+			continue
+		}
+		var leader *metapb.Peer
+		// Assume the leaders will be at the same store.
+		if regionInfo.Leader != nil {
+			for _, p := range region.GetPeers() {
+				if p.GetStoreId() == regionInfo.Leader.GetStoreId() {
+					leader = p
+					break
+				}
+			}
+		}
+		newRegionInfos = append(newRegionInfos, &RegionInfo{
+			Region: region,
+			Leader: leader,
+		})
+	}
+	return newRegionInfos, nil
+}
+
 func (c *pdClient) ScatterRegion(ctx context.Context, regionInfo *RegionInfo) error {
 	return c.client.ScatterRegion(ctx, regionInfo.Region.GetId())
 }
@@ -180,4 +262,85 @@ func (c *pdClient) ScanRegions(ctx context.Context, key, endKey []byte, limit in
 		})
 	}
 	return regionInfos, nil
+}
+
+func (c *pdClient) GetPlacementRule(ctx context.Context, groupID, ruleID string) (placement.Rule, error) {
+	var rule placement.Rule
+	addr := c.getPDAPIAddr()
+	if addr == "" {
+		return rule, errors.New("failed to add stores labels: no leader")
+	}
+	req, _ := http.NewRequestWithContext(ctx, "GET", addr+path.Join("/pd/api/v1/config/rule", groupID, ruleID), nil)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return rule, errors.WithStack(err)
+	}
+	b, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return rule, errors.WithStack(err)
+	}
+	res.Body.Close()
+	err = json.Unmarshal(b, &rule)
+	if err != nil {
+		return rule, errors.WithStack(err)
+	}
+	return rule, nil
+}
+
+func (c *pdClient) SetPlacementRule(ctx context.Context, rule placement.Rule) error {
+	addr := c.getPDAPIAddr()
+	if addr == "" {
+		return errors.New("failed to add stores labels: no leader")
+	}
+	m, _ := json.Marshal(rule)
+	req, _ := http.NewRequestWithContext(ctx, "POST", addr+path.Join("/pd/api/v1/config/rule"), bytes.NewReader(m))
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	ioutil.ReadAll(res.Body)
+	res.Body.Close()
+	return nil
+}
+
+func (c *pdClient) DeletePlacementRule(ctx context.Context, groupID, ruleID string) error {
+	addr := c.getPDAPIAddr()
+	if addr == "" {
+		return errors.New("failed to add stores labels: no leader")
+	}
+	req, _ := http.NewRequestWithContext(ctx, "DELETE", addr+path.Join("/pd/api/v1/config/rule", groupID, ruleID), nil)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	ioutil.ReadAll(res.Body)
+	res.Body.Close()
+	return nil
+}
+
+func (c *pdClient) SetStoresLabel(ctx context.Context, stores []uint64, labelKey, labelValue string) error {
+	b := []byte(fmt.Sprintf(`{"%s": "%s"}`, labelKey, labelValue))
+	addr := c.getPDAPIAddr()
+	if addr == "" {
+		return errors.New("failed to add stores labels: no leader")
+	}
+	for _, id := range stores {
+		req, _ := http.NewRequestWithContext(ctx, "POST", addr+path.Join("/pd/api/v1/store", strconv.FormatUint(id, 10), "label"), bytes.NewReader(b))
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return errors.WithStack(err)
+		}
+		ioutil.ReadAll(res.Body)
+		res.Body.Close()
+
+	}
+	return nil
+}
+
+func (c *pdClient) getPDAPIAddr() string {
+	addr := c.client.GetLeaderAddr()
+	if addr != "" && !strings.HasPrefix(addr, "http") {
+		addr = "http://" + addr
+	}
+	return strings.TrimRight(addr, "/")
 }
