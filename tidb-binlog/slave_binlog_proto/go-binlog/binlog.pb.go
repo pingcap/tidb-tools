@@ -287,7 +287,7 @@ func (m *Table) GetUniqueKeys() []*Key {
 	return nil
 }
 
-// Index contains index info
+// Key contains Key info.
 type Key struct {
 	// name will be PRIMARY if it's the primary key.
 	Name             *string  `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`

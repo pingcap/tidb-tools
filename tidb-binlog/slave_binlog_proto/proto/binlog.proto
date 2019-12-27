@@ -60,9 +60,9 @@ message Table {
 
 // Key contains Key info.
 message Key {
-    // name will be PRIMARY if it's the primary key.
-	optional string name = 1;
-	repeated string column_names = 2;
+  // name will be PRIMARY if it's the primary key.
+  optional string name = 1;
+  repeated string column_names = 2;
 }
 
 message TableMutation {
