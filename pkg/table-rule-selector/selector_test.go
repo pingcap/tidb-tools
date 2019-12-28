@@ -14,6 +14,7 @@
 package selector
 
 import (
+	"sort"
 	"testing"
 
 	. "github.com/pingcap/check"
@@ -25,14 +26,23 @@ func TestClient(t *testing.T) {
 
 var _ = Suite(&testSelectorSuite{
 	tables: map[string][]string{
-		"t*":      {"test*"},
-		"schema*": {"", "test*", "abc*", "xyz"},
-		"?bc":     {"t1_abc", "t1_ab?", "abc*"},
-		"a?c":     {"t2_abc", "t2_ab*", "a?b"},
-		"ab?":     {"t3_ab?", "t3_ab*", "ab?"},
-		"ab*":     {"t4_abc", "t4_abc*", "ab*"},
-		"abc":     {"abc"},
-		"abd":     {"abc"},
+		"t*":          {"test*"},
+		"schema*":     {"", "test*", "abc*", "xyz"},
+		"?bc":         {"t1_abc", "t1_ab?", "abc*"},
+		"a?c":         {"t2_abc", "t2_ab*", "a?b"},
+		"ab?":         {"t3_ab?", "t3_ab*", "ab?"},
+		"ab*":         {"t4_abc", "t4_abc*", "ab*"},
+		"abc":         {"abc"},
+		"abd":         {"abc"},
+		"ik[hjkl]":    {"ik[!zxc]"},
+		"ik[f-h]":     {"ik[!a-ce-g]"},
+		"i[x-z][1-3]": {"i?[x-z]", "ix*"},
+		// [\!-\!], [a-a\--\-], [a-c\--\-f-f].
+		"[!]": {"[a-]", "[a-c-f]"},
+		// [!a-c\!-\!f-g]
+		"[!a-c!f-g]": {"*"},
+		// [] match nothing.
+		"[]*": {"*"},
 	},
 	matchCase: []struct {
 		schema, table string
@@ -52,8 +62,14 @@ var _ = Suite(&testSelectorSuite{
 		{"schema1", "test1", 2, []string{"schema*", "", "schema*", "test*"}},
 		{"t1", "test1", 1, []string{"t*", "test*"}},
 		{"schema1", "abc1", 2, []string{"schema*", "", "schema*", "abc*"}},
+		{"ikj", "ikb", 1, []string{"ik[hjkl]", "ik[!zxc]"}},
+		{"ikh", "iky", 2, []string{"ik[hjkl]", "ik[!zxc]", "ik[f-h]", "ik[!a-ce-g]"}},
+		{"iz3", "ixz", 2, []string{"i[x-z][1-3]", "i?[x-z]", "i[x-z][1-3]", "ix*"}},
+		{"!", "-", 2, []string{"[!]", "[a-]", "[!]", "[a-c-f]"}},
+		{"!", "c", 1, []string{"[!]", "[a-c-f]"}},
+		{"d", "zxcv", 1, []string{"[!a-c!f-g]", "*"}},
 	},
-	removeCases: []string{"schema*", "", "a?c", "t2_ab*"},
+	removeCases: []string{"schema*", "", "a?c", "t2_ab*", "i[x-z][1-3]", "i?[x-z]", "[!]", "[a-c-f]"},
 })
 
 type testSelectorSuite struct {
@@ -184,7 +200,12 @@ func (t *testSelectorSuite) testMatch(c *C, s Selector) {
 			rule := &dummyRule{quoteSchemaTable(mc.matchedRules[2*i], mc.matchedRules[2*i+1])}
 			expectedRules = append(expectedRules, rule)
 		}
-
+		sort.Slice(expectedRules, func(i, j int) bool {
+			return expectedRules[i].(*dummyRule).description < expectedRules[j].(*dummyRule).description
+		})
+		sort.Slice(rules, func(i, j int) bool {
+			return rules[i].(*dummyRule).description < rules[j].(*dummyRule).description
+		})
 		c.Assert(rules, DeepEquals, expectedRules)
 		cache[quoteSchemaTable(mc.schema, mc.table)] = expectedRules
 	}
@@ -192,6 +213,11 @@ func (t *testSelectorSuite) testMatch(c *C, s Selector) {
 	// test cache
 	trie, ok := s.(*trieSelector)
 	c.Assert(ok, IsTrue)
+	for _, cacheItem := range trie.cache {
+		sort.Slice(cacheItem, func(i, j int) bool {
+			return cacheItem[i].(*dummyRule).description < cacheItem[j].(*dummyRule).description
+		})
+	}
 	c.Assert(trie.cache, DeepEquals, cache)
 
 	// test not mathced

@@ -96,6 +96,39 @@ func (c *testClient) SplitRegion(ctx context.Context, regionInfo *RegionInfo, ke
 	return newRegion, nil
 }
 
+func (c *testClient) BatchSplitRegions(ctx context.Context, regionInfo *RegionInfo, keys [][]byte) ([]*RegionInfo, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	newRegions := make([]*RegionInfo, 0)
+	for _, key := range keys {
+		var target *RegionInfo
+		splitKey := codec.EncodeBytes([]byte{}, key)
+		for _, region := range c.regions {
+			if bytes.Compare(splitKey, region.Region.GetStartKey()) > 0 &&
+				beforeEnd(splitKey, region.Region.GetEndKey()) {
+				target = region
+			}
+		}
+		if target == nil {
+			continue
+		}
+		newRegion := &RegionInfo{
+			Region: &metapb.Region{
+				Peers:    target.Region.Peers,
+				Id:       c.nextRegionID,
+				StartKey: target.Region.StartKey,
+				EndKey:   splitKey,
+			},
+		}
+		c.regions[c.nextRegionID] = newRegion
+		c.nextRegionID++
+		target.Region.StartKey = splitKey
+		c.regions[target.Region.Id] = target
+		newRegions = append(newRegions, newRegion)
+	}
+	return newRegions, nil
+}
+
 func (c *testClient) ScatterRegion(ctx context.Context, regionInfo *RegionInfo) error {
 	return nil
 }
@@ -107,7 +140,18 @@ func (c *testClient) GetOperator(ctx context.Context, regionID uint64) (*pdpb.Ge
 }
 
 func (c *testClient) ScanRegions(ctx context.Context, key, endKey []byte, limit int) ([]*RegionInfo, error) {
-	return nil, nil
+	regions := make([]*RegionInfo, 0)
+	for _, region := range c.regions {
+		if limit > 0 && len(regions) >= limit {
+			break
+		}
+		if (len(region.Region.GetEndKey()) != 0 && bytes.Compare(region.Region.GetEndKey(), key) <= 0) ||
+			bytes.Compare(region.Region.GetStartKey(), endKey) > 0 {
+			continue
+		}
+		regions = append(regions, region)
+	}
+	return regions, nil
 }
 
 func (c *testClient) GetPlacementRule(ctx context.Context, groupID, ruleID string) (r placement.Rule, err error) {
@@ -130,7 +174,7 @@ func (c *testClient) SetStoresLabel(ctx context.Context, stores []uint64, labelK
 // range: [aaa, aae), [aae, aaz), [ccd, ccf), [ccf, ccj)
 // rewrite rules: aa -> xx,  cc -> bb
 // expected regions after split:
-// 		[, aay), [aay, bb), [bb, bba), [bba, bbf), [bbf, bbh), [bbh, cca), [cca, xx), [xx, xxe), [xxe, xxz), [xxz, )
+// 	[, aay), [aay, bb), [bb, bba), [bba, bbf), [bbf, bbh), [bbh, bbj), [bbj, cca), [cca, xx), [xx, xxe), [xxe, xxz), [xxz, )
 func TestSplit(t *testing.T) {
 	client := initTestClient()
 	ranges := initRanges()
@@ -138,17 +182,7 @@ func TestSplit(t *testing.T) {
 	regionSplitter := NewRegionSplitter(client)
 
 	ctx := context.Background()
-	length := 0
-	err := regionSplitter.Split(ctx, ranges, rewriteRules,
-		func(rg *Range) {
-			length++
-			if rg == nil {
-				t.Fatal("nil Range")
-			}
-		})
-	if length != 4+2 { // Ranges + Rules
-		t.Fatal("wrong length", length)
-	}
+	err := regionSplitter.Split(ctx, ranges, rewriteRules, func(key [][]byte) {})
 	if err != nil {
 		t.Fatalf("split regions failed: %v", err)
 	}
@@ -234,14 +268,14 @@ func initRewriteRules() *RewriteRules {
 }
 
 // expected regions after split:
-// 		[, aay), [aay, bb), [bb, bba), [bba, bbf), [bbf, bbh), [bbh, cca), [cca, xx), [xx, xxe), [xxe, xxz), [xxz, )
+// 	[, aay), [aay, bb), [bb, bba), [bba, bbf), [bbf, bbh), [bbh, bbj), [bbj, cca), [cca, xx), [xx, xxe), [xxe, xxz), [xxz, )
 func validateRegions(regions map[uint64]*RegionInfo) bool {
-	keys := [11]string{"", "aay", "bb", "bba", "bbf", "bbh", "cca", "xx", "xxe", "xxz", ""}
-	if len(regions) != 10 {
+	keys := [12]string{"", "aay", "bb", "bba", "bbf", "bbh", "bbj", "cca", "xx", "xxe", "xxz", ""}
+	if len(regions) != 11 {
 		return false
 	}
 FindRegion:
-	for i := 1; i < 11; i++ {
+	for i := 1; i < 12; i++ {
 		for _, region := range regions {
 			startKey := []byte(keys[i-1])
 			if len(startKey) != 0 {
