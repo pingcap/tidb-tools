@@ -241,7 +241,7 @@ func parseIndex(table *table, stmt *ast.CreateIndexStmt) error {
 		return errors.Errorf("mismatch table name for create index - %s : %s", table.name, stmt.Table.Name.L)
 	}
 
-	for _, indexCol := range stmt.IndexPartSpecifications {
+	for _, indexCol := range stmt.IndexColNames {
 		name := indexCol.Column.Name.L
 		if stmt.KeyType == ast.IndexKeyTypeUnique {
 			table.uniqIndices[name] = table.findCol(table.columns, name)
