@@ -7,7 +7,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.1.1 // indirect
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f // indirect
-	github.com/cznic/sortutil v0.0.0-20181122101858-f5f958428db8 // indirect
 	github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2 // indirect
 	github.com/go-sql-driver/mysql v1.4.1
 	github.com/gogo/protobuf v1.3.1 // indirect
@@ -22,15 +21,14 @@ require (
 	github.com/montanaflynn/stats v0.5.0 // indirect
 	github.com/onsi/ginkgo v1.10.2 // indirect
 	github.com/onsi/gomega v1.7.0 // indirect
-	github.com/pingcap/check v0.0.0-20191107115940-caf2b9e6ccf4
+	github.com/pingcap/check v0.0.0-20191216031241-8a5a85928f12
 	github.com/pingcap/errcode v0.3.0 // indirect
-	github.com/pingcap/errors v0.11.4
-	github.com/pingcap/failpoint v0.0.0-20190708053854-e7b1061e6e81 // indirect
-	github.com/pingcap/kvproto v0.0.0-20191210032720-9b94dc54ca2d
+	github.com/pingcap/errors v0.11.5-0.20190809092503-95897b64e011
+	github.com/pingcap/kvproto v0.0.0-20191217072959-393e6c0fd4b7
 	github.com/pingcap/log v0.0.0-20191012051959-b742a5d432e9
-	github.com/pingcap/parser v0.0.0-20191210055545-753e13bfdbf0
-	github.com/pingcap/pd v1.1.0-beta.0.20191211031832-13ea87a019a5
-	github.com/pingcap/tidb v1.1.0-beta.0.20191211070559-a94cff903cd1
+	github.com/pingcap/parser v0.0.0-20191223023445-b93660cf3e4e
+	github.com/pingcap/pd v1.1.0-beta.0.20191219054547-4d65bbefbc6d
+	github.com/pingcap/tidb v1.1.0-beta.0.20191226094607-05596fe145be
 	github.com/pingcap/tipb v0.0.0-20191209145133-44f75c9bef33
 	github.com/prometheus/client_golang v1.2.1 // indirect
 	github.com/prometheus/client_model v0.0.0-20191202183732-d1d2010b5bee // indirect
@@ -61,7 +59,5 @@ require (
 )
 
 replace github.com/golang/lint => golang.org/x/lint v0.0.0-20190930215403-16217165b5de
-
-replace github.com/google/pprof => github.com/lonng/pprof v0.0.0-20191012154247-04dfd648ce8d
 
 go 1.13
