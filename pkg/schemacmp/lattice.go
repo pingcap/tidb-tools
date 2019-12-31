@@ -386,8 +386,8 @@ func (a Uint) Join(other Lattice) (Lattice, error) {
 	}
 }
 
-// Tuple of Lattice instances. Given two Tuples `a` and `b`, we define `a < b`
-// iff `a[i] < b[i]` for all `i`.
+// Tuple of Lattice instances. Given two Tuples `a` and `b`, we define `a <= b`
+// iff `a[i] <= b[i]` for all `i`.
 type Tuple []Lattice
 
 // Unwrap implements Lattice. The returned type is a `[]interface{}`.
@@ -699,6 +699,6 @@ func (a latticeMap) Join(other Lattice) (Lattice, error) {
 }
 
 // Map wraps a LatticeMap instance into a Lattice.
-func Map(lm LatticeMap) latticeMap {
+func Map(lm LatticeMap) Lattice {
 	return latticeMap{LatticeMap: lm}
 }

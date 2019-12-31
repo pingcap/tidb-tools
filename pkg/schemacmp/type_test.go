@@ -14,11 +14,11 @@
 package schemacmp_test
 
 import (
-	. "github.com/pingcap/tidb-tools/pkg/schemacmp"
-
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/parser/types"
+
+	. "github.com/pingcap/tidb-tools/pkg/schemacmp"
 )
 
 type typeSchema struct{}

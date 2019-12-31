@@ -28,7 +28,6 @@ const (
 	columnInfoTupleIndexGeneratedExprString
 	columnInfoTupleIndexGeneratedStored
 	columnInfoTupleIndexFieldTypes
-	columnInfoTupleIndexComment
 )
 
 // encodeColumnInfoToLattice collects the necessary information for comparing a column.
@@ -38,11 +37,10 @@ func encodeColumnInfoToLattice(ci *model.ColumnInfo) Tuple {
 		Singleton(ci.GeneratedExprString),
 		Singleton(ci.GeneratedStored),
 		Type(&ci.FieldType),
-		MaybeSingletonString(ci.Comment),
 	}
 }
 
-// restoreColumnInfoFromLattice restores the text representation of a column.
+// restoreColumnInfoFromUnwrapped restores the text representation of a column.
 func restoreColumnInfoFromUnwrapped(col []interface{}, colName string, ctx *format.RestoreCtx) {
 	typ := col[columnInfoTupleIndexFieldTypes].(*types.FieldType)
 
@@ -66,17 +64,12 @@ func restoreColumnInfoFromUnwrapped(col []interface{}, colName string, ctx *form
 	if mysql.HasAutoIncrementFlag(typ.Flag) {
 		ctx.WriteKeyWord(" AUTO_INCREMENT")
 	}
-	if comment, ok := col[columnInfoTupleIndexComment].(string); ok && len(comment) != 0 {
-		ctx.WriteKeyWord(" COMMENT ")
-		ctx.WriteString(comment)
-	}
 }
 
 const (
 	indexInfoTupleIndexColumns = iota
 	indexInfoTupleIndexNotUnique
 	indexInfoTupleIndexNotPrimary
-	indexInfoTupleIndexComment
 	indexInfoTupleIndexType
 )
 
@@ -111,12 +104,11 @@ func encodeIndexInfoToLattice(ii *model.IndexInfo) Tuple {
 		EqualitySingleton(indexColumns),
 		Bool(!ii.Unique),
 		Bool(!ii.Primary),
-		MaybeSingletonString(ii.Comment),
 		Singleton(ii.Tp),
 	}
 }
 
-func restoreIndexIntoFromUnwrapped(index []interface{}, keyName string, ctx *format.RestoreCtx) {
+func restoreIndexInfoFromUnwrapped(index []interface{}, keyName string, ctx *format.RestoreCtx) {
 	isPrimary := !index[indexInfoTupleIndexNotPrimary].(bool)
 
 	switch {
@@ -146,11 +138,6 @@ func restoreIndexIntoFromUnwrapped(index []interface{}, keyName string, ctx *for
 		}
 	}
 	ctx.WritePlain(")")
-
-	if comment, ok := index[indexInfoTupleIndexComment].(string); ok && len(comment) != 0 {
-		ctx.WriteKeyWord(" COMMENT ")
-		ctx.WriteString(comment)
-	}
 }
 
 type columnMap map[string]Tuple
@@ -245,7 +232,6 @@ const (
 	tableInfoTupleIndexCollate
 	tableInfoTupleIndexColumns
 	tableInfoTupleIndexIndices
-	tableInfoTupleIndexComment
 	tableInfoTupleIndexAutoIncID
 	tableInfoTupleIndexShardRowIDBits
 	tableInfoTupleIndexAutoRandomBits
@@ -270,7 +256,6 @@ func encodeTableInfoToLattice(ti *model.TableInfo) Tuple {
 		Map(columns),
 		Map(indices),
 		// TODO ForeignKeys?
-		MaybeSingletonString(ti.Comment),
 		Int64(ti.AutoIncID),
 		// TODO Relax these?
 		Singleton(ti.ShardRowIDBits),
@@ -327,7 +312,7 @@ func restoreTableInfoFromUnwrapped(table []interface{}, tableName string, ctx *f
 		ctx.WritePlain(", ")
 		indexName := pair.key
 		index := pair.value.([]interface{})
-		restoreIndexIntoFromUnwrapped(index, indexName, ctx)
+		restoreIndexInfoFromUnwrapped(index, indexName, ctx)
 	}
 
 	ctx.WritePlain(") ")

@@ -15,9 +15,10 @@ package schemacmp_test
 
 import (
 	"bytes"
-	. "github.com/pingcap/tidb-tools/pkg/schemacmp"
 
 	. "github.com/pingcap/check"
+
+	. "github.com/pingcap/tidb-tools/pkg/schemacmp"
 )
 
 // eqBytes is a sample type used for testing EqualitySingleton.
