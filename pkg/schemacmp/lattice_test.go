@@ -222,6 +222,12 @@ func (*latticeSchema) TestCompatibilities(c *C) {
 			join:          StringList{"one", "two", "three", "four", "five"},
 		},
 		{
+			a:            StringList{"one", "two", "three"},
+			b:            StringList{"two", "three"},
+			compareError: `at string list index 0: distinct values.*`,
+			joinError:    `at string list index 0: distinct values.*`,
+		},
+		{
 			a:            StringList{"a", "b", "c"},
 			b:            StringList{"a", "e", "i", "o", "u"},
 			compareError: `at string list index 1: distinct values.*`,

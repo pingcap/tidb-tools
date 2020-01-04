@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/util/mock"
+
 	// initialize expression.EvalAsAst
 	_ "github.com/pingcap/tidb/planner"
 
@@ -75,9 +76,23 @@ func (s *tableSchema) TestJoinSchemas(c *C) {
 			join: "CREATE TABLE tb3 (col1 INT, new_col1 INT)",
 		},
 		{
+			name: "DM_002/1/unordered",
+			a:    "CREATE TABLE tb1 (col1 INT)",
+			b:    "CREATE TABLE tb2 (new_col1 INT, col1 INT)",
+			cmp:  -1,
+			join: "CREATE TABLE tb3 (new_col1 INT, col1 INT)",
+		},
+		{
 			name: "DM_002/2",
 			a:    "CREATE TABLE tb1 (col1 INT, new_col1 INT)",
 			b:    "CREATE TABLE tb2 (col1 INT, new_col1 INT)",
+			cmp:  0,
+			join: "CREATE TABLE tb3 (col1 INT, new_col1 INT)",
+		},
+		{
+			name: "DM_002/2/unordered",
+			a:    "CREATE TABLE tb1 (col1 INT, new_col1 INT)",
+			b:    "CREATE TABLE tb2 (new_col1 INT, col1 INT)",
 			cmp:  0,
 			join: "CREATE TABLE tb3 (col1 INT, new_col1 INT)",
 		},
