@@ -41,7 +41,7 @@ func encodeColumnInfoToLattice(ci *model.ColumnInfo) Tuple {
 }
 
 // restoreColumnInfoFromUnwrapped restores the text representation of a column.
-func restoreColumnInfoFromUnwrapped(col []interface{}, colName string, ctx *format.RestoreCtx) {
+func restoreColumnInfoFromUnwrapped(ctx *format.RestoreCtx, col []interface{}, colName string) {
 	typ := col[columnInfoTupleIndexFieldTypes].(*types.FieldType)
 
 	ctx.WriteName(colName)
@@ -108,7 +108,7 @@ func encodeIndexInfoToLattice(ii *model.IndexInfo) Tuple {
 	}
 }
 
-func restoreIndexInfoFromUnwrapped(index []interface{}, keyName string, ctx *format.RestoreCtx) {
+func restoreIndexInfoFromUnwrapped(ctx *format.RestoreCtx, index []interface{}, keyName string) {
 	isPrimary := !index[indexInfoTupleIndexNotPrimary].(bool)
 
 	switch {
@@ -294,7 +294,7 @@ func sortedMap(input map[string]interface{}) sortedMapSlice {
 	return res
 }
 
-func restoreTableInfoFromUnwrapped(table []interface{}, tableName string, ctx *format.RestoreCtx) {
+func restoreTableInfoFromUnwrapped(ctx *format.RestoreCtx, table []interface{}, tableName string) {
 	ctx.WriteKeyWord("CREATE TABLE ")
 	ctx.WriteName(tableName)
 	ctx.WritePlain("(")
@@ -305,14 +305,14 @@ func restoreTableInfoFromUnwrapped(table []interface{}, tableName string, ctx *f
 		}
 		colName := pair.key
 		column := pair.value.([]interface{})
-		restoreColumnInfoFromUnwrapped(column, colName, ctx)
+		restoreColumnInfoFromUnwrapped(ctx, column, colName)
 	}
 
 	for _, pair := range sortedMap(table[tableInfoTupleIndexIndices].(map[string]interface{})) {
 		ctx.WritePlain(", ")
 		indexName := pair.key
 		index := pair.value.([]interface{})
-		restoreIndexInfoFromUnwrapped(index, indexName, ctx)
+		restoreIndexInfoFromUnwrapped(ctx, index, indexName)
 	}
 
 	ctx.WritePlain(") ")
@@ -341,8 +341,8 @@ func Encode(ti *model.TableInfo) Table {
 	return Table{value: encodeTableInfoToLattice(ti)}
 }
 
-func (t Table) Restore(tableName string, ctx *format.RestoreCtx) {
-	restoreTableInfoFromUnwrapped(t.value.Unwrap().([]interface{}), tableName, ctx)
+func (t Table) Restore(ctx *format.RestoreCtx, tableName string) {
+	restoreTableInfoFromUnwrapped(ctx, t.value.Unwrap().([]interface{}), tableName)
 }
 
 func (t Table) Compare(other Table) (int, error) {
@@ -397,6 +397,6 @@ func (t Table) Join(other Table) (Table, error) {
 func (t Table) String() string {
 	var sb strings.Builder
 	ctx := format.NewRestoreCtx(format.DefaultRestoreFlags, &sb)
-	t.Restore("tbl", ctx)
+	t.Restore(ctx, "tbl")
 	return sb.String()
 }
