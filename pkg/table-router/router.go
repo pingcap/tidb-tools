@@ -81,7 +81,7 @@ func (r *Table) AddRule(rule *TableRule) error {
 		rule.ToLower()
 	}
 
-	err = r.Insert(rule.SchemaPattern, rule.TablePattern, rule, false)
+	err = r.Insert(rule.SchemaPattern, rule.TablePattern, rule, selector.Insert)
 	if err != nil {
 		return errors.Annotatef(err, "add rule %+v into table router", rule)
 	}
@@ -99,7 +99,7 @@ func (r *Table) UpdateRule(rule *TableRule) error {
 		rule.ToLower()
 	}
 
-	err = r.Insert(rule.SchemaPattern, rule.TablePattern, rule, true)
+	err = r.Insert(rule.SchemaPattern, rule.TablePattern, rule, selector.Replace)
 	if err != nil {
 		return errors.Annotatef(err, "update rule %+v into table router", rule)
 	}

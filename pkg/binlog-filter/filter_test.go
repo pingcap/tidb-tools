@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	. "github.com/pingcap/check"
+	selector "github.com/pingcap/tidb-tools/pkg/table-rule-selector"
 )
 
 func TestClient(t *testing.T) {
@@ -125,7 +126,7 @@ func (t *testFilterSuite) TestFilter(c *C) {
 	c.Assert(action, Equals, Do)
 
 	// invalid rule
-	err = filter.Selector.Insert("test_1_*", "abc*", "error", false)
+	err = filter.Selector.Insert("test_1_*", "abc*", "error", selector.Insert)
 	c.Assert(err, IsNil)
 	_, err = filter.Filter("test_1_a", "abc", InsertEvent, "")
 	c.Assert(err, NotNil)

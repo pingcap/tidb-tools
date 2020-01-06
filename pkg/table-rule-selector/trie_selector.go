@@ -46,13 +46,13 @@ type Selector interface {
 	// Insert will insert one rule into trie
 	// if table is empty, insert rule into schema level
 	// otherwise insert rule into table level
-	Insert(schema, table string, rule interface{}, replace bool) error
+	Insert(schema, table string, rule interface{}, insertType int) error
 	// Match will return all matched rules
 	Match(schema, table string) RuleSet
 	// Remove will remove one rule
 	Remove(schema, table string) error
 	// AllRules will returns all rules
-	AllRules() (map[string]interface{}, map[string]map[string]interface{})
+	AllRules() (map[string][]interface{}, map[string]map[string][]interface{})
 }
 
 // RuleSet is a set of rules that selected
@@ -93,8 +93,10 @@ type node struct {
 type item interface {
 	child() *node
 	setChild(*node)
-	getRule() interface{}
-	setRule(interface{})
+	getRule() []interface{}
+	setRule(...interface{})
+	resetRule()
+	appendRule(interface{})
 	getNextLevel() *node
 	setNextLevel(*node)
 }
@@ -102,7 +104,7 @@ type item interface {
 type baseItem struct {
 	ch *node
 
-	rule interface{}
+	rule []interface{}
 	// schema level ->(to) table level
 	nextLevel *node
 }
@@ -115,12 +117,20 @@ func (i *baseItem) setChild(c *node) {
 	i.ch = c
 }
 
-func (i *baseItem) getRule() interface{} {
+func (i *baseItem) getRule() []interface{} {
 	return i.rule
 }
 
-func (i *baseItem) setRule(rule interface{}) {
-	i.rule = rule
+func (i *baseItem) setRule(rules ...interface{}) {
+	i.rule = rules
+}
+
+func (i *baseItem) resetRule() {
+	i.rule = nil
+}
+
+func (i *baseItem) appendRule(rule interface{}) {
+	i.rule = append(i.rule, rule)
 }
 
 func (i *baseItem) getNextLevel() *node {
@@ -201,7 +211,7 @@ func NewTrieSelector() Selector {
 }
 
 // Insert implements Selector's interface.
-func (t *trieSelector) Insert(schema, table string, rule interface{}, replace bool) error {
+func (t *trieSelector) Insert(schema, table string, rule interface{}, insertType int) error {
 	if len(schema) == 0 || rule == nil {
 		return errors.Errorf("schema pattern %s or rule %v can't be empty", schema, rule)
 	}
@@ -209,17 +219,23 @@ func (t *trieSelector) Insert(schema, table string, rule interface{}, replace bo
 	var err error
 	t.Lock()
 	if len(table) == 0 {
-		err = t.insertSchema(schema, rule, replace)
+		err = t.insertSchema(schema, rule, insertType)
 	} else {
-		err = t.insertTable(schema, table, rule, replace)
+		err = t.insertTable(schema, table, rule, insertType)
 	}
 	t.Unlock()
 
 	return errors.Trace(err)
 }
 
-func (t *trieSelector) insertSchema(schema string, rule interface{}, replace bool) error {
-	_, err := t.insert(t.root, schema, rule, replace)
+const (
+	Insert int = iota
+	Replace
+	Append
+)
+
+func (t *trieSelector) insertSchema(schema string, rule interface{}, insertType int) error {
+	_, err := t.insert(t.root, schema, rule, insertType)
 	if err != nil {
 		return errors.Annotate(err, "insert into schema selector")
 	}
@@ -227,8 +243,8 @@ func (t *trieSelector) insertSchema(schema string, rule interface{}, replace boo
 	return nil
 }
 
-func (t *trieSelector) insertTable(schema, table string, rule interface{}, replace bool) error {
-	schemaEntity, err := t.insert(t.root, schema, nil, false)
+func (t *trieSelector) insertTable(schema, table string, rule interface{}, insertType int) error {
+	schemaEntity, err := t.insert(t.root, schema, nil, Insert)
 	if err != nil {
 		return errors.Annotate(err, "insert into schema selector")
 	}
@@ -237,7 +253,7 @@ func (t *trieSelector) insertTable(schema, table string, rule interface{}, repla
 		schemaEntity.setNextLevel(newNode())
 	}
 
-	_, err = t.insert(schemaEntity.getNextLevel(), table, rule, replace)
+	_, err = t.insert(schemaEntity.getNextLevel(), table, rule, insertType)
 	if err != nil {
 		return errors.Annotate(err, "insert into table selector")
 	}
@@ -279,7 +295,7 @@ func (t *trieSelector) getRangeItem(pattern string) (*rangeItem, int) {
 }
 
 // if rule is nil, just extract nodes
-func (t *trieSelector) insert(root *node, pattern string, rule interface{}, replace bool) (item, error) {
+func (t *trieSelector) insert(root *node, pattern string, rule interface{}, insertType int) (item, error) {
 	var (
 		n           = root
 		hadAsterisk = false
@@ -344,10 +360,14 @@ func (t *trieSelector) insert(root *node, pattern string, rule interface{}, repl
 	}
 
 	if rule != nil {
-		if !replace && entity.getRule() != nil {
+		if insertType == Insert && entity.getRule() != nil {
 			return nil, errors.AlreadyExistsf("pattern %s", pattern)
 		}
-		entity.setRule(rule)
+		if insertType == Replace {
+			entity.setRule(rule)
+		} else {
+			entity.appendRule(rule)
+		}
 		t.clearCache()
 	}
 
@@ -429,7 +449,7 @@ func (t *trieSelector) Remove(schema, table string) error {
 		}
 
 		// remove table level nodes
-		tableItems[len(tableItems)-1].setRule(nil)
+		tableItems[len(tableItems)-1].resetRule()
 		t.clearCache()
 		return nil
 	}
@@ -438,7 +458,7 @@ func (t *trieSelector) Remove(schema, table string) error {
 		return errors.NotFoundf("schema/table %s/%s in schema level", schema, table)
 	}
 
-	schemaLeafItem.setRule(nil)
+	schemaLeafItem.resetRule()
 	t.clearCache()
 	return nil
 }
@@ -502,11 +522,11 @@ func (t *trieSelector) track(n *node, pattern string) ([]item, error) {
 }
 
 // AllRules implements Selector's AllRules
-func (t *trieSelector) AllRules() (map[string]interface{}, map[string]map[string]interface{}) {
+func (t *trieSelector) AllRules() (map[string][]interface{}, map[string]map[string][]interface{}) {
 	var (
-		tableRules  = make(map[string]map[string]interface{})
+		tableRules  = make(map[string]map[string][]interface{})
 		schemaNodes = make(map[string]*node)
-		schemaRules = make(map[string]interface{})
+		schemaRules = make(map[string][]interface{})
 		word        []byte
 	)
 	t.RLock()
@@ -515,7 +535,7 @@ func (t *trieSelector) AllRules() (map[string]interface{}, map[string]map[string
 	for schema, n := range schemaNodes {
 		rules, ok := tableRules[schema]
 		if !ok {
-			rules = make(map[string]interface{})
+			rules = make(map[string][]interface{})
 		}
 
 		word = word[:0]
@@ -528,7 +548,7 @@ func (t *trieSelector) AllRules() (map[string]interface{}, map[string]map[string
 	return schemaRules, tableRules
 }
 
-func (t *trieSelector) travel(n *node, word []byte, rules map[string]interface{}, nodes map[string]*node) {
+func (t *trieSelector) travel(n *node, word []byte, rules map[string][]interface{}, nodes map[string]*node) {
 	if n == nil {
 		return
 	}
@@ -609,7 +629,7 @@ func (t *trieSelector) matchNode(n *node, s string, mr *matchedResult) {
 
 func appendMatchedItem(entity item, mr *matchedResult) {
 	if entity.getRule() != nil {
-		mr.rules = append(mr.rules, entity.getRule())
+		mr.rules = append(mr.rules, entity.getRule()...)
 	}
 
 	if entity.getNextLevel() != nil {
@@ -617,7 +637,7 @@ func appendMatchedItem(entity item, mr *matchedResult) {
 	}
 }
 
-func insertMatchedItemIntoMap(pattern string, entity item, rules map[string]interface{}, nodes map[string]*node) {
+func insertMatchedItemIntoMap(pattern string, entity item, rules map[string][]interface{}, nodes map[string]*node) {
 	if rules != nil && entity.getRule() != nil {
 		rules[pattern] = entity.getRule()
 	}
