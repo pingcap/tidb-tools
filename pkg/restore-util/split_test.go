@@ -190,9 +190,9 @@ func (s *testRestoreUtilSuite) TestSplit(c *C) {
 	regions := client.GetAllRegions()
 	if !validateRegions(regions) {
 		for _, region := range regions {
-			fmt.Printf("region: %v\n", region.Region)
+			c.Logf("region: %v\n", region.Region)
 		}
-		fmt.Printf("get wrong result")
+		c.Log("get wrong result")
 		c.Fail()
 	}
 }

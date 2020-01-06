@@ -32,8 +32,8 @@ func (checker *rangeEquals) Check(params []interface{}, names []string) (result 
 		return false, ""
 	}
 	for i := range obtained {
-		if bytes.Compare(obtained[i].StartKey, expected[i].StartKey) != 0 ||
-			bytes.Compare(obtained[i].EndKey, expected[i].EndKey) != 0 {
+		if !bytes.Equal(obtained[i].StartKey, expected[i].StartKey) ||
+			!bytes.Equal(obtained[i].EndKey, expected[i].EndKey) {
 			return false, ""
 		}
 	}
