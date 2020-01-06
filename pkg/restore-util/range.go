@@ -52,7 +52,7 @@ func sortRanges(ranges []Range, rewriteRules *RewriteRules) ([]Range, error) {
 				} else {
 					log.Debug(
 						"rewrite start key",
-						zap.ByteString("key", rg.StartKey),
+						zap.Binary("key", rg.StartKey),
 						zap.Stringer("rule", rule))
 				}
 				rg.EndKey, rule = replacePrefix(rg.EndKey, rewriteRules)
@@ -61,13 +61,13 @@ func sortRanges(ranges []Range, rewriteRules *RewriteRules) ([]Range, error) {
 				} else {
 					log.Debug(
 						"rewrite end key",
-						zap.ByteString("key", rg.EndKey),
+						zap.Binary("key", rg.EndKey),
 						zap.Stringer("rule", rule))
 				}
 			} else {
 				log.Warn("table id does not match",
-					zap.ByteString("startKey", rg.StartKey),
-					zap.ByteString("endKey", rg.EndKey),
+					zap.Binary("startKey", rg.StartKey),
+					zap.Binary("endKey", rg.EndKey),
 					zap.Int64("startID", startID),
 					zap.Int64("endID", endID))
 			}
