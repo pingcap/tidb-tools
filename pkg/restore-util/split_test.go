@@ -3,7 +3,6 @@ package restore_util
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"sync"
 
 	. "github.com/pingcap/check"
