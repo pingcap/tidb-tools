@@ -10,7 +10,6 @@ import (
 	"github.com/pingcap/kvproto/pkg/metapb"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/tablecodec"
-	"github.com/pingcap/tidb/util/codec"
 	"go.uber.org/zap"
 )
 
@@ -53,7 +52,7 @@ func sortRanges(ranges []Range, rewriteRules *RewriteRules) ([]Range, error) {
 				} else {
 					log.Debug(
 						"rewrite start key",
-						zap.Binary("key", rg.StartKey),
+						zap.ByteString("key", rg.StartKey),
 						zap.Stringer("rule", rule))
 				}
 				rg.EndKey, rule = replacePrefix(rg.EndKey, rewriteRules)
@@ -62,23 +61,15 @@ func sortRanges(ranges []Range, rewriteRules *RewriteRules) ([]Range, error) {
 				} else {
 					log.Debug(
 						"rewrite end key",
-						zap.Binary("key", rg.EndKey),
+						zap.ByteString("key", rg.EndKey),
 						zap.Stringer("rule", rule))
 				}
-			} else if startID == endID-1 {
-				rg.StartKey, rule = replacePrefix(rg.StartKey, rewriteRules)
-				if rule == nil {
-					log.Warn("cannot find rewrite rule", zap.Binary("key", rg.StartKey))
-					continue
-				} else {
-					log.Debug(
-						"rewrite start key",
-						zap.Binary("key", rg.StartKey),
-						zap.Stringer("rule", rule))
-				}
-				newStartID := tablecodec.DecodeTableID(rule.GetNewKeyPrefix())
-				endKey := codec.EncodeInt([]byte("t"), newStartID+1)
-				rg.EndKey = append(endKey, rg.EndKey[len(endKey):]...)
+			} else {
+				log.Warn("table id does not match",
+					zap.ByteString("startKey", rg.StartKey),
+					zap.ByteString("endKey", rg.EndKey),
+					zap.Int64("startID", startID),
+					zap.Int64("endID", endID))
 			}
 		}
 		if out := rangeTree.InsertRange(rg); out != nil {
