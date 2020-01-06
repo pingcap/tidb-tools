@@ -204,7 +204,8 @@ func (rs *RegionSplitter) waitForScatterRegion(ctx context.Context, regionInfo *
 		ctx = context.WithValue(ctx, "retryTimes", i)
 		ok, err := rs.isScatterRegionFinished(ctx, regionID)
 		if err != nil {
-			log.Warn("scatter region failed: do not have the region", zap.Reflect("region", regionInfo.Region))
+			log.Warn("scatter region failed: do not have the region",
+				zap.Stringer("region", regionInfo.Region))
 			return
 		}
 		if ok {
