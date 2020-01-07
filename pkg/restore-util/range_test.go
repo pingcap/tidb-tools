@@ -61,11 +61,8 @@ func (s *testRestoreUtilSuite) TestSortRange(c *C) {
 	ranges2 := []Range{
 		{append(tablecodec.GenTableRecordPrefix(1), []byte("aaa")...), append(tablecodec.GenTableRecordPrefix(2), []byte("bbb")...)},
 	}
-	rs2, err := sortRanges(ranges2, rewriteRules)
-	c.Assert(err, IsNil, Commentf("sort range1 failed: %v", err))
-	c.Assert(rs2, RangeEquals, []Range{
-		{append(tablecodec.GenTableRecordPrefix(1), []byte("aaa")...), append(tablecodec.GenTableRecordPrefix(2), []byte("bbb")...)},
-	})
+	_, err = sortRanges(ranges2, rewriteRules)
+	c.Assert(err, ErrorMatches, ".*table id does not match.*")
 
 	ranges3 := initRanges()
 	rewriteRules1 := initRewriteRules()
