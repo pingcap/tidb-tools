@@ -70,6 +70,7 @@ func sortRanges(ranges []Range, rewriteRules *RewriteRules) ([]Range, error) {
 					zap.Binary("endKey", rg.EndKey),
 					zap.Int64("startID", startID),
 					zap.Int64("endID", endID))
+				return nil, errors.New("table id does not match")
 			}
 		}
 		if out := rangeTree.InsertRange(rg); out != nil {
