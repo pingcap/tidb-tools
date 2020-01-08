@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"context"
 	"sync"
-	"testing"
 
+	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/kvproto/pkg/import_sstpb"
 	"github.com/pingcap/kvproto/pkg/metapb"
@@ -175,7 +175,7 @@ func (c *testClient) SetStoresLabel(ctx context.Context, stores []uint64, labelK
 // rewrite rules: aa -> xx,  cc -> bb
 // expected regions after split:
 // 	[, aay), [aay, bb), [bb, bba), [bba, bbf), [bbf, bbh), [bbh, bbj), [bbj, cca), [cca, xx), [xx, xxe), [xxe, xxz), [xxz, )
-func TestSplit(t *testing.T) {
+func (s *testRestoreUtilSuite) TestSplit(c *C) {
 	client := initTestClient()
 	ranges := initRanges()
 	rewriteRules := initRewriteRules()
@@ -184,14 +184,15 @@ func TestSplit(t *testing.T) {
 	ctx := context.Background()
 	err := regionSplitter.Split(ctx, ranges, rewriteRules, func(key [][]byte) {})
 	if err != nil {
-		t.Fatalf("split regions failed: %v", err)
+		c.Assert(err, IsNil, Commentf("split regions failed: %v", err))
 	}
 	regions := client.GetAllRegions()
 	if !validateRegions(regions) {
 		for _, region := range regions {
-			t.Errorf("region: %v", region.Region)
+			c.Logf("region: %v\n", region.Region)
 		}
-		t.Fatalf("get wrong result")
+		c.Log("get wrong result")
+		c.Fail()
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"github.com/pingcap/kvproto/pkg/import_sstpb"
 	"github.com/pingcap/kvproto/pkg/metapb"
 	"github.com/pingcap/log"
+	"github.com/pingcap/tidb/tablecodec"
 	"go.uber.org/zap"
 )
 
@@ -41,25 +42,35 @@ func sortRanges(ranges []Range, rewriteRules *RewriteRules) ([]Range, error) {
 	rangeTree := NewRangeTree()
 	for _, rg := range ranges {
 		if rewriteRules != nil {
-			var startRule *import_sstpb.RewriteRule
-			rg.StartKey, startRule = replacePrefix(rg.StartKey, rewriteRules)
-			if startRule == nil {
-				log.Warn("cannot find rewrite rule", zap.Binary("key", rg.StartKey))
+			startID := tablecodec.DecodeTableID(rg.StartKey)
+			endID := tablecodec.DecodeTableID(rg.EndKey)
+			var rule *import_sstpb.RewriteRule
+			if startID == endID {
+				rg.StartKey, rule = replacePrefix(rg.StartKey, rewriteRules)
+				if rule == nil {
+					log.Warn("cannot find rewrite rule", zap.Binary("key", rg.StartKey))
+				} else {
+					log.Debug(
+						"rewrite start key",
+						zap.Binary("key", rg.StartKey),
+						zap.Stringer("rule", rule))
+				}
+				rg.EndKey, rule = replacePrefix(rg.EndKey, rewriteRules)
+				if rule == nil {
+					log.Warn("cannot find rewrite rule", zap.Binary("key", rg.EndKey))
+				} else {
+					log.Debug(
+						"rewrite end key",
+						zap.Binary("key", rg.EndKey),
+						zap.Stringer("rule", rule))
+				}
 			} else {
-				log.Debug(
-					"rewrite start key",
-					zap.Binary("key", rg.StartKey),
-					zap.Stringer("rule", startRule))
-			}
-			var endRule *import_sstpb.RewriteRule
-			rg.EndKey, endRule = replacePrefix(rg.EndKey, rewriteRules)
-			if endRule == nil {
-				log.Warn("cannot find rewrite rule", zap.Binary("key", rg.EndKey))
-			} else {
-				log.Debug(
-					"rewrite end key",
-					zap.Binary("key", rg.EndKey),
-					zap.Stringer("rule", endRule))
+				log.Warn("table id does not match",
+					zap.Binary("startKey", rg.StartKey),
+					zap.Binary("endKey", rg.EndKey),
+					zap.Int64("startID", startID),
+					zap.Int64("endID", endID))
+				return nil, errors.New("table id does not match")
 			}
 		}
 		if out := rangeTree.InsertRange(rg); out != nil {

@@ -3,52 +3,75 @@ package restore_util
 import (
 	"bytes"
 	"testing"
+
+	. "github.com/pingcap/check"
+	"github.com/pingcap/kvproto/pkg/import_sstpb"
+	"github.com/pingcap/tidb/tablecodec"
 )
 
-func TestRangeTreeNormal(t *testing.T) {
-	ranges := initRanges()
-	rangeTree := NewRangeTree()
-	for _, rg := range ranges {
-		if out := rangeTree.InsertRange(rg); out != nil {
-			t.Fatalf("insert range failed: %s %s", out.(*Range).String(), rg.String())
-		}
-	}
-	resRanges := make([]Range, 0)
-	rangeTree.Ascend(func(rg *Range) bool {
-		if rg == nil {
-			return false
-		}
-		resRanges = append(resRanges, Range{
-			StartKey: rg.StartKey,
-			EndKey:   rg.EndKey,
-		})
-		return true
-	})
-	if len(ranges) != len(resRanges) {
-		t.Fatalf("some inserted ranges missed: rg=%v res=%v", ranges, resRanges)
-	}
-	for i, rg := range ranges {
-		res := resRanges[i]
-		if !bytes.Equal(rg.StartKey, res.StartKey) || !bytes.Equal(rg.EndKey, res.EndKey) {
-			t.Fatalf("some inserted ranges missed: rg=%v res=%v", ranges, resRanges)
-		}
-	}
+func TestRestoreUtil(t *testing.T) {
+	TestingT(t)
 }
 
-func TestRangeOverlapped(t *testing.T) {
-	rg1 := Range{
-		StartKey: []byte("aaa"),
-		EndKey:   []byte("aaz"),
+type testRestoreUtilSuite struct{}
+
+var _ = Suite(&testRestoreUtilSuite{})
+
+type rangeEquals struct {
+	*CheckerInfo
+}
+
+var RangeEquals Checker = &rangeEquals{
+	&CheckerInfo{Name: "RangeEquals", Params: []string{"obtained", "expected"}},
+}
+
+func (checker *rangeEquals) Check(params []interface{}, names []string) (result bool, error string) {
+	obtained := params[0].([]Range)
+	expected := params[1].([]Range)
+	if len(obtained) != len(expected) {
+		return false, ""
 	}
-	rg2 := Range{
-		StartKey: []byte("aab"),
-		EndKey:   []byte("aag"),
+	for i := range obtained {
+		if !bytes.Equal(obtained[i].StartKey, expected[i].StartKey) ||
+			!bytes.Equal(obtained[i].EndKey, expected[i].EndKey) {
+			return false, ""
+		}
 	}
-	rangeTree := NewRangeTree()
-	if out := rangeTree.InsertRange(rg1); out != nil {
-		t.Fatalf("insert range failed: %s %s", out.(*Range).String(), rg1.String())
+	return true, ""
+}
+
+func (s *testRestoreUtilSuite) TestSortRange(c *C) {
+	dataRules := []*import_sstpb.RewriteRule{
+		{OldKeyPrefix: tablecodec.GenTableRecordPrefix(1), NewKeyPrefix: tablecodec.GenTableRecordPrefix(4)},
+		{OldKeyPrefix: tablecodec.GenTableRecordPrefix(2), NewKeyPrefix: tablecodec.GenTableRecordPrefix(5)},
 	}
-	if out := rangeTree.InsertRange(rg2); out == nil {
-		t.Fatalf("overlapping not detected: %s %s", rg1.String(), rg2.String())
+	rewriteRules := &RewriteRules{
+		Table: make([]*import_sstpb.RewriteRule, 0),
+		Data:  dataRules,
 	}
+	ranges1 := []Range{
+		{append(tablecodec.GenTableRecordPrefix(1), []byte("aaa")...), append(tablecodec.GenTableRecordPrefix(1), []byte("bbb")...)},
+	}
+	rs1, err := sortRanges(ranges1, rewriteRules)
+	c.Assert(err, IsNil, Commentf("sort range1 failed: %v", err))
+	c.Assert(rs1, RangeEquals, []Range{
+		{append(tablecodec.GenTableRecordPrefix(4), []byte("aaa")...), append(tablecodec.GenTableRecordPrefix(4), []byte("bbb")...)},
+	})
+
+	ranges2 := []Range{
+		{append(tablecodec.GenTableRecordPrefix(1), []byte("aaa")...), append(tablecodec.GenTableRecordPrefix(2), []byte("bbb")...)},
+	}
+	_, err = sortRanges(ranges2, rewriteRules)
+	c.Assert(err, ErrorMatches, ".*table id does not match.*")
+
+	ranges3 := initRanges()
+	rewriteRules1 := initRewriteRules()
+	rs3, err := sortRanges(ranges3, rewriteRules1)
+	c.Assert(err, IsNil, Commentf("sort range1 failed: %v", err))
+	c.Assert(rs3, RangeEquals, []Range{
+		{[]byte("bbd"), []byte("bbf")},
+		{[]byte("bbf"), []byte("bbj")},
+		{[]byte("xxa"), []byte("xxe")},
+		{[]byte("xxe"), []byte("xxz")},
+	})
 }
