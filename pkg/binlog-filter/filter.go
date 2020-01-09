@@ -156,7 +156,7 @@ func (b *BinlogEvent) AddRule(rule *BinlogEventRule) error {
 		rule.ToLower()
 	}
 
-	err = b.Insert(rule.SchemaPattern, rule.TablePattern, rule, false)
+	err = b.Insert(rule.SchemaPattern, rule.TablePattern, rule, selector.Insert)
 	if err != nil {
 		return errors.Annotatef(err, "add rule %+v into binlog event filter", rule)
 	}
@@ -177,7 +177,7 @@ func (b *BinlogEvent) UpdateRule(rule *BinlogEventRule) error {
 		rule.ToLower()
 	}
 
-	err = b.Insert(rule.SchemaPattern, rule.TablePattern, rule, true)
+	err = b.Insert(rule.SchemaPattern, rule.TablePattern, rule, selector.Replace)
 	if err != nil {
 		return errors.Annotatef(err, "update rule %+v into binlog event filter", rule)
 	}

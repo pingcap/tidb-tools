@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	. "github.com/pingcap/check"
+	selector "github.com/pingcap/tidb-tools/pkg/table-rule-selector"
 )
 
 func TestClient(t *testing.T) {
@@ -101,7 +102,7 @@ func (t *testRouterSuite) TestRoute(c *C) {
 	_, _, err = router.Route("test_1_a", "test")
 	c.Assert(err, NotNil)
 	// invalid rule
-	err = router.Selector.Insert("test_1_*", "abc*", "error", false)
+	err = router.Selector.Insert("test_1_*", "abc*", "error", selector.Insert)
 	c.Assert(err, IsNil)
 	_, _, err = router.Route("test_1_a", "abc")
 	c.Assert(err, NotNil)

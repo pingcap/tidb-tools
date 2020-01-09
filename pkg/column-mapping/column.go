@@ -193,7 +193,11 @@ func (m *Mapping) addOrUpdateRule(rule *Rule, isUpdate bool) error {
 	rule.Adjust()
 
 	m.resetCache()
-	err = m.Insert(rule.PatternSchema, rule.PatternTable, rule, isUpdate)
+	if isUpdate {
+		err = m.Insert(rule.PatternSchema, rule.PatternTable, rule, selector.Replace)
+	} else {
+		err = m.Insert(rule.PatternSchema, rule.PatternTable, rule, selector.Insert)
+	}
 	if err != nil {
 		var method string
 		if isUpdate {

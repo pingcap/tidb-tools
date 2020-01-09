@@ -98,4 +98,6 @@ message Binlog {
   // dml_data is marshalled from DML type
   optional DMLData dml_data = 3;
   optional DDLData ddl_data = 4;
+  // time_zone is the time zone of timestamp value
+  optional string  time_zone  = 5;
 }
