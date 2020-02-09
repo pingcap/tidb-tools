@@ -41,10 +41,12 @@ func (s *testFilterSuite) TestIsSystemSchema(c *C) {
 		{"MYSQL", true},
 		{"SYS", true},
 		{"not_system_schema", false},
+		{"METRIC_SCHEMA", true},
+		{"INSPECTION_SCHEMA", true},
 	}
 
 	for _, t := range cases {
-		c.Assert(IsSystemSchema(t.name), Equals, t.expected)
+		c.Assert(IsSystemSchema(t.name), Equals, t.expected, Commentf("schema name = %s", t.name))
 	}
 
 }
