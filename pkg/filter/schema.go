@@ -13,7 +13,11 @@
 
 package filter
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/pingcap/tidb/util"
+)
 
 // DM heartbeat schema / table name
 var (
@@ -21,19 +25,15 @@ var (
 	DMHeartbeatTable  = "heartbeat"
 )
 
-// mysql system schema
-var systemSchemas = map[string]struct{}{
-	"information_schema": {},
-	"mysql":              {},
-	"performance_schema": {},
-	"sys":                {},
-	DMHeartbeatSchema:    {}, // do not create table in it manually
-}
-
-// IsSystemSchema judge schema is system shema or not
+// IsSystemSchema checks whether schema is system schema or not.
 // case insensitive
 func IsSystemSchema(schema string) bool {
 	schema = strings.ToLower(schema)
-	_, ok := systemSchemas[schema]
-	return ok
+	switch schema {
+	case DMHeartbeatSchema, // do not create table in it manually
+		"sys": // https://dev.mysql.com/doc/refman/8.0/en/sys-schema.html
+		return true
+	default:
+		return util.IsMemOrSysDB(schema)
+	}
 }
