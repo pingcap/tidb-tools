@@ -41,7 +41,7 @@ const (
 	DefaultRetryTime = 10
 
 	// DefaultTimeout is the default timeout for execute sql
-	DefaultTimeout time.Duration = 5 * time.Second
+	DefaultTimeout time.Duration = 10 * time.Second
 
 	// SlowWarnLog defines the duration to log warn log of sql when exec time greater than
 	SlowWarnLog = 100 * time.Millisecond
