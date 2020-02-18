@@ -72,6 +72,9 @@ type Rules struct {
 
 	IgnoreTables []*Table `json:"ignore-tables" toml:"ignore-tables" yaml:"ignore-tables"`
 	IgnoreDBs    []string `json:"ignore-dbs" toml:"ignore-dbs" yaml:"ignore-dbs"`
+
+	NoRegex    bool `json:"no-regex" toml:"no-regex" yaml:"no-regex"`
+	NoWildcard bool `json:"no-wildcard" toml:"no-wildcard" yaml:"no-wildcard"`
 }
 
 // ToLower convert all entries to lowercase
@@ -113,8 +116,15 @@ func New(caseSensitive bool, rules *Rules) (*Filter, error) {
 		rules.ToLower()
 	}
 
+	var sel selector.Selector
+	if rules.NoWildcard {
+		sel = selector.NewTrieSelectorWithoutWildcard()
+	} else {
+		sel = selector.NewTrieSelector()
+	}
+
 	f := &Filter{
-		Selector:      selector.NewTrieSelector(),
+		Selector:      sel,
 		caseSensitive: caseSensitive,
 		rules:         rules,
 	}
@@ -192,6 +202,10 @@ func (f *Filter) initRules() (err error) {
 	return
 }
 
+func (f *Filter) isRegex(str string) bool {
+	return !f.rules.NoRegex && strings.HasPrefix(str, "~")
+}
+
 func (f *Filter) initOneRegex(originStr string) error {
 	if _, ok := f.patternMap[originStr]; !ok {
 		compileStr := originStr
@@ -208,7 +222,7 @@ func (f *Filter) initOneRegex(originStr string) error {
 }
 
 func (f *Filter) initSchemaRule(dbStr string, isWhiteList bool) error {
-	if strings.HasPrefix(dbStr, "~") {
+	if f.isRegex(dbStr) {
 		return f.initOneRegex(dbStr[1:])
 	}
 	return f.Selector.Insert(dbStr, "", &nodeEndRule{
@@ -218,8 +232,8 @@ func (f *Filter) initSchemaRule(dbStr string, isWhiteList bool) error {
 }
 
 func (f *Filter) initTableRule(dbStr, tableStr string, isWhiteList bool) error {
-	dbIsRegex := strings.HasPrefix(dbStr, "~")
-	tblIsRegex := strings.HasPrefix(tableStr, "~")
+	dbIsRegex := f.isRegex(dbStr)
+	tblIsRegex := f.isRegex(tableStr)
 	if dbIsRegex && tblIsRegex {
 		err := f.initOneRegex(dbStr[1:])
 		if err != nil {
@@ -348,7 +362,7 @@ func (f *Filter) filterOnTables(tb *Table) bool {
 
 func (f *Filter) matchDB(patternDBS []string, a string, isWhiteListCheck bool) bool {
 	for _, b := range patternDBS {
-		isRegex := strings.HasPrefix(b, "~")
+		isRegex := f.isRegex(b)
 		if isRegex && f.matchString(b[1:], a) {
 			return true
 		}
@@ -365,7 +379,7 @@ func (f *Filter) matchDB(patternDBS []string, a string, isWhiteListCheck bool) b
 
 func (f *Filter) matchTable(patternTBS []*Table, tb *Table, isWhiteListCheck bool) bool {
 	for _, ptb := range patternTBS {
-		dbIsRegex, tblIsRegex := strings.HasPrefix(ptb.Schema, "~"), strings.HasPrefix(ptb.Name, "~")
+		dbIsRegex, tblIsRegex := f.isRegex(ptb.Schema), f.isRegex(ptb.Name)
 		if dbIsRegex && tblIsRegex {
 			if f.matchString(ptb.Schema[1:], tb.Schema) && f.matchString(ptb.Name[1:], tb.Name) {
 				return true

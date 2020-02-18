@@ -143,6 +143,40 @@ func (s *testFilterSuite) TestFilterOnSchema(c *C) {
 			Input:  []*Table{{"aB", "Ab"}, {"AaB", "aab"}, {"acB", "Afb"}},
 			Output: []*Table(nil),
 		},
+		// test disable regexp & wildcard
+		{
+			rules: &Rules{
+				DoDBs:   []string{"~foo?"},
+				NoRegex: true,
+			},
+			Input:  []*Table{{"~foo?", "a"}, {"~foo", "b"}, {"~fo", "c"}, {"~food", "d"}, {"foo", "e"}, {"fo", "f"}},
+			Output: []*Table{{"~foo?", "a"}, {"~food", "d"}},
+		},
+		{
+			rules: &Rules{
+				DoTables: []*Table{{"~foo", "~bar"}},
+				NoRegex:  true,
+			},
+			Input:  []*Table{{"~foo", "~bar"}, {"foo", "bar"}},
+			Output: []*Table{{"~foo", "~bar"}},
+		},
+		{
+			rules: &Rules{
+				DoDBs:      []string{"~^bar", "fo[o]"},
+				NoWildcard: true,
+			},
+			Input:  []*Table{{"bar", "a"}, {"~^bar", "b"}, {"foo", "c"}, {"fo[o]", "d"}, {"~^bark", "e"}},
+			Output: []*Table{{"bar", "a"}, {"fo[o]", "d"}},
+		},
+		{
+			rules: &Rules{
+				DoDBs:      []string{"~^bar", "fo[o]"},
+				NoRegex:    true,
+				NoWildcard: true,
+			},
+			Input:  []*Table{{"bar", "a"}, {"~^bar", "b"}, {"foo", "c"}, {"fo[o]", "d"}, {"~^bark", "e"}},
+			Output: []*Table{{"~^bar", "b"}, {"fo[o]", "d"}},
+		},
 	}
 
 	for _, t := range cases {

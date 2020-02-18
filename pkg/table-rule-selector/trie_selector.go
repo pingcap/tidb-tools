@@ -81,6 +81,8 @@ type trieSelector struct {
 
 	cache map[string]RuleSet
 	root  *node
+
+	noWildcard bool
 }
 
 type node struct {
@@ -207,7 +209,12 @@ func (i *rangeItem) str() string {
 
 // NewTrieSelector returns a trie Selector
 func NewTrieSelector() Selector {
-	return &trieSelector{cache: make(map[string]RuleSet), root: newNode()}
+	return &trieSelector{cache: make(map[string]RuleSet), root: newNode(), noWildcard: false}
+}
+
+// NewTrieSelector returns a trie Selector with no wildcard support
+func NewTrieSelectorWithoutWildcard() Selector {
+	return &trieSelector{cache: make(map[string]RuleSet), root: newNode(), noWildcard: true}
 }
 
 // Insert implements Selector's interface.
@@ -294,6 +301,13 @@ func (t *trieSelector) getRangeItem(pattern string) (*rangeItem, int) {
 	return item, nextI
 }
 
+func (t *trieSelector) wildcardSymbol(p byte) byte {
+	if t.noWildcard {
+		return 0
+	}
+	return p
+}
+
 // if rule is nil, just extract nodes
 func (t *trieSelector) insert(root *node, pattern string, rule interface{}, insertType int) (item, error) {
 	var (
@@ -309,7 +323,8 @@ func (t *trieSelector) insert(root *node, pattern string, rule interface{}, inse
 
 		var rItem *rangeItem
 		var nextI int
-		switch pattern[i] {
+		wildcardSymbol := t.wildcardSymbol(pattern[i])
+		switch wildcardSymbol {
 		case asterisk:
 			entity = n.asterisk
 			hadAsterisk = true
@@ -333,7 +348,7 @@ func (t *trieSelector) insert(root *node, pattern string, rule interface{}, inse
 		}
 		if entity == nil {
 			entity = &baseItem{}
-			switch pattern[i] {
+			switch wildcardSymbol {
 			case asterisk:
 				n.asterisk = entity
 			case question:
@@ -466,7 +481,7 @@ func (t *trieSelector) Remove(schema, table string) error {
 func (t *trieSelector) track(n *node, pattern string) ([]item, error) {
 	items := make([]item, 0, len(pattern))
 	for i := 0; i < len(pattern); i++ {
-		switch pattern[i] {
+		switch t.wildcardSymbol(pattern[i]) {
 		case asterisk:
 			if n.asterisk == nil {
 				return nil, errors.NotFoundf("pattern %v", pattern)
