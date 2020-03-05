@@ -32,6 +32,9 @@ require (
 	github.com/prometheus/client_golang v1.2.1 // indirect
 	github.com/prometheus/client_model v0.0.0-20191202183732-d1d2010b5bee // indirect
 	github.com/prometheus/procfs v0.0.8 // indirect
+	github.com/remyoudompheng/bigfft v0.0.0-20190728182440-6a916e37a237 // indirect
+	github.com/segmentio/kafka-go v0.3.4
+	github.com/shirou/gopsutil v2.19.9+incompatible // indirect
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/syndtr/goleveldb v1.0.0 // indirect
