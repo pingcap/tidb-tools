@@ -14,7 +14,6 @@
 package utils
 
 import (
-	//"bufio"
 	"context"
 	"crypto/tls"
 	"fmt"
