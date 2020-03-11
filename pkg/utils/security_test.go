@@ -118,14 +118,16 @@ func (s *securitySuite) TestCheckCN(c *C) {
 	clientTLS2, err := ToTLSConfigWithVerify(caPath2, certPath2, keyPath2, nil)
 	c.Assert(err, IsNil)
 
+	port := 9292
+	url := fmt.Sprintf("https://127.0.0.1:%d", port)
 	ctx, cancel := context.WithCancel(context.Background())
-	server := runServer(ctx, serverTLS, 123, c)
+	server := runServer(ctx, serverTLS, port, c)
 	defer func() {
 		cancel()
 		server.Close()
 	}()
 
-	resp, err := ClientWithTLS(clientTLS1).Get("https://127.0.0.1:123")
+	resp, err := ClientWithTLS(clientTLS1).Get(url)
 	c.Assert(err, IsNil)
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
@@ -133,7 +135,7 @@ func (s *securitySuite) TestCheckCN(c *C) {
 	c.Assert(string(body), Equals, "This an example server")
 
 	// client2 can't visit server
-	_, err = ClientWithTLS(clientTLS2).Get("https://127.0.0.1:123/")
+	_, err = ClientWithTLS(clientTLS2).Get(url)
 	c.Assert(err, ErrorMatches, ".*tls: bad certificate")
 }
 
