@@ -27,7 +27,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"time"
 
 	. "github.com/pingcap/check"
 )
@@ -108,151 +107,54 @@ func (s *securitySuite) TestCheckCN(c *C) {
 	dir = path.Join(dir, "tls_test")
 	caPath, certPath, keyPath := getTestCertFile(dir, "server")
 	// only allow client1 to visit
-	c.Log(caPath)
 	serverTLS, err := ToTLSConfig(caPath, certPath, keyPath, []string{"client1"})
-	//serverTLS, err := ToTLSConfig(caPath, certPath, keyPath, nil)
 	c.Assert(err, IsNil)
 
 	caPath1, certPath1, keyPath1 := getTestCertFile(dir, "client1")
 	clientTLS1, err := ToTLSConfig(caPath1, certPath1, keyPath1, nil)
 	c.Assert(err, IsNil)
-	//tlsClient1, err := NewTLS(caPath1, certPath1, keyPath1, "127.0.0.1", nil)
-	//c.Assert(err, IsNil)
 
 	caPath2, certPath2, keyPath2 := getTestCertFile(dir, "client2")
-	//tlsClient2, err := NewTLS(caPath2, certPath2, keyPath2, "127.0.0.1", nil)
-	//c.Assert(err, IsNil)
-
-	
-
-	//caPath, certPath, keyPath = getTestCertFile(dir, "client2")
 	clientTLS2, err := ToTLSConfig(caPath2, certPath2, keyPath2, nil)
-	//c.Assert(err, IsNil)
-	c.Log("run_server")
-	err = AddClientCAs(clientTLS1, []string{caPath1, certPath1, certPath2, certPath})
-	c.Assert(err, IsNil)
-	err = AddClientCAs(clientTLS2, []string{caPath1, certPath1, certPath2, certPath})
-	c.Assert(err, IsNil)
-
-	err = AddClientCAs(serverTLS, []string{caPath1, certPath1, certPath2, certPath})
-	c.Assert(err, IsNil)
-
-	err = AddRootCAs(clientTLS1, []string{caPath1, certPath1, certPath2, certPath})
-	c.Assert(err, IsNil)
-	err = AddRootCAs(clientTLS2, []string{caPath1, certPath1, certPath2, certPath})
-	c.Assert(err, IsNil)
-
-	err = AddRootCAs(serverTLS, []string{caPath1, certPath1, certPath2, certPath})
 	c.Assert(err, IsNil)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	server := runServer(ctx, *serverTLS, 123, c)
+	server := runServer(ctx, serverTLS, 123, c)
 	defer func() {
 		cancel()
 		server.Close()
 	}()
 
-	//err = runClient(*clientTLS1, 123, c)
-	//c.Assert(err, IsNil)
-	//err = runClient(*clientTLS2, 123, c)
-	//c.Assert(err, IsNil)
 	resp, err := ClientWithTLS(clientTLS1).Get("https://127.0.0.1:123")
-	c.Log(resp)
 	c.Assert(err, IsNil)
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	c.Assert(err, IsNil)
+	c.Assert(string(body), Equals, "This an example server")
 
-	resp, err = ClientWithTLS(clientTLS2).Get("https://127.0.0.1:123/")
-	c.Log(resp)
+	// client2 can't visit server
+	_, err = ClientWithTLS(clientTLS2).Get("https://127.0.0.1:123/")
 	c.Assert(err, ErrorMatches, ".*tls: bad certificate")
-
-	time.Sleep(time.Second)
-	//c.Assert(err, NotNil)
-
-	cancel()
-}
-
-func runClient(tlsCfg tls.Config, port int, c *C) error {
-	tlsCfg.InsecureSkipVerify = true
-	conn, err := tls.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", port), &tlsCfg)
-	if err != nil {
-		c.Log("134", err)
-		return err
-	}
-	defer conn.Close()
-
-	_, err = conn.Write([]byte("hello\n"))
-	if err != nil {
-		c.Log("141", err)
-		return err
-	}
-
-	buf := make([]byte, 100)
-	n, err := conn.Read(buf)
-	if err != nil {
-		c.Log("148", err)
-		return err
-	}
-
-	c.Log(string(buf[:n]))
-	return nil
 }
 
 func handler(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte("This an example server.\n"))
+	w.Write([]byte("This an example server"))
 }
 
-func runServer(ctx context.Context, tlsCfg tls.Config, port int, c *C) *http.Server {
+func runServer(ctx context.Context, tlsCfg *tls.Config, port int, c *C) *http.Server {
 	http.HandleFunc("/", handler)
 	server := &http.Server{Addr: fmt.Sprintf(":%d", port), Handler: nil}
 
 	conn, err := net.Listen("tcp", server.Addr)
 	if err != nil {
-	  c.Assert(err, IsNil)
+		c.Assert(err, IsNil)
 	}
-	
-	tlsListener := tls.NewListener(conn, &tlsCfg)
+
+	tlsListener := tls.NewListener(conn, tlsCfg)
 	go server.Serve(tlsListener)
 	return server
-	/*
-	//tlsCfg.InsecureSkipVerify = true
-	ln, err := tls.Listen("tcp", fmt.Sprintf(":%d", port), &tlsCfg)
-	c.Assert(err, IsNil)
-
-	go func() {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-		for {
-			conn, err := ln.Accept()
-			c.Assert(err, IsNil)
-			c.Log("accept")
-			handleConnection(conn, c)
-		}
-	}()
-	return ln
-	*/
 }
-
-/*
-func handleConnection(conn net.Conn, c *C) {
-	defer conn.Close()
-	r := bufio.NewReader(conn)
-	for {
-		msg, err := r.ReadString('\n')
-		if err == io.EOF {
-			break
-		}
-		c.Assert(err, IsNil)
-
-		c.Log(msg)
-
-		_, err = conn.Write([]byte("world\n"))
-		c.Assert(err, IsNil)
-	}
-}
-*/
 
 func getTestCertFile(dir, role string) (string, string, string) {
 	return path.Join(dir, "ca.pem"), path.Join(dir, fmt.Sprintf("%s.pem", role)), path.Join(dir, fmt.Sprintf("%s.key", role))

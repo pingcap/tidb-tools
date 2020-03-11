@@ -71,7 +71,6 @@ func ToTLSConfig(caPath, certPath, keyPath string, verifyCN []string) (*tls.Conf
 		RootCAs:      certPool,
 		ClientCAs:    certPool,
 		NextProtos:   []string{"h2", "http/1.1"}, // specify `h2` to let Go use HTTP/2.
-		InsecureSkipVerify: true,
 	}
 
 	checkCN := make(map[string]struct{})
@@ -80,24 +79,18 @@ func ToTLSConfig(caPath, certPath, keyPath string, verifyCN []string) (*tls.Conf
 		checkCN[cn] = struct{}{}
 	}
 	if len(checkCN) != 0 {
-		fmt.Println(checkCN)
 		tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
-		//tlsCfg.ClientAuth = tls.RequestClientCert
 
 		tlsCfg.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-			fmt.Println("VerifyPeerCertificate", verifiedChains)
 			if len(checkCN) == 0 {
 				return nil
 			}
 
 			cns := make([]string, 0, len(verifiedChains))
 			for _, chains := range verifiedChains {
-				fmt.Println(chains)
 				for _, chain := range chains {
-
 					cns = append(cns, chain.Subject.CommonName)
 					if _, match := checkCN[chain.Subject.CommonName]; match {
-						fmt.Println(cns)
 						return nil
 					}
 				}
@@ -128,6 +121,7 @@ func AddRootCAs(tlsCfg *tls.Config, caPaths []string) error {
 
 // AddClientCAs ...
 func AddClientCAs(tlsCfg *tls.Config, caPaths []string) error {
+	fmt.Println(caPaths)
 	certPool := x509.NewCertPool()
 	for _, caPath := range caPaths {
 		ca, err := ioutil.ReadFile(caPath)
