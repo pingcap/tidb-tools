@@ -107,15 +107,15 @@ func (s *securitySuite) TestCheckCN(c *C) {
 	dir = path.Join(dir, "tls_test")
 	caPath, certPath, keyPath := getTestCertFile(dir, "server")
 	// only allow client1 to visit
-	serverTLS, err := ToTLSConfig(caPath, certPath, keyPath, []string{"client1"})
+	serverTLS, err := ToTLSConfigWithVerify(caPath, certPath, keyPath, []string{"client1"})
 	c.Assert(err, IsNil)
 
 	caPath1, certPath1, keyPath1 := getTestCertFile(dir, "client1")
-	clientTLS1, err := ToTLSConfig(caPath1, certPath1, keyPath1, nil)
+	clientTLS1, err := ToTLSConfigWithVerify(caPath1, certPath1, keyPath1, nil)
 	c.Assert(err, IsNil)
 
 	caPath2, certPath2, keyPath2 := getTestCertFile(dir, "client2")
-	clientTLS2, err := ToTLSConfig(caPath2, certPath2, keyPath2, nil)
+	clientTLS2, err := ToTLSConfigWithVerify(caPath2, certPath2, keyPath2, nil)
 	c.Assert(err, IsNil)
 
 	ctx, cancel := context.WithCancel(context.Background())

@@ -16,7 +16,6 @@ package utils
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -35,11 +34,16 @@ type TLS struct {
 	url    string
 }
 
-// ToTLSConfig constructs a `*tls.Config` from the CA, certification and key
-// paths.
+// ToTLSConfig generates tls's config.
+func ToTLSConfig(caPath, certPath, keyPath string) (*tls.Config, error) {
+	return ToTLSConfig(caPath, certPath, keyPath)
+}
+
+// ToTLSConfigWithVerify constructs a `*tls.Config` from the CA, certification and key
+// paths, and add verify for CN.
 //
 // If the CA path is empty, returns nil.
-func ToTLSConfig(caPath, certPath, keyPath string, verifyCN []string) (*tls.Config, error) {
+func ToTLSConfigWithVerify(caPath, certPath, keyPath string, verifyCN []string) (*tls.Config, error) {
 	if len(caPath) == 0 {
 		return nil, nil
 	}
@@ -102,43 +106,6 @@ func ToTLSConfig(caPath, certPath, keyPath string, verifyCN []string) (*tls.Conf
 	return tlsCfg, nil
 }
 
-// AddRootCAs ...
-func AddRootCAs(tlsCfg *tls.Config, caPaths []string) error {
-	for _, caPath := range caPaths {
-		ca, err := ioutil.ReadFile(caPath)
-		if err != nil {
-			return errors.Annotate(err, "could not read ca certificate")
-		}
-
-		// Append the certificates from the CA
-		if !tlsCfg.RootCAs.AppendCertsFromPEM(ca) {
-			return errors.New("failed to append ca certs")
-		}
-	}
-
-	return nil
-}
-
-// AddClientCAs ...
-func AddClientCAs(tlsCfg *tls.Config, caPaths []string) error {
-	fmt.Println(caPaths)
-	certPool := x509.NewCertPool()
-	for _, caPath := range caPaths {
-		ca, err := ioutil.ReadFile(caPath)
-		if err != nil {
-			return errors.Annotate(err, "could not read ca certificate")
-		}
-
-		// Append the certificates from the CA
-		if !certPool.AppendCertsFromPEM(ca) {
-			return errors.New("failed to append ca certs")
-		}
-	}
-	tlsCfg.ClientCAs = certPool
-
-	return nil
-}
-
 // NewTLS constructs a new HTTP client with TLS configured with the CA,
 // certificate and key paths.
 //
@@ -151,7 +118,7 @@ func NewTLS(caPath, certPath, keyPath, host string, verifyCN []string) (*TLS, er
 			url:    "http://" + host,
 		}, nil
 	}
-	inner, err := ToTLSConfig(caPath, certPath, keyPath, verifyCN)
+	inner, err := ToTLSConfigWithVerify(caPath, certPath, keyPath, verifyCN)
 	if err != nil {
 		return nil, err
 	}
