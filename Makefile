@@ -73,7 +73,11 @@ check: fmt
 	#@ golint ./... 2>&1 | grep -vE '\.pb\.go' | grep -vE 'vendor' | awk '{print} END{if(NR>0) {exit 1}}'
 
 tidy:
+	cp go.mod1 go.mod
+	cp go.sum1 go.sum
 	@$(GO) mod tidy
+	cp go.mod go.mod1
+	cp go.sum go.sum1
 
 clean: prepare tidy finish
 
