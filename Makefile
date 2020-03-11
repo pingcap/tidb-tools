@@ -61,18 +61,16 @@ integration_test: build
 	tests/run.sh
 
 fmt:
-	go fmt ./...
-	@goimports -w $(FILES)
+	@echo "gofmt (simplify)"
+	@ gofmt -s -l -w $(FILES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
 
-check:
+check: fmt
 	#go get github.com/golang/lint/golint
 	@echo "vet"
 	@$(GO) vet -composites=false $(PACKAGES)
 	@$(GO) vet -vettool=$(CURDIR)/bin/shadow $(PACKAGES) || true
 	#@echo "golint"
 	#@ golint ./... 2>&1 | grep -vE '\.pb\.go' | grep -vE 'vendor' | awk '{print} END{if(NR>0) {exit 1}}'
-	@echo "gofmt (simplify)"
-	@ gofmt -s -l -w $(FILES) 2>&1 | awk '{print} END{if(NR>0) {exit 1}}'
 
 tidy:
 	@$(GO) mod tidy
