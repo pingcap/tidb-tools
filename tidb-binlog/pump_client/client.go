@@ -136,7 +136,7 @@ func NewPumpsClient(etcdURLs, strategy string, timeout time.Duration, securityOp
 	clusterID := pdCli.GetClusterID(context.Background())
 	pdCli.Close()
 
-	security, err := utils.ToTLSConfig(securityOpt.CAPath, securityOpt.CertPath, securityOpt.KeyPath)
+	security, err := utils.ToTLSConfig(securityOpt.CAPath, securityOpt.CertPath, securityOpt.KeyPath, nil)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -198,7 +198,7 @@ func NewLocalPumpsClient(etcdURLs, binlogSocket string, timeout time.Duration, s
 	clusterID := pdCli.GetClusterID(context.Background())
 	pdCli.Close()
 
-	security, err := utils.ToTLSConfig(securityOpt.CAPath, securityOpt.CertPath, securityOpt.KeyPath)
+	security, err := utils.ToTLSConfig(securityOpt.CAPath, securityOpt.CertPath, securityOpt.KeyPath, nil)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

@@ -11,22 +11,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package common
+package utils
 
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 
 	"github.com/pingcap/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
 
-// TLS
+// TLS ...
 type TLS struct {
 	inner  *tls.Config
 	client *http.Client
@@ -37,7 +39,7 @@ type TLS struct {
 // paths.
 //
 // If the CA path is empty, returns nil.
-func ToTLSConfig(caPath, certPath, keyPath string) (*tls.Config, error) {
+func ToTLSConfig(caPath, certPath, keyPath string, verifyCN []string) (*tls.Config, error) {
 	if len(caPath) == 0 {
 		return nil, nil
 	}
@@ -64,18 +66,90 @@ func ToTLSConfig(caPath, certPath, keyPath string) (*tls.Config, error) {
 		return nil, errors.New("failed to append ca certs")
 	}
 
-	return &tls.Config{
+	tlsCfg := &tls.Config{
 		Certificates: certificates,
 		RootCAs:      certPool,
+		ClientCAs:    certPool,
 		NextProtos:   []string{"h2", "http/1.1"}, // specify `h2` to let Go use HTTP/2.
-	}, nil
+		InsecureSkipVerify: true,
+	}
+
+	checkCN := make(map[string]struct{})
+	for _, cn := range verifyCN {
+		cn = strings.TrimSpace(cn)
+		checkCN[cn] = struct{}{}
+	}
+	if len(checkCN) != 0 {
+		fmt.Println(checkCN)
+		tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
+		//tlsCfg.ClientAuth = tls.RequestClientCert
+
+		tlsCfg.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+			fmt.Println("VerifyPeerCertificate", verifiedChains)
+			if len(checkCN) == 0 {
+				return nil
+			}
+
+			cns := make([]string, 0, len(verifiedChains))
+			for _, chains := range verifiedChains {
+				fmt.Println(chains)
+				for _, chain := range chains {
+
+					cns = append(cns, chain.Subject.CommonName)
+					if _, match := checkCN[chain.Subject.CommonName]; match {
+						fmt.Println(cns)
+						return nil
+					}
+				}
+			}
+			return errors.Errorf("client certificate authentication failed. The Common Name from the client certificate %v was not found in the configuration cluster-verify-cn with value: %s", cns, verifyCN)
+		}
+	}
+
+	return tlsCfg, nil
+}
+
+// AddRootCAs ...
+func AddRootCAs(tlsCfg *tls.Config, caPaths []string) error {
+	for _, caPath := range caPaths {
+		ca, err := ioutil.ReadFile(caPath)
+		if err != nil {
+			return errors.Annotate(err, "could not read ca certificate")
+		}
+
+		// Append the certificates from the CA
+		if !tlsCfg.RootCAs.AppendCertsFromPEM(ca) {
+			return errors.New("failed to append ca certs")
+		}
+	}
+
+	return nil
+}
+
+// AddClientCAs ...
+func AddClientCAs(tlsCfg *tls.Config, caPaths []string) error {
+	certPool := x509.NewCertPool()
+	for _, caPath := range caPaths {
+		ca, err := ioutil.ReadFile(caPath)
+		if err != nil {
+			return errors.Annotate(err, "could not read ca certificate")
+		}
+
+		// Append the certificates from the CA
+		if !certPool.AppendCertsFromPEM(ca) {
+			return errors.New("failed to append ca certs")
+		}
+	}
+	tlsCfg.ClientCAs = certPool
+
+	return nil
 }
 
 // NewTLS constructs a new HTTP client with TLS configured with the CA,
 // certificate and key paths.
 //
 // If the CA path is empty, returns an instance where TLS is disabled.
-func NewTLS(caPath, certPath, keyPath, host string) (*TLS, error) {
+func NewTLS(caPath, certPath, keyPath, host string, verifyCN []string) (*TLS, error) {
 	if len(caPath) == 0 {
 		return &TLS{
 			inner:  nil,
@@ -83,17 +157,25 @@ func NewTLS(caPath, certPath, keyPath, host string) (*TLS, error) {
 			url:    "http://" + host,
 		}, nil
 	}
-	inner, err := ToTLSConfig(caPath, certPath, keyPath)
+	inner, err := ToTLSConfig(caPath, certPath, keyPath, verifyCN)
 	if err != nil {
 		return nil, err
 	}
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.TLSClientConfig = inner
+
+	client := ClientWithTLS(inner)
+
 	return &TLS{
 		inner:  inner,
-		client: &http.Client{Transport: transport},
+		client: client,
 		url:    "https://" + host,
 	}, nil
+}
+
+// ClientWithTLS ...
+func ClientWithTLS(tlsCfg *tls.Config) *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = tlsCfg
+	return &http.Client{Transport: transport}
 }
 
 // NewTLSFromMockServer constructs a new TLS instance from the certificates of
