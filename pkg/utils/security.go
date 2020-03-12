@@ -27,7 +27,7 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// TLS ...
+// TLS saves some information about tls
 type TLS struct {
 	inner  *tls.Config
 	client *http.Client
@@ -77,19 +77,16 @@ func ToTLSConfigWithVerify(caPath, certPath, keyPath string, verifyCN []string) 
 		NextProtos:   []string{"h2", "http/1.1"}, // specify `h2` to let Go use HTTP/2.
 	}
 
-	checkCN := make(map[string]struct{})
-	for _, cn := range verifyCN {
-		cn = strings.TrimSpace(cn)
-		checkCN[cn] = struct{}{}
-	}
-	if len(checkCN) != 0 {
+	if len(verifyCN) != 0 {
+		checkCN := make(map[string]struct{})
+		for _, cn := range verifyCN {
+			cn = strings.TrimSpace(cn)
+			checkCN[cn] = struct{}{}
+		}
+
 		tlsCfg.ClientAuth = tls.RequireAndVerifyClientCert
 
 		tlsCfg.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-			if len(checkCN) == 0 {
-				return nil
-			}
-
 			cns := make([]string, 0, len(verifiedChains))
 			for _, chains := range verifiedChains {
 				for _, chain := range chains {
@@ -132,7 +129,7 @@ func NewTLS(caPath, certPath, keyPath, host string, verifyCN []string) (*TLS, er
 	}, nil
 }
 
-// ClientWithTLS ...
+// ClientWithTLS creates a http client wit tls
 func ClientWithTLS(tlsCfg *tls.Config) *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = tlsCfg
