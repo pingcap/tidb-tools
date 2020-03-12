@@ -36,7 +36,7 @@ type TLS struct {
 
 // ToTLSConfig generates tls's config.
 func ToTLSConfig(caPath, certPath, keyPath string) (*tls.Config, error) {
-	return ToTLSConfig(caPath, certPath, keyPath)
+	return ToTLSConfigWithVerify(caPath, certPath, keyPath, nil)
 }
 
 // ToTLSConfigWithVerify constructs a `*tls.Config` from the CA, certification and key
