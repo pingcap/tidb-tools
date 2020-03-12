@@ -1,5 +1,8 @@
 #! /bin/bash
 
+# this script used for generating tls file for unit test
+# execute: cd pkg/utils/tls_test && sh generate.sh && cd -
+
     cat - > "ipsan.cnf" <<EOF
 [dn]
 CN = localhost
