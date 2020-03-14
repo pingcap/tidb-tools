@@ -27,7 +27,7 @@ var (
 	// PerformanceSchemaName is the `PERFORMANCE_SCHEMA` database name.
 	PerformanceSchemaName = "PERFORMANCE_SCHEMA"
 	// MetricSchemaName is the `METRIC_SCHEMA` database name.
-	MetricSchemaName = "METRIC_SCHEMA"
+	MetricSchemaName = "METRICS_SCHEMA"
 	// InspectionSchemaName is the `INSPECTION_SCHEMA` database name
 	InspectionSchemaName = "INSPECTION_SCHEMA"
 )
