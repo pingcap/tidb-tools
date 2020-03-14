@@ -41,7 +41,7 @@ func (s *testFilterSuite) TestIsSystemSchema(c *C) {
 		{"MYSQL", true},
 		{"SYS", true},
 		{"not_system_schema", false},
-		{"METRIC_SCHEMA", true},
+		{"METRICS_SCHEMA", true},
 		{"INSPECTION_SCHEMA", true},
 	}
 
