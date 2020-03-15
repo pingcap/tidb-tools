@@ -169,6 +169,15 @@ func (tc *TLS) ToGRPCDialOption() grpc.DialOption {
 	return grpc.WithInsecure()
 }
 
+// ToGRPCServerOption constructs a gRPC server option.
+func (tc *TLS) ToGRPCServerOption() grpc.ServerOption {
+	if tc.inner != nil {
+		return grpc.Creds(credentials.NewTLS(tc.inner))
+	}
+
+	return nil
+}
+
 // WrapListener places a TLS layer on top of the existing listener.
 func (tc *TLS) WrapListener(l net.Listener) net.Listener {
 	if tc.inner == nil {
