@@ -161,6 +161,11 @@ func (tc *TLS) WithHost(host string) *TLS {
 	}
 }
 
+// TLSConfig returns tls config
+func (tc *TLS) TLSConfig() *tls.Config {
+	return tc.inner
+}
+
 // ToGRPCDialOption constructs a gRPC dial option.
 func (tc *TLS) ToGRPCDialOption() grpc.DialOption {
 	if tc.inner != nil {
