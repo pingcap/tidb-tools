@@ -175,7 +175,7 @@ func (tc *TLS) ToGRPCServerOption() grpc.ServerOption {
 		return grpc.Creds(credentials.NewTLS(tc.inner))
 	}
 
-	return nil
+	return grpc.Creds(nil)
 }
 
 // WrapListener places a TLS layer on top of the existing listener.
