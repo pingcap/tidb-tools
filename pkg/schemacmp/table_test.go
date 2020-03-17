@@ -354,6 +354,34 @@ func (s *tableSchema) TestJoinSchemas(c *C) {
 				e2 SET('abc', 'def') NOT NULL DEFAULT ''
 			)`,
 		},
+		{
+			name: "test case 2020-03-17",
+			a:    `CREATE TABLE bar (id INT PRIMARY KEY)`,
+			b:    `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`,
+			cmp:  -1,
+			join: `CREATE TABLE bar (id INT PRIMARY KEY, c1 INT)`,
+		},
+		{
+			name: "test case 2020-03-17-alt",
+			a:    `CREATE TABLE bar (id VARCHAR(10) PRIMARY KEY)`,
+			b:    `CREATE TABLE bar (id VARCHAR(10) PRIMARY KEY, c1 INT)`,
+			cmp:  -1,
+			join: `CREATE TABLE bar (id VARCHAR(10) PRIMARY KEY, c1 INT)`,
+		},
+		{
+			name: "test case 2020-03-17-alt-2",
+			a:    `CREATE TABLE bar (id INT PRIMARY KEY)`,
+			b:    `CREATE TABLE bar (id INT, c1 INT)`,
+			cmp:  -1,
+			join: `CREATE TABLE bar (id INT, c1 INT)`,
+		},
+		{
+			name:   "test case 2020-03-17-alt-3",
+			a:      `CREATE TABLE bar (id1 INT PRIMARY KEY, id2 INT)`,
+			b:      `CREATE TABLE bar (id1 INT, id2 INT PRIMARY KEY)`,
+			cmpErr: `.*combining contradicting orders.*`,
+			join:   `CREATE TABLE bar (id1 INT, id2 INT)`,
+		},
 	}
 
 	for _, tc := range testCases {
