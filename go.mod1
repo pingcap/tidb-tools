@@ -7,19 +7,21 @@ require (
 	github.com/coreos/bbolt v1.3.1-coreos.6 // indirect
 	github.com/coreos/etcd v3.3.10+incompatible
 	github.com/go-sql-driver/mysql v1.4.0
-	github.com/golang/protobuf v1.2.0
+	github.com/golang/protobuf v1.3.2
 	github.com/pingcap/check v0.0.0-20190102082844-67f458068fc8
 	github.com/pingcap/errors v0.11.1
-	github.com/pingcap/kvproto v0.0.0-20190215154024-7f2fc73ef562
-	github.com/pingcap/log v0.0.0-20190307075452-bd41d9273596
+	github.com/pingcap/kvproto v0.0.0-20190516013202-4cf58ad90b6c
+	github.com/pingcap/log v0.0.0-20190715063458-479153f07ebd
 	github.com/pingcap/parser v0.0.0-20190312024907-3f6280b08c8b
-	github.com/pingcap/pd v2.1.0-rc.4+incompatible
+	github.com/pingcap/pd/v3 v3.0.12
 	github.com/pingcap/tidb v0.0.0-20190320062740-9071c7b5b9ed
 	github.com/pingcap/tipb v0.0.0-20190107072121-abbec73437b7
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
 	github.com/siddontang/go-mysql v0.0.0-20190312052122-c6ab05a85eb8
 	go.uber.org/atomic v1.3.2
-	go.uber.org/zap v1.9.1
-	golang.org/x/net v0.0.0-20190108225652-1e06a53dbb7e
-	google.golang.org/grpc v1.17.0
+	go.uber.org/zap v1.10.0
+	golang.org/x/net v0.0.0-20190813141303-74dc4d7220e7
+	google.golang.org/grpc v1.23.1
 )
+
+go 1.13

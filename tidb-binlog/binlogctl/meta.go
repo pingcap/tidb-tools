@@ -24,7 +24,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
-	pd "github.com/pingcap/pd/client"
+	pd "github.com/pingcap/pd/v3/client"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/siddontang/go/ioutil2"
 	"go.uber.org/zap"

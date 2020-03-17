@@ -25,7 +25,7 @@ import (
 	"github.com/coreos/etcd/mvcc/mvccpb"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
-	pd "github.com/pingcap/pd/client"
+	pd "github.com/pingcap/pd/v3/client"
 	"github.com/pingcap/tidb-tools/pkg/etcd"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
