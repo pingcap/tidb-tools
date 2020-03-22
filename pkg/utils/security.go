@@ -29,10 +29,10 @@ import (
 
 // Security config
 type Security struct {
-	SSLCA         string   `toml:"ssl-ca" json:"ssl-ca"`
-	SSLCert       string   `toml:"ssl-cert" json:"ssl-cert"`
-	SSLKey        string   `toml:"ssl-key" json:"ssl-key"`
-	CertAllowedCN []string `toml:"cert-allowed-cn" json:"cert-allowed-cn"`
+	SSLCA         string   `toml:"ssl-ca" json:"ssl-ca" yaml:"ssl-ca"`
+	SSLCert       string   `toml:"ssl-cert" json:"ssl-cert" yaml:"ssl-cert"`
+	SSLKey        string   `toml:"ssl-key" json:"ssl-key" yaml:"ssl-key"`
+	CertAllowedCN []string `toml:"cert-allowed-cn" json:"cert-allowed-cn" yaml:"cert-allowed-cn"`
 }
 
 // TLS saves some information about tls
@@ -172,17 +172,6 @@ func (tc *TLS) WithHost(host string) *TLS {
 // TLSConfig returns tls config
 func (tc *TLS) TLSConfig() *tls.Config {
 	return tc.inner
-}
-
-// SetInsecureSkipVerify set InsecureSkipVerify for tls config
-func (tc *TLS) SetInsecureSkipVerify() {
-	// InsecureSkipVerify controls whether a client verifies the
-	// server's certificate chain and host name.
-	// If InsecureSkipVerify is true, TLS accepts any certificate
-	// presented by the server and any host name in that certificate.
-	// In this mode, TLS is susceptible to man-in-the-middle attacks.
-	// This should be used only for testing.
-	tc.inner.InsecureSkipVerify = true
 }
 
 // ToGRPCDialOption constructs a gRPC dial option.
