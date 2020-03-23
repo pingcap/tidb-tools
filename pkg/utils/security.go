@@ -161,12 +161,26 @@ func (tc *TLS) WithHost(host string) *TLS {
 	}
 }
 
+// TLSConfig returns tls config
+func (tc *TLS) TLSConfig() *tls.Config {
+	return tc.inner
+}
+
 // ToGRPCDialOption constructs a gRPC dial option.
 func (tc *TLS) ToGRPCDialOption() grpc.DialOption {
 	if tc.inner != nil {
 		return grpc.WithTransportCredentials(credentials.NewTLS(tc.inner))
 	}
 	return grpc.WithInsecure()
+}
+
+// ToGRPCServerOption constructs a gRPC server option.
+func (tc *TLS) ToGRPCServerOption() grpc.ServerOption {
+	if tc.inner != nil {
+		return grpc.Creds(credentials.NewTLS(tc.inner))
+	}
+
+	return grpc.Creds(nil)
 }
 
 // WrapListener places a TLS layer on top of the existing listener.
