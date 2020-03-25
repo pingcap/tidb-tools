@@ -42,6 +42,7 @@ type Diff struct {
 	onlyUseChecksum   bool
 	ignoreDataCheck   bool
 	ignoreStructCheck bool
+	ignoreViewCheck   bool
 	tables            map[string]map[string]*TableConfig
 	fixSQLFile        *os.File
 
@@ -65,6 +66,7 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 		onlyUseChecksum:   cfg.OnlyUseChecksum,
 		ignoreDataCheck:   cfg.IgnoreDataCheck,
 		ignoreStructCheck: cfg.IgnoreStructCheck,
+		ignoreViewCheck:   cfg.IgnoreViewCheck,
 		tables:            make(map[string]map[string]*TableConfig),
 		report:            NewReport(),
 		ctx:               ctx,
@@ -281,6 +283,13 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]map[string]inte
 		if err != nil {
 			return nil, errors.Annotatef(err, "get tables from %s.%s", df.targetDB.InstanceID, schema)
 		}
+		if !df.ignoreViewCheck {
+			allViews, err := dbutil.GetViews(df.ctx, df.targetDB.Conn, schema)
+			if err != nil {
+				return nil, errors.Annotatef(err, "get views from %s.%s", df.targetDB.InstanceID, schema)
+			}
+			allTables = append(allTables, allViews...)
+		}
 		allTablesMap[df.targetDB.InstanceID][schema] = utils.SliceToMap(allTables)
 	}
 
@@ -295,6 +304,13 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]map[string]inte
 			allTables, err := dbutil.GetTables(df.ctx, source.Conn, schema)
 			if err != nil {
 				return nil, errors.Annotatef(err, "get tables from %s.%s", source.InstanceID, schema)
+			}
+			if !df.ignoreViewCheck {
+				allViews, err := dbutil.GetViews(df.ctx, source.Conn, schema)
+				if err != nil {
+					return nil, errors.Annotatef(err, "get views from %s.%s", source.InstanceID, schema)
+				}
+				allTables = append(allTables, allViews...)
 			}
 			allTablesMap[source.InstanceID][schema] = utils.SliceToMap(allTables)
 		}
