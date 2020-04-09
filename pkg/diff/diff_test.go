@@ -267,6 +267,7 @@ func generateData(ctx context.Context, db *sql.DB, dbCfg dbutil.DBConfig, source
 		d varchar(10) COLLATE latin1_bin DEFAULT NULL,
 		e int(10) DEFAULT NULL,
 		h year(4) DEFAULT NULL,
+		\`table\` varchar(10),
 		PRIMARY KEY (a))`, targetTable)
 
 	cfg := &importer.Config{
@@ -311,7 +312,7 @@ func generateData(ctx context.Context, db *sql.DB, dbCfg dbutil.DBConfig, source
 
 	// if hasEmptyTable is true, the last source table will be empty.
 	for j, condition := range conditions {
-		_, err = db.ExecContext(ctx, fmt.Sprintf("INSERT INTO `test`.`%s` (`a`, `b`, `c`, `d`, `e`, `h`) SELECT `a`, `b`, `c`, `d`, `e`, `h` FROM `test`.`%s` WHERE %s", sourceTables[j], targetTable, condition))
+		_, err = db.ExecContext(ctx, fmt.Sprintf("INSERT INTO `test`.`%s` (`a`, `b`, `c`, `d`, `e`, `h`, `table`) SELECT `a`, `b`, `c`, `d`, `e`, `h`, `table` FROM `test`.`%s` WHERE %s", sourceTables[j], targetTable, condition))
 		if err != nil {
 			return err
 		}

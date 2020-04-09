@@ -829,6 +829,10 @@ func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableIn
 		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
 	}
 
+	for i, key := range orderKeys {
+		orderKeys[i] = dbutil.ColumnName(key)
+	}
+
 	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ %s FROM `%s`.`%s` WHERE %s ORDER BY %s%s",
 		columns, schema, table, where, strings.Join(orderKeys, ","), collation)
 
