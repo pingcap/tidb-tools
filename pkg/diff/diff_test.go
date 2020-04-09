@@ -267,7 +267,7 @@ func generateData(ctx context.Context, db *sql.DB, dbCfg dbutil.DBConfig, source
 		d varchar(10) COLLATE latin1_bin DEFAULT NULL,
 		e int(10) DEFAULT NULL,
 		h year(4) DEFAULT NULL,
-		\`table\` varchar(10),
+		"table" varchar(10),
 		PRIMARY KEY (a))`, targetTable)
 
 	cfg := &importer.Config{
