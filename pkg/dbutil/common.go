@@ -218,7 +218,7 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 	}
 
 	query := fmt.Sprintf("SELECT %[1]s FROM (SELECT %[1]s, rand() rand_value FROM %[2]s WHERE %[3]s ORDER BY rand_value LIMIT %[4]d)rand_tmp ORDER BY %[1]s%[5]s",
-		escapeName(column), TableName(schemaName, table), limitRange, num, collation)
+		ColumnName(column), TableName(schemaName, table), limitRange, num, collation)
 	log.Debug("get random values", zap.String("sql", query), zap.Reflect("args", limitArgs))
 
 	rows, err := db.QueryContext(ctx, query, limitArgs...)
@@ -618,6 +618,11 @@ func IsTiDB(ctx context.Context, db *sql.DB) (bool, error) {
 // TableName returns `schema`.`table`
 func TableName(schema, table string) string {
 	return fmt.Sprintf("`%s`.`%s`", escapeName(schema), escapeName(table))
+}
+
+// ColumnName returns `column`
+func ColumnName(column string) string {
+	return fmt.Sprintf("`%s`", escapeName(column))
 }
 
 func escapeName(name string) string {
