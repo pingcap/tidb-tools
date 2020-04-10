@@ -821,7 +821,7 @@ func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableIn
 
 	columnNames := make([]string, 0, len(tableInfo.Columns))
 	for _, col := range tableInfo.Columns {
-		columnNames = append(columnNames, col.Name.O)
+		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
 	}
 	columns := strings.Join(columnNames, ", ")
 
@@ -833,8 +833,8 @@ func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableIn
 		orderKeys[i] = dbutil.ColumnName(key)
 	}
 
-	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ %s FROM `%s`.`%s` WHERE %s ORDER BY %s%s",
-		columns, schema, table, where, strings.Join(orderKeys, ","), collation)
+	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ %s FROM %s WHERE %s ORDER BY %s%s",
+		columns, dbutil.TableName(schema, table), where, strings.Join(orderKeys, ","), collation)
 
 	log.Debug("select data", zap.String("sql", query), zap.Reflect("args", args))
 	rows, err := db.QueryContext(ctx, query, args...)
