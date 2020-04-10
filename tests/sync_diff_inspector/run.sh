@@ -10,6 +10,8 @@ mkdir $OUT_DIR || true
 
 echo "use importer to generate test data"
 mysql -uroot -h 127.0.0.1 -P 4000 -e "create database if not exists diff_test"
+# TODO: run `importer -t "create table diff_test.test(\`table\` int, b varchar(10), c float, d datetime, primary key(a));" -c 10 -n 10000 -P 4000 -h 127.0.0.1 -D diff_test -b 1000`
+# will exit with parser error, need to fix it in importer later, just change column name by mysql client now
 importer -t "create table diff_test.test(a int, b varchar(10), c float, d datetime, primary key(a));" -c 10 -n 10000 -P 4000 -h 127.0.0.1 -D diff_test -b 1000
 mysql -uroot -h 127.0.0.1 -P 4000 -e "alter table diff_test.test change column a \`table\` int"
 
