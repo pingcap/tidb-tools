@@ -19,6 +19,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	tmysql "github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb/errno"
 )
 
 var (
@@ -52,11 +53,11 @@ func IsRetryableError(err error) bool {
 	switch mysqlErr.Number {
 	case tmysql.ErrLockDeadlock: // https://dev.mysql.com/doc/refman/5.7/en/innodb-deadlocks.html
 		return true // retryable error in MySQL
-	case tmysql.ErrPDServerTimeout,
-		tmysql.ErrTiKVServerBusy,
-		tmysql.ErrResolveLockTimeout,
-		tmysql.ErrInfoSchemaExpired,
-		tmysql.ErrInfoSchemaChanged:
+	case errno.ErrPDServerTimeout,
+		errno.ErrTiKVServerBusy,
+		errno.ErrResolveLockTimeout,
+		errno.ErrInfoSchemaExpired,
+		errno.ErrInfoSchemaChanged:
 		return true // retryable error in TiDB
 	case tmysql.ErrUnknown: // the old version of TiDB uses `1105` frequently, this should be compatible.
 		for _, msg := range Retryable1105Msgs {

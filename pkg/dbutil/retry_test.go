@@ -20,6 +20,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	tmysql "github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb/errno"
 )
 
 var _ = Suite(&testRetrySuite{})
@@ -57,32 +58,32 @@ func (t *testRetrySuite) TestIsRetryableError(c *C) {
 			retryable: true,
 		},
 		{
-			err:       newMysqlErr(tmysql.ErrPDServerTimeout, "pd server timeout"),
+			err:       newMysqlErr(errno.ErrPDServerTimeout, "pd server timeout"),
 			retryable: true,
 		},
 		{
-			err:       newMysqlErr(tmysql.ErrTiKVServerBusy, "tikv server busy"),
+			err:       newMysqlErr(errno.ErrTiKVServerBusy, "tikv server busy"),
 			retryable: true,
 		},
 		{
-			err:       newMysqlErr(tmysql.ErrResolveLockTimeout, "resolve lock timeout"),
+			err:       newMysqlErr(errno.ErrResolveLockTimeout, "resolve lock timeout"),
 			retryable: true,
 		},
 		// only retryable in some special cases, then we mark it as un-retryable
 		{
-			err:       newMysqlErr(tmysql.ErrTiKVServerTimeout, "tikv server timeout"),
+			err:       newMysqlErr(errno.ErrTiKVServerTimeout, "tikv server timeout"),
 			retryable: false,
 		},
 		{
-			err:       newMysqlErr(tmysql.ErrWriteConflictInTiDB, "Write conflict, txnStartTS 412719757964869950 is stale"),
+			err:       newMysqlErr(errno.ErrWriteConflictInTiDB, "Write conflict, txnStartTS 412719757964869950 is stale"),
 			retryable: false,
 		},
 		{
-			err:       newMysqlErr(tmysql.ErrTableLocked, "Table 'tbl' was locked in aaa by bbb"),
+			err:       newMysqlErr(errno.ErrTableLocked, "Table 'tbl' was locked in aaa by bbb"),
 			retryable: false,
 		},
 		{
-			err:       newMysqlErr(tmysql.ErrWriteConflict, "Write conflict, txnStartTS=412719757964869700, conflictStartTS=412719757964869700, conflictCommitTS=412719757964869950, key=488636541"),
+			err:       newMysqlErr(errno.ErrWriteConflict, "Write conflict, txnStartTS=412719757964869700, conflictStartTS=412719757964869700, conflictCommitTS=412719757964869950, key=488636541"),
 			retryable: false,
 		},
 		// un-retryable
@@ -92,7 +93,7 @@ func (t *testRetrySuite) TestIsRetryableError(c *C) {
 		},
 		// unknown
 		{
-			err:       newMysqlErr(tmysql.ErrRegionUnavailable, "region unavailable"),
+			err:       newMysqlErr(errno.ErrRegionUnavailable, "region unavailable"),
 			retryable: false,
 		},
 		// 1105, un-retryable
@@ -111,11 +112,11 @@ func (t *testRetrySuite) TestIsRetryableError(c *C) {
 		},
 		// 1105 --> unique error code
 		{
-			err:       newMysqlErr(tmysql.ErrInfoSchemaExpired, "Information schema is out of date"),
+			err:       newMysqlErr(errno.ErrInfoSchemaExpired, "Information schema is out of date"),
 			retryable: true,
 		},
 		{
-			err:       newMysqlErr(tmysql.ErrInfoSchemaChanged, "Information schema is changed"),
+			err:       newMysqlErr(errno.ErrInfoSchemaChanged, "Information schema is changed"),
 			retryable: true,
 		},
 	}
