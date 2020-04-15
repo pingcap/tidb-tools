@@ -15,25 +15,37 @@ package filter
 
 import (
 	"strings"
-
-	"github.com/pingcap/tidb/util"
 )
 
-// DM heartbeat schema / table name
 var (
-	DMHeartbeatSchema = "dm_heartbeat"
-	DMHeartbeatTable  = "heartbeat"
+	// DMHeartbeatSchema is the heartbeat schema name
+	DMHeartbeatSchema = "DM_HEARTBEAT"
+	// DMHeartbeatTable is heartbeat table name
+	DMHeartbeatTable = "HEARTBEAT"
+	// InformationSchemaName is the `INFORMATION_SCHEMA` database name.
+	InformationSchemaName = "INFORMATION_SCHEMA"
+	// PerformanceSchemaName is the `PERFORMANCE_SCHEMA` database name.
+	PerformanceSchemaName = "PERFORMANCE_SCHEMA"
+	// MetricSchemaName is the `METRICS_SCHEMA` database name.
+	MetricSchemaName = "METRICS_SCHEMA"
+	// InspectionSchemaName is the `INSPECTION_SCHEMA` database name
+	InspectionSchemaName = "INSPECTION_SCHEMA"
 )
 
 // IsSystemSchema checks whether schema is system schema or not.
 // case insensitive
 func IsSystemSchema(schema string) bool {
-	schema = strings.ToLower(schema)
+	schema = strings.ToUpper(schema)
 	switch schema {
 	case DMHeartbeatSchema, // do not create table in it manually
-		"sys": // https://dev.mysql.com/doc/refman/8.0/en/sys-schema.html
+		"SYS",   // https://dev.mysql.com/doc/refman/8.0/en/sys-schema.html
+		"MYSQL", // the name of system database.
+		InformationSchemaName,
+		InspectionSchemaName,
+		PerformanceSchemaName,
+		MetricSchemaName:
 		return true
 	default:
-		return util.IsMemOrSysDB(schema)
+		return false
 	}
 }
