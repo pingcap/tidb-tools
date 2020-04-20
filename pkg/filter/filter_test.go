@@ -218,4 +218,7 @@ func (s *testFilterSuite) TestMatchReturnsBool(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(f.Match(&Table{Schema: "sns"}), IsTrue)
 	c.Assert(f.Match(&Table{Schema: "other"}), IsFalse)
+	f, err = New(true, nil)
+	c.Assert(err, IsNil)
+	c.Assert(f.Match(&Table{Schema: "other"}), IsTrue)
 }
