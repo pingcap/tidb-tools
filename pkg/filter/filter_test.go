@@ -187,6 +187,9 @@ func (s *testFilterSuite) TestCaseSensitive(c *C) {
 	expected := []*Table{{"foo2", "b"}, {"Foo4", "dfoo"}, {"5", "5"}}
 	c.Logf("got %+v, expected %+v", actual, expected)
 	c.Assert(actual, DeepEquals, expected)
+
+	inputTable := &Table{"FOO", "a"}
+	c.Assert(r.Match(inputTable), IsFalse)
 }
 
 func (s *testFilterSuite) TestInvalidRegex(c *C) {
