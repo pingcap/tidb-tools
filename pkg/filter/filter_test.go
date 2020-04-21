@@ -192,7 +192,7 @@ func (s *testFilterSuite) TestCaseSensitive(c *C) {
 	c.Assert(r.Match(inputTable), IsFalse)
 
 	rules = &Rules{
-		DoDBs:    []string{"BAR"},
+		DoDBs: []string{"BAR"},
 	}
 
 	r, err = New(false, rules)
