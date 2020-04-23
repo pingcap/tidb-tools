@@ -33,9 +33,7 @@ var (
 // NOTE: this should be compatible with different TiDB versions.
 // some errors are only retryable in some special cases, then we mark it as un-retryable:
 // - errno.ErrTiKVServerTimeout
-// - errno.ErrWriteConflictInTiDB
 // - errno.ErrTableLocked
-// - errno.ErrWriteConflict
 //
 // some errors are un-retryable:
 // - errno.ErrQueryInterrupted
@@ -56,7 +54,9 @@ func IsRetryableError(err error) bool {
 		errno.ErrTiKVServerBusy,
 		errno.ErrResolveLockTimeout,
 		errno.ErrInfoSchemaExpired,
-		errno.ErrInfoSchemaChanged:
+		errno.ErrInfoSchemaChanged,
+		errno.ErrWriteConflictInTiDB,
+		errno.ErrWriteConflict:
 		return true // retryable error in TiDB
 	case errno.ErrUnknown: // the old version of TiDB uses `1105` frequently, this should be compatible.
 		for _, msg := range Retryable1105Msgs {

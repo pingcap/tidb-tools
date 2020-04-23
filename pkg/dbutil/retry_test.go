@@ -68,21 +68,21 @@ func (t *testRetrySuite) TestIsRetryableError(c *C) {
 			err:       newMysqlErr(errno.ErrResolveLockTimeout, "resolve lock timeout"),
 			retryable: true,
 		},
+		{
+			err:       newMysqlErr(errno.ErrWriteConflictInTiDB, "Write conflict, txnStartTS 412719757964869950 is stale"),
+			retryable: true,
+		},
+		{
+			err:       newMysqlErr(errno.ErrWriteConflict, "Write conflict, txnStartTS=412719757964869700, conflictStartTS=412719757964869700, conflictCommitTS=412719757964869950, key=488636541"),
+			retryable: true,
+		},
 		// only retryable in some special cases, then we mark it as un-retryable
 		{
 			err:       newMysqlErr(errno.ErrTiKVServerTimeout, "tikv server timeout"),
 			retryable: false,
 		},
 		{
-			err:       newMysqlErr(errno.ErrWriteConflictInTiDB, "Write conflict, txnStartTS 412719757964869950 is stale"),
-			retryable: false,
-		},
-		{
 			err:       newMysqlErr(errno.ErrTableLocked, "Table 'tbl' was locked in aaa by bbb"),
-			retryable: false,
-		},
-		{
-			err:       newMysqlErr(errno.ErrWriteConflict, "Write conflict, txnStartTS=412719757964869700, conflictStartTS=412719757964869700, conflictCommitTS=412719757964869950, key=488636541"),
 			retryable: false,
 		},
 		// un-retryable
