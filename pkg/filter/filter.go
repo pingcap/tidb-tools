@@ -292,6 +292,14 @@ func (f *Filter) ApplyOn(stbs []*Table) []*Table {
 
 // Match returns true if the specified table should not be removed.
 func (f *Filter) Match(tb *Table) bool {
+	if f == nil || f.rules == nil {
+		return true
+	}
+	if !f.caseSensitive {
+		tb.Schema = strings.ToLower(tb.Schema)
+		tb.Name = strings.ToLower(tb.Name)
+	}
+
 	name := tb.String()
 	do, exist := f.c.query(name)
 	if !exist {
