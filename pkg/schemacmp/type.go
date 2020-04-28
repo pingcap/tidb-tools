@@ -74,9 +74,7 @@ func encodeFieldTypeToLattice(ft *types.FieldType) Tuple {
 	}
 
 	return Tuple{
-		// TODO: Currently we treat distinct types as incompatible.
-		// In reality e.g. TINYINT is compatible with BIGINT.
-		Singleton(ft.Tp),
+		FieldTp(ft.Tp),
 		flen,
 		dec,
 

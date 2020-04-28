@@ -15,6 +15,9 @@ package schemacmp
 
 import (
 	"fmt"
+
+	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/parser/types"
 )
 
 type IncompatibleError struct {
@@ -26,6 +29,7 @@ const (
 	ErrMsgTypeMismatch           = "type mismatch (%T vs %T)"
 	ErrMsgTupleLengthMismatch    = "tuple length mismatch (%d vs %d)"
 	ErrMsgDistinctSingletons     = "distinct singletons (%v vs %v)"
+	ErrMsgIncompatibleType       = "incompatible mysql type (%v vs %v)"
 	ErrMsgAtTupleIndex           = "at tuple index %d: %v"
 	ErrMsgAtMapKey               = "at map key %q: %v"
 	ErrMsgNonInclusiveBitSets    = "non-inclusive bit sets (%#x vs %#x)"
@@ -54,6 +58,13 @@ func tupleLengthMismatchError(a, b int) *IncompatibleError {
 func distinctSingletonsErrors(a, b interface{}) *IncompatibleError {
 	return &IncompatibleError{
 		Msg:  ErrMsgDistinctSingletons,
+		Args: []interface{}{a, b},
+	}
+}
+
+func incompatibleTypeError(a, b interface{}) *IncompatibleError {
+	return &IncompatibleError{
+		Msg:  ErrMsgIncompatibleType,
 		Args: []interface{}{a, b},
 	}
 }
@@ -276,6 +287,78 @@ func (a Byte) Join(other Lattice) (Lattice, error) {
 	default:
 		return b, nil
 	}
+}
+
+// fieldTp is a mysql column field type implementing lattice.
+// It is used for the column field type (`github.com/pingcap/parser/types.FieldType.Tp`).
+type fieldTp struct {
+	value byte
+}
+
+// FieldTp is used for the column field type (`github.com/pingcap/parser/types.FieldType.Tp`).
+func FieldTp(value byte) Lattice {
+	return fieldTp{value: value}
+}
+
+// Unwrap implements Lattice
+func (a fieldTp) Unwrap() interface{} {
+	return a.value
+}
+
+// Compare implements Lattice.
+func (a fieldTp) Compare(other Lattice) (int, error) {
+	b, ok := other.(fieldTp)
+	if !ok {
+		return 0, typeMismatchError(a, other)
+	}
+
+	if a.value == b.value {
+		return 0, nil
+	}
+
+	// TODO: add more comparable type check here.
+	// maybe we can ref https://github.com/pingcap/tidb/blob/38f4d869d86c3b274e7d1998a52243a30b125c80/types/field_type.go#L325 later.
+	if mysql.IsIntegerType(a.value) && mysql.IsIntegerType(b.value) {
+		// special handle for integer type.
+		return compareMySQLIntegerType(a.value, b.value), nil
+	}
+
+	if types.IsTypeBlob(a.value) && types.IsTypeBlob(b.value) {
+		// special handle for blob type.
+		return compareMySQLBlobType(a.value, b.value), nil
+	}
+
+	return 0, incompatibleTypeError(a.value, b.value)
+}
+
+// Join implements Lattice.
+func (a fieldTp) Join(other Lattice) (Lattice, error) {
+	b, ok := other.(fieldTp)
+	if !ok {
+		return nil, typeMismatchError(a, other)
+	}
+
+	if a.value == b.value {
+		return a, nil
+	}
+
+	if mysql.IsIntegerType(a.value) && mysql.IsIntegerType(b.value) {
+		// special handle for integer type.
+		if compareMySQLIntegerType(a.value, b.value) < 0 {
+			return b, nil
+		}
+		return a, nil
+	}
+
+	if types.IsTypeBlob(a.value) && types.IsTypeBlob(b.value) {
+		// special handle for blob type.
+		if compareMySQLBlobType(a.value, b.value) < 0 {
+			return b, nil
+		}
+		return a, nil
+	}
+
+	return nil, incompatibleTypeError(a.value, b.value)
 }
 
 // Int is an int implementing Lattice.
