@@ -320,44 +320,12 @@ func (a fieldTp) Compare(other Lattice) (int, error) {
 	// maybe we can ref https://github.com/pingcap/tidb/blob/38f4d869d86c3b274e7d1998a52243a30b125c80/types/field_type.go#L325 later.
 	if mysql.IsIntegerType(a.value) && mysql.IsIntegerType(b.value) {
 		// special handle for integer type.
-		// TypeTiny(1) < TypeShort(2) < TypeInt24(9) < TypeLong(3) < TypeLonglong(8)
-		switch {
-		case a.value == mysql.TypeInt24:
-			if b.value <= mysql.TypeShort {
-				return 1, nil
-			}
-			return -1, nil
-		case b.value == mysql.TypeInt24:
-			if a.value <= mysql.TypeShort {
-				return -1, nil
-			}
-			return 1, nil
-		case a.value < b.value:
-			return -1, nil
-		default:
-			return 1, nil
-		}
+		return compareMySQLIntegerType(a.value, b.value), nil
 	}
 
 	if types.IsTypeBlob(a.value) && types.IsTypeBlob(b.value) {
 		// special handle for blob type.
-		// TypeTinyBlob(0xf9, 249) < TypeBlob(0xfc, 252) < TypeMediumBlob(0xfa, 250) < TypeLongBlob(0xfb, 251)
-		switch {
-		case a.value == mysql.TypeBlob:
-			if b.value == mysql.TypeTinyBlob {
-				return 1, nil
-			}
-			return -1, nil
-		case b.value == mysql.TypeBlob:
-			if a.value == mysql.TypeTinyBlob {
-				return -1, nil
-			}
-			return 1, nil
-		case a.value < b.value:
-			return -1, nil
-		default:
-			return 1, nil
-		}
+		return compareMySQLBlobType(a.value, b.value), nil
 	}
 
 	return 0, incompatibleTypeError(a.value, b.value)
@@ -376,44 +344,18 @@ func (a fieldTp) Join(other Lattice) (Lattice, error) {
 
 	if mysql.IsIntegerType(a.value) && mysql.IsIntegerType(b.value) {
 		// special handle for integer type.
-		// TypeTiny(1) < TypeShort(2) < TypeInt24(9) < TypeLong(3) < TypeLonglong(8)
-		switch {
-		case a.value == mysql.TypeInt24:
-			if b.value <= mysql.TypeShort {
-				return a, nil
-			}
+		if compareMySQLIntegerType(a.value, b.value) < 0 {
 			return b, nil
-		case b.value == mysql.TypeInt24:
-			if a.value <= mysql.TypeShort {
-				return b, nil
-			}
-			return a, nil
-		case a.value < b.value:
-			return b, nil
-		default:
-			return a, nil
 		}
+		return a, nil
 	}
 
 	if types.IsTypeBlob(a.value) && types.IsTypeBlob(b.value) {
 		// special handle for blob type.
-		// TypeTinyBlob(0xf9, 249) < TypeBlob(0xfc, 252) < TypeMediumBlob(0xfa, 250) < TypeLongBlob(0xfb, 251)
-		switch {
-		case a.value == mysql.TypeBlob:
-			if b.value == mysql.TypeTinyBlob {
-				return a, nil
-			}
+		if compareMySQLBlobType(a.value, b.value) < 0 {
 			return b, nil
-		case b.value == mysql.TypeBlob:
-			if a.value == mysql.TypeTinyBlob {
-				return b, nil
-			}
-			return a, nil
-		case a.value < b.value:
-			return b, nil
-		default:
-			return a, nil
 		}
+		return a, nil
 	}
 
 	return nil, incompatibleTypeError(a.value, b.value)
