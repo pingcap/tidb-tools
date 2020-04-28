@@ -15,6 +15,9 @@ package schemacmp
 
 import (
 	"fmt"
+
+	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/parser/types"
 )
 
 type IncompatibleError struct {
@@ -26,6 +29,7 @@ const (
 	ErrMsgTypeMismatch           = "type mismatch (%T vs %T)"
 	ErrMsgTupleLengthMismatch    = "tuple length mismatch (%d vs %d)"
 	ErrMsgDistinctSingletons     = "distinct singletons (%v vs %v)"
+	ErrMsgIncompatibleType       = "incompatible mysql type (%v vs %v)"
 	ErrMsgAtTupleIndex           = "at tuple index %d: %v"
 	ErrMsgAtMapKey               = "at map key %q: %v"
 	ErrMsgNonInclusiveBitSets    = "non-inclusive bit sets (%#x vs %#x)"
@@ -54,6 +58,13 @@ func tupleLengthMismatchError(a, b int) *IncompatibleError {
 func distinctSingletonsErrors(a, b interface{}) *IncompatibleError {
 	return &IncompatibleError{
 		Msg:  ErrMsgDistinctSingletons,
+		Args: []interface{}{a, b},
+	}
+}
+
+func incompatibleTypeError(a, b interface{}) *IncompatibleError {
+	return &IncompatibleError{
+		Msg:  ErrMsgIncompatibleType,
 		Args: []interface{}{a, b},
 	}
 }
@@ -276,6 +287,136 @@ func (a Byte) Join(other Lattice) (Lattice, error) {
 	default:
 		return b, nil
 	}
+}
+
+// fieldTp is a mysql column field type implementing lattice.
+// It is used for the column field type (`github.com/pingcap/parser/types.FieldType.Tp`).
+type fieldTp struct {
+	value byte
+}
+
+// FieldTp is used for the column field type (`github.com/pingcap/parser/types.FieldType.Tp`).
+func FieldTp(value byte) Lattice {
+	return fieldTp{value: value}
+}
+
+// Unwrap implements Lattice
+func (a fieldTp) Unwrap() interface{} {
+	return a.value
+}
+
+// Compare implements Lattice.
+func (a fieldTp) Compare(other Lattice) (int, error) {
+	b, ok := other.(fieldTp)
+	if !ok {
+		return 0, typeMismatchError(a, other)
+	}
+
+	if a.value == b.value {
+		return 0, nil
+	}
+
+	// TODO: add more comparable type check here.
+	// maybe we can ref https://github.com/pingcap/tidb/blob/38f4d869d86c3b274e7d1998a52243a30b125c80/types/field_type.go#L325 later.
+	if mysql.IsIntegerType(a.value) && mysql.IsIntegerType(b.value) {
+		// special handle for integer type.
+		// TypeTiny(1) < TypeShort(2) < TypeInt24(9) < TypeLong(3) < TypeLonglong(8)
+		switch {
+		case a.value == mysql.TypeInt24:
+			if b.value <= mysql.TypeShort {
+				return 1, nil
+			}
+			return -1, nil
+		case b.value == mysql.TypeInt24:
+			if a.value <= mysql.TypeShort {
+				return -1, nil
+			}
+			return 1, nil
+		case a.value < b.value:
+			return -1, nil
+		default:
+			return 1, nil
+		}
+	}
+
+	if types.IsTypeBlob(a.value) && types.IsTypeBlob(b.value) {
+		// special handle for blob type.
+		// TypeTinyBlob(0xf9, 249) < TypeBlob(0xfc, 252) < TypeMediumBlob(0xfa, 250) < TypeLongBlob(0xfb, 251)
+		switch {
+		case a.value == mysql.TypeBlob:
+			if b.value == mysql.TypeTinyBlob {
+				return 1, nil
+			}
+			return -1, nil
+		case b.value == mysql.TypeBlob:
+			if a.value == mysql.TypeTinyBlob {
+				return -1, nil
+			}
+			return 1, nil
+		case a.value < b.value:
+			return -1, nil
+		default:
+			return 1, nil
+		}
+	}
+
+	return 0, incompatibleTypeError(a.value, b.value)
+}
+
+// Join implements Lattice.
+func (a fieldTp) Join(other Lattice) (Lattice, error) {
+	b, ok := other.(fieldTp)
+	if !ok {
+		return nil, typeMismatchError(a, other)
+	}
+
+	if a.value == b.value {
+		return a, nil
+	}
+
+	if mysql.IsIntegerType(a.value) && mysql.IsIntegerType(b.value) {
+		// special handle for integer type.
+		// TypeTiny(1) < TypeShort(2) < TypeInt24(9) < TypeLong(3) < TypeLonglong(8)
+		switch {
+		case a.value == mysql.TypeInt24:
+			if b.value <= mysql.TypeShort {
+				return a, nil
+			}
+			return b, nil
+		case b.value == mysql.TypeInt24:
+			if a.value <= mysql.TypeShort {
+				return b, nil
+			}
+			return a, nil
+		case a.value < b.value:
+			return b, nil
+		default:
+			return a, nil
+		}
+	}
+
+	if types.IsTypeBlob(a.value) && types.IsTypeBlob(b.value) {
+		// special handle for blob type.
+		// TypeTinyBlob(0xf9, 249) < TypeBlob(0xfc, 252) < TypeMediumBlob(0xfa, 250) < TypeLongBlob(0xfb, 251)
+		switch {
+		case a.value == mysql.TypeBlob:
+			if b.value == mysql.TypeTinyBlob {
+				return a, nil
+			}
+			return b, nil
+		case b.value == mysql.TypeBlob:
+			if a.value == mysql.TypeTinyBlob {
+				return b, nil
+			}
+			return a, nil
+		case a.value < b.value:
+			return b, nil
+		default:
+			return a, nil
+		}
+	}
+
+	return nil, incompatibleTypeError(a.value, b.value)
 }
 
 // Int is an int implementing Lattice.
