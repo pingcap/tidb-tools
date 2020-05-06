@@ -36,6 +36,12 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	deleteTp = "delete"
+	updateTp = "update"
+	insertTp = "insert"
+)
+
 // TableInstance record a table instance
 type TableInstance struct {
 	Conn       *sql.DB `json:"-"`
@@ -543,7 +549,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 		if index1 == len(rowsData1) {
 			// all the rowsData2's data should be deleted
 			for ; index2 < len(rowsData2); index2++ {
-				sql := generateDML("delete", rowsData2[index2], t.TargetTable.info, t.TargetTable.Schema)
+				sql := generateDML(deleteTp, nil, rowsData2[index2], t.TargetTable.info, t.TargetTable.Schema)
 				log.Info("[delete]", zap.String("sql", sql))
 				t.wg.Add(1)
 				t.sqlCh <- sql
@@ -554,7 +560,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 		if index2 == len(rowsData2) {
 			// rowsData2 lack some data, should insert them
 			for ; index1 < len(rowsData1); index1++ {
-				sql := generateDML("replace", rowsData1[index1], t.TargetTable.info, t.TargetTable.Schema)
+				sql := generateDML(insertTp, rowsData1[index1], nil, t.TargetTable.info, t.TargetTable.Schema)
 				log.Info("[insert]", zap.String("sql", sql))
 				t.wg.Add(1)
 				t.sqlCh <- sql
@@ -575,21 +581,21 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 		switch cmp {
 		case 1:
 			// delete
-			sql := generateDML("delete", rowsData2[index2], t.TargetTable.info, t.TargetTable.Schema)
+			sql := generateDML(deleteTp, nil, rowsData2[index2], t.TargetTable.info, t.TargetTable.Schema)
 			log.Info("[delete]", zap.String("sql", sql))
 			t.wg.Add(1)
 			t.sqlCh <- sql
 			index2++
 		case -1:
 			// insert
-			sql := generateDML("replace", rowsData1[index1], t.TargetTable.info, t.TargetTable.Schema)
+			sql := generateDML(insertTp, rowsData1[index1], nil, t.TargetTable.info, t.TargetTable.Schema)
 			log.Info("[insert]", zap.String("sql", sql))
 			t.wg.Add(1)
 			t.sqlCh <- sql
 			index1++
 		case 0:
 			// update
-			sql := generateDML("replace", rowsData1[index1], t.TargetTable.info, t.TargetTable.Schema)
+			sql := generateDML(updateTp, rowsData1[index1], rowsData2[index2], t.TargetTable.info, t.TargetTable.Schema)
 			log.Info("[update]", zap.String("sql", sql))
 			t.wg.Add(1)
 			t.sqlCh <- sql
@@ -679,9 +685,9 @@ func (t *TableDiff) UpdateSummaryInfo(ctx context.Context) chan bool {
 	return stopUpdateCh
 }
 
-func generateDML(tp string, data map[string]*dbutil.ColumnData, table *model.TableInfo, schema string) (sql string) {
+func generateDML(tp string, newData, oldData map[string]*dbutil.ColumnData, table *model.TableInfo, schema string) (sql string) {
 	switch tp {
-	case "replace":
+	case insertTp:
 		colNames := make([]string, 0, len(table.Columns))
 		values := make([]string, 0, len(table.Columns))
 		for _, col := range table.Columns {
@@ -690,43 +696,75 @@ func generateDML(tp string, data map[string]*dbutil.ColumnData, table *model.Tab
 			}
 
 			colNames = append(colNames, fmt.Sprintf("`%s`", col.Name.O))
-			if data[col.Name.O].IsNull {
+			if newData[col.Name.O].IsNull {
 				values = append(values, "NULL")
 				continue
 			}
 
 			if needQuotes(col.FieldType) {
-				values = append(values, fmt.Sprintf("'%s'", strings.Replace(string(data[col.Name.O].Data), "'", "\\'", -1)))
+				values = append(values, fmt.Sprintf("'%s'", strings.Replace(string(newData[col.Name.O].Data), "'", "\\'", -1)))
 			} else {
-				values = append(values, string(data[col.Name.O].Data))
+				values = append(values, string(newData[col.Name.O].Data))
 			}
 		}
 
-		sql = fmt.Sprintf("REPLACE INTO `%s`.`%s`(%s) VALUES (%s);", schema, table.Name, strings.Join(colNames, ","), strings.Join(values, ","))
-	case "delete":
-		kvs := make([]string, 0, len(table.Columns))
-		for _, col := range table.Columns {
-			if col.IsGenerated() {
-				continue
-			}
-
-			if data[col.Name.O].IsNull {
-				kvs = append(kvs, fmt.Sprintf("`%s` is NULL", col.Name.O))
-				continue
-			}
-
-			if needQuotes(col.FieldType) {
-				kvs = append(kvs, fmt.Sprintf("`%s` = '%s'", col.Name.O, strings.Replace(string(data[col.Name.O].Data), "'", "\\'", -1)))
-			} else {
-				kvs = append(kvs, fmt.Sprintf("`%s` = %s", col.Name.O, string(data[col.Name.O].Data)))
-			}
-		}
-		sql = fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE %s;", schema, table.Name, strings.Join(kvs, " AND "))
+		sql = fmt.Sprintf("INSERT IGNORE INTO `%s`.`%s`(%s) VALUES (%s);", schema, table.Name, strings.Join(colNames, ","), strings.Join(values, ","))
+	case updateTp:
+		whereCondition := generateWhereCondition(oldData, table)
+		setStatement := generateUpdateSet(newData, table)
+		sql = fmt.Sprintf("UPDATE `%s`.`%s` SET %s WHERE %s;", schema, table.Name, setStatement, whereCondition)
+	case deleteTp:
+		whereCondition := generateWhereCondition(oldData, table)
+		sql = fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE %s;", schema, table.Name, whereCondition)
 	default:
 		log.Error("unknown sql type", zap.String("type", tp))
 	}
 
 	return
+}
+
+func generateUpdateSet(data map[string]*dbutil.ColumnData, table *model.TableInfo) string {
+	kvs := make([]string, 0, len(table.Columns))
+	for _, col := range table.Columns {
+		if col.IsGenerated() {
+			continue
+		}
+
+		if data[col.Name.O].IsNull {
+			kvs = append(kvs, fmt.Sprintf("`%s` = NULL", col.Name.O))
+			continue
+		}
+
+		if needQuotes(col.FieldType) {
+			kvs = append(kvs, fmt.Sprintf("`%s` = '%s'", col.Name.O, strings.Replace(string(data[col.Name.O].Data), "'", "\\'", -1)))
+		} else {
+			kvs = append(kvs, fmt.Sprintf("`%s` = %s", col.Name.O, string(data[col.Name.O].Data)))
+		}
+	}
+
+	return strings.Join(kvs, " , ")
+}
+
+func generateWhereCondition(data map[string]*dbutil.ColumnData, table *model.TableInfo) string {
+	kvs := make([]string, 0, len(table.Columns))
+	for _, col := range table.Columns {
+		if col.IsGenerated() {
+			continue
+		}
+
+		if data[col.Name.O].IsNull {
+			kvs = append(kvs, fmt.Sprintf("`%s` is NULL", col.Name.O))
+			continue
+		}
+
+		if needQuotes(col.FieldType) {
+			kvs = append(kvs, fmt.Sprintf("`%s` = '%s'", col.Name.O, strings.Replace(string(data[col.Name.O].Data), "'", "\\'", -1)))
+		} else {
+			kvs = append(kvs, fmt.Sprintf("`%s` = %s", col.Name.O, string(data[col.Name.O].Data)))
+		}
+	}
+
+	return strings.Join(kvs, " AND ")
 }
 
 func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model.ColumnInfo) (equal bool, cmp int32, err error) {
