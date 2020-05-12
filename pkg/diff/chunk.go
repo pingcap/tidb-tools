@@ -265,6 +265,9 @@ func splitRangeByRandom(db *sql.DB, chunk *ChunkRange, count int, schema string,
 
 		for j, column := range columns {
 			if i == 0 {
+				if len(randomValues[j]) == 0 {
+					break
+				}
 				newChunk.update(column.Name.O, "", randomValues[j][i], false, true)
 			} else if i == len(randomValues[0]) {
 				newChunk.update(column.Name.O, randomValues[j][i-1], "", true, false)
