@@ -17,6 +17,14 @@ import (
 	. "github.com/pingcap/check"
 )
 
+func cloneTables(tbs []*Table) []*Table {
+	newTbs := make([]*Table, 0, len(tbs))
+	for _, tb := range tbs {
+		newTbs = append(newTbs, tb.Clone())
+	}
+	return newTbs
+}
+
 func (s *testFilterSuite) TestFilterOnSchema(c *C) {
 	cases := []struct {
 		rules         *Rules
@@ -148,8 +156,10 @@ func (s *testFilterSuite) TestFilterOnSchema(c *C) {
 	for _, t := range cases {
 		ft, err := New(t.caseSensitive, t.rules)
 		c.Assert(err, IsNil)
+		originInput := cloneTables(t.Input)
 		got := ft.ApplyOn(t.Input)
 		c.Logf("got %+v, expected %+v", got, t.Output)
+		c.Assert(originInput, DeepEquals, t.Input)
 		c.Assert(got, DeepEquals, t.Output)
 	}
 }
@@ -196,13 +206,16 @@ func (s *testFilterSuite) TestCaseSensitive(c *C) {
 	}
 
 	r, err = New(false, rules)
+	c.Assert(err, IsNil)
 	inputTable = &Table{"bar", "a"}
 	c.Assert(r.Match(inputTable), IsTrue)
 
 	c.Assert(err, IsNil)
 
+	originInputTable := inputTable.Clone()
 	inputTable = &Table{"BAR", "a"}
 	c.Assert(r.Match(inputTable), IsTrue)
+	c.Assert(originInputTable, DeepEquals, inputTable)
 }
 
 func (s *testFilterSuite) TestInvalidRegex(c *C) {
