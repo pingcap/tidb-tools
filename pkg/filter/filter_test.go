@@ -18,6 +18,9 @@ import (
 )
 
 func cloneTables(tbs []*Table) []*Table {
+	if tbs == nil {
+		return nil
+	}
 	newTbs := make([]*Table, 0, len(tbs))
 	for _, tb := range tbs {
 		newTbs = append(newTbs, tb.Clone())
@@ -212,8 +215,8 @@ func (s *testFilterSuite) TestCaseSensitive(c *C) {
 
 	c.Assert(err, IsNil)
 
-	originInputTable := inputTable.Clone()
 	inputTable = &Table{"BAR", "a"}
+	originInputTable := inputTable.Clone()
 	c.Assert(r.Match(inputTable), IsTrue)
 	c.Assert(originInputTable, DeepEquals, inputTable)
 }
