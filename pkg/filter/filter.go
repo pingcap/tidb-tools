@@ -38,6 +38,14 @@ type Table struct {
 	Name   string `toml:"tbl-name" json:"tbl-name" yaml:"tbl-name"`
 }
 
+// Clone clones a new filter.Table
+func (t *Table) Clone() *Table {
+	return &Table{
+		Schema: t.Schema,
+		Name:   t.Name,
+	}
+}
+
 // String implements the fmt.Stringer interface.
 func (t *Table) String() string {
 	if len(t.Name) > 0 {
@@ -277,13 +285,14 @@ func (f *Filter) ApplyOn(stbs []*Table) []*Table {
 
 	var tbs []*Table
 	for _, tb := range stbs {
+		newTb := tb.Clone()
 		if !f.caseSensitive {
-			tb.Schema = strings.ToLower(tb.Schema)
-			tb.Name = strings.ToLower(tb.Name)
+			newTb.Schema = strings.ToLower(newTb.Schema)
+			newTb.Name = strings.ToLower(newTb.Name)
 		}
 
-		if f.Match(tb) {
-			tbs = append(tbs, tb)
+		if f.Match(newTb) {
+			tbs = append(tbs, newTb)
 		}
 	}
 
@@ -295,16 +304,17 @@ func (f *Filter) Match(tb *Table) bool {
 	if f == nil || f.rules == nil {
 		return true
 	}
+	newTb := tb.Clone()
 	if !f.caseSensitive {
-		tb.Schema = strings.ToLower(tb.Schema)
-		tb.Name = strings.ToLower(tb.Name)
+		newTb.Schema = strings.ToLower(newTb.Schema)
+		newTb.Name = strings.ToLower(newTb.Name)
 	}
 
-	name := tb.String()
+	name := newTb.String()
 	do, exist := f.c.query(name)
 	if !exist {
-		do = ActionType(f.filterOnSchemas(tb) && f.filterOnTables(tb))
-		f.c.set(tb.String(), do)
+		do = ActionType(f.filterOnSchemas(newTb) && f.filterOnTables(newTb))
+		f.c.set(newTb.String(), do)
 	}
 	return do == Do
 }
