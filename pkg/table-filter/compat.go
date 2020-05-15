@@ -40,6 +40,14 @@ func (t *Table) String() string {
 	return fmt.Sprintf("`%s`", t.Schema)
 }
 
+// Clone clones a new filter.Table
+func (t *Table) Clone() *Table {
+	return &Table{
+		Schema: t.Schema,
+		Name:   t.Name,
+	}
+}
+
 // MySQLReplicationRules is a set of rules based on MySQL's replication filter.
 type MySQLReplicationRules struct {
 	// DoTables is a whitelist of tables.

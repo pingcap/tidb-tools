@@ -35,14 +35,6 @@ const (
 // Table represents a table.
 type Table = tfilter.Table
 
-// Clone clones a new filter.Table
-func (t *Table) Clone() *Table {
-	return &Table{
-		Schema: t.Schema,
-		Name:   t.Name,
-	}
-}
-
 type cache struct {
 	sync.RWMutex
 	items map[string]ActionType // `schema`.`table` => do/ignore
