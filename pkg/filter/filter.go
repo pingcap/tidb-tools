@@ -14,12 +14,12 @@
 package filter
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 	"sync"
 
 	"github.com/pingcap/errors"
+	tfilter "github.com/pingcap/tidb-tools/pkg/table-filter"
 	selector "github.com/pingcap/tidb-tools/pkg/table-rule-selector"
 )
 
@@ -33,18 +33,7 @@ const (
 )
 
 // Table represents a table.
-type Table struct {
-	Schema string `toml:"db-name" json:"db-name" yaml:"db-name"`
-	Name   string `toml:"tbl-name" json:"tbl-name" yaml:"tbl-name"`
-}
-
-// Clone clones a new filter.Table
-func (t *Table) Clone() *Table {
-	return &Table{
-		Schema: t.Schema,
-		Name:   t.Name,
-	}
-}
+type Table = tfilter.Table
 
 // String implements the fmt.Stringer interface.
 func (t *Table) String() string {
@@ -74,35 +63,7 @@ func (c *cache) set(key string, action ActionType) {
 }
 
 // Rules contains Filter rules.
-type Rules struct {
-	DoTables []*Table `json:"do-tables" toml:"do-tables" yaml:"do-tables"`
-	DoDBs    []string `json:"do-dbs" toml:"do-dbs" yaml:"do-dbs"`
-
-	IgnoreTables []*Table `json:"ignore-tables" toml:"ignore-tables" yaml:"ignore-tables"`
-	IgnoreDBs    []string `json:"ignore-dbs" toml:"ignore-dbs" yaml:"ignore-dbs"`
-}
-
-// ToLower convert all entries to lowercase
-func (r *Rules) ToLower() {
-	if r == nil {
-		return
-	}
-
-	for _, table := range r.DoTables {
-		table.Name = strings.ToLower(table.Name)
-		table.Schema = strings.ToLower(table.Schema)
-	}
-	for _, table := range r.IgnoreTables {
-		table.Name = strings.ToLower(table.Name)
-		table.Schema = strings.ToLower(table.Schema)
-	}
-	for i, db := range r.IgnoreDBs {
-		r.IgnoreDBs[i] = strings.ToLower(db)
-	}
-	for i, db := range r.DoDBs {
-		r.DoDBs[i] = strings.ToLower(db)
-	}
-}
+type Rules = tfilter.MySQLReplicationRules
 
 // Filter implements whitelist and blacklist filters.
 type Filter struct {
