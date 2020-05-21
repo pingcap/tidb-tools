@@ -80,6 +80,35 @@ func (s *testSpliterSuite) TestSplitRangeByRandom(c *C) {
 					[]string{"n", "z"},
 				},
 			},
+		}, {
+			"create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`b`))",
+			2,
+			NewChunkRange().copyAndUpdate("b", "a", "z", true, true),
+			[][]interface{}{
+				{"g"},
+			},
+			[]chunkResult{
+				{
+					"((`b` > ?)) AND ((`b` <= ?))",
+					[]string{"a", "g"},
+				}, {
+					"((`b` > ?)) AND ((`b` <= ?))",
+					[]string{"g", "z"},
+				},
+			},
+		}, {
+			"create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`b`))",
+			3,
+			NewChunkRange().copyAndUpdate("b", "a", "z", true, true),
+			[][]interface{}{
+				{},
+			},
+			[]chunkResult{
+				{
+					"((`b` > ?)) AND ((`b` <= ?))",
+					[]string{"a", "z"},
+				},
+			},
 		},
 	}
 
