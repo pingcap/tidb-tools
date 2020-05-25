@@ -420,7 +420,8 @@ func (df *Diff) Equal() (err error) {
 
 			if err != nil {
 				log.Error("check failed", zap.String("table", dbutil.TableName(table.Schema, table.Table)), zap.Error(err))
-				return errors.Trace(err)
+				//return errors.Trace(err)
+				continue
 			}
 
 			df.report.SetTableStructCheckResult(table.Schema, table.Table, structEqual)
