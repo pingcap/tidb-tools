@@ -20,6 +20,7 @@ import (
 	"os"
 	"regexp"
 	"time"
+	"strings"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -180,7 +181,16 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 			if err != nil {
 				return errors.Trace(err)
 			}
-			tables = append(tables, matchedTables...)
+			//tables = append(tables, matchedTables...)
+			//exclude those in "exclude_tables"
+			for _, t := range matchedTables {
+				r := df.InExcludeTables(schemaTables.ExcludeTables, t)
+				if r {
+					continue
+				} else {
+					tables = append(tables, t)
+				}
+			}
 		}
 
 		for _, tableName := range tables {
@@ -435,4 +445,14 @@ func (df *Diff) Equal() (err error) {
 	}
 
 	return
+}
+
+// Judge if a table is in "exclude_tables" list
+func (df *Diff) InExcludeTables(exclude_tables[]string, table string) bool {
+	for _, exclude_table := range exclude_tables {
+		if strings.EqualFold(exclude_table, table) {
+			return true
+		} 
+	}
+	return false
 }
