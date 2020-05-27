@@ -446,3 +446,13 @@ func (s *filterSuite) TestRecursiveImport(c *C) {
 	_, err = filter.Parse([]string{"@" + filepath.Join(dir, "5.txt")})
 	c.Assert(err, ErrorMatches, `.*: cannot open filter file: open .*5\.txt: .*`)
 }
+
+func (s *filterSuite) TestAll(c *C) {
+	f := filter.All()
+	c.Assert(f.MatchTable("db1", "tbl1"), IsTrue)
+	c.Assert(f.MatchSchema("db1"), IsTrue)
+
+	f = filter.CaseInsensitive(f)
+	c.Assert(f.MatchTable("db1", "tbl1"), IsTrue)
+	c.Assert(f.MatchSchema("db1"), IsTrue)
+}
