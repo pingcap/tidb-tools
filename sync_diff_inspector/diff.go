@@ -19,8 +19,8 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"time"
 	"strings"
+	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -448,11 +448,11 @@ func (df *Diff) Equal() (err error) {
 }
 
 // Judge if a table is in "exclude_tables" list
-func (df *Diff) InExcludeTables(exclude_tables[]string, table string) bool {
+func (df *Diff) InExcludeTables(exclude_tables []string, table string) bool {
 	for _, exclude_table := range exclude_tables {
 		if strings.EqualFold(exclude_table, table) {
 			return true
-		} 
+		}
 	}
 	return false
 }
