@@ -106,7 +106,7 @@ func (f schemasFilter) toLower() Filter {
 }
 
 // NewSchemasFilter creates a filter which only accepts a list of schemas.
-func NewSchemasFilter(schemas ...string) schemasFilter {
+func NewSchemasFilter(schemas ...string) Filter {
 	schemaMap := make(map[string]struct{}, len(schemas))
 	for _, schema := range schemas {
 		schemaMap[schema] = struct{}{}
