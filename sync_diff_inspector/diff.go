@@ -182,7 +182,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 				return errors.Trace(err)
 			}
 
-			//exclude those in "exclude_tables"
+			//exclude those in "exclude-tables"
 			for _, t := range matchedTables {
 				if df.InExcludeTables(schemaTables.ExcludeTables, t) {
 					continue
@@ -445,7 +445,7 @@ func (df *Diff) Equal() (err error) {
 	return
 }
 
-// Judge if a table is in "exclude_tables" list
+// Judge if a table is in "exclude-tables" list
 func (df *Diff) InExcludeTables(exclude_tables []string, table string) bool {
 	for _, exclude_table := range exclude_tables {
 		if strings.EqualFold(exclude_table, table) {
