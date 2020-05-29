@@ -181,11 +181,10 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 			if err != nil {
 				return errors.Trace(err)
 			}
-			//tables = append(tables, matchedTables...)
+
 			//exclude those in "exclude_tables"
 			for _, t := range matchedTables {
-				r := df.InExcludeTables(schemaTables.ExcludeTables, t)
-				if r {
+				if df.InExcludeTables(schemaTables.ExcludeTables, t) {
 					continue
 				} else {
 					tables = append(tables, t)
@@ -430,7 +429,6 @@ func (df *Diff) Equal() (err error) {
 
 			if err != nil {
 				log.Error("check failed", zap.String("table", dbutil.TableName(table.Schema, table.Table)), zap.Error(err))
-				//return errors.Trace(err)
 				continue
 			}
 
