@@ -61,6 +61,8 @@ type CheckTables struct {
 
 	// table list
 	Tables []string `toml:"tables" json:"tables"`
+
+	ExcludeTables []string `toml:"exclude-tables" json:"exclude-tables"`
 }
 
 // TableConfig is the config of table.
