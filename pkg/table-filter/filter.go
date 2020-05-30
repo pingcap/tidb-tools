@@ -107,3 +107,22 @@ func (f loweredFilter) MatchSchema(schema string) bool {
 func (f loweredFilter) toLower() Filter {
 	return f
 }
+
+type allFilter struct{}
+
+func (allFilter) MatchTable(string, string) bool {
+	return true
+}
+
+func (allFilter) MatchSchema(string) bool {
+	return true
+}
+
+func (f allFilter) toLower() Filter {
+	return f
+}
+
+// All creates a filter which matches everything.
+func All() Filter {
+	return allFilter{}
+}
