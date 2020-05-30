@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -180,7 +181,15 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 			if err != nil {
 				return errors.Trace(err)
 			}
-			tables = append(tables, matchedTables...)
+
+			//exclude those in "exclude-tables"
+			for _, t := range matchedTables {
+				if df.InExcludeTables(schemaTables.ExcludeTables, t) {
+					continue
+				} else {
+					tables = append(tables, t)
+				}
+			}
 		}
 
 		for _, tableName := range tables {
@@ -420,7 +429,7 @@ func (df *Diff) Equal() (err error) {
 
 			if err != nil {
 				log.Error("check failed", zap.String("table", dbutil.TableName(table.Schema, table.Table)), zap.Error(err))
-				return errors.Trace(err)
+				continue
 			}
 
 			df.report.SetTableStructCheckResult(table.Schema, table.Table, structEqual)
@@ -434,4 +443,14 @@ func (df *Diff) Equal() (err error) {
 	}
 
 	return
+}
+
+// Judge if a table is in "exclude-tables" list
+func (df *Diff) InExcludeTables(exclude_tables []string, table string) bool {
+	for _, exclude_table := range exclude_tables {
+		if strings.EqualFold(exclude_table, table) {
+			return true
+		}
+	}
+	return false
 }
