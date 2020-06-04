@@ -205,6 +205,10 @@ func (s *compatSuite) TestLegacyFilter(c *C) {
 		},
 	}
 
+	f, err := filter.ParseMySQLReplicationRules(nil)
+	c.Assert(err, IsNil)
+	c.Assert(f.MatchTable("foo", "bar"), IsTrue)
+
 	for _, tc := range cases {
 		c.Log("test case =", tc.rules)
 		f, err := filter.ParseMySQLReplicationRules(&tc.rules)

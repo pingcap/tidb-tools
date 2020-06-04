@@ -213,6 +213,9 @@ func matcherFromLegacyPattern(pattern string) (matcher, error) {
 // ParseMySQLReplicationRules constructs up to 2 filters from the MySQLReplicationRules.
 // Tables have to pass *both* filters to be processed.
 func ParseMySQLReplicationRules(rules *MySQLReplicationRules) (Filter, error) {
+	if rules == nil {
+		return All(), nil
+	}
 	schemas := rules.DoDBs
 	positive := true
 	rulesLen := len(schemas)
