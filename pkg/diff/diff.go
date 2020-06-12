@@ -150,9 +150,12 @@ func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (
 
 		select {
 		case <-ctx.Done():
-		default:
-			stopWriteSqlsCh <- true
-			stopUpdateSummaryCh <- true
+		case stopWriteSqlsCh <- true:
+		}
+
+		select {
+		case <-ctx.Done():
+		case stopUpdateSummaryCh <- true:
 		}
 	}
 
