@@ -148,8 +148,15 @@ func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (
 			return false, false, errors.Trace(err)
 		}
 
-		stopWriteSqlsCh <- true
-		stopUpdateSummaryCh <- true
+		select {
+		case <-ctx.Done():
+		case stopWriteSqlsCh <- true:
+		}
+
+		select {
+		case <-ctx.Done():
+		case stopUpdateSummaryCh <- true:
+		}
 	}
 
 	t.wg.Wait()
