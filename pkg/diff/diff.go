@@ -32,7 +32,6 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
-	tidbconfig "github.com/pingcap/tidb/config"
 	"go.uber.org/zap"
 )
 
@@ -195,11 +194,6 @@ func (t *TableDiff) adjustConfig() {
 	if t.CheckThreadCount <= 0 {
 		t.CheckThreadCount = 4
 	}
-
-	// to support table with auto_random in TiDB
-	tidbCfg := tidbconfig.GetGlobalConfig()
-	tidbCfg.Experimental.AllowAutoRandom = true
-	tidbconfig.StoreGlobalConfig(tidbCfg)
 }
 
 func (t *TableDiff) getTableInfo(ctx context.Context) error {
