@@ -204,7 +204,7 @@ func getChunkSummary(ctx context.Context, db *sql.DB, instanceID, schema, table 
 	}
 
 	if total == 0 {
-		return 0, 0, 0, 0, errors.NotFoundf("chunks of instanceID %s schema %s table %s", instanceID, schema, table)
+		log.Debug("chunks of table not found, chunk is still in spliting", zap.String("instance_id", instanceID), zap.String("schema", schema), zap.String("table", table))
 	}
 
 	return
@@ -228,6 +228,12 @@ func updateTableSummary(ctx context.Context, db *sql.DB, instanceID, schema, tab
 	if err != nil {
 		return errors.Trace(err)
 	}
+
+	if total == 0 {
+		// don't need to update summary info
+		return nil
+	}
+
 	log.Info("summary info", zap.String("instance_id", instanceID), zap.String("schema", schema), zap.String("table", table), zap.Int64("chunk num", total), zap.Int64("success num", successNum), zap.Int64("failed num", failedNum), zap.Int64("ignore num", ignoreNum))
 
 	state := notCheckedState
