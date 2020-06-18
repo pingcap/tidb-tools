@@ -50,14 +50,14 @@ func (t *Table) Clone() *Table {
 
 // MySQLReplicationRules is a set of rules based on MySQL's replication filter.
 type MySQLReplicationRules struct {
-	// DoTables is a whitelist of tables.
+	// DoTables is an allowlist of tables.
 	DoTables []*Table `json:"do-tables" toml:"do-tables" yaml:"do-tables"`
-	// DoDBs is the whitelist of schemas.
+	// DoDBs is an allowlist of schemas.
 	DoDBs []string `json:"do-dbs" toml:"do-dbs" yaml:"do-dbs"`
 
-	// IgnoreTables is a blacklist of tables.
+	// IgnoreTables is a blocklist of tables.
 	IgnoreTables []*Table `json:"ignore-tables" toml:"ignore-tables" yaml:"ignore-tables"`
-	// IgnoreDBs is a blacklist of schemas.
+	// IgnoreDBs is a blocklist of schemas.
 	IgnoreDBs []string `json:"ignore-dbs" toml:"ignore-dbs" yaml:"ignore-dbs"`
 }
 
