@@ -33,6 +33,9 @@ schema = "diff_test"
 # table list which need check in target database.
 tables = ["test"]
 
+# tables that should be exclude when checked
+exclude-tables = ["a_table", "should_not_compare"]
+
 [[source-db]]
 host = "127.0.0.1"
 port = 4001
