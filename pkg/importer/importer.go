@@ -23,7 +23,7 @@ func DoProcess(cfg *Config) {
 	table := newTable()
 	err := parseTableSQL(table, cfg.TableSQL)
 	if err != nil {
-		log.Fatal("parseTableSQL", zap.Error(err))
+		log.Fatal("parseTableSQL", zap.String("sql", cfg.TableSQL), zap.Error(err))
 	}
 
 	err = parseIndexSQL(table, cfg.IndexSQL)
