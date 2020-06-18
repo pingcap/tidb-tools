@@ -57,7 +57,7 @@ Try to run with `./main -f 'employee.*' -f '*.WorkOrder'` and see the result.
 
 ## Syntax
 
-### Whitelist
+### Allowlist
 
 The input to the `filter.Parse()` function is a list of table filter rules.
 Each rule specifies what the fully-qualified name of the table to be accepted.
@@ -121,11 +121,11 @@ Blank lines (empty strings) are ignored.
 A leading `#` marks a comment and is ignored.
 `#` not at start of line may be considered syntax error.
 
-### Blacklist
+### Blocklist
 
 An `!` at the beginning of the line means the pattern after it is used to
 exclude tables from being processed. This effectively turns the filter into a
-blacklist.
+blocklist.
 
 ```ini
 *.*
@@ -189,7 +189,7 @@ You cannot place an unescaped `/` between `\Q`…`\E`.)
 When a table name matches none of the rules in the filter list, the default
 behavior is to ignore such unmatched tables.
 
-To build a blacklist, an explicit `*.*` must be used as the first rule,
+To build a blocklist, an explicit `*.*` must be used as the first rule,
 otherwise all tables will be excluded.
 
 ```sh

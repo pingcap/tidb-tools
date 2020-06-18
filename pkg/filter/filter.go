@@ -57,7 +57,7 @@ func (c *cache) set(key string, action ActionType) {
 // Rules contains Filter rules.
 type Rules = tfilter.MySQLReplicationRules
 
-// Filter implements whitelist and blacklist filters.
+// Filter implements table filter in the style of MySQL replication rules.
 type Filter struct {
 	selector.Selector
 	patternMap map[string]*regexp.Regexp
@@ -101,7 +101,7 @@ const (
 type nodeEndRule struct {
 	kind        int
 	r           *regexp.Regexp
-	isWhiteList bool
+	isAllowList bool
 }
 
 // initRules initialize the rules to regex expr or trie node.
@@ -168,17 +168,17 @@ func (f *Filter) initOneRegex(originStr string) error {
 	return nil
 }
 
-func (f *Filter) initSchemaRule(dbStr string, isWhiteList bool) error {
+func (f *Filter) initSchemaRule(dbStr string, isAllowList bool) error {
 	if strings.HasPrefix(dbStr, "~") {
 		return f.initOneRegex(dbStr[1:])
 	}
 	return f.Selector.Insert(dbStr, "", &nodeEndRule{
 		kind:        dbRule,
-		isWhiteList: isWhiteList,
+		isAllowList: isAllowList,
 	}, selector.Append)
 }
 
-func (f *Filter) initTableRule(dbStr, tableStr string, isWhiteList bool) error {
+func (f *Filter) initTableRule(dbStr, tableStr string, isAllowList bool) error {
 	dbIsRegex := strings.HasPrefix(dbStr, "~")
 	tblIsRegex := strings.HasPrefix(tableStr, "~")
 	if dbIsRegex && tblIsRegex {
@@ -197,7 +197,7 @@ func (f *Filter) initTableRule(dbStr, tableStr string, isWhiteList bool) error {
 		}
 		err = f.Selector.Insert(tableStr, "", &nodeEndRule{
 			kind:        tblRuleOnlyTblPart,
-			isWhiteList: isWhiteList,
+			isAllowList: isAllowList,
 		}, selector.Append)
 		if err != nil {
 			return err
@@ -210,7 +210,7 @@ func (f *Filter) initTableRule(dbStr, tableStr string, isWhiteList bool) error {
 		err = f.Selector.Insert(dbStr, "", &nodeEndRule{
 			kind:        tblRuleOnlyDBPart,
 			r:           f.patternMap[tableStr[1:]],
-			isWhiteList: isWhiteList,
+			isAllowList: isAllowList,
 		}, selector.Append)
 		if err != nil {
 			return err
@@ -218,7 +218,7 @@ func (f *Filter) initTableRule(dbStr, tableStr string, isWhiteList bool) error {
 	} else {
 		err := f.Selector.Insert(dbStr, tableStr, &nodeEndRule{
 			kind:        tblRuleFull,
-			isWhiteList: isWhiteList,
+			isAllowList: isAllowList,
 		}, selector.Append)
 		if err != nil {
 			return err
@@ -317,7 +317,7 @@ func (f *Filter) filterOnTables(tb *Table) bool {
 	return len(f.rules.DoTables) == 0
 }
 
-func (f *Filter) matchDB(patternDBS []string, a string, isWhiteListCheck bool) bool {
+func (f *Filter) matchDB(patternDBS []string, a string, isAllowListCheck bool) bool {
 	for _, b := range patternDBS {
 		isRegex := strings.HasPrefix(b, "~")
 		if isRegex && f.matchString(b[1:], a) {
@@ -327,14 +327,14 @@ func (f *Filter) matchDB(patternDBS []string, a string, isWhiteListCheck bool) b
 	ruleSet := f.Selector.Match(a, "")
 	for _, r := range ruleSet {
 		rule := r.(*nodeEndRule)
-		if rule.kind == dbRule && rule.isWhiteList == isWhiteListCheck {
+		if rule.kind == dbRule && rule.isAllowList == isAllowListCheck {
 			return true
 		}
 	}
 	return false
 }
 
-func (f *Filter) matchTable(patternTBS []*Table, tb *Table, isWhiteListCheck bool) bool {
+func (f *Filter) matchTable(patternTBS []*Table, tb *Table, isAllowListCheck bool) bool {
 	for _, ptb := range patternTBS {
 		dbIsRegex, tblIsRegex := strings.HasPrefix(ptb.Schema, "~"), strings.HasPrefix(ptb.Name, "~")
 		if dbIsRegex && tblIsRegex {
@@ -348,7 +348,7 @@ func (f *Filter) matchTable(patternTBS []*Table, tb *Table, isWhiteListCheck boo
 			ruleSet := f.Selector.Match(tb.Name, "")
 			for _, r := range ruleSet {
 				rule := r.(*nodeEndRule)
-				if rule.kind == tblRuleOnlyTblPart && rule.isWhiteList == isWhiteListCheck {
+				if rule.kind == tblRuleOnlyTblPart && rule.isAllowList == isAllowListCheck {
 					return true
 				}
 			}
@@ -356,14 +356,14 @@ func (f *Filter) matchTable(patternTBS []*Table, tb *Table, isWhiteListCheck boo
 		ruleSet := f.Selector.Match(tb.Schema, "")
 		for _, r := range ruleSet {
 			rule := r.(*nodeEndRule)
-			if rule.kind == tblRuleOnlyDBPart && rule.isWhiteList == isWhiteListCheck && rule.r.MatchString(tb.Name) {
+			if rule.kind == tblRuleOnlyDBPart && rule.isAllowList == isAllowListCheck && rule.r.MatchString(tb.Name) {
 				return true
 			}
 		}
 		ruleSet = f.Selector.Match(tb.Schema, tb.Name)
 		for _, r := range ruleSet {
 			rule := r.(*nodeEndRule)
-			if rule.kind == tblRuleFull && rule.isWhiteList == isWhiteListCheck {
+			if rule.kind == tblRuleFull && rule.isAllowList == isAllowListCheck {
 				return true
 			}
 		}
