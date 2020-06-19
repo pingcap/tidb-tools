@@ -16,6 +16,7 @@ package dbutil
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -66,7 +67,7 @@ type DBConfig struct {
 
 	User string `toml:"user" json:"user"`
 
-	Password string `toml:"password" json:"password"`
+	Password string `toml:"password" json:"-"` // omit it for privacy
 
 	Schema string `toml:"schema" json:"schema"`
 
@@ -77,10 +78,11 @@ type DBConfig struct {
 
 // String returns native format of database configuration
 func (c *DBConfig) String() string {
-	if c == nil {
-		return "<nil>"
+	cfg, err := json.Marshal(c)
+	if err != nil {
+		return ""
 	}
-	return fmt.Sprintf("DBConfig(%+v)", *c)
+	return string(cfg)
 }
 
 // GetDBConfigFromEnv returns DBConfig from environment

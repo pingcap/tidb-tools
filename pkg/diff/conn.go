@@ -25,7 +25,7 @@ import (
 func CreateDB(ctx context.Context, dbConfig dbutil.DBConfig, num int) (db *sql.DB, err error) {
 	db, err = dbutil.OpenDB(dbConfig)
 	if err != nil {
-		return nil, errors.Errorf("create db connections %+v error %v", dbConfig, err)
+		return nil, errors.Errorf("create db connections %s error %v", dbConfig.String(), err)
 	}
 
 	// SetMaxOpenConns and SetMaxIdleConns for connection to avoid error like

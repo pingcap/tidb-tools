@@ -15,8 +15,8 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"flag"
-	"fmt"
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
@@ -258,10 +258,11 @@ func (c *Config) Parse(arguments []string) error {
 }
 
 func (c *Config) String() string {
-	if c == nil {
-		return "<nil>"
+	cfg, err := json.Marshal(c)
+	if err != nil {
+		return ""
 	}
-	return fmt.Sprintf("Config(%+v)", *c)
+	return string(cfg)
 }
 
 // configFromFile loads config from file.

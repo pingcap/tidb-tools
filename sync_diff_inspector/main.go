@@ -59,6 +59,8 @@ func main() {
 		return
 	}
 
+	log.Info("", zap.Stringer("config", cfg))
+
 	ctx := context.Background()
 	if !checkSyncState(ctx, cfg) {
 		log.Fatal("sourceDB don't equal targetDB")
