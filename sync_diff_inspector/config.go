@@ -260,7 +260,7 @@ func (c *Config) Parse(arguments []string) error {
 func (c *Config) String() string {
 	cfg, err := json.Marshal(c)
 	if err != nil {
-		return ""
+		return "<nil>"
 	}
 	return string(cfg)
 }
