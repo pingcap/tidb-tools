@@ -16,7 +16,7 @@ func (t *testCheckSuite) TestVersionComparsion(c *tc.C) {
 		{"5.7.0", true, true, true, true},
 		{"5.8.0", true, true, true, true},
 		{"8.0.1", true, true, true, true},
-		{"255.255.255", true, true, false, true},
+		{"255.255.255", true, true, false, true}, // max version
 	}
 
 	var (
