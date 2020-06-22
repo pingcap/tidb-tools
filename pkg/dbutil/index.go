@@ -34,7 +34,7 @@ func ShowIndex(ctx context.Context, db *sql.DB, schemaName string, table string)
 		+-------+------------+----------+--------------+-------------+-----------+-------------+----------+--------+------+------------+---------+---------------+
 	*/
 	indices := make([]*IndexInfo, 0, 3)
-	query := fmt.Sprintf("SHOW INDEX FROM `%s`.`%s`", schemaName, table)
+	query := fmt.Sprintf("SHOW INDEX FROM %s", TableName(schemaName, table))
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, errors.Trace(err)
