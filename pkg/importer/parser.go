@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/types"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	_ "github.com/pingcap/tidb/types/parser_driver" // for parser driver
 	"go.uber.org/zap"
 )
@@ -196,7 +197,7 @@ func (t *table) parseTableConstraint(cons *ast.Constraint) {
 func (t *table) buildColumnList() {
 	columns := make([]string, 0, len(t.columns))
 	for _, column := range t.columns {
-		columns = append(columns, column.name)
+		columns = append(columns, dbutil.ColumnName(column.name))
 	}
 
 	t.columnList = strings.Join(columns, ",")
