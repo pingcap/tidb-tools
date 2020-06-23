@@ -704,7 +704,7 @@ func ExecuteSQLs(ctx context.Context, db *sql.DB, sqls []string, args [][]interf
 
 		takeDuration := time.Since(startTime)
 		if takeDuration > SlowLogThreshold {
-			log.Warn("exec sql slow", zap.String("sql", sqls[i]), zap.Reflect("args", args[i]), zap.Duration("take", takeDuration))
+			log.Debug("exec sql slow", zap.String("sql", sqls[i]), zap.Reflect("args", args[i]), zap.Duration("take", takeDuration))
 		}
 	}
 
