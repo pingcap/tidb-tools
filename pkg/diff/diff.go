@@ -32,7 +32,6 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
-	tidbconfig "github.com/pingcap/tidb/config"
 	"go.uber.org/zap"
 )
 
@@ -90,7 +89,7 @@ type TableDiff struct {
 	IgnoreDataCheck bool `json:"-"`
 
 	// set true will continue check from the latest checkpoint
-	UseCheckpoint bool `json:"use-checkpoint"`
+	UseCheckpoint bool `json:"-"`
 
 	// get tidb statistics information from which table instance. if is nil, will split chunk by random.
 	TiDBStatsSource *TableInstance `json:"tidb-stats-source"`
@@ -137,6 +136,10 @@ func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (
 		if err != nil {
 			return false, false, errors.Trace(err)
 		}
+
+		if !structEqual {
+			return false, false, nil
+		}
 	}
 
 	if !t.IgnoreDataCheck {
@@ -166,8 +169,9 @@ func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (
 // CheckTableStruct checks table's struct
 func (t *TableDiff) CheckTableStruct(ctx context.Context) (bool, error) {
 	for _, sourceTable := range t.SourceTables {
-		eq := dbutil.EqualTableInfo(sourceTable.info, t.TargetTable.info)
+		eq, msg := dbutil.EqualTableInfo(sourceTable.info, t.TargetTable.info)
 		if !eq {
+			log.Warn("table struct is not equal", zap.String("reason", msg))
 			return false, nil
 		}
 	}
@@ -195,11 +199,6 @@ func (t *TableDiff) adjustConfig() {
 	if t.CheckThreadCount <= 0 {
 		t.CheckThreadCount = 4
 	}
-
-	// to support table with auto_random in TiDB
-	tidbCfg := tidbconfig.GetGlobalConfig()
-	tidbCfg.Experimental.AllowAutoRandom = true
-	tidbconfig.StoreGlobalConfig(tidbCfg)
 }
 
 func (t *TableDiff) getTableInfo(ctx context.Context) error {
@@ -696,7 +695,7 @@ func generateDML(tp string, data map[string]*dbutil.ColumnData, table *model.Tab
 				continue
 			}
 
-			colNames = append(colNames, fmt.Sprintf("`%s`", col.Name.O))
+			colNames = append(colNames, dbutil.ColumnName(col.Name.O))
 			if data[col.Name.O].IsNull {
 				values = append(values, "NULL")
 				continue
@@ -709,7 +708,7 @@ func generateDML(tp string, data map[string]*dbutil.ColumnData, table *model.Tab
 			}
 		}
 
-		sql = fmt.Sprintf("REPLACE INTO `%s`.`%s`(%s) VALUES (%s);", schema, table.Name, strings.Join(colNames, ","), strings.Join(values, ","))
+		sql = fmt.Sprintf("REPLACE INTO %s(%s) VALUES (%s);", dbutil.TableName(schema, table.Name.O), strings.Join(colNames, ","), strings.Join(values, ","))
 	case "delete":
 		kvs := make([]string, 0, len(table.Columns))
 		for _, col := range table.Columns {
@@ -718,17 +717,17 @@ func generateDML(tp string, data map[string]*dbutil.ColumnData, table *model.Tab
 			}
 
 			if data[col.Name.O].IsNull {
-				kvs = append(kvs, fmt.Sprintf("`%s` is NULL", col.Name.O))
+				kvs = append(kvs, fmt.Sprintf("%s is NULL", dbutil.ColumnName(col.Name.O)))
 				continue
 			}
 
 			if needQuotes(col.FieldType) {
-				kvs = append(kvs, fmt.Sprintf("`%s` = '%s'", col.Name.O, strings.Replace(string(data[col.Name.O].Data), "'", "\\'", -1)))
+				kvs = append(kvs, fmt.Sprintf("%s = '%s'", dbutil.ColumnName(col.Name.O), strings.Replace(string(data[col.Name.O].Data), "'", "\\'", -1)))
 			} else {
-				kvs = append(kvs, fmt.Sprintf("`%s` = %s", col.Name.O, string(data[col.Name.O].Data)))
+				kvs = append(kvs, fmt.Sprintf("%s = %s", dbutil.ColumnName(col.Name.O), string(data[col.Name.O].Data)))
 			}
 		}
-		sql = fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE %s;", schema, table.Name, strings.Join(kvs, " AND "))
+		sql = fmt.Sprintf("DELETE FROM %s WHERE %s;", dbutil.TableName(schema, table.Name.O), strings.Join(kvs, " AND "))
 	default:
 		log.Error("unknown sql type", zap.String("type", tp))
 	}
