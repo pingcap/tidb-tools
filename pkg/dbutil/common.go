@@ -44,8 +44,8 @@ const (
 	// DefaultTimeout is the default timeout for execute sql
 	DefaultTimeout time.Duration = 10 * time.Second
 
-	// SlowWarnLog defines the duration to log warn log of sql when exec time greater than
-	SlowWarnLog = 200 * time.Millisecond
+	// SlowLogThreshold defines the duration to log debug log of sql when exec time greater than
+	SlowLogThreshold = 200 * time.Millisecond
 
 	// DefaultDeleteRowsNum is the default rows num for delete one time
 	DefaultDeleteRowsNum int64 = 100000
@@ -649,7 +649,7 @@ func ExecSQLWithRetry(ctx context.Context, db *sql.DB, sql string, args ...inter
 		startTime := time.Now()
 		_, err = db.ExecContext(ctx, sql, args...)
 		takeDuration := time.Since(startTime)
-		if takeDuration > SlowWarnLog {
+		if takeDuration > SlowLogThreshold {
 			log.Debug("exec sql slow", zap.String("sql", sql), zap.Reflect("args", args), zap.Duration("take", takeDuration))
 		}
 		if err == nil {
@@ -703,7 +703,7 @@ func ExecuteSQLs(ctx context.Context, db *sql.DB, sqls []string, args [][]interf
 		}
 
 		takeDuration := time.Since(startTime)
-		if takeDuration > SlowWarnLog {
+		if takeDuration > SlowLogThreshold {
 			log.Warn("exec sql slow", zap.String("sql", sqls[i]), zap.Reflect("args", args[i]), zap.Duration("take", takeDuration))
 		}
 	}
