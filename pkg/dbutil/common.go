@@ -16,6 +16,7 @@ package dbutil
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -43,8 +44,8 @@ const (
 	// DefaultTimeout is the default timeout for execute sql
 	DefaultTimeout time.Duration = 10 * time.Second
 
-	// SlowWarnLog defines the duration to log warn log of sql when exec time greater than
-	SlowWarnLog = 100 * time.Millisecond
+	// SlowLogThreshold defines the duration to log debug log of sql when exec time greater than
+	SlowLogThreshold = 200 * time.Millisecond
 
 	// DefaultDeleteRowsNum is the default rows num for delete one time
 	DefaultDeleteRowsNum int64 = 100000
@@ -66,7 +67,7 @@ type DBConfig struct {
 
 	User string `toml:"user" json:"user"`
 
-	Password string `toml:"password" json:"password"`
+	Password string `toml:"password" json:"-"` // omit it for privacy
 
 	Schema string `toml:"schema" json:"schema"`
 
@@ -77,10 +78,11 @@ type DBConfig struct {
 
 // String returns native format of database configuration
 func (c *DBConfig) String() string {
-	if c == nil {
+	cfg, err := json.Marshal(c)
+	if err != nil {
 		return "<nil>"
 	}
-	return fmt.Sprintf("DBConfig(%+v)", *c)
+	return string(cfg)
 }
 
 // GetDBConfigFromEnv returns DBConfig from environment
@@ -647,15 +649,15 @@ func ExecSQLWithRetry(ctx context.Context, db *sql.DB, sql string, args ...inter
 		startTime := time.Now()
 		_, err = db.ExecContext(ctx, sql, args...)
 		takeDuration := time.Since(startTime)
-		if takeDuration > SlowWarnLog {
-			log.Warn("exec sql slow", zap.String("sql", sql), zap.Reflect("args", args), zap.Duration("take", takeDuration))
+		if takeDuration > SlowLogThreshold {
+			log.Debug("exec sql slow", zap.String("sql", sql), zap.Reflect("args", args), zap.Duration("take", takeDuration))
 		}
 		if err == nil {
 			return nil
 		}
 
 		if ignoreError(err) {
-			log.Debug("ignore execute sql error", zap.Error(err))
+			log.Warn("ignore execute sql error", zap.Error(err))
 			return nil
 		}
 
@@ -701,8 +703,8 @@ func ExecuteSQLs(ctx context.Context, db *sql.DB, sqls []string, args [][]interf
 		}
 
 		takeDuration := time.Since(startTime)
-		if takeDuration > SlowWarnLog {
-			log.Warn("exec sql slow", zap.String("sql", sqls[i]), zap.Reflect("args", args[i]), zap.Duration("take", takeDuration))
+		if takeDuration > SlowLogThreshold {
+			log.Debug("exec sql slow", zap.String("sql", sqls[i]), zap.Reflect("args", args[i]), zap.Duration("take", takeDuration))
 		}
 	}
 

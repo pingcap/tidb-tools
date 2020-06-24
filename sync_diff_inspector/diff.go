@@ -103,7 +103,7 @@ func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 	for _, source := range cfg.SourceDBCfg {
 		source.Conn, err = diff.CreateDB(df.ctx, source.DBConfig, cfg.CheckThreadCount)
 		if err != nil {
-			return errors.Errorf("create source db %+v error %v", source.DBConfig, err)
+			return errors.Errorf("create source db %s error %v", source.DBConfig.String(), err)
 		}
 		df.sourceDBs[source.InstanceID] = source
 	}
@@ -111,13 +111,13 @@ func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 	// create connection for target.
 	cfg.TargetDBCfg.Conn, err = diff.CreateDB(df.ctx, cfg.TargetDBCfg.DBConfig, cfg.CheckThreadCount)
 	if err != nil {
-		return errors.Errorf("create target db %+v error %v", cfg.TargetDBCfg, err)
+		return errors.Errorf("create target db %s error %v", cfg.TargetDBCfg.DBConfig.String(), err)
 	}
 	df.targetDB = cfg.TargetDBCfg
 
 	df.cpDB, err = diff.CreateDBForCP(df.ctx, cfg.TargetDBCfg.DBConfig)
 	if err != nil {
-		return errors.Errorf("create checkpoint db %+v error %v", cfg.TargetDBCfg, err)
+		return errors.Errorf("create checkpoint db %s error %v", cfg.TargetDBCfg.DBConfig.String(), err)
 	}
 
 	return nil

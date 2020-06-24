@@ -51,14 +51,17 @@ func main() {
 	}
 	log.SetLevel(l.Level())
 
+	utils.PrintInfo("sync_diff_inspector")
+
 	ok := cfg.checkConfig()
 	if !ok {
 		log.Error("there is something wrong with your config, please check it!")
 		return
 	}
 
-	ctx := context.Background()
+	log.Info("", zap.Stringer("config", cfg))
 
+	ctx := context.Background()
 	if !checkSyncState(ctx, cfg) {
 		log.Fatal("sourceDB don't equal targetDB")
 	}
