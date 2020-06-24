@@ -150,7 +150,7 @@ func GetCreateTableSQL(ctx context.Context, db *sql.DB, schemaName string, table
 			) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin |
 		+-------+--------------------------------------------------------------------+
 	*/
-	query := fmt.Sprintf("SHOW CREATE TABLE `%s`.`%s`", schemaName, tableName)
+	query := fmt.Sprintf("SHOW CREATE TABLE %s", TableName(schemaName, tableName))
 
 	var tbl, createTable sql.NullString
 	err := db.QueryRowContext(ctx, query).Scan(&tbl, &createTable)
@@ -177,7 +177,7 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 		+------+
 	*/
 
-	query := fmt.Sprintf("SELECT COUNT(1) cnt FROM `%s`.`%s`", schemaName, tableName)
+	query := fmt.Sprintf("SELECT COUNT(1) cnt FROM %s", TableName(schemaName, tableName))
 	if len(where) > 0 {
 		query += fmt.Sprintf(" WHERE %s", where)
 	}
@@ -260,8 +260,8 @@ func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column strin
 		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
 	}
 
-	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ MIN(`%s`%s) as MIN, MAX(`%s`%s) as MAX FROM `%s`.`%s` WHERE %s",
-		column, collation, column, collation, schema, table, limitRange)
+	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ MIN(%s%s) as MIN, MAX(%s%s) as MAX FROM %s WHERE %s",
+		ColumnName(column), collation, ColumnName(column), collation, TableName(schema, table), limitRange)
 	log.Debug("GetMinMaxValue", zap.String("sql", query), zap.Reflect("args", limitArgs))
 
 	var min, max sql.NullString
@@ -383,8 +383,8 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName str
 	columnNames := make([]string, 0, len(tbInfo.Columns))
 	columnIsNull := make([]string, 0, len(tbInfo.Columns))
 	for _, col := range tbInfo.Columns {
-		columnNames = append(columnNames, fmt.Sprintf("`%s`", col.Name.O))
-		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(`%s`)", col.Name.O))
+		columnNames = append(columnNames, ColumnName(col.Name.O))
+		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", ColumnName(col.Name.O)))
 	}
 
 	query := fmt.Sprintf("SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED)) AS checksum FROM %s WHERE %s;",
@@ -746,7 +746,7 @@ func ignoreDDLError(err error) bool {
 
 // DeleteRows delete rows in several times. Only can delete less than 300,000 one time in TiDB.
 func DeleteRows(ctx context.Context, db *sql.DB, schemaName string, tableName string, where string, args []interface{}) error {
-	deleteSQL := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE %s limit %d;", schemaName, tableName, where, DefaultDeleteRowsNum)
+	deleteSQL := fmt.Sprintf("DELETE FROM %s WHERE %s limit %d;", TableName(schemaName, tableName), where, DefaultDeleteRowsNum)
 	result, err := db.ExecContext(ctx, deleteSQL, args...)
 	if err != nil {
 		return errors.Trace(err)

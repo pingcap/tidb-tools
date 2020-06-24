@@ -106,9 +106,9 @@ func (*testDBSuite) TestTableStructEqual(c *C) {
 	tableInfo3, err := GetTableInfoBySQL(createTableSQL3, "ANSI_QUOTES")
 	c.Assert(err, IsNil)
 
-	equal := EqualTableInfo(tableInfo1, tableInfo2)
+	equal, _ := EqualTableInfo(tableInfo1, tableInfo2)
 	c.Assert(equal, Equals, true)
 
-	equal = EqualTableInfo(tableInfo1, tableInfo3)
+	equal, _ = EqualTableInfo(tableInfo1, tableInfo3)
 	c.Assert(equal, Equals, false)
 }

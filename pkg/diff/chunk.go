@@ -111,25 +111,25 @@ func (c *ChunkRange) toString(collation string) (string, []string) {
 
 		if bound.HasLower {
 			if len(preConditionForLower) > 0 {
-				lowerCondition = append(lowerCondition, fmt.Sprintf("(%s AND `%s`%s %s ?)", strings.Join(preConditionForLower, " AND "), bound.Column, collation, lowerSymbol))
+				lowerCondition = append(lowerCondition, fmt.Sprintf("(%s AND %s%s %s ?)", strings.Join(preConditionForLower, " AND "), dbutil.ColumnName(bound.Column), collation, lowerSymbol))
 				lowerArgs = append(append(lowerArgs, preConditionArgsForLower...), bound.Lower)
 			} else {
-				lowerCondition = append(lowerCondition, fmt.Sprintf("(`%s`%s %s ?)", bound.Column, collation, lowerSymbol))
+				lowerCondition = append(lowerCondition, fmt.Sprintf("(%s%s %s ?)", dbutil.ColumnName(bound.Column), collation, lowerSymbol))
 				lowerArgs = append(lowerArgs, bound.Lower)
 			}
-			preConditionForLower = append(preConditionForLower, fmt.Sprintf("`%s` = ?", bound.Column))
+			preConditionForLower = append(preConditionForLower, fmt.Sprintf("%s = ?", dbutil.ColumnName(bound.Column)))
 			preConditionArgsForLower = append(preConditionArgsForLower, bound.Lower)
 		}
 
 		if bound.HasUpper {
 			if len(preConditionForUpper) > 0 {
-				upperCondition = append(upperCondition, fmt.Sprintf("(%s AND `%s`%s %s ?)", strings.Join(preConditionForUpper, " AND "), bound.Column, collation, upperSymbol))
+				upperCondition = append(upperCondition, fmt.Sprintf("(%s AND %s%s %s ?)", strings.Join(preConditionForUpper, " AND "), dbutil.ColumnName(bound.Column), collation, upperSymbol))
 				upperArgs = append(append(upperArgs, preConditionArgsForUpper...), bound.Upper)
 			} else {
-				upperCondition = append(upperCondition, fmt.Sprintf("(`%s`%s %s ?)", bound.Column, collation, upperSymbol))
+				upperCondition = append(upperCondition, fmt.Sprintf("(%s%s %s ?)", dbutil.ColumnName(bound.Column), collation, upperSymbol))
 				upperArgs = append(upperArgs, bound.Upper)
 			}
-			preConditionForUpper = append(preConditionForUpper, fmt.Sprintf("`%s` = ?", bound.Column))
+			preConditionForUpper = append(preConditionForUpper, fmt.Sprintf("%s = ?", dbutil.ColumnName(bound.Column)))
 			preConditionArgsForUpper = append(preConditionArgsForUpper, bound.Upper)
 		}
 	}

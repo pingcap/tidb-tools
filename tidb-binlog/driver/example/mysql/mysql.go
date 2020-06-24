@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/tidb-binlog/driver/reader"
 	pb "github.com/pingcap/tidb-tools/tidb-binlog/slave_binlog_proto/go-binlog"
 	_ "github.com/pingcap/tidb/types/parser_driver" // for parser driver
@@ -129,7 +130,7 @@ func columnToArg(c *pb.Column) (arg interface{}) {
 
 func tableToSQL(table *pb.Table) (sqls []string, sqlArgs [][]interface{}) {
 	replace := func(row *pb.Row) {
-		sql := fmt.Sprintf("replace into `%s`.`%s`", table.GetSchemaName(), table.GetTableName())
+		sql := fmt.Sprintf("replace into %s", dbutil.TableName(table.GetSchemaName(), table.GetTableName()))
 
 		var names []string
 		var placeHolders []string
@@ -186,7 +187,7 @@ func tableToSQL(table *pb.Table) (sqls []string, sqlArgs [][]interface{}) {
 			replace(mutation.Row)
 		case pb.MutationType_Update:
 			columnInfo := table.GetColumnInfo()
-			sql := fmt.Sprintf("update `%s`.`%s` set ", table.GetSchemaName(), table.GetTableName())
+			sql := fmt.Sprintf("update %s set ", dbutil.TableName(table.GetSchemaName(), table.GetTableName()))
 			// construct c1 = ?, c2 = ?...
 			for i, col := range columnInfo {
 				if i != 0 {
@@ -220,7 +221,7 @@ func tableToSQL(table *pb.Table) (sqls []string, sqlArgs [][]interface{}) {
 			columnInfo := table.GetColumnInfo()
 			where, usePK := constructWhere()
 
-			sql := fmt.Sprintf("delete from `%s`.`%s` %s", table.GetSchemaName(), table.GetTableName(), where)
+			sql := fmt.Sprintf("delete from %s %s", dbutil.TableName(table.GetSchemaName(), table.GetTableName()), where)
 
 			row := mutation.Row
 			var args []interface{}
