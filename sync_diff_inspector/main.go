@@ -63,7 +63,7 @@ func main() {
 
 	ctx := context.Background()
 	if !checkSyncState(ctx, cfg) {
-		log.Fatal("sourceDB don't equal targetDB")
+		os.Exit(1)
 	}
 	log.Info("test pass!!!")
 }
@@ -84,7 +84,7 @@ func checkSyncState(ctx context.Context, cfg *Config) bool {
 		log.Fatal("check data difference failed", zap.Error(err))
 	}
 
-	log.Info("check report", zap.Stringer("report", d.report))
+	d.report.Print()
 
 	return d.report.Result == Pass
 }
