@@ -82,7 +82,7 @@ func (r *Report) Print() {
 	for schema, tableMap := range r.TableResults {
 		for table, result := range tableMap {
 			if result.MeetError != nil {
-				log.Info("table check result", zap.String("schema", schema), zap.String("table", table), zap.String("meet error", result.MeetError.Error()))
+				log.Error("table check result", zap.String("schema", schema), zap.String("table", table), zap.String("meet error", result.MeetError.Error()))
 			} else {
 				log.Info("table check result", zap.String("schema", schema), zap.String("table", table), zap.Bool("struct equal", result.StructEqual), zap.Bool("data equal", result.DataEqual))
 			}
