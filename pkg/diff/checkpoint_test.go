@@ -83,21 +83,12 @@ func (s *testCheckpointSuite) testSaveAndLoadChunk(c *C, db *sql.DB) {
 }
 
 func (s *testCheckpointSuite) testUpdateSummary(c *C, db *sql.DB) {
-	failedChunk := &ChunkRange{
-		ID:    2,
-		State: failedState,
-	}
-	err := saveChunk(context.Background(), db, failedChunk.ID, "target", "test", "checkpoint", "", failedChunk)
-	c.Assert(err, IsNil)
+	summaryInfo := newTableSummaryInfo(3)
+	summaryInfo.addSuccessNum()
+	summaryInfo.addFailedNum()
+	summaryInfo.addIgnoreNum()
 
-	ignoreChunk := &ChunkRange{
-		ID:    3,
-		State: ignoreState,
-	}
-	err = saveChunk(context.Background(), db, ignoreChunk.ID, "target", "test", "checkpoint", "", ignoreChunk)
-	c.Assert(err, IsNil)
-
-	err = updateTableSummary(context.Background(), db, "target", "test", "checkpoint")
+	err := updateTableSummary(context.Background(), db, "target", "test", "checkpoint", summaryInfo)
 	c.Assert(err, IsNil)
 
 	total, successNum, failedNum, ignoreNum, state, err := getTableSummary(context.Background(), db, "test", "checkpoint")

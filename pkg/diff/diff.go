@@ -104,6 +104,9 @@ type TableDiff struct {
 
 	// 1 means true, 0 means false
 	checkpointLoaded int32
+
+	// create after all chunks is splited, or load from checkpoint
+	summaryInfo *tableSummaryInfo
 }
 
 func (t *TableDiff) setConfigHash() error {
@@ -249,6 +252,8 @@ func (t *TableDiff) CheckTableData(ctx context.Context) (equal bool, err error) 
 		log.Warn("get 0 chunks, table is not checked", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)))
 		return true, nil
 	}
+
+	t.summaryInfo = newTableSummaryInfo(int64(len(chunks)))
 
 	checkResultCh := make(chan bool, t.CheckThreadCount)
 	defer close(checkResultCh)
@@ -398,13 +403,20 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, 
 	}
 
 	defer func() {
-		if chunk.State != ignoreState {
+		if chunk.State == ignoreState {
+			t.summaryInfo.addIgnoreNum()
+		} else {
 			if err != nil {
 				chunk.State = errorState
-			} else if equal {
-				chunk.State = successState
+				t.summaryInfo.addFailedNum()
 			} else {
-				chunk.State = failedState
+				if equal {
+					chunk.State = successState
+					t.summaryInfo.addSuccessNum()
+				} else {
+					chunk.State = failedState
+					t.summaryInfo.addFailedNum()
+				}
 			}
 		}
 		update()
@@ -655,7 +667,7 @@ func (t *TableDiff) UpdateSummaryInfo(ctx context.Context) chan bool {
 			ctx1, cancel1 := context.WithTimeout(ctx, dbutil.DefaultTimeout)
 			defer cancel1()
 
-			err := updateTableSummary(ctx1, t.CpDB, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table)
+			err := updateTableSummary(ctx1, t.CpDB, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table, t.summaryInfo)
 			if err != nil {
 				log.Warn("save table summary info failed", zap.String("schema", t.TargetTable.Schema), zap.String("table", t.TargetTable.Table), zap.Error(err))
 			}

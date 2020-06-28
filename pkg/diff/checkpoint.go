@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -57,6 +58,47 @@ var (
 
 	chunkTableName = "chunk"
 )
+
+// tableSummaryInfo saves a table's summary information
+type tableSummaryInfo struct {
+	sync.RWMutex
+
+	totalNum   int64
+	successNum int64
+	failedNum  int64
+	ignoreNum  int64
+}
+
+func newTableSummaryInfo(totalNum int64) *tableSummaryInfo {
+	return &tableSummaryInfo{
+		totalNum: totalNum,
+	}
+}
+
+func (s *tableSummaryInfo) addSuccessNum() {
+	s.Lock()
+	s.successNum++
+	s.Unlock()
+}
+
+func (s *tableSummaryInfo) addFailedNum() {
+	s.Lock()
+	s.failedNum++
+	s.Unlock()
+}
+
+func (s *tableSummaryInfo) addIgnoreNum() {
+	s.Lock()
+	s.ignoreNum++
+	s.Unlock()
+}
+
+func (s *tableSummaryInfo) get() (totalNum, successNum, failedNum, ignoreNum int64) {
+	s.RLock()
+	defer s.RUnlock()
+	return s.totalNum, s.successNum, s.failedNum, s.ignoreNum
+
+}
 
 // saveChunk saves the chunk's info to `chunk` table
 func saveChunk(ctx context.Context, db *sql.DB, chunkID int, instanceID, schema, table, checksum string, chunk *ChunkRange) error {
@@ -167,49 +209,6 @@ func getTableSummary(ctx context.Context, db *sql.DB, schema, table string) (tot
 	return 0, 0, 0, 0, "", errors.NotFoundf("schema %s, table %s summary info", schema, table)
 }
 
-// getChunkSummary get the table's summary info from `chunk` table
-func getChunkSummary(ctx context.Context, db *sql.DB, instanceID, schema, table string) (total, successNum, failedNum, ignoreNum int64, err error) {
-	query := fmt.Sprintf("SELECT `state`, COUNT(*) FROM `%s`.`%s` WHERE `instance_id` = ? AND `schema` = ? AND `table` = ? GROUP BY `state` ;", checkpointSchemaName, chunkTableName)
-	rows, err := db.QueryContext(ctx, query, instanceID, schema, table)
-	if err != nil {
-		return 0, 0, 0, 0, errors.Trace(err)
-	}
-	defer rows.Close()
-
-	var chunkState sql.NullString
-	var num sql.NullInt64
-	for rows.Next() {
-		err1 := rows.Scan(&chunkState, &num)
-		if err1 != nil {
-			return 0, 0, 0, 0, errors.Trace(err1)
-		}
-
-		if !chunkState.Valid || !num.Valid {
-			return 0, 0, 0, 0, errors.Errorf("some values are invalid, query: %s, args: %v", query, []interface{}{instanceID, schema, table})
-		}
-
-		total += num.Int64
-		switch chunkState.String {
-		case successState:
-			successNum += num.Int64
-		case failedState, errorState:
-			failedNum += num.Int64
-		case ignoreState:
-			ignoreNum += num.Int64
-		case notCheckedState, checkingState:
-		}
-	}
-	if rows.Err() != nil {
-		return 0, 0, 0, 0, errors.Trace(rows.Err())
-	}
-
-	if total == 0 {
-		log.Debug("chunks of table not found, chunk is still in spliting", zap.String("instance_id", instanceID), zap.String("schema", schema), zap.String("table", table))
-	}
-
-	return
-}
-
 // initTableSummary initials a table's summary info in table `summary`
 func initTableSummary(ctx context.Context, db *sql.DB, schema, table string, configHash string) error {
 	sql := fmt.Sprintf("REPLACE INTO `%s`.`%s`(`schema`, `table`, `state`, `config_hash`) VALUES(?, ?, ?, ?)", checkpointSchemaName, summaryTableName)
@@ -223,12 +222,12 @@ func initTableSummary(ctx context.Context, db *sql.DB, schema, table string, con
 }
 
 // updateTableSummary gets summary info from `chunk` table, and then update `summary` table
-func updateTableSummary(ctx context.Context, db *sql.DB, instanceID, schema, table string) error {
-	total, successNum, failedNum, ignoreNum, err := getChunkSummary(ctx, db, instanceID, schema, table)
-	if err != nil {
-		return errors.Trace(err)
+func updateTableSummary(ctx context.Context, db *sql.DB, instanceID, schema, table string, summaryInfo *tableSummaryInfo) error {
+	if summaryInfo == nil {
+		return nil
 	}
 
+	total, successNum, failedNum, ignoreNum := summaryInfo.get()
 	if total == 0 {
 		// don't need to update summary info
 		return nil
@@ -246,7 +245,7 @@ func updateTableSummary(ctx context.Context, db *sql.DB, instanceID, schema, tab
 	}
 
 	updateSQL := fmt.Sprintf("UPDATE `%s`.`%s` SET `chunk_num` = ?, `check_success_num` = ?, `check_failed_num` = ?, `check_ignore_num` = ?, `state` = ? WHERE `schema` = ? AND `table` = ?", checkpointSchemaName, summaryTableName)
-	err = dbutil.ExecSQLWithRetry(ctx, db, updateSQL, total, successNum, failedNum, ignoreNum, state, schema, table)
+	err := dbutil.ExecSQLWithRetry(ctx, db, updateSQL, total, successNum, failedNum, ignoreNum, state, schema, table)
 	if err != nil {
 		return errors.Trace(err)
 	}
