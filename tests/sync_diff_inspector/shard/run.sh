@@ -17,11 +17,11 @@ mysql -uroot -h 127.0.0.1 -P 4001 -e "insert into diff_test.shard_test2 (\`table
 
 echo "compare sharding tables with one table in downstream, check result should be pass"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/shard_diff.log
-check_contains "test pass!!!" $OUT_DIR/shard_diff.log
+check_contains "check pass!!!" $OUT_DIR/shard_diff.log
 
 echo "update data in one shard table, and data should not be equal"
 mysql -uroot -h 127.0.0.1 -P 4001 -e "update diff_test.shard_test1 set b = 'abc' limit 1"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/shard_diff.log || true
-check_contains "sourceDB don't equal targetDB" $OUT_DIR/shard_diff.log
+check_contains "check failed" $OUT_DIR/shard_diff.log
 
 echo "shard test passed"
