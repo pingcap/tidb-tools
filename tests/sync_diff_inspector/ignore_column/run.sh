@@ -12,7 +12,7 @@ mysql -uroot -h 127.0.0.1 -P 4000 -e "update diff_test.test set b = 'abc' limit 
 
 rm $OUT_DIR/fix.sql || true
 sync_diff_inspector --config=./config_base.toml > $OUT_DIR/ignore_column_diff.log || true
-check_contains "sourceDB don't equal targetDB" $OUT_DIR/ignore_column_diff.log
+check_contains "check failed" $OUT_DIR/ignore_column_diff.log
 mv $OUT_DIR/fix.sql $OUT_DIR/fix.sql.bak
 
 echo "ignore check column b, check result should be pass"

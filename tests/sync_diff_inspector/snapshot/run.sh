@@ -16,7 +16,7 @@ echo "delete one data, diff should not passed"
 mysql -uroot -h 127.0.0.1 -P 4000 -e "delete from diff_test.test limit 1"
 
 sync_diff_inspector --config=./config_base.toml > $OUT_DIR/snapshot_diff.log || true
-check_contains "sourceDB don't equal targetDB" $OUT_DIR/snapshot_diff.log
+check_contains "check failed" $OUT_DIR/snapshot_diff.log
 # fix.sql will be empty after check below, so backup it
 cp $OUT_DIR/fix.sql $OUT_DIR/fix.sql.bak
 
