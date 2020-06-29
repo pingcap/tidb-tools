@@ -21,19 +21,20 @@ loader -h 127.0.0.1 -P 4001 -u root -d $OUT_DIR/dump_diff
 
 echo "use sync_diff_inspector to compare data"
 sync_diff_inspector --config=./config_base.toml > $OUT_DIR/diff.log
-check_contains "test pass!!!" $OUT_DIR/diff.log
+check_contains "check pass!!!" $OUT_DIR/diff.log
 
 echo "analyze table, and will use tidb's statistical information to split chunks"
 check_contains "will split chunk by random again" $OUT_DIR/diff.log
 mysql -uroot -h 127.0.0.1 -P 4000 -e "analyze table diff_test.test"
 sync_diff_inspector --config=./config_base.toml > $OUT_DIR/diff.log
-check_contains "test pass!!!" $OUT_DIR/diff.log
+check_contains "check pass!!!" $OUT_DIR/diff.log
 check_not_contains "will split chunk by random again" $OUT_DIR/diff.log
 
 echo "test 'exclude-tables' config"
 mysql -uroot -h 127.0.0.1 -P 4000 -e "create table if not exists diff_test.should_not_compare (id int)"
 sync_diff_inspector --config=./config_base.toml > $OUT_DIR/diff.log
-check_not_contains "should_not_compare" $OUT_DIR/diff.log
+# doesn't contain the table's result in check report
+check_not_contains "[table=should_not_compare]" $OUT_DIR/diff.log
 
 for script in ./*/run.sh; do
     test_name="$(basename "$(dirname "$script")")"
