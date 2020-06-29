@@ -17,11 +17,11 @@ mv $OUT_DIR/fix.sql $OUT_DIR/fix.sql.bak
 
 echo "ignore check column b, check result should be pass"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/ignore_column_diff.log || true
-check_contains "test pass!!!" $OUT_DIR/ignore_column_diff.log
+check_contains "check pass!!!" $OUT_DIR/ignore_column_diff.log
 
 echo "execute fix.sql and use base config, and then compare data, data should be equal"
 cat $OUT_DIR/fix.sql.bak | mysql -uroot -h127.0.0.1 -P 4000
 sync_diff_inspector --config=./config_base.toml > $OUT_DIR/ignore_column_diff.log
-check_contains "test pass!!!" $OUT_DIR/ignore_column_diff.log
+check_contains "check pass!!!" $OUT_DIR/ignore_column_diff.log
 
 echo "ignore_column test passed"
