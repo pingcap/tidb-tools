@@ -14,8 +14,10 @@
 package main
 
 import (
-	"fmt"
 	"sync"
+
+	"github.com/pingcap/log"
+	"go.uber.org/zap"
 )
 
 const (
@@ -31,6 +33,7 @@ type TableResult struct {
 	Table       string
 	StructEqual bool
 	DataEqual   bool
+	MeetError   error
 }
 
 // Report saves the check results.
@@ -52,8 +55,8 @@ func NewReport() *Report {
 	}
 }
 
-// String returns a string of this Report.
-func (r *Report) String() (report string) {
+// Print prints the check report.
+func (r *Report) Print() {
 	r.RLock()
 	defer r.RUnlock()
 	/*
@@ -73,35 +76,18 @@ func (r *Report) String() (report string) {
 		table's struct equal
 		table's data equal
 	*/
-	report = fmt.Sprintf("\ncheck result: %s!\n", r.Result)
-	report += fmt.Sprintf("%d tables' check passed, %d tables' check failed.\n", r.PassNum, r.FailedNum)
 
-	var failTableRsult, passTableResult string
+	log.Info("check result summary", zap.Int32("check passed num", r.PassNum), zap.Int32("check failed num", r.FailedNum))
+
 	for schema, tableMap := range r.TableResults {
 		for table, result := range tableMap {
-			var structResult, dataResult string
-			if !result.StructEqual {
-				structResult = "table's struct not equal"
+			if result.MeetError != nil {
+				log.Error("table check result", zap.String("schema", schema), zap.String("table", table), zap.String("meet error", result.MeetError.Error()))
 			} else {
-				structResult = "table's struct equal"
-			}
-
-			if !result.DataEqual {
-				dataResult = "table's data not equal"
-			} else {
-				dataResult = "table's data equal"
-			}
-
-			if !result.StructEqual || !result.DataEqual {
-				failTableRsult = fmt.Sprintf("%stable: %s.%s\n%s\n%s\n\n", failTableRsult, schema, table, structResult, dataResult)
-			} else {
-				passTableResult = fmt.Sprintf("%stable: %s.%s\n%s\n%s\n\n", passTableResult, schema, table, structResult, dataResult)
+				log.Info("table check result", zap.String("schema", schema), zap.String("table", table), zap.Bool("struct equal", result.StructEqual), zap.Bool("data equal", result.DataEqual))
 			}
 		}
 	}
-
-	// first print the check failed table's information
-	report += fmt.Sprintf("\n%s%s", failTableRsult, passTableResult)
 
 	return
 }
@@ -148,4 +134,21 @@ func (r *Report) SetTableDataCheckResult(schema, table string, equal bool) {
 	if !equal {
 		r.Result = Fail
 	}
+}
+
+// SetTableMeetError sets meet error when check the table.
+func (r *Report) SetTableMeetError(schema, table string, err error) {
+	if _, ok := r.TableResults[schema]; !ok {
+		r.TableResults[schema] = make(map[string]*TableResult)
+	}
+
+	if tableResult, ok := r.TableResults[schema][table]; ok {
+		tableResult.MeetError = err
+	} else {
+		r.TableResults[schema][table] = &TableResult{
+			MeetError: err,
+		}
+	}
+
+	r.Result = Fail
 }
