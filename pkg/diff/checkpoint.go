@@ -235,8 +235,11 @@ func updateTableSummary(ctx context.Context, db *sql.DB, instanceID, schema, tab
 
 	log.Info("summary info", zap.String("instance_id", instanceID), zap.String("schema", schema), zap.String("table", table), zap.Int64("chunk num", total), zap.Int64("success num", successNum), zap.Int64("failed num", failedNum), zap.Int64("ignore num", ignoreNum))
 
-	state := notCheckedState
-	if total == successNum+failedNum+ignoreNum {
+	checkedNum := successNum + failedNum + ignoreNum
+	state := checkingState
+	if checkedNum == 0 {
+		state = notCheckedState
+	} else if checkedNum == total {
 		if total == successNum+ignoreNum {
 			state = successState
 		} else {

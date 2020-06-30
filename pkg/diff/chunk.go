@@ -257,7 +257,7 @@ func splitRangeByRandom(db *sql.DB, chunk *ChunkRange, count int, schema string,
 			return nil, errors.Trace(err)
 		}
 
-		log.Debug("get split values by random", zap.Stringer("chunk", chunk), zap.String("column", column.Name.O), zap.Reflect("random values", randomValues[i]))
+		log.Debug("get split values by random", zap.Stringer("chunk", chunk), zap.String("column", column.Name.O), zap.Int("random values num", len(randomValues[i])))
 	}
 
 	for i := 0; i <= minLenInSlices(randomValues); i++ {
@@ -278,7 +278,7 @@ func splitRangeByRandom(db *sql.DB, chunk *ChunkRange, count int, schema string,
 		chunks = append(chunks, newChunk)
 	}
 
-	log.Debug("split range by random", zap.Stringer("origin chunk", chunk), zap.Reflect("chunks", chunks))
+	log.Debug("split range by random", zap.Stringer("origin chunk", chunk), zap.Int("split num", len(chunks)))
 
 	return chunks, nil
 }
@@ -460,6 +460,7 @@ func SplitChunks(ctx context.Context, table *TableInstance, splitFields, limits 
 
 	ctx1, cancel1 := context.WithTimeout(ctx, time.Duration(len(chunks))*dbutil.DefaultTimeout)
 	defer cancel1()
+
 	for i, chunk := range chunks {
 		conditions, args := chunk.toString(collation)
 
