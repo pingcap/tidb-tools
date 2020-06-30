@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -113,6 +114,45 @@ func saveChunk(ctx context.Context, db *sql.DB, chunkID int, instanceID, schema,
 		log.Error("save chunk info failed", zap.Error(err))
 		return errors.Trace(err)
 	}
+	return nil
+}
+
+// initChunks initials the chunks' information into chunk table
+func initChunks(ctx context.Context, db *sql.DB, instanceID, schema, table string, chunks []*ChunkRange) error {
+	beginTime := time.Now()
+	batch := 100
+	num := 0
+	sqlPrefix := fmt.Sprintf("INSERT INTO `%s`.`%s` VALUES", checkpointSchemaName, chunkTableName)
+
+	valuesPlaceholders := "(?, ?, ?, ?, ?, ?, ?, ?, ?)"
+	valuesPlaceholdersArray := make([]string, 0, batch)
+	values := make([]interface{}, 0, 9*batch)
+
+	for i, chunk := range chunks {
+		num++
+		chunkBytes, err := json.Marshal(chunk)
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		values = append(values, chunk.ID, instanceID, schema, table, chunk.Where, "", string(chunkBytes), chunk.State, time.Now())
+		valuesPlaceholdersArray = append(valuesPlaceholdersArray, valuesPlaceholders)
+
+		if num >= batch || i == len(chunks)-1 {
+			sql := fmt.Sprintf("%s%s", sqlPrefix, strings.Join(valuesPlaceholdersArray, ", "))
+			err = dbutil.ExecSQLWithRetry(ctx, db, sql, values...)
+			if err != nil {
+				log.Error("save chunk info failed", zap.Error(err))
+				return errors.Trace(err)
+			}
+			num = 0
+			valuesPlaceholdersArray = make([]string, 0, batch)
+			values = make([]interface{}, 0, 9*batch)
+		}
+	}
+
+	log.Info("initial chunks", zap.Duration("cost", time.Since(beginTime)))
+
 	return nil
 }
 

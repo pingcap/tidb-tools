@@ -232,6 +232,7 @@ func (s *randomSpliter) split(table *TableInstance, columns []*model.ColumnInfo,
 	}
 
 	chunkCnt := (int(cnt) + chunkSize - 1) / chunkSize
+	log.Info("split range by random", zap.Int64("row count", cnt), zap.Int("split chunk num", chunkCnt))
 	chunks, err := splitRangeByRandom(table.Conn, NewChunkRange(), chunkCnt, table.Schema, table.Table, columns, s.limits, s.collation)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -458,21 +459,20 @@ func SplitChunks(ctx context.Context, table *TableInstance, splitFields, limits 
 		return nil, nil
 	}
 
-	ctx1, cancel1 := context.WithTimeout(ctx, time.Duration(len(chunks))*dbutil.DefaultTimeout)
-	defer cancel1()
-
 	for i, chunk := range chunks {
 		conditions, args := chunk.toString(collation)
-
 		chunk.ID = i
 		chunk.Where = fmt.Sprintf("(%s AND %s)", conditions, limits)
 		chunk.Args = args
 		chunk.State = notCheckedState
+	}
 
-		err = saveChunk(ctx1, cpDB, i, table.InstanceID, table.Schema, table.Table, "", chunk)
-		if err != nil {
-			log.Warn("save chunk failed", zap.Error(err), zap.Stringer("chunk", chunk))
-		}
+	ctx1, cancel1 := context.WithTimeout(ctx, time.Duration(len(chunks))*dbutil.DefaultTimeout)
+	defer cancel1()
+
+	err = initChunks(ctx1, cpDB, table.InstanceID, table.Schema, table.Table, chunks)
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
 
 	return chunks, nil
