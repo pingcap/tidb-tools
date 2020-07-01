@@ -350,20 +350,6 @@ func (t *TableDiff) LoadCheckpoint(ctx context.Context) ([]*ChunkRange, error) {
 	return nil, nil
 }
 
-func (t *TableDiff) getSourceTableChecksum(ctx context.Context, chunk *ChunkRange) (int64, error) {
-	var checksum int64
-
-	for _, sourceTable := range t.SourceTables {
-		checksumTmp, err := dbutil.GetCRC32Checksum(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
-		if err != nil {
-			return -1, errors.Trace(err)
-		}
-
-		checksum ^= checksumTmp
-	}
-	return checksum, nil
-}
-
 func (t *TableDiff) checkChunksDataEqual(ctx context.Context, filterByRand bool, chunks chan *ChunkRange, resultCh chan bool) {
 	for {
 		select {
@@ -460,21 +446,75 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, 
 	return equal, nil
 }
 
-func (t *TableDiff) compareChecksum(ctx context.Context, chunk *ChunkRange) (bool, error) {
-	// first check the checksum is equal or not
-	getSourceChecksumTime := time.Now()
-	sourceChecksum, err := t.getSourceTableChecksum(ctx, chunk)
-	if err != nil {
-		return false, errors.Trace(err)
-	}
-	getSourceChecksumDuration := time.Since(getSourceChecksumTime)
+// checksumInfo save some information about checksum
+type checksumInfo struct {
+	checksum int64
+	err      error
+	cost     time.Duration
+	tp       string
+}
 
-	getTargetChecksumTime := time.Now()
-	targetChecksum, err := dbutil.GetCRC32Checksum(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
-	if err != nil {
-		return false, errors.Trace(err)
+// check the checksum is equal or not
+func (t *TableDiff) compareChecksum(ctx context.Context, chunk *ChunkRange) (bool, error) {
+	ctx1, cancel1 := context.WithCancel(ctx)
+	defer cancel1()
+
+	var (
+		getSourceChecksumDuration, getTargetChecksumDuration time.Duration
+		sourceChecksum, targetChecksum                       int64
+		checksumInfoCh                                       = make(chan checksumInfo)
+		firstErr                                             error
+	)
+	defer close(checksumInfoCh)
+
+	getChecksum := func(db *sql.DB, schema, table, limitRange string, tbInfo *model.TableInfo, args []interface{}, tp string) {
+		beginTime := time.Now()
+		checksum, err := dbutil.GetCRC32Checksum(ctx1, db, schema, table, tbInfo, limitRange, args)
+		cost := time.Since(beginTime)
+
+		checksumInfoCh <- checksumInfo{
+			checksum: checksum,
+			err:      err,
+			cost:     cost,
+			tp:       tp,
+		}
 	}
-	getTargetChecksumDuration := time.Since(getTargetChecksumTime)
+
+	args := utils.StringsToInterfaces(chunk.Args)
+	for _, sourceTable := range t.SourceTables {
+		go getChecksum(sourceTable.Conn, sourceTable.Schema, sourceTable.Table, chunk.Where, t.TargetTable.info, args, "source")
+	}
+
+	go getChecksum(t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, chunk.Where, t.TargetTable.info, args, "target")
+
+	for i := 0; i < len(t.SourceTables)+1; i++ {
+		select {
+		case checksumInfo := <-checksumInfoCh:
+			if checksumInfo.err != nil {
+				// only need to return the first error, others are context cancel error
+				if firstErr == nil {
+					firstErr = checksumInfo.err
+					cancel1()
+				}
+
+				continue
+			}
+
+			if checksumInfo.tp == "source" {
+				sourceChecksum ^= checksumInfo.checksum
+				if checksumInfo.cost > getSourceChecksumDuration {
+					getSourceChecksumDuration = checksumInfo.cost
+				}
+			} else {
+				targetChecksum = checksumInfo.checksum
+				getTargetChecksumDuration = checksumInfo.cost
+			}
+		}
+	}
+
+	if firstErr != nil {
+		return false, errors.Trace(firstErr)
+	}
 
 	if sourceChecksum == targetChecksum {
 		log.Info("checksum is equal", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", dbutil.ReplacePlaceholder(chunk.Where, chunk.Args)), zap.Int64("checksum", sourceChecksum), zap.Duration("get source checksum cost", getSourceChecksumDuration), zap.Duration("get target checksum cost", getTargetChecksumDuration))
