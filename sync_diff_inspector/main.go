@@ -63,7 +63,7 @@ func main() {
 
 	ctx := context.Background()
 	if !checkSyncState(ctx, cfg) {
-		log.Error("check failed!!!")
+		log.Info("check failed!!!")
 		os.Exit(1)
 	}
 	log.Info("check pass!!!")
