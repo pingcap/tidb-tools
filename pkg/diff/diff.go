@@ -438,7 +438,7 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, 
 	// if checksum is not equal or don't need compare checksum, compare the data
 	log.Info("select data and then check data", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", chunk.Where), zap.Reflect("args", chunk.Args))
 
-	equal, err = t.compareRows2(ctx, chunk)
+	equal, err = t.compareRows(ctx, chunk)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
@@ -948,44 +948,4 @@ func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableIn
 	}
 
 	return rows, orderKeyCols, nil
-}
-
-func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo, where string,
-	args []interface{}, collation string) ([]map[string]*dbutil.ColumnData, []*model.ColumnInfo, error) {
-	orderKeys, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
-
-	columnNames := make([]string, 0, len(tableInfo.Columns))
-	for _, col := range tableInfo.Columns {
-		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
-	}
-	columns := strings.Join(columnNames, ", ")
-
-	if collation != "" {
-		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
-	}
-
-	for i, key := range orderKeys {
-		orderKeys[i] = dbutil.ColumnName(key)
-	}
-
-	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ %s FROM %s WHERE %s ORDER BY %s%s",
-		columns, dbutil.TableName(schema, table), where, strings.Join(orderKeys, ","), collation)
-
-	log.Debug("select data", zap.String("sql", query), zap.Reflect("args", args))
-	rows, err := db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, nil, errors.Trace(err)
-	}
-	defer rows.Close()
-
-	datas := make([]map[string]*dbutil.ColumnData, 0, 100)
-	for rows.Next() {
-		data, err := dbutil.ScanRow(rows)
-		if err != nil {
-			return nil, nil, errors.Trace(err)
-		}
-		datas = append(datas, data)
-	}
-
-	return datas, orderKeyCols, errors.Trace(rows.Err())
 }
