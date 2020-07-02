@@ -526,44 +526,25 @@ func (t *TableDiff) compareChecksum(ctx context.Context, chunk *ChunkRange) (boo
 	return false, nil
 }
 
-func (t *TableDiff) compareRows2(ctx context.Context, chunk *ChunkRange) (bool, error) {
+func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, error) {
 	sourceRows := make(map[int]*sql.Rows)
 	sourceMap := make(map[int]bool)
 	args := utils.StringsToInterfaces(chunk.Args)
 
-	targetRows, orderKeyCols, err := getChunkRows2(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, args, t.Collation)
+	targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, args, t.Collation)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
 	defer targetRows.Close()
 
-	// judge rows have all order keys to avoid panic
-	/*
-		if len(targetRows) > 0 {
-			if !rowContainsCols(targetRows[0], orderKeyCols) {
-				return false, errors.Errorf("%s.%s.%s's data don't contain all keys %v", t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table, orderKeyCols)
-			}
-		}
-	*/
-
 	for i, sourceTable := range t.SourceTables {
-		rows, _, err := getChunkRows2(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, chunk.Where, args, t.Collation)
+		rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, chunk.Where, args, t.Collation)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
 		defer rows.Close()
 
-		// judge rows have all order keys to avoid panic
-		/*
-			if len(rows) > 0 {
-				if !rowContainsCols(rows[0], orderKeyCols) {
-					return false, errors.Errorf("%s.%s.%s's data don't contain all keys %v", sourceTable.InstanceID, sourceTable.Schema, sourceTable.Table, orderKeyCols)
-				}
-			}
-		*/
-
 		sourceRows[i] = rows
-
 		sourceMap[i] = false
 	}
 
@@ -578,11 +559,8 @@ func (t *TableDiff) compareRows2(ctx context.Context, chunk *ChunkRange) (bool, 
 			rowData, err = dbutil.ScanRow(rows)
 			return
 		}
-
 		return
 	}
-
-	var lastSourceData, lastTargetData map[string]*dbutil.ColumnData
 
 	getSourceRows := func() (map[string]*dbutil.ColumnData, error) {
 		if len(sourceMap) == 0 {
@@ -591,7 +569,6 @@ func (t *TableDiff) compareRows2(ctx context.Context, chunk *ChunkRange) (bool, 
 
 		needDeleteSource := make([]int, 0, 1)
 		for i, haveData := range sourceMap {
-
 			if !haveData {
 				rowData, err := getRowData(sourceRows[i])
 				if err != nil {
@@ -631,7 +608,9 @@ func (t *TableDiff) compareRows2(ctx context.Context, chunk *ChunkRange) (bool, 
 		return rowData.Data, nil
 	}
 
+	var lastSourceData, lastTargetData map[string]*dbutil.ColumnData
 	equal := true
+
 	for {
 		if lastSourceData == nil {
 			lastSourceData, err = getSourceRows()
@@ -673,12 +652,11 @@ func (t *TableDiff) compareRows2(ctx context.Context, chunk *ChunkRange) (bool, 
 				t.sqlCh <- sql
 				equal = false
 
-				lastTargetData, err = getSourceRows()
+				lastSourceData, err = getSourceRows()
 				if err != nil {
 					return false, err
 				}
 			}
-
 			break
 		}
 
@@ -691,6 +669,7 @@ func (t *TableDiff) compareRows2(ctx context.Context, chunk *ChunkRange) (bool, 
 			lastTargetData = nil
 			continue
 		}
+
 		equal = false
 		switch cmp {
 		case 1:
@@ -941,7 +920,7 @@ func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model
 	return
 }
 
-func getChunkRows2(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo, where string,
+func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo, where string,
 	args []interface{}, collation string) (*sql.Rows, []*model.ColumnInfo, error) {
 	orderKeys, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
 
@@ -969,21 +948,6 @@ func getChunkRows2(ctx context.Context, db *sql.DB, schema, table string, tableI
 	}
 
 	return rows, orderKeyCols, nil
-
-	/*
-		defer rows.Close()
-
-		datas := make([]map[string]*dbutil.ColumnData, 0, 100)
-		for rows.Next() {
-			data, err := dbutil.ScanRow(rows)
-			if err != nil {
-				return nil, nil, errors.Trace(err)
-			}
-			datas = append(datas, data)
-		}
-
-		return datas, orderKeyCols, errors.Trace(rows.Err())
-	*/
 }
 
 func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo, where string,
