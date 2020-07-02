@@ -36,6 +36,12 @@ sync_diff_inspector --config=./config_base.toml > $OUT_DIR/diff.log
 # doesn't contain the table's result in check report
 check_not_contains "[table=should_not_compare]" $OUT_DIR/diff.log
 
+mysql -uroot -h 127.0.0.1 -P 4000 -e "select state from sync_diff_inspector.summary where \`schema\`='diff_test' and \`table\`='test'" | grep "success"
+if [ $? == 1 ]; then
+    echo "the state is not success in summary table"
+    exit 1
+fi
+
 for script in ./*/run.sh; do
     test_name="$(basename "$(dirname "$script")")"
     echo "---------------------------------------"

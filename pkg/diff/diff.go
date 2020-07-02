@@ -100,10 +100,13 @@ type TableDiff struct {
 
 	configHash string
 
-	CpDB *sql.DB
+	CpDB *sql.DB `json:"-"`
 
 	// 1 means true, 0 means false
 	checkpointLoaded int32
+
+	// create after all chunks is splited, or load from checkpoint
+	summaryInfo *tableSummaryInfo
 }
 
 func (t *TableDiff) setConfigHash() error {
@@ -236,7 +239,7 @@ func (t *TableDiff) CheckTableData(ctx context.Context) (equal bool, err error) 
 	}
 
 	if len(chunks) == 0 {
-		log.Debug("don't have checkpoint info or config changed")
+		log.Info("don't have checkpoint info, or the last check success, or config changed, will split chunks")
 
 		fromCheckpoint = false
 		chunks, err = SplitChunks(ctx, table, t.Fields, t.Range, t.ChunkSize, t.Collation, useTiDB, t.CpDB)
@@ -249,6 +252,8 @@ func (t *TableDiff) CheckTableData(ctx context.Context) (equal bool, err error) 
 		log.Warn("get 0 chunks, table is not checked", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)))
 		return true, nil
 	}
+
+	t.summaryInfo = newTableSummaryInfo(int64(len(chunks)))
 
 	checkResultCh := make(chan bool, t.CheckThreadCount)
 	defer close(checkResultCh)
@@ -398,13 +403,20 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, 
 	}
 
 	defer func() {
-		if chunk.State != ignoreState {
+		if chunk.State == ignoreState {
+			t.summaryInfo.addIgnoreNum()
+		} else {
 			if err != nil {
 				chunk.State = errorState
-			} else if equal {
-				chunk.State = successState
+				t.summaryInfo.addFailedNum()
 			} else {
-				chunk.State = failedState
+				if equal {
+					chunk.State = successState
+					t.summaryInfo.addSuccessNum()
+				} else {
+					chunk.State = failedState
+					t.summaryInfo.addFailedNum()
+				}
 			}
 		}
 		update()
@@ -450,21 +462,26 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, 
 
 func (t *TableDiff) compareChecksum(ctx context.Context, chunk *ChunkRange) (bool, error) {
 	// first check the checksum is equal or not
+	getSourceChecksumTime := time.Now()
 	sourceChecksum, err := t.getSourceTableChecksum(ctx, chunk)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
+	getSourceChecksumDuration := time.Since(getSourceChecksumTime)
 
+	getTargetChecksumTime := time.Now()
 	targetChecksum, err := dbutil.GetCRC32Checksum(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
 	if err != nil {
 		return false, errors.Trace(err)
 	}
+	getTargetChecksumDuration := time.Since(getTargetChecksumTime)
+
 	if sourceChecksum == targetChecksum {
-		log.Info("checksum is equal", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", chunk.Where), zap.Reflect("args", chunk.Args), zap.Int64("checksum", sourceChecksum))
+		log.Info("checksum is equal", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", dbutil.ReplacePlaceholder(chunk.Where, chunk.Args)), zap.Int64("checksum", sourceChecksum), zap.Duration("get source checksum cost", getSourceChecksumDuration), zap.Duration("get target checksum cost", getTargetChecksumDuration))
 		return true, nil
 	}
 
-	log.Warn("checksum is not equal", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", chunk.Where), zap.Reflect("args", chunk.Args), zap.Int64("source checksum", sourceChecksum), zap.Int64("target checksum", targetChecksum))
+	log.Warn("checksum is not equal", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", dbutil.ReplacePlaceholder(chunk.Where, chunk.Args)), zap.Int64("source checksum", sourceChecksum), zap.Int64("target checksum", targetChecksum), zap.Duration("get source checksum cost", getSourceChecksumDuration), zap.Duration("get target checksum cost", getTargetChecksumDuration))
 
 	return false, nil
 }
@@ -655,7 +672,7 @@ func (t *TableDiff) UpdateSummaryInfo(ctx context.Context) chan bool {
 			ctx1, cancel1 := context.WithTimeout(ctx, dbutil.DefaultTimeout)
 			defer cancel1()
 
-			err := updateTableSummary(ctx1, t.CpDB, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table)
+			err := updateTableSummary(ctx1, t.CpDB, t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table, t.summaryInfo)
 			if err != nil {
 				log.Warn("save table summary info failed", zap.String("schema", t.TargetTable.Schema), zap.String("table", t.TargetTable.Table), zap.Error(err))
 			}
