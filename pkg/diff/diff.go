@@ -436,7 +436,7 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, 
 	}
 
 	// if checksum is not equal or don't need compare checksum, compare the data
-	log.Info("select data and then check data", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", chunk.Where), zap.Reflect("args", chunk.Args))
+	log.Info("select data and then check data", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", dbutil.ReplacePlaceholder(chunk.Where, chunk.Args)))
 
 	equal, err = t.compareRows(ctx, chunk)
 	if err != nil {
@@ -527,6 +527,8 @@ func (t *TableDiff) compareChecksum(ctx context.Context, chunk *ChunkRange) (boo
 }
 
 func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, error) {
+	beginTime := time.Now()
+
 	sourceRows := make(map[int]*sql.Rows)
 	sourceMap := make(map[int]bool)
 	args := utils.StringsToInterfaces(chunk.Args)
@@ -698,9 +700,9 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 	}
 
 	if equal {
-		log.Info("rows is equal", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", chunk.Where), zap.Reflect("args", chunk.Args))
+		log.Info("rows is equal", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", dbutil.ReplacePlaceholder(chunk.Where, chunk.Args)), zap.Duration("cost", time.Since(beginTime)))
 	} else {
-		log.Warn("rows is not equal", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", chunk.Where), zap.Reflect("args", chunk.Args))
+		log.Warn("rows is not equal", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", dbutil.ReplacePlaceholder(chunk.Where, chunk.Args)), zap.Duration("cost", time.Since(beginTime)))
 	}
 
 	return equal, nil
