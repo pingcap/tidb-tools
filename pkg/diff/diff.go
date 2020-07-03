@@ -564,7 +564,9 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 		return
 	}
 
-	getSourceRows := func() (map[string]*dbutil.ColumnData, error) {
+	// getSourceRow gets one row from all the sources, it should be the smallest.
+	// first get rows from every source, and then push them to the heap, and then pop to get the smallest one
+	getSourceRow := func() (map[string]*dbutil.ColumnData, error) {
 		if len(sourceMap) == 0 {
 			return nil, nil
 		}
@@ -587,11 +589,11 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 			}
 
 			if !sourceMap[i] {
-				// still don't have data, means the rows is read to the end
 				if sourceRows[i].Err() != nil {
 					return nil, sourceRows[i].Err()
 
 				}
+				// still don't have data, means the rows is read to the end, so delete the source
 				needDeleteSource = append(needDeleteSource, i)
 			}
 		}
@@ -600,6 +602,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 			delete(sourceMap, i)
 		}
 
+		// all the sources had read to the end, not data to return
 		if len(sourceRowDatas.Rows) == 0 {
 			return nil, nil
 		}
@@ -615,7 +618,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 
 	for {
 		if lastSourceData == nil {
-			lastSourceData, err = getSourceRows()
+			lastSourceData, err = getSourceRow()
 			if err != nil {
 				return false, err
 			}
@@ -629,7 +632,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 		}
 
 		if lastSourceData == nil {
-			// all the targetRows's data should be deleted
+			// don't have source data, so all the targetRows's data is redundant, should be deleted
 			for lastTargetData != nil {
 				sql := generateDML("delete", lastTargetData, t.TargetTable.info, t.TargetTable.Schema)
 				log.Info("[delete]", zap.String("sql", sql))
@@ -654,7 +657,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 				t.sqlCh <- sql
 				equal = false
 
-				lastSourceData, err = getSourceRows()
+				lastSourceData, err = getSourceRow()
 				if err != nil {
 					return false, err
 				}
