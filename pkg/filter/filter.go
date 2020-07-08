@@ -35,14 +35,6 @@ const (
 // Table represents a table.
 type Table = tfilter.Table
 
-// String implements the fmt.Stringer interface.
-func (t *Table) String() string {
-	if len(t.Name) > 0 {
-		return fmt.Sprintf("`%s`.`%s`", t.Schema, t.Name)
-	}
-	return fmt.Sprintf("`%s`", t.Schema)
-}
-
 type cache struct {
 	sync.RWMutex
 	items map[string]ActionType // `schema`.`table` => do/ignore
