@@ -177,6 +177,7 @@ func (t *TableDiff) CheckTableStruct(ctx context.Context) (bool, error) {
 			log.Warn("table struct is not equal", zap.String("reason", msg))
 			return false, nil
 		}
+		log.Info("table struct is equal", zap.Reflect("source", sourceTable.info), zap.Reflect("target", t.TargetTable.info))
 	}
 
 	return true, nil
@@ -602,7 +603,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 			delete(sourceMap, i)
 		}
 
-		// all the sources had read to the end, not data to return
+		// all the sources had read to the end, no data to return
 		if len(sourceRowDatas.Rows) == 0 {
 			return nil, nil
 		}
