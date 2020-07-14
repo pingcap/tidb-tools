@@ -17,6 +17,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"flag"
+	"strconv"
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
@@ -291,10 +292,16 @@ func (c *Config) checkConfig() bool {
 		if !c.SourceDBCfg[i].Valid() {
 			return false
 		}
+		if c.SourceDBCfg[i].Snapshot != "" {
+			c.SourceDBCfg[i].Snapshot = strconv.Quote(c.SourceDBCfg[i].Snapshot)
+		}
 	}
 
 	if c.TargetDBCfg.InstanceID == "" {
 		c.TargetDBCfg.InstanceID = "target"
+	}
+	if c.TargetDBCfg.Snapshot != "" {
+		c.TargetDBCfg.Snapshot = strconv.Quote(c.TargetDBCfg.Snapshot)
 	}
 	if _, ok := sourceInstanceMap[c.TargetDBCfg.InstanceID]; ok {
 		log.Error("target has same instance id in source", zap.String("instance id", c.TargetDBCfg.InstanceID))
