@@ -28,11 +28,17 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"go.uber.org/zap"
+)
+
+var (
+	// cancel the context for `Equal`, only used in test
+	cancelEqualFunc context.CancelFunc
 )
 
 // TableInstance record a table instance
@@ -151,7 +157,7 @@ func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (
 
 		dataEqual, err = t.CheckTableData(ctx)
 		if err != nil {
-			return false, false, errors.Trace(err)
+			return structEqual, false, errors.Trace(err)
 		}
 
 		select {
@@ -300,6 +306,7 @@ CheckResult:
 				break CheckResult
 			}
 		case <-ctx.Done():
+			equal = false
 			break CheckResult
 		}
 	}
@@ -404,6 +411,17 @@ func (t *TableDiff) checkChunksDataEqual(ctx context.Context, filterByRand bool,
 }
 
 func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, chunk *ChunkRange) (equal bool, err error) {
+	failpoint.Inject("CancelCheckChunkDataEqual", func(val failpoint.Value) {
+		log.Info("check chunk data equal failed", zap.String("failpoint", "CancelCheckChunkDataEqual"))
+		chunkID := val.(int)
+		if chunkID != chunk.ID {
+			return
+		}
+
+		log.Info("check chunk data equal failed", zap.String("failpoint", "CancelCheckChunkDataEqual"))
+		cancelEqualFunc()
+	})
+
 	update := func() {
 		ctx1, cancel1 := context.WithTimeout(ctx, dbutil.DefaultTimeout)
 		defer cancel1()
