@@ -28,11 +28,17 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"go.uber.org/zap"
+)
+
+var (
+	// cancel the context for `Equal`, only used in test
+	cancelEqualFunc context.CancelFunc
 )
 
 // TableInstance record a table instance
@@ -151,7 +157,7 @@ func (t *TableDiff) Equal(ctx context.Context, writeFixSQL func(string) error) (
 
 		dataEqual, err = t.CheckTableData(ctx)
 		if err != nil {
-			return false, false, errors.Trace(err)
+			return structEqual, false, errors.Trace(err)
 		}
 
 		select {
@@ -258,10 +264,15 @@ func (t *TableDiff) CheckTableData(ctx context.Context) (equal bool, err error) 
 	checkResultCh := make(chan bool, t.CheckThreadCount)
 	defer close(checkResultCh)
 
+	var checkWg sync.WaitGroup
 	checkWorkerCh := make([]chan *ChunkRange, 0, t.CheckThreadCount)
 	for i := 0; i < t.CheckThreadCount; i++ {
 		checkWorkerCh = append(checkWorkerCh, make(chan *ChunkRange, 10))
-		go t.checkChunksDataEqual(ctx, t.Sample < 100 && !fromCheckpoint, checkWorkerCh[i], checkResultCh)
+		checkWg.Add(1)
+		go func(j int) {
+			defer checkWg.Done()
+			t.checkChunksDataEqual(ctx, t.Sample < 100 && !fromCheckpoint, checkWorkerCh[j], checkResultCh)
+		}(i)
 	}
 
 	go func() {
@@ -295,9 +306,12 @@ CheckResult:
 				break CheckResult
 			}
 		case <-ctx.Done():
-			return equal, nil
+			equal = false
+			break CheckResult
 		}
 	}
+	checkWg.Wait()
+
 	return equal, nil
 }
 
@@ -365,25 +379,30 @@ func (t *TableDiff) getSourceTableChecksum(ctx context.Context, chunk *ChunkRang
 }
 
 func (t *TableDiff) checkChunksDataEqual(ctx context.Context, filterByRand bool, chunks chan *ChunkRange, resultCh chan bool) {
+	var err error
 	for {
 		select {
 		case chunk, ok := <-chunks:
 			if !ok {
 				return
 			}
+			eq := false
 			if chunk.State == successState || chunk.State == ignoreState {
-				resultCh <- true
-				continue
-			}
-			eq, err := t.checkChunkDataEqual(ctx, filterByRand, chunk)
-			if err != nil {
-				log.Error("check chunk data equal failed", zap.String("chunk", chunk.String()), zap.Error(err))
-				resultCh <- false
+				eq = true
 			} else {
-				if !eq {
+				eq, err = t.checkChunkDataEqual(ctx, filterByRand, chunk)
+				if err != nil {
+					log.Error("check chunk data equal failed", zap.String("chunk", chunk.String()), zap.Error(err))
+					eq = false
+				} else if !eq {
 					log.Warn("check chunk data not equal", zap.String("chunk", chunk.String()))
 				}
-				resultCh <- eq
+			}
+
+			select {
+			case resultCh <- eq:
+			case <-ctx.Done():
+				return
 			}
 		case <-ctx.Done():
 			return
@@ -392,6 +411,16 @@ func (t *TableDiff) checkChunksDataEqual(ctx context.Context, filterByRand bool,
 }
 
 func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, chunk *ChunkRange) (equal bool, err error) {
+	failpoint.Inject("CancelCheckChunkDataEqual", func(val failpoint.Value) {
+		chunkID := val.(int)
+		if chunkID != chunk.ID {
+			return
+		}
+
+		log.Info("check chunk data equal failed", zap.String("failpoint", "CancelCheckChunkDataEqual"))
+		cancelEqualFunc()
+	})
+
 	update := func() {
 		ctx1, cancel1 := context.WithTimeout(ctx, dbutil.DefaultTimeout)
 		defer cancel1()
