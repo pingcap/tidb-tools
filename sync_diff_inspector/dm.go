@@ -72,5 +72,5 @@ func getDMTaskCfg(dmAddr, task string) ([]*config.SubTaskConfig, error) {
 	}
 
 	log.Info("dm sub task configs", zap.Reflect("cfgs", subTaskCfgs))
-	return nil, nil
+	return subTaskCfgs, nil
 }

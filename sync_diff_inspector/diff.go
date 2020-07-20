@@ -22,10 +22,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/diff"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	tidbconfig "github.com/pingcap/tidb/config"
@@ -51,6 +53,11 @@ type Diff struct {
 	tidbInstanceID string
 	tableRouter    *router.Table
 	cpDB           *sql.DB
+
+	// DM's subtask config and block-allow-list
+	subTaskCfgs []*config.SubTaskConfig
+	// instance-id -> filter
+	baList map[string]*filter.Filter
 
 	ctx context.Context
 }
@@ -81,6 +88,14 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 }
 
 func (df *Diff) init(cfg *Config) (err error) {
+	if len(cfg.DMAddr) != 0 {
+		subTaskCfgs, err := getDMTaskCfg(cfg.DMAddr, cfg.DMTask)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		df.subTaskCfgs = subTaskCfgs
+	}
+
 	// create connection for source.
 	if err = df.CreateDBConn(cfg); err != nil {
 		return errors.Trace(err)
@@ -95,18 +110,18 @@ func (df *Diff) init(cfg *Config) (err error) {
 		return errors.Trace(err)
 	}
 
-	if len(cfg.DMAddr) != 0 {
-		_, err := getDMTaskCfg(cfg.DMAddr, cfg.DMTask)
-		if err != nil {
-			return errors.Trace(err)
-		}
-	}
-
 	return nil
 }
 
 // CreateDBConn creates db connections for source and target.
 func (df *Diff) CreateDBConn(cfg *Config) (err error) {
+	if df.subTaskCfgs != nil && len(df.subTaskCfgs) != 0 {
+		err = df.adjustDBCfgByDMSubTasks(cfg)
+		if err != nil {
+			return err
+		}
+	}
+
 	for _, source := range cfg.SourceDBCfg {
 		source.Conn, err = diff.CreateDB(df.ctx, source.DBConfig, cfg.CheckThreadCount)
 		if err != nil {
@@ -130,6 +145,116 @@ func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 	return nil
 }
 
+func (df *Diff) adjustTableConfigBySubTask(cfg *Config) (err error) {
+	allTablesMap, err := df.GetAllTables(cfg)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	baLists := make(map[string]*filter.Filter)
+	tableRouters := make(map[string]*router.Table)
+
+	for _, subTaskCfg := range df.subTaskCfgs {
+		baList, err := filter.New(subTaskCfg.CaseSensitive, subTaskCfg.BAList)
+		if err != nil {
+			return err
+		}
+		baLists[subTaskCfg.SourceID] = baList
+
+		tableRouter, err := router.NewTableRouter(subTaskCfg.CaseSensitive, []*router.TableRule{})
+		if err != nil {
+			return err
+		}
+		for _, rule := range subTaskCfg.RouteRules {
+			err := tableRouter.AddRule(rule)
+			if err != nil {
+				return err
+			}
+		}
+		tableRouters[subTaskCfg.SourceID] = tableRouter
+	}
+
+	// get all source table's matched target table
+	// target database name => target table name => all matched source table instance
+	sourceTablesMap := make(map[string]map[string][]TableInstance)
+	for instanceID, allSchemas := range allTablesMap {
+		if instanceID == df.targetDB.InstanceID {
+			continue
+		}
+
+		for schema, allTables := range allSchemas {
+			if filter.IsSystemSchema(schema) {
+				continue
+			}
+
+			for table := range allTables {
+				if baLists[instanceID] != nil {
+					tbs := []*filter.Table{{Schema: schema, Name: table}}
+					tbs = baLists[instanceID].ApplyOn(tbs)
+					if len(tbs) == 0 {
+						continue
+					}
+				}
+
+				targetSchema := schema
+				targetTable := table
+				if tableRouters[instanceID] != nil {
+					targetSchema, targetTable, err = tableRouters[instanceID].Route(schema, table)
+					if err != nil {
+						return errors.Errorf("get route result for %s.%s.%s failed, error %v", instanceID, schema, table, err)
+					}
+				}
+
+				if _, ok := sourceTablesMap[targetSchema]; !ok {
+					sourceTablesMap[targetSchema] = make(map[string][]TableInstance)
+				}
+
+				if _, ok := sourceTablesMap[targetSchema][targetTable]; !ok {
+					sourceTablesMap[targetSchema][targetTable] = make([]TableInstance, 0, 1)
+				}
+
+				sourceTablesMap[targetSchema][targetTable] = append(sourceTablesMap[targetSchema][targetTable], TableInstance{
+					InstanceID: instanceID,
+					Schema:     schema,
+					Table:      table,
+				})
+			}
+		}
+	}
+
+	log.Info("", zap.Reflect("sourceTablesMap", sourceTablesMap))
+
+	for schema, tables := range sourceTablesMap {
+		for table, sourceTables := range tables {
+			if sourceTables == nil || len(sourceTables) == 0 {
+				continue
+			}
+
+			// TODO: support sql-mode
+			tableInfo, err := dbutil.GetTableInfo(df.ctx, df.targetDB.Conn, schema, table, "")
+			if err != nil {
+				return errors.Errorf("get table %s.%s's inforamtion error %s", schema, table, errors.ErrorStack(err))
+			}
+
+			if _, ok := df.tables[schema]; !ok {
+				df.tables[schema] = make(map[string]*TableConfig)
+			}
+
+			df.tables[schema][table] = &TableConfig{
+				TableInstance: TableInstance{
+					Schema: schema,
+					Table:  table,
+				},
+				TargetTableInfo: tableInfo,
+				Range:           "TRUE",
+				SourceTables:    sourceTables,
+			}
+		}
+	}
+
+	return nil
+}
+
 // AdjustTableConfig adjusts the table's config by check-tables and table-config.
 func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 	// to support table with auto_random in TiDB
@@ -137,10 +262,9 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 	tidbCfg.Experimental.AllowAutoRandom = true
 	tidbconfig.StoreGlobalConfig(tidbCfg)
 
-	if len(cfg.DMAddr) != 0 {
-		if len(cfg.DMTask) == 0 {
-			return errors.New("dm task is empty")
-		}
+	if df.subTaskCfgs != nil {
+		log.Info("adjustTableConfigBySubTask")
+		return df.adjustTableConfigBySubTask(cfg)
 	}
 
 	df.tableRouter, err = router.NewTableRouter(false, cfg.TableRules)
@@ -289,6 +413,34 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 		df.tables[table.Schema][table.Table].IgnoreColumns = table.IgnoreColumns
 		df.tables[table.Schema][table.Table].Fields = table.Fields
 		df.tables[table.Schema][table.Table].Collation = table.Collation
+	}
+
+	return nil
+}
+
+func (df *Diff) adjustDBCfgByDMSubTasks(cfg *Config) error {
+	// all subtask had same target, so use subTaskCfgs[0]
+	cfg.TargetDBCfg = DBConfig{
+		InstanceID: "target",
+		DBConfig: dbutil.DBConfig{
+			Host:     df.subTaskCfgs[0].To.Host,
+			Port:     df.subTaskCfgs[0].To.Port,
+			User:     df.subTaskCfgs[0].To.User,
+			Password: df.subTaskCfgs[0].To.Password,
+		},
+	}
+
+	for _, subTaskCfg := range df.subTaskCfgs {
+		// fill source-db
+		cfg.SourceDBCfg = append(cfg.SourceDBCfg, DBConfig{
+			InstanceID: subTaskCfg.SourceID,
+			DBConfig: dbutil.DBConfig{
+				Host:     subTaskCfg.From.Host,
+				Port:     subTaskCfg.From.Port,
+				User:     subTaskCfg.From.User,
+				Password: subTaskCfg.From.Password,
+			},
+		})
 	}
 
 	return nil

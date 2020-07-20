@@ -287,39 +287,46 @@ func (c *Config) checkConfig() bool {
 		return false
 	}
 
-	if len(c.SourceDBCfg) == 0 {
-		log.Error("must have at least one source database")
+	if len(c.DMAddr) != 0 && len(c.DMTask) == 0 {
 		return false
 	}
 
-	for i := range c.SourceDBCfg {
-		if !c.SourceDBCfg[i].Valid() {
+	if len(c.DMAddr) == 0 {
+
+		if len(c.SourceDBCfg) == 0 {
+			log.Error("must have at least one source database")
 			return false
 		}
-		if c.SourceDBCfg[i].Snapshot != "" {
-			c.SourceDBCfg[i].Snapshot = strconv.Quote(c.SourceDBCfg[i].Snapshot)
+
+		for i := range c.SourceDBCfg {
+			if !c.SourceDBCfg[i].Valid() {
+				return false
+			}
+			if c.SourceDBCfg[i].Snapshot != "" {
+				c.SourceDBCfg[i].Snapshot = strconv.Quote(c.SourceDBCfg[i].Snapshot)
+			}
 		}
-	}
 
-	if c.TargetDBCfg.InstanceID == "" {
-		c.TargetDBCfg.InstanceID = "target"
-	}
-	if c.TargetDBCfg.Snapshot != "" {
-		c.TargetDBCfg.Snapshot = strconv.Quote(c.TargetDBCfg.Snapshot)
-	}
-	if _, ok := sourceInstanceMap[c.TargetDBCfg.InstanceID]; ok {
-		log.Error("target has same instance id in source", zap.String("instance id", c.TargetDBCfg.InstanceID))
-		return false
-	}
-
-	if len(c.Tables) == 0 {
-		log.Error("must specify check tables")
-		return false
-	}
-
-	for _, tableCfg := range c.TableCfgs {
-		if !tableCfg.Valid() {
+		if c.TargetDBCfg.InstanceID == "" {
+			c.TargetDBCfg.InstanceID = "target"
+		}
+		if c.TargetDBCfg.Snapshot != "" {
+			c.TargetDBCfg.Snapshot = strconv.Quote(c.TargetDBCfg.Snapshot)
+		}
+		if _, ok := sourceInstanceMap[c.TargetDBCfg.InstanceID]; ok {
+			log.Error("target has same instance id in source", zap.String("instance id", c.TargetDBCfg.InstanceID))
 			return false
+		}
+
+		if len(c.Tables) == 0 {
+			log.Error("must specify check tables")
+			return false
+		}
+
+		for _, tableCfg := range c.TableCfgs {
+			if !tableCfg.Valid() {
+				return false
+			}
 		}
 	}
 
