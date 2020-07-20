@@ -21,6 +21,7 @@ import (
 
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
+	"github.com/pingcap/dm/pkg/utils"
 	"github.com/pingcap/log"
 	"go.uber.org/zap"
 )
@@ -61,10 +62,12 @@ func getDMTaskCfg(dmAddr, task string) ([]*config.SubTaskConfig, error) {
 	subTaskCfgs := make([]*config.SubTaskConfig, 0, len(getSubTaskCfgResp.Cfgs))
 	for _, cfgBytes := range getSubTaskCfgResp.Cfgs {
 		subtaskCfg := &config.SubTaskConfig{}
-		err = subtaskCfg.Decode(cfgBytes, true)
+		err = subtaskCfg.Decode(cfgBytes, false)
 		if err != nil {
 			return nil, err
 		}
+		subtaskCfg.To.Password = utils.DecryptOrPlaintext(subtaskCfg.To.Password)
+		subtaskCfg.From.Password = utils.DecryptOrPlaintext(subtaskCfg.From.Password)
 		subTaskCfgs = append(subTaskCfgs, subtaskCfg)
 	}
 
