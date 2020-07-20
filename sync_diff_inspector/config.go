@@ -201,6 +201,10 @@ type Config struct {
 	// set true will continue check from the latest checkpoint
 	UseCheckpoint bool `toml:"use-checkpoint" json:"use-checkpoint"`
 
+	DMAddr string `toml:"dm-addr" json:"dm-addr"`
+
+	DMTask string `toml:"dm-task" json:"dm-task"`
+
 	// config file
 	ConfigFile string
 

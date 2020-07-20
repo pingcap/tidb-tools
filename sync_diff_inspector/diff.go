@@ -95,6 +95,13 @@ func (df *Diff) init(cfg *Config) (err error) {
 		return errors.Trace(err)
 	}
 
+	if len(cfg.DMAddr) != 0 {
+		_, err := getDMTaskCfg(cfg.DMAddr, cfg.DMTask)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+
 	return nil
 }
 
@@ -129,6 +136,12 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 	tidbCfg := tidbconfig.GetGlobalConfig()
 	tidbCfg.Experimental.AllowAutoRandom = true
 	tidbconfig.StoreGlobalConfig(tidbCfg)
+
+	if len(cfg.DMAddr) != 0 {
+		if len(cfg.DMTask) == 0 {
+			return errors.New("dm task is empty")
+		}
+	}
 
 	df.tableRouter, err = router.NewTableRouter(false, cfg.TableRules)
 	if err != nil {
