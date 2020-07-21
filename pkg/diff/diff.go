@@ -489,27 +489,25 @@ func (t *TableDiff) compareChecksum(ctx context.Context, chunk *ChunkRange) (boo
 	go getChecksum(t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, chunk.Where, t.TargetTable.info, args, "target")
 
 	for i := 0; i < len(t.SourceTables)+1; i++ {
-		select {
-		case checksumInfo := <-checksumInfoCh:
-			if checksumInfo.err != nil {
-				// only need to return the first error, others are context cancel error
-				if firstErr == nil {
-					firstErr = checksumInfo.err
-					cancel1()
-				}
-
-				continue
+		checksumInfo := <-checksumInfoCh
+		if checksumInfo.err != nil {
+			// only need to return the first error, others are context cancel error
+			if firstErr == nil {
+				firstErr = checksumInfo.err
+				cancel1()
 			}
 
-			if checksumInfo.tp == "source" {
-				sourceChecksum ^= checksumInfo.checksum
-				if checksumInfo.cost > getSourceChecksumDuration {
-					getSourceChecksumDuration = checksumInfo.cost
-				}
-			} else {
-				targetChecksum = checksumInfo.checksum
-				getTargetChecksumDuration = checksumInfo.cost
+			continue
+		}
+
+		if checksumInfo.tp == "source" {
+			sourceChecksum ^= checksumInfo.checksum
+			if checksumInfo.cost > getSourceChecksumDuration {
+				getSourceChecksumDuration = checksumInfo.cost
 			}
+		} else {
+			targetChecksum = checksumInfo.checksum
+			getTargetChecksumDuration = checksumInfo.cost
 		}
 	}
 
@@ -531,7 +529,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 	beginTime := time.Now()
 
 	sourceRows := make(map[int]*sql.Rows)
-	sourceMap := make(map[int]bool)
+	sourceHaveData := make(map[int]bool)
 	args := utils.StringsToInterfaces(chunk.Args)
 
 	targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, args, t.Collation)
@@ -548,7 +546,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 		defer rows.Close()
 
 		sourceRows[i] = rows
-		sourceMap[i] = false
+		sourceHaveData[i] = false
 	}
 
 	sourceRowDatas := &RowDatas{
@@ -568,12 +566,12 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 	// getSourceRow gets one row from all the sources, it should be the smallest.
 	// first get rows from every source, and then push them to the heap, and then pop to get the smallest one
 	getSourceRow := func() (map[string]*dbutil.ColumnData, error) {
-		if len(sourceMap) == 0 {
+		if len(sourceHaveData) == 0 {
 			return nil, nil
 		}
 
 		needDeleteSource := make([]int, 0, 1)
-		for i, haveData := range sourceMap {
+		for i, haveData := range sourceHaveData {
 			if !haveData {
 				rowData, err := getRowData(sourceRows[i])
 				if err != nil {
@@ -581,7 +579,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 				}
 
 				if rowData != nil {
-					sourceMap[i] = true
+					sourceHaveData[i] = true
 					heap.Push(sourceRowDatas, RowData{
 						Data:   rowData,
 						Source: i,
@@ -589,7 +587,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 				}
 			}
 
-			if !sourceMap[i] {
+			if !sourceHaveData[i] {
 				if sourceRows[i].Err() != nil {
 					return nil, sourceRows[i].Err()
 
@@ -600,7 +598,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 		}
 
 		for _, i := range needDeleteSource {
-			delete(sourceMap, i)
+			delete(sourceHaveData, i)
 		}
 
 		// all the sources had read to the end, no data to return
@@ -609,7 +607,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 		}
 
 		rowData := heap.Pop(sourceRowDatas).(RowData)
-		sourceMap[rowData.Source] = false
+		sourceHaveData[rowData.Source] = false
 
 		return rowData.Data, nil
 	}

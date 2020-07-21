@@ -146,8 +146,8 @@ func initChunks(ctx context.Context, db *sql.DB, instanceID, schema, table strin
 				return errors.Trace(err)
 			}
 			num = 0
-			valuesPlaceholdersArray = make([]string, 0, batch)
-			values = make([]interface{}, 0, 9*batch)
+			valuesPlaceholdersArray = valuesPlaceholdersArray[:0]
+			values = values[:0]
 		}
 	}
 
