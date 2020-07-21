@@ -32,7 +32,7 @@ const (
 )
 
 func getDMTaskCfgURL(dmAddr, task string) string {
-	return fmt.Sprintf("http://%s/apis/%s/subtasks/%s", dmAddr, apiVersion, task)
+	return fmt.Sprintf("%s/apis/%s/subtasks/%s", dmAddr, apiVersion, task)
 }
 
 // getDMTaskCfg gets dm's sub task config

@@ -288,11 +288,12 @@ func (c *Config) checkConfig() bool {
 	}
 
 	if len(c.DMAddr) != 0 && len(c.DMTask) == 0 {
+		log.Error("must set the `dm-task` if set `dm-addr`")
 		return false
 	}
 
+	// source DB, target DB and check table's information will get from DM, don't need to check them
 	if len(c.DMAddr) == 0 {
-
 		if len(c.SourceDBCfg) == 0 {
 			log.Error("must have at least one source database")
 			return false

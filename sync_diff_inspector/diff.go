@@ -222,8 +222,6 @@ func (df *Diff) adjustTableConfigBySubTask(cfg *Config) (err error) {
 		}
 	}
 
-	log.Info("", zap.Reflect("sourceTablesMap", sourceTablesMap))
-
 	for schema, tables := range sourceTablesMap {
 		for table, sourceTables := range tables {
 			if sourceTables == nil || len(sourceTables) == 0 {
@@ -263,7 +261,6 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 	tidbconfig.StoreGlobalConfig(tidbCfg)
 
 	if df.subTaskCfgs != nil {
-		log.Info("adjustTableConfigBySubTask")
 		return df.adjustTableConfigBySubTask(cfg)
 	}
 
