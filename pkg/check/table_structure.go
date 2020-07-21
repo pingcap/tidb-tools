@@ -21,7 +21,6 @@ import (
 	"strings"
 
 	"github.com/pingcap/errors"
-	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/charset"
 	"github.com/pingcap/parser/model"
@@ -59,17 +58,19 @@ func (o *incompatibilityOption) String() string {
 // In generally we need to check definitions of columns, constraints and table options.
 // Because of the early TiDB engineering design, we did not have a complete list of check items, which are all based on experience now.
 type TablesChecker struct {
-	db     *sql.DB
-	dbinfo *dbutil.DBConfig
-	tables map[string][]string // schema => []table; if []table is empty, query tables from db
+	db               *sql.DB
+	dbinfo           *dbutil.DBConfig
+	tables           map[string][]string // schema => []table; if []table is empty, query tables from db
+	enableANSIQuotes bool
 }
 
 // NewTablesChecker returns a Checker
-func NewTablesChecker(db *sql.DB, dbinfo *dbutil.DBConfig, tables map[string][]string) Checker {
+func NewTablesChecker(db *sql.DB, dbinfo *dbutil.DBConfig, tables map[string][]string, enableANSIQuotes bool) Checker {
 	return &TablesChecker{
-		db:     db,
-		dbinfo: dbinfo,
-		tables: tables,
+		db:               db,
+		dbinfo:           dbinfo,
+		tables:           tables,
+		enableANSIQuotes: enableANSIQuotes,
 	}
 }
 
@@ -160,7 +161,21 @@ func (c *TablesChecker) Name() string {
 }
 
 func (c *TablesChecker) checkCreateSQL(statement string) []*incompatibilityOption {
-	stmt, err := parser.New().ParseOneStmt(statement, "", "")
+	sqlMode := ""
+	if c.enableANSIQuotes {
+		sqlMode = "ANSI_QUOTES"
+	}
+	parser2, err := dbutil.GetParser(sqlMode)
+	if err != nil {
+		return []*incompatibilityOption{
+			{
+				state:      StateFailure,
+				errMessage: err.Error(),
+			},
+		}
+	}
+
+	stmt, err := parser2.ParseOneStmt(statement, "", "")
 	if err != nil {
 		return []*incompatibilityOption{
 			{
@@ -253,16 +268,18 @@ type ShardingTablesCheck struct {
 	tables                       map[string]map[string][]string // instance => {schema: [table1, table2, ...]}
 	mapping                      map[string]*column.Mapping
 	checkAutoIncrementPrimaryKey bool
+	enableANSIQuotes             bool
 }
 
 // NewShardingTablesCheck returns a Checker
-func NewShardingTablesCheck(name string, dbs map[string]*sql.DB, tables map[string]map[string][]string, mapping map[string]*column.Mapping, checkAutoIncrementPrimaryKey bool) Checker {
+func NewShardingTablesCheck(name string, dbs map[string]*sql.DB, tables map[string]map[string][]string, mapping map[string]*column.Mapping, checkAutoIncrementPrimaryKey bool, enableANSIQuotes bool) Checker {
 	return &ShardingTablesCheck{
 		name:                         name,
 		dbs:                          dbs,
 		tables:                       tables,
 		mapping:                      mapping,
 		checkAutoIncrementPrimaryKey: checkAutoIncrementPrimaryKey,
+		enableANSIQuotes:             enableANSIQuotes,
 	}
 }
 
@@ -279,6 +296,18 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 		stmtNode  *ast.CreateTableStmt
 		tableName string
 	)
+
+	sqlMode := ""
+	if c.enableANSIQuotes {
+		sqlMode = "ANSI_QUOTES"
+	}
+	parser2, err := dbutil.GetParser(sqlMode)
+	if err != nil {
+		markCheckError(r, err)
+		r.Extra = fmt.Sprintf("fail to get parser")
+		return r
+	}
+
 	for instance, schemas := range c.tables {
 		db, ok := c.dbs[instance]
 		if !ok {
@@ -295,14 +324,13 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 					return r
 				}
 
-				info, err := dbutil.GetTableInfoBySQL(statement, "")
+				info, err := dbutil.GetTableInfoBySQL(statement, sqlMode)
 				if err != nil {
 					markCheckError(r, err)
 					r.Extra = fmt.Sprintf("instance %s on sharding %s", instance, c.name)
 					return r
 				}
-
-				stmt, err := parser.New().ParseOneStmt(statement, "", "")
+				stmt, err := parser2.ParseOneStmt(statement, "", "")
 				if err != nil {
 					markCheckError(r, errors.Annotatef(err, "statement %s", statement))
 					r.Extra = fmt.Sprintf("instance %s on sharding %s", instance, c.name)
