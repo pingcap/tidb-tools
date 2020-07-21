@@ -17,6 +17,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"flag"
+	"net/url"
 	"strconv"
 
 	"github.com/BurntSushi/toml"
@@ -201,8 +202,9 @@ type Config struct {
 	// set true will continue check from the latest checkpoint
 	UseCheckpoint bool `toml:"use-checkpoint" json:"use-checkpoint"`
 
+	// DMAddr's format should like "http://127.0.0.1:8261"
 	DMAddr string `toml:"dm-addr" json:"dm-addr"`
-
+	// DMTask is dm's task name
 	DMTask string `toml:"dm-task" json:"dm-task"`
 
 	// config file
@@ -287,9 +289,16 @@ func (c *Config) checkConfig() bool {
 		return false
 	}
 
-	if len(c.DMAddr) != 0 && len(c.DMTask) == 0 {
-		log.Error("must set the `dm-task` if set `dm-addr`")
-		return false
+	if len(c.DMAddr) != 0 {
+		u, err := url.Parse(c.DMAddr)
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			return false
+		}
+
+		if len(c.DMTask) == 0 {
+			log.Error("must set the `dm-task` if set `dm-addr`")
+			return false
+		}
 	}
 
 	// source DB, target DB and check table's information will get from DM, don't need to check them

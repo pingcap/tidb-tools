@@ -35,6 +35,10 @@ ignore-struct-check = false
 # the name of the file which saves sqls used to fix different data.
 fix-sql-file = "fix.sql"
 
+# check for dm's task
+#dm-addr = "http://127.0.0.1:8261"
+#dm-task = "test"
+
 
 ######################### Tables config #########################
 

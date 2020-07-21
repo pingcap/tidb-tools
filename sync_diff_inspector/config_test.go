@@ -33,6 +33,10 @@ func (s *testConfigSuite) TestUseDMConfig(c *C) {
 	isValid := cfg.checkConfig()
 	c.Assert(isValid, IsFalse)
 
+	cfg.DMAddr = "http://127.0.0.1:8261"
+	isValid = cfg.checkConfig()
+	c.Assert(isValid, IsFalse)
+
 	cfg.DMTask = "test"
 	isValid = cfg.checkConfig()
 	c.Assert(isValid, IsTrue)

@@ -54,10 +54,8 @@ type Diff struct {
 	tableRouter    *router.Table
 	cpDB           *sql.DB
 
-	// DM's subtask config and block-allow-list
+	// DM's subtask config
 	subTaskCfgs []*config.SubTaskConfig
-	// instance-id -> filter
-	baList map[string]*filter.Filter
 
 	ctx context.Context
 }
