@@ -292,6 +292,7 @@ func (c *Config) checkConfig() bool {
 	if len(c.DMAddr) != 0 {
 		u, err := url.Parse(c.DMAddr)
 		if err != nil || u.Scheme == "" || u.Host == "" {
+			log.Error("dm-addr's format should like 'http://127.0.0.1:8261'")
 			return false
 		}
 
