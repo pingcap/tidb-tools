@@ -119,3 +119,28 @@ func (s *testUtilSuite) TestloadFromCheckPoint(c *C) {
 	useCheckpoint, err = loadFromCheckPoint(context.Background(), db, "test", "test", "123")
 	c.Assert(useCheckpoint, Equals, true)
 }
+
+func (s *testUtilSuite) TestInitChunks(c *C) {
+	db, _, err := sqlmock.New()
+	c.Assert(err, IsNil)
+
+	chunks := []*ChunkRange{
+		{
+			ID:           1,
+			Bounds:       []*Bound{{Column: "a", Lower: "1"}},
+			State:        notCheckedState,
+			columnOffset: map[string]int{"a": 0},
+		}, {
+			ID:           2,
+			Bounds:       []*Bound{{Column: "a", Lower: "0", Upper: "1"}},
+			State:        notCheckedState,
+			columnOffset: map[string]int{"a": 0},
+		},
+	}
+
+	// init chunks will insert chunk's information with update time, which use time.Now(), so can't know the value and can't fill the `WithArgs`
+	// so just skip the `ExpectQuery` and check the error message
+	//mock.ExpectQuery("INSERT INTO `sync_diff_inspector`.`chunk` VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?, ?, ?)").WithArgs(......)
+	err = initChunks(context.Background(), db, "target", "diff_test", "test", chunks)
+	c.Assert(err, ErrorMatches, ".*INSERT INTO `sync_diff_inspector`.`chunk` VALUES\\(\\?, \\?, \\?, \\?, \\?, \\?, \\?, \\?, \\?\\), \\(\\?, \\?, \\?, \\?, \\?, \\?, \\?, \\?, \\?\\).*")
+}
