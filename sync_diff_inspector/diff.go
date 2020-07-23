@@ -113,7 +113,7 @@ func (df *Diff) init(cfg *Config) (err error) {
 
 // CreateDBConn creates db connections for source and target.
 func (df *Diff) CreateDBConn(cfg *Config) (err error) {
-	if df.subTaskCfgs != nil && len(df.subTaskCfgs) != 0 {
+	if len(df.subTaskCfgs) != 0 {
 		err = df.adjustDBCfgByDMSubTasks(cfg)
 		if err != nil {
 			return err
@@ -222,12 +222,11 @@ func (df *Diff) adjustTableConfigBySubTask(cfg *Config) (err error) {
 
 	for schema, tables := range sourceTablesMap {
 		for table, sourceTables := range tables {
-			if sourceTables == nil || len(sourceTables) == 0 {
+			if len(sourceTables) == 0 {
 				continue
 			}
 
-			// TODO: support sql-mode
-			tableInfo, err := dbutil.GetTableInfo(df.ctx, df.targetDB.Conn, schema, table, "")
+			tableInfo, err := dbutil.GetTableInfo(df.ctx, df.targetDB.Conn, schema, table, df.targetDB.SQLMode)
 			if err != nil {
 				return errors.Errorf("get table %s.%s's inforamtion error %s", schema, table, errors.ErrorStack(err))
 			}
@@ -258,7 +257,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 	tidbCfg.Experimental.AllowAutoRandom = true
 	tidbconfig.StoreGlobalConfig(tidbCfg)
 
-	if df.subTaskCfgs != nil {
+	if len(df.subTaskCfgs) != 0 {
 		return df.adjustTableConfigBySubTask(cfg)
 	}
 
@@ -414,6 +413,10 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 }
 
 func (df *Diff) adjustDBCfgByDMSubTasks(cfg *Config) error {
+	sqlMode := ""
+	if df.subTaskCfgs[0].EnableANSIQuotes {
+		sqlMode = "ANSI_QUOTES"
+	}
 	// all subtask had same target, so use subTaskCfgs[0]
 	cfg.TargetDBCfg = DBConfig{
 		InstanceID: "target",
@@ -422,6 +425,7 @@ func (df *Diff) adjustDBCfgByDMSubTasks(cfg *Config) error {
 			Port:     df.subTaskCfgs[0].To.Port,
 			User:     df.subTaskCfgs[0].To.User,
 			Password: df.subTaskCfgs[0].To.Password,
+			SQLMode:  sqlMode,
 		},
 	}
 
@@ -434,6 +438,7 @@ func (df *Diff) adjustDBCfgByDMSubTasks(cfg *Config) error {
 				Port:     subTaskCfg.From.Port,
 				User:     subTaskCfg.From.User,
 				Password: subTaskCfg.From.Password,
+				SQLMode:  sqlMode,
 			},
 		})
 	}
