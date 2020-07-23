@@ -214,6 +214,21 @@ func (c *TablesChecker) checkAST(stmt ast.StmtNode) []*incompatibilityOption {
 			options = append(options, option)
 		}
 	}
+	// check primary/unique key
+	hasUnique := false
+	for _, cst := range st.Constraints {
+		if c.checkUnique(cst) {
+			hasUnique = true
+			break
+		}
+	}
+	if !hasUnique {
+		options = append(options, &incompatibilityOption{
+			state:       StateFailure,
+			instruction: fmt.Sprintf("please set primary/unique key for the table"),
+			errMessage:  fmt.Sprintf("primary/unique key does not exist"),
+		})
+	}
 
 	// check options
 	for _, opt := range st.Options {
@@ -240,6 +255,14 @@ func (c *TablesChecker) checkConstraint(cst *ast.Constraint) *incompatibilityOpt
 	}
 
 	return nil
+}
+
+func (c *TablesChecker) checkUnique(cst *ast.Constraint) bool {
+	switch cst.Tp {
+	case ast.ConstraintPrimaryKey, ast.ConstraintUniq, ast.ConstraintUniqKey, ast.ConstraintUniqIndex:
+		return true
+	}
+	return false
 }
 
 func (c *TablesChecker) checkTableOption(opt *ast.TableOption) *incompatibilityOption {
