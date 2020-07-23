@@ -25,7 +25,7 @@ import (
 // RowData is the struct of rows selected from mysql/tidb
 type RowData struct {
 	Data   map[string]*dbutil.ColumnData
-	Source string
+	Source int
 }
 
 // RowDatas is a heap of MergeItems.
@@ -100,6 +100,9 @@ func (r *RowDatas) Push(x interface{}) {
 
 // Pop implements heap.Interface's Pop function
 func (r *RowDatas) Pop() interface{} {
+	if len(r.Rows) == 0 {
+		return nil
+	}
 	old := r.Rows
 	n := len(old)
 	x := old[n-1]

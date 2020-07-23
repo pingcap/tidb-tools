@@ -183,6 +183,7 @@ func (t *TableDiff) CheckTableStruct(ctx context.Context) (bool, error) {
 			log.Warn("table struct is not equal", zap.String("reason", msg))
 			return false, nil
 		}
+		log.Info("table struct is equal", zap.Reflect("source", sourceTable.info), zap.Reflect("target", t.TargetTable.info))
 	}
 
 	return true, nil
@@ -364,20 +365,6 @@ func (t *TableDiff) LoadCheckpoint(ctx context.Context) ([]*ChunkRange, error) {
 	return nil, nil
 }
 
-func (t *TableDiff) getSourceTableChecksum(ctx context.Context, chunk *ChunkRange) (int64, error) {
-	var checksum int64
-
-	for _, sourceTable := range t.SourceTables {
-		checksumTmp, err := dbutil.GetCRC32Checksum(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
-		if err != nil {
-			return -1, errors.Trace(err)
-		}
-
-		checksum ^= checksumTmp
-	}
-	return checksum, nil
-}
-
 func (t *TableDiff) checkChunksDataEqual(ctx context.Context, filterByRand bool, chunks chan *ChunkRange, resultCh chan bool) {
 	var err error
 	for {
@@ -479,7 +466,7 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, 
 	}
 
 	// if checksum is not equal or don't need compare checksum, compare the data
-	log.Info("select data and then check data", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", chunk.Where), zap.Reflect("args", chunk.Args))
+	log.Info("select data and then check data", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", dbutil.ReplacePlaceholder(chunk.Where, chunk.Args)))
 
 	equal, err = t.compareRows(ctx, chunk)
 	if err != nil {
@@ -489,21 +476,73 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, 
 	return equal, nil
 }
 
-func (t *TableDiff) compareChecksum(ctx context.Context, chunk *ChunkRange) (bool, error) {
-	// first check the checksum is equal or not
-	getSourceChecksumTime := time.Now()
-	sourceChecksum, err := t.getSourceTableChecksum(ctx, chunk)
-	if err != nil {
-		return false, errors.Trace(err)
-	}
-	getSourceChecksumDuration := time.Since(getSourceChecksumTime)
+// checksumInfo save some information about checksum
+type checksumInfo struct {
+	checksum int64
+	err      error
+	cost     time.Duration
+	tp       string
+}
 
-	getTargetChecksumTime := time.Now()
-	targetChecksum, err := dbutil.GetCRC32Checksum(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
-	if err != nil {
-		return false, errors.Trace(err)
+// check the checksum is equal or not
+func (t *TableDiff) compareChecksum(ctx context.Context, chunk *ChunkRange) (bool, error) {
+	ctx1, cancel1 := context.WithCancel(ctx)
+	defer cancel1()
+
+	var (
+		getSourceChecksumDuration, getTargetChecksumDuration time.Duration
+		sourceChecksum, targetChecksum                       int64
+		checksumInfoCh                                       = make(chan checksumInfo)
+		firstErr                                             error
+	)
+	defer close(checksumInfoCh)
+
+	getChecksum := func(db *sql.DB, schema, table, limitRange string, tbInfo *model.TableInfo, args []interface{}, tp string) {
+		beginTime := time.Now()
+		checksum, err := dbutil.GetCRC32Checksum(ctx1, db, schema, table, tbInfo, limitRange, args)
+		cost := time.Since(beginTime)
+
+		checksumInfoCh <- checksumInfo{
+			checksum: checksum,
+			err:      err,
+			cost:     cost,
+			tp:       tp,
+		}
 	}
-	getTargetChecksumDuration := time.Since(getTargetChecksumTime)
+
+	args := utils.StringsToInterfaces(chunk.Args)
+	for _, sourceTable := range t.SourceTables {
+		go getChecksum(sourceTable.Conn, sourceTable.Schema, sourceTable.Table, chunk.Where, t.TargetTable.info, args, "source")
+	}
+
+	go getChecksum(t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, chunk.Where, t.TargetTable.info, args, "target")
+
+	for i := 0; i < len(t.SourceTables)+1; i++ {
+		checksumInfo := <-checksumInfoCh
+		if checksumInfo.err != nil {
+			// only need to return the first error, others are context cancel error
+			if firstErr == nil {
+				firstErr = checksumInfo.err
+				cancel1()
+			}
+
+			continue
+		}
+
+		if checksumInfo.tp == "source" {
+			sourceChecksum ^= checksumInfo.checksum
+			if checksumInfo.cost > getSourceChecksumDuration {
+				getSourceChecksumDuration = checksumInfo.cost
+			}
+		} else {
+			targetChecksum = checksumInfo.checksum
+			getTargetChecksumDuration = checksumInfo.cost
+		}
+	}
+
+	if firstErr != nil {
+		return false, errors.Trace(firstErr)
+	}
 
 	if sourceChecksum == targetChecksum {
 		log.Info("checksum is equal", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", dbutil.ReplacePlaceholder(chunk.Where, chunk.Args)), zap.Int64("checksum", sourceChecksum), zap.Duration("get source checksum cost", getSourceChecksumDuration), zap.Duration("get target checksum cost", getTargetChecksumDuration))
@@ -516,138 +555,185 @@ func (t *TableDiff) compareChecksum(ctx context.Context, chunk *ChunkRange) (boo
 }
 
 func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, error) {
-	sourceRows := make(map[string][]map[string]*dbutil.ColumnData)
+	beginTime := time.Now()
+
+	sourceRows := make(map[int]*sql.Rows)
+	sourceHaveData := make(map[int]bool)
 	args := utils.StringsToInterfaces(chunk.Args)
 
 	targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, args, t.Collation)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
-
-	// judge rows have all order keys to avoid panic
-	if len(targetRows) > 0 {
-		if !rowContainsCols(targetRows[0], orderKeyCols) {
-			return false, errors.Errorf("%s.%s.%s's data don't contain all keys %v", t.TargetTable.InstanceID, t.TargetTable.Schema, t.TargetTable.Table, orderKeyCols)
-		}
-	}
+	defer targetRows.Close()
 
 	for i, sourceTable := range t.SourceTables {
 		rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, chunk.Where, args, t.Collation)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
+		defer rows.Close()
 
-		// judge rows have all order keys to avoid panic
-		if len(rows) > 0 {
-			if !rowContainsCols(rows[0], orderKeyCols) {
-				return false, errors.Errorf("%s.%s.%s's data don't contain all keys %v", sourceTable.InstanceID, sourceTable.Schema, sourceTable.Table, orderKeyCols)
-			}
-		}
-
-		sourceRows[fmt.Sprintf("source-%d", i)] = rows
+		sourceRows[i] = rows
+		sourceHaveData[i] = false
 	}
 
-	var (
-		equal     = true
-		rowsData1 = make([]map[string]*dbutil.ColumnData, 0, 100)
-		rowsData2 = make([]map[string]*dbutil.ColumnData, 0, 100)
-	)
-
-	rowDatas := &RowDatas{
+	sourceRowDatas := &RowDatas{
 		Rows:         make([]RowData, 0, len(sourceRows)),
 		OrderKeyCols: orderKeyCols,
 	}
-	heap.Init(rowDatas)
-	sourceMap := make(map[string]interface{})
-	sourceOffset := make(map[string]int)
-	for {
-		for source, rows := range sourceRows {
-			if _, ok := sourceMap[source]; ok {
-				continue
-			}
-			if sourceOffset[source] == len(rows) {
-				delete(sourceRows, source)
-				continue
-			}
+	heap.Init(sourceRowDatas)
 
-			data := rows[sourceOffset[source]]
-			heap.Push(rowDatas, RowData{
-				Data:   data,
-				Source: source,
-			})
-			sourceMap[source] = struct{}{}
-			sourceOffset[source]++
+	getRowData := func(rows *sql.Rows) (rowData map[string]*dbutil.ColumnData, err error) {
+		for rows.Next() {
+			rowData, err = dbutil.ScanRow(rows)
+			return
 		}
-
-		if rowDatas.Len() == 0 {
-			break
-		}
-
-		rowData := heap.Pop(rowDatas).(RowData)
-		rowsData1 = append(rowsData1, rowData.Data)
-		delete(sourceMap, rowData.Source)
+		return
 	}
 
-	rowsData2 = targetRows
+	// getSourceRow gets one row from all the sources, it should be the smallest.
+	// first get rows from every source, and then push them to the heap, and then pop to get the smallest one
+	getSourceRow := func() (map[string]*dbutil.ColumnData, error) {
+		if len(sourceHaveData) == 0 {
+			return nil, nil
+		}
 
-	var index1, index2 int
+		needDeleteSource := make([]int, 0, 1)
+		for i, haveData := range sourceHaveData {
+			if !haveData {
+				rowData, err := getRowData(sourceRows[i])
+				if err != nil {
+					return nil, err
+				}
+
+				if rowData != nil {
+					sourceHaveData[i] = true
+					heap.Push(sourceRowDatas, RowData{
+						Data:   rowData,
+						Source: i,
+					})
+				}
+			}
+
+			if !sourceHaveData[i] {
+				if sourceRows[i].Err() != nil {
+					return nil, sourceRows[i].Err()
+
+				}
+				// still don't have data, means the rows is read to the end, so delete the source
+				needDeleteSource = append(needDeleteSource, i)
+			}
+		}
+
+		for _, i := range needDeleteSource {
+			delete(sourceHaveData, i)
+		}
+
+		// all the sources had read to the end, no data to return
+		if len(sourceRowDatas.Rows) == 0 {
+			return nil, nil
+		}
+
+		rowData := heap.Pop(sourceRowDatas).(RowData)
+		sourceHaveData[rowData.Source] = false
+
+		return rowData.Data, nil
+	}
+
+	var lastSourceData, lastTargetData map[string]*dbutil.ColumnData
+	equal := true
+
 	for {
-		if index1 == len(rowsData1) {
-			// all the rowsData2's data should be deleted
-			for ; index2 < len(rowsData2); index2++ {
-				sql := generateDML("delete", rowsData2[index2], t.TargetTable.info, t.TargetTable.Schema)
+		if lastSourceData == nil {
+			lastSourceData, err = getSourceRow()
+			if err != nil {
+				return false, err
+			}
+		}
+
+		if lastTargetData == nil {
+			lastTargetData, err = getRowData(targetRows)
+			if err != nil {
+				return false, err
+			}
+		}
+
+		if lastSourceData == nil {
+			// don't have source data, so all the targetRows's data is redundant, should be deleted
+			for lastTargetData != nil {
+				sql := generateDML("delete", lastTargetData, t.TargetTable.info, t.TargetTable.Schema)
 				log.Info("[delete]", zap.String("sql", sql))
 				t.wg.Add(1)
 				t.sqlCh <- sql
 				equal = false
+
+				lastTargetData, err = getRowData(targetRows)
+				if err != nil {
+					return false, err
+				}
 			}
 			break
 		}
-		if index2 == len(rowsData2) {
-			// rowsData2 lack some data, should insert them
-			for ; index1 < len(rowsData1); index1++ {
-				sql := generateDML("replace", rowsData1[index1], t.TargetTable.info, t.TargetTable.Schema)
+
+		if lastTargetData == nil {
+			// target lack some data, should insert the last source datas
+			for lastSourceData != nil {
+				sql := generateDML("replace", lastSourceData, t.TargetTable.info, t.TargetTable.Schema)
 				log.Info("[insert]", zap.String("sql", sql))
 				t.wg.Add(1)
 				t.sqlCh <- sql
 				equal = false
+
+				lastSourceData, err = getSourceRow()
+				if err != nil {
+					return false, err
+				}
 			}
 			break
 		}
-		eq, cmp, err := compareData(rowsData1[index1], rowsData2[index2], orderKeyCols)
+
+		eq, cmp, err := compareData(lastSourceData, lastTargetData, orderKeyCols)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
 		if eq {
-			index1++
-			index2++
+			lastSourceData = nil
+			lastTargetData = nil
 			continue
 		}
+
 		equal = false
 		switch cmp {
 		case 1:
 			// delete
-			sql := generateDML("delete", rowsData2[index2], t.TargetTable.info, t.TargetTable.Schema)
+			sql := generateDML("delete", lastTargetData, t.TargetTable.info, t.TargetTable.Schema)
 			log.Info("[delete]", zap.String("sql", sql))
 			t.wg.Add(1)
 			t.sqlCh <- sql
-			index2++
+			lastTargetData = nil
 		case -1:
 			// insert
-			sql := generateDML("replace", rowsData1[index1], t.TargetTable.info, t.TargetTable.Schema)
+			sql := generateDML("replace", lastSourceData, t.TargetTable.info, t.TargetTable.Schema)
 			log.Info("[insert]", zap.String("sql", sql))
 			t.wg.Add(1)
 			t.sqlCh <- sql
-			index1++
+			lastSourceData = nil
 		case 0:
 			// update
-			sql := generateDML("replace", rowsData1[index1], t.TargetTable.info, t.TargetTable.Schema)
+			sql := generateDML("replace", lastSourceData, t.TargetTable.info, t.TargetTable.Schema)
 			log.Info("[update]", zap.String("sql", sql))
 			t.wg.Add(1)
 			t.sqlCh <- sql
-			index1++
-			index2++
+			lastSourceData = nil
+			lastTargetData = nil
 		}
+	}
+
+	if equal {
+		log.Info("rows is equal", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", dbutil.ReplacePlaceholder(chunk.Where, chunk.Args)), zap.Duration("cost", time.Since(beginTime)))
+	} else {
+		log.Warn("rows is not equal", zap.String("table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)), zap.String("where", dbutil.ReplacePlaceholder(chunk.Where, chunk.Args)), zap.Duration("cost", time.Since(beginTime)))
 	}
 
 	return equal, nil
@@ -868,7 +954,7 @@ func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model
 }
 
 func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo, where string,
-	args []interface{}, collation string) ([]map[string]*dbutil.ColumnData, []*model.ColumnInfo, error) {
+	args []interface{}, collation string) (*sql.Rows, []*model.ColumnInfo, error) {
 	orderKeys, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
 
 	columnNames := make([]string, 0, len(tableInfo.Columns))
@@ -893,16 +979,6 @@ func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableIn
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
-	defer rows.Close()
 
-	datas := make([]map[string]*dbutil.ColumnData, 0, 100)
-	for rows.Next() {
-		data, err := dbutil.ScanRow(rows)
-		if err != nil {
-			return nil, nil, errors.Trace(err)
-		}
-		datas = append(datas, data)
-	}
-
-	return datas, orderKeyCols, errors.Trace(rows.Err())
+	return rows, orderKeyCols, nil
 }
