@@ -92,6 +92,11 @@ func (df *Diff) init(cfg *Config) (err error) {
 			return errors.Trace(err)
 		}
 		df.subTaskCfgs = subTaskCfgs
+
+		err = df.adjustDBCfgByDMSubTasks(cfg)
+		if err != nil {
+			return err
+		}
 	}
 
 	// create connection for source.
@@ -113,13 +118,6 @@ func (df *Diff) init(cfg *Config) (err error) {
 
 // CreateDBConn creates db connections for source and target.
 func (df *Diff) CreateDBConn(cfg *Config) (err error) {
-	if len(df.subTaskCfgs) != 0 {
-		err = df.adjustDBCfgByDMSubTasks(cfg)
-		if err != nil {
-			return err
-		}
-	}
-
 	for _, source := range cfg.SourceDBCfg {
 		source.Conn, err = diff.CreateDB(df.ctx, source.DBConfig, cfg.CheckThreadCount)
 		if err != nil {
