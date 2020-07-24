@@ -40,4 +40,22 @@ func (s *testConfigSuite) TestUseDMConfig(c *C) {
 	cfg.DMTask = "test"
 	isValid = cfg.checkConfig()
 	c.Assert(isValid, IsTrue)
+
+	cfg.TargetDBCfg = DBConfig{
+		InstanceID: "target",
+	}
+	isValid = cfg.checkConfig()
+	c.Assert(isValid, IsFalse)
+
+	cfg.TargetDBCfg.InstanceID = ""
+	isValid = cfg.checkConfig()
+	c.Assert(isValid, IsTrue)
+
+	cfg.SourceDBCfg = []DBConfig{
+		{
+			InstanceID: "source-1",
+		},
+	}
+	isValid = cfg.checkConfig()
+	c.Assert(isValid, IsFalse)
 }

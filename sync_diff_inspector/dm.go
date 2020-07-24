@@ -22,6 +22,7 @@ import (
 	"github.com/pingcap/dm/dm/config"
 	"github.com/pingcap/dm/dm/pb"
 	"github.com/pingcap/dm/pkg/utils"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"go.uber.org/zap"
 )
@@ -43,6 +44,9 @@ func getDMTaskCfg(dmAddr, task string) ([]*config.SubTaskConfig, error) {
 	}
 	client := &http.Client{Transport: tr}
 	req, err := http.NewRequest("GET", getDMTaskCfgURL(dmAddr, task), nil)
+	if err != nil {
+		return nil, err
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -57,6 +61,10 @@ func getDMTaskCfg(dmAddr, task string) ([]*config.SubTaskConfig, error) {
 	err = json.Unmarshal(body, getSubTaskCfgResp)
 	if err != nil {
 		return nil, err
+	}
+
+	if !getSubTaskCfgResp.Result {
+		return nil, errors.Errorf("fail to get sub task config from DM, %s", getSubTaskCfgResp.Msg)
 	}
 
 	subTaskCfgs := make([]*config.SubTaskConfig, 0, len(getSubTaskCfgResp.Cfgs))
