@@ -58,4 +58,14 @@ func (s *testConfigSuite) TestUseDMConfig(c *C) {
 	}
 	isValid = cfg.checkConfig()
 	c.Assert(isValid, IsFalse)
+
+	cfg.SourceDBCfg = nil
+	isValid = cfg.checkConfig()
+	c.Assert(isValid, IsTrue)
+
+	cfg.Tables = []*CheckTables{
+		{}, {},
+	}
+	isValid = cfg.checkConfig()
+	c.Assert(isValid, IsFalse)
 }

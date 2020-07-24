@@ -304,7 +304,12 @@ func (c *Config) checkConfig() bool {
 		emptyDBConfig := DBConfig{}
 		// source DB, target DB and check table's information will get from DM, should not set them
 		if len(c.SourceDBCfg) != 0 || c.TargetDBCfg != emptyDBConfig {
-			log.Error("should not set `source-db` or `target-db`, diff will generate `source-db` config automatically when set `dm-addr` and `dm-task`")
+			log.Error("should not set `source-db` or `target-db`, diff will generate them automatically when set `dm-addr` and `dm-task`")
+			return false
+		}
+
+		if len(c.Tables) != 0 || len(c.TableRules) != 0 || len(c.TableCfgs) != 0 {
+			log.Error("should not set `check-tables`, `table-rules` or `table-config`, diff will generate them automatically when set `dm-addr` and `dm-task`")
 			return false
 		}
 	} else {
