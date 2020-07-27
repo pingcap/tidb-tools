@@ -17,6 +17,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"flag"
+	"net/url"
 	"strconv"
 
 	"github.com/BurntSushi/toml"
@@ -201,6 +202,11 @@ type Config struct {
 	// set true will continue check from the latest checkpoint
 	UseCheckpoint bool `toml:"use-checkpoint" json:"use-checkpoint"`
 
+	// DMAddr is dm-master's address, the format should like "http://127.0.0.1:8261"
+	DMAddr string `toml:"dm-addr" json:"dm-addr"`
+	// DMTask is dm's task name
+	DMTask string `toml:"dm-task" json:"dm-task"`
+
 	// config file
 	ConfigFile string
 
@@ -283,39 +289,64 @@ func (c *Config) checkConfig() bool {
 		return false
 	}
 
-	if len(c.SourceDBCfg) == 0 {
-		log.Error("must have at least one source database")
-		return false
-	}
-
-	for i := range c.SourceDBCfg {
-		if !c.SourceDBCfg[i].Valid() {
+	if len(c.DMAddr) != 0 {
+		u, err := url.Parse(c.DMAddr)
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			log.Error("dm-addr's format should like 'http://127.0.0.1:8261'")
 			return false
 		}
-		if c.SourceDBCfg[i].Snapshot != "" {
-			c.SourceDBCfg[i].Snapshot = strconv.Quote(c.SourceDBCfg[i].Snapshot)
-		}
-	}
 
-	if c.TargetDBCfg.InstanceID == "" {
-		c.TargetDBCfg.InstanceID = "target"
-	}
-	if c.TargetDBCfg.Snapshot != "" {
-		c.TargetDBCfg.Snapshot = strconv.Quote(c.TargetDBCfg.Snapshot)
-	}
-	if _, ok := sourceInstanceMap[c.TargetDBCfg.InstanceID]; ok {
-		log.Error("target has same instance id in source", zap.String("instance id", c.TargetDBCfg.InstanceID))
-		return false
-	}
-
-	if len(c.Tables) == 0 {
-		log.Error("must specify check tables")
-		return false
-	}
-
-	for _, tableCfg := range c.TableCfgs {
-		if !tableCfg.Valid() {
+		if len(c.DMTask) == 0 {
+			log.Error("must set the `dm-task` if set `dm-addr`")
 			return false
+		}
+
+		emptyDBConfig := DBConfig{}
+		// source DB, target DB and check table's information will get from DM, should not set them
+		if len(c.SourceDBCfg) != 0 || c.TargetDBCfg != emptyDBConfig {
+			log.Error("should not set `source-db` or `target-db`, diff will generate them automatically when set `dm-addr` and `dm-task`")
+			return false
+		}
+
+		if len(c.Tables) != 0 || len(c.TableRules) != 0 || len(c.TableCfgs) != 0 {
+			log.Error("should not set `check-tables`, `table-rules` or `table-config`, diff will generate them automatically when set `dm-addr` and `dm-task`")
+			return false
+		}
+	} else {
+		if len(c.SourceDBCfg) == 0 {
+			log.Error("must have at least one source database")
+			return false
+		}
+
+		for i := range c.SourceDBCfg {
+			if !c.SourceDBCfg[i].Valid() {
+				return false
+			}
+			if c.SourceDBCfg[i].Snapshot != "" {
+				c.SourceDBCfg[i].Snapshot = strconv.Quote(c.SourceDBCfg[i].Snapshot)
+			}
+		}
+
+		if c.TargetDBCfg.InstanceID == "" {
+			c.TargetDBCfg.InstanceID = "target"
+		}
+		if c.TargetDBCfg.Snapshot != "" {
+			c.TargetDBCfg.Snapshot = strconv.Quote(c.TargetDBCfg.Snapshot)
+		}
+		if _, ok := sourceInstanceMap[c.TargetDBCfg.InstanceID]; ok {
+			log.Error("target has same instance id in source", zap.String("instance id", c.TargetDBCfg.InstanceID))
+			return false
+		}
+
+		if len(c.Tables) == 0 {
+			log.Error("must specify check tables")
+			return false
+		}
+
+		for _, tableCfg := range c.TableCfgs {
+			if !tableCfg.Valid() {
+				return false
+			}
 		}
 	}
 

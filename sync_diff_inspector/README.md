@@ -4,7 +4,7 @@ sync-diff-inspector is a tool for comparing two database's data.
 
 ## How to use
 
-```
+```shell
 Usage of sync_diff_inspector:
   -L string
         log level: debug, info, warn, error, fatal (default "info")
@@ -25,4 +25,4 @@ Usage of sync_diff_inspector:
         target database's snapshot config
 ```
 
-For more details you can read the [config.toml](./config.toml) and [config_sharding.toml](./config_sharding.toml).
+For more details you can read the [config.toml](./config.toml), [config_sharding.toml](./config_sharding.toml) and [config_dm.toml](./config_dm.toml).
