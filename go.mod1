@@ -2,7 +2,7 @@ module github.com/pingcap/tidb-tools
 
 require (
 	github.com/BurntSushi/toml v0.3.1
-	github.com/DATA-DOG/go-sqlmock v1.3.3
+	github.com/DATA-DOG/go-sqlmock v1.4.1
 	github.com/Shopify/sarama v1.24.1
 	github.com/cespare/xxhash/v2 v2.1.1 // indirect
 	github.com/coreos/go-semver v0.3.0 // indirect
@@ -16,7 +16,7 @@ require (
 	github.com/klauspost/cpuid v1.2.1 // indirect
 	github.com/montanaflynn/stats v0.5.0 // indirect
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
-	github.com/pingcap/dm v1.0.6
+	github.com/pingcap/dm v1.1.0-alpha.0.20200729032940-53a08d777030
 	github.com/pingcap/errcode v0.3.0 // indirect
 	github.com/pingcap/errors v0.11.5-0.20190809092503-95897b64e011
 	github.com/pingcap/failpoint v0.0.0-20200603062251-b230c36c413c
