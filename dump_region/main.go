@@ -102,18 +102,18 @@ func main() {
 
 	ctx := context.Background()
 	for i := 0; i < *limit; i++ {
-		region, leader, err := client.GetRegion(ctx, startKey)
+		region, err := client.GetRegion(ctx, startKey)
 		exitWithErr(err)
 
-		if bytes.Compare(region.GetStartKey(), endKey) >= 0 {
+		if bytes.Compare(region.Meta.GetStartKey(), endKey) >= 0 {
 			break
 		}
 
-		startKey = region.GetEndKey()
+		startKey = region.Meta.GetEndKey()
 
 		r := &regionInfo{
-			Region: region,
-			Leader: leader,
+			Region: region.Meta,
+			Leader: region.Leader,
 		}
 
 		infos, err := json.MarshalIndent(r, "", "  ")
