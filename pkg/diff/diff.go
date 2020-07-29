@@ -401,7 +401,7 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, 
 	failpoint.Inject("CancelCheckChunkDataEqual", func(val failpoint.Value) {
 		chunkID := val.(int)
 		if chunkID != chunk.ID {
-			failpoint.Return()
+			failpoint.Return(false, nil)
 		}
 
 		log.Info("check chunk data equal failed", zap.String("failpoint", "CancelCheckChunkDataEqual"))
