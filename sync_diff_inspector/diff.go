@@ -30,7 +30,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/pkg/utils"
-	tidbconfig "github.com/pingcap/tidb/config"
 	"go.uber.org/zap"
 )
 
@@ -250,11 +249,6 @@ func (df *Diff) adjustTableConfigBySubTask(cfg *Config) (err error) {
 
 // AdjustTableConfig adjusts the table's config by check-tables and table-config.
 func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
-	// to support table with auto_random in TiDB
-	tidbCfg := tidbconfig.GetGlobalConfig()
-	tidbCfg.Experimental.AllowAutoRandom = true
-	tidbconfig.StoreGlobalConfig(tidbCfg)
-
 	if len(df.subTaskCfgs) != 0 {
 		return df.adjustTableConfigBySubTask(cfg)
 	}

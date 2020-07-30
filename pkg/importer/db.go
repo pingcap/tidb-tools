@@ -156,7 +156,7 @@ func genColumnData(table *table, column *column) (string, error) {
 
 		data = append(data, '\'')
 		return string(data), nil
-	case mysql.TypeFloat, mysql.TypeDouble, mysql.TypeDecimal:
+	case mysql.TypeFloat, mysql.TypeDouble, mysql.TypeNewDecimal:
 		var data float64
 		if isUnique {
 			data = float64(uniqInt64Value(column, 0, math.MaxInt64))
