@@ -25,8 +25,8 @@ import (
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	pb "github.com/pingcap/tidb-tools/tidb-binlog/consumer_binlog_proto/go-binlog"
 	"github.com/pingcap/tidb-tools/tidb-binlog/driver/reader"
-	pb "github.com/pingcap/tidb-tools/tidb-binlog/slave_binlog_proto/go-binlog"
 	_ "github.com/pingcap/tidb/types/parser_driver" // for parser driver
 	"go.uber.org/zap"
 )

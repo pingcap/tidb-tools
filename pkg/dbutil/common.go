@@ -561,7 +561,7 @@ func GetTidbLatestTSO(ctx context.Context, db *sql.DB) (int64, error) {
 		}
 		return ts, nil
 	}
-	return 0, errors.New("get slave cluster's ts failed")
+	return 0, errors.New("get secondary cluster's ts failed")
 }
 
 // GetDBVersion returns the database's version
