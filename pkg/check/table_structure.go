@@ -18,7 +18,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/pingcap/tidb-tools/pkg/utils"
 	"strings"
 
 	"github.com/pingcap/errors"
@@ -28,6 +27,7 @@ import (
 	"github.com/pingcap/parser/mysql"
 	column "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 // AutoIncrementKeyChecking is an identification for auto increment key checking
@@ -62,16 +62,14 @@ type TablesChecker struct {
 	db               *sql.DB
 	dbinfo           *dbutil.DBConfig
 	tables           map[string][]string // schema => []table; if []table is empty, query tables from db
-	enableANSIQuotes bool
 }
 
 // NewTablesChecker returns a Checker
-func NewTablesChecker(db *sql.DB, dbinfo *dbutil.DBConfig, tables map[string][]string, enableANSIQuotes bool) Checker {
+func NewTablesChecker(db *sql.DB, dbinfo *dbutil.DBConfig, tables map[string][]string) Checker {
 	return &TablesChecker{
 		db:               db,
 		dbinfo:           dbinfo,
 		tables:           tables,
-		enableANSIQuotes: enableANSIQuotes,
 	}
 }
 
@@ -162,8 +160,18 @@ func (c *TablesChecker) Name() string {
 }
 
 func (c *TablesChecker) checkCreateSQL(statement string) []*incompatibilityOption {
+	ansiQuotes, err := utils.HasAnsiQuotesMode(c.db)
+	if err != nil {
+		return []*incompatibilityOption{
+			{
+				state:      StateFailure,
+				errMessage: err.Error(),
+			},
+		}
+	}
+
 	sqlMode := ""
-	if c.enableANSIQuotes {
+	if ansiQuotes {
 		sqlMode = "ANSI_QUOTES"
 	}
 	parser2, err := dbutil.GetParser(sqlMode)
@@ -295,7 +303,7 @@ type ShardingTablesCheck struct {
 }
 
 // NewShardingTablesCheck returns a Checker
-func NewShardingTablesCheck(name string, dbs map[string]*sql.DB, tables map[string]map[string][]string, mapping map[string]*column.Mapping, checkAutoIncrementPrimaryKey bool, enableANSIQuotes bool) Checker {
+func NewShardingTablesCheck(name string, dbs map[string]*sql.DB, tables map[string]map[string][]string, mapping map[string]*column.Mapping, checkAutoIncrementPrimaryKey bool) Checker {
 	return &ShardingTablesCheck{
 		name:                         name,
 		dbs:                          dbs,
