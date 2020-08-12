@@ -72,8 +72,6 @@ type DBConfig struct {
 	Schema string `toml:"schema" json:"schema"`
 
 	Snapshot string `toml:"snapshot" json:"snapshot"`
-
-	SQLMode string `toml:"sql-mode" json:"sql-mode"`
 }
 
 // String returns native format of database configuration

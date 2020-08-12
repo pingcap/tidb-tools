@@ -59,17 +59,17 @@ func (o *incompatibilityOption) String() string {
 // In generally we need to check definitions of columns, constraints and table options.
 // Because of the early TiDB engineering design, we did not have a complete list of check items, which are all based on experience now.
 type TablesChecker struct {
-	db               *sql.DB
-	dbinfo           *dbutil.DBConfig
-	tables           map[string][]string // schema => []table; if []table is empty, query tables from db
+	db     *sql.DB
+	dbinfo *dbutil.DBConfig
+	tables map[string][]string // schema => []table; if []table is empty, query tables from db
 }
 
 // NewTablesChecker returns a Checker
 func NewTablesChecker(db *sql.DB, dbinfo *dbutil.DBConfig, tables map[string][]string) Checker {
 	return &TablesChecker{
-		db:               db,
-		dbinfo:           dbinfo,
-		tables:           tables,
+		db:     db,
+		dbinfo: dbinfo,
+		tables: tables,
 	}
 }
 
