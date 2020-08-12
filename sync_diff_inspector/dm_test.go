@@ -157,6 +157,9 @@ func mockDB(c *C) (*sql.DB, *sql.DB, *sql.DB) {
 	rows = sqlmock.NewRows([]string{"Table", "Create Table"}).AddRow("t_target", "CREATE TABLE t_target (id int primary key, name varchar(24))")
 	targetMock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(rows)
 
+	rows = sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION")
+	targetMock.ExpectQuery("SHOW GLOBAL VARIABLES LIKE 'sql_mode'").WillReturnRows(rows)
+
 	return sourceDB1, sourceDB2, targetDB
 }
 
