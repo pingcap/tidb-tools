@@ -604,6 +604,60 @@ func GetDBVersion(ctx context.Context, db *sql.DB) (string, error) {
 	return "", ErrVersionNotFound
 }
 
+// GetGlobalVariable gets server's global variable
+func GetGlobalVariable(db *sql.DB, variable string) (value string, err error) {
+	query := fmt.Sprintf("SHOW GLOBAL VARIABLES LIKE '%s'", variable)
+	rows, err := db.Query(query)
+
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	defer rows.Close()
+
+	// Show an example.
+	/*
+		mysql> SHOW GLOBAL VARIABLES LIKE "binlog_format";
+		+---------------+-------+
+		| Variable_name | Value |
+		+---------------+-------+
+		| binlog_format | ROW   |
+		+---------------+-------+
+	*/
+
+	for rows.Next() {
+		err = rows.Scan(&variable, &value)
+		if err != nil {
+			return "", errors.Trace(err)
+		}
+	}
+
+	if rows.Err() != nil {
+		return "", errors.Trace(err)
+	}
+
+	return value, nil
+}
+
+// GetSQLMode returns sql_mode.
+func GetSQLMode(db *sql.DB) (tmysql.SQLMode, error) {
+	sqlMode, err := GetGlobalVariable(db, "sql_mode")
+	if err != nil {
+		return tmysql.ModeNone, err
+	}
+
+	mode, err := tmysql.GetSQLMode(sqlMode)
+	return mode, errors.Trace(err)
+}
+
+// HasAnsiQuotesMode checks whether database has `ANSI_QUOTES` set
+func HasAnsiQuotesMode(db *sql.DB) (bool, error) {
+	mode, err := GetSQLMode(db)
+	if err != nil {
+		return false, err
+	}
+	return mode.HasANSIQuotesMode(), nil
+}
+
 // IsTiDB returns true if this database is tidb
 func IsTiDB(ctx context.Context, db *sql.DB) (bool, error) {
 	version, err := GetDBVersion(ctx, db)

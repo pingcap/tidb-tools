@@ -27,7 +27,6 @@ import (
 	"github.com/pingcap/parser/mysql"
 	column "github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 // AutoIncrementKeyChecking is an identification for auto increment key checking
@@ -160,7 +159,7 @@ func (c *TablesChecker) Name() string {
 }
 
 func (c *TablesChecker) checkCreateSQL(statement string) []*incompatibilityOption {
-	ansiQuotes, err := utils.HasAnsiQuotesMode(c.db)
+	ansiQuotes, err := dbutil.HasAnsiQuotesMode(c.db)
 	if err != nil {
 		return []*incompatibilityOption{
 			{
@@ -335,7 +334,7 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 		}
 
 		sqlMode := ""
-		ansiQuotes, err := utils.HasAnsiQuotesMode(db)
+		ansiQuotes, err := dbutil.HasAnsiQuotesMode(db)
 		if err != nil {
 			markCheckError(r, err)
 			r.Extra = fmt.Sprintf("instance %s on sharding %s", instance, c.name)

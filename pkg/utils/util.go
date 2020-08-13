@@ -1,14 +1,11 @@
 package utils
 
 import (
-	"database/sql"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 
 	"github.com/pingcap/errors"
-	tmysql "github.com/pingcap/parser/mysql"
 )
 
 // SliceToMap converts slice to map
@@ -58,58 +55,4 @@ func GetJSON(client *http.Client, url string, v interface{}) error {
 	}
 
 	return errors.Trace(json.NewDecoder(resp.Body).Decode(v))
-}
-
-// GetGlobalVariable gets server's global variable
-func GetGlobalVariable(db *sql.DB, variable string) (value string, err error) {
-	query := fmt.Sprintf("SHOW GLOBAL VARIABLES LIKE '%s'", variable)
-	rows, err := db.Query(query)
-
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-	defer rows.Close()
-
-	// Show an example.
-	/*
-		mysql> SHOW GLOBAL VARIABLES LIKE "binlog_format";
-		+---------------+-------+
-		| Variable_name | Value |
-		+---------------+-------+
-		| binlog_format | ROW   |
-		+---------------+-------+
-	*/
-
-	for rows.Next() {
-		err = rows.Scan(&variable, &value)
-		if err != nil {
-			return "", errors.Trace(err)
-		}
-	}
-
-	if rows.Err() != nil {
-		return "", errors.Trace(err)
-	}
-
-	return value, nil
-}
-
-// GetSQLMode returns sql_mode.
-func GetSQLMode(db *sql.DB) (tmysql.SQLMode, error) {
-	sqlMode, err := GetGlobalVariable(db, "sql_mode")
-	if err != nil {
-		return tmysql.ModeNone, err
-	}
-
-	mode, err := tmysql.GetSQLMode(sqlMode)
-	return mode, errors.Trace(err)
-}
-
-// HasAnsiQuotesMode checks whether database has `ANSI_QUOTES` set
-func HasAnsiQuotesMode(db *sql.DB) (bool, error) {
-	mode, err := GetSQLMode(db)
-	if err != nil {
-		return false, err
-	}
-	return mode.HasANSIQuotesMode(), nil
 }
