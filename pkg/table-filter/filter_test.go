@@ -243,6 +243,28 @@ func (s *filterSuite) TestMatchTables(c *C) {
 			acceptedCS: []bool{false, true, false, true, true},
 			acceptedCI: []bool{false, true, false, true, true},
 		},
+		{
+			args: []string{"*.*", "!S.D[!a-d]"},
+			tables: []filter.Table{
+				{Schema: "S", Name: "D1"},
+				{Schema: "S", Name: "Da"},
+				{Schema: "S", Name: "Db"},
+				{Schema: "S", Name: "Daa"},
+			},
+			acceptedCS: []bool{false, true, true, true},
+			acceptedCI: []bool{false, true, true, true},
+		},
+		{
+			args: []string{"*.*", "!S.D[a-d]"},
+			tables: []filter.Table{
+				{Schema: "S", Name: "D1"},
+				{Schema: "S", Name: "Da"},
+				{Schema: "S", Name: "Db"},
+				{Schema: "S", Name: "Daa"},
+			},
+			acceptedCS: []bool{true, false, false, true},
+			acceptedCI: []bool{true, false, false, true},
+		},
 	}
 
 	for _, tc := range cases {
