@@ -236,7 +236,7 @@ parseLoop:
 				return nil, "", p.errorf("syntax error: failed to parse character class")
 			}
 			end := i + rangeLoc[1]
-			switch line[1] {
+			switch line[i+1] {
 			case '!':
 				wildcardPatternBuilder.WriteString("[^")
 				wildcardPatternBuilder.WriteString(line[i+2 : end])
@@ -246,7 +246,6 @@ parseLoop:
 			default:
 				wildcardPatternBuilder.WriteString(line[i:end])
 			}
-			fmt.Println(wildcardPatternBuilder.String())
 			i = end
 
 		default:
