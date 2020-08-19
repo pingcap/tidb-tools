@@ -121,10 +121,18 @@ func verifyPrivileges(result *Result, grants []string, expectedGrants []string) 
 		firstGrant = firstGrant + " 'secret'"
 	}
 
+	// Aurora has some privilege failing parsing
+	firstGrant = strings.Replace(firstGrant, "LOAD FROM S3", "", 1)
+	firstGrant = strings.ReplaceAll(firstGrant, ", ,", ",")
+	firstGrant = strings.Replace(firstGrant, "SELECT INTO S3", "", 1)
+	firstGrant = strings.ReplaceAll(firstGrant, ", ,", ",")
+	firstGrant = strings.ReplaceAll(firstGrant, "GRANT ,", "GRANT ")
+	firstGrant = strings.ReplaceAll(firstGrant, ",  ON", " ON")
+
 	// get username and hostname
 	node, err := parser.New().ParseOneStmt(firstGrant, "", "")
 	if err != nil {
-		result.ErrorMsg = errors.ErrorStack(errors.Annotatef(err, "grants[0] %s", grants[0]))
+		result.ErrorMsg = errors.ErrorStack(errors.Annotatef(err, "grants[0] %s, firstGrant after replace %s", grants[0], firstGrant))
 		return
 	}
 	grantStmt, ok := node.(*ast.GrantStmt)
