@@ -225,7 +225,7 @@ func (df *Diff) adjustTableConfigBySubTask(cfg *Config) (err error) {
 
 			tableInfo, err := dbutil.GetTableInfo(df.ctx, df.targetDB.Conn, schema, table)
 			if err != nil {
-				return errors.Errorf("get table %s.%s's inforamtion error %s", schema, table, errors.ErrorStack(err))
+				return errors.Errorf("get table %s.%s's information error %s", schema, table, errors.ErrorStack(err))
 			}
 
 			if _, ok := df.tables[schema]; !ok {
@@ -324,7 +324,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 		for _, tableName := range tables {
 			tableInfo, err := dbutil.GetTableInfo(df.ctx, df.targetDB.Conn, schemaTables.Schema, tableName)
 			if err != nil {
-				return errors.Errorf("get table %s.%s's inforamtion error %s", schemaTables.Schema, tableName, errors.ErrorStack(err))
+				return errors.Errorf("get table %s.%s's information error %s", schemaTables.Schema, tableName, errors.ErrorStack(err))
 			}
 
 			if _, ok := df.tables[schemaTables.Schema][tableName]; ok {
