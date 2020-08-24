@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb/ddl"
@@ -34,24 +35,15 @@ func GetTableInfo(ctx context.Context, db *sql.DB, schemaName string, tableName 
 		return nil, errors.Trace(err)
 	}
 
-	ansiQuotes, err := HasAnsiQuotesMode(db)
+	parser2, err := GetParserForDB(db)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	sqlMode := ""
-	if ansiQuotes {
-		sqlMode = "ANSI_QUOTES"
-	}
-	return GetTableInfoBySQL(createTableSQL, sqlMode)
+	return GetTableInfoBySQL(createTableSQL, parser2)
 }
 
 // GetTableInfoBySQL returns table information by given create table sql.
-func GetTableInfoBySQL(createTableSQL string, sqlMode string) (table *model.TableInfo, err error) {
-	parser2, err := GetParser(sqlMode)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
+func GetTableInfoBySQL(createTableSQL string, parser2 *parser.Parser) (table *model.TableInfo, err error) {
 	stmt, err := parser2.ParseOneStmt(createTableSQL, "", "")
 	if err != nil {
 		return nil, errors.Trace(err)

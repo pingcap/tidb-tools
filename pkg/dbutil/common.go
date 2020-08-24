@@ -604,9 +604,10 @@ func GetDBVersion(ctx context.Context, db *sql.DB) (string, error) {
 	return "", ErrVersionNotFound
 }
 
-// GetGlobalVariable gets server's global variable
-func GetGlobalVariable(db *sql.DB, variable string) (value string, err error) {
-	query := fmt.Sprintf("SHOW GLOBAL VARIABLES LIKE '%s'", variable)
+// GetSessionVariable gets server's session variable, although argument is *sql.DB, (session) system variables may be
+// set through DSN
+func GetSessionVariable(db *sql.DB, variable string) (value string, err error) {
+	query := fmt.Sprintf("SHOW VARIABLES LIKE '%s'", variable)
 	rows, err := db.Query(query)
 
 	if err != nil {
@@ -616,7 +617,7 @@ func GetGlobalVariable(db *sql.DB, variable string) (value string, err error) {
 
 	// Show an example.
 	/*
-		mysql> SHOW GLOBAL VARIABLES LIKE "binlog_format";
+		mysql> SHOW VARIABLES LIKE "binlog_format";
 		+---------------+-------+
 		| Variable_name | Value |
 		+---------------+-------+
@@ -640,7 +641,7 @@ func GetGlobalVariable(db *sql.DB, variable string) (value string, err error) {
 
 // GetSQLMode returns sql_mode.
 func GetSQLMode(db *sql.DB) (tmysql.SQLMode, error) {
-	sqlMode, err := GetGlobalVariable(db, "sql_mode")
+	sqlMode, err := GetSessionVariable(db, "sql_mode")
 	if err != nil {
 		return tmysql.ModeNone, err
 	}
@@ -818,8 +819,8 @@ func DeleteRows(ctx context.Context, db *sql.DB, schemaName string, tableName st
 	return DeleteRows(ctx, db, schemaName, tableName, where, args)
 }
 
-// GetParser gets parser according to sql mode
-func GetParser(sqlModeStr string) (*parser.Parser, error) {
+// getParser gets parser according to sql mode
+func getParser(sqlModeStr string) (*parser.Parser, error) {
 	if len(sqlModeStr) == 0 {
 		return parser.New(), nil
 	}
@@ -831,4 +832,17 @@ func GetParser(sqlModeStr string) (*parser.Parser, error) {
 	parser2 := parser.New()
 	parser2.SetSQLMode(sqlMode)
 	return parser2, nil
+}
+
+// GetParserForDB discovers ANSI_QUOTES in db's session variables and returns a proper parser
+func GetParserForDB(db *sql.DB) (*parser.Parser, error) {
+	ansiQuotes, err := HasAnsiQuotesMode(db)
+	if err != nil {
+		return nil, err
+	}
+	sqlMode := ""
+	if ansiQuotes {
+		sqlMode = "ANSI_QUOTES"
+	}
+	return getParser(sqlMode)
 }

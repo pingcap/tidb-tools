@@ -159,21 +159,7 @@ func (c *TablesChecker) Name() string {
 }
 
 func (c *TablesChecker) checkCreateSQL(statement string) []*incompatibilityOption {
-	ansiQuotes, err := dbutil.HasAnsiQuotesMode(c.db)
-	if err != nil {
-		return []*incompatibilityOption{
-			{
-				state:      StateFailure,
-				errMessage: err.Error(),
-			},
-		}
-	}
-
-	sqlMode := ""
-	if ansiQuotes {
-		sqlMode = "ANSI_QUOTES"
-	}
-	parser2, err := dbutil.GetParser(sqlMode)
+	parser2, err := dbutil.GetParserForDB(c.db)
 	if err != nil {
 		return []*incompatibilityOption{
 			{
@@ -333,20 +319,10 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 			return r
 		}
 
-		sqlMode := ""
-		ansiQuotes, err := dbutil.HasAnsiQuotesMode(db)
+		parser2, err := dbutil.GetParserForDB(db)
 		if err != nil {
 			markCheckError(r, err)
-			r.Extra = fmt.Sprintf("instance %s on sharding %s", instance, c.name)
-			return r
-		}
-		if ansiQuotes {
-			sqlMode = "ANSI_QUOTES"
-		}
-		parser2, err := dbutil.GetParser(sqlMode)
-		if err != nil {
-			markCheckError(r, err)
-			r.Extra = fmt.Sprintf("fail to get parser")
+			r.Extra = fmt.Sprintf("fail to get parser for instance %s on sharding %s", instance, c.name)
 			return r
 		}
 
@@ -359,7 +335,7 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 					return r
 				}
 
-				info, err := dbutil.GetTableInfoBySQL(statement, sqlMode)
+				info, err := dbutil.GetTableInfoBySQL(statement, parser2)
 				if err != nil {
 					markCheckError(r, err)
 					r.Extra = fmt.Sprintf("instance %s on sharding %s", instance, c.name)
