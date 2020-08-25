@@ -650,15 +650,6 @@ func GetSQLMode(db *sql.DB) (tmysql.SQLMode, error) {
 	return mode, errors.Trace(err)
 }
 
-// HasAnsiQuotesMode checks whether database has `ANSI_QUOTES` set
-func HasAnsiQuotesMode(db *sql.DB) (bool, error) {
-	mode, err := GetSQLMode(db)
-	if err != nil {
-		return false, err
-	}
-	return mode.HasANSIQuotesMode(), nil
-}
-
 // IsTiDB returns true if this database is tidb
 func IsTiDB(ctx context.Context, db *sql.DB) (bool, error) {
 	version, err := GetDBVersion(ctx, db)
@@ -836,13 +827,12 @@ func getParser(sqlModeStr string) (*parser.Parser, error) {
 
 // GetParserForDB discovers ANSI_QUOTES in db's session variables and returns a proper parser
 func GetParserForDB(db *sql.DB) (*parser.Parser, error) {
-	ansiQuotes, err := HasAnsiQuotesMode(db)
+	mode, err := GetSQLMode(db)
 	if err != nil {
 		return nil, err
 	}
-	sqlMode := ""
-	if ansiQuotes {
-		sqlMode = "ANSI_QUOTES"
-	}
-	return getParser(sqlMode)
+
+	parser2 := parser.New()
+	parser2.SetSQLMode(mode)
+	return parser2, nil
 }
