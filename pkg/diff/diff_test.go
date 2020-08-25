@@ -23,6 +23,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/parser"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/importer"
 )
@@ -37,7 +38,7 @@ type testDiffSuite struct{}
 
 func (*testDiffSuite) TestGenerateSQLs(c *C) {
 	createTableSQL := "CREATE TABLE `diff_test`.`atest` (`id` int(24), `name` varchar(24), `birthday` datetime, `update_time` time, `money` decimal(20,2), `id_gen` int(11) GENERATED ALWAYS AS ((`id` + 1)) VIRTUAL, primary key(`id`, `name`))"
-	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, "")
+	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
 	c.Assert(err, IsNil)
 
 	rowsData := map[string]*dbutil.ColumnData{
@@ -56,7 +57,7 @@ func (*testDiffSuite) TestGenerateSQLs(c *C) {
 
 	// test the unique key
 	createTableSQL2 := "CREATE TABLE `diff_test`.`atest` (`id` int(24), `name` varchar(24), `birthday` datetime, `update_time` time, `money` decimal(20,2), unique key(`id`, `name`))"
-	tableInfo2, err := dbutil.GetTableInfoBySQL(createTableSQL2, "")
+	tableInfo2, err := dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
 	c.Assert(err, IsNil)
 	replaceSQL = generateDML("replace", rowsData, tableInfo2, "diff_test")
 	deleteSQL = generateDML("delete", rowsData, tableInfo2, "diff_test")
@@ -188,10 +189,10 @@ func testStructEqual(ctx context.Context, conn *sql.DB, c *C) {
 		_, err = conn.ExecContext(ctx, testCase.createTargetTable)
 		c.Assert(err, IsNil)
 
-		sourceInfo, err := dbutil.GetTableInfoBySQL(testCase.createSourceTable, "")
+		sourceInfo, err := dbutil.GetTableInfoBySQL(testCase.createSourceTable, parser.New())
 		c.Assert(err, IsNil)
 
-		targetInfo, err := dbutil.GetTableInfoBySQL(testCase.createTargetTable, "")
+		targetInfo, err := dbutil.GetTableInfoBySQL(testCase.createTargetTable, parser.New())
 		c.Assert(err, IsNil)
 
 		tableDiff := createTableDiff(conn, "diff_test", []string{sourceInfo.Name.O}, targetInfo.Name.O)

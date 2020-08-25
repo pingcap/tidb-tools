@@ -170,7 +170,7 @@ func (s *testDBSuite) TestGetParser(c *C) {
 	}
 
 	for _, testCase := range testCases {
-		parser, err := GetParser(testCase.sqlModeStr)
+		parser, err := getParser(testCase.sqlModeStr)
 		if testCase.hasErr {
 			c.Assert(err, NotNil)
 		} else {

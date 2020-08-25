@@ -15,6 +15,7 @@ package diff
 
 import (
 	. "github.com/pingcap/check"
+	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 )
@@ -25,7 +26,7 @@ type testUtilSuite struct{}
 
 func (s *testUtilSuite) TestIgnoreColumns(c *C) {
 	createTableSQL1 := "CREATE TABLE `test`.`atest` (`a` int, `b` int, `c` int, `d` int, primary key(`a`))"
-	tableInfo1, err := dbutil.GetTableInfoBySQL(createTableSQL1, "")
+	tableInfo1, err := dbutil.GetTableInfoBySQL(createTableSQL1, parser.New())
 	c.Assert(err, IsNil)
 	tbInfo := ignoreColumns(tableInfo1, []string{"a"})
 	c.Assert(tbInfo.Columns, HasLen, 3)
@@ -33,14 +34,14 @@ func (s *testUtilSuite) TestIgnoreColumns(c *C) {
 	c.Assert(tbInfo.Columns[2].Offset, Equals, 2)
 
 	createTableSQL2 := "CREATE TABLE `test`.`atest` (`a` int, `b` int, `c` int, `d` int, primary key(`a`), index idx(`b`, `c`))"
-	tableInfo2, err := dbutil.GetTableInfoBySQL(createTableSQL2, "")
+	tableInfo2, err := dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
 	c.Assert(err, IsNil)
 	tbInfo = ignoreColumns(tableInfo2, []string{"a", "b"})
 	c.Assert(tbInfo.Columns, HasLen, 2)
 	c.Assert(tbInfo.Indices, HasLen, 0)
 
 	createTableSQL3 := "CREATE TABLE `test`.`atest` (`a` int, `b` int, `c` int, `d` int, primary key(`a`), index idx(`b`, `c`))"
-	tableInfo3, err := dbutil.GetTableInfoBySQL(createTableSQL3, "")
+	tableInfo3, err := dbutil.GetTableInfoBySQL(createTableSQL3, parser.New())
 	c.Assert(err, IsNil)
 	tbInfo = ignoreColumns(tableInfo3, []string{"b", "c"})
 	c.Assert(tbInfo.Columns, HasLen, 2)

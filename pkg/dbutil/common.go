@@ -72,8 +72,6 @@ type DBConfig struct {
 	Schema string `toml:"schema" json:"schema"`
 
 	Snapshot string `toml:"snapshot" json:"snapshot"`
-
-	SQLMode string `toml:"sql-mode" json:"sql-mode"`
 }
 
 // String returns native format of database configuration
@@ -606,6 +604,52 @@ func GetDBVersion(ctx context.Context, db *sql.DB) (string, error) {
 	return "", ErrVersionNotFound
 }
 
+// GetSessionVariable gets server's session variable, although argument is *sql.DB, (session) system variables may be
+// set through DSN
+func GetSessionVariable(db *sql.DB, variable string) (value string, err error) {
+	query := fmt.Sprintf("SHOW VARIABLES LIKE '%s'", variable)
+	rows, err := db.Query(query)
+
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	defer rows.Close()
+
+	// Show an example.
+	/*
+		mysql> SHOW VARIABLES LIKE "binlog_format";
+		+---------------+-------+
+		| Variable_name | Value |
+		+---------------+-------+
+		| binlog_format | ROW   |
+		+---------------+-------+
+	*/
+
+	for rows.Next() {
+		err = rows.Scan(&variable, &value)
+		if err != nil {
+			return "", errors.Trace(err)
+		}
+	}
+
+	if rows.Err() != nil {
+		return "", errors.Trace(err)
+	}
+
+	return value, nil
+}
+
+// GetSQLMode returns sql_mode.
+func GetSQLMode(db *sql.DB) (tmysql.SQLMode, error) {
+	sqlMode, err := GetSessionVariable(db, "sql_mode")
+	if err != nil {
+		return tmysql.ModeNone, err
+	}
+
+	mode, err := tmysql.GetSQLMode(sqlMode)
+	return mode, errors.Trace(err)
+}
+
 // IsTiDB returns true if this database is tidb
 func IsTiDB(ctx context.Context, db *sql.DB) (bool, error) {
 	version, err := GetDBVersion(ctx, db)
@@ -766,8 +810,8 @@ func DeleteRows(ctx context.Context, db *sql.DB, schemaName string, tableName st
 	return DeleteRows(ctx, db, schemaName, tableName, where, args)
 }
 
-// GetParser gets parser according to sql mode
-func GetParser(sqlModeStr string) (*parser.Parser, error) {
+// getParser gets parser according to sql mode
+func getParser(sqlModeStr string) (*parser.Parser, error) {
 	if len(sqlModeStr) == 0 {
 		return parser.New(), nil
 	}
@@ -778,5 +822,17 @@ func GetParser(sqlModeStr string) (*parser.Parser, error) {
 	}
 	parser2 := parser.New()
 	parser2.SetSQLMode(sqlMode)
+	return parser2, nil
+}
+
+// GetParserForDB discovers ANSI_QUOTES in db's session variables and returns a proper parser
+func GetParserForDB(db *sql.DB) (*parser.Parser, error) {
+	mode, err := GetSQLMode(db)
+	if err != nil {
+		return nil, err
+	}
+
+	parser2 := parser.New()
+	parser2.SetSQLMode(mode)
 	return parser2, nil
 }

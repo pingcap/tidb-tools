@@ -58,19 +58,17 @@ func (o *incompatibilityOption) String() string {
 // In generally we need to check definitions of columns, constraints and table options.
 // Because of the early TiDB engineering design, we did not have a complete list of check items, which are all based on experience now.
 type TablesChecker struct {
-	db               *sql.DB
-	dbinfo           *dbutil.DBConfig
-	tables           map[string][]string // schema => []table; if []table is empty, query tables from db
-	enableANSIQuotes bool
+	db     *sql.DB
+	dbinfo *dbutil.DBConfig
+	tables map[string][]string // schema => []table; if []table is empty, query tables from db
 }
 
 // NewTablesChecker returns a Checker
-func NewTablesChecker(db *sql.DB, dbinfo *dbutil.DBConfig, tables map[string][]string, enableANSIQuotes bool) Checker {
+func NewTablesChecker(db *sql.DB, dbinfo *dbutil.DBConfig, tables map[string][]string) Checker {
 	return &TablesChecker{
-		db:               db,
-		dbinfo:           dbinfo,
-		tables:           tables,
-		enableANSIQuotes: enableANSIQuotes,
+		db:     db,
+		dbinfo: dbinfo,
+		tables: tables,
 	}
 }
 
@@ -165,11 +163,7 @@ func (c *TablesChecker) Name() string {
 }
 
 func (c *TablesChecker) checkCreateSQL(statement string) []*incompatibilityOption {
-	sqlMode := ""
-	if c.enableANSIQuotes {
-		sqlMode = "ANSI_QUOTES"
-	}
-	parser2, err := dbutil.GetParser(sqlMode)
+	parser2, err := dbutil.GetParserForDB(c.db)
 	if err != nil {
 		return []*incompatibilityOption{
 			{
@@ -295,18 +289,16 @@ type ShardingTablesCheck struct {
 	tables                       map[string]map[string][]string // instance => {schema: [table1, table2, ...]}
 	mapping                      map[string]*column.Mapping
 	checkAutoIncrementPrimaryKey bool
-	enableANSIQuotes             bool
 }
 
 // NewShardingTablesCheck returns a Checker
-func NewShardingTablesCheck(name string, dbs map[string]*sql.DB, tables map[string]map[string][]string, mapping map[string]*column.Mapping, checkAutoIncrementPrimaryKey bool, enableANSIQuotes bool) Checker {
+func NewShardingTablesCheck(name string, dbs map[string]*sql.DB, tables map[string]map[string][]string, mapping map[string]*column.Mapping, checkAutoIncrementPrimaryKey bool) Checker {
 	return &ShardingTablesCheck{
 		name:                         name,
 		dbs:                          dbs,
 		tables:                       tables,
 		mapping:                      mapping,
 		checkAutoIncrementPrimaryKey: checkAutoIncrementPrimaryKey,
-		enableANSIQuotes:             enableANSIQuotes,
 	}
 }
 
@@ -324,21 +316,17 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 		tableName string
 	)
 
-	sqlMode := ""
-	if c.enableANSIQuotes {
-		sqlMode = "ANSI_QUOTES"
-	}
-	parser2, err := dbutil.GetParser(sqlMode)
-	if err != nil {
-		markCheckError(r, err)
-		r.Extra = fmt.Sprintf("fail to get parser")
-		return r
-	}
-
 	for instance, schemas := range c.tables {
 		db, ok := c.dbs[instance]
 		if !ok {
 			markCheckError(r, errors.NotFoundf("client for instance %s", instance))
+			return r
+		}
+
+		parser2, err := dbutil.GetParserForDB(db)
+		if err != nil {
+			markCheckError(r, err)
+			r.Extra = fmt.Sprintf("fail to get parser for instance %s on sharding %s", instance, c.name)
 			return r
 		}
 
@@ -355,7 +343,7 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 					return r
 				}
 
-				info, err := dbutil.GetTableInfoBySQL(statement, sqlMode)
+				info, err := dbutil.GetTableInfoBySQL(statement, parser2)
 				if err != nil {
 					markCheckError(r, err)
 					r.Extra = fmt.Sprintf("instance %s on sharding %s", instance, c.name)

@@ -223,9 +223,9 @@ func (df *Diff) adjustTableConfigBySubTask(cfg *Config) (err error) {
 				continue
 			}
 
-			tableInfo, err := dbutil.GetTableInfo(df.ctx, df.targetDB.Conn, schema, table, df.targetDB.SQLMode)
+			tableInfo, err := dbutil.GetTableInfo(df.ctx, df.targetDB.Conn, schema, table)
 			if err != nil {
-				return errors.Errorf("get table %s.%s's inforamtion error %s", schema, table, errors.ErrorStack(err))
+				return errors.Errorf("get table %s.%s's information error %s", schema, table, errors.ErrorStack(err))
 			}
 
 			if _, ok := df.tables[schema]; !ok {
@@ -322,9 +322,9 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 		}
 
 		for _, tableName := range tables {
-			tableInfo, err := dbutil.GetTableInfo(df.ctx, df.targetDB.Conn, schemaTables.Schema, tableName, df.targetDB.SQLMode)
+			tableInfo, err := dbutil.GetTableInfo(df.ctx, df.targetDB.Conn, schemaTables.Schema, tableName)
 			if err != nil {
-				return errors.Errorf("get table %s.%s's inforamtion error %s", schemaTables.Schema, tableName, errors.ErrorStack(err))
+				return errors.Errorf("get table %s.%s's information error %s", schemaTables.Schema, tableName, errors.ErrorStack(err))
 			}
 
 			if _, ok := df.tables[schemaTables.Schema][tableName]; ok {
@@ -405,10 +405,6 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 }
 
 func (df *Diff) adjustDBCfgByDMSubTasks(cfg *Config) error {
-	sqlMode := ""
-	if df.subTaskCfgs[0].EnableANSIQuotes {
-		sqlMode = "ANSI_QUOTES"
-	}
 	// all subtask had same target, so use subTaskCfgs[0]
 	cfg.TargetDBCfg = DBConfig{
 		InstanceID: "target",
@@ -417,7 +413,6 @@ func (df *Diff) adjustDBCfgByDMSubTasks(cfg *Config) error {
 			Port:     df.subTaskCfgs[0].To.Port,
 			User:     df.subTaskCfgs[0].To.User,
 			Password: df.subTaskCfgs[0].To.Password,
-			SQLMode:  sqlMode,
 		},
 	}
 
@@ -430,7 +425,6 @@ func (df *Diff) adjustDBCfgByDMSubTasks(cfg *Config) error {
 				Port:     subTaskCfg.From.Port,
 				User:     subTaskCfg.From.User,
 				Password: subTaskCfg.From.Password,
-				SQLMode:  sqlMode,
 			},
 		})
 	}
@@ -532,7 +526,6 @@ func (df *Diff) Equal() (err error) {
 					Schema:     sourceTable.Schema,
 					Table:      sourceTable.Table,
 					InstanceID: sourceTable.InstanceID,
-					SQLMode:    df.sourceDBs[sourceTable.InstanceID].SQLMode,
 				}
 				sourceTables = append(sourceTables, sourceTableInstance)
 			}
@@ -542,7 +535,6 @@ func (df *Diff) Equal() (err error) {
 				Schema:     table.Schema,
 				Table:      table.Table,
 				InstanceID: df.targetDB.InstanceID,
-				SQLMode:    df.targetDB.SQLMode,
 			}
 
 			// find tidb instance for getting statistical information to split chunk

@@ -48,7 +48,6 @@ type TableInstance struct {
 	Table      string  `json:"table"`
 	InstanceID string  `json:"instance-id"`
 	info       *model.TableInfo
-	SQLMode    string `json:"sql-mode"`
 }
 
 // TableDiff saves config for diff table
@@ -212,14 +211,14 @@ func (t *TableDiff) adjustConfig() {
 }
 
 func (t *TableDiff) getTableInfo(ctx context.Context) error {
-	tableInfo, err := dbutil.GetTableInfo(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.SQLMode)
+	tableInfo, err := dbutil.GetTableInfo(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	t.TargetTable.info = ignoreColumns(tableInfo, t.IgnoreColumns)
 
 	for _, sourceTable := range t.SourceTables {
-		tableInfo, err := dbutil.GetTableInfo(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.SQLMode)
+		tableInfo, err := dbutil.GetTableInfo(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table)
 		if err != nil {
 			return errors.Trace(err)
 		}
