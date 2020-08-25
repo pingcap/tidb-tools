@@ -101,6 +101,10 @@ func (c *TablesChecker) Check(ctx context.Context) *Result {
 			tableName := dbutil.TableName(schema, table)
 			statement, err := dbutil.GetCreateTableSQL(ctx, c.db, schema, table)
 			if err != nil {
+				// continue if table was deleted when checking
+				if isMySQLError(err, mysql.ErrNoSuchTable) {
+					continue
+				}
 				markCheckError(r, err)
 				return r
 			}
@@ -342,6 +346,10 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 			for _, table := range tables {
 				statement, err := dbutil.GetCreateTableSQL(ctx, db, schema, table)
 				if err != nil {
+					// continue if table was deleted when checking
+					if isMySQLError(err, mysql.ErrNoSuchTable) {
+						continue
+					}
 					markCheckError(r, err)
 					r.Extra = fmt.Sprintf("instance %s on sharding %s", instance, c.name)
 					return r
