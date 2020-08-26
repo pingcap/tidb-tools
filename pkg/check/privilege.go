@@ -61,7 +61,7 @@ func (pc *SourceDumpPrivilegeChecker) Check(ctx context.Context) *Result {
 
 // Name implements the Checker interface.
 func (pc *SourceDumpPrivilegeChecker) Name() string {
-	return "source db dump privilege chcker"
+	return "source db dump privilege checker"
 }
 
 /*****************************************************/
@@ -99,7 +99,7 @@ func (pc *SourceReplicatePrivilegeChecker) Check(ctx context.Context) *Result {
 
 // Name implements the Checker interface.
 func (pc *SourceReplicatePrivilegeChecker) Name() string {
-	return "source db replication privilege chcker"
+	return "source db replication privilege checker"
 }
 
 func verifyPrivileges(result *Result, grants []string, expectedGrants []string) {
