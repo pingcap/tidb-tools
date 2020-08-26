@@ -122,10 +122,11 @@ func verifyPrivileges(result *Result, grants []string, expectedGrants []string) 
 	}
 
 	// Aurora has some privilege failing parsing
-	firstGrant = strings.Replace(firstGrant, "LOAD FROM S3", "", 1)
-	firstGrant = strings.ReplaceAll(firstGrant, ", ,", ",")
-	firstGrant = strings.Replace(firstGrant, "SELECT INTO S3", "", 1)
-	firstGrant = strings.ReplaceAll(firstGrant, ", ,", ",")
+	awsPrivilege := []string{"LOAD FROM S3", "SELECT INTO S3", "INVOKE LAMBDA"}
+	for _, p := range awsPrivilege {
+		firstGrant = strings.Replace(firstGrant, p, "", 1)
+		firstGrant = strings.ReplaceAll(firstGrant, ", ,", ",")
+	}
 	firstGrant = strings.ReplaceAll(firstGrant, "GRANT ,", "GRANT ")
 	firstGrant = strings.ReplaceAll(firstGrant, ",  ON", " ON")
 
