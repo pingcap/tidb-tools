@@ -29,6 +29,7 @@ import (
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/model"
 	tmysql "github.com/pingcap/parser/mysql"
+	"github.com/pingcap/parser/terror"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/infoschema"
@@ -776,7 +777,7 @@ func ignoreDDLError(err error) bool {
 		return false
 	}
 
-	errCode := errors.ErrCode(mysqlErr.Number)
+	errCode := terror.ErrCode(mysqlErr.Number)
 	switch errCode {
 	case infoschema.ErrDatabaseExists.Code(), infoschema.ErrDatabaseDropExists.Code(),
 		infoschema.ErrTableExists.Code(), infoschema.ErrTableDropExists.Code(),
