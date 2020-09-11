@@ -663,8 +663,12 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 			for lastTargetData != nil {
 				sql := generateDML("delete", lastTargetData, t.TargetTable.info, t.TargetTable.Schema)
 				log.Info("[delete]", zap.String("sql", sql))
-				t.wg.Add(1)
-				t.sqlCh <- sql
+
+				select {
+				case t.sqlCh <- sql:
+				case <-ctx.Done():
+					return false, nil
+				}
 				equal = false
 
 				lastTargetData, err = getRowData(targetRows)
@@ -680,8 +684,12 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 			for lastSourceData != nil {
 				sql := generateDML("replace", lastSourceData, t.TargetTable.info, t.TargetTable.Schema)
 				log.Info("[insert]", zap.String("sql", sql))
-				t.wg.Add(1)
-				t.sqlCh <- sql
+
+				select {
+				case t.sqlCh <- sql:
+				case <-ctx.Done():
+					return false, nil
+				}
 				equal = false
 
 				lastSourceData, err = getSourceRow()
@@ -703,29 +711,31 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 		}
 
 		equal = false
+		sql := ""
+
 		switch cmp {
 		case 1:
 			// delete
-			sql := generateDML("delete", lastTargetData, t.TargetTable.info, t.TargetTable.Schema)
+			sql = generateDML("delete", lastTargetData, t.TargetTable.info, t.TargetTable.Schema)
 			log.Info("[delete]", zap.String("sql", sql))
-			t.wg.Add(1)
-			t.sqlCh <- sql
 			lastTargetData = nil
 		case -1:
 			// insert
-			sql := generateDML("replace", lastSourceData, t.TargetTable.info, t.TargetTable.Schema)
+			sql = generateDML("replace", lastSourceData, t.TargetTable.info, t.TargetTable.Schema)
 			log.Info("[insert]", zap.String("sql", sql))
-			t.wg.Add(1)
-			t.sqlCh <- sql
 			lastSourceData = nil
 		case 0:
 			// update
-			sql := generateDML("replace", lastSourceData, t.TargetTable.info, t.TargetTable.Schema)
+			sql = generateDML("replace", lastSourceData, t.TargetTable.info, t.TargetTable.Schema)
 			log.Info("[update]", zap.String("sql", sql))
-			t.wg.Add(1)
-			t.sqlCh <- sql
 			lastSourceData = nil
 			lastTargetData = nil
+		}
+
+		select {
+		case t.sqlCh <- sql:
+		case <-ctx.Done():
+			return false, nil
 		}
 	}
 
@@ -758,7 +768,7 @@ func (t *TableDiff) WriteSqls(ctx context.Context, writeFixSQL func(string) erro
 				if err != nil {
 					log.Error("write sql failed", zap.String("sql", dml), zap.Error(err))
 				}
-				t.wg.Done()
+
 			case <-stopWriteCh:
 				stop = true
 			case <-ctx.Done():
@@ -767,7 +777,6 @@ func (t *TableDiff) WriteSqls(ctx context.Context, writeFixSQL func(string) erro
 				if stop {
 					return
 				}
-
 				time.Sleep(100 * time.Millisecond)
 			}
 		}
