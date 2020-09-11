@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 )
@@ -131,4 +132,10 @@ func markCheckError(result *Result, err error) {
 		}
 		result.ErrorMsg = fmt.Sprintf("%v\n%s", err, result.ErrorMsg)
 	}
+}
+
+func isMySQLError(err error, code uint16) bool {
+	err = errors.Cause(err)
+	e, ok := err.(*mysql.MySQLError)
+	return ok && e.Number == code
 }

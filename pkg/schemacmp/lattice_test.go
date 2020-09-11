@@ -17,6 +17,7 @@ import (
 	"bytes"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/parser/mysql"
 
 	. "github.com/pingcap/tidb-tools/pkg/schemacmp"
 )
@@ -280,6 +281,274 @@ func (*latticeSchema) TestCompatibilities(c *C) {
 			b:             Map(uintMap{"a": 1, "c": 4}),
 			compareResult: 1,
 			join:          Map(uintMap{"a": 123, "b": 678, "c": 456}),
+		},
+		// TypeTiny compare/join with other integer types.
+		{
+			a:             FieldTp(mysql.TypeTiny),
+			b:             FieldTp(mysql.TypeTiny),
+			compareResult: 0,
+			join:          FieldTp(mysql.TypeTiny),
+		},
+		{
+			a:             FieldTp(mysql.TypeTiny),
+			b:             FieldTp(mysql.TypeShort),
+			compareResult: -1,
+			join:          FieldTp(mysql.TypeShort),
+		},
+		{
+			a:             FieldTp(mysql.TypeTiny),
+			b:             FieldTp(mysql.TypeInt24),
+			compareResult: -1,
+			join:          FieldTp(mysql.TypeInt24),
+		},
+		{
+			a:             FieldTp(mysql.TypeTiny),
+			b:             FieldTp(mysql.TypeLong),
+			compareResult: -1,
+			join:          FieldTp(mysql.TypeLong),
+		},
+		{
+			a:             FieldTp(mysql.TypeTiny),
+			b:             FieldTp(mysql.TypeLonglong),
+			compareResult: -1,
+			join:          FieldTp(mysql.TypeLonglong),
+		},
+		// TypeShort compare/join with other integer types.
+		{
+			a:             FieldTp(mysql.TypeShort),
+			b:             FieldTp(mysql.TypeTiny),
+			compareResult: 1,
+			join:          FieldTp(mysql.TypeShort),
+		},
+		{
+			a:             FieldTp(mysql.TypeShort),
+			b:             FieldTp(mysql.TypeShort),
+			compareResult: 0,
+			join:          FieldTp(mysql.TypeShort),
+		},
+		{
+			a:             FieldTp(mysql.TypeShort),
+			b:             FieldTp(mysql.TypeInt24),
+			compareResult: -1,
+			join:          FieldTp(mysql.TypeInt24),
+		},
+		{
+			a:             FieldTp(mysql.TypeShort),
+			b:             FieldTp(mysql.TypeLong),
+			compareResult: -1,
+			join:          FieldTp(mysql.TypeLong),
+		},
+		{
+			a:             FieldTp(mysql.TypeShort),
+			b:             FieldTp(mysql.TypeLonglong),
+			compareResult: -1,
+			join:          FieldTp(mysql.TypeLonglong),
+		},
+		// TypeInt24 compare/join with other integer types.
+		{
+			a:             FieldTp(mysql.TypeInt24),
+			b:             FieldTp(mysql.TypeTiny),
+			compareResult: 1,
+			join:          FieldTp(mysql.TypeInt24),
+		},
+		{
+			a:             FieldTp(mysql.TypeInt24),
+			b:             FieldTp(mysql.TypeShort),
+			compareResult: 1,
+			join:          FieldTp(mysql.TypeInt24),
+		},
+		{
+			a:             FieldTp(mysql.TypeInt24),
+			b:             FieldTp(mysql.TypeInt24),
+			compareResult: 0,
+			join:          FieldTp(mysql.TypeInt24),
+		},
+		{
+			a:             FieldTp(mysql.TypeInt24),
+			b:             FieldTp(mysql.TypeLong),
+			compareResult: -1,
+			join:          FieldTp(mysql.TypeLong),
+		},
+		{
+			a:             FieldTp(mysql.TypeInt24),
+			b:             FieldTp(mysql.TypeLonglong),
+			compareResult: -1,
+			join:          FieldTp(mysql.TypeLonglong),
+		},
+		// TypeLong compare/join with other integer types.
+		{
+			a:             FieldTp(mysql.TypeLong),
+			b:             FieldTp(mysql.TypeTiny),
+			compareResult: 1,
+			join:          FieldTp(mysql.TypeLong),
+		},
+		{
+			a:             FieldTp(mysql.TypeLong),
+			b:             FieldTp(mysql.TypeShort),
+			compareResult: 1,
+			join:          FieldTp(mysql.TypeLong),
+		},
+		{
+			a:             FieldTp(mysql.TypeLong),
+			b:             FieldTp(mysql.TypeInt24),
+			compareResult: 1,
+			join:          FieldTp(mysql.TypeLong),
+		},
+		{
+			a:             FieldTp(mysql.TypeLong),
+			b:             FieldTp(mysql.TypeLong),
+			compareResult: 0,
+			join:          FieldTp(mysql.TypeLong),
+		},
+		{
+			a:             FieldTp(mysql.TypeLong),
+			b:             FieldTp(mysql.TypeLonglong),
+			compareResult: -1,
+			join:          FieldTp(mysql.TypeLonglong),
+		},
+		// TypeLonglong compare/join with other integer types.
+		{
+			a:             FieldTp(mysql.TypeLonglong),
+			b:             FieldTp(mysql.TypeTiny),
+			compareResult: 1,
+			join:          FieldTp(mysql.TypeLonglong),
+		},
+		{
+			a:             FieldTp(mysql.TypeLonglong),
+			b:             FieldTp(mysql.TypeShort),
+			compareResult: 1,
+			join:          FieldTp(mysql.TypeLonglong),
+		},
+		{
+			a:             FieldTp(mysql.TypeLonglong),
+			b:             FieldTp(mysql.TypeInt24),
+			compareResult: 1,
+			join:          FieldTp(mysql.TypeLonglong),
+		},
+		{
+			a:             FieldTp(mysql.TypeLonglong),
+			b:             FieldTp(mysql.TypeLong),
+			compareResult: 1,
+			join:          FieldTp(mysql.TypeLonglong),
+		},
+		{
+			a:             FieldTp(mysql.TypeLonglong),
+			b:             FieldTp(mysql.TypeLonglong),
+			compareResult: 0,
+			join:          FieldTp(mysql.TypeLonglong),
+		},
+		// TypeTinyBlob compare/join with other blob types.
+		{
+			a:             FieldTp(mysql.TypeTinyBlob),
+			b:             FieldTp(mysql.TypeTinyBlob),
+			compareResult: 0,
+			join:          FieldTp(mysql.TypeTinyBlob),
+		},
+		{
+			a:             FieldTp(mysql.TypeTinyBlob),
+			b:             FieldTp(mysql.TypeBlob),
+			compareResult: -1,
+			join:          FieldTp(mysql.TypeBlob),
+		},
+		{
+			a:             FieldTp(mysql.TypeTinyBlob),
+			b:             FieldTp(mysql.TypeMediumBlob),
+			compareResult: -1,
+			join:          FieldTp(mysql.TypeMediumBlob),
+		},
+		{
+			a:             FieldTp(mysql.TypeTinyBlob),
+			b:             FieldTp(mysql.TypeLongBlob),
+			compareResult: -1,
+			join:          FieldTp(mysql.TypeLongBlob),
+		},
+		// TypeBlob compare/join with other blob types.
+		{
+			a:             FieldTp(mysql.TypeBlob),
+			b:             FieldTp(mysql.TypeTinyBlob),
+			compareResult: 1,
+			join:          FieldTp(mysql.TypeBlob),
+		},
+		{
+			a:             FieldTp(mysql.TypeBlob),
+			b:             FieldTp(mysql.TypeBlob),
+			compareResult: 0,
+			join:          FieldTp(mysql.TypeBlob),
+		},
+		{
+			a:             FieldTp(mysql.TypeBlob),
+			b:             FieldTp(mysql.TypeMediumBlob),
+			compareResult: -1,
+			join:          FieldTp(mysql.TypeMediumBlob),
+		},
+		{
+			a:             FieldTp(mysql.TypeBlob),
+			b:             FieldTp(mysql.TypeLongBlob),
+			compareResult: -1,
+			join:          FieldTp(mysql.TypeLongBlob),
+		},
+		// TypeMediumBlob compare/join with other blob types.
+		{
+			a:             FieldTp(mysql.TypeMediumBlob),
+			b:             FieldTp(mysql.TypeTinyBlob),
+			compareResult: 1,
+			join:          FieldTp(mysql.TypeMediumBlob),
+		},
+		{
+			a:             FieldTp(mysql.TypeMediumBlob),
+			b:             FieldTp(mysql.TypeBlob),
+			compareResult: 1,
+			join:          FieldTp(mysql.TypeMediumBlob),
+		},
+		{
+			a:             FieldTp(mysql.TypeMediumBlob),
+			b:             FieldTp(mysql.TypeMediumBlob),
+			compareResult: 0,
+			join:          FieldTp(mysql.TypeMediumBlob),
+		},
+		{
+			a:             FieldTp(mysql.TypeMediumBlob),
+			b:             FieldTp(mysql.TypeLongBlob),
+			compareResult: -1,
+			join:          FieldTp(mysql.TypeLongBlob),
+		},
+		// TypeLongBlob compare/join with other blob types.
+		{
+			a:             FieldTp(mysql.TypeLongBlob),
+			b:             FieldTp(mysql.TypeTinyBlob),
+			compareResult: 1,
+			join:          FieldTp(mysql.TypeLongBlob),
+		},
+		{
+			a:             FieldTp(mysql.TypeLongBlob),
+			b:             FieldTp(mysql.TypeBlob),
+			compareResult: 1,
+			join:          FieldTp(mysql.TypeLongBlob),
+		},
+		{
+			a:             FieldTp(mysql.TypeLongBlob),
+			b:             FieldTp(mysql.TypeMediumBlob),
+			compareResult: 1,
+			join:          FieldTp(mysql.TypeLongBlob),
+		},
+		{
+			a:             FieldTp(mysql.TypeLongBlob),
+			b:             FieldTp(mysql.TypeLongBlob),
+			compareResult: 0,
+			join:          FieldTp(mysql.TypeLongBlob),
+		},
+		// type mismatch or incompatible.
+		{
+			a:            FieldTp(mysql.TypeLong),
+			b:            Singleton(false),
+			compareError: `type mismatch.*`,
+			joinError:    `type mismatch.*`,
+		},
+		{
+			a:            FieldTp(mysql.TypeLong),
+			b:            FieldTp(mysql.TypeSet),
+			compareError: `incompatible mysql type.*`,
+			joinError:    `incompatible mysql type.*`,
 		},
 	}
 

@@ -83,21 +83,12 @@ func (s *testCheckpointSuite) testSaveAndLoadChunk(c *C, db *sql.DB) {
 }
 
 func (s *testCheckpointSuite) testUpdateSummary(c *C, db *sql.DB) {
-	failedChunk := &ChunkRange{
-		ID:    2,
-		State: failedState,
-	}
-	err := saveChunk(context.Background(), db, failedChunk.ID, "target", "test", "checkpoint", "", failedChunk)
-	c.Assert(err, IsNil)
+	summaryInfo := newTableSummaryInfo(3)
+	summaryInfo.addSuccessNum()
+	summaryInfo.addFailedNum()
+	summaryInfo.addIgnoreNum()
 
-	ignoreChunk := &ChunkRange{
-		ID:    3,
-		State: ignoreState,
-	}
-	err = saveChunk(context.Background(), db, ignoreChunk.ID, "target", "test", "checkpoint", "", ignoreChunk)
-	c.Assert(err, IsNil)
-
-	err = updateTableSummary(context.Background(), db, "target", "test", "checkpoint")
+	err := updateTableSummary(context.Background(), db, "target", "test", "checkpoint", summaryInfo)
 	c.Assert(err, IsNil)
 
 	total, successNum, failedNum, ignoreNum, state, err := getTableSummary(context.Background(), db, "test", "checkpoint")
@@ -127,4 +118,29 @@ func (s *testUtilSuite) TestloadFromCheckPoint(c *C) {
 	mock.ExpectQuery("SELECT").WillReturnRows(rows)
 	useCheckpoint, err = loadFromCheckPoint(context.Background(), db, "test", "test", "123")
 	c.Assert(useCheckpoint, Equals, true)
+}
+
+func (s *testUtilSuite) TestInitChunks(c *C) {
+	db, _, err := sqlmock.New()
+	c.Assert(err, IsNil)
+
+	chunks := []*ChunkRange{
+		{
+			ID:           1,
+			Bounds:       []*Bound{{Column: "a", Lower: "1"}},
+			State:        notCheckedState,
+			columnOffset: map[string]int{"a": 0},
+		}, {
+			ID:           2,
+			Bounds:       []*Bound{{Column: "a", Lower: "0", Upper: "1"}},
+			State:        notCheckedState,
+			columnOffset: map[string]int{"a": 0},
+		},
+	}
+
+	// init chunks will insert chunk's information with update time, which use time.Now(), so can't know the value and can't fill the `WithArgs`
+	// so just skip the `ExpectQuery` and check the error message
+	//mock.ExpectQuery("INSERT INTO `sync_diff_inspector`.`chunk` VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?, ?, ?, ?)").WithArgs(......)
+	err = initChunks(context.Background(), db, "target", "diff_test", "test", chunks)
+	c.Assert(err, ErrorMatches, ".*INSERT INTO `sync_diff_inspector`.`chunk` VALUES\\(\\?, \\?, \\?, \\?, \\?, \\?, \\?, \\?, \\?\\), \\(\\?, \\?, \\?, \\?, \\?, \\?, \\?, \\?, \\?\\).*")
 }

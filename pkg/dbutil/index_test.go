@@ -15,6 +15,7 @@ package dbutil
 
 import (
 	. "github.com/pingcap/check"
+	"github.com/pingcap/parser"
 )
 
 func (*testDBSuite) TestIndex(c *C) {
@@ -81,7 +82,7 @@ func (*testDBSuite) TestIndex(c *C) {
 	}
 
 	for _, testCase := range testCases {
-		tableInfo, err := GetTableInfoBySQL(testCase.sql, "")
+		tableInfo, err := GetTableInfoBySQL(testCase.sql, parser.New())
 		c.Assert(err, IsNil)
 
 		indices := FindAllIndex(tableInfo)

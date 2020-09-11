@@ -76,6 +76,31 @@ func (*testDBSuite) TestTableName(c *C) {
 	}
 }
 
+func (*testDBSuite) TestColumnName(c *C) {
+	testCases := []struct {
+		column        string
+		expectColName string
+	}{
+		{
+			"test",
+			"`test`",
+		},
+		{
+			"test-1",
+			"`test-1`",
+		},
+		{
+			"t`esta",
+			"`t``esta`",
+		},
+	}
+
+	for _, testCase := range testCases {
+		colName := ColumnName(testCase.column)
+		c.Assert(colName, Equals, testCase.expectColName)
+	}
+}
+
 func newMysqlErr(number uint16, message string) *mysql.MySQLError {
 	return &mysql.MySQLError{
 		Number:  number,
@@ -145,7 +170,7 @@ func (s *testDBSuite) TestGetParser(c *C) {
 	}
 
 	for _, testCase := range testCases {
-		parser, err := GetParser(testCase.sqlModeStr)
+		parser, err := getParser(testCase.sqlModeStr)
 		if testCase.hasErr {
 			c.Assert(err, NotNil)
 		} else {

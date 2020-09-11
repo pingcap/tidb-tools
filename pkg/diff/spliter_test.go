@@ -18,6 +18,7 @@ import (
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
+	"github.com/pingcap/parser"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 )
 
@@ -80,11 +81,40 @@ func (s *testSpliterSuite) TestSplitRangeByRandom(c *C) {
 					[]string{"n", "z"},
 				},
 			},
+		}, {
+			"create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`b`))",
+			2,
+			NewChunkRange().copyAndUpdate("b", "a", "z", true, true),
+			[][]interface{}{
+				{"g"},
+			},
+			[]chunkResult{
+				{
+					"((`b` > ?)) AND ((`b` <= ?))",
+					[]string{"a", "g"},
+				}, {
+					"((`b` > ?)) AND ((`b` <= ?))",
+					[]string{"g", "z"},
+				},
+			},
+		}, {
+			"create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`b`))",
+			3,
+			NewChunkRange().copyAndUpdate("b", "a", "z", true, true),
+			[][]interface{}{
+				{},
+			},
+			[]chunkResult{
+				{
+					"((`b` > ?)) AND ((`b` <= ?))",
+					[]string{"a", "z"},
+				},
+			},
 		},
 	}
 
 	for i, testCase := range testCases {
-		tableInfo, err := dbutil.GetTableInfoBySQL(testCase.createTableSQL, "")
+		tableInfo, err := dbutil.GetTableInfoBySQL(testCase.createTableSQL, parser.New())
 		c.Assert(err, IsNil)
 
 		splitCols, err := getSplitFields(tableInfo, nil)
@@ -171,7 +201,7 @@ func (s *testSpliterSuite) TestRandomSpliter(c *C) {
 	}
 
 	for i, testCase := range testCases {
-		tableInfo, err := dbutil.GetTableInfoBySQL(testCase.createTableSQL, "")
+		tableInfo, err := dbutil.GetTableInfoBySQL(testCase.createTableSQL, parser.New())
 		c.Assert(err, IsNil)
 
 		tableInstance := &TableInstance{
@@ -223,7 +253,7 @@ func (s *testSpliterSuite) TestBucketSpliter(c *C) {
 	c.Assert(err, IsNil)
 
 	createTableSQL := "create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
-	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, "")
+	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
 	c.Assert(err, IsNil)
 
 	testCases := []struct {

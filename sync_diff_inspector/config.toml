@@ -1,4 +1,4 @@
-# diff Configuration.
+# Diff Configuration.
 
 ######################### Global config #########################
 
@@ -20,7 +20,7 @@ sample-percent = 100
 # set false if want to comapre the data directly
 use-checksum = true
 
-# set true if just want compare data by checksum, will skip select data when checksum is not equal. 
+# set true if just want compare data by checksum, will skip select data when checksum is not equal.
 only-use-checksum = false
 
 # set true will continue check from the latest checkpoint
@@ -58,9 +58,11 @@ fix-sql-file = "fix.sql"
     # for example, this config will check tables with prefix 'test'.
     # tables = ["~^test.*"]
 
+    # tables that should be exclude when checked
+    exclude-tables = ["a_table", "should_not_compare"]
 
 # schema and table in table-config must be contained in check-tables.
-# a example for comparing table with same schema and table name. 
+# a example for comparing table with same schema and table name.
 [[table-config]]
     # schema name.
     schema = "test"
@@ -68,7 +70,7 @@ fix-sql-file = "fix.sql"
     # table name.
     table = "test3"
 
-    # field should be the primary key, unique key or field with index. 
+    # field should be the primary key, unique key or field with index.
     # if comment this, diff will find a suitable field.
     index-fields = "id"
 

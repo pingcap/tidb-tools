@@ -18,7 +18,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
-	tmysql "github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb/errno"
 )
 
 var (
@@ -32,16 +32,14 @@ var (
 // IsRetryableError checks whether the SQL statement can be retry directly when encountering this error.
 // NOTE: this should be compatible with different TiDB versions.
 // some errors are only retryable in some special cases, then we mark it as un-retryable:
-// - tmysql.ErrTiKVServerTimeout
-// - tmysql.ErrWriteConflictInTiDB
-// - tmysql.ErrTableLocked
-// - tmysql.ErrWriteConflict
+// - errno.ErrTiKVServerTimeout
+// - errno.ErrTableLocked
 //
 // some errors are un-retryable:
-// - tmysql.ErrQueryInterrupted
+// - errno.ErrQueryInterrupted
 //
 // some errors are unknown:
-// - tmysql.ErrRegionUnavailable
+// - errno.ErrRegionUnavailable
 func IsRetryableError(err error) bool {
 	err = errors.Cause(err) // check the original error
 	mysqlErr, ok := err.(*mysql.MySQLError)
@@ -50,15 +48,17 @@ func IsRetryableError(err error) bool {
 	}
 
 	switch mysqlErr.Number {
-	case tmysql.ErrLockDeadlock: // https://dev.mysql.com/doc/refman/5.7/en/innodb-deadlocks.html
+	case errno.ErrLockDeadlock: // https://dev.mysql.com/doc/refman/5.7/en/innodb-deadlocks.html
 		return true // retryable error in MySQL
-	case tmysql.ErrPDServerTimeout,
-		tmysql.ErrTiKVServerBusy,
-		tmysql.ErrResolveLockTimeout,
-		tmysql.ErrInfoSchemaExpired,
-		tmysql.ErrInfoSchemaChanged:
+	case errno.ErrPDServerTimeout,
+		errno.ErrTiKVServerBusy,
+		errno.ErrResolveLockTimeout,
+		errno.ErrInfoSchemaExpired,
+		errno.ErrInfoSchemaChanged,
+		errno.ErrWriteConflictInTiDB,
+		errno.ErrWriteConflict:
 		return true // retryable error in TiDB
-	case tmysql.ErrUnknown: // the old version of TiDB uses `1105` frequently, this should be compatible.
+	case errno.ErrUnknown: // the old version of TiDB uses `1105` frequently, this should be compatible.
 		for _, msg := range Retryable1105Msgs {
 			if strings.Contains(mysqlErr.Message, msg) {
 				return true

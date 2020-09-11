@@ -17,6 +17,17 @@ import (
 	. "github.com/pingcap/check"
 )
 
+func cloneTables(tbs []*Table) []*Table {
+	if tbs == nil {
+		return nil
+	}
+	newTbs := make([]*Table, 0, len(tbs))
+	for _, tb := range tbs {
+		newTbs = append(newTbs, tb.Clone())
+	}
+	return newTbs
+}
+
 func (s *testFilterSuite) TestFilterOnSchema(c *C) {
 	cases := []struct {
 		rules         *Rules
@@ -148,8 +159,10 @@ func (s *testFilterSuite) TestFilterOnSchema(c *C) {
 	for _, t := range cases {
 		ft, err := New(t.caseSensitive, t.rules)
 		c.Assert(err, IsNil)
+		originInput := cloneTables(t.Input)
 		got := ft.ApplyOn(t.Input)
 		c.Logf("got %+v, expected %+v", got, t.Output)
+		c.Assert(originInput, DeepEquals, t.Input)
 		c.Assert(got, DeepEquals, t.Output)
 	}
 }
@@ -187,6 +200,25 @@ func (s *testFilterSuite) TestCaseSensitive(c *C) {
 	expected := []*Table{{"foo2", "b"}, {"Foo4", "dfoo"}, {"5", "5"}}
 	c.Logf("got %+v, expected %+v", actual, expected)
 	c.Assert(actual, DeepEquals, expected)
+
+	inputTable := &Table{"FOO", "a"}
+	c.Assert(r.Match(inputTable), IsFalse)
+
+	rules = &Rules{
+		DoDBs: []string{"BAR"},
+	}
+
+	r, err = New(false, rules)
+	c.Assert(err, IsNil)
+	inputTable = &Table{"bar", "a"}
+	c.Assert(r.Match(inputTable), IsTrue)
+
+	c.Assert(err, IsNil)
+
+	inputTable = &Table{"BAR", "a"}
+	originInputTable := inputTable.Clone()
+	c.Assert(r.Match(inputTable), IsTrue)
+	c.Assert(originInputTable, DeepEquals, inputTable)
 }
 
 func (s *testFilterSuite) TestInvalidRegex(c *C) {
@@ -218,4 +250,7 @@ func (s *testFilterSuite) TestMatchReturnsBool(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(f.Match(&Table{Schema: "sns"}), IsTrue)
 	c.Assert(f.Match(&Table{Schema: "other"}), IsFalse)
+	f, err = New(true, nil)
+	c.Assert(err, IsNil)
+	c.Assert(f.Match(&Table{Schema: "other"}), IsTrue)
 }

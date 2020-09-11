@@ -111,25 +111,25 @@ func (c *ChunkRange) toString(collation string) (string, []string) {
 
 		if bound.HasLower {
 			if len(preConditionForLower) > 0 {
-				lowerCondition = append(lowerCondition, fmt.Sprintf("(%s AND `%s`%s %s ?)", strings.Join(preConditionForLower, " AND "), bound.Column, collation, lowerSymbol))
+				lowerCondition = append(lowerCondition, fmt.Sprintf("(%s AND %s%s %s ?)", strings.Join(preConditionForLower, " AND "), dbutil.ColumnName(bound.Column), collation, lowerSymbol))
 				lowerArgs = append(append(lowerArgs, preConditionArgsForLower...), bound.Lower)
 			} else {
-				lowerCondition = append(lowerCondition, fmt.Sprintf("(`%s`%s %s ?)", bound.Column, collation, lowerSymbol))
+				lowerCondition = append(lowerCondition, fmt.Sprintf("(%s%s %s ?)", dbutil.ColumnName(bound.Column), collation, lowerSymbol))
 				lowerArgs = append(lowerArgs, bound.Lower)
 			}
-			preConditionForLower = append(preConditionForLower, fmt.Sprintf("`%s` = ?", bound.Column))
+			preConditionForLower = append(preConditionForLower, fmt.Sprintf("%s = ?", dbutil.ColumnName(bound.Column)))
 			preConditionArgsForLower = append(preConditionArgsForLower, bound.Lower)
 		}
 
 		if bound.HasUpper {
 			if len(preConditionForUpper) > 0 {
-				upperCondition = append(upperCondition, fmt.Sprintf("(%s AND `%s`%s %s ?)", strings.Join(preConditionForUpper, " AND "), bound.Column, collation, upperSymbol))
+				upperCondition = append(upperCondition, fmt.Sprintf("(%s AND %s%s %s ?)", strings.Join(preConditionForUpper, " AND "), dbutil.ColumnName(bound.Column), collation, upperSymbol))
 				upperArgs = append(append(upperArgs, preConditionArgsForUpper...), bound.Upper)
 			} else {
-				upperCondition = append(upperCondition, fmt.Sprintf("(`%s`%s %s ?)", bound.Column, collation, upperSymbol))
+				upperCondition = append(upperCondition, fmt.Sprintf("(%s%s %s ?)", dbutil.ColumnName(bound.Column), collation, upperSymbol))
 				upperArgs = append(upperArgs, bound.Upper)
 			}
-			preConditionForUpper = append(preConditionForUpper, fmt.Sprintf("`%s` = ?", bound.Column))
+			preConditionForUpper = append(preConditionForUpper, fmt.Sprintf("%s = ?", dbutil.ColumnName(bound.Column)))
 			preConditionArgsForUpper = append(preConditionArgsForUpper, bound.Upper)
 		}
 	}
@@ -232,6 +232,7 @@ func (s *randomSpliter) split(table *TableInstance, columns []*model.ColumnInfo,
 	}
 
 	chunkCnt := (int(cnt) + chunkSize - 1) / chunkSize
+	log.Info("split range by random", zap.Int64("row count", cnt), zap.Int("split chunk num", chunkCnt))
 	chunks, err := splitRangeByRandom(table.Conn, NewChunkRange(), chunkCnt, table.Schema, table.Table, columns, s.limits, s.collation)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -257,7 +258,7 @@ func splitRangeByRandom(db *sql.DB, chunk *ChunkRange, count int, schema string,
 			return nil, errors.Trace(err)
 		}
 
-		log.Debug("get split values by random", zap.Stringer("chunk", chunk), zap.String("column", column.Name.O), zap.Reflect("random values", randomValues[i]))
+		log.Debug("get split values by random", zap.Stringer("chunk", chunk), zap.String("column", column.Name.O), zap.Int("random values num", len(randomValues[i])))
 	}
 
 	for i := 0; i <= minLenInSlices(randomValues); i++ {
@@ -265,6 +266,9 @@ func splitRangeByRandom(db *sql.DB, chunk *ChunkRange, count int, schema string,
 
 		for j, column := range columns {
 			if i == 0 {
+				if len(randomValues[j]) == 0 {
+					break
+				}
 				newChunk.update(column.Name.O, "", randomValues[j][i], false, true)
 			} else if i == len(randomValues[0]) {
 				newChunk.update(column.Name.O, randomValues[j][i-1], "", true, false)
@@ -275,7 +279,7 @@ func splitRangeByRandom(db *sql.DB, chunk *ChunkRange, count int, schema string,
 		chunks = append(chunks, newChunk)
 	}
 
-	log.Debug("split range by random", zap.Stringer("origin chunk", chunk), zap.Reflect("chunks", chunks))
+	log.Debug("split range by random", zap.Stringer("origin chunk", chunk), zap.Int("split num", len(chunks)))
 
 	return chunks, nil
 }
@@ -455,20 +459,20 @@ func SplitChunks(ctx context.Context, table *TableInstance, splitFields, limits 
 		return nil, nil
 	}
 
-	ctx1, cancel1 := context.WithTimeout(ctx, time.Duration(len(chunks))*dbutil.DefaultTimeout)
-	defer cancel1()
 	for i, chunk := range chunks {
 		conditions, args := chunk.toString(collation)
-
 		chunk.ID = i
 		chunk.Where = fmt.Sprintf("(%s AND %s)", conditions, limits)
 		chunk.Args = args
 		chunk.State = notCheckedState
+	}
 
-		err = saveChunk(ctx1, cpDB, i, table.InstanceID, table.Schema, table.Table, "", chunk)
-		if err != nil {
-			log.Warn("save chunk failed", zap.Error(err), zap.Stringer("chunk", chunk))
-		}
+	ctx1, cancel1 := context.WithTimeout(ctx, time.Duration(len(chunks))*dbutil.DefaultTimeout)
+	defer cancel1()
+
+	err = initChunks(ctx1, cpDB, table.InstanceID, table.Schema, table.Table, chunks)
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
 
 	return chunks, nil

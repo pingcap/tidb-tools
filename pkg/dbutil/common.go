@@ -16,6 +16,7 @@ package dbutil
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -28,7 +29,6 @@ import (
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/model"
 	tmysql "github.com/pingcap/parser/mysql"
-	"github.com/pingcap/parser/terror"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/infoschema"
@@ -41,10 +41,10 @@ const (
 	DefaultRetryTime = 10
 
 	// DefaultTimeout is the default timeout for execute sql
-	DefaultTimeout time.Duration = 5 * time.Second
+	DefaultTimeout time.Duration = 10 * time.Second
 
-	// SlowWarnLog defines the duration to log warn log of sql when exec time greater than
-	SlowWarnLog = 100 * time.Millisecond
+	// SlowLogThreshold defines the duration to log debug log of sql when exec time greater than
+	SlowLogThreshold = 200 * time.Millisecond
 
 	// DefaultDeleteRowsNum is the default rows num for delete one time
 	DefaultDeleteRowsNum int64 = 100000
@@ -66,21 +66,20 @@ type DBConfig struct {
 
 	User string `toml:"user" json:"user"`
 
-	Password string `toml:"password" json:"password"`
+	Password string `toml:"password" json:"-"` // omit it for privacy
 
 	Schema string `toml:"schema" json:"schema"`
 
 	Snapshot string `toml:"snapshot" json:"snapshot"`
-
-	SQLMode string `toml:"sql-mode" json:"sql-mode"`
 }
 
 // String returns native format of database configuration
 func (c *DBConfig) String() string {
-	if c == nil {
+	cfg, err := json.Marshal(c)
+	if err != nil {
 		return "<nil>"
 	}
-	return fmt.Sprintf("DBConfig(%+v)", *c)
+	return string(cfg)
 }
 
 // GetDBConfigFromEnv returns DBConfig from environment
@@ -150,7 +149,7 @@ func GetCreateTableSQL(ctx context.Context, db *sql.DB, schemaName string, table
 			) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin |
 		+-------+--------------------------------------------------------------------+
 	*/
-	query := fmt.Sprintf("SHOW CREATE TABLE `%s`.`%s`", schemaName, tableName)
+	query := fmt.Sprintf("SHOW CREATE TABLE %s", TableName(schemaName, tableName))
 
 	var tbl, createTable sql.NullString
 	err := db.QueryRowContext(ctx, query).Scan(&tbl, &createTable)
@@ -177,7 +176,7 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 		+------+
 	*/
 
-	query := fmt.Sprintf("SELECT COUNT(1) cnt FROM `%s`.`%s`", schemaName, tableName)
+	query := fmt.Sprintf("SELECT COUNT(1) cnt FROM %s", TableName(schemaName, tableName))
 	if len(where) > 0 {
 		query += fmt.Sprintf(" WHERE %s", where)
 	}
@@ -218,7 +217,7 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 	}
 
 	query := fmt.Sprintf("SELECT %[1]s FROM (SELECT %[1]s, rand() rand_value FROM %[2]s WHERE %[3]s ORDER BY rand_value LIMIT %[4]d)rand_tmp ORDER BY %[1]s%[5]s",
-		escapeName(column), TableName(schemaName, table), limitRange, num, collation)
+		ColumnName(column), TableName(schemaName, table), limitRange, num, collation)
 	log.Debug("get random values", zap.String("sql", query), zap.Reflect("args", limitArgs))
 
 	rows, err := db.QueryContext(ctx, query, limitArgs...)
@@ -260,8 +259,8 @@ func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column strin
 		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
 	}
 
-	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ MIN(`%s`%s) as MIN, MAX(`%s`%s) as MAX FROM `%s`.`%s` WHERE %s",
-		column, collation, column, collation, schema, table, limitRange)
+	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ MIN(%s%s) as MIN, MAX(%s%s) as MAX FROM %s WHERE %s",
+		ColumnName(column), collation, ColumnName(column), collation, TableName(schema, table), limitRange)
 	log.Debug("GetMinMaxValue", zap.String("sql", query), zap.Reflect("args", limitArgs))
 
 	var min, max sql.NullString
@@ -383,8 +382,8 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName str
 	columnNames := make([]string, 0, len(tbInfo.Columns))
 	columnIsNull := make([]string, 0, len(tbInfo.Columns))
 	for _, col := range tbInfo.Columns {
-		columnNames = append(columnNames, fmt.Sprintf("`%s`", col.Name.O))
-		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(`%s`)", col.Name.O))
+		columnNames = append(columnNames, ColumnName(col.Name.O))
+		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", ColumnName(col.Name.O)))
 	}
 
 	query := fmt.Sprintf("SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED)) AS checksum FROM %s WHERE %s;",
@@ -559,7 +558,7 @@ func GetTidbLatestTSO(ctx context.Context, db *sql.DB) (int64, error) {
 		}
 		return ts, nil
 	}
-	return 0, errors.New("get slave cluster's ts failed")
+	return 0, errors.New("get secondary cluster's ts failed")
 }
 
 // GetDBVersion returns the database's version
@@ -604,6 +603,52 @@ func GetDBVersion(ctx context.Context, db *sql.DB) (string, error) {
 	return "", ErrVersionNotFound
 }
 
+// GetSessionVariable gets server's session variable, although argument is *sql.DB, (session) system variables may be
+// set through DSN
+func GetSessionVariable(db *sql.DB, variable string) (value string, err error) {
+	query := fmt.Sprintf("SHOW VARIABLES LIKE '%s'", variable)
+	rows, err := db.Query(query)
+
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	defer rows.Close()
+
+	// Show an example.
+	/*
+		mysql> SHOW VARIABLES LIKE "binlog_format";
+		+---------------+-------+
+		| Variable_name | Value |
+		+---------------+-------+
+		| binlog_format | ROW   |
+		+---------------+-------+
+	*/
+
+	for rows.Next() {
+		err = rows.Scan(&variable, &value)
+		if err != nil {
+			return "", errors.Trace(err)
+		}
+	}
+
+	if rows.Err() != nil {
+		return "", errors.Trace(err)
+	}
+
+	return value, nil
+}
+
+// GetSQLMode returns sql_mode.
+func GetSQLMode(db *sql.DB) (tmysql.SQLMode, error) {
+	sqlMode, err := GetSessionVariable(db, "sql_mode")
+	if err != nil {
+		return tmysql.ModeNone, err
+	}
+
+	mode, err := tmysql.GetSQLMode(sqlMode)
+	return mode, errors.Trace(err)
+}
+
 // IsTiDB returns true if this database is tidb
 func IsTiDB(ctx context.Context, db *sql.DB) (bool, error) {
 	version, err := GetDBVersion(ctx, db)
@@ -618,6 +663,11 @@ func IsTiDB(ctx context.Context, db *sql.DB) (bool, error) {
 // TableName returns `schema`.`table`
 func TableName(schema, table string) string {
 	return fmt.Sprintf("`%s`.`%s`", escapeName(schema), escapeName(table))
+}
+
+// ColumnName returns `column`
+func ColumnName(column string) string {
+	return fmt.Sprintf("`%s`", escapeName(column))
 }
 
 func escapeName(name string) string {
@@ -642,15 +692,15 @@ func ExecSQLWithRetry(ctx context.Context, db *sql.DB, sql string, args ...inter
 		startTime := time.Now()
 		_, err = db.ExecContext(ctx, sql, args...)
 		takeDuration := time.Since(startTime)
-		if takeDuration > SlowWarnLog {
-			log.Warn("exec sql slow", zap.String("sql", sql), zap.Reflect("args", args), zap.Duration("take", takeDuration))
+		if takeDuration > SlowLogThreshold {
+			log.Debug("exec sql slow", zap.String("sql", sql), zap.Reflect("args", args), zap.Duration("take", takeDuration))
 		}
 		if err == nil {
 			return nil
 		}
 
 		if ignoreError(err) {
-			log.Debug("ignore execute sql error", zap.Error(err))
+			log.Warn("ignore execute sql error", zap.Error(err))
 			return nil
 		}
 
@@ -696,8 +746,8 @@ func ExecuteSQLs(ctx context.Context, db *sql.DB, sqls []string, args [][]interf
 		}
 
 		takeDuration := time.Since(startTime)
-		if takeDuration > SlowWarnLog {
-			log.Warn("exec sql slow", zap.String("sql", sqls[i]), zap.Reflect("args", args[i]), zap.Duration("take", takeDuration))
+		if takeDuration > SlowLogThreshold {
+			log.Debug("exec sql slow", zap.String("sql", sqls[i]), zap.Reflect("args", args[i]), zap.Duration("take", takeDuration))
 		}
 	}
 
@@ -726,7 +776,7 @@ func ignoreDDLError(err error) bool {
 		return false
 	}
 
-	errCode := terror.ErrCode(mysqlErr.Number)
+	errCode := errors.ErrCode(mysqlErr.Number)
 	switch errCode {
 	case infoschema.ErrDatabaseExists.Code(), infoschema.ErrDatabaseDropExists.Code(),
 		infoschema.ErrTableExists.Code(), infoschema.ErrTableDropExists.Code(),
@@ -741,7 +791,7 @@ func ignoreDDLError(err error) bool {
 
 // DeleteRows delete rows in several times. Only can delete less than 300,000 one time in TiDB.
 func DeleteRows(ctx context.Context, db *sql.DB, schemaName string, tableName string, where string, args []interface{}) error {
-	deleteSQL := fmt.Sprintf("DELETE FROM `%s`.`%s` WHERE %s limit %d;", schemaName, tableName, where, DefaultDeleteRowsNum)
+	deleteSQL := fmt.Sprintf("DELETE FROM %s WHERE %s limit %d;", TableName(schemaName, tableName), where, DefaultDeleteRowsNum)
 	result, err := db.ExecContext(ctx, deleteSQL, args...)
 	if err != nil {
 		return errors.Trace(err)
@@ -759,8 +809,8 @@ func DeleteRows(ctx context.Context, db *sql.DB, schemaName string, tableName st
 	return DeleteRows(ctx, db, schemaName, tableName, where, args)
 }
 
-// GetParser gets parser according to sql mode
-func GetParser(sqlModeStr string) (*parser.Parser, error) {
+// getParser gets parser according to sql mode
+func getParser(sqlModeStr string) (*parser.Parser, error) {
 	if len(sqlModeStr) == 0 {
 		return parser.New(), nil
 	}
@@ -771,5 +821,17 @@ func GetParser(sqlModeStr string) (*parser.Parser, error) {
 	}
 	parser2 := parser.New()
 	parser2.SetSQLMode(sqlMode)
+	return parser2, nil
+}
+
+// GetParserForDB discovers ANSI_QUOTES in db's session variables and returns a proper parser
+func GetParserForDB(db *sql.DB) (*parser.Parser, error) {
+	mode, err := GetSQLMode(db)
+	if err != nil {
+		return nil, err
+	}
+
+	parser2 := parser.New()
+	parser2.SetSQLMode(mode)
 	return parser2, nil
 }

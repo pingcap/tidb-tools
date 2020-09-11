@@ -16,9 +16,11 @@ package dbutil
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strings"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb/ddl"
@@ -27,22 +29,21 @@ import (
 )
 
 // GetTableInfo returns table information.
-func GetTableInfo(ctx context.Context, db *sql.DB, schemaName string, tableName string, sqlMode string) (*model.TableInfo, error) {
+func GetTableInfo(ctx context.Context, db *sql.DB, schemaName string, tableName string) (*model.TableInfo, error) {
 	createTableSQL, err := GetCreateTableSQL(ctx, db, schemaName, tableName)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	return GetTableInfoBySQL(createTableSQL, sqlMode)
-}
-
-// GetTableInfoBySQL returns table information by given create table sql.
-func GetTableInfoBySQL(createTableSQL string, sqlMode string) (table *model.TableInfo, err error) {
-	parser2, err := GetParser(sqlMode)
+	parser2, err := GetParserForDB(db)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+	return GetTableInfoBySQL(createTableSQL, parser2)
+}
 
+// GetTableInfoBySQL returns table information by given create table sql.
+func GetTableInfoBySQL(createTableSQL string, parser2 *parser.Parser) (table *model.TableInfo, err error) {
 	stmt, err := parser2.ParseOneStmt(createTableSQL, "", "")
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -92,24 +93,24 @@ func FindColumnByName(cols []*model.ColumnInfo, name string) *model.ColumnInfo {
 }
 
 // EqualTableInfo returns true if this two table info have same columns and indices
-func EqualTableInfo(tableInfo1, tableInfo2 *model.TableInfo) bool {
+func EqualTableInfo(tableInfo1, tableInfo2 *model.TableInfo) (bool, string) {
 	// check columns
 	if len(tableInfo1.Columns) != len(tableInfo2.Columns) {
-		return false
+		return false, fmt.Sprintf("column num not equal, one is %d another is %d", len(tableInfo1.Columns), len(tableInfo2.Columns))
 	}
 
 	for j, col := range tableInfo1.Columns {
 		if col.Name.O != tableInfo2.Columns[j].Name.O {
-			return false
+			return false, fmt.Sprintf("column name not equal, one is %s another is %s", col.Name.O, tableInfo2.Columns[j].Name.O)
 		}
 		if col.Tp != tableInfo2.Columns[j].Tp {
-			return false
+			return false, fmt.Sprintf("column %s's type not equal, one is %v another is %v", col.Name.O, col.Tp, tableInfo2.Columns[j].Tp)
 		}
 	}
 
 	// check index
 	if len(tableInfo1.Indices) != len(tableInfo2.Indices) {
-		return false
+		return false, fmt.Sprintf("index num not equal, one is %d another is %d", len(tableInfo1.Indices), len(tableInfo2.Indices))
 	}
 
 	index2Map := make(map[string]*model.IndexInfo)
@@ -120,18 +121,18 @@ func EqualTableInfo(tableInfo1, tableInfo2 *model.TableInfo) bool {
 	for _, index1 := range tableInfo1.Indices {
 		index2, ok := index2Map[index1.Name.O]
 		if !ok {
-			return false
+			return false, fmt.Sprintf("index %s not exists", index1.Name.O)
 		}
 
 		if len(index1.Columns) != len(index2.Columns) {
-			return false
+			return false, fmt.Sprintf("index %s's columns num not equal, one is %d another is %d", index1.Name.O, len(index1.Columns), len(index2.Columns))
 		}
 		for j, col := range index1.Columns {
 			if col.Name.O != index2.Columns[j].Name.O {
-				return false
+				return false, fmt.Sprintf("index %s's column not equal, one has %s another has %s", index1.Name.O, col.Name.O, index2.Columns[j].Name.O)
 			}
 		}
 	}
 
-	return true
+	return true, ""
 }

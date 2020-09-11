@@ -439,8 +439,8 @@ func (*typeSchema) TestTypeCompareJoin(c *C) {
 		{
 			a:            typeSet5,
 			b:            typeEnum5,
-			compareError: `at tuple index \d+: distinct singletons.*`,
-			joinError:    `at tuple index \d+: distinct singletons.*`,
+			compareError: `at tuple index \d+: incompatible mysql type.*`,
+			joinError:    `at tuple index \d+: incompatible mysql type.*`,
 		},
 	}
 

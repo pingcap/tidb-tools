@@ -21,7 +21,6 @@ import (
 	"strings"
 
 	"github.com/pingcap/errors"
-	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/charset"
 	"github.com/pingcap/parser/model"
@@ -100,6 +99,10 @@ func (c *TablesChecker) Check(ctx context.Context) *Result {
 			tableName := dbutil.TableName(schema, table)
 			statement, err := dbutil.GetCreateTableSQL(ctx, c.db, schema, table)
 			if err != nil {
+				// continue if table was deleted when checking
+				if isMySQLError(err, mysql.ErrNoSuchTable) {
+					continue
+				}
 				markCheckError(r, err)
 				return r
 			}
@@ -160,7 +163,17 @@ func (c *TablesChecker) Name() string {
 }
 
 func (c *TablesChecker) checkCreateSQL(statement string) []*incompatibilityOption {
-	stmt, err := parser.New().ParseOneStmt(statement, "", "")
+	parser2, err := dbutil.GetParserForDB(c.db)
+	if err != nil {
+		return []*incompatibilityOption{
+			{
+				state:      StateFailure,
+				errMessage: err.Error(),
+			},
+		}
+	}
+
+	stmt, err := parser2.ParseOneStmt(statement, "", "")
 	if err != nil {
 		return []*incompatibilityOption{
 			{
@@ -199,6 +212,21 @@ func (c *TablesChecker) checkAST(stmt ast.StmtNode) []*incompatibilityOption {
 			options = append(options, option)
 		}
 	}
+	// check primary/unique key
+	hasUnique := false
+	for _, cst := range st.Constraints {
+		if c.checkUnique(cst) {
+			hasUnique = true
+			break
+		}
+	}
+	if !hasUnique {
+		options = append(options, &incompatibilityOption{
+			state:       StateFailure,
+			instruction: fmt.Sprintf("please set primary/unique key for the table"),
+			errMessage:  fmt.Sprintf("primary/unique key does not exist"),
+		})
+	}
 
 	// check options
 	for _, opt := range st.Options {
@@ -225,6 +253,14 @@ func (c *TablesChecker) checkConstraint(cst *ast.Constraint) *incompatibilityOpt
 	}
 
 	return nil
+}
+
+func (c *TablesChecker) checkUnique(cst *ast.Constraint) bool {
+	switch cst.Tp {
+	case ast.ConstraintPrimaryKey, ast.ConstraintUniq, ast.ConstraintUniqKey, ast.ConstraintUniqIndex:
+		return true
+	}
+	return false
 }
 
 func (c *TablesChecker) checkTableOption(opt *ast.TableOption) *incompatibilityOption {
@@ -279,6 +315,7 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 		stmtNode  *ast.CreateTableStmt
 		tableName string
 	)
+
 	for instance, schemas := range c.tables {
 		db, ok := c.dbs[instance]
 		if !ok {
@@ -286,23 +323,33 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 			return r
 		}
 
+		parser2, err := dbutil.GetParserForDB(db)
+		if err != nil {
+			markCheckError(r, err)
+			r.Extra = fmt.Sprintf("fail to get parser for instance %s on sharding %s", instance, c.name)
+			return r
+		}
+
 		for schema, tables := range schemas {
 			for _, table := range tables {
 				statement, err := dbutil.GetCreateTableSQL(ctx, db, schema, table)
 				if err != nil {
+					// continue if table was deleted when checking
+					if isMySQLError(err, mysql.ErrNoSuchTable) {
+						continue
+					}
 					markCheckError(r, err)
 					r.Extra = fmt.Sprintf("instance %s on sharding %s", instance, c.name)
 					return r
 				}
 
-				info, err := dbutil.GetTableInfoBySQL(statement, "")
+				info, err := dbutil.GetTableInfoBySQL(statement, parser2)
 				if err != nil {
 					markCheckError(r, err)
 					r.Extra = fmt.Sprintf("instance %s on sharding %s", instance, c.name)
 					return r
 				}
-
-				stmt, err := parser.New().ParseOneStmt(statement, "", "")
+				stmt, err := parser2.ParseOneStmt(statement, "", "")
 				if err != nil {
 					markCheckError(r, errors.Annotatef(err, "statement %s", statement))
 					r.Extra = fmt.Sprintf("instance %s on sharding %s", instance, c.name)

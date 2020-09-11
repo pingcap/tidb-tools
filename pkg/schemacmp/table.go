@@ -107,6 +107,14 @@ func encodeIndexInfoToLattice(ii *model.IndexInfo) Tuple {
 		Singleton(ii.Tp),
 	}
 }
+func encodeImplicitPrimaryKeyToLattice(ci *model.ColumnInfo) Tuple {
+	return Tuple{
+		EqualitySingleton(indexColumnSlice{indexColumn{colName: ci.Name.L, length: types.UnspecifiedLength}}),
+		Bool(false),
+		Bool(false),
+		Singleton(model.IndexTypeBtree),
+	}
+}
 
 func restoreIndexInfoFromUnwrapped(ctx *format.RestoreCtx, index []interface{}, keyName string) {
 	isPrimary := !index[indexInfoTupleIndexNotPrimary].(bool)
@@ -241,13 +249,20 @@ const (
 
 func encodeTableInfoToLattice(ti *model.TableInfo) Tuple {
 	// TODO: Handle VIEW and PARTITION and SEQUENCE
+	hasExplicitPrimaryKey := false
+	indices := make(indexMap)
+	for _, ii := range ti.Indices {
+		if ii.Primary {
+			hasExplicitPrimaryKey = true
+		}
+		indices[ii.Name.L] = encodeIndexInfoToLattice(ii)
+	}
 	columns := make(columnMap)
 	for _, ci := range ti.Columns {
 		columns[ci.Name.L] = encodeColumnInfoToLattice(ci)
-	}
-	indices := make(indexMap)
-	for _, ii := range ti.Indices {
-		indices[ii.Name.L] = encodeIndexInfoToLattice(ii)
+		if !hasExplicitPrimaryKey && (ci.Flag&mysql.PriKeyFlag) != 0 {
+			indices["primary"] = encodeImplicitPrimaryKeyToLattice(ci)
+		}
 	}
 
 	return Tuple{

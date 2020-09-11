@@ -33,7 +33,7 @@ type chunkTestCase struct {
 }
 
 func (*testChunkSuite) TestSplitRange(c *C) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
 	conn, err := createConn()
@@ -43,10 +43,10 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 	_, err = conn.ExecContext(ctx, "CREATE DATABASE IF NOT EXISTS `test`")
 	c.Assert(err, IsNil)
 
-	_, err = conn.ExecContext(ctx, "DROP TABLE IF EXISTS `test`.`testa`")
+	_, err = conn.ExecContext(ctx, "DROP TABLE IF EXISTS `test`.`test_chunk`")
 	c.Assert(err, IsNil)
 
-	createTableSQL := `CREATE TABLE test.testa (
+	createTableSQL := `CREATE TABLE test.test_chunk (
 		a date NOT NULL,
 		b datetime DEFAULT NULL,
 		c time DEFAULT NULL,
@@ -64,20 +64,20 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 		DBCfg:       dbutil.GetDBConfigFromEnv("test"),
 	}
 
-	// generate data for test.testa
+	// generate data for test.test_chunk
 	importer.DoProcess(cfg)
-	defer conn.ExecContext(ctx, "DROP TABLE IF EXISTS `test`.`testa`")
+	defer conn.ExecContext(ctx, "DROP TABLE IF EXISTS `test`.`test_chunk`")
 
 	// only work on tidb, so don't assert err here
-	_, _ = conn.ExecContext(ctx, "ANALYZE TABLE `test`.`testa`")
+	_, _ = conn.ExecContext(ctx, "ANALYZE TABLE `test`.`test_chunk`")
 
-	tableInfo, err := dbutil.GetTableInfo(ctx, conn, "test", "testa", "")
+	tableInfo, err := dbutil.GetTableInfo(ctx, conn, "test", "test_chunk")
 	c.Assert(err, IsNil)
 
 	tableInstance := &TableInstance{
 		Conn:   conn,
 		Schema: "test",
-		Table:  "testa",
+		Table:  "test_chunk",
 		info:   tableInfo,
 	}
 

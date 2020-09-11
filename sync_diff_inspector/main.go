@@ -51,18 +51,22 @@ func main() {
 	}
 	log.SetLevel(l.Level())
 
+	utils.PrintInfo("sync_diff_inspector")
+
 	ok := cfg.checkConfig()
 	if !ok {
 		log.Error("there is something wrong with your config, please check it!")
 		return
 	}
 
-	ctx := context.Background()
+	log.Info("", zap.Stringer("config", cfg))
 
+	ctx := context.Background()
 	if !checkSyncState(ctx, cfg) {
-		log.Fatal("sourceDB don't equal targetDB")
+		log.Warn("check failed!!!")
+		os.Exit(1)
 	}
-	log.Info("test pass!!!")
+	log.Info("check pass!!!")
 }
 
 func checkSyncState(ctx context.Context, cfg *Config) bool {
@@ -81,7 +85,7 @@ func checkSyncState(ctx context.Context, cfg *Config) bool {
 		log.Fatal("check data difference failed", zap.Error(err))
 	}
 
-	log.Info("check report", zap.Stringer("report", d.report))
+	d.report.Print()
 
 	return d.report.Result == Pass
 }
