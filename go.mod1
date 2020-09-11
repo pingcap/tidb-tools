@@ -6,17 +6,19 @@ require (
 	github.com/Shopify/sarama v1.24.1
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/golang/protobuf v1.3.4
+	github.com/klauspost/compress v1.9.5 // indirect
+	github.com/pingcap-incubator/tidb-dashboard v0.0.0-20200908071351-a715a95c7de2 // indirect
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
 	github.com/pingcap/dm v1.1.0-alpha.0.20200729032940-53a08d777030
 	github.com/pingcap/errors v0.11.5-0.20200902104258-eba4f1d8f6de
 	github.com/pingcap/failpoint v0.0.0-20200702092429-9f69995143ce
-	github.com/pingcap/kvproto v0.0.0-20200828054126-d677e6fd224a
+	github.com/pingcap/kvproto v0.0.0-20200907074027-32a3a0accf7d
 	github.com/pingcap/log v0.0.0-20200828042413-fce0951f1463
-	github.com/pingcap/parser v0.0.0-20200908111137-8157d6307003
-	github.com/pingcap/tidb v1.1.0-beta.0.20200909035710-f9b71fca1f86
+	github.com/pingcap/parser v0.0.0-20200911054040-258297116c4b
+	github.com/pingcap/tidb v1.1.0-beta.0.20200911063238-51d365fc45fd
 	github.com/pingcap/tipb v0.0.0-20200618092958-4fad48b4c8c3
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
-	github.com/tikv/pd v1.1.0-beta.0.20200820084926-bcfa77a7a593
+	github.com/tikv/pd v1.1.0-beta.0.20200907080620-6830f5bb92a2
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20191023171146-3cf2f69b5738
 	go.uber.org/atomic v1.6.0
 	go.uber.org/zap v1.16.0

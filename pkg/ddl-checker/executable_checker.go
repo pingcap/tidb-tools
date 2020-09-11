@@ -41,7 +41,7 @@ func NewExecutableChecker() (*ExecutableChecker, error) {
 			Level: "error",
 		},
 	})
-	mockTikv, err := mockstore.NewMockStore()
+	mockTikv, err := mockstore.NewMockTikvStore()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
