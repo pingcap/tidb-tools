@@ -33,6 +33,7 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
+	tidbconfig "github.com/pingcap/tidb/config"
 	"go.uber.org/zap"
 )
 
@@ -208,6 +209,12 @@ func (t *TableDiff) adjustConfig() {
 	if t.CheckThreadCount <= 0 {
 		t.CheckThreadCount = 4
 	}
+
+	// to support long index in TiDB
+	tidbCfg := tidbconfig.GetGlobalConfig()
+	// 3027 * 4 is the max value the MaxIndexLength can be set
+	tidbCfg.MaxIndexLength = 3027 * 4
+	tidbconfig.StoreGlobalConfig(tidbCfg)
 }
 
 func (t *TableDiff) getTableInfo(ctx context.Context) error {
