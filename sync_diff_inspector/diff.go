@@ -30,6 +30,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/pkg/utils"
+	tidbconfig "github.com/pingcap/tidb/config"
 	"go.uber.org/zap"
 )
 
@@ -85,6 +86,8 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 }
 
 func (df *Diff) init(cfg *Config) (err error) {
+	setTiDBCfg()
+
 	if len(cfg.DMAddr) != 0 {
 		subTaskCfgs, err := getDMTaskCfg(cfg.DMAddr, cfg.DMTask)
 		if err != nil {
@@ -610,4 +613,14 @@ func (df *Diff) InExcludeTables(exclude_tables []string, table string) bool {
 		}
 	}
 	return false
+}
+
+func setTiDBCfg() {
+	// to support long index key in TiDB
+	tidbCfg := tidbconfig.GetGlobalConfig()
+	// 3027 * 4 is the max value the MaxIndexLength can be set
+	tidbCfg.MaxIndexLength = 3027 * 4
+	tidbconfig.StoreGlobalConfig(tidbCfg)
+
+	fmt.Println("set tidb cfg")
 }
