@@ -32,7 +32,7 @@ var (
 // GetRawInfo do what its name tells
 func GetRawInfo(app string) string {
 	info := ""
-	info += fmt.Sprintf("%s: v%s\n", app, Version)
+	info += fmt.Sprintf("%s: %s\n", app, Version)
 	info += fmt.Sprintf("Git Commit Hash: %s\n", GitHash)
 	info += fmt.Sprintf("Git Branch: %s\n", GitBranch)
 	info += fmt.Sprintf("UTC Build Time: %s\n", BuildTS)
