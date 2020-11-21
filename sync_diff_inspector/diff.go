@@ -46,6 +46,7 @@ type Diff struct {
 	onlyUseChecksum   bool
 	ignoreDataCheck   bool
 	ignoreStructCheck bool
+	ignoreStats       bool
 	tables            map[string]map[string]*TableConfig
 	fixSQLFile        *os.File
 
@@ -72,6 +73,7 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 		onlyUseChecksum:   cfg.OnlyUseChecksum,
 		ignoreDataCheck:   cfg.IgnoreDataCheck,
 		ignoreStructCheck: cfg.IgnoreStructCheck,
+		ignoreStats:       cfg.IgnoreStats,
 		tables:            make(map[string]map[string]*TableConfig),
 		report:            NewReport(),
 		ctx:               ctx,
@@ -545,18 +547,23 @@ func (df *Diff) Equal() (err error) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			isTiDB, err := dbutil.IsTiDB(ctx, targetTableInstance.Conn)
-			if err != nil {
-				log.Warn("judge instance is tidb failed", zap.Error(err))
-			} else if isTiDB {
-				tidbStatsSource = targetTableInstance
-			} else if len(sourceTables) == 1 {
-				isTiDB, err := dbutil.IsTiDB(ctx, sourceTables[0].Conn)
+			if !df.ignoreStats {
+				log.Info("use tidb stats to split chunks")
+				isTiDB, err := dbutil.IsTiDB(ctx, targetTableInstance.Conn)
 				if err != nil {
 					log.Warn("judge instance is tidb failed", zap.Error(err))
 				} else if isTiDB {
-					tidbStatsSource = sourceTables[0]
+					tidbStatsSource = targetTableInstance
+				} else if len(sourceTables) == 1 {
+					isTiDB, err := dbutil.IsTiDB(ctx, sourceTables[0].Conn)
+					if err != nil {
+						log.Warn("judge instance is tidb failed", zap.Error(err))
+					} else if isTiDB {
+						tidbStatsSource = sourceTables[0]
+					}
 				}
+			} else {
+				log.Info("ignore tidb stats because of user setting")
 			}
 
 			td := &diff.TableDiff{
