@@ -118,7 +118,7 @@ func NewMySQLServerIDChecker(db *sql.DB, dbinfo *dbutil.DBConfig) Checker {
 func (pc *MySQLServerIDChecker) Check(ctx context.Context) *Result {
 	result := &Result{
 		Name:  pc.Name(),
-		Desc:  "check whether mysql server_id has been set > 1",
+		Desc:  "check whether mysql server_id has been greater than 0",
 		State: StateFailure,
 		Extra: fmt.Sprintf("address of db instance - %s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
 	}
