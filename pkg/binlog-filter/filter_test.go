@@ -30,7 +30,7 @@ type testFilterSuite struct{}
 
 func (t *testFilterSuite) TestFilter(c *C) {
 	rules := []*BinlogEventRule{
-		{"Test_1_*", "abc*", []EventType{DeleteEvent, InsertEvent, CreateIndex, DropIndex}, []string{"^DROP\\s+PROCEDURE", "^CREATE\\s+PROCEDURE"}, nil, Ignore},
+		{"Test_1_*", "abc*", []EventType{DeleteEvent, InsertEvent, CreateIndex, DropIndex, DropView}, []string{"^DROP\\s+PROCEDURE", "^CREATE\\s+PROCEDURE"}, nil, Ignore},
 		{"xxx_*", "abc_*", []EventType{AllDML, NoneDDL}, nil, nil, Ignore},
 		{"yyy_*", "abc_*", []EventType{EventType("ALL DML")}, nil, nil, Do},
 	}
@@ -54,6 +54,7 @@ func (t *testFilterSuite) TestFilter(c *C) {
 		{"xxx_1", "abc_1", CreateIndex, "", Do},
 		{"yyy_1", "abc_1", InsertEvent, "", Do},
 		{"yyy_1", "abc_1", CreateIndex, "", Ignore},
+		{"test_1_a", "abc1", DropView, "", Ignore},
 	}
 
 	// initial binlog event filter
@@ -87,6 +88,7 @@ func (t *testFilterSuite) TestFilter(c *C) {
 	cases[10].action = Ignore // match none event and create index
 	cases[11].action = Ignore // no match
 	cases[12].action = Do     // match all ddl
+	cases[13].action = Do     // match all ddl
 	for _, cs := range cases {
 		action, err := filter.Filter(cs.schema, cs.table, cs.event, cs.sql)
 		c.Assert(err, IsNil)
