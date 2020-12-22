@@ -130,7 +130,7 @@ func GetTablesNeededExist(stmt ast.StmtNode) ([]string, error) {
 	case *ast.AlterTableStmt:
 		return []string{x.Table.Name.String()}, nil
 	case *ast.RenameTableStmt:
-		return []string{x.OldTable.Name.String()}, nil
+		return []string{x.TableToTables[0].OldTable.Name.String()}, nil
 	case ast.DDLNode:
 		return []string{}, nil
 	default:
@@ -145,7 +145,7 @@ func GetTablesNeededNonExist(stmt ast.StmtNode) ([]string, error) {
 	case *ast.CreateTableStmt:
 		return []string{x.Table.Name.String()}, nil
 	case *ast.RenameTableStmt:
-		return []string{x.NewTable.Name.String()}, nil
+		return []string{x.TableToTables[0].NewTable.Name.String()}, nil
 	case ast.DDLNode:
 		return []string{}, nil
 	default:

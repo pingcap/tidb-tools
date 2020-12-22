@@ -22,8 +22,28 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
+	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	_ "github.com/pingcap/tidb/types/parser_driver" // for parser driver
+)
+
+var (
+	dumpPrivileges = map[mysql.PrivilegeType]struct{}{
+		mysql.ReloadPriv: {},
+		mysql.SelectPriv: {},
+	}
+	replicationPrivileges = map[mysql.PrivilegeType]struct{}{
+		mysql.ReplicationClientPriv: {},
+		mysql.ReplicationSlavePriv:  {},
+	}
+
+	// some privileges are only effective on global level. in other words, GRANT ALL ON test.* is not enough for them
+	// https://dev.mysql.com/doc/refman/5.7/en/grant.html#grant-global-privileges
+	privNeedGlobal = map[mysql.PrivilegeType]struct{}{
+		mysql.ReloadPriv:            {},
+		mysql.ReplicationClientPriv: {},
+		mysql.ReplicationSlavePriv:  {},
+	}
 )
 
 /*****************************************************/
@@ -55,7 +75,7 @@ func (pc *SourceDumpPrivilegeChecker) Check(ctx context.Context) *Result {
 		return result
 	}
 
-	verifyPrivileges(result, grants, []string{"RELOAD", "SELECT"})
+	verifyPrivileges(result, grants, dumpPrivileges)
 	return result
 }
 
@@ -93,7 +113,7 @@ func (pc *SourceReplicatePrivilegeChecker) Check(ctx context.Context) *Result {
 		return result
 	}
 
-	verifyPrivileges(result, grants, []string{"REPLICATION SLAVE", "REPLICATION CLIENT"})
+	verifyPrivileges(result, grants, replicationPrivileges)
 	return result
 }
 
@@ -102,74 +122,106 @@ func (pc *SourceReplicatePrivilegeChecker) Name() string {
 	return "source db replication privilege checker"
 }
 
-func verifyPrivileges(result *Result, grants []string, expectedGrants []string) {
+// TODO: if we add more privilege in future, we might add special checks for that new privilege
+func verifyPrivileges(result *Result, grants []string, expectedGrants map[mysql.PrivilegeType]struct{}) {
 	if len(grants) == 0 {
 		result.ErrorMsg = "there is no such grant defined for current user on host '%'"
 		return
 	}
 
-	// TiDB parser does not support parse `IDENTIFIED BY PASSWORD <secret>`,
-	// but it may appear in some cases, ref: https://bugs.mysql.com/bug.php?id=78888.
-	// We do not need the password in grant statement, so we can replace it.
-	firstGrant := strings.Replace(grants[0], "IDENTIFIED BY PASSWORD <secret>", "IDENTIFIED BY PASSWORD 'secret'", 1)
-
-	// support parse `IDENTIFIED BY PASSWORD WITH {GRANT OPTION | resource_option} ...`
-	firstGrant = strings.Replace(firstGrant, "IDENTIFIED BY PASSWORD WITH", "IDENTIFIED BY PASSWORD 'secret' WITH", 1)
-
-	// support parse `IDENTIFIED BY PASSWORD`
-	if strings.HasSuffix(firstGrant, "IDENTIFIED BY PASSWORD") {
-		firstGrant = firstGrant + " 'secret'"
+	var (
+		user       string
+		lackGrants = make(map[mysql.PrivilegeType]struct{}, len(expectedGrants))
+	)
+	for k := range expectedGrants {
+		lackGrants[k] = struct{}{}
 	}
 
-	// Aurora has some privilege failing parsing
-	awsPrivilege := []string{"LOAD FROM S3", "SELECT INTO S3", "INVOKE LAMBDA", "INVOKE SAGEMAKER", "INVOKE COMPREHEND"}
-	for _, p := range awsPrivilege {
-		firstGrant = strings.Replace(firstGrant, p, "", 1)
-		firstGrant = strings.ReplaceAll(firstGrant, ", ,", ",")
-	}
-	firstGrant = strings.ReplaceAll(firstGrant, "GRANT ,", "GRANT ")
-	firstGrant = strings.ReplaceAll(firstGrant, ",  ON", " ON")
+	for i, grant := range grants {
+		// TiDB parser does not support parse `IDENTIFIED BY PASSWORD <secret>`,
+		// but it may appear in some cases, ref: https://bugs.mysql.com/bug.php?id=78888.
+		// We do not need the password in grant statement, so we can replace it.
+		grant := strings.Replace(grant, "IDENTIFIED BY PASSWORD <secret>", "IDENTIFIED BY PASSWORD 'secret'", 1)
 
-	// get username and hostname
-	node, err := parser.New().ParseOneStmt(firstGrant, "", "")
-	if err != nil {
-		result.ErrorMsg = errors.ErrorStack(errors.Annotatef(err, "grants[0] %s, firstGrant after replace %s", grants[0], firstGrant))
-		return
-	}
-	grantStmt, ok := node.(*ast.GrantStmt)
-	if !ok {
-		result.ErrorMsg = fmt.Sprintf("%s is not grant statment", grants[0])
-		return
-	}
+		// support parse `IDENTIFIED BY PASSWORD WITH {GRANT OPTION | resource_option} ...`
+		grant = strings.Replace(grant, "IDENTIFIED BY PASSWORD WITH", "IDENTIFIED BY PASSWORD 'secret' WITH", 1)
 
-	if len(grantStmt.Users) == 0 {
-		result.ErrorMsg = fmt.Sprintf("grant has not user %s", grantStmt.Text())
-		return
-	}
+		// support parse `IDENTIFIED BY PASSWORD`
+		if strings.HasSuffix(grant, "IDENTIFIED BY PASSWORD") {
+			grant = grant + " 'secret'"
+		}
 
-	// TODO: user tidb parser(which not works very well now)
-	lackOfPrivileges := make([]string, 0, len(expectedGrants))
-	for _, expected := range expectedGrants {
-		hasPrivilege := false
-		for _, grant := range grants {
-			if strings.Contains(grant, "ALL PRIVILEGES") {
-				result.State = StateSuccess
-				return
-			}
-			if strings.Contains(grant, expected) {
-				hasPrivilege = true
+		// Aurora has some privilege failing parsing
+		awsPrivilege := []string{"LOAD FROM S3", "SELECT INTO S3", "INVOKE LAMBDA", "INVOKE SAGEMAKER", "INVOKE COMPREHEND"}
+		for _, p := range awsPrivilege {
+			grant = strings.Replace(grant, p, "", 1)
+			grant = strings.ReplaceAll(grant, ", ,", ",")
+		}
+		grant = strings.ReplaceAll(grant, "GRANT ,", "GRANT ")
+		grant = strings.ReplaceAll(grant, ",  ON", " ON")
+
+		// get username and hostname
+		node, err := parser.New().ParseOneStmt(grant, "", "")
+		if err != nil {
+			result.ErrorMsg = errors.ErrorStack(errors.Annotatef(err, "grant %s, grant after replace %s", grants[i], grant))
+			return
+		}
+		grantStmt, ok := node.(*ast.GrantStmt)
+		if !ok {
+			result.ErrorMsg = fmt.Sprintf("%s is not grant statment", grants[i])
+			return
+		}
+
+		if len(grantStmt.Users) == 0 {
+			result.ErrorMsg = fmt.Sprintf("grant has no user %s", grantStmt.Text())
+			return
+		} else if user == "" {
+			// show grants will only output grants for requested user
+			user = grantStmt.Users[0].User.Username
+		}
+
+		for _, privElem := range grantStmt.Privs {
+			if privElem.Priv == mysql.AllPriv {
+				if grantStmt.Level.Level == ast.GrantLevelGlobal {
+					result.State = StateSuccess
+					return
+				} else {
+					// REPLICATION CLIENT, REPLICATION SLAVE, RELOAD should be global privileges,
+					// thus a non-global GRANT ALL is not enough
+					for expectedGrant := range lackGrants {
+						if _, ok := privNeedGlobal[expectedGrant]; !ok {
+							delete(lackGrants, expectedGrant)
+						}
+					}
+				}
+			} else {
+				// check every privilege and remove it from expectedGrants
+				if _, ok := lackGrants[privElem.Priv]; ok {
+					if _, ok := privNeedGlobal[privElem.Priv]; ok {
+						if grantStmt.Level.Level == ast.GrantLevelGlobal {
+							delete(lackGrants, privElem.Priv)
+						}
+					} else {
+						// currently, only SELECT privilege goes here. we didn't require SELECT to be granted globally,
+						// dumpling could report error if an allow-list table is lack of privilege.
+						// we only check that SELECT is granted on all columns, otherwise we can't SHOW CREATE TABLE
+						if len(privElem.Cols) == 0 {
+							delete(lackGrants, privElem.Priv)
+						}
+					}
+				}
 			}
 		}
-		if !hasPrivilege {
-			lackOfPrivileges = append(lackOfPrivileges, expected)
-		}
 	}
 
-	user := grantStmt.Users[0]
-	if len(lackOfPrivileges) != 0 {
-		privileges := strings.Join(lackOfPrivileges, ",")
+	if len(lackGrants) != 0 {
+		lackGrantsStr := make([]string, 0, len(lackGrants))
+		for g := range lackGrants {
+			lackGrantsStr = append(lackGrantsStr, mysql.Priv2Str[g])
+		}
+		privileges := strings.Join(lackGrantsStr, ",")
 		result.ErrorMsg = fmt.Sprintf("lack of %s privilege", privileges)
-		result.Instruction = fmt.Sprintf("GRANT %s ON *.* TO '%s'@'%s';", privileges, user.User.Username, "%")
+		result.Instruction = fmt.Sprintf("GRANT %s ON *.* TO '%s'@'%s';", privileges, user, "%")
 		return
 	}
 
