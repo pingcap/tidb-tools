@@ -170,6 +170,15 @@ func (t *testCheckSuite) TestVerifyPrivileges(c *tc.C) {
 			dumpState:       StateFailure,
 			replcationState: StateSuccess,
 		},
+		{
+			grants: []string{
+				"GRANT RELOAD ON *.* TO `u1`@`localhost`",
+				"GRANT SELECT, INSERT, UPDATE, DELETE ON `db1`.* TO `u1`@`localhost`",
+				"GRANT `r1`@`%`,`r2`@`%` TO `u1`@`localhost`",
+			},
+			dumpState:       StateSuccess,
+			replcationState: StateFailure,
+		},
 	}
 
 	for _, cs := range cases {
