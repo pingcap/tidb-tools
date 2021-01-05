@@ -4,10 +4,8 @@ require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/Shopify/sarama v1.24.1
-	github.com/coocood/badger v1.5.1-0.20200528065104-c02ac3616d04 // indirect
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/golang/protobuf v1.3.4
-	github.com/juju/testing v0.0.0-20200706033705-4c23f9c453cd // indirect
 	github.com/onsi/ginkgo v1.11.0 // indirect
 	github.com/onsi/gomega v1.8.1 // indirect
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
@@ -16,8 +14,7 @@ require (
 	github.com/pingcap/failpoint v0.0.0-20200702092429-9f69995143ce
 	github.com/pingcap/kvproto v0.0.0-20201215060142-f3dafca4c7fd
 	github.com/pingcap/log v0.0.0-20201112100606-8f1e84a3abc8
-	github.com/pingcap/parser v0.0.0-20201222082018-e2b44ffa7c1d
-	github.com/pingcap/pd/v4 v4.0.0-rc.2.0.20200730093003-dc8c75cf7ca0 // indirect
+	github.com/pingcap/parser v0.0.0-20210105063241-09b74e077464
 	github.com/pingcap/tidb v1.1.0-beta.0.20201222032702-32d8cad845d6
 	github.com/pingcap/tipb v0.0.0-20201209065231-aa39b1b86217
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
