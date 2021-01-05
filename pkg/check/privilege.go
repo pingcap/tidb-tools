@@ -122,8 +122,9 @@ func (pc *SourceReplicatePrivilegeChecker) Name() string {
 	return "source db replication privilege checker"
 }
 
-// TODO: if we add more privilege in future, we might add special checks for that new privilege
+// TODO: if we add more privilege in future, we might add special checks (globally granted?) for that new privilege
 func verifyPrivileges(result *Result, grants []string, expectedGrants map[mysql.PrivilegeType]struct{}) {
+	result.State = StateFailure
 	if len(grants) == 0 {
 		result.ErrorMsg = "there is no such grant defined for current user on host '%'"
 		return
@@ -151,15 +152,6 @@ func verifyPrivileges(result *Result, grants []string, expectedGrants map[mysql.
 			grant = grant + " 'secret'"
 		}
 
-		// Aurora has some privilege failing parsing
-		awsPrivilege := []string{"LOAD FROM S3", "SELECT INTO S3", "INVOKE LAMBDA", "INVOKE SAGEMAKER", "INVOKE COMPREHEND"}
-		for _, p := range awsPrivilege {
-			grant = strings.Replace(grant, p, "", 1)
-			grant = strings.ReplaceAll(grant, ", ,", ",")
-		}
-		grant = strings.ReplaceAll(grant, "GRANT ,", "GRANT ")
-		grant = strings.ReplaceAll(grant, ",  ON", " ON")
-
 		// get username and hostname
 		node, err := parser.New().ParseOneStmt(grant, "", "")
 		if err != nil {
@@ -168,8 +160,13 @@ func verifyPrivileges(result *Result, grants []string, expectedGrants map[mysql.
 		}
 		grantStmt, ok := node.(*ast.GrantStmt)
 		if !ok {
-			result.ErrorMsg = fmt.Sprintf("%s is not grant statment", grants[i])
-			return
+			switch node.(type) {
+			case *ast.GrantProxyStmt, *ast.GrantRoleStmt:
+				continue
+			default:
+				result.ErrorMsg = fmt.Sprintf("%s is not grant statment", grants[i])
+				return
+			}
 		}
 
 		if len(grantStmt.Users) == 0 {
