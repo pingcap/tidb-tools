@@ -16,7 +16,7 @@ package filter_test
 import (
 	. "github.com/pingcap/check"
 
-	filter "github.com/pingcap/tidb-tools/pkg/table-filter"
+	filter "github.com/pingcap/tidb-tools/components/table-filter"
 )
 
 type compatSuite struct{}

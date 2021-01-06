@@ -19,7 +19,7 @@ import (
 	"sync"
 
 	"github.com/pingcap/errors"
-	tfilter "github.com/pingcap/tidb-tools/pkg/table-filter"
+	tfilter "github.com/pingcap/tidb-tools/components/table-filter"
 	selector "github.com/pingcap/tidb-tools/pkg/table-rule-selector"
 )
 

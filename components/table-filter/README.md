@@ -15,7 +15,7 @@ package main
 import (
     "fmt"
 
-    "github.com/pingcap/tidb-tools/pkg/table-filter"
+    "github.com/pingcap/tidb-tools/components/table-filter"
     "github.com/spf13/pflag"
 )
 
