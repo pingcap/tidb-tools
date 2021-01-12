@@ -14,6 +14,9 @@
 package main
 
 import (
+	"io/ioutil"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	. "github.com/pingcap/check"
@@ -68,4 +71,25 @@ func (s *testConfigSuite) TestUseDMConfig(c *C) {
 	}
 	isValid = cfg.checkConfig()
 	c.Assert(isValid, IsFalse)
+}
+
+func (s *testConfigSuite) TestUnknownFlagOrItem(c *C) {
+	cfg := NewConfig()
+	c.Assert(cfg.Parse([]string{"-L", "info"}), IsNil)
+
+	unknownFlag := []string{"-LL", "info"}
+	err := cfg.Parse(unknownFlag)
+	c.Assert(err, ErrorMatches, ".*LL.*")
+
+	c.Assert(cfg.Parse([]string{"-config", "config.toml"}), IsNil)
+
+	dir := c.MkDir()
+	path := filepath.Join(dir, "wrong.toml")
+	content, err := ioutil.ReadFile("config.toml")
+	c.Assert(err, IsNil)
+	// table_rules is a typo
+	wrongContentStr := strings.ReplaceAll(string(content), "#[[table-rules]]", "[[table_rules]]")
+	c.Assert(ioutil.WriteFile(path, []byte(wrongContentStr), 0644), IsNil)
+	err = cfg.Parse([]string{"-config", path})
+	c.Assert(err, ErrorMatches, ".*table_rules.*")
 }

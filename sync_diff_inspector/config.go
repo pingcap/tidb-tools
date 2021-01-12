@@ -274,8 +274,14 @@ func (c *Config) String() string {
 
 // configFromFile loads config from file.
 func (c *Config) configFromFile(path string) error {
-	_, err := toml.DecodeFile(path, c)
-	return errors.Trace(err)
+	meta, err := toml.DecodeFile(path, c)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	if len(meta.Undecoded()) > 0 {
+		return errors.Errorf("unknown keys in config file %s: %v", path, meta.Undecoded())
+	}
+	return nil
 }
 
 func (c *Config) checkConfig() bool {
