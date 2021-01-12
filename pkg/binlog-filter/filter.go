@@ -61,6 +61,8 @@ const (
 	RenameTable    EventType = "rename table"
 	CreateIndex    EventType = "create index"
 	DropIndex      EventType = "drop index"
+	CreateView     EventType = "create view"
+	DropView       EventType = "drop view"
 	AlertTable     EventType = "alter table"
 	// if need, add more	AlertTableOption     = "alert table option"
 
@@ -72,7 +74,8 @@ func ClassifyEvent(event EventType) (EventType, error) {
 	switch event {
 	case InsertEvent, UpdateEvent, DeleteEvent:
 		return dml, nil
-	case CreateDatabase, DropDatabase, CreateTable, DropTable, TruncateTable, RenameTable, CreateIndex, DropIndex, AlertTable:
+	case CreateDatabase, DropDatabase, CreateTable, DropTable, TruncateTable, RenameTable,
+		CreateIndex, DropIndex, CreateView, DropView, AlertTable:
 		return ddl, nil
 	case NullEvent:
 		return NullEvent, nil
