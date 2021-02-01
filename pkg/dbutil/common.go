@@ -440,7 +440,7 @@ func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string, table
 
 	for rows.Next() {
 		var dbName, tableName, partitionName, columnName, lowerBound, upperBound sql.NullString
-		var isIndex, bucketID, count, repeats sql.NullInt64
+		var isIndex, bucketID, count, repeats, ndv sql.NullInt64
 
 		// add partiton_name in new version
 		switch len(cols) {
@@ -448,6 +448,8 @@ func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string, table
 			err = rows.Scan(&dbName, &tableName, &columnName, &isIndex, &bucketID, &count, &repeats, &lowerBound, &upperBound)
 		case 10:
 			err = rows.Scan(&dbName, &tableName, &partitionName, &columnName, &isIndex, &bucketID, &count, &repeats, &lowerBound, &upperBound)
+		case 11:
+			err = rows.Scan(&dbName, &tableName, &partitionName, &columnName, &isIndex, &bucketID, &count, &repeats, &lowerBound, &upperBound, &ndv)
 		default:
 			return nil, errors.New("Unknown struct for buckets info")
 		}
