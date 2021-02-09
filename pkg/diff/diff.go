@@ -567,13 +567,11 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 	defer targetRows.Close()
 
 	for i, sourceTable := range t.SourceTables {
-		rows, _, err2 := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, chunk.Where, args, t.Collation)
-		if err2 != nil {
-			return false, errors.Trace(err2)
+		rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, chunk.Where, args, t.Collation)
+		if err != nil {
+			return false, errors.Trace(err)
 		}
-		if err2 = rows.Close(); err2 != nil {
-			return false, errors.Trace(err2)
-		}
+		defer rows.Close()
 
 		sourceRows[i] = rows
 		sourceHaveData[i] = false
@@ -623,6 +621,9 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 
 				}
 				// still don't have data, means the rows is read to the end, so delete the source
+				if err := sourceRows[i].Close(); err != nil {
+					return nil, err
+				}
 				needDeleteSource = append(needDeleteSource, i)
 			}
 		}
