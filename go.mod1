@@ -2,26 +2,30 @@ module github.com/pingcap/tidb-tools
 
 require (
 	github.com/BurntSushi/toml v0.3.1
-	github.com/DATA-DOG/go-sqlmock v1.4.1
+	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/Shopify/sarama v1.24.1
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/golang/protobuf v1.3.4
+	github.com/onsi/ginkgo v1.11.0 // indirect
+	github.com/onsi/gomega v1.8.1 // indirect
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
 	github.com/pingcap/dm v1.1.0-alpha.0.20200729032940-53a08d777030
-	github.com/pingcap/errors v0.11.5-0.20200917111840-a15ef68f753d
+	github.com/pingcap/errors v0.11.5-0.20201126102027-b0a155152ca3
 	github.com/pingcap/failpoint v0.0.0-20200702092429-9f69995143ce
-	github.com/pingcap/kvproto v0.0.0-20200828054126-d677e6fd224a
-	github.com/pingcap/log v0.0.0-20200828042413-fce0951f1463
-	github.com/pingcap/parser v0.0.0-20200924053142-5d7e8ebf605e
-	github.com/pingcap/tidb v1.1.0-beta.0.20200927065602-486e473a86e9
-	github.com/pingcap/tipb v0.0.0-20200618092958-4fad48b4c8c3
+	github.com/pingcap/kvproto v0.0.0-20201215060142-f3dafca4c7fd
+	github.com/pingcap/log v0.0.0-20201112100606-8f1e84a3abc8
+	github.com/pingcap/parser v0.0.0-20210105063241-09b74e077464
+	github.com/pingcap/tidb v1.1.0-beta.0.20201222032702-32d8cad845d6
+	github.com/pingcap/tipb v0.0.0-20201209065231-aa39b1b86217
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
-	github.com/tikv/pd v1.1.0-beta.0.20200907085700-5b04bec39b99
-	go.etcd.io/etcd v0.5.0-alpha.5.0.20191023171146-3cf2f69b5738
-	go.uber.org/atomic v1.6.0
+	github.com/syndtr/goleveldb v1.0.1-0.20190625010220-02440ea7a285 // indirect
+	github.com/tikv/pd v1.1.0-beta.0.20201125070607-d4b90eee0c70
+	go.etcd.io/bbolt v1.3.5 // indirect
+	go.etcd.io/etcd v0.5.0-alpha.5.0.20200824191128-ae9734ed278b
+	go.uber.org/atomic v1.7.0
 	go.uber.org/zap v1.16.0
-	golang.org/x/net v0.0.0-20200813134508-3edf25e44fcc
-	google.golang.org/grpc v1.26.0
+	golang.org/x/net v0.0.0-20200904194848-62affa334b73
+	google.golang.org/grpc v1.27.1
 )
 
 replace github.com/golang/lint => golang.org/x/lint v0.0.0-20190930215403-16217165b5de
