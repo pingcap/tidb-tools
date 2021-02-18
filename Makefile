@@ -42,6 +42,13 @@ endef
 
 build: prepare version check importer sync_diff_inspector ddl_checker finish
 
+
+failpoint-enable: retool_setup
+	$(FAILPOINT_ENABLE)
+
+failpoint-disable: retool_setup
+	$(FAILPOINT_DISABLE)
+
 retool_setup:
 	@echo "setup retool"
 	go get github.com/twitchtv/retool
