@@ -9,7 +9,8 @@ log-level = "debug"
 chunk-size = 1000
 
 # how many goroutines are created to check data
-check-thread-count = 4
+# before #412, sync-diff-inspector will SetMaxOpenConns to 1, so processing 2 shard tables in upstream will block
+check-thread-count = 1
 
 # sampling check percent, for example 10 means only check 10% data
 sample-percent = 100

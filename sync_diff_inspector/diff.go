@@ -46,6 +46,7 @@ type Diff struct {
 	onlyUseChecksum   bool
 	ignoreDataCheck   bool
 	ignoreStructCheck bool
+	ignoreStats       bool
 	tables            map[string]map[string]*TableConfig
 	fixSQLFile        *os.File
 
@@ -72,6 +73,7 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 		onlyUseChecksum:   cfg.OnlyUseChecksum,
 		ignoreDataCheck:   cfg.IgnoreDataCheck,
 		ignoreStructCheck: cfg.IgnoreStructCheck,
+		ignoreStats:       cfg.IgnoreStats,
 		tables:            make(map[string]map[string]*TableConfig),
 		report:            NewReport(),
 		ctx:               ctx,
@@ -404,6 +406,37 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 		df.tables[table.Schema][table.Table].Collation = table.Collation
 	}
 
+	// we need to increase max open connections for upstream, because one chunk needs accessing N shard tables in one
+	// upstream, and there are `CheckThreadCount` processing chunks. At most we need N*`CheckThreadCount` connections
+	// for an upstream
+	// instanceID -> max number of upstream shard tables every target table
+	maxNumShardTablesOneRun := map[string]int{}
+	for _, targetTables := range df.tables {
+		for _, sourceCfg := range targetTables {
+			upstreamCount := map[string]int{}
+			for _, sourceTables := range sourceCfg.SourceTables {
+				upstreamCount[sourceTables.InstanceID]++
+			}
+			for id, count := range upstreamCount {
+				if count > maxNumShardTablesOneRun[id] {
+					maxNumShardTablesOneRun[id] = count
+				}
+			}
+		}
+	}
+
+	for instanceId, count := range maxNumShardTablesOneRun {
+		db := df.sourceDBs[instanceId].Conn
+		if db == nil {
+			return errors.Errorf("didn't found sourceDB for instance %s", instanceId)
+		}
+		log.Info("will increase connection configurations for DB of instance",
+			zap.String("instance id", instanceId),
+			zap.Int("connection limit", count*df.checkThreadCount))
+		db.SetMaxOpenConns(count * df.checkThreadCount)
+		db.SetMaxIdleConns(count * df.checkThreadCount)
+	}
+
 	return nil
 }
 
@@ -545,18 +578,23 @@ func (df *Diff) Equal() (err error) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			isTiDB, err := dbutil.IsTiDB(ctx, targetTableInstance.Conn)
-			if err != nil {
-				log.Warn("judge instance is tidb failed", zap.Error(err))
-			} else if isTiDB {
-				tidbStatsSource = targetTableInstance
-			} else if len(sourceTables) == 1 {
-				isTiDB, err := dbutil.IsTiDB(ctx, sourceTables[0].Conn)
+			if !df.ignoreStats {
+				log.Info("use tidb stats to split chunks")
+				isTiDB, err := dbutil.IsTiDB(ctx, targetTableInstance.Conn)
 				if err != nil {
 					log.Warn("judge instance is tidb failed", zap.Error(err))
 				} else if isTiDB {
-					tidbStatsSource = sourceTables[0]
+					tidbStatsSource = targetTableInstance
+				} else if len(sourceTables) == 1 {
+					isTiDB, err := dbutil.IsTiDB(ctx, sourceTables[0].Conn)
+					if err != nil {
+						log.Warn("judge instance is tidb failed", zap.Error(err))
+					} else if isTiDB {
+						tidbStatsSource = sourceTables[0]
+					}
 				}
+			} else {
+				log.Info("ignore tidb stats because of user setting")
 			}
 
 			td := &diff.TableDiff{
