@@ -43,7 +43,7 @@ var (
 	typeIntNotNull = &types.FieldType{
 		Tp:      mysql.TypeLong,
 		Flag:    mysql.NoDefaultValueFlag | mysql.NotNullFlag,
-		Flen:    10,
+		Flen:    11,
 		Decimal: 0,
 		Charset: binary,
 		Collate: binary,
@@ -364,16 +364,22 @@ func (*typeSchema) TestTypeCompareJoin(c *C) {
 		joinError     string
 	}{
 		{
-			a:             typeInt,
-			b:             typeInt22,
-			compareResult: -1,
-			join:          typeInt22,
+			a: typeInt,
+			b: typeInt22,
+			// FIXME: introduced in https://github.com/pingcap/tidb-tools/pull/415, revert this after DM support add different Flen columns
+			// compareResult: -1,
+			// join:          typeInt22,
+			compareError: `at tuple index \d+: distinct singletons.*`,
+			joinError:    `at tuple index \d+: distinct singletons.*`,
 		},
 		{
-			a:             typeInt1,
-			b:             typeInt,
-			compareResult: -1,
-			join:          typeInt,
+			a: typeInt1,
+			b: typeInt,
+			// FIXME: introduced in https://github.com/pingcap/tidb-tools/pull/415, revert this after DM support add different Flen columns
+			// compareResult: -1,
+			// join:          typeInt,
+			compareError: `at tuple index \d+: distinct singletons.*`,
+			joinError:    `at tuple index \d+: distinct singletons.*`,
 		},
 		{
 			a:             typeInt,

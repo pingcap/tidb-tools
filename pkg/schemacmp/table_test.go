@@ -240,8 +240,11 @@ func (s *tableSchema) TestJoinSchemas(c *C) {
 			name: "DM_055",
 			a:    "CREATE TABLE tb1 (a INT, b VARCHAR(10))",
 			b:    "CREATE TABLE tb2 (a BIGINT, b VARCHAR(10))",
-			cmp:  -1,
-			join: "CREATE TABLE tb2 (a BIGINT, b VARCHAR(10))",
+			// FIXME: introduced in https://github.com/pingcap/tidb-tools/pull/415, revert this after DM support add different Flen columns
+			// cmp:  -1,
+			// join: "CREATE TABLE tb2 (a BIGINT, b VARCHAR(10))",
+			cmpErr:  `.*"a".*distinct singletons.*`,
+			joinErr: `.*"a".*distinct singletons.*`,
 		},
 		{
 			name:   "DM_057",
@@ -387,8 +390,11 @@ func (s *tableSchema) TestJoinSchemas(c *C) {
 			name: "test case 2020-04-28-blob",
 			a:    "CREATE TABLE tb1 (a BLOB, b VARCHAR(10))",
 			b:    "CREATE TABLE tb2 (a LONGBLOB, b VARCHAR(10))",
-			cmp:  -1,
-			join: "CREATE TABLE tb2 (a LONGBLOB, b VARCHAR(10))",
+			// FIXME: introduced in https://github.com/pingcap/tidb-tools/pull/415, revert this after DM support add different Flen columns
+			// cmp:  -1,
+			// join: "CREATE TABLE tb2 (a LONGBLOB, b VARCHAR(10))",
+			cmpErr:  `.*"a".*distinct singletons.*`,
+			joinErr: `.*"a".*distinct singletons.*`,
 		},
 	}
 
