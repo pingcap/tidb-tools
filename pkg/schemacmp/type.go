@@ -58,13 +58,17 @@ func decodeAntiKeys(encoded byte) uint {
 // encodeTypeTpAsLattice
 func encodeFieldTypeToLattice(ft *types.FieldType) Tuple {
 	var flen, dec Lattice
-	if ft.Tp == mysql.TypeNewDecimal {
-		flen = Singleton(ft.Flen)
-		dec = Singleton(ft.Decimal)
-	} else {
-		flen = Int(ft.Flen)
-		dec = Int(ft.Decimal)
-	}
+	// FIXME: set flen & dec to Singleton. When dm add column with different flen, dm can't transfer
+	//  the sql to modify the column to a larger flen. Change this back to Int after DM support this.
+	// if ft.Tp == mysql.TypeNewDecimal {
+	// 	flen = Singleton(ft.Flen)
+	// 	dec = Singleton(ft.Decimal)
+	// } else {
+	//	flen = Int(ft.Flen)
+	//	dec = Int(ft.Decimal)
+	// }
+	flen = Singleton(ft.Flen)
+	dec = Singleton(ft.Decimal)
 
 	var defVal Lattice
 	if mysql.HasAutoIncrementFlag(ft.Flag) || !mysql.HasNoDefaultValueFlag(ft.Flag) {
