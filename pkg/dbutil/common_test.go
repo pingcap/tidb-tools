@@ -20,6 +20,9 @@ import (
 	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/parser/model"
+	pmysql "github.com/pingcap/parser/mysql"
+	"github.com/pingcap/parser/types"
 	"github.com/pingcap/tidb/infoschema"
 )
 
@@ -177,5 +180,50 @@ func (s *testDBSuite) TestGetParser(c *C) {
 			c.Assert(err, IsNil)
 			c.Assert(parser, NotNil)
 		}
+	}
+}
+
+func (s *testDBSuite) TestAnalyzeValuesFromBuckets(c *C) {
+	cases := []struct {
+		value  string
+		col    *model.ColumnInfo
+		expect string
+	}{
+		{
+			"2021-03-05 21:31:03",
+			&model.ColumnInfo{FieldType: types.FieldType{Tp: pmysql.TypeDatetime}},
+			"2021-03-05 21:31:03",
+		},
+		{
+			"2021-03-05 21:31:03",
+			&model.ColumnInfo{FieldType: types.FieldType{Tp: pmysql.TypeTimestamp}},
+			"2021-03-05 21:31:03",
+		},
+		{
+			"2021-03-05",
+			&model.ColumnInfo{FieldType: types.FieldType{Tp: pmysql.TypeDate}},
+			"2021-03-05",
+		},
+		{
+			"1847956477067657216",
+			&model.ColumnInfo{FieldType: types.FieldType{Tp: pmysql.TypeDatetime}},
+			"2020-01-01 10:00:00",
+		},
+		{
+			"1847955927311843328",
+			&model.ColumnInfo{FieldType: types.FieldType{Tp: pmysql.TypeTimestamp}},
+			"2020-01-01 02:00:00",
+		},
+		{
+			"1847955789872889856",
+			&model.ColumnInfo{FieldType: types.FieldType{Tp: pmysql.TypeDate}},
+			"2020-01-01 00:00:00",
+		},
+	}
+	for _, ca := range cases {
+		val, err := AnalyzeValuesFromBuckets(ca.value, []*model.ColumnInfo{ca.col})
+		c.Assert(err, IsNil)
+		c.Assert(val, HasLen, 1)
+		c.Assert(val[0], Equals, ca.expect)
 	}
 }

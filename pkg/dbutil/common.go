@@ -32,6 +32,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/infoschema"
+	"github.com/pingcap/tidb/sessionctx/stmtctx"
 	"github.com/pingcap/tidb/types"
 	"go.uber.org/zap"
 )
@@ -498,6 +499,13 @@ func AnalyzeValuesFromBuckets(valueString string, cols []*model.ColumnInfo) ([]s
 
 	for i, col := range cols {
 		if IsTimeTypeAndNeedDecode(col.Tp) {
+			// check if values[i] is already a time string
+			sc := &stmtctx.StatementContext{TimeZone: time.UTC}
+			_, err := types.ParseTime(sc, values[i], col.Tp, types.MinFsp)
+			if err == nil {
+				continue
+			}
+
 			value, err := DecodeTimeInBucket(values[i])
 			if err != nil {
 				log.Error("analyze values from buckets", zap.String("column", col.Name.O), zap.String("value", values[i]), zap.Error(err))
