@@ -58,6 +58,16 @@ func (s *tableSchema) toTableInfo(createTableStmt string) (*model.TableInfo, err
 	return ddl.MockTableInfo(s.sctx, createStmtNode, 1)
 }
 
+func (s *tableSchema) checkDecodeFieldTypes(c *C, info *model.TableInfo, t Table) {
+	fieldTyps := DecodeColumnFieldTypes(t)
+	c.Assert(fieldTyps, HasLen, len(info.Columns))
+	for _, col := range info.Columns {
+		typ, ok := fieldTyps[col.Name.O]
+		c.Assert(ok, IsTrue, "fieldTyp not found")
+		c.Assert(col.FieldType, DeepEquals, *typ)
+	}
+}
+
 func (s *tableSchema) TestJoinSchemas(c *C) {
 	testCases := []struct {
 		name    string
@@ -405,6 +415,8 @@ func (s *tableSchema) TestJoinSchemas(c *C) {
 
 		a := Encode(tia)
 		b := Encode(tib)
+		s.checkDecodeFieldTypes(c, tia, a)
+		s.checkDecodeFieldTypes(c, tib, b)
 		var j Table
 		if len(tc.joinErr) == 0 {
 			tij, err := s.toTableInfo(tc.join)

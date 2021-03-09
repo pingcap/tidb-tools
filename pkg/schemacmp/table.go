@@ -356,16 +356,14 @@ func Encode(ti *model.TableInfo) Table {
 	return Table{value: encodeTableInfoToLattice(ti)}
 }
 
-func DecodeColumnsFieldTypesFromTable(t Table) ([]string, []*types.FieldType) {
+func DecodeColumnFieldTypes(t Table) map[string]*types.FieldType {
 	table := t.value.Unwrap().([]interface{})
-	columnPairs := sortedMap(table[tableInfoTupleIndexColumns].(map[string]interface{}))
-	colNames := make([]string, 0, len(columnPairs))
-	typs := make([]*types.FieldType, 0, len(columnPairs))
-	for _, pair := range columnPairs {
-		colNames = append(colNames, pair.key)
-		typs = append(typs, pair.value.([]interface{})[columnInfoTupleIndexFieldTypes].(*types.FieldType))
+	columnMaps := table[tableInfoTupleIndexColumns].(map[string]interface{})
+	cols := make(map[string]*types.FieldType, len(columnMaps))
+	for key, value := range columnMaps {
+		cols[key] = value.([]interface{})[columnInfoTupleIndexFieldTypes].(*types.FieldType)
 	}
-	return colNames, typs
+	return cols
 }
 
 func (t Table) Restore(ctx *format.RestoreCtx, tableName string) {
