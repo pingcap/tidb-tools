@@ -63,7 +63,7 @@ func (s *tableSchema) checkDecodeFieldTypes(c *C, info *model.TableInfo, t Table
 	c.Assert(fieldTyps, HasLen, len(info.Columns))
 	for _, col := range info.Columns {
 		typ, ok := fieldTyps[col.Name.O]
-		c.Assert(ok, IsTrue, "fieldTyp not found")
+		c.Assert(ok, IsTrue)
 		c.Assert(col.FieldType, DeepEquals, *typ)
 	}
 }
