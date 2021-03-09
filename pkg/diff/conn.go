@@ -21,7 +21,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 )
 
-// CreateDB creates sql.DB used for select data
+// CreateDB creates sql.DB and set connection limit
 func CreateDB(ctx context.Context, dbConfig dbutil.DBConfig, num int) (db *sql.DB, err error) {
 	db, err = dbutil.OpenDB(dbConfig)
 	if err != nil {

@@ -175,6 +175,9 @@ type Config struct {
 	// how many goroutines are created to check data
 	CheckThreadCount int `toml:"check-thread-count" json:"check-thread-count"`
 
+	// how many goroutines are created to save checkpoint
+	CheckpointThreadCount int `toml:"checkpoint-thread-count" json:"checkpoint-thread-count"`
+
 	// set false if want to comapre the data directly
 	UseChecksum bool `toml:"use-checksum" json:"use-checksum"`
 
@@ -228,6 +231,7 @@ func NewConfig() *Config {
 	fs.IntVar(&cfg.ChunkSize, "chunk-size", 1000, "diff check chunk size")
 	fs.IntVar(&cfg.Sample, "sample", 100, "the percent of sampling check")
 	fs.IntVar(&cfg.CheckThreadCount, "check-thread-count", 1, "how many goroutines are created to check data")
+	fs.IntVar(&cfg.CheckpointThreadCount, "checkpoint-thread-count", 64, "how many goroutines are created to save checkpoint")
 	fs.BoolVar(&cfg.UseChecksum, "use-checksum", true, "set false if want to comapre the data directly")
 	fs.StringVar(&cfg.FixSQLFile, "fix-sql-file", "fix.sql", "the name of the file which saves sqls used to fix different data")
 	fs.BoolVar(&cfg.PrintVersion, "V", false, "print version of sync_diff_inspector")
