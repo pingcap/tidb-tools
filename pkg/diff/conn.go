@@ -44,8 +44,6 @@ func CreateDBForCP(ctx context.Context, dbConfig dbutil.DBConfig) (cpDB *sql.DB,
 	if err != nil {
 		return nil, errors.Errorf("create db connections %+v error %v", dbConfig, err)
 	}
-	cpDB.SetMaxOpenConns(1)
-	cpDB.SetMaxIdleConns(1)
 
 	return cpDB, nil
 }
