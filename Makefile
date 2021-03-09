@@ -35,7 +35,7 @@ define run_unit_test
 	@echo "running unit test for packages:" $(1)
 	$(FAILPOINT_ENABLE)
 	@export log_level=error; \
-	$(GOTEST) -cover $(1) \
+	$(GOTEST) -cover $(1) -count=1 \
 	|| { $(FAILPOINT_DISABLE); exit 1; }
 	$(FAILPOINT_DISABLE)
 endef
