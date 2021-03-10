@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -26,6 +27,7 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
 
@@ -322,6 +324,9 @@ func (s *bucketSpliter) getChunksByBuckets() (chunks []*ChunkRange, err error) {
 		var (
 			lowerValues, upperValues []string
 			latestCount              int64
+			wg                       sync.WaitGroup
+			chunkCh                  = make(chan []*ChunkRange, len(buckets)+1)
+			splitErr                 atomic.Error
 		)
 
 		indexColumns := getColumnsFromIndex(index, s.table.info)
@@ -363,17 +368,38 @@ func (s *bucketSpliter) getChunksByBuckets() (chunks []*ChunkRange, err error) {
 			if count == 0 {
 				continue
 			} else if count >= 2 {
-				splitChunks, err := splitRangeByRandom(s.table.Conn, chunk, int(count), s.table.Schema, s.table.Table, indexColumns, s.limits, s.collation)
-				if err != nil {
-					return nil, errors.Trace(err)
-				}
-				chunks = append(chunks, splitChunks...)
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					splitChunks, err := splitRangeByRandom(s.table.Conn, chunk, int(count), s.table.Schema, s.table.Table, indexColumns, s.limits, s.collation)
+					if err != nil && splitErr.Load() == nil {
+						splitErr.Store(errors.Trace(err))
+					}
+					chunkCh <- splitChunks
+				}()
+
 			} else {
 				chunks = append(chunks, chunk)
 			}
 
 			latestCount = buckets[i].Count
 			lowerValues = upperValues
+		}
+
+		// early fail
+		err = splitErr.Load()
+		if err != nil {
+			return nil, err
+		}
+		wg.Wait()
+		err = splitErr.Load()
+		if err != nil {
+			return nil, err
+		}
+
+		for len(chunkCh) > 0 {
+			splitChunks := <-chunkCh
+			chunks = append(chunks, splitChunks...)
 		}
 
 		if len(chunks) != 0 {
