@@ -2,6 +2,6 @@
 */*.iml
 */.idea
 deps.sh
-go.sum
-go.mod
+go.sum1
+go.mod1
 .idea/

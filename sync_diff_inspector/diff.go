@@ -39,6 +39,8 @@ type Diff struct {
 	sourceDBs         map[string]DBConfig
 	targetDB          DBConfig
 	chunkSize         int
+	failedRetryTimes  int
+	failedRetrySleep  int
 	sample            int
 	checkThreadCount  int
 	useChecksum       bool
@@ -66,6 +68,8 @@ func NewDiff(ctx context.Context, cfg *Config) (diff *Diff, err error) {
 	diff = &Diff{
 		sourceDBs:         make(map[string]DBConfig),
 		chunkSize:         cfg.ChunkSize,
+		failedRetryTimes:  cfg.FailedRetryTimes,
+		failedRetrySleep:  cfg.FailedRetrySleep,
 		sample:            cfg.Sample,
 		checkThreadCount:  cfg.CheckThreadCount,
 		useChecksum:       cfg.UseChecksum,
@@ -598,15 +602,17 @@ func (df *Diff) Equal() (err error) {
 			}
 
 			td := &diff.TableDiff{
-				SourceTables: sourceTables,
-				TargetTable:  targetTableInstance,
+				SourceTables:     sourceTables,
+				TargetTable:      targetTableInstance,
+				FailedRetryTimes: df.failedRetryTimes,
+				FailedRetrySleep: df.failedRetrySleep,
+				IgnoreColumns:    table.IgnoreColumns,
 
-				IgnoreColumns: table.IgnoreColumns,
+				Fields:    table.Fields,
+				Range:     table.Range,
+				Collation: table.Collation,
+				ChunkSize: df.chunkSize,
 
-				Fields:            table.Fields,
-				Range:             table.Range,
-				Collation:         table.Collation,
-				ChunkSize:         df.chunkSize,
 				Sample:            df.sample,
 				CheckThreadCount:  df.checkThreadCount,
 				UseChecksum:       df.useChecksum,

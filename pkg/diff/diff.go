@@ -57,6 +57,9 @@ type TableDiff struct {
 	// target table
 	TargetTable *TableInstance `json:"target-table"`
 
+	FailedRetryTimes int
+	FailedRetrySleep int
+
 	// columns be ignored
 	IgnoreColumns []string `json:"-"`
 
@@ -271,6 +274,8 @@ func (t *TableDiff) CheckTableData(ctx context.Context) (equal bool, err error) 
 		checkWg.Add(1)
 		go func(j int) {
 			defer checkWg.Done()
+			// check chunk data equal
+			// if chunk data checksum isn't consistent, then retry failedRetryTimes and sleep failedRetrySleep
 			t.checkChunksDataEqual(ctx, t.Sample < 100 && !fromCheckpoint, checkWorkerCh[j], checkResultCh)
 		}(i)
 	}
@@ -451,15 +456,27 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, 
 
 	if t.UseChecksum {
 		// first check the checksum is equal or not
-		equal, err = t.compareChecksum(ctx, chunk)
-		if err != nil {
-			return false, errors.Trace(err)
-		}
-		if equal {
-			return true, nil
+		// if chunk data checksum isn't consistent, then retry failedRetryTimes and sleep failedRetrySleep
+		for i := 0; i < (t.FailedRetryTimes + 1); i++ {
+			equal, err = t.compareChecksum(ctx, chunk)
+			if err != nil {
+				return false, errors.Trace(err)
+			}
+			if equal {
+				return true, nil
+			} else {
+				// sleep time and retry
+				log.Warn("schema table checksum failed, failed retry, please waiting",
+					zap.String("downstream schema", t.TargetTable.Schema),
+					zap.String("downstream table", t.TargetTable.Table),
+					zap.String("where", dbutil.ReplacePlaceholder(chunk.Where, chunk.Args)),
+					zap.Int("retry-counts", i),
+					zap.Duration("sleep", time.Duration(t.FailedRetrySleep)*time.Second))
+				time.Sleep(time.Duration(t.FailedRetrySleep) * time.Second)
+				continue
+			}
 		}
 	}
-
 	if t.UseChecksum && t.OnlyUseChecksum {
 		return false, nil
 	}
