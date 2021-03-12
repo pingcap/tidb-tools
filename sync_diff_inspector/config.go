@@ -169,6 +169,12 @@ type Config struct {
 	// size of the split chunk
 	ChunkSize int `toml:"chunk-size" json:"chunk-size"`
 
+	// Chunk check failed, retry times
+	FailedRetryTimes int `toml:"failed-retry-times" json:"failed-retry-times"`
+
+	// Chunk retry sleep
+	FailedRetrySleep int `toml:"failed-retry-sleep" json:"failed-retry-sleep"`
+
 	// sampling check percent, for example 10 means only check 10% data
 	Sample int `toml:"sample-percent" json:"sample-percent"`
 
@@ -299,6 +305,15 @@ func (c *Config) checkConfig() bool {
 		return false
 	}
 
+	if c.FailedRetryTimes <= 0 {
+		log.Error("failed-retry-times must greater than 0!")
+		return false
+	}
+
+	if c.FailedRetrySleep <= 0 {
+		log.Error("failed-retry-sleep must greater than 0!")
+		return false
+	}
 	if len(c.DMAddr) != 0 {
 		u, err := url.Parse(c.DMAddr)
 		if err != nil || u.Scheme == "" || u.Host == "" {
