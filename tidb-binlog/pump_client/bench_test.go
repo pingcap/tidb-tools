@@ -83,8 +83,7 @@ func createMockPumpsClientAndServer(b *testing.B) (*PumpsClient, *mockPumpServer
 	addr := "127.0.0.1:15049"
 	pumpServer, err := createMockPumpServer(addr, "tcp", false)
 	if err != nil {
-		b.Error(err)
-		return nil, nil
+		b.Fatal(err)
 	}
 
 	opt := grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
@@ -93,12 +92,10 @@ func createMockPumpsClientAndServer(b *testing.B) (*PumpsClient, *mockPumpServer
 
 	clientCon, err := grpc.Dial(addr, opt, grpc.WithInsecure())
 	if err != nil {
-		b.Error(err)
-		return nil, nil
+		b.Fatal(err)
 	}
 	if clientCon == nil {
-		b.Error("grpc client is nil")
-		return nil, nil
+		b.Fatal("grpc client is nil")
 	}
 	pumpClient := mockPumpsClient(pb.NewPumpClient(clientCon), false)
 
