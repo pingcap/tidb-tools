@@ -400,6 +400,48 @@ func (s *tableSchema) TestJoinSchemas(c *C) {
 			cmp:  -1,
 			join: "CREATE TABLE tb2 (a LONGBLOB, b VARCHAR(10))",
 		},
+		{
+			name: "join equal single primary key",
+			a:    "CREATE TABLE t(a INT, b INT, PRIMARY KEY(a))",
+			b:    "CREATE TABLE t(a INT, b INT, PRIMARY KEY(a))",
+			cmp:  0,
+			join: "CREATE TABLE t(a INT, b INT, PRIMARY KEY(a))",
+		},
+		{
+			name: "join equal composite primary key",
+			a:    "CREATE TABLE t(a INT, b INT, c INT, PRIMARY KEY(a, b))",
+			b:    "CREATE TABLE t(a INT, b INT, c INT, PRIMARY KEY(a, b))",
+			cmp:  0,
+			join: "CREATE TABLE t(a INT, b INT, c INT, PRIMARY KEY(a, b))",
+		},
+		{
+			name: "join equal single index",
+			a:    "CREATE TABLE t(a INT PRIMARY KEY, b INT, c INT, INDEX idx_b(b))",
+			b:    "CREATE TABLE t(a INT PRIMARY KEY, b INT, c INT, INDEX idx_b(b))",
+			cmp:  0,
+			join: "CREATE TABLE t(a INT PRIMARY KEY, b INT, c INT, INDEX idx_b(b))",
+		},
+		{
+			name: "join equal unique index",
+			a:    "CREATE TABLE t(a INT PRIMARY KEY, b INT, c INT, UNIQUE KEY uni_b(b))",
+			b:    "CREATE TABLE t(a INT PRIMARY KEY, b INT, c INT, UNIQUE KEY uni_b(b))",
+			cmp:  0,
+			join: "CREATE TABLE t(a INT PRIMARY KEY, b INT, c INT, UNIQUE KEY uni_b(b))",
+		},
+		{
+			name: "join equal composite index",
+			a:    "CREATE TABLE t(a INT PRIMARY KEY, b INT, c INT, INDEX idx_bc(b, c))",
+			b:    "CREATE TABLE t(a INT PRIMARY KEY, b INT, c INT, INDEX idx_bc(b, c))",
+			cmp:  0,
+			join: "CREATE TABLE t(a INT PRIMARY KEY, b INT, c INT, INDEX idx_bc(b, c))",
+		},
+		{
+			name: "join equal composite unique index",
+			a:    "CREATE TABLE t(a INT PRIMARY KEY, b INT, c INT, UNIQUE INDEX idx_bc(b, c))",
+			b:    "CREATE TABLE t(a INT PRIMARY KEY, b INT, c INT, UNIQUE INDEX idx_bc(b, c))",
+			cmp:  0,
+			join: "CREATE TABLE t(a INT PRIMARY KEY, b INT, c INT, UNIQUE INDEX idx_bc(b, c))",
+		},
 	}
 
 	for _, tc := range testCases {
