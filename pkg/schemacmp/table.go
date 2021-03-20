@@ -386,21 +386,21 @@ func (t Table) Join(other Table) (Table, error) {
 	columnKeyFlags := make(map[string]uint)
 	table := res.(Tuple)
 	for _, index := range table[tableInfoTupleIndexIndices].(latticeMap).LatticeMap.(indexMap) {
-		var flag uint
+		cols := index[indexInfoTupleIndexColumns].Unwrap().(indexColumnSlice)
+		if len(cols) == 0 {
+			continue
+		}
 		switch {
 		case !index[indexInfoTupleIndexNotPrimary].Unwrap().(bool):
-			flag = mysql.PriKeyFlag
-		case !index[indexInfoTupleIndexNotUnique].Unwrap().(bool):
-			flag = mysql.UniqueKeyFlag
+			for _, col := range cols {
+				columnKeyFlags[col.colName] |= mysql.PriKeyFlag
+			}
+		case !index[indexInfoTupleIndexNotUnique].Unwrap().(bool) && len(cols) == 1:
+			columnKeyFlags[cols[0].colName] |= mysql.UniqueKeyFlag
 		default:
-			flag = mysql.MultipleKeyFlag
-		}
-		cols := index[indexInfoTupleIndexColumns].Unwrap().(indexColumnSlice)
-		if len(cols) > 1 {
-			flag |= mysql.MultipleKeyFlag
-		}
-		for _, col := range cols {
-			columnKeyFlags[col.colName] |= flag
+			// Only the first column can be set if index or unique index has multiple columns.
+			// See https://dev.mysql.com/doc/refman/5.7/en/show-columns.html.
+			columnKeyFlags[cols[0].colName] |= mysql.MultipleKeyFlag
 		}
 	}
 	columns := table[tableInfoTupleIndexColumns].(latticeMap).LatticeMap.(columnMap)
