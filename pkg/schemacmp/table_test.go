@@ -14,6 +14,7 @@
 package schemacmp_test
 
 import (
+	"strings"
 	"testing"
 
 	. "github.com/pingcap/check"
@@ -21,12 +22,14 @@ import (
 	"github.com/pingcap/parser"
 	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/util/mock"
 
 	// initialize expression.EvalAsAst
 	_ "github.com/pingcap/tidb/planner"
 
+	"github.com/pingcap/tidb-tools/pkg/schemacmp"
 	. "github.com/pingcap/tidb-tools/pkg/schemacmp"
 )
 
@@ -510,6 +513,23 @@ func (s *tableSchema) TestJoinSchemas(c *C) {
 			cmp, err = joined.Compare(b)
 			assert(err, IsNil)
 			assert(cmp, GreaterEqual, 0)
+		}
+	}
+}
+
+func (s *tableSchema) TestTableString(c *C) {
+	ti, err := s.toTableInfo("CREATE TABLE tb (a INT, b INT)")
+	c.Assert(err, IsNil)
+
+	charsets := []string{"", mysql.DefaultCharset}
+	collates := []string{"", mysql.DefaultCollationName}
+	for _, charset := range charsets {
+		for _, collate := range collates {
+			ti.Charset = charset
+			ti.Collate = collate
+			sql := strings.ToLower(schemacmp.Encode(ti).String())
+			c.Assert(strings.Contains(sql, "charset"), Equals, charset != "")
+			c.Assert(strings.Contains(sql, "collate"), Equals, collate != "")
 		}
 	}
 }

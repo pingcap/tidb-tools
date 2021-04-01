@@ -330,11 +330,15 @@ func restoreTableInfoFromUnwrapped(ctx *format.RestoreCtx, table []interface{}, 
 		restoreIndexInfoFromUnwrapped(ctx, index, indexName)
 	}
 
-	ctx.WritePlain(") ")
-	ctx.WriteKeyWord("CHARSET ")
-	ctx.WriteKeyWord(table[tableInfoTupleIndexCharset].(string))
-	ctx.WriteKeyWord(" COLLATE ")
-	ctx.WriteKeyWord(table[tableInfoTupleIndexCollate].(string))
+	ctx.WritePlain(")")
+	if charset := table[tableInfoTupleIndexCharset].(string); charset != "" {
+		ctx.WriteKeyWord(" CHARSET ")
+		ctx.WriteKeyWord(charset)
+	}
+	if collate := table[tableInfoTupleIndexCollate].(string); collate != "" {
+		ctx.WriteKeyWord(" COLLATE ")
+		ctx.WriteKeyWord(collate)
+	}
 	if bits := table[tableInfoTupleIndexShardRowIDBits].(uint64); bits > 0 {
 		ctx.WriteKeyWord(" SHARD_ROW_ID_BITS ")
 		ctx.WritePlainf("%d", bits)
