@@ -530,6 +530,8 @@ func (s *tableSchema) TestTableString(c *C) {
 			sql := strings.ToLower(schemacmp.Encode(ti).String())
 			c.Assert(strings.Contains(sql, "charset"), Equals, charset != "")
 			c.Assert(strings.Contains(sql, "collate"), Equals, collate != "")
+			_, err := s.toTableInfo(sql)
+			c.Assert(err, IsNil)
 		}
 	}
 }
