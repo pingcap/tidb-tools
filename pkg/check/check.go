@@ -37,15 +37,27 @@ const (
 	StateWarning State = "warn"
 )
 
+type Error struct {
+	Severity    State  `json:"severity"`
+	ShortErr    string `json:"short_error"`
+	Left        string `json:"left,omitempty"`
+	Right       string `json:"right,omitempty"`
+	Instruction string `json:"instruction,omitempty"`
+}
+
+func NewError(description string) *Error {
+	return &Error{Severity: StateFailure, ShortErr: description}
+}
+
 // Result is result of check
 type Result struct {
-	ID          uint64 `json:"id"`
-	Name        string `json:"name"`
-	Desc        string `json:"desc"`
-	State       State  `json:"state"`
-	ErrorMsg    string `json:"errorMsg"`
-	Instruction string `json:"instruction"`
-	Extra       string `json:"extra"`
+	ID          uint64   `json:"id"`
+	Name        string   `json:"name"`
+	Desc        string   `json:"desc"`
+	State       State    `json:"state"`
+	Errors      []*Error `json:"errors,omitempty"`
+	Instruction string   `json:"instruction,omitempty"`
+	Extra       string   `json:"extra,omitempty"`
 }
 
 // ResultSummary is summary of all check results

@@ -125,12 +125,14 @@ func IsMariaDB(version string) bool {
 
 func markCheckError(result *Result, err error) {
 	if err != nil {
+		var state State
 		if utils.OriginError(err) == context.Canceled {
-			result.State = StateWarning
+			state = StateWarning
 		} else {
-			result.State = StateFailure
+			state = StateFailure
 		}
-		result.ErrorMsg = fmt.Sprintf("%v\n%s", err, result.ErrorMsg)
+		result.State = state
+		result.Errors = append(result.Errors, &Error{Severity: state, ShortErr: err.Error()})
 	}
 }
 

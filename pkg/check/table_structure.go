@@ -115,18 +115,11 @@ func (c *TablesChecker) Check(ctx context.Context) *Result {
 		}
 	}
 
-	var information bytes.Buffer
 	for name, opts := range options {
 		if len(opts) == 0 {
 			continue
 		}
-
-		var (
-			errMessages     = make([]string, 0, len(opts))
-			warningMessages = make([]string, 0, len(opts))
-		)
-		fmt.Fprintf(&information, "********** table %s **********\n", name)
-		fmt.Fprintf(&information, "statement: %s\n", statements[name])
+		tableMsg := "table " + name + " "
 
 		for _, option := range opts {
 			switch option.state {
@@ -134,25 +127,18 @@ func (c *TablesChecker) Check(ctx context.Context) *Result {
 				if len(r.State) == 0 {
 					r.State = StateWarning
 				}
-				warningMessages = append(warningMessages, option.String())
+				e := NewError(tableMsg + option.errMessage)
+				e.Severity = StateWarning
+				e.Instruction = option.instruction
+				r.Errors = append(r.Errors, e)
 			case StateFailure:
 				r.State = StateFailure
-				errMessages = append(errMessages, option.String())
+				e := NewError(tableMsg + option.errMessage)
+				e.Instruction = option.instruction
+				r.Errors = append(r.Errors, e)
 			}
 		}
-
-		if len(errMessages) > 0 {
-			fmt.Fprint(&information, "---------- error messages ----------\n")
-			fmt.Fprintf(&information, "%s\n", strings.Join(errMessages, "\n"))
-		}
-
-		if len(warningMessages) > 0 {
-			fmt.Fprint(&information, "---------- warning messages ----------\n")
-			fmt.Fprintf(&information, "%s\n", strings.Join(warningMessages, "\n"))
-		}
 	}
-
-	r.ErrorMsg = information.String()
 
 	return r
 }
@@ -247,7 +233,7 @@ func (c *TablesChecker) checkConstraint(cst *ast.Constraint) *incompatibilityOpt
 	case ast.ConstraintForeignKey:
 		return &incompatibilityOption{
 			state:       StateWarning,
-			instruction: fmt.Sprintf("please ref document: https://github.com/pingcap/docs-cn/blob/master/sql/ddl.md"),
+			instruction: fmt.Sprintf("please ref document: https://docs.pingcap.com/tidb/stable/mysql-compatibility#unsupported-features"),
 			errMessage:  fmt.Sprintf("Foreign Key %s is parsed but ignored by TiDB.", cst.Name),
 		}
 	}
@@ -271,7 +257,7 @@ func (c *TablesChecker) checkTableOption(opt *ast.TableOption) *incompatibilityO
 		if cs != "binary" && !charset.ValidCharsetAndCollation(cs, "") {
 			return &incompatibilityOption{
 				state:       StateFailure,
-				instruction: fmt.Sprintf("please ref document: https://github.com/pingcap/docs-cn/blob/master/sql/character-set-support.md"),
+				instruction: fmt.Sprintf("https://docs.pingcap.com/tidb/stable/mysql-compatibility#unsupported-features"),
 				errMessage:  fmt.Sprintf("unsupport charset %s", opt.StrValue),
 			}
 		}
@@ -279,10 +265,10 @@ func (c *TablesChecker) checkTableOption(opt *ast.TableOption) *incompatibilityO
 	return nil
 }
 
-// ShardingTablesCheck checks consistency of table structures of one sharding group
+// ShardingTablesChecker checks consistency of table structures of one sharding group
 // * check whether they have same column list
 // * check whether they have auto_increment key
-type ShardingTablesCheck struct {
+type ShardingTablesChecker struct {
 	name string
 
 	dbs                          map[string]*sql.DB
@@ -291,9 +277,9 @@ type ShardingTablesCheck struct {
 	checkAutoIncrementPrimaryKey bool
 }
 
-// NewShardingTablesCheck returns a Checker
-func NewShardingTablesCheck(name string, dbs map[string]*sql.DB, tables map[string]map[string][]string, mapping map[string]*column.Mapping, checkAutoIncrementPrimaryKey bool) Checker {
-	return &ShardingTablesCheck{
+// NewShardingTablesChecker returns a Checker
+func NewShardingTablesChecker(name string, dbs map[string]*sql.DB, tables map[string]map[string][]string, mapping map[string]*column.Mapping, checkAutoIncrementPrimaryKey bool) Checker {
+	return &ShardingTablesChecker{
 		name:                         name,
 		dbs:                          dbs,
 		tables:                       tables,
@@ -303,7 +289,7 @@ func NewShardingTablesCheck(name string, dbs map[string]*sql.DB, tables map[stri
 }
 
 // Check implements Checker interface
-func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
+func (c *ShardingTablesChecker) Check(ctx context.Context) *Result {
 	r := &Result{
 		Name:  c.Name(),
 		Desc:  "check consistency of sharding table structures",
@@ -312,8 +298,9 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 	}
 
 	var (
-		stmtNode  *ast.CreateTableStmt
-		tableName string
+		stmtNode      *ast.CreateTableStmt
+		firstTable    string
+		firstInstance string
 	)
 
 	for instance, schemas := range c.tables {
@@ -372,14 +359,16 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 
 				if stmtNode == nil {
 					stmtNode = ctStmt
-					tableName = dbutil.TableName(schema, table)
+					firstTable = dbutil.TableName(schema, table)
+					firstInstance = instance
 					continue
 				}
 
-				err = c.checkConsistency(stmtNode, ctStmt, tableName, dbutil.TableName(schema, table))
-				if err != nil {
-					markCheckError(r, err)
-					r.Extra = fmt.Sprintf("instance %s on sharding %s", instance, c.name)
+				checkErr := c.checkConsistency(stmtNode, ctStmt, firstTable, dbutil.TableName(schema, table), firstInstance, instance)
+				if checkErr != nil {
+					r.State = StateFailure
+					r.Errors = append(r.Errors, checkErr)
+					r.Extra = fmt.Sprintf("error on sharding %s", c.name)
 					r.Instruction = "please set same table structure for sharding tables"
 					return r
 				}
@@ -390,7 +379,7 @@ func (c *ShardingTablesCheck) Check(ctx context.Context) *Result {
 	return r
 }
 
-func (c *ShardingTablesCheck) checkAutoIncrementKey(instance, schema, table string, ctStmt *ast.CreateTableStmt, info *model.TableInfo, r *Result) bool {
+func (c *ShardingTablesChecker) checkAutoIncrementKey(instance, schema, table string, ctStmt *ast.CreateTableStmt, info *model.TableInfo, r *Result) bool {
 	autoIncrementKeys := c.findAutoIncrementKey(ctStmt, info)
 	for columnName, isBigInt := range autoIncrementKeys {
 		hasMatchedRule := false
@@ -410,7 +399,7 @@ func (c *ShardingTablesCheck) checkAutoIncrementKey(instance, schema, table stri
 
 			if hasMatchedRule && !isBigInt {
 				r.State = StateFailure
-				r.ErrorMsg = fmt.Sprintf("instance %s table `%s`.`%s` of sharding %s have auto-increment key %s and column mapping, but type of %s should be bigint", instance, schema, table, c.name, columnName, columnName)
+				r.Errors = append(r.Errors, NewError(fmt.Sprintf("instance %s table `%s`.`%s` of sharding %s have auto-increment key %s and column mapping, but type of %s should be bigint", instance, schema, table, c.name, columnName, columnName)))
 				r.Instruction = "please set auto-increment key type to bigint"
 				r.Extra = AutoIncrementKeyChecking
 				return false
@@ -419,7 +408,7 @@ func (c *ShardingTablesCheck) checkAutoIncrementKey(instance, schema, table stri
 
 		if !hasMatchedRule {
 			r.State = StateFailure
-			r.ErrorMsg = fmt.Sprintf("instance %s table `%s`.`%s` of sharding %s have auto-increment key, would conflict with each other to cause data corruption", instance, schema, table, c.name)
+			r.Errors = append(r.Errors, NewError(fmt.Sprintf("instance %s table `%s`.`%s` of sharding %s have auto-increment key %s and column mapping, but type of %s should be bigint", instance, schema, table, c.name, columnName, columnName)))
 			r.Instruction = "please handle it by yourself"
 			r.Extra = AutoIncrementKeyChecking
 			return false
@@ -429,7 +418,7 @@ func (c *ShardingTablesCheck) checkAutoIncrementKey(instance, schema, table stri
 	return true
 }
 
-func (c *ShardingTablesCheck) findAutoIncrementKey(stmt *ast.CreateTableStmt, info *model.TableInfo) map[string]bool {
+func (c *ShardingTablesChecker) findAutoIncrementKey(stmt *ast.CreateTableStmt, info *model.TableInfo) map[string]bool {
 	autoIncrementKeys := make(map[string]bool)
 	autoIncrementCols := make(map[string]bool)
 
@@ -499,17 +488,30 @@ func (cs briefColumnInfos) String() string {
 	return strings.Join(colStrs, "\n")
 }
 
-func (c *ShardingTablesCheck) checkConsistency(self, other *ast.CreateTableStmt, selfName, otherName string) error {
+func (c *ShardingTablesChecker) checkConsistency(self, other *ast.CreateTableStmt, selfTable, otherTable, selfInstance, otherInstance string) *Error {
 	selfColumnList := getBriefColumnList(self)
 	otherColumnList := getBriefColumnList(other)
 
 	if len(selfColumnList) != len(otherColumnList) {
-		return errors.Errorf("column length mismatch (%d vs %d)\n table %s\ncolumns %s\n\ntable%s\ncolumns %s", len(selfColumnList), len(otherColumnList), selfName, selfColumnList, otherName, otherColumnList)
+		e := NewError(fmt.Sprintf("column length mismatch (%d vs %d)", len(selfColumnList), len(otherColumnList)))
+		getColumnNames := func(infos briefColumnInfos) []string {
+			ret := make([]string, 0, len(infos))
+			for _, info := range infos {
+				ret = append(ret, info.name)
+			}
+			return ret
+		}
+		e.Left = fmt.Sprintf("instance %s table %s columns %v", selfInstance, selfTable, getColumnNames(selfColumnList))
+		e.Right = fmt.Sprintf("instance %s table %s columns %v", otherInstance, otherTable, getColumnNames(otherColumnList))
+		return e
 	}
 
 	for i := range selfColumnList {
 		if *selfColumnList[i] != *otherColumnList[i] {
-			return errors.Errorf("different column definition\ncolumn %s on table %s\ncolumn %s on table %s", selfColumnList[i], selfName, otherColumnList[i], otherName)
+			e := NewError("different column definition")
+			e.Left = fmt.Sprintf("instance %s table %s column %s", selfInstance, selfTable, selfColumnList[i])
+			e.Right = fmt.Sprintf("instance %s table %s column %s", otherInstance, otherTable, otherColumnList[i])
+			return e
 		}
 	}
 
@@ -541,6 +543,6 @@ func getBriefColumnList(stmt *ast.CreateTableStmt) briefColumnInfos {
 }
 
 // Name implements Checker interface
-func (c *ShardingTablesCheck) Name() string {
+func (c *ShardingTablesChecker) Name() string {
 	return fmt.Sprintf("sharding table %s consistency checking", c.name)
 }
