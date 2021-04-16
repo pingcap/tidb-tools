@@ -40,8 +40,8 @@ const (
 type Error struct {
 	Severity    State  `json:"severity"`
 	ShortErr    string `json:"short_error"`
-	Left        string `json:"left,omitempty"`
-	Right       string `json:"right,omitempty"`
+	Self        string `json:"self,omitempty"`
+	Other       string `json:"other,omitempty"`
 	Instruction string `json:"instruction,omitempty"`
 }
 

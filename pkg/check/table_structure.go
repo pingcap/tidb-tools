@@ -493,7 +493,7 @@ func (c *ShardingTablesChecker) checkConsistency(self, other *ast.CreateTableStm
 	otherColumnList := getBriefColumnList(other)
 
 	if len(selfColumnList) != len(otherColumnList) {
-		e := NewError(fmt.Sprintf("column length mismatch (%d vs %d)", len(selfColumnList), len(otherColumnList)))
+		e := NewError(fmt.Sprintf("column length mismatch (self: %d vs other: %d)", len(selfColumnList), len(otherColumnList)))
 		getColumnNames := func(infos briefColumnInfos) []string {
 			ret := make([]string, 0, len(infos))
 			for _, info := range infos {
@@ -501,16 +501,16 @@ func (c *ShardingTablesChecker) checkConsistency(self, other *ast.CreateTableStm
 			}
 			return ret
 		}
-		e.Left = fmt.Sprintf("instance %s table %s columns %v", selfInstance, selfTable, getColumnNames(selfColumnList))
-		e.Right = fmt.Sprintf("instance %s table %s columns %v", otherInstance, otherTable, getColumnNames(otherColumnList))
+		e.Self = fmt.Sprintf("instance %s table %s columns %v", selfInstance, selfTable, getColumnNames(selfColumnList))
+		e.Other = fmt.Sprintf("instance %s table %s columns %v", otherInstance, otherTable, getColumnNames(otherColumnList))
 		return e
 	}
 
 	for i := range selfColumnList {
 		if *selfColumnList[i] != *otherColumnList[i] {
 			e := NewError("different column definition")
-			e.Left = fmt.Sprintf("instance %s table %s column %s", selfInstance, selfTable, selfColumnList[i])
-			e.Right = fmt.Sprintf("instance %s table %s column %s", otherInstance, otherTable, otherColumnList[i])
+			e.Self = fmt.Sprintf("instance %s table %s column %s", selfInstance, selfTable, selfColumnList[i])
+			e.Other = fmt.Sprintf("instance %s table %s column %s", otherInstance, otherTable, otherColumnList[i])
 			return e
 		}
 	}
