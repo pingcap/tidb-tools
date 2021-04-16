@@ -399,7 +399,7 @@ func (c *ShardingTablesChecker) checkAutoIncrementKey(instance, schema, table st
 
 			if hasMatchedRule && !isBigInt {
 				r.State = StateFailure
-				r.Errors = append(r.Errors, NewError(fmt.Sprintf("instance %s table `%s`.`%s` of sharding %s have auto-increment key %s and column mapping, but type of %s should be bigint", instance, schema, table, c.name, columnName, columnName)))
+				r.Errors = append(r.Errors, NewError("instance %s table `%s`.`%s` of sharding %s have auto-increment key %s and column mapping, but type of %s should be bigint", instance, schema, table, c.name, columnName, columnName))
 				r.Instruction = "please set auto-increment key type to bigint"
 				r.Extra = AutoIncrementKeyChecking
 				return false
@@ -408,7 +408,7 @@ func (c *ShardingTablesChecker) checkAutoIncrementKey(instance, schema, table st
 
 		if !hasMatchedRule {
 			r.State = StateFailure
-			r.Errors = append(r.Errors, NewError(fmt.Sprintf("instance %s table `%s`.`%s` of sharding %s have auto-increment key %s and column mapping, but type of %s should be bigint", instance, schema, table, c.name, columnName, columnName)))
+			r.Errors = append(r.Errors, NewError("instance %s table `%s`.`%s` of sharding %s have auto-increment key %s and column mapping, but type of %s should be bigint", instance, schema, table, c.name, columnName, columnName))
 			r.Instruction = "please handle it by yourself"
 			r.Extra = AutoIncrementKeyChecking
 			return false
@@ -493,7 +493,7 @@ func (c *ShardingTablesChecker) checkConsistency(self, other *ast.CreateTableStm
 	otherColumnList := getBriefColumnList(other)
 
 	if len(selfColumnList) != len(otherColumnList) {
-		e := NewError(fmt.Sprintf("column length mismatch (self: %d vs other: %d)", len(selfColumnList), len(otherColumnList)))
+		e := NewError("column length mismatch (self: %d vs other: %d)", len(selfColumnList), len(otherColumnList))
 		getColumnNames := func(infos briefColumnInfos) []string {
 			ret := make([]string, 0, len(infos))
 			for _, info := range infos {

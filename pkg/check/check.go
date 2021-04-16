@@ -15,6 +15,7 @@ package check
 
 import (
 	"context"
+	"fmt"
 	"sync"
 )
 
@@ -45,8 +46,9 @@ type Error struct {
 	Instruction string `json:"instruction,omitempty"`
 }
 
-func NewError(description string) *Error {
-	return &Error{Severity: StateFailure, ShortErr: description}
+// NewError creates a pointer to Error, the parameters could be used as in Sprintf
+func NewError(description string, args ...interface{}) *Error {
+	return &Error{Severity: StateFailure, ShortErr: fmt.Sprintf(description, args...)}
 }
 
 // Result is result of check

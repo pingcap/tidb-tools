@@ -83,13 +83,13 @@ func (pc *MySQLVersionChecker) checkVersion(value string, result *Result) {
 	}
 
 	if !version.Ge(needVersion.Min) {
-		result.Errors = append(result.Errors, NewError(fmt.Sprintf("version required at least %v but got %v", needVersion.Min, version)))
+		result.Errors = append(result.Errors, NewError("version required at least %v but got %v", needVersion.Min, version))
 		result.Instruction = "Please upgrade your database system"
 		return
 	}
 
 	if !version.Lt(needVersion.Max) {
-		result.Errors = append(result.Errors, NewError(fmt.Sprintf("version required less than %v but got %v", needVersion.Max, version)))
+		result.Errors = append(result.Errors, NewError("version required less than %v but got %v", needVersion.Max, version))
 		return
 	}
 

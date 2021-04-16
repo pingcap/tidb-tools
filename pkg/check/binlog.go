@@ -48,7 +48,7 @@ func (pc *MySQLBinlogEnableChecker) Check(ctx context.Context) *Result {
 		return result
 	}
 	if strings.ToUpper(value) != "ON" {
-		result.Errors = append(result.Errors, NewError(fmt.Sprintf("log_bin is %s, and should be ON", value)))
+		result.Errors = append(result.Errors, NewError("log_bin is %s, and should be ON", value))
 		result.Instruction = "ref document: https://dev.mysql.com/doc/refman/5.7/en/replication-howto-masterbaseconfig.html"
 		return result
 	}
@@ -89,7 +89,7 @@ func (pc *MySQLBinlogFormatChecker) Check(ctx context.Context) *Result {
 		return result
 	}
 	if strings.ToUpper(value) != "ROW" {
-		result.Errors = append(result.Errors, NewError(fmt.Sprintf("binlog_format is %s, and should be ROW", value)))
+		result.Errors = append(result.Errors, NewError("binlog_format is %s, and should be ROW", value))
 		result.Instruction = "please execute 'set global binlog_format=ROW;'"
 		return result
 	}
@@ -160,7 +160,7 @@ func (pc *MySQLBinlogRowImageChecker) Check(ctx context.Context) *Result {
 		return result
 	}
 	if strings.ToUpper(value) != "FULL" {
-		result.Errors = append(result.Errors, NewError(fmt.Sprintf("binlog_row_image is %s, and should be FULL", value)))
+		result.Errors = append(result.Errors, NewError("binlog_row_image is %s, and should be FULL", value))
 		result.Instruction = "please execute 'set global binlog_row_image = FULL;'"
 		return result
 	}

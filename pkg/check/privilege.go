@@ -126,7 +126,7 @@ func (pc *SourceReplicatePrivilegeChecker) Name() string {
 func verifyPrivileges(result *Result, grants []string, expectedGrants map[mysql.PrivilegeType]struct{}) {
 	result.State = StateFailure
 	if len(grants) == 0 {
-		result.Errors = append(result.Errors, NewError("there is no such grant defined for current user on host '%'"))
+		result.Errors = append(result.Errors, NewError("there is no such grant defined for current user on host '%%'"))
 		return
 	}
 
@@ -164,13 +164,13 @@ func verifyPrivileges(result *Result, grants []string, expectedGrants map[mysql.
 			case *ast.GrantProxyStmt, *ast.GrantRoleStmt:
 				continue
 			default:
-				result.Errors = append(result.Errors, NewError(fmt.Sprintf("%s is not grant statment", grants[i])))
+				result.Errors = append(result.Errors, NewError("%s is not grant statement", grants[i]))
 				return
 			}
 		}
 
 		if len(grantStmt.Users) == 0 {
-			result.Errors = append(result.Errors, NewError(fmt.Sprintf("grant has no user %s", grantStmt.Text())))
+			result.Errors = append(result.Errors, NewError("grant has no user %s", grantStmt.Text()))
 			return
 		} else if user == "" {
 			// show grants will only output grants for requested user
@@ -217,7 +217,7 @@ func verifyPrivileges(result *Result, grants []string, expectedGrants map[mysql.
 			lackGrantsStr = append(lackGrantsStr, mysql.Priv2Str[g])
 		}
 		privileges := strings.Join(lackGrantsStr, ",")
-		result.Errors = append(result.Errors, NewError(fmt.Sprintf("lack of %s privilege", privileges)))
+		result.Errors = append(result.Errors, NewError("lack of %s privilege", privileges))
 		result.Instruction = fmt.Sprintf("GRANT %s ON *.* TO '%s'@'%s';", privileges, user, "%")
 		return
 	}
