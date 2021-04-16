@@ -373,7 +373,6 @@ func restorePartitionInfoFromUnwrapped(ctx *format.RestoreCtx, info []interface{
 				ctx.WritePlain(", ")
 			}
 			ctx.WriteKeyWord("PARTITION ")
-			// ctx.WritePlain(pair.key)
 			ctx.WriteName(pair.key)
 
 			d := pair.value.(partitionDefinition)
