@@ -235,6 +235,169 @@ func (indexMap) JoinWithNil(value Lattice) (Lattice, error) {
 	return nil, nil
 }
 
+type partitionDefinition struct {
+	lessThan []string
+	inValues [][]string
+}
+
+func (a partitionDefinition) Equals(other Equality) bool {
+	b, ok := other.(partitionDefinition)
+	if !ok {
+		return false
+	}
+	if len(a.lessThan) != len(b.lessThan) {
+		return false
+	}
+	for i := 0; i < len(a.lessThan); i++ {
+		if a.lessThan[i] != b.lessThan[i] {
+			return false
+		}
+	}
+	if len(a.inValues) != len(b.inValues) {
+		return false
+	}
+	for i := 0; i < len(a.inValues); i++ {
+		av := a.inValues[i]
+		bv := b.inValues[i]
+		if len(av) != len(bv) {
+			return false
+		}
+		for j := 0; j < len(av); j++ {
+			if av[j] != bv[j] {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// encodePartitionDefinitionToLattice collects the necessary information for comparing a partition.
+func encodePartitionDefinitionToLattice(pd model.PartitionDefinition) Lattice {
+	return EqualitySingleton(partitionDefinition{pd.LessThan, pd.InValues})
+}
+
+type partitionMap map[string]Lattice
+
+func (partitionMap) New() LatticeMap {
+	return make(partitionMap)
+}
+
+func (a partitionMap) Get(key string) Lattice {
+	val, ok := a[key]
+	if !ok {
+		return nil
+	}
+	return val
+}
+
+func (a partitionMap) Insert(key string, value Lattice) {
+	a[key] = value
+}
+
+func (a partitionMap) ForEach(f func(key string, value Lattice) error) error {
+	for key, value := range a {
+		if err := f(key, value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (partitionMap) CompareWithNil(value Lattice) (int, error) {
+	return 1, nil
+}
+
+func (partitionMap) ShouldDeleteIncompatibleJoin() bool {
+	return false
+}
+
+func (partitionMap) JoinWithNil(value Lattice) (Lattice, error) {
+	return value, nil
+}
+
+const (
+	partitionTupleIndexType = iota
+	partitionTupleIndexExpr
+	partitionTupleIndexColumns
+	partitionTupleIndexEnable
+	partitionTupleIndexDefinitions
+	partitionTupleIndexNum
+)
+
+func encodePartitionInfoToLattice(pi *model.PartitionInfo) Tuple {
+	partitions := make(partitionMap, len(pi.Definitions))
+	for _, d := range pi.Definitions {
+		partitions[d.Name.L] = encodePartitionDefinitionToLattice(d.Clone())
+	}
+	columns := make(Tuple, 0, len(pi.Columns))
+	for _, c := range pi.Columns {
+		columns = append(columns, Singleton(c.L))
+	}
+	num := Singleton(pi.Num)
+	// Only range and list partition num can be changed.
+	if pi.Type == model.PartitionTypeRange || pi.Type == model.PartitionTypeList {
+		num = Uint64(pi.Num)
+	}
+	return Tuple{
+		Singleton(pi.Type),
+		Singleton(pi.Expr),
+		columns,
+		Singleton(pi.Enable),
+		Map(partitions),
+		num,
+	}
+}
+
+func restorePartitionInfoFromUnwrapped(ctx *format.RestoreCtx, info []interface{}) {
+	ctx.WriteKeyWord(" PARTITION BY ")
+	typ := info[partitionTupleIndexType].(model.PartitionType)
+	ctx.WriteKeyWord(typ.String())
+
+	if expr := info[partitionTupleIndexExpr].(string); len(expr) > 0 {
+		ctx.WritePlainf("(%s)", expr)
+	} else {
+		ctx.WriteKeyWord(" COLUMNS")
+		ctx.WritePlain("(")
+		for i, colName := range info[partitionTupleIndexColumns].([]interface{}) {
+			if i != 0 {
+				ctx.WritePlain(", ")
+			}
+			ctx.WritePlain(colName.(string))
+		}
+		ctx.WritePlain(")")
+	}
+	if typ != model.PartitionTypeHash {
+		ctx.WritePlain(" (")
+		for i, pair := range sortedMap(info[partitionTupleIndexDefinitions].(map[string]interface{})) {
+			if i > 0 {
+				ctx.WritePlain(", ")
+			}
+			ctx.WriteKeyWord("PARTITION ")
+			// ctx.WritePlain(pair.key)
+			ctx.WriteName(pair.key)
+
+			d := pair.value.(partitionDefinition)
+			if len(d.lessThan) > 0 {
+				ctx.WriteKeyWord(" VALUES LESS THAN ")
+				ctx.WritePlainf("(%s)", strings.Join(d.lessThan, ","))
+			} else if len(d.inValues) > 0 {
+				ctx.WriteKeyWord(" VALUES IN (")
+				for i, iv := range d.inValues {
+					if i > 0 {
+						ctx.WritePlain(",")
+					}
+					ctx.WritePlainf("(%s)", strings.Join(iv, ","))
+				}
+				ctx.WritePlain(")")
+			}
+		}
+		ctx.WritePlain(")")
+	} else {
+		ctx.WriteKeyWord(" PARTITIONS ")
+		ctx.WritePlainf("%d", info[partitionTupleIndexNum].(uint64))
+	}
+}
+
 const (
 	tableInfoTupleIndexCharset = iota
 	tableInfoTupleIndexCollate
@@ -245,6 +408,7 @@ const (
 	tableInfoTupleIndexAutoRandomBits
 	tableInfoTupleIndexPreSplitRegions
 	tableInfoTupleIndexCompression
+	tableInfoTupleIndexPartitions
 )
 
 func encodeTableInfoToLattice(ti *model.TableInfo) Tuple {
@@ -264,6 +428,10 @@ func encodeTableInfoToLattice(ti *model.TableInfo) Tuple {
 			indices["primary"] = encodeImplicitPrimaryKeyToLattice(ci)
 		}
 	}
+	partitionInfo := Maybe(nil)
+	if ti.Partition != nil {
+		partitionInfo = Maybe(encodePartitionInfoToLattice(ti.Partition))
+	}
 
 	return Tuple{
 		Singleton(ti.Charset),
@@ -277,6 +445,7 @@ func encodeTableInfoToLattice(ti *model.TableInfo) Tuple {
 		Singleton(ti.AutoRandomBits),
 		Singleton(ti.PreSplitRegions),
 		MaybeSingletonString(ti.Compression),
+		partitionInfo,
 	}
 }
 
@@ -351,6 +520,9 @@ func restoreTableInfoFromUnwrapped(ctx *format.RestoreCtx, table []interface{}, 
 	if compression, ok := table[tableInfoTupleIndexCompression].(string); ok && len(compression) != 0 {
 		ctx.WriteKeyWord(" COMPRESSION ")
 		ctx.WriteString(compression)
+	}
+	if partitionInfo, ok := table[tableInfoTupleIndexPartitions].([]interface{}); ok {
+		restorePartitionInfoFromUnwrapped(ctx, partitionInfo)
 	}
 }
 

@@ -469,6 +469,42 @@ func (a Uint) Join(other Lattice) (Lattice, error) {
 	}
 }
 
+// Uint64 is a uint implementing Lattice.
+type Uint64 uint
+
+// Unwrap implements Lattice.
+func (a Uint64) Unwrap() interface{} {
+	return uint64(a)
+}
+
+// Compare implements Lattice.
+func (a Uint64) Compare(other Lattice) (int, error) {
+	b, ok := other.(Uint64)
+	switch {
+	case !ok:
+		return 0, typeMismatchError(a, other)
+	case a == b:
+		return 0, nil
+	case a > b:
+		return 1, nil
+	default:
+		return -1, nil
+	}
+}
+
+// Join implements Lattice.
+func (a Uint64) Join(other Lattice) (Lattice, error) {
+	b, ok := other.(Uint64)
+	switch {
+	case !ok:
+		return nil, typeMismatchError(a, other)
+	case a >= b:
+		return a, nil
+	default:
+		return b, nil
+	}
+}
+
 // Tuple of Lattice instances. Given two Tuples `a` and `b`, we define `a <= b`
 // iff `a[i] <= b[i]` for all `i`.
 type Tuple []Lattice
@@ -609,7 +645,7 @@ func (a maybe) Join(other Lattice) (Lattice, error) {
 	}
 }
 
-// StringList is a list of string where `a <= b` iff `a == b[:len(a)]`.
+// StringList is a list of string where `a <= b` if `a == b[:len(a)]`.
 type StringList []string
 
 // Unwrap implements Lattice.

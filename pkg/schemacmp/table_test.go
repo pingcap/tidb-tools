@@ -18,18 +18,15 @@ import (
 	"testing"
 
 	. "github.com/pingcap/check"
-	"github.com/pingcap/errors"
 	"github.com/pingcap/parser"
-	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/parser/mysql"
-	"github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/util/mock"
 
 	// initialize expression.EvalAsAst
 	_ "github.com/pingcap/tidb/planner"
 
-	"github.com/pingcap/tidb-tools/pkg/schemacmp"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	. "github.com/pingcap/tidb-tools/pkg/schemacmp"
 )
 
@@ -50,15 +47,7 @@ func (s *tableSchema) SetUpSuite(c *C) {
 }
 
 func (s *tableSchema) toTableInfo(createTableStmt string) (*model.TableInfo, error) {
-	node, err := s.parser.ParseOneStmt(createTableStmt, "", "")
-	if err != nil {
-		return nil, err
-	}
-	createStmtNode, ok := node.(*ast.CreateTableStmt)
-	if !ok {
-		return nil, errors.New("not a create table statement")
-	}
-	return ddl.MockTableInfo(s.sctx, createStmtNode, 1)
+	return dbutil.GetTableInfoBySQL(createTableStmt, s.parser)
 }
 
 func (s *tableSchema) checkDecodeFieldTypes(c *C, info *model.TableInfo, t Table) {
@@ -277,12 +266,13 @@ func (s *tableSchema) TestJoinSchemas(c *C) {
 			cmp:  -1,
 			join: "CREATE TABLE tb3 (a INT DEFAULT 1, b VARCHAR(10))",
 		},
-		// { // these table options are somehow ignored by the parser.
-		// 	name:    "DM_074",
-		// 	a:       "CREATE TABLE tbl1 (a INT, b VARCHAR(10)) CHARSET utf8 COLLATE utf8_bin",
-		// 	b:       "CREATE TABLE tbl2 (a INT, b VARCHAR(10)) CHARSET utf8mb4 COLLATE utf8mb4_bin",
-		// 	joinErr: `.*distinct singletons.*`,
-		// },
+		{
+			name:    "DM_074",
+			a:       "CREATE TABLE tbl1 (a INT, b VARCHAR(10)) CHARSET utf8 COLLATE utf8_bin",
+			b:       "CREATE TABLE tbl2 (a INT, b VARCHAR(10)) CHARSET utf8mb4 COLLATE utf8mb4_bin",
+			cmpErr:  `.*distinct singletons.*`,
+			joinErr: `.*distinct singletons.*`,
+		},
 		{
 			name: "DM_078",
 			a:    "CREATE TABLE tb1 (a INT, b VARCHAR(10))",
@@ -445,6 +435,106 @@ func (s *tableSchema) TestJoinSchemas(c *C) {
 			cmp:  0,
 			join: "CREATE TABLE t(a INT PRIMARY KEY, b INT, c INT, UNIQUE INDEX idx_bc(b, c))",
 		},
+		{
+			name: "equal range partition",
+			a:    "CREATE TABLE tb (id INT NOT NULL) PARTITION BY RANGE (id) (PARTITION p0 VALUES LESS THAN (10), PARTITION p1 VALUES LESS THAN (20))",
+			b:    "CREATE TABLE tb (id INT NOT NULL) PARTITION BY RANGE (id) (PARTITION p0 VALUES LESS THAN (10), PARTITION p1 VALUES LESS THAN (20))",
+			cmp:  0,
+			join: "CREATE TABLE tb (id INT NOT NULL) PARTITION BY RANGE (id) (PARTITION p0 VALUES LESS THAN (10), PARTITION p1 VALUES LESS THAN (20))",
+		},
+		{
+			name: "add range partition",
+			a:    "CREATE TABLE tb (id INT NOT NULL) PARTITION BY RANGE (id) (PARTITION p0 VALUES LESS THAN (10), PARTITION p1 VALUES LESS THAN (20))",
+			b:    "CREATE TABLE tb (id INT NOT NULL) PARTITION BY RANGE (id) (PARTITION p0 VALUES LESS THAN (10), PARTITION p1 VALUES LESS THAN (20), PARTITION p2 VALUES LESS THAN (30))",
+			cmp:  -1,
+			join: "CREATE TABLE tb (id INT NOT NULL) PARTITION BY RANGE (id) (PARTITION p0 VALUES LESS THAN (10), PARTITION p1 VALUES LESS THAN (20), PARTITION p2 VALUES LESS THAN (30))",
+		},
+		{
+			name: "remove range partition",
+			a:    "CREATE TABLE tb (id INT NOT NULL) PARTITION BY RANGE (id) (PARTITION p0 VALUES LESS THAN (10), PARTITION p1 VALUES LESS THAN (20))",
+			b:    "CREATE TABLE tb (id INT NOT NULL) PARTITION BY RANGE (id) (PARTITION p0 VALUES LESS THAN (10))",
+			cmp:  1,
+			join: "CREATE TABLE tb (id INT NOT NULL) PARTITION BY RANGE (id) (PARTITION p0 VALUES LESS THAN (10), PARTITION p1 VALUES LESS THAN (20))",
+		},
+		{
+			name:    "range partition conflict",
+			a:       "CREATE TABLE tb (id INT NOT NULL) PARTITION BY RANGE (id) (PARTITION p0 VALUES LESS THAN (10), PARTITION p1 VALUES LESS THAN (20))",
+			b:       "CREATE TABLE tb (id INT NOT NULL) PARTITION BY RANGE (id) (PARTITION p0 VALUES LESS THAN (10), PARTITION p1 VALUES LESS THAN (30))",
+			cmpErr:  ".*p1.*distinct singletons.*",
+			joinErr: ".*p1.*distinct singletons.*",
+		},
+
+		{
+			name: "equal list partition",
+			a:    "CREATE TABLE tb (id INT NOT NULL) PARTITION BY LIST (id) (PARTITION p0 VALUES IN (1,2,3,4,5), PARTITION p1 VALUES IN (6,7,8,9,10))",
+			b:    "CREATE TABLE tb (id INT NOT NULL) PARTITION BY LIST (id) (PARTITION p0 VALUES IN (1,2,3,4,5), PARTITION p1 VALUES IN (6,7,8,9,10))",
+			cmp:  0,
+			join: "CREATE TABLE tb (id INT NOT NULL) PARTITION BY LIST (id) (PARTITION p0 VALUES IN (1,2,3,4,5), PARTITION p1 VALUES IN (6,7,8,9,10))",
+		},
+		{
+			name: "add list partition",
+			a:    "CREATE TABLE tb (id INT NOT NULL) PARTITION BY LIST (id) (PARTITION p0 VALUES IN (1,2,3,4,5), PARTITION p1 VALUES IN (6,7,8,9,10))",
+			b:    "CREATE TABLE tb (id INT NOT NULL) PARTITION BY LIST (id) (PARTITION p0 VALUES IN (1,2,3,4,5), PARTITION p1 VALUES IN (6,7,8,9,10), PARTITION p2 VALUES IN (11,12,13,14,15))",
+			cmp:  -1,
+			join: "CREATE TABLE tb (id INT NOT NULL) PARTITION BY LIST (id) (PARTITION p0 VALUES IN (1,2,3,4,5), PARTITION p1 VALUES IN (6,7,8,9,10), PARTITION p2 VALUES IN (11,12,13,14,15))",
+		},
+
+		{
+			name: "remove list partition",
+			a:    "CREATE TABLE tb (id INT NOT NULL) PARTITION BY LIST (id) (PARTITION p0 VALUES IN (1,2,3,4,5), PARTITION p1 VALUES IN (6,7,8,9,10))",
+			b:    "CREATE TABLE tb (id INT NOT NULL) PARTITION BY LIST (id) (PARTITION p0 VALUES IN (1,2,3,4,5))",
+			cmp:  1,
+			join: "CREATE TABLE tb (id INT NOT NULL) PARTITION BY LIST (id) (PARTITION p0 VALUES IN (1,2,3,4,5), PARTITION p1 VALUES IN (6,7,8,9,10))",
+		},
+		{
+			name:    "list partition conflict",
+			a:       "CREATE TABLE tb (id INT NOT NULL) PARTITION BY LIST (id) (PARTITION p0 VALUES IN (1,2,3,4,5), PARTITION p1 VALUES IN (6,7,8,9,10))",
+			b:       "CREATE TABLE tb (id INT NOT NULL) PARTITION BY LIST (id) (PARTITION p0 VALUES IN (1,2,3,4,5), PARTITION p1 VALUES IN (6,7,8,9,11))",
+			cmpErr:  ".*p1.*distinct singletons.*",
+			joinErr: ".*p1.*distinct singletons.*",
+		},
+		{
+			name: "equal list columns partition",
+			a:    "CREATE TABLE tb (id INT NOT NULL, a INT, b INT) PARTITION BY LIST COLUMNS (a, b) (PARTITION p0 VALUES IN ((1,1),(2,2)), PARTITION p1 VALUES IN ((1,2),(2,1)))",
+			b:    "CREATE TABLE tb (id INT NOT NULL, a INT, b INT) PARTITION BY LIST COLUMNS (a, b) (PARTITION p0 VALUES IN ((1,1),(2,2)), PARTITION p1 VALUES IN ((1,2),(2,1)))",
+			cmp:  0,
+			join: "CREATE TABLE tb (id INT NOT NULL, a INT, b INT) PARTITION BY LIST COLUMNS (a, b) (PARTITION p0 VALUES IN ((1,1),(2,2)), PARTITION p1 VALUES IN ((1,2),(2,1)))",
+		},
+		{
+			name: "add list columns partition",
+			a:    "CREATE TABLE tb (id INT NOT NULL, a INT, b INT) PARTITION BY LIST COLUMNS (a, b) (PARTITION p0 VALUES IN ((1,1),(2,2)), PARTITION p1 VALUES IN ((1,2),(2,1)))",
+			b:    "CREATE TABLE tb (id INT NOT NULL, a INT, b INT) PARTITION BY LIST COLUMNS (a, b) (PARTITION p0 VALUES IN ((1,1),(2,2)), PARTITION p1 VALUES IN ((1,2),(2,1)), PARTITION p2 VALUES IN ((3,3)))",
+			cmp:  -1,
+			join: "CREATE TABLE tb (id INT NOT NULL, a INT, b INT) PARTITION BY LIST COLUMNS (a, b) (PARTITION p0 VALUES IN ((1,1),(2,2)), PARTITION p1 VALUES IN ((1,2),(2,1)), PARTITION p2 VALUES IN ((3,3)))",
+		},
+		{
+			name: "remove list columns partition",
+			a:    "CREATE TABLE tb (id INT NOT NULL, a INT, b INT) PARTITION BY LIST COLUMNS (a, b) (PARTITION p0 VALUES IN ((1,1),(2,2)), PARTITION p1 VALUES IN ((1,2),(2,1)))",
+			b:    "CREATE TABLE tb (id INT NOT NULL, a INT, b INT) PARTITION BY LIST COLUMNS (a, b) (PARTITION p0 VALUES IN ((1,1),(2,2)))",
+			cmp:  1,
+			join: "CREATE TABLE tb (id INT NOT NULL, a INT, b INT) PARTITION BY LIST COLUMNS (a, b) (PARTITION p0 VALUES IN ((1,1),(2,2)), PARTITION p1 VALUES IN ((1,2),(2,1)))",
+		},
+		{
+			name:    "list columns partition conflict",
+			a:       "CREATE TABLE tb (id INT NOT NULL, a INT, b INT) PARTITION BY LIST COLUMNS (a, b) (PARTITION p0 VALUES IN ((1,1),(2,2)), PARTITION p1 VALUES IN ((1,2),(2,1)))",
+			b:       "CREATE TABLE tb (id INT NOT NULL, a INT, b INT) PARTITION BY LIST COLUMNS (a, b) (PARTITION p0 VALUES IN ((1,1),(2,2)), PARTITION p1 VALUES IN ((1,2),(2,1),(3,3)))",
+			cmpErr:  ".*p1.*distinct singletons.*",
+			joinErr: ".*p1.*distinct singletons.*",
+		},
+		{
+			name: "equal hash partition",
+			a:    "CREATE TABLE tb (id INT NOT NULL) PARTITION BY HASH(id) PARTITIONS 4",
+			b:    "CREATE TABLE tb (id INT NOT NULL) PARTITION BY HASH(id) PARTITIONS 4",
+			cmp:  0,
+			join: "CREATE TABLE tb (id INT NOT NULL) PARTITION BY HASH(id) PARTITIONS 4",
+		},
+		{
+			name:    "hash partition num conflict",
+			a:       "CREATE TABLE tb (id INT NOT NULL) PARTITION BY HASH(id) PARTITIONS 4",
+			b:       "CREATE TABLE tb (id INT NOT NULL) PARTITION BY HASH(id) PARTITIONS 8",
+			cmpErr:  ".*distinct singletons.*",
+			joinErr: ".*distinct singletons.*",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -518,20 +608,54 @@ func (s *tableSchema) TestJoinSchemas(c *C) {
 }
 
 func (s *tableSchema) TestTableString(c *C) {
-	ti, err := s.toTableInfo("CREATE TABLE tb (a INT, b INT)")
+	// Emtpy charset and collate shouldn't exist in Encode.String().
+	ti, err := s.toTableInfo("CREATE TABLE tb (id INT NOT NULL)")
 	c.Assert(err, IsNil)
-
 	charsets := []string{"", mysql.DefaultCharset}
 	collates := []string{"", mysql.DefaultCollationName}
 	for _, charset := range charsets {
 		for _, collate := range collates {
 			ti.Charset = charset
 			ti.Collate = collate
-			sql := strings.ToLower(schemacmp.Encode(ti).String())
+			sql := strings.ToLower(Encode(ti).String())
 			c.Assert(strings.Contains(sql, "charset"), Equals, charset != "")
 			c.Assert(strings.Contains(sql, "collate"), Equals, collate != "")
 			_, err := s.toTableInfo(sql)
 			c.Assert(err, IsNil)
 		}
 	}
+
+	// Table with partition should be parsed after encoded.
+
+	// Range partition.
+	ti, err = s.toTableInfo("CREATE TABLE tb (id INT NOT NULL) PARTITION BY RANGE (id) (PARTITION p0 VALUES LESS THAN (10), PARTITION p1 VALUES LESS THAN (20))")
+	c.Assert(err, IsNil)
+	sql := strings.ToLower(Encode(ti).String())
+	c.Assert(strings.Contains(sql, "partition by range"), Equals, true)
+	_, err = s.toTableInfo(sql)
+	c.Assert(err, IsNil)
+
+	// List partition.
+	ti, err = s.toTableInfo("CREATE TABLE tb (id INT NOT NULL) PARTITION BY LIST (id) (PARTITION p0 VALUES IN (1,2,3,4,5), PARTITION p1 VALUES IN (6,7,8,9,10))")
+	c.Assert(err, IsNil)
+	sql = strings.ToLower(Encode(ti).String())
+	c.Assert(strings.Contains(sql, "partition by list"), Equals, true)
+	_, err = s.toTableInfo(sql)
+	c.Assert(err, IsNil)
+
+	// List Columns partition.
+	ti, err = s.toTableInfo("CREATE TABLE tb (id INT NOT NULL, a INT, b INT) PARTITION BY LIST COLUMNS (a, b) (PARTITION p0 VALUES IN ((1,1),(2,2)), PARTITION p1 VALUES IN ((1,2),(2,1)))")
+	c.Assert(err, IsNil)
+	sql = strings.ToLower(Encode(ti).String())
+	c.Assert(strings.Contains(sql, "partition by list columns"), Equals, true)
+	_, err = s.toTableInfo(sql)
+	c.Assert(err, IsNil)
+
+	// Hash partition.
+	ti, err = s.toTableInfo("CREATE TABLE tb (id INT NOT NULL) PARTITION BY HASH(id) PARTITIONS 4")
+	c.Assert(err, IsNil)
+	sql = strings.ToLower(Encode(ti).String())
+	c.Assert(strings.Contains(sql, "partition by hash"), Equals, true)
+	_, err = s.toTableInfo(sql)
+	c.Assert(err, IsNil)
 }
