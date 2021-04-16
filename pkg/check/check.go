@@ -15,6 +15,7 @@ package check
 
 import (
 	"context"
+	"fmt"
 	"sync"
 )
 
@@ -37,15 +38,28 @@ const (
 	StateWarning State = "warn"
 )
 
+type Error struct {
+	Severity    State  `json:"severity"`
+	ShortErr    string `json:"short_error"`
+	Self        string `json:"self,omitempty"`
+	Other       string `json:"other,omitempty"`
+	Instruction string `json:"instruction,omitempty"`
+}
+
+// NewError creates a pointer to Error, the parameters could be used as in Sprintf
+func NewError(description string, args ...interface{}) *Error {
+	return &Error{Severity: StateFailure, ShortErr: fmt.Sprintf(description, args...)}
+}
+
 // Result is result of check
 type Result struct {
-	ID          uint64 `json:"id"`
-	Name        string `json:"name"`
-	Desc        string `json:"desc"`
-	State       State  `json:"state"`
-	ErrorMsg    string `json:"errorMsg"`
-	Instruction string `json:"instruction"`
-	Extra       string `json:"extra"`
+	ID          uint64   `json:"id"`
+	Name        string   `json:"name"`
+	Desc        string   `json:"desc"`
+	State       State    `json:"state"`
+	Errors      []*Error `json:"errors,omitempty"`
+	Instruction string   `json:"instruction,omitempty"`
+	Extra       string   `json:"extra,omitempty"`
 }
 
 // ResultSummary is summary of all check results

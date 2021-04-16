@@ -83,13 +83,13 @@ func (pc *MySQLVersionChecker) checkVersion(value string, result *Result) {
 	}
 
 	if !version.Ge(needVersion.Min) {
-		result.ErrorMsg = fmt.Sprintf("version required at least %v but got %v", needVersion.Min, version)
+		result.Errors = append(result.Errors, NewError("version required at least %v but got %v", needVersion.Min, version))
 		result.Instruction = "Please upgrade your database system"
 		return
 	}
 
 	if !version.Lt(needVersion.Max) {
-		result.ErrorMsg = fmt.Sprintf("version required less than %v but got %v", needVersion.Max, version)
+		result.Errors = append(result.Errors, NewError("version required less than %v but got %v", needVersion.Max, version))
 		return
 	}
 
@@ -126,7 +126,7 @@ func (pc *MySQLServerIDChecker) Check(ctx context.Context) *Result {
 	serverID, err := dbutil.ShowServerID(ctx, pc.db)
 	if err != nil {
 		if utils.OriginError(err) == sql.ErrNoRows {
-			result.ErrorMsg = "server_id not set"
+			result.Errors = append(result.Errors, NewError("server_id not set"))
 			result.Instruction = "please set server_id in your database"
 		} else {
 			markCheckError(result, err)
@@ -136,7 +136,7 @@ func (pc *MySQLServerIDChecker) Check(ctx context.Context) *Result {
 	}
 
 	if serverID == 0 {
-		result.ErrorMsg = "server_id is 0"
+		result.Errors = append(result.Errors, NewError("server_id is 0"))
 		result.Instruction = "please set server_id greater than 0"
 		return result
 	}

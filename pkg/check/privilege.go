@@ -126,7 +126,7 @@ func (pc *SourceReplicatePrivilegeChecker) Name() string {
 func verifyPrivileges(result *Result, grants []string, expectedGrants map[mysql.PrivilegeType]struct{}) {
 	result.State = StateFailure
 	if len(grants) == 0 {
-		result.ErrorMsg = "there is no such grant defined for current user on host '%'"
+		result.Errors = append(result.Errors, NewError("there is no such grant defined for current user on host '%%'"))
 		return
 	}
 
@@ -155,7 +155,7 @@ func verifyPrivileges(result *Result, grants []string, expectedGrants map[mysql.
 		// get username and hostname
 		node, err := parser.New().ParseOneStmt(grant, "", "")
 		if err != nil {
-			result.ErrorMsg = errors.ErrorStack(errors.Annotatef(err, "grant %s, grant after replace %s", grants[i], grant))
+			result.Errors = append(result.Errors, NewError(errors.Annotatef(err, "grant %s, grant after replace %s", grants[i], grant).Error()))
 			return
 		}
 		grantStmt, ok := node.(*ast.GrantStmt)
@@ -164,13 +164,13 @@ func verifyPrivileges(result *Result, grants []string, expectedGrants map[mysql.
 			case *ast.GrantProxyStmt, *ast.GrantRoleStmt:
 				continue
 			default:
-				result.ErrorMsg = fmt.Sprintf("%s is not grant statment", grants[i])
+				result.Errors = append(result.Errors, NewError("%s is not grant statement", grants[i]))
 				return
 			}
 		}
 
 		if len(grantStmt.Users) == 0 {
-			result.ErrorMsg = fmt.Sprintf("grant has no user %s", grantStmt.Text())
+			result.Errors = append(result.Errors, NewError("grant has no user %s", grantStmt.Text()))
 			return
 		} else if user == "" {
 			// show grants will only output grants for requested user
@@ -217,7 +217,7 @@ func verifyPrivileges(result *Result, grants []string, expectedGrants map[mysql.
 			lackGrantsStr = append(lackGrantsStr, mysql.Priv2Str[g])
 		}
 		privileges := strings.Join(lackGrantsStr, ",")
-		result.ErrorMsg = fmt.Sprintf("lack of %s privilege", privileges)
+		result.Errors = append(result.Errors, NewError("lack of %s privilege", privileges))
 		result.Instruction = fmt.Sprintf("GRANT %s ON *.* TO '%s'@'%s';", privileges, user, "%")
 		return
 	}
