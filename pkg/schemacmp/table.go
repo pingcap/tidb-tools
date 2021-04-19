@@ -342,7 +342,6 @@ func encodePartitionInfoToLattice(pi *model.PartitionInfo) Tuple {
 		Singleton(pi.Type),
 		Singleton(pi.Expr),
 		columns,
-		Singleton(pi.Enable),
 		Map(partitions),
 		num,
 	}
