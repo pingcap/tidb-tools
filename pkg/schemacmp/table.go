@@ -364,9 +364,14 @@ func restorePartitionInfoFromUnwrapped(ctx *format.RestoreCtx, info []interface{
 		}
 		ctx.WritePlain(")")
 	}
-	if typ != model.PartitionTypeHash {
+	num := info[partitionTupleIndexNum].(uint64)
+	defs := sortedMap(info[partitionTupleIndexDefinitions].(map[string]interface{}))
+	if num > 0 && len(defs) == 0 {
+		ctx.WriteKeyWord(" PARTITIONS ")
+		ctx.WritePlainf("%d", num)
+	} else {
 		ctx.WritePlain(" (")
-		for i, pair := range sortedMap(info[partitionTupleIndexDefinitions].(map[string]interface{})) {
+		for i, pair := range defs {
 			if i > 0 {
 				ctx.WritePlain(", ")
 			}
@@ -389,9 +394,6 @@ func restorePartitionInfoFromUnwrapped(ctx *format.RestoreCtx, info []interface{
 			}
 		}
 		ctx.WritePlain(")")
-	} else {
-		ctx.WriteKeyWord(" PARTITIONS ")
-		ctx.WritePlainf("%d", info[partitionTupleIndexNum].(uint64))
 	}
 }
 

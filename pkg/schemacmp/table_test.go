@@ -14,6 +14,7 @@
 package schemacmp_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -655,6 +656,7 @@ func (s *tableSchema) TestTableString(c *C) {
 	ti, err = s.toTableInfo("CREATE TABLE tb (id INT NOT NULL) PARTITION BY HASH(id) PARTITIONS 4")
 	c.Assert(err, IsNil)
 	sql = strings.ToLower(Encode(ti).String())
+	fmt.Println(sql)
 	c.Assert(strings.Contains(sql, "partition by hash"), Equals, true)
 	_, err = s.toTableInfo(sql)
 	c.Assert(err, IsNil)
