@@ -470,7 +470,7 @@ func (a Uint) Join(other Lattice) (Lattice, error) {
 }
 
 // Uint64 is a uint implementing Lattice.
-type Uint64 uint
+type Uint64 uint64
 
 // Unwrap implements Lattice.
 func (a Uint64) Unwrap() interface{} {
