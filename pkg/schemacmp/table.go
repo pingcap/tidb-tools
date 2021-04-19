@@ -319,7 +319,6 @@ const (
 	partitionTupleIndexType = iota
 	partitionTupleIndexExpr
 	partitionTupleIndexColumns
-	partitionTupleIndexEnable
 	partitionTupleIndexDefinitions
 	partitionTupleIndexNum
 )
