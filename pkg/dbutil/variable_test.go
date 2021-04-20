@@ -25,10 +25,7 @@ func (*testDBSuite) TestShowGrants(c *C) {
 	grants, err := ShowGrants(ctx, db, "", "")
 	c.Assert(err, IsNil)
 	c.Assert(grants, DeepEquals, mockGrants)
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		c.Errorf("there were unfulfilled expectations: %s", err)
-	}
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
 }
 
 func (*testDBSuite) TestShowGrantsWithRoles(c *C) {
@@ -60,8 +57,45 @@ func (*testDBSuite) TestShowGrantsWithRoles(c *C) {
 	grants, err := ShowGrants(ctx, db, "", "")
 	c.Assert(err, IsNil)
 	c.Assert(grants, DeepEquals, mockGrantsWithRoles)
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+}
 
-	if err := mock.ExpectationsWereMet(); err != nil {
-		c.Errorf("there were unfulfilled expectations: %s", err)
+func (*testDBSuite) TestShowGrantsPasswordMasked(c *C) {
+	ctx := context.Background()
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+
+	cases := []struct {
+		original string
+		expected string
+	}{
+		{
+			"GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' IDENTIFIED BY PASSWORD <secret> WITH GRANT OPTION",
+			"GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' IDENTIFIED BY PASSWORD 'secret' WITH GRANT OPTION",
+		},
+		{
+			"GRANT ALL PRIVILEGES ON *.* TO 'user'@'%' IDENTIFIED BY PASSWORD",
+			"GRANT ALL PRIVILEGES ON *.* TO 'user'@'%' IDENTIFIED BY PASSWORD 'secret'",
+		},
+		{
+			"GRANT ALL PRIVILEGES ON *.* TO 'user'@'%' IDENTIFIED BY PASSWORD WITH GRANT OPTION",
+			"GRANT ALL PRIVILEGES ON *.* TO 'user'@'%' IDENTIFIED BY PASSWORD 'secret' WITH GRANT OPTION",
+		},
+		{
+			"GRANT ALL PRIVILEGES ON *.* TO 'user'@'%' IDENTIFIED BY PASSWORD <secret>",
+			"GRANT ALL PRIVILEGES ON *.* TO 'user'@'%' IDENTIFIED BY PASSWORD 'secret'",
+		},
+	}
+
+	for _, ca := range cases {
+		rows := sqlmock.NewRows([]string{"Grants for root@localhost"})
+		rows.AddRow(ca.original)
+		mock.ExpectQuery("SHOW GRANTS").WillReturnRows(rows)
+
+		grants, err := ShowGrants(ctx, db, "", "")
+		c.Assert(err, IsNil)
+		c.Assert(grants, HasLen, 1)
+		c.Assert(grants[0], DeepEquals, ca.expected)
+		c.Assert(mock.ExpectationsWereMet(), IsNil)
 	}
 }

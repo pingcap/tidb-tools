@@ -63,7 +63,7 @@ func ShowGrants(ctx context.Context, db *sql.DB, user, host string) ([]string, e
 
 	var query string
 	if user == "" {
-		// for currrent user.
+		// for current user.
 		query = "SHOW GRANTS"
 	} else {
 		query = fmt.Sprintf("SHOW GRANTS FOR '%s'@'%s'", user, host)
@@ -83,6 +83,20 @@ func ShowGrants(ctx context.Context, db *sql.DB, user, host string) ([]string, e
 			if err != nil {
 				return nil, errors.Trace(err)
 			}
+
+			// TiDB parser does not support parse `IDENTIFIED BY PASSWORD <secret>`,
+			// but it may appear in some cases, ref: https://dev.mysql.com/doc/refman/5.6/en/show-grants.html.
+			// We do not need the password in grant statement, so we can replace it.
+			grant = strings.Replace(grant, "IDENTIFIED BY PASSWORD <secret>", "IDENTIFIED BY PASSWORD 'secret'", 1)
+
+			// support parse `IDENTIFIED BY PASSWORD WITH {GRANT OPTION | resource_option} ...`
+			grant = strings.Replace(grant, "IDENTIFIED BY PASSWORD WITH", "IDENTIFIED BY PASSWORD 'secret' WITH", 1)
+
+			// support parse `IDENTIFIED BY PASSWORD`
+			if strings.HasSuffix(grant, "IDENTIFIED BY PASSWORD") {
+				grant = grant + " 'secret'"
+			}
+
 			grants = append(grants, grant)
 		}
 		if rows.Err() != nil {
