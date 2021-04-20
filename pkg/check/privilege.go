@@ -139,18 +139,6 @@ func verifyPrivileges(result *Result, grants []string, expectedGrants map[mysql.
 	}
 
 	for i, grant := range grants {
-		// TiDB parser does not support parse `IDENTIFIED BY PASSWORD <secret>`,
-		// but it may appear in some cases, ref: https://bugs.mysql.com/bug.php?id=78888.
-		// We do not need the password in grant statement, so we can replace it.
-		grant := strings.Replace(grant, "IDENTIFIED BY PASSWORD <secret>", "IDENTIFIED BY PASSWORD 'secret'", 1)
-
-		// support parse `IDENTIFIED BY PASSWORD WITH {GRANT OPTION | resource_option} ...`
-		grant = strings.Replace(grant, "IDENTIFIED BY PASSWORD WITH", "IDENTIFIED BY PASSWORD 'secret' WITH", 1)
-
-		// support parse `IDENTIFIED BY PASSWORD`
-		if strings.HasSuffix(grant, "IDENTIFIED BY PASSWORD") {
-			grant = grant + " 'secret'"
-		}
 
 		// get username and hostname
 		node, err := parser.New().ParseOneStmt(grant, "", "")
