@@ -65,20 +65,37 @@ func (*testDBSuite) TestShowGrantsPasswordMasked(c *C) {
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
 
-	mockGrants := []string{
-		"GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' IDENTIFIED BY PASSWORD <secret> WITH GRANT OPTION",
+	cases := []struct {
+		original string
+		expected string
+	}{
+		{
+			"GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' IDENTIFIED BY PASSWORD <secret> WITH GRANT OPTION",
+			"GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' IDENTIFIED BY PASSWORD 'secret' WITH GRANT OPTION",
+		},
+		{
+			"GRANT ALL PRIVILEGES ON *.* TO 'user'@'%' IDENTIFIED BY PASSWORD",
+			"GRANT ALL PRIVILEGES ON *.* TO 'user'@'%' IDENTIFIED BY PASSWORD 'secret'",
+		},
+		{
+			"GRANT ALL PRIVILEGES ON *.* TO 'user'@'%' IDENTIFIED BY PASSWORD WITH GRANT OPTION",
+			"GRANT ALL PRIVILEGES ON *.* TO 'user'@'%' IDENTIFIED BY PASSWORD 'secret' WITH GRANT OPTION",
+		},
+		{
+			"GRANT ALL PRIVILEGES ON *.* TO 'user'@'%' IDENTIFIED BY PASSWORD <secret>",
+			"GRANT ALL PRIVILEGES ON *.* TO 'user'@'%' IDENTIFIED BY PASSWORD 'secret'",
+		},
 	}
-	rows := sqlmock.NewRows([]string{"Grants for root@localhost"})
-	for _, g := range mockGrants {
-		rows.AddRow(g)
-	}
-	mock.ExpectQuery("SHOW GRANTS").WillReturnRows(rows)
 
-	expected := []string{
-		"GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' IDENTIFIED BY PASSWORD 'secret' WITH GRANT OPTION",
+	for _, ca := range cases {
+		rows := sqlmock.NewRows([]string{"Grants for root@localhost"})
+		rows.AddRow(ca.original)
+		mock.ExpectQuery("SHOW GRANTS").WillReturnRows(rows)
+
+		grants, err := ShowGrants(ctx, db, "", "")
+		c.Assert(err, IsNil)
+		c.Assert(grants, HasLen, 1)
+		c.Assert(grants[0], DeepEquals, ca.expected)
+		c.Assert(mock.ExpectationsWereMet(), IsNil)
 	}
-	grants, err := ShowGrants(ctx, db, "", "")
-	c.Assert(err, IsNil)
-	c.Assert(grants, DeepEquals, expected)
-	c.Assert(mock.ExpectationsWereMet(), IsNil)
 }
