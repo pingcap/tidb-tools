@@ -21,7 +21,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 )
 
-// CreateDB creates sql.DB used for select data
+// CreateDB creates sql.DB and set connection limit
 func CreateDB(ctx context.Context, dbConfig dbutil.DBConfig, num int) (db *sql.DB, err error) {
 	db, err = dbutil.OpenDB(dbConfig)
 	if err != nil {
@@ -44,8 +44,6 @@ func CreateDBForCP(ctx context.Context, dbConfig dbutil.DBConfig) (cpDB *sql.DB,
 	if err != nil {
 		return nil, errors.Errorf("create db connections %+v error %v", dbConfig, err)
 	}
-	cpDB.SetMaxOpenConns(1)
-	cpDB.SetMaxIdleConns(1)
 
 	return cpDB, nil
 }

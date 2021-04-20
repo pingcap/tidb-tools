@@ -408,6 +408,7 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, 
 	})
 
 	update := func() {
+		checksumLimiter <- struct{}{}
 		ctx1, cancel1 := context.WithTimeout(ctx, dbutil.DefaultTimeout)
 		defer cancel1()
 
@@ -415,6 +416,7 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, 
 		if err1 != nil {
 			log.Warn("update chunk info", zap.Error(err1))
 		}
+		<-checksumLimiter
 	}
 
 	defer func() {
@@ -434,7 +436,7 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, 
 				}
 			}
 		}
-		update()
+		go update()
 	}()
 
 	if filterByRand {
@@ -447,7 +449,7 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, 
 	}
 
 	chunk.State = checkingState
-	update()
+	go update()
 
 	if t.UseChecksum {
 		// first check the checksum is equal or not
@@ -473,6 +475,13 @@ func (t *TableDiff) checkChunkDataEqual(ctx context.Context, filterByRand bool, 
 	}
 
 	return equal, nil
+}
+
+var checksumLimiter chan struct{}
+
+// SetChecksumLimit limits the number of checkpoint DB connections simultaneously
+func SetChecksumLimit(num int) {
+	checksumLimiter = make(chan struct{}, num)
 }
 
 // checksumInfo save some information about checksum

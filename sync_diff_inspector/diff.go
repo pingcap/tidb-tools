@@ -107,6 +107,7 @@ func (df *Diff) init(cfg *Config) (err error) {
 	if err = df.CreateDBConn(cfg); err != nil {
 		return errors.Trace(err)
 	}
+	diff.SetChecksumLimit(cfg.CheckpointThreadCount)
 
 	if err = df.AdjustTableConfig(cfg); err != nil {
 		return errors.Trace(err)
@@ -120,7 +121,7 @@ func (df *Diff) init(cfg *Config) (err error) {
 	return nil
 }
 
-// CreateDBConn creates db connections for source and target.
+// CreateDBConn creates db connections for source and target
 func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 	for _, source := range cfg.SourceDBCfg {
 		source.Conn, err = diff.CreateDB(df.ctx, source.DBConfig, cfg.CheckThreadCount)
