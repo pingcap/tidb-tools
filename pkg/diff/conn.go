@@ -22,8 +22,8 @@ import (
 )
 
 // CreateDB creates sql.DB used for select data
-func CreateDB(ctx context.Context, dbConfig dbutil.DBConfig, num int) (db *sql.DB, err error) {
-	db, err = dbutil.OpenDB(dbConfig)
+func CreateDB(ctx context.Context, dbConfig dbutil.DBConfig, vars map[string]string, num int) (db *sql.DB, err error) {
+	db, err = dbutil.OpenDB(dbConfig, vars)
 	if err != nil {
 		return nil, errors.Errorf("create db connections %s error %v", dbConfig.String(), err)
 	}
@@ -40,7 +40,7 @@ func CreateDB(ctx context.Context, dbConfig dbutil.DBConfig, num int) (db *sql.D
 func CreateDBForCP(ctx context.Context, dbConfig dbutil.DBConfig) (cpDB *sql.DB, err error) {
 	// set snapshot to empty, this DB used for write checkpoint data
 	dbConfig.Snapshot = ""
-	cpDB, err = dbutil.OpenDB(dbConfig)
+	cpDB, err = dbutil.OpenDB(dbConfig, nil)
 	if err != nil {
 		return nil, errors.Errorf("create db connections %+v error %v", dbConfig, err)
 	}

@@ -122,20 +122,29 @@ func (df *Diff) init(cfg *Config) (err error) {
 
 // CreateDBConn creates db connections for source and target.
 func (df *Diff) CreateDBConn(cfg *Config) (err error) {
-	for _, source := range cfg.SourceDBCfg {
-		source.Conn, err = diff.CreateDB(df.ctx, source.DBConfig, cfg.CheckThreadCount)
-		if err != nil {
-			return errors.Errorf("create source db %s error %v", source.DBConfig.String(), err)
-		}
-		df.sourceDBs[source.InstanceID] = source
-	}
-
 	// create connection for target.
-	cfg.TargetDBCfg.Conn, err = diff.CreateDB(df.ctx, cfg.TargetDBCfg.DBConfig, cfg.CheckThreadCount)
+	cfg.TargetDBCfg.Conn, err = diff.CreateDB(df.ctx, cfg.TargetDBCfg.DBConfig, nil, cfg.CheckThreadCount)
 	if err != nil {
 		return errors.Errorf("create target db %s error %v", cfg.TargetDBCfg.DBConfig.String(), err)
 	}
 	df.targetDB = cfg.TargetDBCfg
+
+	targetTZOffset, err := dbutil.GetTimeZoneOffset(df.ctx, cfg.TargetDBCfg.Conn)
+	if err != nil {
+		return errors.Annotatef(err, "fetch target db %s time zone offset failed", cfg.TargetDBCfg.DBConfig.String())
+	}
+	vars := map[string]string{
+		"time_zone": dbutil.FormatTimeZoneOffset(targetTZOffset),
+	}
+
+	for _, source := range cfg.SourceDBCfg {
+		// connect source db with target db time_zone
+		source.Conn, err = diff.CreateDB(df.ctx, source.DBConfig, vars, cfg.CheckThreadCount)
+		if err != nil {
+			return errors.Annotatef(err, "create source db %s failed", source.DBConfig.String())
+		}
+		df.sourceDBs[source.InstanceID] = source
+	}
 
 	df.cpDB, err = diff.CreateDBForCP(df.ctx, cfg.TargetDBCfg.DBConfig)
 	if err != nil {

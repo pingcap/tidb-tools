@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -109,13 +110,18 @@ func GetDBConfigFromEnv(schema string) DBConfig {
 }
 
 // OpenDB opens a mysql connection FD
-func OpenDB(cfg DBConfig) (*sql.DB, error) {
+func OpenDB(cfg DBConfig, vars map[string]string) (*sql.DB, error) {
 	var dbDSN string
 	if len(cfg.Snapshot) != 0 {
 		log.Info("create connection with snapshot", zap.String("snapshot", cfg.Snapshot))
 		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&tidb_snapshot=%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Snapshot)
 	} else {
 		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4", cfg.User, cfg.Password, cfg.Host, cfg.Port)
+	}
+
+	for key, val := range vars {
+		// key='val'. add single quote for better compatibility.
+		dbDSN += fmt.Sprintf("&%s=%%27%s%%27", key, url.QueryEscape(val))
 	}
 
 	dbConn, err := sql.Open("mysql", dbDSN)
@@ -284,6 +290,47 @@ func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column strin
 	}
 
 	return min.String, max.String, errors.Trace(rows.Err())
+}
+
+func GetTimeZoneOffset(ctx context.Context, db *sql.DB) (time.Duration, error) {
+	var timeStr string
+	err := db.QueryRowContext(ctx, "SELECT cast(TIMEDIFF(NOW(6), UTC_TIMESTAMP(6)) as time);").Scan(&timeStr)
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+	factor := time.Duration(1)
+	if timeStr[0] == '-' || timeStr[0] == '+' {
+		if timeStr[0] == '-' {
+			factor *= -1
+		}
+		timeStr = timeStr[1:]
+	}
+	t, err := time.Parse("15:04:05", timeStr)
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+
+	if t.IsZero() {
+		return 0, nil
+	}
+
+	hour, minute, second := t.Clock()
+
+	d := time.Duration(hour*3600+minute*60+second) * time.Second * factor
+	return d, nil
+}
+
+func FormatTimeZoneOffset(offset time.Duration) string {
+	prefix := "+"
+	if offset < 0 {
+		prefix = "-"
+		offset *= -1
+	}
+	hours := offset / time.Hour
+	minutes := (offset % time.Hour) / time.Minute
+
+	return fmt.Sprintf("%s%02d:%02d", prefix, hours, minutes)
+
 }
 
 func queryTables(ctx context.Context, db *sql.DB, q string) (tables []string, err error) {
