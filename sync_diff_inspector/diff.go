@@ -17,7 +17,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -135,7 +134,7 @@ func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 		return errors.Annotatef(err, "fetch target db %s time zone offset failed", cfg.TargetDBCfg.DBConfig.String())
 	}
 	vars := map[string]string{
-		"time_zone": url.QueryEscape(dbutil.FormatTimeZoneOffset(targetTZOffset)),
+		"time_zone": dbutil.FormatTimeZoneOffset(targetTZOffset),
 	}
 
 	for _, source := range cfg.SourceDBCfg {
@@ -144,11 +143,14 @@ func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 			return errors.Annotatef(err, "create source db %s failed", source.DBConfig.String())
 		}
 
-		sourceTZOffset, err := dbutil.GetTimeZoneOffset(df.ctx, cfg.TargetDBCfg.Conn)
+		sourceTZOffset, err := dbutil.GetTimeZoneOffset(df.ctx, source.Conn)
 		if err != nil {
 			return errors.Annotatef(err, "fetch target db %s time zone offset failed", cfg.TargetDBCfg.DBConfig.String())
 		}
+
 		if sourceTZOffset != targetTZOffset {
+			log.L().Debug("tz offsets", zap.Reflect("source", source.DBConfig), zap.Duration("source", sourceTZOffset),
+				zap.Reflect("target", cfg.TargetDBCfg.DBConfig), zap.Duration("target", targetTZOffset))
 			if err := source.Conn.Close(); err != nil {
 				return errors.Trace(err)
 			}
