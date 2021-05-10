@@ -120,6 +120,7 @@ func OpenDB(cfg DBConfig, vars map[string]string) (*sql.DB, error) {
 	}
 
 	for key, val := range vars {
+		// key='val'. add single quote for better compatibility.
 		dbDSN += fmt.Sprintf("&%s=%%27%s%%27", key, url.QueryEscape(val))
 	}
 
