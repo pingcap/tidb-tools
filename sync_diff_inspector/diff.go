@@ -132,7 +132,7 @@ func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 
 	targetTZOffset, err := dbutil.GetTimeZoneOffset(df.ctx, cfg.TargetDBCfg.Conn)
 	if err != nil {
-		return errors.Annotatef(err,"fetch target db %s time zone offset failed", cfg.TargetDBCfg.DBConfig.String())
+		return errors.Annotatef(err, "fetch target db %s time zone offset failed", cfg.TargetDBCfg.DBConfig.String())
 	}
 	vars := map[string]string{
 		"time_zone": url.QueryEscape(dbutil.FormatTimeZoneOffset(targetTZOffset)),
@@ -141,12 +141,12 @@ func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 	for _, source := range cfg.SourceDBCfg {
 		source.Conn, err = diff.CreateDB(df.ctx, source.DBConfig, nil, cfg.CheckThreadCount)
 		if err != nil {
-			return errors.Annotatef(err,"create source db %s failed", source.DBConfig.String())
+			return errors.Annotatef(err, "create source db %s failed", source.DBConfig.String())
 		}
 
 		sourceTZOffset, err := dbutil.GetTimeZoneOffset(df.ctx, cfg.TargetDBCfg.Conn)
 		if err != nil {
-			return errors.Annotatef(err,"fetch target db %s time zone offset failed", cfg.TargetDBCfg.DBConfig.String())
+			return errors.Annotatef(err, "fetch target db %s time zone offset failed", cfg.TargetDBCfg.DBConfig.String())
 		}
 		if sourceTZOffset != targetTZOffset {
 			if err := source.Conn.Close(); err != nil {
@@ -154,7 +154,7 @@ func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 			}
 			source.Conn, err = diff.CreateDB(df.ctx, source.DBConfig, vars, cfg.CheckThreadCount)
 			if err != nil {
-				return errors.Annotatef(err,"create source db %s failed", source.DBConfig.String())
+				return errors.Annotatef(err, "create source db %s failed", source.DBConfig.String())
 			}
 		}
 

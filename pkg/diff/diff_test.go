@@ -289,7 +289,7 @@ func createTableDiff(conn *sql.DB, schema string, sourceTableNames []string, tar
 }
 
 func createConn() (*sql.DB, error) {
-	return dbutil.OpenDB(dbutil.GetDBConfigFromEnv(""))
+	return dbutil.OpenDB(dbutil.GetDBConfigFromEnv(""), nil)
 }
 
 func generateData(ctx context.Context, db *sql.DB, dbCfg dbutil.DBConfig, sourceTables []string, targetTable string, hasEmptyTable bool) error {
