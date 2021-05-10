@@ -15,6 +15,7 @@ package dbutil
 
 import (
 	"context"
+	"time"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/go-sql-driver/mysql"
@@ -225,5 +226,20 @@ func (s *testDBSuite) TestAnalyzeValuesFromBuckets(c *C) {
 		c.Assert(err, IsNil)
 		c.Assert(val, HasLen, 1)
 		c.Assert(val[0], Equals, ca.expect)
+	}
+}
+
+func (s *testDBSuite) TestFormatTimeZoneOffset(c *C) {
+	cases := map[string]time.Duration {
+		"+00:00": 0,
+		"+01:00": time.Hour,
+		"-08:03": -1 * (8 * time.Hour + 3 * time.Minute),
+		"-12:59": -1 * (12 * time.Hour + 59 * time.Minute),
+		"+12:59": 12 * time.Hour + 59 * time.Minute,
+	}
+
+	for k, v := range cases {
+		offset := FormatTimeZoneOffset(v)
+		c.Assert(k, Equals, offset)
 	}
 }

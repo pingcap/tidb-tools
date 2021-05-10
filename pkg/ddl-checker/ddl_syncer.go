@@ -29,7 +29,7 @@ type DDLSyncer struct {
 
 // NewDDLSyncer create a new DDLSyncer
 func NewDDLSyncer(cfg *dbutil.DBConfig, executableChecker *ExecutableChecker) (*DDLSyncer, error) {
-	db, err := dbutil.OpenDB(*cfg)
+	db, err := dbutil.OpenDB(*cfg, nil)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
