@@ -120,7 +120,7 @@ func OpenDB(cfg DBConfig, vars map[string]string) (*sql.DB, error) {
 	}
 
 	for key, val := range vars {
-		dbDSN += fmt.Sprintf("&%s='%s'", key, url.QueryEscape(val))
+		dbDSN += fmt.Sprintf("&%s=%%27%s%%27", key, url.QueryEscape(val))
 	}
 
 	dbConn, err := sql.Open("mysql", dbDSN)

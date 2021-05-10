@@ -138,28 +138,11 @@ func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 	}
 
 	for _, source := range cfg.SourceDBCfg {
-		source.Conn, err = diff.CreateDB(df.ctx, source.DBConfig, nil, cfg.CheckThreadCount)
+		// connect source db with target db time_zone
+		source.Conn, err = diff.CreateDB(df.ctx, source.DBConfig, vars, cfg.CheckThreadCount)
 		if err != nil {
 			return errors.Annotatef(err, "create source db %s failed", source.DBConfig.String())
 		}
-
-		sourceTZOffset, err := dbutil.GetTimeZoneOffset(df.ctx, source.Conn)
-		if err != nil {
-			return errors.Annotatef(err, "fetch target db %s time zone offset failed", cfg.TargetDBCfg.DBConfig.String())
-		}
-
-		if sourceTZOffset != targetTZOffset {
-			log.L().Debug("tz offsets", zap.Reflect("source", source.DBConfig), zap.Duration("source", sourceTZOffset),
-				zap.Reflect("target", cfg.TargetDBCfg.DBConfig), zap.Duration("target", targetTZOffset))
-			if err := source.Conn.Close(); err != nil {
-				return errors.Trace(err)
-			}
-			source.Conn, err = diff.CreateDB(df.ctx, source.DBConfig, vars, cfg.CheckThreadCount)
-			if err != nil {
-				return errors.Annotatef(err, "create source db %s failed", source.DBConfig.String())
-			}
-		}
-
 		df.sourceDBs[source.InstanceID] = source
 	}
 
