@@ -7,7 +7,7 @@ OUT_DIR=/tmp/tidb_tools_test/sync_diff_inspector
 
 mysql -uroot -h 127.0.0.1 -P 4000 -e "create database if not exists tz_test"
 mysql -uroot -h 127.0.0.1 -P 4000 -e "create table tz_test.diff(id int, dt datetime, ts timestamp);"
-mysql -uroot -h 127.0.0.1 -P 4000 -e "insert into table tz_test.diff values (1, now(), now());"
+mysql -uroot -h 127.0.0.1 -P 4000 -e "insert into tz_test.diff values (1, now(), now());"
 
 echo "dump data and then load to tidb"
 rm -rf $OUT_DIR/dump_tz_diff
