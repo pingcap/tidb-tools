@@ -5,6 +5,7 @@ set -e
 cd "$(dirname "$0")"
 OUT_DIR=/tmp/tidb_tools_test/sync_diff_inspector
 
+mysql -uroot -h 127.0.0.1 -P 4000 -e "SET GLOBAL sql_mode = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION';"
 mysql -uroot -h 127.0.0.1 -P 4000 -e "show variables like '%sql_mode%'"
 mysql -uroot -h 127.0.0.1 -P 4000 -e "create database if not exists tz_test"
 mysql -uroot -h 127.0.0.1 -P 4000 -e "create table tz_test.diff(id int, dt datetime, ts timestamp);"
