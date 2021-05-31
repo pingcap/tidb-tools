@@ -47,6 +47,7 @@ type TableInstance struct {
 	Schema     string  `json:"schema"`
 	Table      string  `json:"table"`
 	InstanceID string  `json:"instance-id"`
+	DBType 	   string `json:"db_type"`
 	info       *model.TableInfo
 }
 
@@ -217,6 +218,10 @@ func (t *TableDiff) getTableInfo(ctx context.Context) error {
 	}
 	t.TargetTable.info = ignoreColumns(tableInfo, t.IgnoreColumns)
 
+	//if source db is oracle, no need to get table info like tidb.
+	if t.SourceTables[0].DBType == dbutil.Type_Oracle {
+		return nil
+	}
 	for _, sourceTable := range t.SourceTables {
 		tableInfo, err := dbutil.GetTableInfo(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table)
 		if err != nil {
@@ -498,6 +503,7 @@ func (t *TableDiff) compareChecksum(ctx context.Context, chunk *ChunkRange) (boo
 
 	getChecksum := func(db *sql.DB, schema, table, limitRange string, tbInfo *model.TableInfo, args []interface{}, tp string) {
 		beginTime := time.Now()
+		//TODO: support get oracle CRC32Checksum
 		checksum, err := dbutil.GetCRC32Checksum(ctx1, db, schema, table, tbInfo, limitRange, args)
 		cost := time.Since(beginTime)
 
@@ -566,10 +572,20 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 	}
 	defer targetRows.Close()
 
+	var (
+		rows *sql.Rows
+		getChunkRowsErr error
+	)
 	for i, sourceTable := range t.SourceTables {
-		rows, _, err := getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, chunk.Where, args, t.Collation)
-		if err != nil {
-			return false, errors.Trace(err)
+		//TODO: support get chunk row from oracle
+		if sourceTable.DBType == dbutil.Type_Oracle {
+			rows, _, getChunkRowsErr = getOracleChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.info, chunk.Where, args, t.Collation)
+		}else {
+			rows, _, getChunkRowsErr = getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, chunk.Where, args, t.Collation)
+		}
+
+		if getChunkRowsErr != nil {
+			return false, errors.Trace(getChunkRowsErr)
 		}
 		defer rows.Close()
 
@@ -990,3 +1006,36 @@ func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableIn
 
 	return rows, orderKeyCols, nil
 }
+
+//get chunk rows from oracle
+func getOracleChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo, where string,
+	args []interface{}, collation string) (*sql.Rows, []*model.ColumnInfo, error) {
+	orderKeys, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
+
+	columnNames := make([]string, 0, len(tableInfo.Columns))
+	for _, col := range tableInfo.Columns {
+		columnNames = append(columnNames, dbutil.OracleColumnName(col.Name.O))
+	}
+	columns := strings.Join(columnNames, ", ")
+
+	if collation != "" {
+		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
+	}
+
+	for i, key := range orderKeys {
+		orderKeys[i] = dbutil.OracleColumnName(key)
+	}
+
+	query := fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s%s",
+		columns, dbutil.OracleTableName(schema, table), where, strings.Join(orderKeys, ","), collation)
+
+	log.Debug("select data", zap.String("sql", query), zap.Reflect("args", args))
+	rows, err := db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, nil, errors.Trace(err)
+	}
+
+	return rows, orderKeyCols, nil
+}
+
+

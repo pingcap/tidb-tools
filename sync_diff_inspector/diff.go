@@ -495,6 +495,19 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]map[string]inte
 		allTablesMap[df.targetDB.InstanceID][schema] = utils.SliceToMap(allTables)
 	}
 
+	//for Oracle db source, it do not support table-rules.
+	//it have no multi sources; so one target schema correspond to  one source schema
+	if cfg.SourceDBCfg[0].Type == dbutil.Type_Oracle {
+		for _, source := range df.sourceDBs {
+			allTablesMap[source.InstanceID] = make(map[string]map[string]interface{})
+			for _, schema := range targetSchemas {
+				allTablesMap[source.InstanceID][schema] = allTablesMap[df.targetDB.InstanceID][schema]
+			}
+		}
+		return allTablesMap,nil
+	}
+
+	//for TiDB
 	for _, source := range df.sourceDBs {
 		allTablesMap[source.InstanceID] = make(map[string]map[string]interface{})
 		sourceSchemas, err := dbutil.GetSchemas(df.ctx, source.Conn)
@@ -571,6 +584,7 @@ func (df *Diff) Equal() (err error) {
 					Schema:     sourceTable.Schema,
 					Table:      sourceTable.Table,
 					InstanceID: sourceTable.InstanceID,
+					DBType:     df.sourceDBs[sourceTable.InstanceID].DBConfig.Type,
 				}
 				sourceTables = append(sourceTables, sourceTableInstance)
 			}
@@ -580,6 +594,7 @@ func (df *Diff) Equal() (err error) {
 				Schema:     table.Schema,
 				Table:      table.Table,
 				InstanceID: df.targetDB.InstanceID,
+				DBType:     df.targetDB.DBConfig.Type,
 			}
 
 			// find tidb instance for getting statistical information to split chunk

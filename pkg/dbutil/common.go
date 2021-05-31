@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
+	"github.com/godror/godror"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser"
@@ -50,6 +51,9 @@ const (
 
 	// DefaultDeleteRowsNum is the default rows num for delete one time
 	DefaultDeleteRowsNum int64 = 100000
+
+	Type_Oracle = "Oracle"
+	Type_Mysql = "Mysql"
 )
 
 var (
@@ -73,6 +77,12 @@ type DBConfig struct {
 	Schema string `toml:"schema" json:"schema"`
 
 	Snapshot string `toml:"snapshot" json:"snapshot"`
+
+	//for Oracle db
+	ConnectString string `toml:"connectString" json:"connectString"`
+
+	//Only support Mysql, Oracle
+	Type string `toml:"type" json:"type"`
 }
 
 // String returns native format of database configuration
@@ -140,6 +150,32 @@ func CloseDB(db *sql.DB) error {
 	}
 
 	return errors.Trace(db.Close())
+}
+
+//OpenOracleDB opens a oracle connection
+func OpenOracleDB(cfg DBConfig, vars map[string]string) (*sql.DB, error) {
+	// 时区以及配置设置
+	loc, err := time.LoadLocation("Local")
+	if err != nil {
+		return nil, err
+	}
+
+	oraDSN := godror.ConnectionParams{
+		CommonParams: godror.CommonParams{
+			Username: cfg.User,
+			Password: godror.NewPassword(cfg.Password),
+			ConnectString: cfg.ConnectString,
+			Timezone: loc,
+		},
+	}
+
+	sqlDB := sql.OpenDB(godror.NewConnector(oraDSN))
+
+	err = sqlDB.Ping()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return sqlDB, nil
 }
 
 // GetCreateTableSQL returns the create table statement.
@@ -722,9 +758,17 @@ func TableName(schema, table string) string {
 	return fmt.Sprintf("`%s`.`%s`", escapeName(schema), escapeName(table))
 }
 
+func OracleTableName(schema, table string) string {
+	return fmt.Sprintf("%s.%s", escapeName(schema), escapeName(table))
+}
+
 // ColumnName returns `column`
 func ColumnName(column string) string {
 	return fmt.Sprintf("`%s`", escapeName(column))
+}
+
+func OracleColumnName(column string) string {
+	return escapeName(column)
 }
 
 func escapeName(name string) string {
