@@ -252,7 +252,7 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 	*/
 
 	if limitRange == "" {
-		limitRange = "TRUE"
+		limitRange = "1=1"
 	}
 
 	if collation != "" {
@@ -295,7 +295,7 @@ func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column strin
 	*/
 
 	if limitRange == "" {
-		limitRange = "TRUE"
+		limitRange = "1=1"
 	}
 
 	if collation != "" {
@@ -471,6 +471,78 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName str
 	}
 
 	query := fmt.Sprintf("SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED)) AS checksum FROM %s WHERE %s;",
+		strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), TableName(schemaName, tableName), limitRange)
+	log.Debug("checksum", zap.String("sql", query), zap.Reflect("args", args))
+
+	var checksum sql.NullInt64
+	err := db.QueryRowContext(ctx, query, args...).Scan(&checksum)
+	if err != nil {
+		return -1, errors.Trace(err)
+	}
+	if !checksum.Valid {
+		// if don't have any data, the checksum will be `NULL`
+		log.Warn("get empty checksum", zap.String("sql", query), zap.Reflect("args", args))
+		return 0, nil
+	}
+
+	return checksum.Int64, nil
+}
+
+// GetOracleSumCRC32Checksum returns checksum code of some data by given condition in Oracle
+func GetOracleSumCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, error) {
+	/*
+		SELECT SUM(CRC32(nvl2(id,id||',',NULL)||nvl2(name,name||',',NULL)||nvl2(rtrim(sexy),rtrim(sexy)||',',NULL)||nvl2(hiredate,to_char(hiredate,'yyyy-mm-dd hh24:mi:ss')||',',NULL)||nvl2(id,0,1)||nvl2(name,0,1)||nvl2(sexy,0,1)||nvl2(hiredate,0,1)))
+	 from yzbttest;
+	*/
+	columnNvl2 := make([]string, 0, len(tbInfo.Columns))
+	for _, col := range tbInfo.Columns {
+		if IsTimeType(col.Tp) {
+			columnNvl2 = append(columnNvl2, fmt.Sprintf("NVL2(%s,to_char(%s,'yyyy-mm-dd hh24:mi:ss')||',',NULL)",OracleColumnName(col.Name.O), OracleColumnName(col.Name.O)))
+			continue
+		}
+		if IsCharType(col.Tp) {
+			columnNvl2 = append(columnNvl2, fmt.Sprintf("NVL2(rtrim(%s),rtrim(%s)||',',NULL)",OracleColumnName(col.Name.O), OracleColumnName(col.Name.O)))
+			continue
+		}
+
+		columnNvl2 = append(columnNvl2, fmt.Sprintf("NVL2(%s,%s||',',NULL)",OracleColumnName(col.Name.O), OracleColumnName(col.Name.O)))
+	}
+	query := fmt.Sprintf("SELECT SUM(CRC32(%s)) AS checksum FROM %s WHERE %s;", strings.Join(columnNvl2, "||"), OracleTableName(schemaName, tableName), limitRange)
+	log.Debug("checksum", zap.String("sql", query), zap.Reflect("args", args))
+
+	var checksum sql.NullInt64
+	err := db.QueryRowContext(ctx, query, args...).Scan(&checksum)
+	if err != nil {
+		return -1, errors.Trace(err)
+	}
+	if !checksum.Valid {
+		// if don't have any data, the checksum will be `NULL`
+		log.Warn("get empty checksum", zap.String("sql", query), zap.Reflect("args", args))
+		return 0, nil
+	}
+
+	return checksum.Int64, nil
+}
+
+// GetTiDBSumCRC32Checksum returns checksum code of some data by given condition in TiDB
+func GetTiDBSumCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, error) {
+	/*
+		calculate CRC32 checksum example:
+		mysql> SELECT sum(CAST(CRC32(CONCAT_WS(',', id, name, age, CONCAT(ISNULL(id), ISNULL(name), ISNULL(age))))AS UNSIGNED)) AS checksum FROM test.test WHERE id > 0 AND id < 10;
+		+------------+
+		| checksum   |
+		+------------+
+		| 1466098199 |
+		+------------+
+	*/
+	columnNames := make([]string, 0, len(tbInfo.Columns))
+	columnIsNull := make([]string, 0, len(tbInfo.Columns))
+	for _, col := range tbInfo.Columns {
+		columnNames = append(columnNames, ColumnName(col.Name.O))
+		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", ColumnName(col.Name.O)))
+	}
+
+	query := fmt.Sprintf("SELECT SUM(CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED)) AS checksum FROM %s WHERE %s;",
 		strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), TableName(schemaName, tableName), limitRange)
 	log.Debug("checksum", zap.String("sql", query), zap.Reflect("args", args))
 

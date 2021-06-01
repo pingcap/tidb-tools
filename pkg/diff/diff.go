@@ -200,7 +200,7 @@ func (t *TableDiff) adjustConfig() {
 	}
 
 	if len(t.Range) == 0 {
-		t.Range = "TRUE"
+		t.Range = "1=1"
 	}
 	if t.Sample <= 0 {
 		t.Sample = 100
@@ -501,10 +501,26 @@ func (t *TableDiff) compareChecksum(ctx context.Context, chunk *ChunkRange) (boo
 	)
 	defer close(checksumInfoCh)
 
-	getChecksum := func(db *sql.DB, schema, table, limitRange string, tbInfo *model.TableInfo, args []interface{}, tp string) {
+	getChecksum := func(db *sql.DB, sourceDbType,targetDbType, schema, table, limitRange string, tbInfo *model.TableInfo, args []interface{}, tp string) {
 		beginTime := time.Now()
-		//TODO: support get oracle CRC32Checksum
-		checksum, err := dbutil.GetCRC32Checksum(ctx1, db, schema, table, tbInfo, limitRange, args)
+		var (
+			checksum int64
+			err error
+		)
+		if sourceDbType == dbutil.Type_Oracle && targetDbType == dbutil.Type_Mysql{
+			log.Info("sourceDBType=>" + sourceDbType)
+			log.Info("targetDbType=>" + targetDbType)
+			if tp == "source" {
+				checksum, err = dbutil.GetOracleSumCRC32Checksum(ctx1, db, schema, table, tbInfo, limitRange, args)
+			}else {
+				checksum, err = dbutil.GetTiDBSumCRC32Checksum(ctx1, db, schema, table, tbInfo, limitRange, args)
+			}
+
+		}else {
+			log.Info("sourceDBType=>" + sourceDbType)
+			log.Info("targetDbType=>" + targetDbType)
+			checksum, err = dbutil.GetCRC32Checksum(ctx1, db, schema, table, tbInfo, limitRange, args)
+		}
 		cost := time.Since(beginTime)
 
 		checksumInfoCh <- checksumInfo{
@@ -517,10 +533,10 @@ func (t *TableDiff) compareChecksum(ctx context.Context, chunk *ChunkRange) (boo
 
 	args := utils.StringsToInterfaces(chunk.Args)
 	for _, sourceTable := range t.SourceTables {
-		go getChecksum(sourceTable.Conn, sourceTable.Schema, sourceTable.Table, chunk.Where, t.TargetTable.info, args, "source")
+		go getChecksum(sourceTable.Conn, sourceTable.DBType, t.TargetTable.DBType, sourceTable.Schema, sourceTable.Table, chunk.Where, t.TargetTable.info, args, "source")
 	}
-
-	go getChecksum(t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, chunk.Where, t.TargetTable.info, args, "target")
+	sourceDBType := t.SourceTables[0].DBType
+	go getChecksum(t.TargetTable.Conn, sourceDBType, t.TargetTable.DBType, t.TargetTable.Schema, t.TargetTable.Table, chunk.Where, t.TargetTable.info, args, "target")
 
 	for i := 0; i < len(t.SourceTables)+1; i++ {
 		checksumInfo := <-checksumInfoCh

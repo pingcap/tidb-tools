@@ -217,7 +217,7 @@ func (s *testSpliterSuite) TestRandomSpliter(c *C) {
 		createFakeResultForRandomSplit(mock, testCase.count, testCase.randomValues)
 
 		rSpliter := new(randomSpliter)
-		chunks, err := rSpliter.split(tableInstance, splitCols, 2, "TRUE", "")
+		chunks, err := rSpliter.split(tableInstance, splitCols, 2, "1=1", "")
 		c.Assert(err, IsNil)
 
 		for j, chunk := range chunks {
@@ -410,7 +410,7 @@ func (s *testSpliterSuite) TestBucketSpliter(c *C) {
 			nil,
 			[]chunkResult{
 				{
-					"TRUE",
+					"1=1",
 					nil,
 				},
 			},
@@ -427,7 +427,7 @@ func (s *testSpliterSuite) TestBucketSpliter(c *C) {
 	for i, testCase := range testCases {
 		createFakeResultForBucketSplit(mock, testCase.aRandomValues, testCase.bRandomValues)
 		bSpliter := new(bucketSpliter)
-		chunks, err := bSpliter.split(tableInstance, tableInfo.Columns, testCase.chunkSize, "TRUE", "")
+		chunks, err := bSpliter.split(tableInstance, tableInfo.Columns, testCase.chunkSize, "1=1", "")
 		c.Assert(err, IsNil)
 		for j, chunk := range chunks {
 			chunkStr, args := chunk.toString("")

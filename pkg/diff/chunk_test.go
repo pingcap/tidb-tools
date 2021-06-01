@@ -85,7 +85,7 @@ func (*testChunkSuite) TestSplitRange(c *C) {
 	// split chunks
 	fields, err := getSplitFields(tableInstance.info, nil)
 	c.Assert(err, IsNil)
-	chunks, err := getChunksForTable(tableInstance, fields, 100, "TRUE", "", false)
+	chunks, err := getChunksForTable(tableInstance, fields, 100, "1=1", "", false)
 	c.Assert(err, IsNil)
 
 	// get data count from every chunk, and the sum of them should equal to the table's count.

@@ -31,3 +31,17 @@ func IsTimeTypeAndNeedDecode(tp byte) bool {
 	}
 	return false
 }
+
+func IsTimeType(tp byte) bool {
+	if tp == mysql.TypeDatetime || tp == mysql.TypeTimestamp || tp == mysql.TypeDate || tp == mysql.TypeYear || tp == mysql.TypeNewDate{
+		return true
+	}
+	return false
+}
+
+func IsCharType(tp byte) bool {
+	if tp == mysql.TypeString || tp == mysql.TypeVarchar{
+		return true
+	}
+	return false
+}

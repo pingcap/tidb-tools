@@ -135,7 +135,7 @@ func (c *ChunkRange) toString(collation string) (string, []string) {
 	}
 
 	if len(upperCondition) == 0 && len(lowerCondition) == 0 {
-		return "TRUE", nil
+		return "1=1", nil
 	}
 
 	if len(upperCondition) == 0 {

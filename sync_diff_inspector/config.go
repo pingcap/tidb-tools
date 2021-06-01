@@ -340,6 +340,9 @@ func (c *Config) checkConfig() bool {
 		if c.TargetDBCfg.InstanceID == "" {
 			c.TargetDBCfg.InstanceID = "target"
 		}
+		if c.TargetDBCfg.Type == "" {
+			c.TargetDBCfg.Type = dbutil.Type_Mysql
+		}
 		if c.TargetDBCfg.Snapshot != "" {
 			c.TargetDBCfg.Snapshot = strconv.Quote(c.TargetDBCfg.Snapshot)
 		}

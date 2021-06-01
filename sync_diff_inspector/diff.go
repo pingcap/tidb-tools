@@ -252,7 +252,7 @@ func (df *Diff) adjustTableConfigBySubTask(cfg *Config) (err error) {
 					Table:  table,
 				},
 				TargetTableInfo: tableInfo,
-				Range:           "TRUE",
+				Range:           "1=1",
 				SourceTables:    sourceTables,
 			}
 		}
@@ -365,7 +365,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 					Table:  tableName,
 				},
 				TargetTableInfo: tableInfo,
-				Range:           "TRUE",
+				Range:           "1=1",
 				SourceTables:    sourceTables,
 			}
 		}
