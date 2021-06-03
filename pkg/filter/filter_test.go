@@ -167,6 +167,119 @@ func (s *testFilterSuite) TestFilterOnSchema(c *C) {
 	}
 }
 
+func (s *testFilterSuite) TestCaseSensitiveApply(c *C) {
+	cases := []struct {
+		rules         *Rules
+		Input         []*Table
+		Output        []*Table
+		caseSensitive bool
+	}{
+		{
+			rules: &Rules{
+				IgnoreDBs: []string{"foo"},
+				DoDBs:     []string{"foo"},
+			},
+			Input:  []*Table{{"foo", "bar"}, {"foo", ""}, {"foo1", "bar"}, {"foo1", ""}},
+			Output: []*Table{{"foo", "bar"}, {"foo", ""}},
+		},
+		{
+			rules: &Rules{
+				IgnoreDBs: []string{"foo1"},
+				DoDBs:     nil,
+			},
+			Input:  []*Table{{"foo", "bar"}, {"foo", ""}, {"foo1", "bar"}, {"foo1", ""}},
+			Output: []*Table{{"foo", "bar"}, {"foo", ""}},
+		},
+		// ignoreTable rules(Without regex)
+		{
+			rules: &Rules{
+				IgnoreTables: []*Table{{"Foo", "bAr"}},
+				DoTables:     nil,
+			},
+			Input:  []*Table{{"foo", "bar"}, {"foo", "bar1"}, {"foo", ""}, {"fff", "bar1"}},
+			Output: []*Table{{"foo", "bar1"}, {"foo", ""}, {"fff", "bar1"}},
+		},
+		{
+			// all regexp
+			rules: &Rules{
+				IgnoreDBs:    nil,
+				DoDBs:        []string{"~^foo"},
+				IgnoreTables: []*Table{{"~^foo", "~^sbtest-\\d"}},
+			},
+			Input:  []*Table{{"foo", "sbtest"}, {"foo1", "sbtest-1"}, {"foo2", ""}, {"fff", "bar"}},
+			Output: []*Table{{"foo", "sbtest"}, {"foo2", ""}},
+		},
+		// test rule with * or ?
+		{
+			rules: &Rules{
+				IgnoreDBs: []string{"foo[bar]", "foo?", "special\\"},
+			},
+			Input:  []*Table{{"foor", "a"}, {"foo[bar]", "b"}, {"Fo", "c"}, {"foo?", "d"}, {"special\\", "e"}},
+			Output: []*Table{{"foo[bar]", "b"}, {"Fo", "c"}},
+		},
+		// ensure non case-insensitive
+		{
+			rules: &Rules{
+				IgnoreDBs:    []string{"~^FOO"},
+				IgnoreTables: []*Table{{"~.*", "~FoO$"}},
+			},
+			Input:  []*Table{{"FOO1", "a"}, {"foo2", "b"}, {"BoO3", "cFoO"}, {"Foo4", "dfoo"}, {"5", "5"}},
+			Output: []*Table{{"5", "5"}},
+		},
+		// ensure case-insensitive
+		{
+			rules: &Rules{
+				IgnoreDBs:    []string{"~^FOO"},
+				IgnoreTables: []*Table{{"~.*", "~FoO$"}},
+			},
+			Input:         []*Table{{"FOO1", "a"}, {"foo2", "b"}, {"BoO3", "cFoo"}, {"Foo4", "dfoo"}, {"5", "5"}},
+			Output:        []*Table{{"foo2", "b"}, {"BoO3", "cFoo"}, {"Foo4", "dfoo"}, {"5", "5"}},
+			caseSensitive: true,
+		},
+		// test the rule whose schema part is not regex and the table part is regex.
+		{
+			rules: &Rules{
+				IgnoreTables: []*Table{{"a?b?", "~f[0-9]"}},
+			},
+			Input:  []*Table{{"abBd", "f1"}, {"aAAa", "f2"}, {"5", "5"}, {"abbc", "FA"}},
+			Output: []*Table{{"aAAa", "f2"}, {"5", "5"}, {"abbc", "FA"}},
+		},
+		// test the rule whose schema part is regex and the table part is not regex.
+		{
+			rules: &Rules{
+				IgnoreTables: []*Table{{"~t[0-8]", "A??"}},
+			},
+			Input:  []*Table{{"t1", "a01"}, {"t9", "A02"}, {"5", "5"}, {"T9", "a001"}},
+			Output: []*Table{{"t9", "A02"}, {"5", "5"}, {"T9", "a001"}},
+		},
+		{
+			rules: &Rules{
+				IgnoreTables: []*Table{{"a*", "A*"}},
+			},
+			Input:         []*Table{{"aB", "Ab"}, {"AaB", "aab"}, {"acB", "Afb"}},
+			Output:        []*Table{{"AaB", "aab"}},
+			caseSensitive: true,
+		},
+		{
+			rules: &Rules{
+				IgnoreTables: []*Table{{"a*", "A*"}},
+			},
+			Input:  []*Table{{"aB", "Ab"}, {"AaB", "aab"}, {"acB", "Afb"}},
+			Output: []*Table{},
+		},
+	}
+
+	for _, t := range cases {
+		ft, err := New(t.caseSensitive, t.rules)
+		c.Assert(err, IsNil)
+		originInput := cloneTables(t.Input)
+		got := ft.Apply(t.Input)
+		c.Logf("got %+v, expected %+v", got, t.Output)
+		c.Assert(originInput, DeepEquals, t.Input)
+		c.Assert(got, DeepEquals, t.Output)
+	}
+}
+
 func (s *testFilterSuite) TestMaxBox(c *C) {
 	rules := &Rules{
 		DoTables: []*Table{
