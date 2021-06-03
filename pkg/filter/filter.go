@@ -227,7 +227,8 @@ func (f *Filter) initTableRule(dbStr, tableStr string, isAllowList bool) error {
 	return nil
 }
 
-// ApplyOn applies filter rules on tables
+// deprecated
+// ApplyOn applies filter rules on tables and convert schema/table name to lower case if not caseSensitive
 // rules like
 // https://dev.mysql.com/doc/refman/8.0/en/replication-rules-table-options.html
 // https://dev.mysql.com/doc/refman/8.0/en/replication-rules-db-options.html
@@ -249,6 +250,31 @@ func (f *Filter) ApplyOn(stbs []*Table) []*Table {
 		}
 	}
 
+	return tbs
+}
+
+// ApplyOn applies filter rules on tables
+// rules like
+// https://dev.mysql.com/doc/refman/8.0/en/replication-rules-table-options.html
+// https://dev.mysql.com/doc/refman/8.0/en/replication-rules-db-options.html
+func (f *Filter) Apply(stbs []*Table) []*Table {
+	if f == nil || f.rules == nil {
+		return stbs
+	}
+	tbs := make([]*Table, 0)
+	for _, tb := range stbs {
+		newTb := tb
+		if !f.caseSensitive {
+			newTb = &Table{
+				Schema: strings.ToLower(newTb.Schema),
+				Name:   strings.ToLower(newTb.Name),
+			}
+		}
+
+		if f.Match(newTb) {
+			tbs = append(tbs, tb)
+		}
+	}
 	return tbs
 }
 
