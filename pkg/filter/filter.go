@@ -267,7 +267,7 @@ func (f *Filter) Apply(stbs []*Table) []*Table {
 		if !f.caseSensitive {
 			newTb = &Table{
 				Schema: strings.ToLower(newTb.Schema),
-				Name: strings.ToLower(newTb.Name),
+				Name:   strings.ToLower(newTb.Name),
 			}
 		}
 
