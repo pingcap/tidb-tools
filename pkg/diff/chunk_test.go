@@ -243,7 +243,7 @@ func (*testChunkSuite) TestRangeLimit(c *C) {
 	}
 
 	c.Assert(createCheckpointTable(ctx, conn), IsNil)
-	chunks, err := SplitChunks(ctx, tableInstance, "a,d", "a > 7", 1, "", false, conn)
+	chunks, err := SplitChunks(ctx, tableInstance, "a,d", "a > 7","", 1, "", false, conn)
 	c.Assert(err, IsNil)
 	defer conn.ExecContext(ctx, "DROP DATABASE sync_diff_inspector")
 	// a > 7 and chunkSize = 1 should return 2 chunk

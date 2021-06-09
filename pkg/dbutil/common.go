@@ -53,7 +53,8 @@ const (
 	DefaultDeleteRowsNum int64 = 100000
 
 	Type_Oracle = "Oracle"
-	Type_Mysql = "Mysql"
+	Type_Mysql   = "Mysql"
+	Type_Tidb   = "Tidb"
 )
 
 var (
@@ -472,7 +473,7 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName str
 
 	query := fmt.Sprintf("SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED)) AS checksum FROM %s WHERE %s;",
 		strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), TableName(schemaName, tableName), limitRange)
-	log.Debug("checksum", zap.String("sql", query), zap.Reflect("args", args))
+	log.Debug("get tidb xor crc32 checksum", zap.String("sql", query), zap.Reflect("args", args))
 
 	var checksum sql.NullInt64
 	err := db.QueryRowContext(ctx, query, args...).Scan(&checksum)
@@ -481,7 +482,7 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName str
 	}
 	if !checksum.Valid {
 		// if don't have any data, the checksum will be `NULL`
-		log.Warn("get empty checksum", zap.String("sql", query), zap.Reflect("args", args))
+		log.Warn("get tidb xor empty checksum", zap.String("sql", query), zap.Reflect("args", args))
 		return 0, nil
 	}
 
@@ -495,20 +496,23 @@ func GetOracleSumCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tabl
 	 from yzbttest;
 	*/
 	columnNvl2 := make([]string, 0, len(tbInfo.Columns))
+	columnNames := make([]string, 0, len(tbInfo.Columns))
 	for _, col := range tbInfo.Columns {
 		if IsTimeType(col.Tp) {
 			columnNvl2 = append(columnNvl2, fmt.Sprintf("NVL2(%s,to_char(%s,'yyyy-mm-dd hh24:mi:ss')||',',NULL)",OracleColumnName(col.Name.O), OracleColumnName(col.Name.O)))
+			columnNames = append(columnNames, fmt.Sprintf("NVL2(%s,0,1)", OracleColumnName(col.Name.O)))
 			continue
 		}
 		if IsCharType(col.Tp) {
 			columnNvl2 = append(columnNvl2, fmt.Sprintf("NVL2(rtrim(%s),rtrim(%s)||',',NULL)",OracleColumnName(col.Name.O), OracleColumnName(col.Name.O)))
+			columnNames = append(columnNames, fmt.Sprintf("NVL2(%s,0,1)", OracleColumnName(col.Name.O)))
 			continue
 		}
-
 		columnNvl2 = append(columnNvl2, fmt.Sprintf("NVL2(%s,%s||',',NULL)",OracleColumnName(col.Name.O), OracleColumnName(col.Name.O)))
+		columnNames = append(columnNames, fmt.Sprintf("NVL2(%s,0,1)", OracleColumnName(col.Name.O)))
 	}
-	query := fmt.Sprintf("SELECT SUM(CRC32(%s)) AS checksum FROM %s WHERE %s;", strings.Join(columnNvl2, "||"), OracleTableName(schemaName, tableName), limitRange)
-	log.Debug("checksum", zap.String("sql", query), zap.Reflect("args", args))
+	query := fmt.Sprintf("SELECT SUM(CRC32(%s || %s)) AS checksum FROM %s WHERE %s", strings.Join(columnNvl2, "||"), strings.Join(columnNames, "||"), OracleTableName(schemaName, tableName), limitRange)
+	log.Debug("get Oracle sum crc32 checksum", zap.String("sql", query), zap.Reflect("args", args))
 
 	var checksum sql.NullInt64
 	err := db.QueryRowContext(ctx, query, args...).Scan(&checksum)
@@ -517,7 +521,7 @@ func GetOracleSumCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tabl
 	}
 	if !checksum.Valid {
 		// if don't have any data, the checksum will be `NULL`
-		log.Warn("get empty checksum", zap.String("sql", query), zap.Reflect("args", args))
+		log.Warn("get Oracle sum crc32 empty checksum", zap.String("sql", query), zap.Reflect("args", args))
 		return 0, nil
 	}
 
@@ -544,7 +548,7 @@ func GetTiDBSumCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableN
 
 	query := fmt.Sprintf("SELECT SUM(CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED)) AS checksum FROM %s WHERE %s;",
 		strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), TableName(schemaName, tableName), limitRange)
-	log.Debug("checksum", zap.String("sql", query), zap.Reflect("args", args))
+	log.Debug("get Tidb sum crc32 checksum", zap.String("sql", query), zap.Reflect("args", args))
 
 	var checksum sql.NullInt64
 	err := db.QueryRowContext(ctx, query, args...).Scan(&checksum)
@@ -553,7 +557,7 @@ func GetTiDBSumCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableN
 	}
 	if !checksum.Valid {
 		// if don't have any data, the checksum will be `NULL`
-		log.Warn("get empty checksum", zap.String("sql", query), zap.Reflect("args", args))
+		log.Warn("get Tidb sum crc32 empty checksum", zap.String("sql", query), zap.Reflect("args", args))
 		return 0, nil
 	}
 

@@ -410,6 +410,9 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 		if table.Range != "" {
 			df.tables[table.Schema][table.Table].Range = table.Range
 		}
+		if table.OracleRange != "" {
+			df.tables[table.Schema][table.Table].OracleRange = table.OracleRange
+		}
 		df.tables[table.Schema][table.Table].IgnoreColumns = table.IgnoreColumns
 		df.tables[table.Schema][table.Table].Fields = table.Fields
 		df.tables[table.Schema][table.Table].Collation = table.Collation
@@ -629,6 +632,7 @@ func (df *Diff) Equal() (err error) {
 
 				Fields:            table.Fields,
 				Range:             table.Range,
+				OracleRange: 	   table.OracleRange,
 				Collation:         table.Collation,
 				ChunkSize:         df.chunkSize,
 				Sample:            df.sample,

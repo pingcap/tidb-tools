@@ -108,8 +108,8 @@ func saveChunk(ctx context.Context, db *sql.DB, chunkID int, instanceID, schema,
 		return errors.Trace(err)
 	}
 
-	sql := fmt.Sprintf("REPLACE INTO `%s`.`%s` VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?);", checkpointSchemaName, chunkTableName)
-	err = dbutil.ExecSQLWithRetry(ctx, db, sql, chunkID, instanceID, schema, table, chunk.Where, checksum, string(chunkBytes), chunk.State, time.Now())
+	sql := fmt.Sprintf("REPLACE INTO `%s`.`%s` VALUES(?, ?, ?, ?, ?, ?, ?, ?, NOW());", checkpointSchemaName, chunkTableName)
+	err = dbutil.ExecSQLWithRetry(ctx, db, sql, chunkID, instanceID, schema, table, chunk.Where, checksum, string(chunkBytes), chunk.State)
 	if err != nil {
 		log.Error("save chunk info failed", zap.Error(err))
 		return errors.Trace(err)
@@ -124,7 +124,7 @@ func initChunks(ctx context.Context, db *sql.DB, instanceID, schema, table strin
 	num := 0
 	sqlPrefix := fmt.Sprintf("INSERT INTO `%s`.`%s` VALUES", checkpointSchemaName, chunkTableName)
 
-	valuesPlaceholders := "(?, ?, ?, ?, ?, ?, ?, ?, ?)"
+	valuesPlaceholders := "(?, ?, ?, ?, ?, ?, ?, ?, NOW())"
 	valuesPlaceholdersArray := make([]string, 0, batch)
 	values := make([]interface{}, 0, 9*batch)
 
@@ -135,7 +135,7 @@ func initChunks(ctx context.Context, db *sql.DB, instanceID, schema, table strin
 			return errors.Trace(err)
 		}
 
-		values = append(values, chunk.ID, instanceID, schema, table, chunk.Where, "", string(chunkBytes), chunk.State, time.Now())
+		values = append(values, chunk.ID, instanceID, schema, table, chunk.Where, "", string(chunkBytes), chunk.State)
 		valuesPlaceholdersArray = append(valuesPlaceholdersArray, valuesPlaceholders)
 
 		if num >= batch || i == len(chunks)-1 {

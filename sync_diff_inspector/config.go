@@ -17,6 +17,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"net/url"
 	"strconv"
 
@@ -53,6 +54,11 @@ func (c *DBConfig) Valid() bool {
 	}
 	sourceInstanceMap[c.InstanceID] = struct{}{}
 
+	if c.DBConfig.Type != dbutil.Type_Oracle && c.DBConfig.Type != dbutil.Type_Tidb && c.DBConfig.Type != dbutil.Type_Mysql{
+		log.Error(fmt.Sprintf("DB type is error. Only support Oracle, Tidb, Mysql, your db type is [%s]", c.DBConfig.Type))
+		return false
+	}
+
 	return true
 }
 
@@ -77,6 +83,8 @@ type TableConfig struct {
 	Fields string `toml:"index-fields"`
 	// select range, for example: "age > 10 AND age < 20"
 	Range string `toml:"range"`
+	//for Oracle db, this range scope should equal to Range scope
+	OracleRange string `toml:"oracle-range"`
 	// set true if comparing sharding tables with target table, should have more than one source tables.
 	IsSharding bool `toml:"is-sharding"`
 	// saves the source tables's info.
@@ -332,6 +340,9 @@ func (c *Config) checkConfig() bool {
 			if !c.SourceDBCfg[i].Valid() {
 				return false
 			}
+			if c.SourceDBCfg[i].Type == "" {
+				c.SourceDBCfg[i].Type = dbutil.Type_Tidb
+			}
 			if c.SourceDBCfg[i].Snapshot != "" {
 				c.SourceDBCfg[i].Snapshot = strconv.Quote(c.SourceDBCfg[i].Snapshot)
 			}
@@ -341,7 +352,7 @@ func (c *Config) checkConfig() bool {
 			c.TargetDBCfg.InstanceID = "target"
 		}
 		if c.TargetDBCfg.Type == "" {
-			c.TargetDBCfg.Type = dbutil.Type_Mysql
+			c.TargetDBCfg.Type = dbutil.Type_Tidb
 		}
 		if c.TargetDBCfg.Snapshot != "" {
 			c.TargetDBCfg.Snapshot = strconv.Quote(c.TargetDBCfg.Snapshot)
@@ -360,7 +371,19 @@ func (c *Config) checkConfig() bool {
 			if !tableCfg.Valid() {
 				return false
 			}
+			if c.SourceDBCfg[0].Type == dbutil.Type_Oracle{
+				if tableCfg.Collation != "" {
+					log.Error(fmt.Sprintf("when source db is Oracle, Collation of table config must not config. table[%s] have config it", tableCfg.Table))
+					return false
+				}
+				if tableCfg.Range != "" && tableCfg.OracleRange == "" {
+					log.Error("when source db is Oracle, range have setup, so oracle-range must have setup")
+					return false
+				}
+			}
 		}
+
+
 	}
 
 	if c.OnlyUseChecksum {

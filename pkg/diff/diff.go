@@ -67,6 +67,9 @@ type TableDiff struct {
 	// select range, for example: "age > 10 AND age < 20"
 	Range string `json:"range"`
 
+	//for Oracle db, this range scope should equal to Range scope, for example date scope
+	OracleRange string `json:"oracle-range"`
+
 	// for example, the whole data is [1...100]
 	// we can split these data to [1...10], [11...20], ..., [91...100]
 	// the [1...10] is a chunk, and it's chunk size is 10
@@ -253,7 +256,7 @@ func (t *TableDiff) CheckTableData(ctx context.Context) (equal bool, err error) 
 		log.Info("don't have checkpoint info, or the last check success, or config changed, will split chunks")
 
 		fromCheckpoint = false
-		chunks, err = SplitChunks(ctx, table, t.Fields, t.Range, t.ChunkSize, t.Collation, useTiDB, t.CpDB)
+		chunks, err = SplitChunks(ctx, table, t.Fields, t.Range, t.OracleRange, t.ChunkSize, t.Collation, useTiDB, t.CpDB)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -354,7 +357,7 @@ func (t *TableDiff) LoadCheckpoint(ctx context.Context) ([]*ChunkRange, error) {
 		}
 	}
 
-	// clean old checkpoint infomation, and initial table summary
+	// clean old checkpoint information, and initial table summary
 	err = cleanCheckpoint(ctx1, t.CpDB, t.TargetTable.Schema, t.TargetTable.Table)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -501,25 +504,25 @@ func (t *TableDiff) compareChecksum(ctx context.Context, chunk *ChunkRange) (boo
 	)
 	defer close(checksumInfoCh)
 
-	getChecksum := func(db *sql.DB, sourceDbType,targetDbType, schema, table, limitRange string, tbInfo *model.TableInfo, args []interface{}, tp string) {
+	getChecksum := func(db *sql.DB, sourceDbType,targetDbType, schema, table string, chunk *ChunkRange, tbInfo *model.TableInfo, args []interface{}, tp string) {
 		beginTime := time.Now()
 		var (
 			checksum int64
 			err error
 		)
-		if sourceDbType == dbutil.Type_Oracle && targetDbType == dbutil.Type_Mysql{
-			log.Info("sourceDBType=>" + sourceDbType)
-			log.Info("targetDbType=>" + targetDbType)
+		if sourceDbType == dbutil.Type_Oracle && (targetDbType == dbutil.Type_Tidb || targetDbType == dbutil.Type_Mysql) {
+			log.Debug("sourceDBType=>" + sourceDbType)
+			log.Debug("targetDbType=>" + targetDbType)
 			if tp == "source" {
-				checksum, err = dbutil.GetOracleSumCRC32Checksum(ctx1, db, schema, table, tbInfo, limitRange, args)
+				checksum, err = dbutil.GetOracleSumCRC32Checksum(ctx1, db, schema, table, tbInfo, chunk.OracleWhere, args)
 			}else {
-				checksum, err = dbutil.GetTiDBSumCRC32Checksum(ctx1, db, schema, table, tbInfo, limitRange, args)
+				checksum, err = dbutil.GetTiDBSumCRC32Checksum(ctx1, db, schema, table, tbInfo, chunk.Where, args)
 			}
 
 		}else {
-			log.Info("sourceDBType=>" + sourceDbType)
-			log.Info("targetDbType=>" + targetDbType)
-			checksum, err = dbutil.GetCRC32Checksum(ctx1, db, schema, table, tbInfo, limitRange, args)
+			log.Debug("sourceDBType=>" + sourceDbType)
+			log.Debug("targetDbType=>" + targetDbType)
+			checksum, err = dbutil.GetCRC32Checksum(ctx1, db, schema, table, tbInfo, chunk.Where, args)
 		}
 		cost := time.Since(beginTime)
 
@@ -533,10 +536,10 @@ func (t *TableDiff) compareChecksum(ctx context.Context, chunk *ChunkRange) (boo
 
 	args := utils.StringsToInterfaces(chunk.Args)
 	for _, sourceTable := range t.SourceTables {
-		go getChecksum(sourceTable.Conn, sourceTable.DBType, t.TargetTable.DBType, sourceTable.Schema, sourceTable.Table, chunk.Where, t.TargetTable.info, args, "source")
+		go getChecksum(sourceTable.Conn, sourceTable.DBType, t.TargetTable.DBType, sourceTable.Schema, sourceTable.Table, chunk, t.TargetTable.info, args, "source")
 	}
 	sourceDBType := t.SourceTables[0].DBType
-	go getChecksum(t.TargetTable.Conn, sourceDBType, t.TargetTable.DBType, t.TargetTable.Schema, t.TargetTable.Table, chunk.Where, t.TargetTable.info, args, "target")
+	go getChecksum(t.TargetTable.Conn, sourceDBType, t.TargetTable.DBType, t.TargetTable.Schema, t.TargetTable.Table, chunk, t.TargetTable.info, args, "target")
 
 	for i := 0; i < len(t.SourceTables)+1; i++ {
 		checksumInfo := <-checksumInfoCh
@@ -593,9 +596,8 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 		getChunkRowsErr error
 	)
 	for i, sourceTable := range t.SourceTables {
-		//TODO: support get chunk row from oracle
 		if sourceTable.DBType == dbutil.Type_Oracle {
-			rows, _, getChunkRowsErr = getOracleChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.info, chunk.Where, args, t.Collation)
+			rows, _, getChunkRowsErr = getOracleChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.info, chunk.OracleWhere, args, t.Collation)
 		}else {
 			rows, _, getChunkRowsErr = getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, chunk.Where, args, t.Collation)
 		}
@@ -617,7 +619,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 
 	getRowData := func(rows *sql.Rows) (rowData map[string]*dbutil.ColumnData, err error) {
 		for rows.Next() {
-			rowData, err = dbutil.ScanRow(rows)
+			rowData, err = dbutil.UpperCaseKeyScanRow(rows)
 			return
 		}
 		return
@@ -868,15 +870,15 @@ func generateDML(tp string, data map[string]*dbutil.ColumnData, table *model.Tab
 			}
 
 			colNames = append(colNames, dbutil.ColumnName(col.Name.O))
-			if data[col.Name.O].IsNull {
+			if data[strings.ToUpper(col.Name.O)].IsNull {
 				values = append(values, "NULL")
 				continue
 			}
 
 			if needQuotes(col.FieldType) {
-				values = append(values, fmt.Sprintf("'%s'", strings.Replace(string(data[col.Name.O].Data), "'", "\\'", -1)))
+				values = append(values, fmt.Sprintf("'%s'", strings.Replace(string(data[strings.ToUpper(col.Name.O)].Data), "'", "\\'", -1)))
 			} else {
-				values = append(values, string(data[col.Name.O].Data))
+				values = append(values, string(data[strings.ToUpper(col.Name.O)].Data))
 			}
 		}
 
@@ -888,15 +890,15 @@ func generateDML(tp string, data map[string]*dbutil.ColumnData, table *model.Tab
 				continue
 			}
 
-			if data[col.Name.O].IsNull {
+			if data[strings.ToUpper(col.Name.O)].IsNull {
 				kvs = append(kvs, fmt.Sprintf("%s is NULL", dbutil.ColumnName(col.Name.O)))
 				continue
 			}
 
 			if needQuotes(col.FieldType) {
-				kvs = append(kvs, fmt.Sprintf("%s = '%s'", dbutil.ColumnName(col.Name.O), strings.Replace(string(data[col.Name.O].Data), "'", "\\'", -1)))
+				kvs = append(kvs, fmt.Sprintf("%s = '%s'", dbutil.ColumnName(col.Name.O), strings.Replace(string(data[strings.ToUpper(col.Name.O)].Data), "'", "\\'", -1)))
 			} else {
-				kvs = append(kvs, fmt.Sprintf("%s = %s", dbutil.ColumnName(col.Name.O), string(data[col.Name.O].Data)))
+				kvs = append(kvs, fmt.Sprintf("%s = %s", dbutil.ColumnName(col.Name.O), string(data[strings.ToUpper(col.Name.O)].Data)))
 			}
 		}
 		sql = fmt.Sprintf("DELETE FROM %s WHERE %s;", dbutil.TableName(schema, table.Name.O), strings.Join(kvs, " AND "))
@@ -934,7 +936,7 @@ func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model
 		if data2, ok = map2[key]; !ok {
 			return false, 0, errors.Errorf("don't have key %s", key)
 		}
-		if (string(data1.Data) == string(data2.Data)) && (data1.IsNull == data2.IsNull) {
+		if string(data1.Data) == string(data2.Data) {
 			continue
 		}
 		equal = false
@@ -946,11 +948,11 @@ func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model
 	}
 
 	for _, col := range orderKeyCols {
-		if data1, ok = map1[col.Name.O]; !ok {
+		if data1, ok = map1[strings.ToUpper(col.Name.O)]; !ok {
 			err = errors.Errorf("don't have key %s", col.Name.O)
 			return
 		}
-		if data2, ok = map2[col.Name.O]; !ok {
+		if data2, ok = map2[strings.ToUpper(col.Name.O)]; !ok {
 			err = errors.Errorf("don't have key %s", col.Name.O)
 			return
 		}
@@ -999,6 +1001,10 @@ func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableIn
 
 	columnNames := make([]string, 0, len(tableInfo.Columns))
 	for _, col := range tableInfo.Columns {
+		if dbutil.IsTimeType(col.Tp) {
+			columnNames = append(columnNames, "DATE_FORMAT("+ dbutil.ColumnName(col.Name.O) +",'%Y-%m-%d %H:%i:%s') as "+ dbutil.ColumnName(col.Name.O))
+			continue
+		}
 		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
 	}
 	columns := strings.Join(columnNames, ", ")
@@ -1030,6 +1036,11 @@ func getOracleChunkRows(ctx context.Context, db *sql.DB, schema, table string, t
 
 	columnNames := make([]string, 0, len(tableInfo.Columns))
 	for _, col := range tableInfo.Columns {
+		if dbutil.IsTimeType(col.Tp) {
+			columnNames = append(columnNames, fmt.Sprintf("TO_CHAR(%s,'yyyy-mm-dd hh24:mi:ss') as %s", dbutil.OracleColumnName(col.Name.O), dbutil.OracleColumnName(col.Name.O)))
+			continue
+		}
+
 		columnNames = append(columnNames, dbutil.OracleColumnName(col.Name.O))
 	}
 	columns := strings.Join(columnNames, ", ")

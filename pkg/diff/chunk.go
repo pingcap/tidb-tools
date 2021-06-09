@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -56,6 +57,8 @@ type ChunkRange struct {
 	Bounds []*Bound `json:"bounds"`
 
 	Where string   `json:"where"`
+	//for oracle db
+	OracleWhere string `json:"oracle-where"`
 	Args  []string `json:"args"`
 
 	State string `json:"state"`
@@ -435,7 +438,7 @@ func getSplitFields(table *model.TableInfo, splitFields []string) ([]*model.Colu
 }
 
 // SplitChunks splits the table to some chunks.
-func SplitChunks(ctx context.Context, table *TableInstance, splitFields, limits string, chunkSize int, collation string, useTiDBStatsInfo bool, cpDB *sql.DB) (chunks []*ChunkRange, err error) {
+func SplitChunks(ctx context.Context, table *TableInstance, splitFields, limits, oracleLimit string, chunkSize int, collation string, useTiDBStatsInfo bool, cpDB *sql.DB) (chunks []*ChunkRange, err error) {
 	var splitFieldArr []string
 	if len(splitFields) != 0 {
 		splitFieldArr = strings.Split(splitFields, ",")
@@ -463,6 +466,7 @@ func SplitChunks(ctx context.Context, table *TableInstance, splitFields, limits 
 		conditions, args := chunk.toString(collation)
 		chunk.ID = i
 		chunk.Where = fmt.Sprintf("((%s) AND %s)", conditions, limits)
+		chunk.OracleWhere = resolveOracleWhere(fmt.Sprintf("((%s) AND %s)", conditions, oracleLimit))
 		chunk.Args = args
 		chunk.State = notCheckedState
 	}
@@ -476,4 +480,17 @@ func SplitChunks(ctx context.Context, table *TableInstance, splitFields, limits 
 	}
 
 	return chunks, nil
+}
+
+func resolveOracleWhere(where string) string {
+	result := ""
+	ss := strings.Split(where, "?")
+	for i, s := range ss {
+		if i != len(ss)-1 {
+			result += s + ":" + strconv.Itoa(i+1)
+			continue
+		}
+		result += s
+	}
+	return strings.Replace(result, "`", "", -1)
 }
