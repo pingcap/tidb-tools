@@ -18,7 +18,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -466,7 +465,7 @@ func SplitChunks(ctx context.Context, table *TableInstance, splitFields, limits,
 		conditions, args := chunk.toString(collation)
 		chunk.ID = i
 		chunk.Where = fmt.Sprintf("((%s) AND %s)", conditions, limits)
-		chunk.OracleWhere = resolveOracleWhere(fmt.Sprintf("((%s) AND %s)", conditions, oracleLimit))
+		chunk.OracleWhere = resolveOracleWhere(conditions, oracleLimit, args)
 		chunk.Args = args
 		chunk.State = notCheckedState
 	}
@@ -482,15 +481,7 @@ func SplitChunks(ctx context.Context, table *TableInstance, splitFields, limits,
 	return chunks, nil
 }
 
-func resolveOracleWhere(where string) string {
-	result := ""
-	ss := strings.Split(where, "?")
-	for i, s := range ss {
-		if i != len(ss)-1 {
-			result += s + ":" + strconv.Itoa(i+1)
-			continue
-		}
-		result += s
-	}
+func resolveOracleWhere(conditions, oracleLimit string, args []string) string {
+	result := dbutil.ReplacePlaceholder(fmt.Sprintf("((%s) AND %s)", conditions, oracleLimit), args)
 	return strings.Replace(result, "`", "", -1)
 }

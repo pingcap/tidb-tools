@@ -490,7 +490,7 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName str
 }
 
 // GetOracleSumCRC32Checksum returns checksum code of some data by given condition in Oracle
-func GetOracleSumCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, error) {
+func GetOracleSumCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string) (int64, error) {
 	/*
 		SELECT SUM(CRC32(nvl2(id,id||',',NULL)||nvl2(name,name||',',NULL)||nvl2(rtrim(sexy),rtrim(sexy)||',',NULL)||nvl2(hiredate,to_char(hiredate,'yyyy-mm-dd hh24:mi:ss')||',',NULL)||nvl2(id,0,1)||nvl2(name,0,1)||nvl2(sexy,0,1)||nvl2(hiredate,0,1)))
 	 from yzbttest;
@@ -512,16 +512,16 @@ func GetOracleSumCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tabl
 		columnNames = append(columnNames, fmt.Sprintf("NVL2(%s,0,1)", OracleColumnName(col.Name.O)))
 	}
 	query := fmt.Sprintf("SELECT SUM(CRC32(%s || %s)) AS checksum FROM %s WHERE %s", strings.Join(columnNvl2, "||"), strings.Join(columnNames, "||"), OracleTableName(schemaName, tableName), limitRange)
-	log.Debug("get Oracle sum crc32 checksum", zap.String("sql", query), zap.Reflect("args", args))
+	log.Debug("get Oracle sum crc32 checksum", zap.String("sql", query))
 
 	var checksum sql.NullInt64
-	err := db.QueryRowContext(ctx, query, args...).Scan(&checksum)
+	err := db.QueryRowContext(ctx, query).Scan(&checksum)
 	if err != nil {
 		return -1, errors.Trace(err)
 	}
 	if !checksum.Valid {
 		// if don't have any data, the checksum will be `NULL`
-		log.Warn("get Oracle sum crc32 empty checksum", zap.String("sql", query), zap.Reflect("args", args))
+		log.Warn("get Oracle sum crc32 empty checksum", zap.String("sql", query))
 		return 0, nil
 	}
 
@@ -542,7 +542,11 @@ func GetTiDBSumCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableN
 	columnNames := make([]string, 0, len(tbInfo.Columns))
 	columnIsNull := make([]string, 0, len(tbInfo.Columns))
 	for _, col := range tbInfo.Columns {
-		columnNames = append(columnNames, ColumnName(col.Name.O))
+		if IsNumberOrFloatType(col.Tp) {
+			columnNames = append(columnNames, fmt.Sprintf("0 + cast(%s as char)", ColumnName(col.Name.O)))
+		}else {
+			columnNames = append(columnNames, ColumnName(col.Name.O))
+		}
 		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", ColumnName(col.Name.O)))
 	}
 

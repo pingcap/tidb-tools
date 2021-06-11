@@ -516,17 +516,13 @@ func (t *TableDiff) compareChecksum(ctx context.Context, chunk *ChunkRange) (boo
 			err error
 		)
 		if sourceDbType == dbutil.Type_Oracle && (targetDbType == dbutil.Type_Tidb || targetDbType == dbutil.Type_Mysql) {
-			log.Debug("sourceDBType=>" + sourceDbType)
-			log.Debug("targetDbType=>" + targetDbType)
 			if tp == "source" {
-				checksum, err = dbutil.GetOracleSumCRC32Checksum(ctx1, db, schema, table, tbInfo, chunk.OracleWhere, args)
+				checksum, err = dbutil.GetOracleSumCRC32Checksum(ctx1, db, schema, table, tbInfo, chunk.OracleWhere)
 			}else {
 				checksum, err = dbutil.GetTiDBSumCRC32Checksum(ctx1, db, schema, table, tbInfo, chunk.Where, args)
 			}
 
 		}else {
-			log.Debug("sourceDBType=>" + sourceDbType)
-			log.Debug("targetDbType=>" + targetDbType)
 			checksum, err = dbutil.GetCRC32Checksum(ctx1, db, schema, table, tbInfo, chunk.Where, args)
 		}
 		cost := time.Since(beginTime)
@@ -559,7 +555,7 @@ func (t *TableDiff) compareChecksum(ctx context.Context, chunk *ChunkRange) (boo
 		}
 
 		if checksumInfo.tp == "source" {
-			sourceChecksum ^= checksumInfo.checksum
+			sourceChecksum = sourceChecksum + checksumInfo.checksum
 			if checksumInfo.cost > getSourceChecksumDuration {
 				getSourceChecksumDuration = checksumInfo.cost
 			}
@@ -602,7 +598,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 	)
 	for i, sourceTable := range t.SourceTables {
 		if sourceTable.DBType == dbutil.Type_Oracle {
-			rows, _, getChunkRowsErr = getOracleChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.info, chunk.OracleWhere, args, t.Collation)
+			rows, _, getChunkRowsErr = getOracleChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.info, chunk.OracleWhere)
 		}else {
 			rows, _, getChunkRowsErr = getChunkRows(ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, sourceTable.info, chunk.Where, args, t.Collation)
 		}
@@ -951,24 +947,22 @@ func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model
 				num1,num2 float64
 				err1,err2 error
 			)
-			if data1.IsNull {
-				num1 = 0.0
-			}else {
+			if  !data1.IsNull && !data2.IsNull {
 				num1, err1 = strconv.ParseFloat(string(data1.Data), 64)
-			}
-			if data2.IsNull {
-				num2 = 0.0
-			}else {
 				num2, err2 = strconv.ParseFloat(string(data2.Data), 64)
-			}
-			if err1 != nil || err2 != nil {
-				err = errors.Errorf("value of column %s convert %s, %s to float failed, err1: %v, err2: %v", key, string(data1.Data), string(data2.Data), err1, err2)
-				equal = false
-				return
-			}
-			if num1 == num2 {
+				if err1 != nil || err2 != nil {
+					err = errors.Errorf("value of column %s convert %s, %s to float failed, err1: %v, err2: %v", key, string(data1.Data), string(data2.Data), err1, err2)
+					equal = false
+					return
+				}
+				if num1 == num2 {
+					continue
+				}
+			}else if data1.IsNull && data2.IsNull  {
+				//they are null, so equal
 				continue
 			}
+
 		}else {
 			//for other column type, compare them as a string
 			if string(data1.Data) == string(data2.Data) {
@@ -1012,29 +1006,34 @@ func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model
 				num1,num2 float64
 				err1,err2 error
 			)
-			if data1.IsNull {
-				num1 = 0.0
-			}else {
+			if !data1.IsNull && !data2.IsNull {
 				num1, err1 = strconv.ParseFloat(string(data1.Data), 64)
-			}
-			if data2.IsNull {
-				num2 = 0.0
-			}else {
 				num2, err2 = strconv.ParseFloat(string(data2.Data), 64)
-			}
-			if err1 != nil || err2 != nil {
-				err = errors.Errorf("convert %s, %s to float failed, err1: %v, err2: %v", string(data1.Data), string(data2.Data), err1, err2)
-				return
-			}
+				if err1 != nil || err2 != nil {
+					err = errors.Errorf("value of column %s convert %s, %s to float failed, err1: %v, err2: %v", key, string(data1.Data), string(data2.Data), err1, err2)
+					equal = false
+					return
+				}
+				if num1 == num2 {
+					continue
+				}
+				if num1 < num2 {
+					cmp = -1
+				} else if num1 > num2 {
+					cmp = 1
+				}
 
-			if num1 == num2 {
+			}else if  data1.IsNull && data2.IsNull{
+				//they are null, so equal
 				continue
-			}
-
-			if num1 < num2 {
-				cmp = -1
-			} else if num1 > num2 {
-				cmp = 1
+			}else {// data1 is null or data2 is null
+				if data1.IsNull {
+					// target had superfluous data
+					cmp = 1
+				}else {
+					//target lack data
+					cmp = -1
+				}
 			}
 			break
 		}
@@ -1078,8 +1077,7 @@ func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableIn
 }
 
 //get chunk rows from oracle
-func getOracleChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo, where string,
-	args []interface{}, collation string) (*sql.Rows, []*model.ColumnInfo, error) {
+func getOracleChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo, where string) (*sql.Rows, []*model.ColumnInfo, error) {
 	orderKeys, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
 
 	columnNames := make([]string, 0, len(tableInfo.Columns))
@@ -1104,8 +1102,8 @@ func getOracleChunkRows(ctx context.Context, db *sql.DB, schema, table string, t
 	query := fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s",
 		columns, dbutil.OracleTableName(schema, table), where, strings.Join(orderKeys, ","))
 
-	log.Debug("select data", zap.String("sql", query), zap.Reflect("args", args))
-	rows, err := db.QueryContext(ctx, query, args...)
+	log.Debug("select data", zap.String("sql", query))
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
