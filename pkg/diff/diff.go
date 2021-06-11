@@ -937,6 +937,16 @@ func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model
 			}
 			break
 
+		} else if data1.IsNull || data2.IsNull {
+			if data1.IsNull && data2.IsNull {
+				continue
+			}
+			if data1.IsNull {
+				cmp = -1
+			} else if data2.IsNull {
+				cmp = 1
+			}
+			break
 		} else {
 			num1, err1 := strconv.ParseFloat(string(data1.Data), 64)
 			num2, err2 := strconv.ParseFloat(string(data2.Data), 64)
