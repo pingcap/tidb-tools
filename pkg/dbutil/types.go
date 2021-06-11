@@ -40,8 +40,12 @@ func IsTimeType(tp byte) bool {
 }
 
 func IsCharType(tp byte) bool {
-	if tp == mysql.TypeString || tp == mysql.TypeVarchar{
+	if tp == mysql.TypeString{
 		return true
 	}
 	return false
+}
+
+func IsNumberOrFloatType(tp byte) bool {
+	return IsNumberType(tp) || IsFloatType(tp)
 }

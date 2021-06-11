@@ -205,6 +205,11 @@ func (t *TableDiff) adjustConfig() {
 	if len(t.Range) == 0 {
 		t.Range = "1=1"
 	}
+
+	if len(t.OracleRange) == 0 {
+		t.OracleRange = "1=1"
+	}
+
 	if t.Sample <= 0 {
 		t.Sample = 100
 	}
@@ -677,6 +682,11 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 	var lastSourceData, lastTargetData map[string]*dbutil.ColumnData
 	equal := true
 
+	columnsMap := make(map[string]*model.ColumnInfo)
+	for _, col := range t.TargetTable.info.Columns {
+		columnsMap[strings.ToUpper(col.Name.O)] = col
+	}
+
 	for {
 		if lastSourceData == nil {
 			lastSourceData, err = getSourceRow()
@@ -734,7 +744,7 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 			break
 		}
 
-		eq, cmp, err := compareData(lastSourceData, lastTargetData, orderKeyCols)
+		eq, cmp, err := compareData(lastSourceData, lastTargetData, orderKeyCols, columnsMap)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -909,7 +919,7 @@ func generateDML(tp string, data map[string]*dbutil.ColumnData, table *model.Tab
 	return
 }
 
-func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model.ColumnInfo) (equal bool, cmp int32, err error) {
+func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model.ColumnInfo, columnsMap map[string]*model.ColumnInfo) (equal bool, cmp int32, err error) {
 	var (
 		data1, data2 *dbutil.ColumnData
 		key          string
@@ -936,8 +946,34 @@ func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model
 		if data2, ok = map2[key]; !ok {
 			return false, 0, errors.Errorf("don't have key %s", key)
 		}
-		if string(data1.Data) == string(data2.Data) {
-			continue
+		if dbutil.IsNumberOrFloatType(columnsMap[key].Tp) {
+			var (
+				num1,num2 float64
+				err1,err2 error
+			)
+			if data1.IsNull {
+				num1 = 0.0
+			}else {
+				num1, err1 = strconv.ParseFloat(string(data1.Data), 64)
+			}
+			if data2.IsNull {
+				num2 = 0.0
+			}else {
+				num2, err2 = strconv.ParseFloat(string(data2.Data), 64)
+			}
+			if err1 != nil || err2 != nil {
+				err = errors.Errorf("value of column %s convert %s, %s to float failed, err1: %v, err2: %v", key, string(data1.Data), string(data2.Data), err1, err2)
+				equal = false
+				return
+			}
+			if num1 == num2 {
+				continue
+			}
+		}else {
+			//for other column type, compare them as a string
+			if string(data1.Data) == string(data2.Data) {
+				continue
+			}
 		}
 		equal = false
 
@@ -972,8 +1008,20 @@ func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model
 			break
 
 		} else {
-			num1, err1 := strconv.ParseFloat(string(data1.Data), 64)
-			num2, err2 := strconv.ParseFloat(string(data2.Data), 64)
+			var (
+				num1,num2 float64
+				err1,err2 error
+			)
+			if data1.IsNull {
+				num1 = 0.0
+			}else {
+				num1, err1 = strconv.ParseFloat(string(data1.Data), 64)
+			}
+			if data2.IsNull {
+				num2 = 0.0
+			}else {
+				num2, err2 = strconv.ParseFloat(string(data2.Data), 64)
+			}
 			if err1 != nil || err2 != nil {
 				err = errors.Errorf("convert %s, %s to float failed, err1: %v, err2: %v", string(data1.Data), string(data2.Data), err1, err2)
 				return
@@ -1040,21 +1088,21 @@ func getOracleChunkRows(ctx context.Context, db *sql.DB, schema, table string, t
 			columnNames = append(columnNames, fmt.Sprintf("TO_CHAR(%s,'yyyy-mm-dd hh24:mi:ss') as %s", dbutil.OracleColumnName(col.Name.O), dbutil.OracleColumnName(col.Name.O)))
 			continue
 		}
+		if dbutil.IsCharType(col.Tp) {
+			columnNames = append(columnNames, fmt.Sprintf("rtrim(%s) as %s", dbutil.OracleColumnName(col.Name.O), dbutil.OracleColumnName(col.Name.O)))
+			continue
+		}
 
 		columnNames = append(columnNames, dbutil.OracleColumnName(col.Name.O))
 	}
 	columns := strings.Join(columnNames, ", ")
 
-	if collation != "" {
-		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
-	}
-
 	for i, key := range orderKeys {
 		orderKeys[i] = dbutil.OracleColumnName(key)
 	}
 
-	query := fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s%s",
-		columns, dbutil.OracleTableName(schema, table), where, strings.Join(orderKeys, ","), collation)
+	query := fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s",
+		columns, dbutil.OracleTableName(schema, table), where, strings.Join(orderKeys, ","))
 
 	log.Debug("select data", zap.String("sql", query), zap.Reflect("args", args))
 	rows, err := db.QueryContext(ctx, query, args...)

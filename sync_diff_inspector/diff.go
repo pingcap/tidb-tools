@@ -253,6 +253,7 @@ func (df *Diff) adjustTableConfigBySubTask(cfg *Config) (err error) {
 				},
 				TargetTableInfo: tableInfo,
 				Range:           "1=1",
+				OracleRange:     "1=1",
 				SourceTables:    sourceTables,
 			}
 		}
@@ -366,6 +367,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 				},
 				TargetTableInfo: tableInfo,
 				Range:           "1=1",
+				OracleRange:     "1=1",
 				SourceTables:    sourceTables,
 			}
 		}
