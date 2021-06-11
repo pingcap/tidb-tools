@@ -235,12 +235,14 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 
 	randomValue := make([]string, 0, num)
 	for rows.Next() {
-		var value string
+		var value sql.NullString
 		err = rows.Scan(&value)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		randomValue = append(randomValue, value)
+		if value.Valid {
+			randomValue = append(randomValue, value.String)
+		}
 	}
 
 	return randomValue, errors.Trace(rows.Err())
