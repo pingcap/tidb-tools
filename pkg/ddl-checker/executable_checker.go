@@ -36,7 +36,7 @@ type ExecutableChecker struct {
 
 // NewExecutableChecker creates a new ExecutableChecker
 func NewExecutableChecker() (*ExecutableChecker, error) {
-	logutil.InitZapLogger(&logutil.LogConfig{
+	logutil.InitLogger(&logutil.LogConfig{
 		Config: log.Config{
 			Level: "error",
 		},
