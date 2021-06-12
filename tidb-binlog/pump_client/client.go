@@ -27,7 +27,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/etcd"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
-	"github.com/pingcap/tidb/util/logutil"
 	pb "github.com/pingcap/tipb/go-binlog"
 	pd "github.com/tikv/pd/client"
 	"go.etcd.io/etcd/mvcc/mvccpb"
@@ -612,9 +611,4 @@ func copyPumps(pumps map[string]*PumpStatus) []*PumpStatus {
 	}
 
 	return ps
-}
-
-// InitLogger initializes logger.
-func InitLogger(cfg *logutil.LogConfig) error {
-	return logutil.InitZapLogger(cfg)
 }
