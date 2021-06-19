@@ -326,12 +326,11 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 			}
 
 			//exclude those in "exclude-tables"
-			for _, t := range matchedTables {
-				if df.InExcludeTables(schemaTables.ExcludeTables, t) {
-					continue
-				} else {
-					tables = append(tables, t)
-				}
+			for _, excludeTable := range schemaTables.ExcludeTables {
+				matchedTables = df.RemoveMatchTable(excludeTable, matchedTables)
+			}
+			for table := range matchedTables {
+				tables = append(tables, table)
 			}
 		}
 
@@ -395,7 +394,7 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 				return errors.Trace(err)
 			}
 
-			for _, table := range tables {
+			for table := range tables {
 				sourceTables = append(sourceTables, TableInstance{
 					InstanceID: sourceTable.InstanceID,
 					Schema:     sourceTable.Schema,
@@ -515,8 +514,8 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]map[string]inte
 }
 
 // GetMatchTable returns all the matched table.
-func (df *Diff) GetMatchTable(db DBConfig, schema, table string, allTables map[string]interface{}) ([]string, error) {
-	tableNames := make([]string, 0, 1)
+func (df *Diff) GetMatchTable(db DBConfig, schema, table string, allTables map[string]interface{}) (map[string]interface{}, error) {
+	tableNames := make(map[string]interface{}, 1)
 
 	if table[0] == '~' {
 		tableRegex := regexp.MustCompile(fmt.Sprintf("(?i)%s", table[1:]))
@@ -524,17 +523,36 @@ func (df *Diff) GetMatchTable(db DBConfig, schema, table string, allTables map[s
 			if !tableRegex.MatchString(tableName) {
 				continue
 			}
-			tableNames = append(tableNames, tableName)
+			tableNames[tableName] = struct{}{}
 		}
 	} else {
 		if _, ok := allTables[table]; ok {
-			tableNames = append(tableNames, table)
+			tableNames[table] = struct{}{}
 		} else {
 			return nil, errors.Errorf("%s.%s not found in %s", schema, table, db.InstanceID)
 		}
 	}
 
 	return tableNames, nil
+}
+
+// RemoveMatchTable removes all the matched table.
+func (df *Diff) RemoveMatchTable(table string, allTables map[string]interface{}) map[string]interface{} {
+	tableNames := allTables
+
+	if table[0] == '~' {
+		tableRegex := regexp.MustCompile(fmt.Sprintf("(?i)%s", table[1:]))
+		for tableName := range tableNames {
+			if !tableRegex.MatchString(tableName) {
+				continue
+			}
+			delete(tableNames, tableName)
+		}
+	} else {
+		delete(tableNames, table)
+	}
+
+	return tableNames
 }
 
 // Close closes file and database connection.
