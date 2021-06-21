@@ -17,7 +17,7 @@ check-thread-count = 4
 sample-percent = 100
 
 # calculate the data's checksum, and compare data by checksum.
-# set false if want to comapre the data directly
+# set false if want to compare the data directly
 use-checksum = true
 
 # set true if just want compare data by checksum, will skip select data when checksum is not equal.
