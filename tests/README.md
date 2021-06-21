@@ -10,7 +10,7 @@ This folder contains all tests which relies on external service such as TiDB.
    - `bin/tikv-server`
    - `bin/tidb-server`
    - `bin/sync_diff_inspector`
-   - `bin/mydumper`
+   - `bin/dumpling`
    - `bin/loader`
    - `bin/importer`
 

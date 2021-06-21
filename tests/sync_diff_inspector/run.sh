@@ -16,7 +16,7 @@ importer -t "create table diff_test.test(a int, b varchar(10), c float, d dateti
 mysql -uroot -h 127.0.0.1 -P 4000 -e "alter table diff_test.test change column a \`table\` int"
 
 echo "dump data and then load to tidb"
-mydumper --host 127.0.0.1 --port 4000 --user root --outputdir $OUT_DIR/dump_diff -B diff_test -T test
+dumpling --host 127.0.0.1 --port 4000 --user root --output $OUT_DIR/dump_diff -T diff_test.test
 loader -h 127.0.0.1 -P 4001 -u root -d $OUT_DIR/dump_diff
 
 echo "use sync_diff_inspector to compare data"

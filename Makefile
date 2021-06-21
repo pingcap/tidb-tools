@@ -81,7 +81,7 @@ integration_test: build
 	@which bin/tikv-server
 	@which bin/pd-server
 	@which bin/sync_diff_inspector
-	@which bin/mydumper
+	@which bin/dumpling
 	@which bin/loader
 	@which bin/importer
 	tests/run.sh
