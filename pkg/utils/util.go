@@ -9,8 +9,8 @@ import (
 )
 
 // SliceToMap converts slice to map
-func SliceToMap(slice []string) map[string]interface{} {
-	sMap := make(map[string]interface{})
+func SliceToMap(slice []string) map[string]struct{} {
+	sMap := make(map[string]struct{})
 	for _, str := range slice {
 		sMap[str] = struct{}{}
 	}

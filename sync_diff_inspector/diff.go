@@ -477,11 +477,11 @@ func (df *Diff) adjustDBCfgByDMSubTasks(cfg *Config) error {
 }
 
 // GetAllTables get all tables in all databases.
-func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]map[string]interface{}, error) {
+func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]map[string]struct{}, error) {
 	// instanceID => schema => table
-	allTablesMap := make(map[string]map[string]map[string]interface{})
+	allTablesMap := make(map[string]map[string]map[string]struct{})
 
-	allTablesMap[df.targetDB.InstanceID] = make(map[string]map[string]interface{})
+	allTablesMap[df.targetDB.InstanceID] = make(map[string]map[string]struct{})
 	targetSchemas, err := dbutil.GetSchemas(df.ctx, df.targetDB.Conn)
 	if err != nil {
 		return nil, errors.Annotatef(err, "get schemas from %s", df.targetDB.InstanceID)
@@ -495,7 +495,7 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]map[string]inte
 	}
 
 	for _, source := range df.sourceDBs {
-		allTablesMap[source.InstanceID] = make(map[string]map[string]interface{})
+		allTablesMap[source.InstanceID] = make(map[string]map[string]struct{})
 		sourceSchemas, err := dbutil.GetSchemas(df.ctx, source.Conn)
 		if err != nil {
 			return nil, errors.Annotatef(err, "get schemas from %s", source.InstanceID)
@@ -514,16 +514,15 @@ func (df *Diff) GetAllTables(cfg *Config) (map[string]map[string]map[string]inte
 }
 
 // GetMatchTable returns all the matched table.
-func (df *Diff) GetMatchTable(db DBConfig, schema, table string, allTables map[string]interface{}) (map[string]interface{}, error) {
-	tableNames := make(map[string]interface{}, 1)
+func (df *Diff) GetMatchTable(db DBConfig, schema, table string, allTables map[string]struct{}) (map[string]struct{}, error) {
+	tableNames := make(map[string]struct{}, 1)
 
 	if table[0] == '~' {
 		tableRegex := regexp.MustCompile(fmt.Sprintf("(?i)%s", table[1:]))
 		for tableName := range allTables {
-			if !tableRegex.MatchString(tableName) {
-				continue
+			if tableRegex.MatchString(tableName) {
+				tableNames[tableName] = struct{}{}
 			}
-			tableNames[tableName] = struct{}{}
 		}
 	} else {
 		if _, ok := allTables[table]; ok {
@@ -537,16 +536,15 @@ func (df *Diff) GetMatchTable(db DBConfig, schema, table string, allTables map[s
 }
 
 // RemoveMatchTable removes all the matched table.
-func (df *Diff) RemoveMatchTable(table string, allTables map[string]interface{}) map[string]interface{} {
+func (df *Diff) RemoveMatchTable(table string, allTables map[string]struct{}) map[string]struct{} {
 	tableNames := allTables
 
 	if table[0] == '~' {
 		tableRegex := regexp.MustCompile(fmt.Sprintf("(?i)%s", table[1:]))
 		for tableName := range tableNames {
-			if !tableRegex.MatchString(tableName) {
-				continue
+			if tableRegex.MatchString(tableName) {
+				delete(tableNames, tableName)
 			}
-			delete(tableNames, tableName)
 		}
 	} else {
 		delete(tableNames, table)
