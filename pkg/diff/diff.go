@@ -20,6 +20,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/godror/godror"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -388,6 +389,11 @@ func (t *TableDiff) checkChunksDataEqual(ctx context.Context, filterByRand bool,
 			eq := false
 			if chunk.State == successState || chunk.State == ignoreState {
 				eq = true
+				if chunk.State == ignoreState {
+					t.summaryInfo.addIgnoreNum()
+				}else if chunk.State == successState {
+					t.summaryInfo.addSuccessNum()
+				}
 			} else {
 				eq, err = t.checkChunkDataEqual(ctx, filterByRand, chunk)
 				if err != nil {
@@ -599,9 +605,13 @@ func (t *TableDiff) compareRowsByCRC32(ctx context.Context, chunk *ChunkRange) (
 	if sourceErr != nil {
 		return false, errors.Trace(sourceErr)
 	}
+	defer sourceRows.Close()
 	getRowCRC32Data := func(rows *sql.Rows) (rowData map[string]*dbutil.ColumnData, err error) {
+		log.Debug("enter getRowCRC32Data")
 		for rows.Next() {
+			log.Debug("enter getRowCRC32Data for loop")
 			rowData, err = dbutil.UpperCaseKeyScanRow(rows)
+			log.Debug("end getRowCRC32Data for loop")
 			return
 		}
 		return
@@ -610,11 +620,16 @@ func (t *TableDiff) compareRowsByCRC32(ctx context.Context, chunk *ChunkRange) (
 	var lastSourceData, lastTargetData map[string]*dbutil.ColumnData
 	equal := true
 
-	//columnsMap := make(map[string]*model.ColumnInfo)
-	//for _, col := range t.TargetTable.info.Columns {
-	//	columnsMap[strings.ToUpper(col.Name.O)] = col
-	//}
-
+	var (
+		equalNum = 0
+		noEqualNum = 0
+	)
+	defer func() {
+		log.Info("compare row in one chunk stat",
+			zap.String("target table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)),
+			zap.Int("equal num", equalNum), zap.Int("no equal num", noEqualNum),
+			zap.String("where", dbutil.ReplacePlaceholder(chunk.Where, chunk.Args)))
+	}()
 	for {
 		if lastSourceData == nil {
 			lastSourceData, err = getRowCRC32Data(sourceRows)
@@ -622,7 +637,6 @@ func (t *TableDiff) compareRowsByCRC32(ctx context.Context, chunk *ChunkRange) (
 				return false, err
 			}
 		}
-
 		if lastTargetData == nil {
 			lastTargetData, err = getRowCRC32Data(targetRows)
 			if err != nil {
@@ -639,6 +653,7 @@ func (t *TableDiff) compareRowsByCRC32(ctx context.Context, chunk *ChunkRange) (
 					return false, errors.Trace(targetRowErr)
 				}
 				targetRowMap, targetRowMapErr := getRowCRC32Data(targetRow)
+				targetRow.Close()
 				if targetRowMapErr != nil {
 					return false, errors.Trace(targetRowErr)
 				}
@@ -651,7 +666,8 @@ func (t *TableDiff) compareRowsByCRC32(ctx context.Context, chunk *ChunkRange) (
 					return false, nil
 				}
 				equal = false
-
+				noEqualNum++
+				printCompareNumInfo(noEqualNum, equalNum, t)
 				lastTargetData, err = getRowCRC32Data(targetRows)
 				if err != nil {
 					return false, err
@@ -665,10 +681,11 @@ func (t *TableDiff) compareRowsByCRC32(ctx context.Context, chunk *ChunkRange) (
 			for lastSourceData != nil {
 				sourceRow, sourceRowErr := getOracleRowByOrderKey(lastSourceData, orderKeyCols, ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.info)
 				if sourceRowErr != nil {
-					log.Error("get source row by order key failed.", zap.String("schema", sourceTable.Schema),zap.String("table", sourceTable.Table))
+					log.Error("get source row by order key failed.", zap.String("schema", sourceTable.Schema), zap.String("table", sourceTable.Table))
 					return false, errors.Trace(sourceRowErr)
 				}
 				sourceRowMap, sourceRowMapErr := getRowCRC32Data(sourceRow)
+				sourceRow.Close()
 				if sourceRowMapErr != nil {
 					return false, errors.Trace(sourceRowMapErr)
 				}
@@ -681,7 +698,8 @@ func (t *TableDiff) compareRowsByCRC32(ctx context.Context, chunk *ChunkRange) (
 					return false, nil
 				}
 				equal = false
-
+				noEqualNum++
+				printCompareNumInfo(noEqualNum, equalNum, t)
 				lastSourceData, err = getRowCRC32Data(sourceRows)
 				if err != nil {
 					return false, err
@@ -697,23 +715,26 @@ func (t *TableDiff) compareRowsByCRC32(ctx context.Context, chunk *ChunkRange) (
 		if eq {
 			lastSourceData = nil
 			lastTargetData = nil
+			equalNum++
+			printCompareNumInfo(noEqualNum, equalNum, t)
 			continue
 		}
 
 		equal = false
+		noEqualNum++
+		printCompareNumInfo(noEqualNum, equalNum, t)
 		sql := ""
-
+		log.Debug("not equal and generate sql")
 		switch cmp {
 		case 1:
 			// delete
-			targetRow, targetRowErr := getTidbRowByOrderKey(lastTargetData,orderKeyCols, ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info)
+			targetRow, targetRowErr := getTidbRowByOrderKey(lastTargetData, orderKeyCols, ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info)
 			if targetRowErr != nil {
-				log.Error("get target row by order key failed.", zap.String("schema", t.TargetTable.Schema),zap.String("table", t.TargetTable.Table))
+				log.Error("get target row by order key failed.", zap.String("schema", t.TargetTable.Schema), zap.String("table", t.TargetTable.Table))
 				return false, errors.Trace(targetRowErr)
 			}
-			log.Debug("start call getRowCRC32Data")
 			targetRowMap, targetRowMapErr := getRowCRC32Data(targetRow)
-			log.Debug("end call getRowCRC32Data")
+			targetRow.Close()
 			if targetRowMapErr != nil {
 				return false, errors.Trace(targetRowErr)
 			}
@@ -724,12 +745,11 @@ func (t *TableDiff) compareRowsByCRC32(ctx context.Context, chunk *ChunkRange) (
 			// insert
 			sourceRow, sourceRowErr := getOracleRowByOrderKey(lastSourceData, orderKeyCols, ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.info)
 			if sourceRowErr != nil {
-				log.Error("get source row by order key failed.", zap.String("schema", sourceTable.Schema),zap.String("table", sourceTable.Table))
+				log.Error("get source row by order key failed.", zap.String("schema", sourceTable.Schema), zap.String("table", sourceTable.Table))
 				return false, errors.Trace(sourceRowErr)
 			}
-			log.Debug("start call getRowCRC32Data")
 			sourceRowMap, sourceRowMapErr := getRowCRC32Data(sourceRow)
-			log.Debug("end call getRowCRC32Data")
+			sourceRow.Close()
 			if sourceRowMapErr != nil {
 				return false, errors.Trace(sourceRowMapErr)
 			}
@@ -740,12 +760,11 @@ func (t *TableDiff) compareRowsByCRC32(ctx context.Context, chunk *ChunkRange) (
 			// update
 			sourceRow, sourceRowErr := getOracleRowByOrderKey(lastSourceData, orderKeyCols, ctx, sourceTable.Conn, sourceTable.Schema, sourceTable.Table, t.TargetTable.info)
 			if sourceRowErr != nil {
-				log.Error("get source row by order key failed.", zap.String("schema", sourceTable.Schema),zap.String("table", sourceTable.Table))
+				log.Error("get source row by order key failed.", zap.String("schema", sourceTable.Schema), zap.String("table", sourceTable.Table))
 				return false, errors.Trace(sourceRowErr)
 			}
-			log.Debug("start call getRowCRC32Data")
 			sourceRowMap, sourceRowMapErr := getRowCRC32Data(sourceRow)
-			log.Debug("end call getRowCRC32Data")
+			sourceRow.Close()
 			if sourceRowMapErr != nil {
 				return false, errors.Trace(sourceRowMapErr)
 			}
@@ -769,6 +788,13 @@ func (t *TableDiff) compareRowsByCRC32(ctx context.Context, chunk *ChunkRange) (
 	}
 
 	return equal, nil
+}
+
+func printCompareNumInfo(noEqualNum int, equalNum int, t *TableDiff) {
+	if (noEqualNum+equalNum) % 1000 == 0 {
+		log.Info("stat of rows compare in one chunk", zap.String("target table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)),
+			zap.Int("noEqualNum", noEqualNum), zap.Int("equalNum", equalNum))
+	}
 }
 
 func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, error) {
@@ -1205,7 +1231,7 @@ func compareCRC32Row(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*m
 	}
 	key = "CHECKSUM"
 	if string(map1[key].Data) != string(map2[key].Data) {
-		log.Debug("compare CHECKSUM column, value1 != value2, cmp=1",zap.String("column",key), zap.String("value1",string(map1[key].Data)), zap.String("value2",string(map2[key].Data)))
+		log.Debug("compare CHECKSUM column, value1 != value2, cmp=0",zap.String("column",key), zap.String("value1",string(map1[key].Data)), zap.String("value2",string(map2[key].Data)))
 		equal = false
 	}
 	return
@@ -1421,14 +1447,19 @@ func getTidbChunkCRC32Rows(ctx context.Context, db *sql.DB, schemaName, tableNam
 		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", dbutil.ColumnName(col.Name.O)))
 	}
 
+	orderkeyColNames := make([]string, 0, len(orderKeyCols))
 	for i, key := range orderKeys {
+		if dbutil.IsTimeType(orderKeyCols[i].Tp) {
+			orderkeyColNames = append(orderkeyColNames, "DATE_FORMAT("+ dbutil.ColumnName(key) +",'%Y-%m-%d %H:%i:%s') as "+ dbutil.ColumnName(key))
+		}else {
+			orderkeyColNames = append(orderkeyColNames, dbutil.ColumnName(key))
+		}
 		orderKeys[i] = dbutil.ColumnName(key)
 	}
 
-	orderkeyColNames := strings.Join(orderKeys, ",")
-
 	query := fmt.Sprintf("SELECT %s, CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s))) AS UNSIGNED) AS checksum FROM %s WHERE %s ORDER BY %s ;",
-		orderkeyColNames, strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), dbutil.TableName(schemaName, tableName), where, orderkeyColNames)
+		strings.Join(orderkeyColNames, ", "), strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "),
+		dbutil.TableName(schemaName, tableName), where, strings.Join(orderKeys, ","))
 
 	log.Debug("get tidb chunk crc32 rows", zap.String("sql", query), zap.Reflect("args", args))
 	rows, err := db.QueryContext(ctx, query, args...)
@@ -1465,6 +1496,8 @@ func getOracleChunkCRC32Rows(ctx context.Context, db *sql.DB, schemaName, tableN
 	for _, orderKeyCol := range orderKeyCols {
 		if dbutil.IsCharType(orderKeyCol.Tp) {
 			orderkeyColNames = append(orderkeyColNames, fmt.Sprintf("rtrim(%s) as %s",dbutil.OracleColumnName(orderKeyCol.Name.O),dbutil.OracleColumnName(orderKeyCol.Name.O)))
+		}else if dbutil.IsTimeType(orderKeyCol.Tp) {
+			orderkeyColNames = append(orderkeyColNames, fmt.Sprintf("TO_CHAR(%s,'yyyy-mm-dd hh24:mi:ss') as %s", dbutil.OracleColumnName(orderKeyCol.Name.O), dbutil.OracleColumnName(orderKeyCol.Name.O)))
 		}else {
 			orderkeyColNames = append(orderkeyColNames, dbutil.OracleColumnName(orderKeyCol.Name.O))
 		}
@@ -1476,7 +1509,7 @@ func getOracleChunkCRC32Rows(ctx context.Context, db *sql.DB, schemaName, tableN
 		where, strings.Join(orderbyOrderKeyColNames, ", "))
 
 	log.Debug("get oracle chunk crc32 rows", zap.String("sql", query))
-	rows, err := db.QueryContext(ctx, query)
+	rows, err := db.QueryContext(ctx, query,godror.PrefetchCount(1000), godror.FetchArraySize(1000))
 	if err != nil {
 		log.Error("get oracle chunk crc32 rows failed", zap.String("schema", schemaName),
 			zap.String("table", tableName), zap.String("sql", query))
@@ -1516,10 +1549,13 @@ func getTidbRowByOrderKey(data map[string]*dbutil.ColumnData, orderKeyCols []*mo
 	}
 
 	query := fmt.Sprintf("SELECT %s FROM %s WHERE %s;",
-		columns, dbutil.TableName(schemaName, tableName), strings.Join(condition, "AND "))
+		columns, dbutil.TableName(schemaName, tableName), strings.Join(condition, " AND "))
 
 	log.Debug("get tidb one row by order key", zap.String("sql", query))
+	log.Debug("db stats", zap.Reflect("info ", db.Stats()))
+	log.Debug("start call 'get tidb one row by order key sql'")
 	rows, err := db.QueryContext(ctx, query)
+	log.Debug("end call 'get tidb one row by order key sql'")
 	if err != nil {
 		log.Error("get tidb one row by order key failed.", zap.String("schema", schemaName),
 			zap.String("table", tableName), zap.String("sql", query))
@@ -1556,16 +1592,19 @@ func getOracleRowByOrderKey(data map[string]*dbutil.ColumnData, orderKeyCols []*
 		}
 		if dbutil.IsNumberOrFloatType(key.Tp) {
 			condition = append(condition, fmt.Sprintf("%s = %s", dbutil.OracleColumnName(key.Name.O), string(column.Data)))
+		}else if dbutil.IsTimeType(key.Tp) {
+			condition = append(condition, fmt.Sprintf("%s = TO_DATE('%s','yyyy-mm-dd hh24:mi:ss')", dbutil.OracleColumnName(key.Name.O),string(column.Data)))
 		}else {
 			condition = append(condition, fmt.Sprintf("%s = '%s'", dbutil.OracleColumnName(key.Name.O), string(column.Data)))
 		}
 	}
 
 	query := fmt.Sprintf("SELECT %s FROM %s WHERE %s",
-		columns, dbutil.OracleTableName(schemaName, tableName), strings.Join(condition, "AND "))
+		columns, dbutil.OracleTableName(schemaName, tableName), strings.Join(condition, " AND "))
 
 	log.Debug("get oracle one row by order key", zap.String("sql", query))
 	log.Debug("start call 'get oracle one row by order key'")
+	log.Debug("db stats", zap.Reflect("info ", db.Stats()))
 	rows, err := db.QueryContext(ctx, query)
 	log.Debug("end call 'get oracle one row by order key'")
 	if err != nil {

@@ -48,6 +48,8 @@ type Bound struct {
 
 	HasLower bool `json:"has-lower"`
 	HasUpper bool `json:"has-upper"`
+
+	ColumnInfo *model.ColumnInfo `json:"-"`
 }
 
 // ChunkRange represents chunk range
@@ -82,6 +84,124 @@ func (c *ChunkRange) String() string {
 	}
 
 	return string(chunkBytes)
+}
+
+//process logic same to toString method, but add oracle condition
+func (c *ChunkRange) toTidbAndOracleCondition(collation string) (tidbCondition string, args []string, oracleCondition string) {
+	if collation != "" {
+		collation = fmt.Sprintf(" COLLATE '%s'", collation)
+	}
+
+
+	lowerCondition := make([]string, 0, 1)
+	upperCondition := make([]string, 0, 1)
+	lowerArgs := make([]string, 0, 1)
+	upperArgs := make([]string, 0, 1)
+
+	lowerOracleCondition := make([]string, 0, 1)
+	upperOracleCondition := make([]string, 0, 1)
+
+	preConditionForLower := make([]string, 0, 1)
+	preConditionForUpper := make([]string, 0, 1)
+	preConditionArgsForLower := make([]string, 0, 1)
+	preConditionArgsForUpper := make([]string, 0, 1)
+
+	preOracleConditionForLower := make([]string, 0, 1)
+	preOracleConditionForUpper := make([]string, 0, 1)
+
+	for i, bound := range c.Bounds {
+		lowerSymbol := gt
+		upperSymbol := lt
+		if i == len(c.Bounds)-1 {
+			upperSymbol = lte
+		}
+
+		if bound.HasLower {
+			if len(preConditionForLower) > 0 {
+				lowerCondition = append(lowerCondition, fmt.Sprintf("(%s AND %s%s %s ?)", strings.Join(preConditionForLower, " AND "), dbutil.ColumnName(bound.Column), collation, lowerSymbol))
+				lowerArgs = append(append(lowerArgs, preConditionArgsForLower...), bound.Lower)
+				if dbutil.IsTimeType(bound.ColumnInfo.Tp) {
+					lowerOracleCondition = append(lowerOracleCondition, fmt.Sprintf("(%s AND %s%s %s %s)",
+						strings.Join(preOracleConditionForLower, " AND "), dbutil.OracleColumnName(bound.Column), collation, lowerSymbol,
+						fmt.Sprintf("TO_DATE('%s','yyyy-mm-dd hh24:mi:ss')",bound.Lower)))
+				}else {
+					lowerOracleCondition = append(lowerOracleCondition, fmt.Sprintf("(%s AND %s%s %s '%s')",
+						strings.Join(preOracleConditionForLower, " AND "), dbutil.OracleColumnName(bound.Column), collation, lowerSymbol,
+						bound.Lower))
+				}
+			} else {
+				lowerCondition = append(lowerCondition, fmt.Sprintf("(%s%s %s ?)", dbutil.ColumnName(bound.Column), collation, lowerSymbol))
+				lowerArgs = append(lowerArgs, bound.Lower)
+				if dbutil.IsTimeType(bound.ColumnInfo.Tp) {
+					lowerOracleCondition = append(lowerOracleCondition, fmt.Sprintf("(%s%s %s %s)", dbutil.OracleColumnName(bound.Column), collation, lowerSymbol,
+						fmt.Sprintf("TO_DATE('%s','yyyy-mm-dd hh24:mi:ss')",bound.Lower)))
+				}else {
+					lowerOracleCondition = append(lowerOracleCondition, fmt.Sprintf("(%s%s %s '%s')", dbutil.OracleColumnName(bound.Column), collation, lowerSymbol,
+						bound.Lower))
+				}
+			}
+			preConditionForLower = append(preConditionForLower, fmt.Sprintf("%s = ?", dbutil.ColumnName(bound.Column)))
+			preConditionArgsForLower = append(preConditionArgsForLower, bound.Lower)
+			if dbutil.IsTimeType(bound.ColumnInfo.Tp) {
+				preOracleConditionForLower = append(preOracleConditionForLower, fmt.Sprintf("%s = %s", dbutil.OracleColumnName(bound.Column),
+					fmt.Sprintf("TO_DATE('%s','yyyy-mm-dd hh24:mi:ss')",bound.Lower)))
+			}else {
+				preOracleConditionForLower = append(preOracleConditionForLower, fmt.Sprintf("%s = '%s'", dbutil.OracleColumnName(bound.Column),
+					bound.Lower))
+			}
+		}
+
+		if bound.HasUpper {
+			if len(preConditionForUpper) > 0 {
+				upperCondition = append(upperCondition, fmt.Sprintf("(%s AND %s%s %s ?)", strings.Join(preConditionForUpper, " AND "), dbutil.ColumnName(bound.Column), collation, upperSymbol))
+				upperArgs = append(append(upperArgs, preConditionArgsForUpper...), bound.Upper)
+				if dbutil.IsTimeType(bound.ColumnInfo.Tp) {
+					upperOracleCondition = append(upperOracleCondition, fmt.Sprintf("(%s AND %s%s %s %s)",
+						strings.Join(preOracleConditionForUpper, " AND "), dbutil.OracleColumnName(bound.Column), collation, upperSymbol,
+						fmt.Sprintf("TO_DATE('%s','yyyy-mm-dd hh24:mi:ss')",bound.Upper)))
+				}else {
+					upperOracleCondition = append(upperOracleCondition, fmt.Sprintf("(%s AND %s%s %s '%s')",
+						strings.Join(preOracleConditionForUpper, " AND "), dbutil.OracleColumnName(bound.Column), collation, upperSymbol,
+						bound.Upper))
+				}
+			} else {
+				upperCondition = append(upperCondition, fmt.Sprintf("(%s%s %s ?)", dbutil.ColumnName(bound.Column), collation, upperSymbol))
+				upperArgs = append(upperArgs, bound.Upper)
+				if dbutil.IsTimeType(bound.ColumnInfo.Tp) {
+					upperOracleCondition = append(upperOracleCondition, fmt.Sprintf("(%s%s %s %s)", dbutil.OracleColumnName(bound.Column), collation, upperSymbol,
+					fmt.Sprintf("TO_DATE('%s','yyyy-mm-dd hh24:mi:ss')",bound.Upper)))
+				}else {
+					upperOracleCondition = append(upperOracleCondition, fmt.Sprintf("(%s%s %s '%s')", dbutil.OracleColumnName(bound.Column), collation, upperSymbol,
+						bound.Upper))
+				}
+			}
+			preConditionForUpper = append(preConditionForUpper, fmt.Sprintf("%s = ?", dbutil.ColumnName(bound.Column)))
+			preConditionArgsForUpper = append(preConditionArgsForUpper, bound.Upper)
+			if dbutil.IsTimeType(bound.ColumnInfo.Tp) {
+				preOracleConditionForUpper = append(preOracleConditionForUpper, fmt.Sprintf("%s = %s", dbutil.OracleColumnName(bound.Column),
+					fmt.Sprintf("TO_DATE('%s','yyyy-mm-dd hh24:mi:ss')",bound.Upper)))
+			}else{
+				preOracleConditionForUpper = append(preOracleConditionForUpper, fmt.Sprintf("%s = '%s'", dbutil.OracleColumnName(bound.Column),
+					bound.Upper))
+			}
+		}
+	}
+
+	if len(upperCondition) == 0 && len(lowerCondition) == 0 {
+		return "1=1", nil, "1=1"
+	}
+
+	if len(upperCondition) == 0 {
+		return strings.Join(lowerCondition, " OR "), lowerArgs, strings.Join(lowerOracleCondition, " OR ")
+	}
+
+	if len(lowerCondition) == 0 {
+		return strings.Join(upperCondition, " OR "), upperArgs, strings.Join(upperOracleCondition, " OR ")
+	}
+
+	return fmt.Sprintf("(%s) AND (%s)", strings.Join(lowerCondition, " OR "), strings.Join(upperCondition, " OR ")), append(lowerArgs, upperArgs...),
+		fmt.Sprintf("(%s) AND (%s)", strings.Join(lowerOracleCondition, " OR "), strings.Join(upperOracleCondition, " OR "))
+
 }
 
 func (c *ChunkRange) toString(collation string) (string, []string) {
@@ -163,7 +283,7 @@ func (c *ChunkRange) updateColumnOffset() {
 	}
 }
 
-func (c *ChunkRange) update(column, lower, upper string, updateLower, updateUpper bool) {
+func (c *ChunkRange) update(column, lower, upper string, updateLower, updateUpper bool, columnInfo *model.ColumnInfo) {
 	if offset, ok := c.columnOffset[column]; ok {
 		// update the bound
 		if updateLower {
@@ -185,6 +305,7 @@ func (c *ChunkRange) update(column, lower, upper string, updateLower, updateUppe
 		Upper:    upper,
 		HasLower: updateLower,
 		HasUpper: updateUpper,
+		ColumnInfo: columnInfo,
 	})
 }
 
@@ -205,7 +326,7 @@ func (c *ChunkRange) copy() *ChunkRange {
 
 func (c *ChunkRange) copyAndUpdate(column, lower, upper string, updateLower, updateUpper bool) *ChunkRange {
 	newChunk := c.copy()
-	newChunk.update(column, lower, upper, updateLower, updateUpper)
+	newChunk.update(column, lower, upper, updateLower, updateUpper, nil)
 	return newChunk
 }
 
@@ -271,11 +392,11 @@ func splitRangeByRandom(db *sql.DB, chunk *ChunkRange, count int, schema string,
 				if len(randomValues[j]) == 0 {
 					break
 				}
-				newChunk.update(column.Name.O, "", randomValues[j][i], false, true)
+				newChunk.update(column.Name.O, "", randomValues[j][i], false, true, column)
 			} else if i == len(randomValues[0]) {
-				newChunk.update(column.Name.O, randomValues[j][i-1], "", true, false)
+				newChunk.update(column.Name.O, randomValues[j][i-1], "", true, false, column)
 			} else {
-				newChunk.update(column.Name.O, randomValues[j][i-1], randomValues[j][i], true, true)
+				newChunk.update(column.Name.O, randomValues[j][i-1], randomValues[j][i], true, true, column)
 			}
 		}
 		chunks = append(chunks, newChunk)
@@ -339,10 +460,10 @@ func (s *bucketSpliter) getChunksByBuckets() (chunks []*ChunkRange, err error) {
 			chunk := NewChunkRange()
 			for j, column := range indexColumns {
 				if i == 0 {
-					chunk.update(column.Name.O, "", upperValues[j], false, true)
+					chunk.update(column.Name.O, "", upperValues[j], false, true, column)
 				} else if i == len(buckets) {
 					if len(lowerValues) > 0 {
-						chunk.update(column.Name.O, lowerValues[j], "", true, false)
+						chunk.update(column.Name.O, lowerValues[j], "", true, false, column)
 					}
 				} else {
 					var lowerValue, upperValue string
@@ -352,7 +473,7 @@ func (s *bucketSpliter) getChunksByBuckets() (chunks []*ChunkRange, err error) {
 					if len(upperValues) > 0 {
 						upperValue = upperValues[j]
 					}
-					chunk.update(column.Name.O, lowerValue, upperValue, len(lowerValues) > 0, len(upperValues) > 0)
+					chunk.update(column.Name.O, lowerValue, upperValue, len(lowerValues) > 0, len(upperValues) > 0, column)
 				}
 			}
 
@@ -462,10 +583,10 @@ func SplitChunks(ctx context.Context, table *TableInstance, splitFields, limits,
 	}
 
 	for i, chunk := range chunks {
-		conditions, args := chunk.toString(collation)
+		conditions, args, oracleCondition := chunk.toTidbAndOracleCondition(collation)
 		chunk.ID = i
 		chunk.Where = fmt.Sprintf("((%s) AND %s)", conditions, limits)
-		chunk.OracleWhere = resolveOracleWhere(conditions, oracleLimit, args)
+		chunk.OracleWhere = fmt.Sprintf("((%s) AND %s)", oracleCondition, oracleLimit)
 		chunk.Args = args
 		chunk.State = notCheckedState
 	}
@@ -479,9 +600,4 @@ func SplitChunks(ctx context.Context, table *TableInstance, splitFields, limits,
 	}
 
 	return chunks, nil
-}
-
-func resolveOracleWhere(conditions, oracleLimit string, args []string) string {
-	result := dbutil.ReplacePlaceholder(fmt.Sprintf("((%s) AND %s)", conditions, oracleLimit), args)
-	return strings.Replace(result, "`", "", -1)
 }

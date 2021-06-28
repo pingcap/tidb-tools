@@ -34,8 +34,8 @@ func CreateDB(ctx context.Context, dbConfig dbutil.DBConfig, vars map[string]str
 
 	// SetMaxOpenConns and SetMaxIdleConns for connection to avoid error like
 	// `dial tcp 10.26.2.1:3306: connect: cannot assign requested address`
-	db.SetMaxOpenConns(num*2)
-	db.SetMaxIdleConns(num*2)
+	db.SetMaxOpenConns(num)
+	db.SetMaxIdleConns(num)
 
 	return db, nil
 }

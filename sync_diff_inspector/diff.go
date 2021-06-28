@@ -123,7 +123,7 @@ func (df *Diff) init(cfg *Config) (err error) {
 // CreateDBConn creates db connections for source and target.
 func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 	// create connection for target.
-	cfg.TargetDBCfg.Conn, err = diff.CreateDB(df.ctx, cfg.TargetDBCfg.DBConfig, nil, cfg.CheckThreadCount)
+	cfg.TargetDBCfg.Conn, err = diff.CreateDB(df.ctx, cfg.TargetDBCfg.DBConfig, nil, cfg.CheckThreadCount *2)
 	if err != nil {
 		return errors.Errorf("create target db %s error %v", cfg.TargetDBCfg.DBConfig.String(), err)
 	}
@@ -139,7 +139,7 @@ func (df *Diff) CreateDBConn(cfg *Config) (err error) {
 
 	for _, source := range cfg.SourceDBCfg {
 		// connect source db with target db time_zone
-		source.Conn, err = diff.CreateDB(df.ctx, source.DBConfig, vars, cfg.CheckThreadCount)
+		source.Conn, err = diff.CreateDB(df.ctx, source.DBConfig, vars, cfg.CheckThreadCount * 2)
 		if err != nil {
 			return errors.Annotatef(err, "create source db %s failed", source.DBConfig.String())
 		}
@@ -447,8 +447,8 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 		log.Info("will increase connection configurations for DB of instance",
 			zap.String("instance id", instanceId),
 			zap.Int("connection limit", count*df.checkThreadCount))
-		db.SetMaxOpenConns(count * df.checkThreadCount)
-		db.SetMaxIdleConns(count * df.checkThreadCount)
+		db.SetMaxOpenConns(count * df.checkThreadCount*2)
+		db.SetMaxIdleConns(count * df.checkThreadCount*2)
 	}
 
 	return nil
@@ -647,7 +647,8 @@ func (df *Diff) Equal() (err error) {
 				TiDBStatsSource:   tidbStatsSource,
 				CpDB:              df.cpDB,
 			}
-
+			log.Info("check target table", zap.Reflect("table ", targetTableInstance.Table),
+				zap.Reflect("connection pool stat", sourceTables[0].Conn.Stats()))
 			structEqual, dataEqual, err := td.Equal(df.ctx, func(dml string) error {
 				_, err := df.fixSQLFile.WriteString(fmt.Sprintf("%s\n", dml))
 				return errors.Trace(err)
