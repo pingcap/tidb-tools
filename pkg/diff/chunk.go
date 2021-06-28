@@ -318,6 +318,7 @@ func (c *ChunkRange) copy() *ChunkRange {
 			Upper:    bound.Upper,
 			HasLower: bound.HasLower,
 			HasUpper: bound.HasUpper,
+			ColumnInfo: bound.ColumnInfo,
 		})
 	}
 

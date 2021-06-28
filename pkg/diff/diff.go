@@ -1156,6 +1156,15 @@ func compareCRC32Row(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*m
 		}
 	}()
 
+	key = "CHECKSUM"
+	if string(map1[key].Data) == string(map2[key].Data) {
+		equal = true
+		return
+	} else {
+		equal = false
+		log.Debug("value of CHECKSUM column is not equal.",zap.String("column",key), zap.String("value1",string(map1[key].Data)), zap.String("value2",string(map2[key].Data)))
+	}
+
 	for _, col := range orderKeyCols {
 		if data1, ok = map1[strings.ToUpper(col.Name.O)]; !ok {
 			err = errors.Errorf("don't have key %s", col.Name.O)
@@ -1208,17 +1217,18 @@ func compareCRC32Row(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*m
 					equal = false
 					log.Debug("compare number column, value1 > value2, cmp=1",zap.String("column", col.Name.O), zap.Float64("value1",num1), zap.Float64("value2",num2))
 				}
-
 			}else if  data1.IsNull && data2.IsNull{
 				//they are null, so equal
 				continue
-			}else {// data1 is null or data2 is null
+			}else { // data1 is null or data2 is null
 				if data1.IsNull {
 					//target lack data
 					cmp = -1
+					log.Debug("compare number column, value1 is null", zap.String("column", col.Name.O), zap.Float64("value2", num2))
 				}else {
 					// target had superfluous data
 					cmp = 1
+					log.Debug("compare number column, value2 is null", zap.String("column", col.Name.O), zap.Float64("value1", num1))
 				}
 				equal = false
 			}
@@ -1226,14 +1236,6 @@ func compareCRC32Row(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*m
 		}
 	}
 
-	if !equal {
-		return
-	}
-	key = "CHECKSUM"
-	if string(map1[key].Data) != string(map2[key].Data) {
-		log.Debug("compare CHECKSUM column, value1 != value2, cmp=0",zap.String("column",key), zap.String("value1",string(map1[key].Data)), zap.String("value2",string(map2[key].Data)))
-		equal = false
-	}
 	return
 }
 
