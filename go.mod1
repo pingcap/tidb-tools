@@ -5,6 +5,7 @@ require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/Shopify/sarama v1.24.1
 	github.com/go-sql-driver/mysql v1.5.0
+	github.com/godror/godror v0.24.7
 	github.com/golang/protobuf v1.3.4
 	github.com/onsi/ginkgo v1.11.0 // indirect
 	github.com/onsi/gomega v1.8.1 // indirect
@@ -26,8 +27,11 @@ require (
 	go.uber.org/zap v1.16.0
 	golang.org/x/net v0.0.0-20200904194848-62affa334b73
 	google.golang.org/grpc v1.27.1
+
+	github.com/shirou/gopsutil v3.21.4+incompatible // indirect
+	github.com/tklauser/go-sysconf v0.3.6 // indirect
 )
 
 replace github.com/golang/lint => golang.org/x/lint v0.0.0-20190930215403-16217165b5de
 
-go 1.13
+go 1.16
