@@ -557,7 +557,6 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 	beginTime := time.Now()
 
 	sourceRows := make(map[int]*sql.Rows)
-	sourceHaveData := make(map[int]bool)
 	args := utils.StringsToInterfaces(chunk.Args)
 
 	targetRows, orderKeyCols, err := getChunkRows(ctx, t.TargetTable.Conn, t.TargetTable.Schema, t.TargetTable.Table, t.TargetTable.info, chunk.Where, args, t.Collation)
@@ -574,7 +573,6 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 		defer rows.Close()
 
 		sourceRows[i] = rows
-		sourceHaveData[i] = false
 	}
 
 	sourceRowDatas := &RowDatas{
@@ -591,51 +589,48 @@ func (t *TableDiff) compareRows(ctx context.Context, chunk *ChunkRange) (bool, e
 		return
 	}
 
-	// getSourceRow gets one row from all the sources, it should be the smallest.
-	// first get rows from every source, and then push them to the heap, and then pop to get the smallest one
+	// first push one row from all the sources into heap
+	for i, sourceRow := range sourceRows {
+		rowData, err := getRowData(sourceRows[i])
+		if err != nil {
+			return false, err
+		}
+		if rowData != nil {
+			heap.Push(sourceRowDatas, RowData{
+				Data:   rowData,
+				Source: i,
+			})
+		} else {
+			if sourceRow.Err() != nil {
+				return false, sourceRow.Err()
+			}
+		}
+	}
+
+	// Before running getSourceRow, heap save one row from all the sources,
+	// otherwise this source has read to the end. Each row should be the smallest in each source.
+	// Once there is one row popped, we need to immediately push one row, which is from the same source, into the heap.
 	getSourceRow := func() (map[string]*dbutil.ColumnData, error) {
-		if len(sourceHaveData) == 0 {
-			return nil, nil
-		}
-
-		needDeleteSource := make([]int, 0, 1)
-		for i, haveData := range sourceHaveData {
-			if !haveData {
-				rowData, err := getRowData(sourceRows[i])
-				if err != nil {
-					return nil, err
-				}
-
-				if rowData != nil {
-					sourceHaveData[i] = true
-					heap.Push(sourceRowDatas, RowData{
-						Data:   rowData,
-						Source: i,
-					})
-				}
-			}
-
-			if !sourceHaveData[i] {
-				if sourceRows[i].Err() != nil {
-					return nil, sourceRows[i].Err()
-
-				}
-				// still don't have data, means the rows is read to the end, so delete the source
-				needDeleteSource = append(needDeleteSource, i)
-			}
-		}
-
-		for _, i := range needDeleteSource {
-			delete(sourceHaveData, i)
-		}
-
 		// all the sources had read to the end, no data to return
 		if len(sourceRowDatas.Rows) == 0 {
 			return nil, nil
 		}
 
 		rowData := heap.Pop(sourceRowDatas).(RowData)
-		sourceHaveData[rowData.Source] = false
+		newRowData, err := getRowData(sourceRows[rowData.Source])
+		if err != nil {
+			return nil, err
+		}
+		if newRowData != nil {
+			heap.Push(sourceRowDatas, RowData{
+				Data:   newRowData,
+				Source: rowData.Source,
+			})
+		} else {
+			if sourceRows[rowData.Source].Err() != nil {
+				return nil, sourceRows[rowData.Source].Err()
+			}
+		}
 
 		return rowData.Data, nil
 	}
