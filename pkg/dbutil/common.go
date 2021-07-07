@@ -492,14 +492,14 @@ func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName str
 // GetOracleSumCRC32Checksum returns checksum code of some data by given condition in Oracle
 func GetOracleSumCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string) (int64, error) {
 	/*
-		SELECT SUM(CRC32(nvl2(id,id||',',NULL)||nvl2(name,name||',',NULL)||nvl2(rtrim(sexy),rtrim(sexy)||',',NULL)||nvl2(hiredate,to_char(hiredate,'yyyy-mm-dd hh24:mi:ss')||',',NULL)||nvl2(id,0,1)||nvl2(name,0,1)||nvl2(sexy,0,1)||nvl2(hiredate,0,1)))
+		SELECT SUM(CRC32(nvl2(id,id||',',NULL)||nvl2(name,name||',',NULL)||nvl2(rtrim(sexy),rtrim(sexy)||',',NULL)||nvl2(hiredate,to_char(hiredate,'yyyy-mm-dd hh24:mi:ss.ff6')||',',NULL)||nvl2(id,0,1)||nvl2(name,0,1)||nvl2(sexy,0,1)||nvl2(hiredate,0,1)))
 	 from yzbttest;
 	*/
 	columnNvl2 := make([]string, 0, len(tbInfo.Columns))
 	columnNames := make([]string, 0, len(tbInfo.Columns))
 	for _, col := range tbInfo.Columns {
 		if IsTimeType(col.Tp) {
-			columnNvl2 = append(columnNvl2, fmt.Sprintf("NVL2(%s,to_char(%s,'yyyy-mm-dd hh24:mi:ss')||',',NULL)",OracleColumnName(col.Name.O), OracleColumnName(col.Name.O)))
+			columnNvl2 = append(columnNvl2, fmt.Sprintf("NVL2(%s,to_char(%s,'%s')||',',NULL)",OracleColumnName(col.Name.O), OracleColumnName(col.Name.O),ProcessOracleDateTimeFormat(col)))
 			columnNames = append(columnNames, fmt.Sprintf("NVL2(%s,0,1)", OracleColumnName(col.Name.O)))
 			continue
 		}
@@ -542,6 +542,7 @@ func GetTiDBSumCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableN
 	columnNames := make([]string, 0, len(tbInfo.Columns))
 	columnIsNull := make([]string, 0, len(tbInfo.Columns))
 	for _, col := range tbInfo.Columns {
+		//log.Info("table column info", zap.String("table name", tableName),zap.Reflect("column info", col))
 		if IsNumberOrFloatType(col.Tp) {
 			columnNames = append(columnNames, fmt.Sprintf("0 + cast(%s as char)", ColumnName(col.Name.O)))
 		}else {
@@ -1015,4 +1016,12 @@ func GetParserForDB(db *sql.DB) (*parser.Parser, error) {
 	parser2 := parser.New()
 	parser2.SetSQLMode(mode)
 	return parser2, nil
+}
+
+func ProcessOracleDateTimeFormat(columnInfo *model.ColumnInfo) string {
+	oracleDateFormat := "yyyy-mm-dd hh24:mi:ss"
+	if IsDateTimeType(columnInfo.Tp) && !(columnInfo.Decimal == 0) {
+		oracleDateFormat = oracleDateFormat + ".ff" + strconv.Itoa(columnInfo.Decimal)
+	}
+	return oracleDateFormat
 }

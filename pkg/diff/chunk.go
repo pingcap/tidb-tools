@@ -115,15 +115,15 @@ func (c *ChunkRange) toTidbAndOracleCondition(collation string) (tidbCondition s
 		if i == len(c.Bounds)-1 {
 			upperSymbol = lte
 		}
-
 		if bound.HasLower {
 			if len(preConditionForLower) > 0 {
 				lowerCondition = append(lowerCondition, fmt.Sprintf("(%s AND %s%s %s ?)", strings.Join(preConditionForLower, " AND "), dbutil.ColumnName(bound.Column), collation, lowerSymbol))
 				lowerArgs = append(append(lowerArgs, preConditionArgsForLower...), bound.Lower)
 				if dbutil.IsTimeType(bound.ColumnInfo.Tp) {
-					lowerOracleCondition = append(lowerOracleCondition, fmt.Sprintf("(%s AND %s%s %s %s)",
-						strings.Join(preOracleConditionForLower, " AND "), dbutil.OracleColumnName(bound.Column), collation, lowerSymbol,
-						fmt.Sprintf("TO_DATE('%s','yyyy-mm-dd hh24:mi:ss')",bound.Lower)))
+					lowerOracleCondition = append(lowerOracleCondition, fmt.Sprintf("(%s AND %s%s %s '%s')",
+						strings.Join(preOracleConditionForLower, " AND "), fmt.Sprintf("TO_CHAR(%s,'%s')", dbutil.OracleColumnName(bound.Column), dbutil.ProcessOracleDateTimeFormat(bound.ColumnInfo)),
+						collation, lowerSymbol,bound.Lower))
+
 				}else {
 					lowerOracleCondition = append(lowerOracleCondition, fmt.Sprintf("(%s AND %s%s %s '%s')",
 						strings.Join(preOracleConditionForLower, " AND "), dbutil.OracleColumnName(bound.Column), collation, lowerSymbol,
@@ -133,8 +133,9 @@ func (c *ChunkRange) toTidbAndOracleCondition(collation string) (tidbCondition s
 				lowerCondition = append(lowerCondition, fmt.Sprintf("(%s%s %s ?)", dbutil.ColumnName(bound.Column), collation, lowerSymbol))
 				lowerArgs = append(lowerArgs, bound.Lower)
 				if dbutil.IsTimeType(bound.ColumnInfo.Tp) {
-					lowerOracleCondition = append(lowerOracleCondition, fmt.Sprintf("(%s%s %s %s)", dbutil.OracleColumnName(bound.Column), collation, lowerSymbol,
-						fmt.Sprintf("TO_DATE('%s','yyyy-mm-dd hh24:mi:ss')",bound.Lower)))
+					lowerOracleCondition = append(lowerOracleCondition, fmt.Sprintf("(%s%s %s '%s')",
+						fmt.Sprintf("TO_CHAR(%s,'%s')",dbutil.OracleColumnName(bound.Column), dbutil.ProcessOracleDateTimeFormat(bound.ColumnInfo)),
+						collation, lowerSymbol,bound.Lower))
 				}else {
 					lowerOracleCondition = append(lowerOracleCondition, fmt.Sprintf("(%s%s %s '%s')", dbutil.OracleColumnName(bound.Column), collation, lowerSymbol,
 						bound.Lower))
@@ -143,8 +144,8 @@ func (c *ChunkRange) toTidbAndOracleCondition(collation string) (tidbCondition s
 			preConditionForLower = append(preConditionForLower, fmt.Sprintf("%s = ?", dbutil.ColumnName(bound.Column)))
 			preConditionArgsForLower = append(preConditionArgsForLower, bound.Lower)
 			if dbutil.IsTimeType(bound.ColumnInfo.Tp) {
-				preOracleConditionForLower = append(preOracleConditionForLower, fmt.Sprintf("%s = %s", dbutil.OracleColumnName(bound.Column),
-					fmt.Sprintf("TO_DATE('%s','yyyy-mm-dd hh24:mi:ss')",bound.Lower)))
+				preOracleConditionForLower = append(preOracleConditionForLower, fmt.Sprintf("%s = '%s'", fmt.Sprintf("TO_CHAR(%s,'%s')",dbutil.OracleColumnName(bound.Column),dbutil.ProcessOracleDateTimeFormat(bound.ColumnInfo)),
+					bound.Lower))
 			}else {
 				preOracleConditionForLower = append(preOracleConditionForLower, fmt.Sprintf("%s = '%s'", dbutil.OracleColumnName(bound.Column),
 					bound.Lower))
@@ -156,9 +157,10 @@ func (c *ChunkRange) toTidbAndOracleCondition(collation string) (tidbCondition s
 				upperCondition = append(upperCondition, fmt.Sprintf("(%s AND %s%s %s ?)", strings.Join(preConditionForUpper, " AND "), dbutil.ColumnName(bound.Column), collation, upperSymbol))
 				upperArgs = append(append(upperArgs, preConditionArgsForUpper...), bound.Upper)
 				if dbutil.IsTimeType(bound.ColumnInfo.Tp) {
-					upperOracleCondition = append(upperOracleCondition, fmt.Sprintf("(%s AND %s%s %s %s)",
-						strings.Join(preOracleConditionForUpper, " AND "), dbutil.OracleColumnName(bound.Column), collation, upperSymbol,
-						fmt.Sprintf("TO_DATE('%s','yyyy-mm-dd hh24:mi:ss')",bound.Upper)))
+					upperOracleCondition = append(upperOracleCondition, fmt.Sprintf("(%s AND %s%s %s '%s')",
+						strings.Join(preOracleConditionForUpper, " AND "),
+						fmt.Sprintf("TO_CHAR(%s,'%s')",dbutil.OracleColumnName(bound.Column),dbutil.ProcessOracleDateTimeFormat(bound.ColumnInfo)),
+						collation, upperSymbol,bound.Upper))
 				}else {
 					upperOracleCondition = append(upperOracleCondition, fmt.Sprintf("(%s AND %s%s %s '%s')",
 						strings.Join(preOracleConditionForUpper, " AND "), dbutil.OracleColumnName(bound.Column), collation, upperSymbol,
@@ -168,8 +170,9 @@ func (c *ChunkRange) toTidbAndOracleCondition(collation string) (tidbCondition s
 				upperCondition = append(upperCondition, fmt.Sprintf("(%s%s %s ?)", dbutil.ColumnName(bound.Column), collation, upperSymbol))
 				upperArgs = append(upperArgs, bound.Upper)
 				if dbutil.IsTimeType(bound.ColumnInfo.Tp) {
-					upperOracleCondition = append(upperOracleCondition, fmt.Sprintf("(%s%s %s %s)", dbutil.OracleColumnName(bound.Column), collation, upperSymbol,
-					fmt.Sprintf("TO_DATE('%s','yyyy-mm-dd hh24:mi:ss')",bound.Upper)))
+					upperOracleCondition = append(upperOracleCondition, fmt.Sprintf("(%s%s %s '%s')",
+						fmt.Sprintf("TO_CHAR(%s,'%s')",dbutil.OracleColumnName(bound.Column),dbutil.ProcessOracleDateTimeFormat(bound.ColumnInfo)),
+						collation, upperSymbol, bound.Upper))
 				}else {
 					upperOracleCondition = append(upperOracleCondition, fmt.Sprintf("(%s%s %s '%s')", dbutil.OracleColumnName(bound.Column), collation, upperSymbol,
 						bound.Upper))
@@ -178,8 +181,8 @@ func (c *ChunkRange) toTidbAndOracleCondition(collation string) (tidbCondition s
 			preConditionForUpper = append(preConditionForUpper, fmt.Sprintf("%s = ?", dbutil.ColumnName(bound.Column)))
 			preConditionArgsForUpper = append(preConditionArgsForUpper, bound.Upper)
 			if dbutil.IsTimeType(bound.ColumnInfo.Tp) {
-				preOracleConditionForUpper = append(preOracleConditionForUpper, fmt.Sprintf("%s = %s", dbutil.OracleColumnName(bound.Column),
-					fmt.Sprintf("TO_DATE('%s','yyyy-mm-dd hh24:mi:ss')",bound.Upper)))
+				preOracleConditionForUpper = append(preOracleConditionForUpper, fmt.Sprintf("%s = '%s'", fmt.Sprintf("TO_CHAR(%s,'%s')",dbutil.OracleColumnName(bound.Column),dbutil.ProcessOracleDateTimeFormat(bound.ColumnInfo)),
+					bound.Upper))
 			}else{
 				preOracleConditionForUpper = append(preOracleConditionForUpper, fmt.Sprintf("%s = '%s'", dbutil.OracleColumnName(bound.Column),
 					bound.Upper))

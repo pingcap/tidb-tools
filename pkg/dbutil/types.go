@@ -39,6 +39,13 @@ func IsTimeType(tp byte) bool {
 	return false
 }
 
+func IsDateTimeType(tp byte) bool {
+	if tp == mysql.TypeDatetime{
+		return true
+	}
+	return false
+}
+
 func IsCharType(tp byte) bool {
 	if tp == mysql.TypeString{
 		return true

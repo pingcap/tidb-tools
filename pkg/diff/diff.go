@@ -792,7 +792,7 @@ func (t *TableDiff) compareRowsByCRC32(ctx context.Context, chunk *ChunkRange) (
 
 func printCompareNumInfo(noEqualNum int, equalNum int, t *TableDiff) {
 	if (noEqualNum+equalNum) % 1000 == 0 {
-		log.Info("stat of rows compare in one chunk", zap.String("target table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)),
+		log.Debug("stat of rows compare in one chunk", zap.String("target table", dbutil.TableName(t.TargetTable.Schema, t.TargetTable.Table)),
 			zap.Int("noEqualNum", noEqualNum), zap.Int("equalNum", equalNum))
 	}
 }
@@ -1451,11 +1451,7 @@ func getTidbChunkCRC32Rows(ctx context.Context, db *sql.DB, schemaName, tableNam
 
 	orderkeyColNames := make([]string, 0, len(orderKeyCols))
 	for i, key := range orderKeys {
-		if dbutil.IsTimeType(orderKeyCols[i].Tp) {
-			orderkeyColNames = append(orderkeyColNames, "DATE_FORMAT("+ dbutil.ColumnName(key) +",'%Y-%m-%d %H:%i:%s') as "+ dbutil.ColumnName(key))
-		}else {
-			orderkeyColNames = append(orderkeyColNames, dbutil.ColumnName(key))
-		}
+		orderkeyColNames = append(orderkeyColNames, dbutil.ColumnName(key))
 		orderKeys[i] = dbutil.ColumnName(key)
 	}
 
@@ -1481,7 +1477,7 @@ func getOracleChunkCRC32Rows(ctx context.Context, db *sql.DB, schemaName, tableN
 	columnNames := make([]string, 0, len(tbInfo.Columns))
 	for _, col := range tbInfo.Columns {
 		if dbutil.IsTimeType(col.Tp) {
-			columnNvl2 = append(columnNvl2, fmt.Sprintf("NVL2(%s,to_char(%s,'yyyy-mm-dd hh24:mi:ss')||',',NULL)",dbutil.OracleColumnName(col.Name.O), dbutil.OracleColumnName(col.Name.O)))
+			columnNvl2 = append(columnNvl2, fmt.Sprintf("NVL2(%s,to_char(%s,'%s')||',',NULL)",dbutil.OracleColumnName(col.Name.O), dbutil.OracleColumnName(col.Name.O), dbutil.ProcessOracleDateTimeFormat(col)))
 			columnNames = append(columnNames, fmt.Sprintf("NVL2(%s,0,1)", dbutil.OracleColumnName(col.Name.O)))
 			continue
 		}
@@ -1499,7 +1495,7 @@ func getOracleChunkCRC32Rows(ctx context.Context, db *sql.DB, schemaName, tableN
 		if dbutil.IsCharType(orderKeyCol.Tp) {
 			orderkeyColNames = append(orderkeyColNames, fmt.Sprintf("rtrim(%s) as %s",dbutil.OracleColumnName(orderKeyCol.Name.O),dbutil.OracleColumnName(orderKeyCol.Name.O)))
 		}else if dbutil.IsTimeType(orderKeyCol.Tp) {
-			orderkeyColNames = append(orderkeyColNames, fmt.Sprintf("TO_CHAR(%s,'yyyy-mm-dd hh24:mi:ss') as %s", dbutil.OracleColumnName(orderKeyCol.Name.O), dbutil.OracleColumnName(orderKeyCol.Name.O)))
+			orderkeyColNames = append(orderkeyColNames, fmt.Sprintf("TO_CHAR(%s,'%s') as %s", dbutil.OracleColumnName(orderKeyCol.Name.O), dbutil.ProcessOracleDateTimeFormat(orderKeyCol), dbutil.OracleColumnName(orderKeyCol.Name.O)))
 		}else {
 			orderkeyColNames = append(orderkeyColNames, dbutil.OracleColumnName(orderKeyCol.Name.O))
 		}
@@ -1525,10 +1521,6 @@ func getTidbRowByOrderKey(data map[string]*dbutil.ColumnData, orderKeyCols []*mo
 
 	columnNames := make([]string, 0, len(tableInfo.Columns))
 	for _, col := range tableInfo.Columns {
-		if dbutil.IsTimeType(col.Tp) {
-			columnNames = append(columnNames, "DATE_FORMAT("+ dbutil.ColumnName(col.Name.O) +",'%Y-%m-%d %H:%i:%s') as "+ dbutil.ColumnName(col.Name.O))
-			continue
-		}
 		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
 	}
 	columns := strings.Join(columnNames, ", ")
@@ -1555,9 +1547,7 @@ func getTidbRowByOrderKey(data map[string]*dbutil.ColumnData, orderKeyCols []*mo
 
 	log.Debug("get tidb one row by order key", zap.String("sql", query))
 	log.Debug("db stats", zap.Reflect("info ", db.Stats()))
-	log.Debug("start call 'get tidb one row by order key sql'")
 	rows, err := db.QueryContext(ctx, query)
-	log.Debug("end call 'get tidb one row by order key sql'")
 	if err != nil {
 		log.Error("get tidb one row by order key failed.", zap.String("schema", schemaName),
 			zap.String("table", tableName), zap.String("sql", query))
@@ -1570,7 +1560,7 @@ func getOracleRowByOrderKey(data map[string]*dbutil.ColumnData, orderKeyCols []*
 	columnNames := make([]string, 0, len(tableInfo.Columns))
 	for _, col := range tableInfo.Columns {
 		if dbutil.IsTimeType(col.Tp) {
-			columnNames = append(columnNames, fmt.Sprintf("TO_CHAR(%s,'yyyy-mm-dd hh24:mi:ss') as %s", dbutil.OracleColumnName(col.Name.O), dbutil.OracleColumnName(col.Name.O)))
+			columnNames = append(columnNames, fmt.Sprintf("TO_CHAR(%s,'%s') as %s", dbutil.OracleColumnName(col.Name.O), dbutil.ProcessOracleDateTimeFormat(col), dbutil.OracleColumnName(col.Name.O)))
 			continue
 		}
 		if dbutil.IsCharType(col.Tp) {
@@ -1583,19 +1573,22 @@ func getOracleRowByOrderKey(data map[string]*dbutil.ColumnData, orderKeyCols []*
 	columns := strings.Join(columnNames, ", ")
 
 	condition := make([]string,0, len(orderKeyCols))
+
 	for _, key := range orderKeyCols {
 		column, ok := data[strings.ToUpper(key.Name.O)]
+		log.Debug("###order column info",zap.String("column name", strings.ToUpper(key.Name.O)), zap.Bool("isNull", column.IsNull), zap.String("value", string(column.Data)))
 		if !ok {
 			return nil, errors.NotFoundf("order key %s does not exist in columns of oracle crc32 row", strings.ToUpper(key.Name.O))
 		}
-		if column.IsNull{
-			condition = append(condition, fmt.Sprintf("%s is NULL", dbutil.OracleColumnName(key.Name.O)))
+
+		if column.IsNull || "" == string(column.Data){
+			condition = append(condition, fmt.Sprintf("((%s is NULL) or (%s = ''))", dbutil.OracleColumnName(key.Name.O), dbutil.OracleColumnName(key.Name.O)))
 			continue
 		}
 		if dbutil.IsNumberOrFloatType(key.Tp) {
 			condition = append(condition, fmt.Sprintf("%s = %s", dbutil.OracleColumnName(key.Name.O), string(column.Data)))
 		}else if dbutil.IsTimeType(key.Tp) {
-			condition = append(condition, fmt.Sprintf("%s = TO_DATE('%s','yyyy-mm-dd hh24:mi:ss')", dbutil.OracleColumnName(key.Name.O),string(column.Data)))
+			condition = append(condition, fmt.Sprintf("TO_CHAR(%s, '%s') = '%s'", dbutil.OracleColumnName(key.Name.O), dbutil.ProcessOracleDateTimeFormat(key), string(column.Data)))
 		}else {
 			condition = append(condition, fmt.Sprintf("%s = '%s'", dbutil.OracleColumnName(key.Name.O), string(column.Data)))
 		}
@@ -1605,10 +1598,8 @@ func getOracleRowByOrderKey(data map[string]*dbutil.ColumnData, orderKeyCols []*
 		columns, dbutil.OracleTableName(schemaName, tableName), strings.Join(condition, " AND "))
 
 	log.Debug("get oracle one row by order key", zap.String("sql", query))
-	log.Debug("start call 'get oracle one row by order key'")
 	log.Debug("db stats", zap.Reflect("info ", db.Stats()))
 	rows, err := db.QueryContext(ctx, query)
-	log.Debug("end call 'get oracle one row by order key'")
 	if err != nil {
 		log.Error("get oracle row by order key failed.", zap.String("schema", schemaName),
 			zap.String("table", tableName), zap.String("sql", query))
