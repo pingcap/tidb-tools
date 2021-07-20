@@ -4,42 +4,33 @@ require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/Shopify/sarama v1.24.1
-	github.com/frankban/quicktest v1.11.1 // indirect
-	github.com/go-sql-driver/mysql v1.6.0
-	github.com/golang/protobuf v1.5.2
-	github.com/hashicorp/go-uuid v1.0.2 // indirect
-	github.com/jcmturner/gofork v1.0.0 // indirect
-	github.com/pierrec/lz4 v2.5.2+incompatible // indirect
+	github.com/go-sql-driver/mysql v1.5.0
+	github.com/golang/protobuf v1.3.4
+	github.com/onsi/ginkgo v1.11.0 // indirect
+	github.com/onsi/gomega v1.8.1 // indirect
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
 	github.com/pingcap/dm v1.1.0-alpha.0.20200729032940-53a08d777030
-	github.com/pingcap/errors v0.11.5-0.20210425183316-da1aaba5fb63
-	github.com/pingcap/failpoint v0.0.0-20210316064728-7acb0f0a3dfd
-	github.com/pingcap/kvproto v0.0.0-20210915062418-0f5764a128ad
-	github.com/pingcap/log v0.0.0-20210906054005-afc726e70354
-	github.com/pingcap/parser v0.0.0-20210525032559-c37778aff307
-	github.com/pingcap/tidb v1.1.0-beta.0.20211012114926-d53f9f55a0f9
-	github.com/pingcap/tidb/parser v0.0.0-20211012113926-e933e0008d04
-	github.com/pingcap/tipb v0.0.0-20210802080519-94b831c6db55
-	github.com/rcrowley/go-metrics v0.0.0-20190826022208-cac0b30c2563 // indirect
-	github.com/satori/go.uuid v1.2.1-0.20181028125025-b2ce2384e17b // indirect
+	github.com/pingcap/errors v0.11.5-0.20201126102027-b0a155152ca3
+	github.com/pingcap/failpoint v0.0.0-20200702092429-9f69995143ce
+	github.com/pingcap/kvproto v0.0.0-20201215060142-f3dafca4c7fd
+	github.com/pingcap/log v0.0.0-20201112100606-8f1e84a3abc8
+	github.com/pingcap/parser v0.0.0-20210105063241-09b74e077464
+	github.com/pingcap/tidb v1.1.0-beta.0.20201222032702-32d8cad845d6
+	github.com/pingcap/tipb v0.0.0-20201209065231-aa39b1b86217
 	github.com/shirou/gopsutil v3.21.4+incompatible // indirect
-	github.com/shopspring/decimal v0.0.0-20200105231215-408a2507e114 // indirect
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
 	github.com/syndtr/goleveldb v1.0.1-0.20190625010220-02440ea7a285 // indirect
-	github.com/tikv/pd v1.1.0-beta.0.20210818082359-acba1da0018d
+	github.com/tikv/pd v1.1.0-beta.0.20201125070607-d4b90eee0c70
 	github.com/tklauser/go-sysconf v0.3.6 // indirect
-	go.etcd.io/etcd v0.5.0-alpha.5.0.20210512015243-d19fbe541bf9
-	go.uber.org/atomic v1.9.0
-	go.uber.org/zap v1.19.1
-	golang.org/x/net v0.0.0-20210503060351-7fd8e65b6420
-	google.golang.org/grpc v1.40.0
-	sigs.k8s.io/yaml v1.2.0 // indirect
+	go.etcd.io/bbolt v1.3.5 // indirect
+	go.etcd.io/etcd v0.5.0-alpha.5.0.20200824191128-ae9734ed278b
+	go.uber.org/atomic v1.7.0
+	go.uber.org/zap v1.16.0
+	golang.org/x/net v0.0.0-20200904194848-62affa334b73
+	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
+	google.golang.org/grpc v1.27.1
 )
 
 replace github.com/golang/lint => golang.org/x/lint v0.0.0-20190930215403-16217165b5de
-
-// cloud.google.com/go/storage will upgrade grpc to v1.40.0
-// we need keep the replacement until go.etcd.io supports the higher version of grpc.
-replace google.golang.org/grpc => google.golang.org/grpc v1.29.1
 
 go 1.16

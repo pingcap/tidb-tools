@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package dm
 
 import (
 	"encoding/json"
@@ -36,8 +36,8 @@ func getDMTaskCfgURL(dmAddr, task string) string {
 	return fmt.Sprintf("%s/apis/%s/subtasks/%s", dmAddr, apiVersion, task)
 }
 
-// getDMTaskCfg gets dm's sub task config
-func getDMTaskCfg(dmAddr, task string) ([]*config.SubTaskConfig, error) {
+// GetDMTaskCfg gets dm's sub task config
+func GetDMTaskCfg(dmAddr, task string) ([]*config.SubTaskConfig, error) {
 	tr := &http.Transport{
 		// TODO: support tls
 		//TLSClientConfig: tlsCfg,

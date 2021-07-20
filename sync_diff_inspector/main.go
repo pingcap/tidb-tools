@@ -24,11 +24,12 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/utils"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"go.uber.org/zap"
 )
 
 func main() {
-	cfg := NewConfig()
+	cfg := config.NewConfig()
 	err := cfg.Parse(os.Args[1:])
 	switch errors.Cause(err) {
 	case nil:
@@ -53,7 +54,7 @@ func main() {
 
 	utils.PrintInfo("sync_diff_inspector")
 
-	ok := cfg.checkConfig()
+	ok := cfg.CheckConfig()
 	if !ok {
 		log.Error("there is something wrong with your config, please check it!")
 		return
@@ -69,23 +70,23 @@ func main() {
 	log.Info("check pass!!!")
 }
 
-func checkSyncState(ctx context.Context, cfg *Config) bool {
+func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 	beginTime := time.Now()
 	defer func() {
 		log.Info("check data finished", zap.Duration("cost", time.Since(beginTime)))
 	}()
 
-	d, err := NewDiff(ctx, cfg)
+	d, err := NewDiff(cfg)
 	if err != nil {
 		log.Fatal("fail to initialize diff process", zap.Error(err))
 	}
 
-	err = d.Equal()
+	err = d.Equal(ctx)
 	if err != nil {
 		log.Fatal("check data difference failed", zap.Error(err))
 	}
 
-	d.report.Print()
-
-	return d.report.Result == Pass
+	//d.report.Print()
+	// TODO update report
+	return false
 }
