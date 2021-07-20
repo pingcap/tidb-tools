@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package config
 
 import (
 	"io/ioutil"
@@ -33,43 +33,43 @@ type testConfigSuite struct{}
 func (s *testConfigSuite) TestUseDMConfig(c *C) {
 	cfg := NewConfig()
 	cfg.DMAddr = "127.0.0.1:8261"
-	isValid := cfg.checkConfig()
+	isValid := cfg.CheckConfig()
 	c.Assert(isValid, IsFalse)
 
 	cfg.DMAddr = "http://127.0.0.1:8261"
-	isValid = cfg.checkConfig()
+	isValid = cfg.CheckConfig()
 	c.Assert(isValid, IsFalse)
 
 	cfg.DMTask = "test"
-	isValid = cfg.checkConfig()
+	isValid = cfg.CheckConfig()
 	c.Assert(isValid, IsTrue)
 
-	cfg.TargetDBCfg = DBConfig{
+	cfg.TargetDBCfg = &DBConfig{
 		InstanceID: "target",
 	}
-	isValid = cfg.checkConfig()
+	isValid = cfg.CheckConfig()
 	c.Assert(isValid, IsFalse)
 
 	cfg.TargetDBCfg.InstanceID = ""
-	isValid = cfg.checkConfig()
+	isValid = cfg.CheckConfig()
 	c.Assert(isValid, IsTrue)
 
-	cfg.SourceDBCfg = []DBConfig{
+	cfg.SourceDBCfg = []*DBConfig{
 		{
 			InstanceID: "source-1",
 		},
 	}
-	isValid = cfg.checkConfig()
+	isValid = cfg.CheckConfig()
 	c.Assert(isValid, IsFalse)
 
 	cfg.SourceDBCfg = nil
-	isValid = cfg.checkConfig()
+	isValid = cfg.CheckConfig()
 	c.Assert(isValid, IsTrue)
 
 	cfg.Tables = []*CheckTables{
 		{}, {},
 	}
-	isValid = cfg.checkConfig()
+	isValid = cfg.CheckConfig()
 	c.Assert(isValid, IsFalse)
 }
 

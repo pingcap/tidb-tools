@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package config
 
 import (
 	"database/sql"
@@ -44,6 +44,8 @@ type DBConfig struct {
 	InstanceID string `toml:"instance-id" json:"instance-id"`
 
 	Conn *sql.DB
+
+	DBType string
 }
 
 // Valid returns true if database's config is valide.
@@ -159,10 +161,10 @@ type Config struct {
 	LogLevel string `toml:"log-level" json:"log-level"`
 
 	// source database's config
-	SourceDBCfg []DBConfig `toml:"source-db" json:"source-db"`
+	SourceDBCfg []*DBConfig `toml:"source-db" json:"source-db"`
 
 	// target database's config
-	TargetDBCfg DBConfig `toml:"target-db" json:"target-db"`
+	TargetDBCfg *DBConfig `toml:"target-db" json:"target-db"`
 
 	// for example, the whole data is [1...100]
 	// we can split these data to [1...10], [11...20], ..., [91...100]
@@ -289,7 +291,7 @@ func (c *Config) configFromFile(path string) error {
 	return nil
 }
 
-func (c *Config) checkConfig() bool {
+func (c *Config) CheckConfig() bool {
 	if c.Sample > percent100 || c.Sample < percent0 {
 		log.Error("sample must be greater than 0 and less than or equal to 100!")
 		return false
@@ -312,9 +314,8 @@ func (c *Config) checkConfig() bool {
 			return false
 		}
 
-		emptyDBConfig := DBConfig{}
 		// source DB, target DB and check table's information will get from DM, should not set them
-		if len(c.SourceDBCfg) != 0 || c.TargetDBCfg != emptyDBConfig {
+		if len(c.SourceDBCfg) != 0 || c.TargetDBCfg != nil {
 			log.Error("should not set `source-db` or `target-db`, diff will generate them automatically when set `dm-addr` and `dm-task`")
 			return false
 		}
