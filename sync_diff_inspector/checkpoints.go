@@ -16,7 +16,6 @@ package main
 import (
 	"container/heap"
 	"context"
-	"fmt"
 	"os"
 	"sync"
 
@@ -36,11 +35,11 @@ const (
 
 // 断点续传： fix sql 要等待 checkpoint 同步？
 type Node struct {
-	ID int `json:"chunk-id"`
+	ID int
 	// Instance ID ???
 	Schema     string
 	Table      string
-	UpperBound chunk.Bound
+	UpperBound string
 	Type       ChunkType
 	BucketID   int
 	ChunkState string
@@ -134,7 +133,6 @@ func SaveChunk(ctx context.Context, hp *Heap) (int, error) {
 			break
 		}
 		next = hp.Nodes[0]
-		fmt.Println(cur.ID, " ", next.ID)
 		if cur.ID+1 != next.ID {
 			break
 		}
