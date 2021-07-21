@@ -14,10 +14,8 @@ var _ = Suite(&testCheckpointSuit{})
 type testCheckpointSuit struct{}
 
 func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
-	hp := new(Heap)
-	hp.mu = sync.Mutex{}
-	hp.Nodes = make([]*Node, 0)
-	heap.Init(hp)
+	checker := new(Checkpointer)
+	checker.Init()
 	ctx := context.Background()
 	wg := &sync.WaitGroup{}
 	wg.Add(99)
@@ -29,18 +27,18 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 			if i_ == 10 {
 				time.Sleep(5 * time.Second)
 			}
-			hp.mu.Lock()
-			heap.Push(hp, node)
-			hp.mu.Unlock()
+			checker.hp.mu.Lock()
+			heap.Push(checker.hp, node)
+			checker.hp.mu.Unlock()
 			if i_ != 10 {
 				wg.Done()
 			}
 		}(i)
 	}
 	wg.Wait()
-	id, _ := SaveChunk(ctx, hp)
+	id, _ := checker.SaveChunk(ctx)
 	c.Assert(id, Equals, 9)
 	time.Sleep(5 * time.Second)
-	id, _ = SaveChunk(ctx, hp)
+	id, _ = checker.SaveChunk(ctx)
 	c.Assert(id, Equals, 99)
 }

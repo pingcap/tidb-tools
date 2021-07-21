@@ -52,6 +52,9 @@ type Heap struct {
 	Nodes []*Node
 	mu    sync.Mutex
 }
+type Checkpointer struct {
+	hp *Heap
+}
 
 // Len - get the length of the heap
 func (heap Heap) Len() int { return len(heap.Nodes) }
@@ -117,27 +120,34 @@ func WriteFile(path string, data []byte) error {
 	return os.WriteFile(path, data, localFilePerm)
 }
 
-// saveChunk saves the chunk to file.
-func SaveChunk(ctx context.Context, hp *Heap) (int, error) {
+func (cp *Checkpointer) Init() {
+	hp := new(Heap)
+	hp.mu = sync.Mutex{}
+	hp.Nodes = make([]*Node, 0)
+	heap.Init(hp)
+	cp.hp = hp
+}
 
+// saveChunk saves the chunk to file.
+func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 	// TODO save Chunk to file
 
 	var cur, next *Node
-	hp.mu.Lock()
+	cp.hp.mu.Lock()
 	for {
-		if hp.Len() == 0 {
+		if cp.hp.Len() == 0 {
 			break
 		}
-		cur = heap.Pop(hp).(*Node)
-		if hp.Len() == 0 {
+		cur = heap.Pop(cp.hp).(*Node)
+		if cp.hp.Len() == 0 {
 			break
 		}
-		next = hp.Nodes[0]
+		next = cp.hp.Nodes[0]
 		if cur.ID+1 != next.ID {
 			break
 		}
 	}
-	hp.mu.Unlock()
+	cp.hp.mu.Unlock()
 	if cur != nil {
 		//	CheckpointData, err := proto.Marshal(cur)
 		//	if err != err {
@@ -149,7 +159,7 @@ func SaveChunk(ctx context.Context, hp *Heap) (int, error) {
 }
 
 // loadChunks loads chunk info from file `chunk`
-func loadChunks(ctx context.Context, instanceID, schema, table string) ([]*chunk.Range, error) {
+func LoadChunks(ctx context.Context, instanceID, schema, table string) ([]*chunk.Range, error) {
 	chunks := make([]*chunk.Range, 0, 100)
 	// TODO load chunks from files
 	return chunks, nil
