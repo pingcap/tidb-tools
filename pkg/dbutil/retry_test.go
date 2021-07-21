@@ -119,7 +119,7 @@ func (t *testRetrySuite) TestIsRetryableError(c *C) {
 			retryable: true,
 		},
 		{
-			err:      newMysqlErr(errno.ErrTxnRetryable, "KV error safe to retry Txn(Mvcc(TxnLockNotFound { start_ts: TimeStamp(425904341916582174), commit_ts: TimeStamp(425904342991372376)"),
+			err:       newMysqlErr(errno.ErrTxnRetryable, "KV error safe to retry Txn(Mvcc(TxnLockNotFound { start_ts: TimeStamp(425904341916582174), commit_ts: TimeStamp(425904342991372376)"),
 			retryable: true,
 		},
 	}
