@@ -33,6 +33,16 @@ const (
 	Others
 )
 
+type BucketNode struct {
+	Node
+	BucketID int
+}
+
+type RandomNode struct {
+	Node
+	RandomValue [][]string
+}
+
 // 断点续传： fix sql 要等待 checkpoint 同步？
 type Node struct {
 	ID int
@@ -41,19 +51,14 @@ type Node struct {
 	Table      string
 	UpperBound string
 	Type       ChunkType
-	BucketID   int
 	ChunkState string
-	// random split chunk 看起来没有必要记录，直接记录对应的 Table，从对应 Table 继续执行
-	// or 记录整个 random value 从对应 chunk 处开始执行
-	// 断点续传后，使用二分，根据 UpperBound 找到 RandomValue 对应位置，生成 chunks 重新开始校验.
-	RandomValue [][]string
 }
 
-// 维护一个小根堆，如果插入的值刚好是小根堆的堆顶值+1，那么更新堆顶元素，反之插入到堆中
-// 定期进行 checkpoint 操作, 在 checkpoint 时，不断移除连续的堆顶元素，直到出现一个间断的堆顶元素，将该元素写入 json
+// Heap maintain a Min Heap, which can be accessed by multiple threads and protected by mutex.
 type Heap struct {
-	Nodes []*Node
-	mu    sync.Mutex
+	Nodes          []*Node
+	CurrentSavedID int        // CurrentSavedID save the lastest save chunk id, initially was 0, updated by saveChunk method
+	mu             sync.Mutex // protect critical section
 }
 type Checkpointer struct {
 	hp *Heap
@@ -133,6 +138,7 @@ func (cp *Checkpointer) Init() {
 	hp := new(Heap)
 	hp.mu = sync.Mutex{}
 	hp.Nodes = make([]*Node, 0)
+	hp.CurrentSavedID = 0
 	heap.Init(hp)
 	cp.hp = hp
 }
@@ -140,31 +146,37 @@ func (cp *Checkpointer) Init() {
 // saveChunk saves the chunk to file.
 func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 	// TODO save Chunk to file
-
-	var cur, next *Node
+	cur_id := 0
 	cp.hp.mu.Lock()
+	var cur, next *Node
 	for {
-		if cp.hp.Len() == 0 {
-			break
-		}
-		cur = heap.Pop(cp.hp).(*Node)
-		if cp.hp.Len() == 0 {
-			break
-		}
-		next = cp.hp.Nodes[0]
-		if cur.ID+1 != next.ID {
+		next_id := cp.hp.CurrentSavedID + 1
+		if next_id == cp.hp.Nodes[0].ID {
+			if cp.hp.Len() == 0 {
+				break
+			}
+			cur = heap.Pop(cp.hp).(*Node)
+			cp.hp.CurrentSavedID = cur.ID
+			cur_id = cur.ID
+			if cp.hp.Len() == 0 {
+				break
+			}
+			next = cp.hp.Nodes[0]
+			if cur.ID+1 != next.ID {
+				break
+			}
+		} else {
 			break
 		}
 	}
 	cp.hp.mu.Unlock()
-	if cur != nil {
-		//	CheckpointData, err := proto.Marshal(cur)
-		//	if err != err {
-		//		return errors.Trace(err)
-		//	}
-		//	WriteFile(checkpointFile, CheckpointData)
-	}
-	return cur.ID, nil
+	//	CheckpointData, err := proto.Marshal(cur)
+	//	if err != err {
+	//		return errors.Trace(err)
+	//	}
+	//	WriteFile(checkpointFile, CheckpointData)
+	return cur_id, nil
+
 }
 
 // loadChunks loads chunk info from file `chunk`
