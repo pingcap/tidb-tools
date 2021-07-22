@@ -14,6 +14,8 @@
 package source
 
 import (
+	"strconv"
+
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
@@ -23,7 +25,6 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb/types"
 	"go.uber.org/zap"
-	"strconv"
 )
 
 type DMLType int32
@@ -131,7 +132,7 @@ type RowDataIterator interface {
 }
 
 type Source interface {
-	GenerateChunks() (chunk.Iterator, error)
+	GenerateChunksIterator() (DBIterator, error)
 	GetCrc32(chunk *chunk.Range) (string, error)
 	GetRows(chunk *chunk.Range) (RowDataIterator, error)
 }
@@ -154,4 +155,10 @@ func NewSource(tableDiffs []*common.TableDiff, cfg ...*config.DBConfig) (Source,
 	default:
 	}
 	return nil, nil
+}
+
+// DBIterator generate next chunk for the whole tables lazily.
+type DBIterator interface {
+	// Next seeks the next chunk, return nil if seeks to end.
+	Next() (*chunk.Range, error)
 }

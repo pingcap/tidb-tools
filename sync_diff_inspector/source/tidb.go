@@ -16,6 +16,7 @@ package source
 import (
 	"context"
 	"database/sql"
+
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
@@ -23,6 +24,7 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 )
 
+// TiDBChunksIterator iterate chunks in tables sequence
 type TiDBChunksIterator struct {
 	TableDiffs          []*common.TableDiff
 	curTableIndex       int
@@ -31,16 +33,16 @@ type TiDBChunksIterator struct {
 	chunkSize int
 	limit     int
 
-	TiDBSplitter *TiDBSplitter
+	dbConn *sql.DB
 
-	iter chunk.Iterator
+	iter splitter.Iterator
 }
 
 func (t *TiDBChunksIterator) Next() (*chunk.Range, error) {
 	if !t.curTableHasSplitted {
 		curTable := t.TableDiffs[t.curTableIndex]
 
-		chunkIter, err := t.TiDBSplitter.splitChunksForTable(curTable)
+		chunkIter, err := t.splitChunksForTable(curTable)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -59,65 +61,57 @@ func (t *TiDBChunksIterator) Next() (*chunk.Range, error) {
 	return chunk, nil
 }
 
-type TiDBSplitter struct {
-	chunkSize int
-	collation string
-
-	dbConn *sql.DB
-}
-
 // useBucket returns the tableInstance that can use bucket info whether in source or target.
-func (s *TiDBSplitter) useBucket(diff *common.TableDiff) bool {
+func (s *TiDBChunksIterator) useBucket(diff *common.TableDiff) bool {
 	// TODO check whether we can use bucket for this table to split chunks.
 	return true
 }
 
-func (s *TiDBSplitter) splitChunksForTable(tableDiff *common.TableDiff) (chunk.Iterator, error) {
+func (s *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff) (splitter.Iterator, error) {
 	if s.useBucket(tableDiff) {
-		bucketSplitter, err := splitter.NewBucketSplitter(tableDiff, s.collation, s.dbConn)
+		bucketIter, err := splitter.NewBucketIterator(tableDiff, s.dbConn)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		chunkIter, err := bucketSplitter.Split()
-		if err != nil {
-			// fall back to random splitter
-		}
-		return chunkIter, nil
+
+		return bucketIter, nil
+		// TODO fall back to random splitter
 	}
 	// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
-	randSplitter := splitter.NewRandomSplitter(tableDiff, s.chunkSize, tableDiff.Range, tableDiff.Collation)
-	return randSplitter.Split()
+	randIter, err := splitter.NewRandomIterator(tableDiff, s.dbConn, s.chunkSize, tableDiff.Range, tableDiff.Collation)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return randIter, nil
 }
 
 type TiDBSource struct {
 	tableDiffs []*common.TableDiff
-	chunkSize  int
 	dbConn     *sql.DB
 }
 
-func NewTiDBSource(tableDiffs []*common.TableDiff, cfg *config.DBConfig) (Source, error) {
+func NewTiDBSource(tableDiffs []*common.TableDiff, dbCfg *config.DBConfig) (Source, error) {
 	// TODO build TiDB Source
 	ctx := context.Background()
-	dbConn, err := common.CreateDB(ctx, &cfg.DBConfig, nil, 4)
+	dbConn, err := common.CreateDB(ctx, &dbCfg.DBConfig, nil, 4)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	return &TiDBSource{
 		tableDiffs,
-		// TODO adjust chunk-size for each table.
-		1,
 		dbConn,
 	}, nil
 }
 
-func (s *TiDBSource) GenerateChunks() (chunk.Iterator, error) {
+func (s *TiDBSource) GenerateChunksIterator() (DBIterator, error) {
 	// TODO build Iterator with config.
 	return &TiDBChunksIterator{
-		TableDiffs: s.tableDiffs,
-		TiDBSplitter: &TiDBSplitter{
-			chunkSize: s.chunkSize,
-			dbConn:    s.dbConn,
-		},
+		TableDiffs:          s.tableDiffs,
+		curTableIndex:       0,
+		curTableHasSplitted: false,
+		chunkSize:           0,
+		limit:               0,
+		dbConn:              s.dbConn,
 	}, nil
 }
 
