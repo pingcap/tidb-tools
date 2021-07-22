@@ -50,6 +50,7 @@ func (n BucketNode) MarshalJSON() ([]byte, error) {
 }
 
 func (n RandomNode) MarshalJSON() ([]byte, error) {
+	// TODO: random value type is [][]string, this methoad will be updated when implement LoadChunk method
 	str := fmt.Sprintf(`{"chunk-id":%d, "schema":%s, "table":%s,"random-values":%s, "upper-bound":%s, "type":%d, "chunck-state":%s}`, n.ID, n.Schema, n.Table, n.RandomValue, n.UpperBound, n.Type, n.ChunkState)
 	return []byte(str), nil
 }
