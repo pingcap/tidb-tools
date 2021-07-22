@@ -38,6 +38,7 @@ type TiDBChunksIterator struct {
 }
 
 func (t *TiDBChunksIterator) Next() (*chunk.Range, error) {
+
 	chunk, err := t.iter.Next()
 	if err != nil {
 		return nil, errors.Trace(err)
