@@ -26,9 +26,8 @@ import (
 
 // TiDBChunksIterator iterate chunks in tables sequence
 type TiDBChunksIterator struct {
-	TableDiffs          []*common.TableDiff
-	curTableIndex       int
-	curTableHasSplitted bool
+	TableDiffs     []*common.TableDiff
+	nextTableIndex int
 
 	chunkSize int
 	limit     int
@@ -39,26 +38,32 @@ type TiDBChunksIterator struct {
 }
 
 func (t *TiDBChunksIterator) Next() (*chunk.Range, error) {
-	if !t.curTableHasSplitted {
-		curTable := t.TableDiffs[t.curTableIndex]
-
-		chunkIter, err := t.splitChunksForTable(curTable)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		t.iter = chunkIter
-		t.curTableHasSplitted = true
-	}
 	chunk, err := t.iter.Next()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	if chunk == nil {
-		// current table seek to end
-		t.curTableIndex++
-		t.curTableHasSplitted = false
-	}
 	return chunk, nil
+}
+
+func (t *TiDBChunksIterator) Close() {
+
+}
+
+func (t *TiDBChunksIterator) NextTable() (bool, error) {
+	if t.nextTableIndex >= len(t.TableDiffs) {
+		return false, nil
+	}
+	curTable := t.TableDiffs[t.nextTableIndex]
+	t.nextTableIndex++
+	chunkIter, err := t.splitChunksForTable(curTable)
+	if err != nil {
+		return false, errors.Trace(err)
+	}
+	if t.iter != nil {
+		t.iter.Close()
+	}
+	t.iter = chunkIter
+	return true, nil
 }
 
 // useBucket returns the tableInstance that can use bucket info whether in source or target.
@@ -68,8 +73,9 @@ func (s *TiDBChunksIterator) useBucket(diff *common.TableDiff) bool {
 }
 
 func (s *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff) (splitter.Iterator, error) {
+	chunkSize := 1000
 	if s.useBucket(tableDiff) {
-		bucketIter, err := splitter.NewBucketIterator(tableDiff, s.dbConn)
+		bucketIter, err := splitter.NewBucketIterator(tableDiff, s.dbConn, chunkSize)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -106,12 +112,11 @@ func NewTiDBSource(tableDiffs []*common.TableDiff, dbCfg *config.DBConfig) (Sour
 func (s *TiDBSource) GenerateChunksIterator() (DBIterator, error) {
 	// TODO build Iterator with config.
 	return &TiDBChunksIterator{
-		TableDiffs:          s.tableDiffs,
-		curTableIndex:       0,
-		curTableHasSplitted: false,
-		chunkSize:           0,
-		limit:               0,
-		dbConn:              s.dbConn,
+		TableDiffs:     s.tableDiffs,
+		nextTableIndex: 0,
+		chunkSize:      0,
+		limit:          0,
+		dbConn:         s.dbConn,
 	}, nil
 }
 

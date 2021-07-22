@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb/types"
 	"go.uber.org/zap"
 )
@@ -159,6 +160,7 @@ func NewSource(tableDiffs []*common.TableDiff, cfg ...*config.DBConfig) (Source,
 
 // DBIterator generate next chunk for the whole tables lazily.
 type DBIterator interface {
+	splitter.Iterator
 	// Next seeks the next chunk, return nil if seeks to end.
-	Next() (*chunk.Range, error)
+	NextTable() (bool, error)
 }
