@@ -33,7 +33,7 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 				ID: i_,
 			}
 			if rand.Intn(4) == 0 {
-				time.Sleep(2 * time.Second)
+				time.Sleep(time.Duration(rand.Intn(3)) * time.Second)
 			}
 			fmt.Printf("Insert %d\n", i_)
 			checker.Insert(node)
@@ -44,26 +44,3 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 	id, _ = checker.SaveChunk(ctx)
 	c.Assert(id, Equals, 9999)
 }
-
-//func (cp *testCheckpointSuit) TestSaveChunk2(c *C) {
-//	checker := new(Checkpointer)
-//	checker.Init()
-//	ctx := context.Background()
-//	node4 := &Node{
-//		ID: 4,
-//	}
-//	checker.Insert(node4)
-//	go func() {
-//		time.Sleep(5 * time.Second)
-//		node1 := &Node{ID: 1}
-//		node2 := &Node{ID: 2}
-//		checker.Insert(node1)
-//		checker.Insert(node2)
-//	}()
-//	id, _ := checker.SaveChunk(ctx)
-//	c.Assert(id, Equals, 0)
-//	time.Sleep(6 * time.Second)
-//	id, _ = checker.SaveChunk(ctx)
-//	c.Assert(id, Equals, 2)
-
-//}

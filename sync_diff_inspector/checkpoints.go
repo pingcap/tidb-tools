@@ -16,6 +16,7 @@ package main
 import (
 	"container/heap"
 	"context"
+	"fmt"
 	"os"
 	"sync"
 
@@ -43,7 +44,16 @@ type RandomNode struct {
 	RandomValue [][]string
 }
 
-// 断点续传： fix sql 要等待 checkpoint 同步？
+func (n BucketNode) MarshalJSON() ([]byte, error) {
+	str := fmt.Sprintf(`{"chunk-id":%d, "schema":%s, "table":%s,"bucket_id":%d, "upper-bound":%s, "type":%d, "chunck-state":%s}`, n.ID, n.Schema, n.Table, n.BucketID, n.UpperBound, n.Type, n.ChunkState)
+	return []byte(str), nil
+}
+
+func (n RandomNode) MarshalJSON() ([]byte, error) {
+	str := fmt.Sprintf(`{"chunk-id":%d, "schema":%s, "table":%s,"random-values":%s, "upper-bound":%s, "type":%d, "chunck-state":%s}`, n.ID, n.Schema, n.Table, n.RandomValue, n.UpperBound, n.Type, n.ChunkState)
+	return []byte(str), nil
+}
+
 type Node struct {
 	ID int
 	// Instance ID ???
@@ -146,7 +156,6 @@ func (cp *Checkpointer) Init() {
 // saveChunk saves the chunk to file.
 func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 	// TODO save Chunk to file
-	cur_id := 0
 	cp.hp.mu.Lock()
 	var cur, next *Node
 	for {
@@ -157,7 +166,6 @@ func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 		if next_id == cp.hp.Nodes[0].ID {
 			cur = heap.Pop(cp.hp).(*Node)
 			cp.hp.CurrentSavedID = cur.ID
-			cur_id = cur.ID
 			if cp.hp.Len() == 0 {
 				break
 			}
@@ -175,7 +183,10 @@ func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 	//		return errors.Trace(err)
 	//	}
 	//	WriteFile(checkpointFile, CheckpointData)
-	return cur_id, nil
+	if cur == nil {
+		return 0, nil
+	}
+	return cur.ID, nil
 
 }
 
