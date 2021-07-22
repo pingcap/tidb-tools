@@ -16,12 +16,14 @@ package main
 import (
 	"container/heap"
 	"context"
-	"fmt"
+	"encoding/json"
 	"os"
 	"sync"
 
 	//"github.com/golang/protobuf/proto"
 	//"github.com/pingcap/errors"
+
+	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 )
 
@@ -36,38 +38,67 @@ const (
 
 type BucketNode struct {
 	Node
-	BucketID int
+	BucketID int `json:"bucket-id"`
 }
 
 type RandomNode struct {
 	Node
-	RandomValue [][]string
+	RandomValue [][]string `json:"random-values"`
 }
 
-func (n BucketNode) MarshalJSON() ([]byte, error) {
-	str := fmt.Sprintf(`{"chunk-id":%d, "schema":%s, "table":%s,"bucket_id":%d, "upper-bound":%s, "type":%d, "chunck-state":%s}`, n.ID, n.Schema, n.Table, n.BucketID, n.UpperBound, n.Type, n.ChunkState)
-	return []byte(str), nil
+//func (n BucketNode) MarshalJSON() ([]byte, error) {
+//	str := fmt.Sprintf(`{"chunk-id":%d, "schema":%s, "table":%s,"bucket-id":%d, "upper-bound":%s, "type":%d, "chunck-state":%s}`, n.GetID(), n.GetSchema(), n.GetTable(), n.GetBucketID(), n.GetUpperBound(), n.GetType(), n.GetChunkState())
+//	fmt.Printf("%s\n", str)
+//	return []byte(str), nil
+//}
+
+func (n *BucketNode) GetBucketID() int {
+	return n.BucketID
 }
 
-func (n RandomNode) MarshalJSON() ([]byte, error) {
-	// TODO: random value type is [][]string, this methoad will be updated when implement LoadChunk method
-	str := fmt.Sprintf(`{"chunk-id":%d, "schema":%s, "table":%s,"random-values":%s, "upper-bound":%s, "type":%d, "chunck-state":%s}`, n.ID, n.Schema, n.Table, n.RandomValue, n.UpperBound, n.Type, n.ChunkState)
-	return []byte(str), nil
+func (n *RandomNode) GetRandomValues() [][]string {
+	return n.RandomValue
+}
+
+//func (n RandomNode) MarshalJSON() ([]byte, error) {
+//	// TODO: random value type is [][]string, this methoad will be updated when implement LoadChunk method
+//	str := fmt.Sprintf(`{"chunk-id":%d, "schema":%s, "table":%s,"random-values":%s, "upper-bound":%s, "type":%d, "chunck-state":%s}`, n.ID, n.Schema, n.Table, n.RandomValue, n.UpperBound, n.Type, n.ChunkState)
+//	return []byte(str), nil
+//}
+
+type NodeInterface interface {
+	GetID() int
+	GetSchema() string
+	GetTable() string
+	GetUpperBound() string
+	GetType() ChunkType
+	GetChunkState() string
 }
 
 type Node struct {
-	ID int
-	// Instance ID ???
-	Schema     string
-	Table      string
-	UpperBound string
-	Type       ChunkType
-	ChunkState string
+	ID         int       `json:"chunk-id"`
+	Schema     string    `json:"schema"`
+	Table      string    `json:"table"`
+	UpperBound string    `json:"upper-bound"`
+	Type       ChunkType `json:"type"`
+	ChunkState string    `json:"chunk-state"`
 }
+
+func (n *Node) GetID() int { return n.ID }
+
+func (n *Node) GetSchema() string { return n.Schema }
+
+func (n *Node) GetTable() string { return n.Table }
+
+func (n *Node) GetUpperBound() string { return n.UpperBound }
+
+func (n *Node) GetType() ChunkType { return n.Type }
+
+func (n *Node) GetChunkState() string { return n.ChunkState }
 
 // Heap maintain a Min Heap, which can be accessed by multiple threads and protected by mutex.
 type Heap struct {
-	Nodes          []*Node
+	Nodes          []NodeInterface
 	CurrentSavedID int        // CurrentSavedID save the lastest save chunk id, initially was 0, updated by saveChunk method
 	mu             sync.Mutex // protect critical section
 }
@@ -75,7 +106,7 @@ type Checkpointer struct {
 	hp *Heap
 }
 
-func (cp *Checkpointer) Insert(node *Node) {
+func (cp *Checkpointer) Insert(node NodeInterface) {
 	cp.hp.mu.Lock()
 	heap.Push(cp.hp, node)
 	cp.hp.mu.Unlock()
@@ -86,7 +117,7 @@ func (hp Heap) Len() int { return len(hp.Nodes) }
 
 // Less - determine which is more priority than another
 func (hp Heap) Less(i, j int) bool {
-	return hp.Nodes[i].ID < hp.Nodes[j].ID
+	return hp.Nodes[i].GetID() < hp.Nodes[j].GetID()
 }
 
 // Swap - implementation of swap for the heap interface
@@ -96,7 +127,7 @@ func (hp Heap) Swap(i, j int) {
 
 // Push - implementation of push for the heap interface
 func (hp *Heap) Push(x interface{}) {
-	hp.Nodes = append(hp.Nodes, x.(*Node))
+	hp.Nodes = append(hp.Nodes, x.(NodeInterface))
 }
 
 // Pop - implementation of pop for heap interface
@@ -148,7 +179,7 @@ func WriteFile(path string, data []byte) error {
 func (cp *Checkpointer) Init() {
 	hp := new(Heap)
 	hp.mu = sync.Mutex{}
-	hp.Nodes = make([]*Node, 0)
+	hp.Nodes = make([]NodeInterface, 0)
 	hp.CurrentSavedID = 0
 	heap.Init(hp)
 	cp.hp = hp
@@ -158,20 +189,20 @@ func (cp *Checkpointer) Init() {
 func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 	// TODO save Chunk to file
 	cp.hp.mu.Lock()
-	var cur, next *Node
+	var cur, next NodeInterface
 	for {
 		next_id := cp.hp.CurrentSavedID + 1
 		if cp.hp.Len() == 0 {
 			break
 		}
-		if next_id == cp.hp.Nodes[0].ID {
-			cur = heap.Pop(cp.hp).(*Node)
-			cp.hp.CurrentSavedID = cur.ID
+		if next_id == cp.hp.Nodes[0].GetID() {
+			cur = heap.Pop(cp.hp).(NodeInterface)
+			cp.hp.CurrentSavedID = cur.GetID()
 			if cp.hp.Len() == 0 {
 				break
 			}
 			next = cp.hp.Nodes[0]
-			if cur.ID+1 != next.ID {
+			if cur.GetID()+1 != next.GetID() {
 				break
 			}
 		} else {
@@ -179,15 +210,27 @@ func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 		}
 	}
 	cp.hp.mu.Unlock()
-	//	CheckpointData, err := proto.Marshal(cur)
-	//	if err != err {
-	//		return errors.Trace(err)
-	//	}
-	//	WriteFile(checkpointFile, CheckpointData)
-	if cur == nil {
-		return 0, nil
+	if cur != nil {
+		var CheckpointData []byte
+		var err error
+		switch cur := cur.(type) {
+		case *BucketNode:
+			CheckpointData, err = json.Marshal(cur)
+			if err != nil {
+				return 0, errors.Trace(err)
+			}
+		case *RandomNode:
+			CheckpointData, err = json.Marshal(cur)
+			if err != nil {
+				return 0, errors.Trace(err)
+			}
+		default:
+			panic("error")
+		}
+		WriteFile(checkpointFile, CheckpointData)
+		return cur.GetID(), nil
 	}
-	return cur.ID, nil
+	return 0, nil
 
 }
 

@@ -157,9 +157,10 @@ func (df *Diff) consume(chunk *chunk.Range) {
 	if crc1 != crc2 {
 		// 1. compare rows
 		// 2. generate fix sql
-		df.cp.Insert(&Node{
+		node := &Node{
 			ID: chunk.ID,
-		})
+		}
+		df.cp.Insert(node)
 	} else {
 		// update chunk success state in summary
 	}

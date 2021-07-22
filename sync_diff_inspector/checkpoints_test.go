@@ -29,8 +29,9 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 	wg.Add(9999)
 	for i := 1; i < 10000; i++ {
 		go func(i_ int) {
-			node := &Node{
-				ID: i_,
+			node := &BucketNode{
+				Node:     Node{ID: i_},
+				BucketID: i_,
 			}
 			if rand.Intn(4) == 0 {
 				time.Sleep(time.Duration(rand.Intn(3)) * time.Second)
