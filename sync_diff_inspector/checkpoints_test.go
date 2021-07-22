@@ -23,15 +23,14 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 	checker := new(Checkpointer)
 	checker.Init()
 	ctx := context.Background()
+	id, _ := checker.SaveChunk(ctx)
+	c.Assert(id, Equals, 0)
 	wg := &sync.WaitGroup{}
 	wg.Add(9999)
 	for i := 1; i < 10000; i++ {
 		go func(i_ int) {
 			node := &Node{
 				ID: i_,
-			}
-			if i_ < 1000 {
-				time.Sleep(1 * time.Second)
 			}
 			if rand.Intn(4) == 0 {
 				time.Sleep(2 * time.Second)
@@ -42,7 +41,7 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 		}(i)
 	}
 	wg.Wait()
-	id, _ := checker.SaveChunk(ctx)
+	id, _ = checker.SaveChunk(ctx)
 	c.Assert(id, Equals, 9999)
 }
 

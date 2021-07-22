@@ -151,10 +151,10 @@ func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 	var cur, next *Node
 	for {
 		next_id := cp.hp.CurrentSavedID + 1
+		if cp.hp.Len() == 0 {
+			break
+		}
 		if next_id == cp.hp.Nodes[0].ID {
-			if cp.hp.Len() == 0 {
-				break
-			}
 			cur = heap.Pop(cp.hp).(*Node)
 			cp.hp.CurrentSavedID = cur.ID
 			cur_id = cur.ID
