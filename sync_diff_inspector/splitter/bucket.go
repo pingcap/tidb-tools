@@ -16,50 +16,63 @@ package splitter
 import (
 	"context"
 	"database/sql"
+
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
+	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"go.uber.org/zap"
 )
 
-type BucketSplitter struct {
-	table     *common.TableDiff
-	collation string
-	buckets   map[string][]dbutil.Bucket
+type BucketIterator struct {
+	table        *common.TableDiff
+	indexcolumns []*model.ColumnInfo
+	buckets      []dbutil.Bucket
 
 	dbConn *sql.DB
 }
 
-func NewBucketSplitter(table *common.TableDiff, collation string, dbConn *sql.DB) (*BucketSplitter, error) {
+func NewBucketIterator(table *common.TableDiff, dbConn *sql.DB) (*BucketIterator, error) {
 	buckets, err := dbutil.GetBucketsInfo(context.Background(), dbConn, table.Schema, table.Table, table.Info)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	return &BucketSplitter{
-		table:     table,
-		buckets:   buckets,
-		collation: collation,
-		dbConn:    dbConn,
-	}, nil
-}
-
-func (s *BucketSplitter) Split() (chunk.Iterator, error) {
-	indices := dbutil.FindAllIndex(s.table.Info)
+	bs := &BucketIterator{
+		table:  table,
+		dbConn: dbConn,
+	}
+	// TODO ignore columns
+	indices := dbutil.FindAllIndex(table.Info)
 	for _, index := range indices {
 		if index == nil {
 			continue
 		}
-		buckets, ok := s.buckets[index.Name.O]
+		bucket, ok := buckets[index.Name.O]
 		if !ok {
 			return nil, errors.NotFoundf("index %s in buckets info", index.Name.O)
 		}
 		log.Debug("buckets for index", zap.String("index", index.Name.O), zap.Reflect("buckets", buckets))
 
-		// TODO build next one chunk
+		indexcolumns := utils.GetColumnsFromIndex(index, table.Info)
 
+		if len(indexcolumns) == 0 {
+			continue
+		}
+		bs.buckets = bucket
+		bs.indexcolumns = indexcolumns
 	}
+
+	if bs.buckets == nil || bs.indexcolumns == nil {
+		return nil, errors.NotFoundf("no index to split buckets")
+	}
+
+	return bs, nil
+}
+
+func (s *BucketIterator) Next() (*chunk.Range, error) {
 
 	return nil, nil
 }
