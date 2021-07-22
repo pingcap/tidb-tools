@@ -16,6 +16,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"time"
+
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
@@ -23,7 +26,6 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	tidbconfig "github.com/pingcap/tidb/config"
-	"os"
 )
 
 // Diff contains two sql DB, used for comparing.
@@ -45,6 +47,7 @@ type Diff struct {
 	fixSQLFile        *os.File
 
 	chunkCh chan *chunk.Range
+	cp      *Checkpointer
 }
 
 // NewDiff returns a Diff instance.
@@ -63,6 +66,7 @@ func NewDiff(cfg *config.Config) (diff *Diff, err error) {
 
 		// TODO use a meaningfull chunk channel buffer
 		chunkCh: make(chan *chunk.Range, 1024),
+		cp:      new(Checkpointer),
 	}
 
 	if err = diff.init(cfg); err != nil {
@@ -93,6 +97,7 @@ func (df *Diff) init(cfg *config.Config) (err error) {
 		return errors.Trace(err)
 	}
 
+	df.cp.Init()
 	return nil
 }
 
@@ -102,8 +107,21 @@ func (df *Diff) Equal(ctx context.Context) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-
+	tick := time.Tick(10 * time.Second)
 	go df.handleChunks(ctx)
+	go func(ctx context.Context) {
+		for {
+			select {
+			case <-ctx.Done():
+				log.Info("Stop do checkpoint")
+			case <-tick:
+				_, err := df.cp.SaveChunk(ctx)
+				// delay err handling
+				if err != nil {
+				}
+			}
+		}
+	}(ctx)
 
 	for {
 		c, err := chunksIter.Next()
@@ -138,6 +156,9 @@ func (df *Diff) consume(chunk *chunk.Range) {
 	if crc1 != crc2 {
 		// 1. compare rows
 		// 2. generate fix sql
+		df.cp.Insert(&Node{
+			ID: chunk.ID,
+		})
 	} else {
 		// update chunk success state in summary
 	}
