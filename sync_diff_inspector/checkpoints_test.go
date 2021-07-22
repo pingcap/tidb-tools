@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"sync"
 	"testing"
+	"time"
 
 	. "github.com/pingcap/check"
 )
@@ -27,6 +29,12 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 		go func(i_ int) {
 			node := &Node{
 				ID: i_,
+			}
+			if i_ < 1000 {
+				time.Sleep(1 * time.Second)
+			}
+			if rand.Intn(4) == 0 {
+				time.Sleep(2 * time.Second)
 			}
 			fmt.Printf("Insert %d\n", i_)
 			checker.Insert(node)
