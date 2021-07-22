@@ -16,10 +16,11 @@ package chunk
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
+
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"go.uber.org/zap"
-	"strings"
 )
 
 var (
@@ -32,12 +33,6 @@ var (
 	bucketMode = "bucketMode"
 	normalMode = "normalMode"
 )
-
-// Iterator generate next chunk lazily.
-type Iterator interface {
-	// Next seeks the next chunk, return nil if seeks to end.
-	Next() (*Range, error)
-}
 
 // Bound represents a bound for a column
 type Bound struct {

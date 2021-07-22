@@ -34,6 +34,7 @@ const (
 	Others
 )
 
+
 type BucketNode struct {
 	Node
 	BucketID int
@@ -54,7 +55,6 @@ func (n RandomNode) MarshalJSON() ([]byte, error) {
 	str := fmt.Sprintf(`{"chunk-id":%d, "schema":%s, "table":%s,"random-values":%s, "upper-bound":%s, "type":%d, "chunck-state":%s}`, n.ID, n.Schema, n.Table, n.RandomValue, n.UpperBound, n.Type, n.ChunkState)
 	return []byte(str), nil
 }
-
 type Node struct {
 	ID int
 	// Instance ID ???

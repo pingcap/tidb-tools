@@ -11,10 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package utils
 
 import (
 	"github.com/pingcap/log"
+	"github.com/pingcap/parser/model"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
@@ -104,4 +105,17 @@ func (pool *WorkerPool) recycle(worker *Worker) {
 // HasWorker checks if the pool has unallocated workers.
 func (pool *WorkerPool) HasWorker() bool {
 	return len(pool.workers) > 0
+}
+
+func GetColumnsFromIndex(index *model.IndexInfo, tableInfo *model.TableInfo) []*model.ColumnInfo {
+	indexColumns := make([]*model.ColumnInfo, 0, len(index.Columns))
+	for _, indexColumn := range index.Columns {
+		for _, column := range tableInfo.Columns {
+			if column.Name.O == indexColumn.Name.O {
+				indexColumns = append(indexColumns, column)
+			}
+		}
+	}
+
+	return indexColumns
 }
