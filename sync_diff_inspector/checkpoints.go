@@ -103,7 +103,8 @@ type Heap struct {
 	mu             sync.Mutex // protect critical section
 }
 type Checkpointer struct {
-	hp *Heap
+	hp       *Heap
+	nodeChan chan NodeInterface
 }
 
 func (cp *Checkpointer) Insert(node NodeInterface) {
@@ -183,6 +184,7 @@ func (cp *Checkpointer) Init() {
 	hp.CurrentSavedID = 0
 	heap.Init(hp)
 	cp.hp = hp
+	cp.nodeChan = make(chan NodeInterface, 1024)
 }
 
 // saveChunk saves the chunk to file.

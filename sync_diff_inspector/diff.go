@@ -120,6 +120,8 @@ func (df *Diff) Equal(ctx context.Context) error {
 				// delay err handling
 				if err != nil {
 				}
+			case node := <-df.cp.nodeChan:
+				df.cp.Insert(node)
 			}
 		}
 	}(ctx)
@@ -154,16 +156,18 @@ func (df *Diff) consume(chunk *chunk.Range) {
 	if err != nil {
 		// retry or log this chunk's error to checkpoint.
 	}
+	node := &Node{}
 	if crc1 != crc2 {
 		// 1. compare rows
 		// 2. generate fix sql
-		node := &Node{
-			ID: chunk.ID,
-		}
-		df.cp.Insert(node)
+		node.ID = chunk.ID
+		node.ChunkState = "failed"
 	} else {
 		// update chunk success state in summary
+		node.ID = chunk.ID
+		node.ChunkState = "success"
 	}
+	df.cp.nodeChan <- node
 }
 
 func (df *Diff) handleChunks(ctx context.Context) {
