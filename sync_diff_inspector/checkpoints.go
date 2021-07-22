@@ -16,6 +16,7 @@ package main
 import (
 	"container/heap"
 	"context"
+	"fmt"
 	"os"
 	"sync"
 
@@ -33,7 +34,27 @@ const (
 	Others
 )
 
-// 断点续传： fix sql 要等待 checkpoint 同步？
+
+type BucketNode struct {
+	Node
+	BucketID int
+}
+
+type RandomNode struct {
+	Node
+	RandomValue [][]string
+}
+
+func (n BucketNode) MarshalJSON() ([]byte, error) {
+	str := fmt.Sprintf(`{"chunk-id":%d, "schema":%s, "table":%s,"bucket_id":%d, "upper-bound":%s, "type":%d, "chunck-state":%s}`, n.ID, n.Schema, n.Table, n.BucketID, n.UpperBound, n.Type, n.ChunkState)
+	return []byte(str), nil
+}
+
+func (n RandomNode) MarshalJSON() ([]byte, error) {
+	// TODO: random value type is [][]string, this methoad will be updated when implement LoadChunk method
+	str := fmt.Sprintf(`{"chunk-id":%d, "schema":%s, "table":%s,"random-values":%s, "upper-bound":%s, "type":%d, "chunck-state":%s}`, n.ID, n.Schema, n.Table, n.RandomValue, n.UpperBound, n.Type, n.ChunkState)
+	return []byte(str), nil
+}
 type Node struct {
 	ID int
 	// Instance ID ???
@@ -41,48 +62,52 @@ type Node struct {
 	Table      string
 	UpperBound string
 	Type       ChunkType
-	BucketID   int
 	ChunkState string
-	// random split chunk 看起来没有必要记录，直接记录对应的 Table，从对应 Table 继续执行
 }
 
-// 维护一个小根堆，如果插入的值刚好是小根堆的堆顶值+1，那么更新堆顶元素，反之插入到堆中
-// 定期进行 checkpoint 操作, 在 checkpoint 时，不断移除连续的堆顶元素，直到出现一个间断的堆顶元素，将该元素写入 json
+// Heap maintain a Min Heap, which can be accessed by multiple threads and protected by mutex.
 type Heap struct {
-	Nodes []*Node
-	mu    sync.Mutex
+	Nodes          []*Node
+	CurrentSavedID int        // CurrentSavedID save the lastest save chunk id, initially was 0, updated by saveChunk method
+	mu             sync.Mutex // protect critical section
 }
 type Checkpointer struct {
 	hp *Heap
 }
 
+func (cp *Checkpointer) Insert(node *Node) {
+	cp.hp.mu.Lock()
+	heap.Push(cp.hp, node)
+	cp.hp.mu.Unlock()
+}
+
 // Len - get the length of the heap
-func (heap Heap) Len() int { return len(heap.Nodes) }
+func (hp Heap) Len() int { return len(hp.Nodes) }
 
 // Less - determine which is more priority than another
-func (heap Heap) Less(i, j int) bool {
-	return heap.Nodes[i].ID < heap.Nodes[j].ID
+func (hp Heap) Less(i, j int) bool {
+	return hp.Nodes[i].ID < hp.Nodes[j].ID
 }
 
 // Swap - implementation of swap for the heap interface
-func (heap Heap) Swap(i, j int) {
-	heap.Nodes[i], heap.Nodes[j] = heap.Nodes[j], heap.Nodes[i]
+func (hp Heap) Swap(i, j int) {
+	hp.Nodes[i], hp.Nodes[j] = hp.Nodes[j], hp.Nodes[i]
 }
 
 // Push - implementation of push for the heap interface
-func (heap *Heap) Push(x interface{}) {
-	heap.Nodes = append(heap.Nodes, x.(*Node))
+func (hp *Heap) Push(x interface{}) {
+	hp.Nodes = append(hp.Nodes, x.(*Node))
 }
 
 // Pop - implementation of pop for heap interface
-func (heap *Heap) Pop() interface{} {
-	if len(heap.Nodes) == 0 {
+func (hp *Heap) Pop() interface{} {
+	if len(hp.Nodes) == 0 {
 		return nil
 	}
-	old := heap.Nodes
+	old := hp.Nodes
 	n := len(old)
 	item := old[n-1]
-	heap.Nodes = old[0 : n-1]
+	hp.Nodes = old[0 : n-1]
 	return item
 }
 
@@ -124,6 +149,7 @@ func (cp *Checkpointer) Init() {
 	hp := new(Heap)
 	hp.mu = sync.Mutex{}
 	hp.Nodes = make([]*Node, 0)
+	hp.CurrentSavedID = 0
 	heap.Init(hp)
 	cp.hp = hp
 }
@@ -131,31 +157,38 @@ func (cp *Checkpointer) Init() {
 // saveChunk saves the chunk to file.
 func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 	// TODO save Chunk to file
-
-	var cur, next *Node
 	cp.hp.mu.Lock()
+	var cur, next *Node
 	for {
+		next_id := cp.hp.CurrentSavedID + 1
 		if cp.hp.Len() == 0 {
 			break
 		}
-		cur = heap.Pop(cp.hp).(*Node)
-		if cp.hp.Len() == 0 {
-			break
-		}
-		next = cp.hp.Nodes[0]
-		if cur.ID+1 != next.ID {
+		if next_id == cp.hp.Nodes[0].ID {
+			cur = heap.Pop(cp.hp).(*Node)
+			cp.hp.CurrentSavedID = cur.ID
+			if cp.hp.Len() == 0 {
+				break
+			}
+			next = cp.hp.Nodes[0]
+			if cur.ID+1 != next.ID {
+				break
+			}
+		} else {
 			break
 		}
 	}
 	cp.hp.mu.Unlock()
-	if cur != nil {
-		//	CheckpointData, err := proto.Marshal(cur)
-		//	if err != err {
-		//		return errors.Trace(err)
-		//	}
-		//	WriteFile(checkpointFile, CheckpointData)
+	//	CheckpointData, err := proto.Marshal(cur)
+	//	if err != err {
+	//		return errors.Trace(err)
+	//	}
+	//	WriteFile(checkpointFile, CheckpointData)
+	if cur == nil {
+		return 0, nil
 	}
 	return cur.ID, nil
+
 }
 
 // loadChunks loads chunk info from file `chunk`

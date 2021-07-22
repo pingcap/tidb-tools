@@ -1,13 +1,19 @@
 package main
 
 import (
-	"container/heap"
 	"context"
+	"fmt"
+	"math/rand"
 	"sync"
+	"testing"
 	"time"
 
 	. "github.com/pingcap/check"
 )
+
+func TestClient(t *testing.T) {
+	TestingT(t)
+}
 
 var _ = Suite(&testCheckpointSuit{})
 
@@ -17,28 +23,24 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 	checker := new(Checkpointer)
 	checker.Init()
 	ctx := context.Background()
+	id, _ := checker.SaveChunk(ctx)
+	c.Assert(id, Equals, 0)
 	wg := &sync.WaitGroup{}
-	wg.Add(99)
-	for i := 0; i < 100; i++ {
+	wg.Add(9999)
+	for i := 1; i < 10000; i++ {
 		go func(i_ int) {
 			node := &Node{
 				ID: i_,
 			}
-			if i_ == 10 {
-				time.Sleep(5 * time.Second)
+			if rand.Intn(4) == 0 {
+				time.Sleep(time.Duration(rand.Intn(3)) * time.Second)
 			}
-			checker.hp.mu.Lock()
-			heap.Push(checker.hp, node)
-			checker.hp.mu.Unlock()
-			if i_ != 10 {
-				wg.Done()
-			}
+			fmt.Printf("Insert %d\n", i_)
+			checker.Insert(node)
+			wg.Done()
 		}(i)
 	}
 	wg.Wait()
-	id, _ := checker.SaveChunk(ctx)
-	c.Assert(id, Equals, 9)
-	time.Sleep(5 * time.Second)
 	id, _ = checker.SaveChunk(ctx)
-	c.Assert(id, Equals, 99)
+	c.Assert(id, Equals, 9999)
 }

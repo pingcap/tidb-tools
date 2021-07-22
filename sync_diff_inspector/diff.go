@@ -117,8 +117,8 @@ func (df *Diff) Equal(ctx context.Context) error {
 				log.Info("Stop do checkpoint")
 			case <-tick:
 				_, err := df.cp.SaveChunk(ctx)
+				// delay err handling
 				if err != nil {
-					//
 				}
 			}
 		}
@@ -157,6 +157,9 @@ func (df *Diff) consume(chunk *chunk.Range) {
 	if crc1 != crc2 {
 		// 1. compare rows
 		// 2. generate fix sql
+		df.cp.Insert(&Node{
+			ID: chunk.ID,
+		})
 	} else {
 		// update chunk success state in summary
 	}
