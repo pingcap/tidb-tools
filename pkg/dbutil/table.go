@@ -15,7 +15,6 @@ package dbutil
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strings"
 
@@ -29,13 +28,13 @@ import (
 )
 
 // GetTableInfo returns table information.
-func GetTableInfo(ctx context.Context, db *sql.DB, schemaName string, tableName string) (*model.TableInfo, error) {
+func GetTableInfo(ctx context.Context, db QueryExecutor, schemaName string, tableName string) (*model.TableInfo, error) {
 	createTableSQL, err := GetCreateTableSQL(ctx, db, schemaName, tableName)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	parser2, err := GetParserForDB(db)
+	parser2, err := GetParserForDB(ctx, db)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
