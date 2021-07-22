@@ -98,11 +98,11 @@ func (n *RandomNode) GetRandomValues() [][]string {
 	return n.RandomValue
 }
 
-//func (n RandomNode) MarshalJSON() ([]byte, error) {
-//	// TODO: random value type is [][]string, this methoad will be updated when implement LoadChunk method
-//	str := fmt.Sprintf(`{"chunk-id":%d, "schema":%s, "table":%s,"random-values":%s, "upper-bound":%s, "type":%d, "chunck-state":%s}`, n.ID, n.Schema, n.Table, n.RandomValue, n.UpperBound, n.Type, n.ChunkState)
-//	return []byte(str), nil
-//}
+func (n RandomNode) MarshalJSON() ([]byte, error) {
+	// TODO: random value type is [][]string, this methoad will be updated when implement LoadChunk method
+	str := fmt.Sprintf(`{"type":%d, "chunk-id":%d, "schema":"%s", "table":"%s","random-values":"%s", "upper-bound":"%s","chunck-state":"%s", "random-values":"%s"}`, n.Type, n.ID, n.Schema, n.Table, n.RandomValue, n.UpperBound, n.ChunkState, n.RandomValue)
+	return []byte(str), nil
+}
 
 type NodeInterface interface {
 	GetID() int
@@ -248,13 +248,11 @@ func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 		case *BucketNode:
 			CheckpointData, err = json.Marshal(cur)
 			if err != nil {
-				fmt.Println(err.Error())
 				return 0, errors.Trace(err)
 			}
 		case *RandomNode:
 			CheckpointData, err = json.Marshal(cur)
 			if err != nil {
-				fmt.Println(err.Error())
 				return 0, errors.Trace(err)
 			}
 		default:
@@ -275,7 +273,6 @@ func (cp *Checkpointer) LoadChunks(ctx context.Context) (NodeInterface, error) {
 		// TODO error handling
 	}
 	str := string(bytes)
-	fmt.Println(str[strings.Index(str, `"type"`)+len(`"type"`)+1 : strings.Index(str, `"type"`)+len(`"type"`)+2])
 	t, err := strconv.Atoi(str[strings.Index(str, `"type"`)+len(`"type"`)+1 : strings.Index(str, `"type"`)+len(`"type"`)+2])
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -286,7 +283,6 @@ func (cp *Checkpointer) LoadChunks(ctx context.Context) (NodeInterface, error) {
 		node := &BucketNode{}
 		err := json.Unmarshal(bytes, &node)
 		if err != nil {
-			fmt.Println(err.Error())
 			return nil, errors.Trace(err)
 		}
 		return node, nil
