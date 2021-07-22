@@ -19,13 +19,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 
 	//"github.com/golang/protobuf/proto"
 	//"github.com/pingcap/errors"
 
 	"github.com/pingcap/errors"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 )
 
 type ChunkType int
@@ -38,11 +39,11 @@ const (
 )
 
 type Node struct {
+	Type       ChunkType `json:"type"`
 	ID         int       `json:"chunk-id"`
 	Schema     string    `json:"schema"`
 	Table      string    `json:"table"`
 	UpperBound string    `json:"upper-bound"`
-	Type       ChunkType `json:"type"`
 	ChunkState string    `json:"chunk-state"`
 }
 type BucketNode struct {
@@ -55,11 +56,39 @@ type RandomNode struct {
 	RandomValue [][]string `json:"random-values"`
 }
 
-func (n BucketNode) MarshalJSON() ([]byte, error) {
-	str := fmt.Sprintf(`{"chunk-id":%d,"schema":"%s","table":"%s","bucket-id":%d,"upper-bound":"%s","type":%d,"chunck-state":"%s"}`, n.GetID(), n.GetSchema(), n.GetTable(), n.GetBucketID(), n.GetUpperBound(), n.GetType(), n.GetChunkState())
+func (n *BucketNode) MarshalJSON() ([]byte, error) {
+	str := fmt.Sprintf(`{"type":%d, "chunk-id":%d,"schema":"%s","table":"%s","upper-bound":"%s","chunck-state":"%s","bucket-id":%d}`, n.GetType(), n.GetID(), n.GetSchema(), n.GetTable(), n.GetUpperBound(), n.GetChunkState(), n.GetBucketID())
 	fmt.Printf("%s\n", str)
 	return []byte(str), nil
 }
+
+//func (n *BucketNode) UnmarshalJSON(data []byte) error {
+//	err := json.Unmarshal(data, &n.ID)
+//	if err != nil {
+//		return errors.Trace(err)
+//	}
+//	err = json.Unmarshal(data, &n.Schema)
+//	if err != nil {
+//		return errors.Trace(err)
+//	}
+//	err = json.Unmarshal(data, &n.Table)
+//	if err != nil {
+//		return errors.Trace(err)
+//	}
+//	err = json.Unmarshal(data, &n.UpperBound)
+//	if err != nil {
+//		return errors.Trace(err)
+//	}
+//	err = json.Unmarshal(data, &n.ChunkState)
+//	if err != nil {
+//		return errors.Trace(err)
+//	}
+//	err = json.Unmarshal(data, &n.BucketID)
+//	if err != nil {
+//		return errors.Trace(err)
+//	}
+//	return nil
+//}
 
 func (n *BucketNode) GetBucketID() int {
 	return n.BucketID
@@ -239,13 +268,31 @@ func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 }
 
 // loadChunks loads chunk info from file `chunk`
-func LoadChunks(ctx context.Context, instanceID, schema, table string) ([]*chunk.Range, error) {
-	chunks := make([]*chunk.Range, 0, 100)
-	_, err := os.ReadFile(checkpointFile)
+func (cp *Checkpointer) LoadChunks(ctx context.Context) (NodeInterface, error) {
+	//chunks := make([]*chunk.Range, 0, 100)
+	bytes, err := os.ReadFile(checkpointFile)
 	if err != nil {
 		// TODO error handling
 	}
+	str := string(bytes)
+	fmt.Println(str[strings.Index(str, `"type"`)+len(`"type"`)+1 : strings.Index(str, `"type"`)+len(`"type"`)+2])
+	t, err := strconv.Atoi(str[strings.Index(str, `"type"`)+len(`"type"`)+1 : strings.Index(str, `"type"`)+len(`"type"`)+2])
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
 
+	switch t {
+	case Bucket:
+		node := &BucketNode{}
+		err := json.Unmarshal(bytes, &node)
+		if err != nil {
+			fmt.Println(err.Error())
+			return nil, errors.Trace(err)
+		}
+		return node, nil
+	// TODO random
+	default:
+		panic("LoadChunk error")
+	}
 	// TODO load chunks from files
-	return chunks, nil
 }
