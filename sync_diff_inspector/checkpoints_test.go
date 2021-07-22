@@ -30,7 +30,7 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 	for i := 1; i < 10000; i++ {
 		go func(i_ int) {
 			node := &BucketNode{
-				Node:     Node{ID: i_},
+				Node:     Node{ID: i_, Schema: "test", Table: "test", UpperBound: "(a,b,c)", Type: 1, ChunkState: "success"},
 				BucketID: i_,
 			}
 			if rand.Intn(4) == 0 {

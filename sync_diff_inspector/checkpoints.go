@@ -17,6 +17,7 @@ import (
 	"container/heap"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"sync"
 
@@ -36,6 +37,14 @@ const (
 	Others
 )
 
+type Node struct {
+	ID         int       `json:"chunk-id"`
+	Schema     string    `json:"schema"`
+	Table      string    `json:"table"`
+	UpperBound string    `json:"upper-bound"`
+	Type       ChunkType `json:"type"`
+	ChunkState string    `json:"chunk-state"`
+}
 type BucketNode struct {
 	Node
 	BucketID int `json:"bucket-id"`
@@ -46,11 +55,11 @@ type RandomNode struct {
 	RandomValue [][]string `json:"random-values"`
 }
 
-//func (n BucketNode) MarshalJSON() ([]byte, error) {
-//	str := fmt.Sprintf(`{"chunk-id":%d, "schema":%s, "table":%s,"bucket-id":%d, "upper-bound":%s, "type":%d, "chunck-state":%s}`, n.GetID(), n.GetSchema(), n.GetTable(), n.GetBucketID(), n.GetUpperBound(), n.GetType(), n.GetChunkState())
-//	fmt.Printf("%s\n", str)
-//	return []byte(str), nil
-//}
+func (n BucketNode) MarshalJSON() ([]byte, error) {
+	str := fmt.Sprintf(`{"chunk-id":%d,"schema":"%s","table":"%s","bucket-id":%d,"upper-bound":"%s","type":%d,"chunck-state":"%s"}`, n.GetID(), n.GetSchema(), n.GetTable(), n.GetBucketID(), n.GetUpperBound(), n.GetType(), n.GetChunkState())
+	fmt.Printf("%s\n", str)
+	return []byte(str), nil
+}
 
 func (n *BucketNode) GetBucketID() int {
 	return n.BucketID
@@ -73,15 +82,6 @@ type NodeInterface interface {
 	GetUpperBound() string
 	GetType() ChunkType
 	GetChunkState() string
-}
-
-type Node struct {
-	ID         int       `json:"chunk-id"`
-	Schema     string    `json:"schema"`
-	Table      string    `json:"table"`
-	UpperBound string    `json:"upper-bound"`
-	Type       ChunkType `json:"type"`
-	ChunkState string    `json:"chunk-state"`
 }
 
 func (n *Node) GetID() int { return n.ID }
@@ -219,11 +219,13 @@ func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 		case *BucketNode:
 			CheckpointData, err = json.Marshal(cur)
 			if err != nil {
+				fmt.Println(err.Error())
 				return 0, errors.Trace(err)
 			}
 		case *RandomNode:
 			CheckpointData, err = json.Marshal(cur)
 			if err != nil {
+				fmt.Println(err.Error())
 				return 0, errors.Trace(err)
 			}
 		default:
@@ -239,6 +241,11 @@ func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 // loadChunks loads chunk info from file `chunk`
 func LoadChunks(ctx context.Context, instanceID, schema, table string) ([]*chunk.Range, error) {
 	chunks := make([]*chunk.Range, 0, 100)
+	_, err := os.ReadFile(checkpointFile)
+	if err != nil {
+		// TODO error handling
+	}
+
 	// TODO load chunks from files
 	return chunks, nil
 }

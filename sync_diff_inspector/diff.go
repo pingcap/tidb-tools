@@ -117,7 +117,7 @@ func (df *Diff) Equal(ctx context.Context) error {
 				log.Info("Stop do checkpoint")
 			case <-tick:
 				_, err := df.cp.SaveChunk(ctx)
-				// delay err handling
+				// TODO: error handling
 				if err != nil {
 				}
 			case node := <-df.cp.nodeChan:
