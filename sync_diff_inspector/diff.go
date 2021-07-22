@@ -25,6 +25,7 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	tidbconfig "github.com/pingcap/tidb/config"
 )
 
@@ -103,7 +104,7 @@ func (df *Diff) init(cfg *config.Config) (err error) {
 
 // Equal tests whether two database have same data and schema.
 func (df *Diff) Equal(ctx context.Context) error {
-	chunksIter, err := df.generateChunks()
+	chunksIter, err := df.generateChunksIterator()
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -163,7 +164,7 @@ func (df *Diff) consume(chunk *chunk.Range) {
 
 func (df *Diff) handleChunks(ctx context.Context) {
 	// TODO use a meaningfull count
-	pool := NewWorkerPool(4, "consumer")
+	pool := utils.NewWorkerPool(4, "consumer")
 	for {
 		select {
 		case <-ctx.Done():
@@ -176,15 +177,15 @@ func (df *Diff) handleChunks(ctx context.Context) {
 	}
 }
 
-func (df *Diff) generateChunks() (chunk.Iterator, error) {
+func (df *Diff) generateChunksIterator() (source.DBIterator, error) {
 	// TODO choose upstream or downstream to generate chunks
 	// if isTiDB(df.upstream) {
-	//		return df.upstream.GenerateChunks()
+	//		return df.upstream.GenerateChunksIterator()
 	// }
 	// if isTiDB(df.downstream) {
-	//		return df.downstream.GenerateChunks()
+	//		return df.downstream.GenerateChunksIterator()
 	//}
-	return df.downstream.GenerateChunks()
+	return df.downstream.GenerateChunksIterator()
 }
 
 func setTiDBCfg() {

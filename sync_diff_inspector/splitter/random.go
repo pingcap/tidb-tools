@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
@@ -27,7 +28,7 @@ import (
 	"go.uber.org/zap"
 )
 
-type RandomSplitter struct {
+type RandomIterator struct {
 	table     *common.TableDiff
 	chunkSize int
 	limits    string
@@ -36,25 +37,27 @@ type RandomSplitter struct {
 	dbConn *sql.DB
 }
 
-func NewRandomSplitter(table *common.TableDiff, chunkSize int, limits string, collation string) *RandomSplitter {
-	return &RandomSplitter{
-		table:     table,
-		collation: collation,
-		chunkSize: chunkSize,
-		limits:    limits,
-	}
-}
-
-func (s *RandomSplitter) Split() (chunk.Iterator, error) {
+func NewRandomIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int, limits string, collation string) (*RandomIterator, error) {
 	// get the chunk count by data count and chunk size
-	cnt, err := dbutil.GetRowCount(context.Background(), s.dbConn, s.table.Schema, s.table.Table, s.limits, nil)
+	cnt, err := dbutil.GetRowCount(context.Background(), dbConn, table.Schema, table.Table, limits, nil)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	chunkCnt := (int(cnt) + s.chunkSize - 1) / s.chunkSize
+	chunkCnt := (int(cnt) + chunkSize - 1) / chunkSize
 	log.Info("split range by random", zap.Int64("row count", cnt), zap.Int("split chunk num", chunkCnt))
-	// TODO generate random chunk iter
+
+	return &RandomIterator{
+		table:     table,
+		collation: collation,
+		chunkSize: chunkSize,
+		limits:    limits,
+		dbConn:    dbConn,
+	}, nil
+
+}
+
+func (s *RandomIterator) Next() (*chunk.Range, error) {
 
 	return nil, nil
 }
