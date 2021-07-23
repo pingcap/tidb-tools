@@ -130,16 +130,8 @@ func (df *Diff) Equal(ctx context.Context) error {
 			return errors.Trace(err)
 		}
 		if c == nil {
-			// finish read the table
-			res, err := chunksIter.NextTable()
-			if err != nil {
-				return errors.Trace(err)
-			}
-			if !res {
-				// finish read the whole tables
-				break
-			}
-			continue
+			// finish read the tables
+			break
 		}
 
 		select {
@@ -155,6 +147,7 @@ func (df *Diff) Equal(ctx context.Context) error {
 }
 
 func (df *Diff) consume(chunk *chunk.Range) {
+	// TODO: if !UseChecksum
 	crc1, err := df.upstream.GetCrc32(chunk)
 	if err != nil {
 		// retry or log this chunk's error to checkpoint.

@@ -41,28 +41,43 @@ func (t *TiDBChunksIterator) Next() (*chunk.Range, error) {
 	if t.iter == nil {
 		return nil, nil
 	}
-	return t.iter.Next()
+	chunks, err := t.iter.Next()
+
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	if chunks == nil {
+		err := t.nextTable()
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+	}
+	return t.Next()
 }
 
 func (t *TiDBChunksIterator) Close() {
 	t.iter.Close()
 }
 
-func (t *TiDBChunksIterator) NextTable() (bool, error) {
+// if error is nil and t.iter is not nil,
+// then nextTable is done successfully.
+func (t *TiDBChunksIterator) nextTable() error {
 	if t.nextTableIndex >= len(t.TableDiffs) {
-		return false, nil
+		t.iter = nil
+		return nil
 	}
 	curTable := t.TableDiffs[t.nextTableIndex]
 	t.nextTableIndex++
 	chunkIter, err := t.splitChunksForTable(curTable)
 	if err != nil {
-		return false, errors.Trace(err)
+		return errors.Trace(err)
 	}
 	if t.iter != nil {
 		t.iter.Close()
 	}
 	t.iter = chunkIter
-	return true, nil
+	return nil
 }
 
 // useBucket returns the tableInstance that can use bucket info whether in source or target.
@@ -110,13 +125,15 @@ func NewTiDBSource(tableDiffs []*common.TableDiff, dbCfg *config.DBConfig) (Sour
 
 func (s *TiDBSource) GenerateChunksIterator() (DBIterator, error) {
 	// TODO build Iterator with config.
-	return &TiDBChunksIterator{
+	dbIter := &TiDBChunksIterator{
 		TableDiffs:     s.tableDiffs,
 		nextTableIndex: 0,
 		chunkSize:      0,
 		limit:          0,
 		dbConn:         s.dbConn,
-	}, nil
+	}
+	err := dbIter.nextTable()
+	return dbIter, err
 }
 
 func (s *TiDBSource) GetCrc32(chunk *chunk.Range) (string, error) {

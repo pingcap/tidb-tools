@@ -162,5 +162,4 @@ func NewSource(tableDiffs []*common.TableDiff, cfg ...*config.DBConfig) (Source,
 type DBIterator interface {
 	splitter.Iterator
 	// Next seeks the next chunk, return nil if seeks to end.
-	NextTable() (bool, error)
 }
