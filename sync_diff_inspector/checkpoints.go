@@ -43,8 +43,8 @@ type Node struct {
 	ID         int       `json:"chunk-id"`
 	Schema     string    `json:"schema"`
 	Table      string    `json:"table"`
-	UpperBound string    `json:"upper-bound"`
-	ChunkState string    `json:"chunk-state"`
+	UpperBound string    `json:"upper-bound"` // the upper bound should be like "(a, b, c)"
+	ChunkState string    `json:"chunk-state"` // indicate the state ("success" or "failed") of the chunk
 }
 type BucketNode struct {
 	Node
@@ -128,8 +128,8 @@ func (n *Node) GetChunkState() string { return n.ChunkState }
 // Heap maintain a Min Heap, which can be accessed by multiple threads and protected by mutex.
 type Heap struct {
 	Nodes          []NodeInterface
-	CurrentSavedID int        // CurrentSavedID save the lastest save chunk id, initially was 0, updated by saveChunk method
-	mu             sync.Mutex // protect critical section
+	CurrentSavedID int         // CurrentSavedID save the lastest save chunk id, initially was 0, updated by saveChunk method
+	mu             *sync.Mutex // protect critical section
 }
 type Checkpointer struct {
 	hp       *Heap
@@ -208,7 +208,7 @@ func WriteFile(path string, data []byte) error {
 
 func (cp *Checkpointer) Init() {
 	hp := new(Heap)
-	hp.mu = sync.Mutex{}
+	hp.mu = &sync.Mutex{}
 	hp.Nodes = make([]NodeInterface, 0)
 	hp.CurrentSavedID = 0
 	heap.Init(hp)
@@ -273,6 +273,7 @@ func (cp *Checkpointer) LoadChunks(ctx context.Context) (NodeInterface, error) {
 		// TODO error handling
 	}
 	str := string(bytes)
+	// TODO find a better way
 	t, err := strconv.Atoi(str[strings.Index(str, `"type"`)+len(`"type"`)+1 : strings.Index(str, `"type"`)+len(`"type"`)+2])
 	if err != nil {
 		return nil, errors.Trace(err)
