@@ -135,13 +135,14 @@ func (df *Diff) Equal(ctx context.Context) error {
 			return errors.Trace(err)
 		}
 		if c == nil {
-			// finish read chunks
+			// finish read the tables
 			break
 		}
 
 		select {
 		case <-ctx.Done():
 			log.Info("Stop generate chunks by user canceled")
+			chunksIter.Close()
 		// Produce chunk
 		case df.chunkCh <- c:
 		}
@@ -151,6 +152,7 @@ func (df *Diff) Equal(ctx context.Context) error {
 }
 
 func (df *Diff) consume(chunk *chunk.Range) {
+	// TODO: if !UseChecksum
 	crc1, err := df.upstream.GetCrc32(chunk)
 	if err != nil {
 		// retry or log this chunk's error to checkpoint.
@@ -215,6 +217,7 @@ func (df *Diff) handleChunks(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			log.Info("Stop consumer chunks by user canceled")
+			// TODO: close worker gracefully
 		case c := <-df.chunkCh:
 			pool.Apply(func() {
 				df.consume(c)
