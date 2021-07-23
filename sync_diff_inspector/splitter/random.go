@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -31,8 +32,8 @@ import (
 type RandomIterator struct {
 	table     *common.TableDiff
 	chunkSize int
-	limits    string
-	collation string
+	chunks    []*chunk.Range
+	nextChunk uint
 
 	dbConn *sql.DB
 }
@@ -47,19 +48,46 @@ func NewRandomIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int, l
 	chunkCnt := (int(cnt) + chunkSize - 1) / chunkSize
 	log.Info("split range by random", zap.Int64("row count", cnt), zap.Int("split chunk num", chunkCnt))
 
+	var splitFieldArr []string
+	if len(table.Fields) != 0 {
+		splitFieldArr = strings.Split(table.Fields, ",")
+	}
+
+	for i := range splitFieldArr {
+		splitFieldArr[i] = strings.TrimSpace(splitFieldArr[i])
+	}
+
+	fields, err := getSplitFields(table.Info, splitFieldArr)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	chunks, err := splitRangeByRandom(dbConn, chunk.NewChunkRange(), chunkCnt, table.Schema, table.Table, fields, table.Range, table.Collation)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
 	return &RandomIterator{
 		table:     table,
-		collation: collation,
 		chunkSize: chunkSize,
-		limits:    limits,
+		chunks:    chunks,
+		nextChunk: 0,
 		dbConn:    dbConn,
 	}, nil
 
 }
 
 func (s *RandomIterator) Next() (*chunk.Range, error) {
+	if uint(len(s.chunks)) <= s.nextChunk {
+		return nil, nil
+	}
+	chunk := s.chunks[s.nextChunk]
+	s.nextChunk = s.nextChunk + 1
+	return chunk, nil
+}
 
-	return nil, nil
+func (s *RandomIterator) Close() {
+
 }
 
 // getSplitFields returns fields to split chunks, order by pk, uk, index, columns.

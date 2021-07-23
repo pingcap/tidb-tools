@@ -155,7 +155,7 @@ func (c *Range) updateColumnOffset() {
 	}
 }
 
-func (c *Range) update(column, lower, upper string, updateLower, updateUpper bool) {
+func (c *Range) Update(column, lower, upper string, updateLower, updateUpper bool) {
 	if offset, ok := c.columnOffset[column]; ok {
 		// update the bound
 		if updateLower {
@@ -197,6 +197,6 @@ func (c *Range) copy() *Range {
 
 func (c *Range) copyAndUpdate(column, lower, upper string, updateLower, updateUpper bool) *Range {
 	newChunk := c.copy()
-	newChunk.update(column, lower, upper, updateLower, updateUpper)
+	newChunk.Update(column, lower, upper, updateLower, updateUpper)
 	return newChunk
 }
