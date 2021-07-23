@@ -98,15 +98,20 @@ func (s *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff) (s
 	var node checkpoints.NodeInterface
 	if tableDiff.UseCheckpoint {
 		// TODO error handling
-		node, _ = checkpoints.LoadChunks()
-		switch node.(type) {
-		case *checkpoints.BucketNode:
-			bucket = true
-		case *checkpoints.RandomNode:
-			bucket = false
+		var err error
+		node, err = checkpoints.LoadChunks()
+		if err != nil {
+			tableDiff.UseCheckpoint = false
+		} else {
+			switch node.(type) {
+			case *checkpoints.BucketNode:
+				bucket = true
+			case *checkpoints.RandomNode:
+				bucket = false
+			}
 		}
 	}
-	if s.useBucket(tableDiff) || bucket {
+	if (!tableDiff.UseCheckpoint && s.useBucket(tableDiff)) || bucket {
 		bucketIter, err := splitter.NewBucketIterator(tableDiff, s.dbConn, chunkSize)
 		if err != nil {
 			return nil, errors.Trace(err)

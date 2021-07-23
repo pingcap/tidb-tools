@@ -269,18 +269,17 @@ func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 func LoadChunks() (NodeInterface, error) {
 	//chunks := make([]*chunk.Range, 0, 100)
 	bytes, err := os.ReadFile(checkpointFile)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
 	bytes_copy := make([]byte, len(bytes))
 	copy(bytes_copy, bytes)
-	if err != nil {
-		// TODO error handling
-	}
 	//str := string(bytes)
 	// TODO find a better way
 	m := make(map[string]interface{})
 	err = json.Unmarshal(bytes_copy, &m)
 	//t, err := strconv.Atoi(str[strings.Index(str, `"type"`)+len(`"type"`)+1 : strings.Index(str, `"type"`)+len(`"type"`)+2])
 	if err != nil {
-		fmt.Println(err.Error())
 		return nil, errors.Trace(err)
 	}
 	t, err := strconv.Atoi(fmt.Sprint(m["type"]))
