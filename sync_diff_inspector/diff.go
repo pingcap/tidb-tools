@@ -21,6 +21,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source"
@@ -48,7 +49,7 @@ type Diff struct {
 	fixSQLFile        *os.File
 
 	chunkCh chan *chunk.Range
-	cp      *Checkpointer
+	cp      *checkpoints.Checkpointer
 }
 
 // NewDiff returns a Diff instance.
@@ -67,7 +68,7 @@ func NewDiff(cfg *config.Config) (diff *Diff, err error) {
 
 		// TODO use a meaningfull chunk channel buffer
 		chunkCh: make(chan *chunk.Range, 1024),
-		cp:      new(Checkpointer),
+		cp:      new(checkpoints.Checkpointer),
 	}
 
 	if err = diff.init(cfg); err != nil {
@@ -110,6 +111,8 @@ func (df *Diff) Equal(ctx context.Context) error {
 	}
 	tick := time.Tick(10 * time.Second)
 	go df.handleChunks(ctx)
+	// a background gorotine which will insert the verified chunk,
+	// and periodically save checkpoint
 	go func(ctx context.Context) {
 		for {
 			select {
@@ -120,7 +123,7 @@ func (df *Diff) Equal(ctx context.Context) error {
 				// TODO: error handling
 				if err != nil {
 				}
-			case node := <-df.cp.nodeChan:
+			case node := <-df.cp.NodeChan:
 				df.cp.Insert(node)
 			}
 		}
@@ -156,18 +159,53 @@ func (df *Diff) consume(chunk *chunk.Range) {
 	if err != nil {
 		// retry or log this chunk's error to checkpoint.
 	}
-	node := &Node{}
+	var node checkpoints.NodeInterface
+	var state string
 	if crc1 != crc2 {
 		// 1. compare rows
 		// 2. generate fix sql
-		node.ID = chunk.ID
-		node.ChunkState = "failed"
+		state = "failed"
 	} else {
 		// update chunk success state in summary
-		node.ID = chunk.ID
-		node.ChunkState = "success"
+		state = "success"
 	}
-	df.cp.nodeChan <- node
+	switch chunk.Type {
+	case checkpoints.Bucket:
+		bucketNode := &checkpoints.BucketNode{
+			Node: checkpoints.Node{
+				Type: chunk.Type,
+				ID:   chunk.ID,
+				// TODO need schema
+				Schema: "",
+				// TODO need table
+				Table: "",
+				// TODO translate Bound to string
+				UpperBound: "",
+				ChunkState: state,
+			},
+			// TODO need BucketID
+			BucketID: 0,
+		}
+		node = bucketNode
+	case checkpoints.Random:
+		randomNode := &checkpoints.RandomNode{
+			Node: checkpoints.Node{
+				Type: chunk.Type,
+				ID:   chunk.ID,
+				// TODO need schema
+				Schema: "",
+				// TODO need table
+				Table: "",
+				// TODO translate Bound to string
+				UpperBound: "",
+				ChunkState: state,
+			},
+			// TODO need random value
+			RandomValue: make([][]string, 0),
+		}
+		randomNode.ID = chunk.ID
+	}
+	df.cp.NodeChan <- node
 }
 
 func (df *Diff) handleChunks(ctx context.Context) {

@@ -20,6 +20,7 @@ import (
 
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
 	"go.uber.org/zap"
 )
 
@@ -46,6 +47,7 @@ type Bound struct {
 
 // Range represents chunk range
 type Range struct {
+	Type   checkpoints.ChunkType
 	ID     int      `json:"id"`
 	Bounds []*Bound `json:"bounds"`
 
