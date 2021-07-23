@@ -29,50 +29,191 @@ import (
 
 type BucketIterator struct {
 	table        *common.TableDiff
-	indexcolumns []*model.ColumnInfo
+	indexColumns []*model.ColumnInfo
 	buckets      []dbutil.Bucket
+	chunkSize    int64
+	chunks       []*chunk.Range
+	nextChunk    uint
+	chunksCh     chan []*chunk.Range
+	errCh        chan error
+	ctrlCh       chan bool
 
 	dbConn *sql.DB
 }
 
-func NewBucketIterator(table *common.TableDiff, dbConn *sql.DB) (*BucketIterator, error) {
-	buckets, err := dbutil.GetBucketsInfo(context.Background(), dbConn, table.Schema, table.Table, table.Info)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
+func NewBucketIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int) (*BucketIterator, error) {
+
 	bs := &BucketIterator{
-		table:  table,
-		dbConn: dbConn,
-	}
-	// TODO ignore columns
-	indices := dbutil.FindAllIndex(table.Info)
-	for _, index := range indices {
-		if index == nil {
-			continue
-		}
-		bucket, ok := buckets[index.Name.O]
-		if !ok {
-			return nil, errors.NotFoundf("index %s in buckets info", index.Name.O)
-		}
-		log.Debug("buckets for index", zap.String("index", index.Name.O), zap.Reflect("buckets", buckets))
-
-		indexcolumns := utils.GetColumnsFromIndex(index, table.Info)
-
-		if len(indexcolumns) == 0 {
-			continue
-		}
-		bs.buckets = bucket
-		bs.indexcolumns = indexcolumns
+		table:     table,
+		chunkSize: int64(chunkSize),
+		chunksCh:  make(chan []*chunk.Range, 1),
+		errCh:     make(chan error, 1),
+		ctrlCh:    make(chan bool, 1),
+		dbConn:    dbConn,
 	}
 
-	if bs.buckets == nil || bs.indexcolumns == nil {
-		return nil, errors.NotFoundf("no index to split buckets")
+	go bs.createProducer()
+
+	if err := bs.init(); err != nil {
+		return nil, errors.Trace(err)
 	}
 
 	return bs, nil
 }
 
 func (s *BucketIterator) Next() (*chunk.Range, error) {
+	// `len(s.chunks) == 0` is included in this
+	if uint(len(s.chunks)) <= s.nextChunk {
+		// TODO: add timeout
+		// select {
 
-	return nil, nil
+		// }
+		select {
+		case err := <-s.errCh:
+			return nil, err
+		case s.chunks = <-s.chunksCh:
+		}
+
+		if s.chunks == nil {
+			return nil, nil
+		}
+		s.nextChunk = 0
+	}
+
+	chunk := s.chunks[s.nextChunk]
+	s.nextChunk = s.nextChunk + 1
+	return chunk, nil
+}
+
+func (s *BucketIterator) init() error {
+	s.nextChunk = 0
+	buckets, err := dbutil.GetBucketsInfo(context.Background(), s.dbConn, s.table.Schema, s.table.Table, s.table.Info)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// TODO: 1. ignore some columns
+	//		 2. how to choose index
+	indices := dbutil.FindAllIndex(s.table.Info)
+	for _, index := range indices {
+		if index == nil {
+			continue
+		}
+		bucket, ok := buckets[index.Name.O]
+		if !ok {
+			return errors.NotFoundf("index %s in buckets info", index.Name.O)
+		}
+		log.Debug("buckets for index", zap.String("index", index.Name.O), zap.Reflect("buckets", buckets))
+
+		indexcolumns := utils.GetColumnsFromIndex(index, s.table.Info)
+
+		if len(indexcolumns) == 0 {
+			continue
+		}
+		s.buckets = bucket
+		s.indexColumns = indexcolumns
+		break
+	}
+
+	if s.buckets == nil || s.indexColumns == nil {
+		return errors.NotFoundf("no index to split buckets")
+	}
+
+	s.ctrlCh <- false
+	return nil
+}
+
+func (s *BucketIterator) Close() {
+	s.ctrlCh <- true
+}
+
+func (s *BucketIterator) createProducer() {
+	// close this goruntine gracefully.
+	ctrl := <-s.ctrlCh
+	if ctrl {
+		return
+	}
+	var (
+		lowerValues, upperValues []string
+		latestCount              int64
+		err                      error
+	)
+	chunkSize := s.chunkSize
+	table := s.table
+	buckets := s.buckets
+	indexColumns := s.indexColumns
+	for i := 0; i < len(buckets); i++ {
+		count := buckets[i].Count - latestCount
+		if count < s.chunkSize {
+			// merge more buckets into one chunk
+			continue
+		}
+
+		upperValues, err = dbutil.AnalyzeValuesFromBuckets(buckets[i].UpperBound, indexColumns)
+		if err != nil {
+			s.errCh <- errors.Trace(err)
+			return
+		}
+
+		chunkRange := chunk.NewChunkRange()
+		for j, column := range indexColumns {
+			if i == 0 {
+				chunkRange.Update(column.Name.O, "", upperValues[j], false, true)
+			} else {
+				var lowerValue, upperValue string
+				if len(lowerValues) > 0 {
+					lowerValue = lowerValues[j]
+				}
+				if len(upperValues) > 0 {
+					upperValue = upperValues[j]
+				}
+				chunkRange.Update(column.Name.O, lowerValue, upperValue, len(lowerValues) > 0, len(upperValues) > 0)
+			}
+		}
+
+		chunks := []*chunk.Range{}
+		if count >= 2*chunkSize {
+			splitChunks, err := splitRangeByRandom(s.dbConn, chunkRange, int(count/chunkSize), table.Schema, table.Table, indexColumns, table.Range, table.Collation)
+			if err != nil {
+				s.errCh <- errors.Trace(err)
+				return
+			}
+			chunks = append(chunks, splitChunks...)
+		} else {
+			chunks = append(chunks, chunkRange)
+		}
+
+		latestCount = buckets[i].Count
+		lowerValues = upperValues
+		select {
+		case _ = <-s.ctrlCh:
+			return
+		case s.chunksCh <- chunks:
+
+		}
+
+	}
+
+	// merge the rest keys into one chunk
+	if len(lowerValues) > 0 {
+		chunkRange := chunk.NewChunkRange()
+		for j, column := range indexColumns {
+			chunkRange.Update(column.Name.O, lowerValues[j], "", true, false)
+		}
+		select {
+		case _ = <-s.ctrlCh:
+			return
+		case s.chunksCh <- []*chunk.Range{chunkRange}:
+
+		}
+	}
+
+	// finish split this table.
+	for {
+		select {
+		case _ = <-s.ctrlCh:
+			return
+		case s.chunksCh <- nil:
+		}
+	}
+
 }
