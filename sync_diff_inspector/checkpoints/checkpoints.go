@@ -245,12 +245,7 @@ func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 		var CheckpointData []byte
 		var err error
 		switch cur := cur.(type) {
-		case *BucketNode:
-			CheckpointData, err = json.Marshal(cur)
-			if err != nil {
-				return 0, errors.Trace(err)
-			}
-		case *RandomNode:
+		case *BucketNode, *RandomNode:
 			CheckpointData, err = json.Marshal(cur)
 			if err != nil {
 				return 0, errors.Trace(err)
@@ -258,7 +253,9 @@ func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 		default:
 			panic("error")
 		}
-		WriteFile(checkpointFile, CheckpointData)
+		if err := WriteFile(checkpointFile, CheckpointData); err != nil {
+			return 0, err
+		}
 		return cur.GetID(), nil
 	}
 	return 0, nil
@@ -295,7 +292,13 @@ func LoadChunks() (NodeInterface, error) {
 			return nil, errors.Trace(err)
 		}
 		return node, nil
-	// TODO random
+	case int(Random):
+		node := &RandomNode{}
+		err := json.Unmarshal(bytes, &node)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		return node, nil
 	default:
 		panic("LoadChunk error")
 	}
