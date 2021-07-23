@@ -131,7 +131,8 @@ type Heap struct {
 	mu             *sync.Mutex // protect critical section
 }
 type Checkpointer struct {
-	hp       *Heap
+	hp *Heap
+	// TODO close the channel
 	NodeChan chan NodeInterface
 }
 
