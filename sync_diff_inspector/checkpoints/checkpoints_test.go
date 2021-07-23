@@ -47,9 +47,6 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 }
 
 func (cp *testCheckpointSuit) TestLoadChunk(c *C) {
-	checker := new(Checkpointer)
-	checker.Init()
-	ctx := context.Background()
-	node, _ := checker.LoadChunks(ctx)
+	node, _ := LoadChunks()
 	c.Assert(node.(*BucketNode).BucketID, Equals, 9999)
 }

@@ -266,7 +266,7 @@ func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 }
 
 // loadChunks loads chunk info from file `chunk`
-func (cp *Checkpointer) LoadChunks(ctx context.Context) (NodeInterface, error) {
+func LoadChunks() (NodeInterface, error) {
 	//chunks := make([]*chunk.Range, 0, 100)
 	bytes, err := os.ReadFile(checkpointFile)
 	bytes_copy := make([]byte, len(bytes))
@@ -280,6 +280,7 @@ func (cp *Checkpointer) LoadChunks(ctx context.Context) (NodeInterface, error) {
 	err = json.Unmarshal(bytes_copy, &m)
 	//t, err := strconv.Atoi(str[strings.Index(str, `"type"`)+len(`"type"`)+1 : strings.Index(str, `"type"`)+len(`"type"`)+2])
 	if err != nil {
+		fmt.Println(err.Error())
 		return nil, errors.Trace(err)
 	}
 	t, err := strconv.Atoi(fmt.Sprint(m["type"]))
