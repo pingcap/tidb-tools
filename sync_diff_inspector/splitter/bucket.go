@@ -68,7 +68,12 @@ func (s *BucketIterator) Next() (*chunk.Range, error) {
 		// select {
 
 		// }
-		s.chunks = <-s.chunksCh
+		select {
+		case err := <-s.errCh:
+			return nil, err
+		case s.chunks = <-s.chunksCh:
+		}
+
 		if s.chunks == nil {
 			return nil, nil
 		}

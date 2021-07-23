@@ -41,11 +41,7 @@ func (t *TiDBChunksIterator) Next() (*chunk.Range, error) {
 	if t.iter == nil {
 		return nil, nil
 	}
-	chunk, err := t.iter.Next()
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	return chunk, nil
+	return t.iter.Next()
 }
 
 func (t *TiDBChunksIterator) Close() {
