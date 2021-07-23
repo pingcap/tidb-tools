@@ -180,7 +180,7 @@ func (s *BucketIterator) createProducer() {
 		latestCount = buckets[i].Count
 		lowerValues = upperValues
 		select {
-		case ctrl := <-s.ctrlCh:
+		case _ = <-s.ctrlCh:
 			return
 		case s.chunksCh <- chunks:
 
@@ -195,7 +195,7 @@ func (s *BucketIterator) createProducer() {
 			chunkRange.Update(column.Name.O, lowerValues[j], "", true, false)
 		}
 		select {
-		case ctrl := <-s.ctrlCh:
+		case _ = <-s.ctrlCh:
 			return
 		case s.chunksCh <- []*chunk.Range{chunkRange}:
 
@@ -205,10 +205,10 @@ func (s *BucketIterator) createProducer() {
 	// finish split this table.
 	for {
 		select {
-		case ctrl := <- s.ctrlCh:
+		case _ = <-s.ctrlCh:
 			return
 		case s.chunksCh <- nil:
 		}
 	}
-	
+
 }
