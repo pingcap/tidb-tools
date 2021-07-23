@@ -123,94 +123,92 @@ func (s *BucketIterator) Close() {
 
 func (s *BucketIterator) createProducer() {
 	// close this goruntine gracefully.
-	lastCtrl := <-s.ctrlCh
-RESTART:
-	for {
+	ctrl := <-s.ctrlCh
+	if ctrl {
+		return
+	}
+	var (
+		lowerValues, upperValues []string
+		latestCount              int64
+		err                      error
+	)
+	chunkSize := s.chunkSize
+	table := s.table
+	buckets := s.buckets
+	indexColumns := s.indexColumns
+	for i := 0; i < len(buckets); i++ {
+		count := buckets[i].Count - latestCount
+		if count < s.chunkSize {
+			// merge more buckets into one chunk
+			continue
+		}
 
-		if lastCtrl {
+		upperValues, err = dbutil.AnalyzeValuesFromBuckets(buckets[i].UpperBound, indexColumns)
+		if err != nil {
+			s.errCh <- errors.Trace(err)
 			return
 		}
 
-		var (
-			lowerValues, upperValues []string
-			latestCount              int64
-			err                      error
-		)
-		chunkSize := s.chunkSize
-		table := s.table
-		buckets := s.buckets
-		indexColumns := s.indexColumns
-		for i := 0; i < len(buckets); i++ {
-			count := buckets[i].Count - latestCount
-			if count < s.chunkSize {
-				// merge more buckets into one chunk
-				continue
+		chunkRange := chunk.NewChunkRange()
+		for j, column := range indexColumns {
+			if i == 0 {
+				chunkRange.Update(column.Name.O, "", upperValues[j], false, true)
+			} else {
+				var lowerValue, upperValue string
+				if len(lowerValues) > 0 {
+					lowerValue = lowerValues[j]
+				}
+				if len(upperValues) > 0 {
+					upperValue = upperValues[j]
+				}
+				chunkRange.Update(column.Name.O, lowerValue, upperValue, len(lowerValues) > 0, len(upperValues) > 0)
 			}
+		}
 
-			upperValues, err = dbutil.AnalyzeValuesFromBuckets(buckets[i].UpperBound, indexColumns)
+		chunks := []*chunk.Range{}
+		if count >= 2*chunkSize {
+			splitChunks, err := splitRangeByRandom(s.dbConn, chunkRange, int(count/chunkSize), table.Schema, table.Table, indexColumns, table.Range, table.Collation)
 			if err != nil {
 				s.errCh <- errors.Trace(err)
 				return
 			}
+			chunks = append(chunks, splitChunks...)
+		} else {
+			chunks = append(chunks, chunkRange)
+		}
 
-			chunkRange := chunk.NewChunkRange()
-			for j, column := range indexColumns {
-				if i == 0 {
-					chunkRange.Update(column.Name.O, "", upperValues[j], false, true)
-				} else {
-					var lowerValue, upperValue string
-					if len(lowerValues) > 0 {
-						lowerValue = lowerValues[j]
-					}
-					if len(upperValues) > 0 {
-						upperValue = upperValues[j]
-					}
-					chunkRange.Update(column.Name.O, lowerValue, upperValue, len(lowerValues) > 0, len(upperValues) > 0)
-				}
-			}
-
-			chunks := []*chunk.Range{}
-			if count >= 2*chunkSize {
-				splitChunks, err := splitRangeByRandom(s.dbConn, chunkRange, int(count/chunkSize), table.Schema, table.Table, indexColumns, table.Range, table.Collation)
-				if err != nil {
-					s.errCh <- errors.Trace(err)
-					return
-				}
-				chunks = append(chunks, splitChunks...)
-			} else {
-				chunks = append(chunks, chunkRange)
-			}
-
-			latestCount = buckets[i].Count
-			lowerValues = upperValues
-			select {
-			case ctrl := <-s.ctrlCh:
-				lastCtrl = ctrl
-				continue RESTART
-			case s.chunksCh <- chunks:
-
-			}
+		latestCount = buckets[i].Count
+		lowerValues = upperValues
+		select {
+		case ctrl := <-s.ctrlCh:
+			return
+		case s.chunksCh <- chunks:
 
 		}
 
-		// merge the rest keys into one chunk
-		if len(lowerValues) > 0 {
-			chunkRange := chunk.NewChunkRange()
-			for j, column := range indexColumns {
-				chunkRange.Update(column.Name.O, lowerValues[j], "", true, false)
-			}
-			select {
-			case ctrl := <-s.ctrlCh:
-				lastCtrl = ctrl
-				continue RESTART
-			case s.chunksCh <- []*chunk.Range{chunkRange}:
-
-			}
-		}
-
-		// finish split this table.
-
-		s.chunksCh <- nil
-		lastCtrl = <-s.ctrlCh
 	}
+
+	// merge the rest keys into one chunk
+	if len(lowerValues) > 0 {
+		chunkRange := chunk.NewChunkRange()
+		for j, column := range indexColumns {
+			chunkRange.Update(column.Name.O, lowerValues[j], "", true, false)
+		}
+		select {
+		case ctrl := <-s.ctrlCh:
+			return
+		case s.chunksCh <- []*chunk.Range{chunkRange}:
+
+		}
+	}
+
+	// finish split this table.
+	for {
+		select {
+		case ctrl := <- s.ctrlCh:
+			return
+		case s.chunksCh <- nil:
+		}
+	}
+	
 }
