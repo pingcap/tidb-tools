@@ -1,0 +1,1 @@
+{"type":1,"chunk-id":9999,"schema":"test","table":"test","upper-bound":"(a,b,c)","chunck-state":"success","bucket-id":9999}
