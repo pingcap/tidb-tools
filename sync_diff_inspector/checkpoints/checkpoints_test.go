@@ -26,9 +26,9 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 	id, _ := checker.SaveChunk(ctx)
 	c.Assert(id, Equals, 0)
 	wg := &sync.WaitGroup{}
-	wg.Add(9999)
 	for i := 1; i < 10000; i++ {
 		go func(i_ int) {
+			wg.Add(1)
 			node := &BucketNode{
 				Node:     Node{ID: i_, Schema: "test", Table: "test", UpperBound: "(a,b,c)", Type: 1, ChunkState: "success"},
 				BucketID: i_,

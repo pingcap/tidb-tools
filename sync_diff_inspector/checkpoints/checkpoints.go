@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 	"sync"
 
 	//"github.com/golang/protobuf/proto"
@@ -269,12 +268,20 @@ func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 func (cp *Checkpointer) LoadChunks(ctx context.Context) (NodeInterface, error) {
 	//chunks := make([]*chunk.Range, 0, 100)
 	bytes, err := os.ReadFile(checkpointFile)
+	bytes_copy := make([]byte, len(bytes))
+	copy(bytes_copy, bytes)
 	if err != nil {
 		// TODO error handling
 	}
-	str := string(bytes)
+	//str := string(bytes)
 	// TODO find a better way
-	t, err := strconv.Atoi(str[strings.Index(str, `"type"`)+len(`"type"`)+1 : strings.Index(str, `"type"`)+len(`"type"`)+2])
+	m := make(map[string]interface{})
+	err = json.Unmarshal(bytes_copy, &m)
+	//t, err := strconv.Atoi(str[strings.Index(str, `"type"`)+len(`"type"`)+1 : strings.Index(str, `"type"`)+len(`"type"`)+2])
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	t, err := strconv.Atoi(fmt.Sprint(m["type"]))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
