@@ -18,6 +18,7 @@ import (
 	"database/sql"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
@@ -100,6 +101,8 @@ func (s *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff) (s
 		// TODO error handling
 		var err error
 		node, err = checkpoints.LoadChunks()
+		// TODO add warn log
+		log.Warn("the checkpoint load failed, diable checkpoint")
 		if err != nil {
 			tableDiff.UseCheckpoint = false
 		} else {
@@ -111,6 +114,7 @@ func (s *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff) (s
 			}
 		}
 	}
+	// TODO merge bucket function into useBucket()
 	if (!tableDiff.UseCheckpoint && s.useBucket(tableDiff)) || bucket {
 		bucketIter, err := splitter.NewBucketIterator(tableDiff, s.dbConn, chunkSize)
 		if err != nil {
