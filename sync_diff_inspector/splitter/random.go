@@ -77,6 +77,11 @@ func NewRandomIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int, l
 
 }
 
+// TODO implement Seek
+func (s *RandomIterator) Seek(randomValues [][]string) {
+
+}
+
 func (s *RandomIterator) Next() (*chunk.Range, error) {
 	if uint(len(s.chunks)) <= s.nextChunk {
 		return nil, nil
