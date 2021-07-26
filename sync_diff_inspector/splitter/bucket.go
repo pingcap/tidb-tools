@@ -61,6 +61,12 @@ func NewBucketIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int) (
 	return bs, nil
 }
 
+// TODO when cfg.useCheckpoint is true, call Seek to set the cursor to
+// the bucket just after the bucket id.
+func (s *BucketIterator) Seek(bucketID int) {
+
+}
+
 func (s *BucketIterator) Next() (*chunk.Range, error) {
 	// `len(s.chunks) == 0` is included in this
 	if uint(len(s.chunks)) <= s.nextChunk {

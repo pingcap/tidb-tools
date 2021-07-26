@@ -18,6 +18,8 @@ import (
 	"database/sql"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
@@ -93,17 +95,42 @@ func (s *TiDBChunksIterator) useBucket(diff *common.TableDiff) bool {
 
 func (s *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff) (splitter.Iterator, error) {
 	chunkSize := 1000
-	if s.useBucket(tableDiff) {
+	bucket := false
+	var node checkpoints.Node
+	if tableDiff.UseCheckpoint {
+		// TODO error handling
+		var err error
+		node, err = checkpoints.LoadChunks()
+		// TODO add warn log
+		log.Warn("the checkpoint load failed, diable checkpoint")
+		if err != nil {
+			tableDiff.UseCheckpoint = false
+		} else {
+			switch node.(type) {
+			case *checkpoints.BucketNode:
+				bucket = true
+			case *checkpoints.RandomNode:
+				bucket = false
+			}
+		}
+	}
+	// TODO merge bucket function into useBucket()
+	if (!tableDiff.UseCheckpoint && s.useBucket(tableDiff)) || bucket {
 		bucketIter, err := splitter.NewBucketIterator(tableDiff, s.dbConn, chunkSize)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-
+		if tableDiff.UseCheckpoint {
+			bucketIter.Seek(node.(*checkpoints.BucketNode).BucketID)
+		}
 		return bucketIter, nil
 		// TODO fall back to random splitter
 	}
 	// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
 	randIter, err := splitter.NewRandomIterator(tableDiff, s.dbConn, s.chunkSize, tableDiff.Range, tableDiff.Collation)
+	if tableDiff.UseCheckpoint {
+		randIter.Seek(node.(*checkpoints.RandomNode).RandomValue)
+	}
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
