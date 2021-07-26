@@ -36,7 +36,7 @@ type Inner struct {
 	ID         int             `json:"chunk-id"`
 	Schema     string          `json:"schema"`
 	Table      string          `json:"table"`
-	UpperBound string          `json:"upper-bound"` // the upper bound should be like "(a, b, c)"
+	UpperBound []string        `json:"upper-bound"` // the upper bound should be like "(a, b, c)"
 	ChunkState string          `json:"chunk-state"` // indicate the state ("success" or "failed") of the chunk
 }
 type BucketNode struct {
@@ -101,7 +101,7 @@ type Node interface {
 	GetID() int
 	GetSchema() string
 	GetTable() string
-	GetUpperBound() string
+	GetUpperBound() []string
 	GetType() chunk.ChunkType
 	GetChunkState() string
 }
@@ -112,7 +112,7 @@ func (n *Inner) GetSchema() string { return n.Schema }
 
 func (n *Inner) GetTable() string { return n.Table }
 
-func (n *Inner) GetUpperBound() string { return n.UpperBound }
+func (n *Inner) GetUpperBound() []string { return n.UpperBound }
 
 func (n *Inner) GetType() chunk.ChunkType { return n.Type }
 

@@ -21,6 +21,7 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
@@ -41,30 +42,23 @@ type BucketIterator struct {
 	dbConn *sql.DB
 }
 
-func NewBucketIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int) (*BucketIterator, error) {
+func NewBucketIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int, node checkpoints.Node) (*BucketIterator, error) {
 
 	bs := &BucketIterator{
 		table:     table,
 		chunkSize: int64(chunkSize),
 		chunksCh:  make(chan []*chunk.Range, 1),
 		errCh:     make(chan error, 1),
-		ctrlCh:    make(chan bool, 1),
+		ctrlCh:    make(chan bool, 2),
 		dbConn:    dbConn,
 	}
-
-	go bs.createProducer()
+	go bs.createProducer(node)
 
 	if err := bs.init(); err != nil {
 		return nil, errors.Trace(err)
 	}
 
 	return bs, nil
-}
-
-// TODO when cfg.useCheckpoint is true, call Seek to set the cursor to
-// the bucket just after the bucket id.
-func (s *BucketIterator) Seek(bucketID int) {
-
 }
 
 func (s *BucketIterator) Next() (*chunk.Range, error) {
@@ -132,8 +126,9 @@ func (s *BucketIterator) Close() {
 	s.ctrlCh <- true
 }
 
-func (s *BucketIterator) createProducer() {
+func (s *BucketIterator) createProducer(node checkpoints.Node) {
 	// close this goruntine gracefully.
+	// init control
 	ctrl := <-s.ctrlCh
 	if ctrl {
 		return
@@ -147,7 +142,15 @@ func (s *BucketIterator) createProducer() {
 	table := s.table
 	buckets := s.buckets
 	indexColumns := s.indexColumns
-	for i := 0; i < len(buckets); i++ {
+	beginBucket := 0
+	if node == nil {
+		lowerValues = make([]string, len(indexColumns), len(indexColumns))
+	} else {
+		lowerValues = node.GetUpperBound()
+		beginBucket = node.GetID()
+	}
+	// TODO split beginBucket
+	for i := beginBucket; i < len(buckets); i++ {
 		count := buckets[i].Count - latestCount
 		if count < s.chunkSize {
 			// merge more buckets into one chunk
@@ -162,18 +165,14 @@ func (s *BucketIterator) createProducer() {
 
 		chunkRange := chunk.NewChunkRange()
 		for j, column := range indexColumns {
-			if i == 0 {
-				chunkRange.Update(column.Name.O, "", upperValues[j], false, true)
-			} else {
-				var lowerValue, upperValue string
-				if len(lowerValues) > 0 {
-					lowerValue = lowerValues[j]
-				}
-				if len(upperValues) > 0 {
-					upperValue = upperValues[j]
-				}
-				chunkRange.Update(column.Name.O, lowerValue, upperValue, len(lowerValues) > 0, len(upperValues) > 0)
+			var lowerValue, upperValue string
+			if len(lowerValues) > 0 {
+				lowerValue = lowerValues[j]
 			}
+			if len(upperValues) > 0 {
+				upperValue = upperValues[j]
+			}
+			chunkRange.Update(column.Name.O, lowerValue, upperValue, len(lowerValues) > 0, len(upperValues) > 0)
 		}
 
 		chunks := []*chunk.Range{}

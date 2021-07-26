@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"go.uber.org/zap"
@@ -38,7 +39,7 @@ type RandomIterator struct {
 	dbConn *sql.DB
 }
 
-func NewRandomIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int, limits string, collation string) (*RandomIterator, error) {
+func NewRandomIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int, limits string, collation string, node checkpoints.Node) (*RandomIterator, error) {
 	// get the chunk count by data count and chunk size
 	cnt, err := dbutil.GetRowCount(context.Background(), dbConn, table.Schema, table.Table, limits, nil)
 	if err != nil {
@@ -67,6 +68,8 @@ func NewRandomIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int, l
 		return nil, errors.Trace(err)
 	}
 
+	// TODO checkpoints
+
 	return &RandomIterator{
 		table:     table,
 		chunkSize: chunkSize,
@@ -78,8 +81,12 @@ func NewRandomIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int, l
 }
 
 // TODO implement Seek
-func (s *RandomIterator) Seek(randomValues [][]string) {
+func (s *RandomIterator) StartProducerWithSeek(randomValues [][]string) {
 
+}
+
+func (s *RandomIterator) StartProducer() {
+	// No Producer, just empty
 }
 
 func (s *RandomIterator) Next() (*chunk.Range, error) {
