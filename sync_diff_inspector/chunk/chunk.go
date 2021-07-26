@@ -20,7 +20,6 @@ import (
 
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
 	"go.uber.org/zap"
 )
 
@@ -35,6 +34,14 @@ var (
 	normalMode = "normalMode"
 )
 
+type ChunkType int
+
+const (
+	Bucket ChunkType = iota + 1
+	Random
+	Others
+)
+
 // Bound represents a bound for a column
 type Bound struct {
 	Column string `json:"column"`
@@ -47,7 +54,8 @@ type Bound struct {
 
 // Range represents chunk range
 type Range struct {
-	Type   checkpoints.ChunkType
+	// TODO when Next() generate a chunk, assign the corresponding chunk type
+	Type   ChunkType
 	ID     int      `json:"id"`
 	Bounds []*Bound `json:"bounds"`
 

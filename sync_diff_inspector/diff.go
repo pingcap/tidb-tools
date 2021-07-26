@@ -151,13 +151,13 @@ func (df *Diff) Equal(ctx context.Context) error {
 	return nil
 }
 
-func (df *Diff) consume(chunk *chunk.Range) {
+func (df *Diff) consume(chunkRange *chunk.Range) {
 	// TODO: if !UseChecksum
-	crc1, err := df.upstream.GetCrc32(chunk)
+	crc1, err := df.upstream.GetCrc32(chunkRange)
 	if err != nil {
 		// retry or log this chunk's error to checkpoint.
 	}
-	crc2, err := df.downstream.GetCrc32(chunk)
+	crc2, err := df.downstream.GetCrc32(chunkRange)
 	if err != nil {
 		// retry or log this chunk's error to checkpoint.
 	}
@@ -171,12 +171,12 @@ func (df *Diff) consume(chunk *chunk.Range) {
 		// update chunk success state in summary
 		state = "success"
 	}
-	switch chunk.Type {
-	case checkpoints.Bucket:
+	switch chunkRange.Type {
+	case chunk.Bucket:
 		bucketNode := &checkpoints.BucketNode{
 			Inner: checkpoints.Inner{
-				Type: chunk.Type,
-				ID:   chunk.ID,
+				Type: chunkRange.Type,
+				ID:   chunkRange.ID,
 				// TODO need schema
 				Schema: "",
 				// TODO need table
@@ -189,11 +189,11 @@ func (df *Diff) consume(chunk *chunk.Range) {
 			BucketID: 0,
 		}
 		node = bucketNode
-	case checkpoints.Random:
+	case chunk.Random:
 		randomNode := &checkpoints.RandomNode{
 			Inner: checkpoints.Inner{
-				Type: chunk.Type,
-				ID:   chunk.ID,
+				Type: chunkRange.Type,
+				ID:   chunkRange.ID,
 				// TODO need schema
 				Schema: "",
 				// TODO need table

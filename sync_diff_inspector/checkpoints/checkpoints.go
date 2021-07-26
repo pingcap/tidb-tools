@@ -26,24 +26,18 @@ import (
 	//"github.com/pingcap/errors"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 )
-
-type ChunkType int
 
 const localFilePerm os.FileMode = 0o644
-const (
-	Bucket ChunkType = iota + 1
-	Random
-	Others
-)
 
 type Inner struct {
-	Type       ChunkType `json:"type"`
-	ID         int       `json:"chunk-id"`
-	Schema     string    `json:"schema"`
-	Table      string    `json:"table"`
-	UpperBound string    `json:"upper-bound"` // the upper bound should be like "(a, b, c)"
-	ChunkState string    `json:"chunk-state"` // indicate the state ("success" or "failed") of the chunk
+	Type       chunk.ChunkType `json:"type"`
+	ID         int             `json:"chunk-id"`
+	Schema     string          `json:"schema"`
+	Table      string          `json:"table"`
+	UpperBound string          `json:"upper-bound"` // the upper bound should be like "(a, b, c)"
+	ChunkState string          `json:"chunk-state"` // indicate the state ("success" or "failed") of the chunk
 }
 type BucketNode struct {
 	Inner
@@ -108,7 +102,7 @@ type Node interface {
 	GetSchema() string
 	GetTable() string
 	GetUpperBound() string
-	GetType() ChunkType
+	GetType() chunk.ChunkType
 	GetChunkState() string
 }
 
@@ -120,7 +114,7 @@ func (n *Inner) GetTable() string { return n.Table }
 
 func (n *Inner) GetUpperBound() string { return n.UpperBound }
 
-func (n *Inner) GetType() ChunkType { return n.Type }
+func (n *Inner) GetType() chunk.ChunkType { return n.Type }
 
 func (n *Inner) GetChunkState() string { return n.ChunkState }
 
@@ -285,14 +279,14 @@ func LoadChunks() (Node, error) {
 	}
 
 	switch t {
-	case int(Bucket):
+	case int(chunk.Bucket):
 		node := &BucketNode{}
 		err := json.Unmarshal(bytes, &node)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 		return node, nil
-	case int(Random):
+	case int(chunk.Random):
 		node := &RandomNode{}
 		err := json.Unmarshal(bytes, &node)
 		if err != nil {
