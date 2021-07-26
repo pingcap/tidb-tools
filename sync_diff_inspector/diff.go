@@ -21,6 +21,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source"
@@ -48,7 +49,7 @@ type Diff struct {
 	fixSQLFile        *os.File
 
 	chunkCh chan *chunk.Range
-	cp      *Checkpointer
+	cp      *checkpoints.Checkpointer
 }
 
 // NewDiff returns a Diff instance.
@@ -67,7 +68,7 @@ func NewDiff(cfg *config.Config) (diff *Diff, err error) {
 
 		// TODO use a meaningfull chunk channel buffer
 		chunkCh: make(chan *chunk.Range, 1024),
-		cp:      new(Checkpointer),
+		cp:      new(checkpoints.Checkpointer),
 	}
 
 	if err = diff.init(cfg); err != nil {
@@ -110,6 +111,8 @@ func (df *Diff) Equal(ctx context.Context) error {
 	}
 	tick := time.Tick(10 * time.Second)
 	go df.handleChunks(ctx)
+	// a background gorotine which will insert the verified chunk,
+	// and periodically save checkpoint
 	go func(ctx context.Context) {
 		for {
 			select {
@@ -117,9 +120,11 @@ func (df *Diff) Equal(ctx context.Context) error {
 				log.Info("Stop do checkpoint")
 			case <-tick:
 				_, err := df.cp.SaveChunk(ctx)
-				// delay err handling
+				// TODO: error handling
 				if err != nil {
 				}
+			case node := <-df.cp.NodeChan:
+				df.cp.Insert(node)
 			}
 		}
 	}(ctx)
@@ -146,25 +151,63 @@ func (df *Diff) Equal(ctx context.Context) error {
 	return nil
 }
 
-func (df *Diff) consume(chunk *chunk.Range) {
+func (df *Diff) consume(chunkRange *chunk.Range) {
 	// TODO: if !UseChecksum
-	crc1, err := df.upstream.GetCrc32(chunk)
+	crc1, err := df.upstream.GetCrc32(chunkRange)
 	if err != nil {
 		// retry or log this chunk's error to checkpoint.
 	}
-	crc2, err := df.downstream.GetCrc32(chunk)
+	crc2, err := df.downstream.GetCrc32(chunkRange)
 	if err != nil {
 		// retry or log this chunk's error to checkpoint.
 	}
+	var node checkpoints.Node
+	var state string
 	if crc1 != crc2 {
 		// 1. compare rows
 		// 2. generate fix sql
-		df.cp.Insert(&Node{
-			ID: chunk.ID,
-		})
+		state = "failed"
 	} else {
 		// update chunk success state in summary
+		state = "success"
 	}
+	switch chunkRange.Type {
+	case chunk.Bucket:
+		bucketNode := &checkpoints.BucketNode{
+			Inner: checkpoints.Inner{
+				Type: chunkRange.Type,
+				ID:   chunkRange.ID,
+				// TODO need schema
+				Schema: "",
+				// TODO need table
+				Table: "",
+				// TODO translate Bound to string
+				UpperBound: "",
+				ChunkState: state,
+			},
+			// TODO need BucketID
+			BucketID: 0,
+		}
+		node = bucketNode
+	case chunk.Random:
+		randomNode := &checkpoints.RandomNode{
+			Inner: checkpoints.Inner{
+				Type: chunkRange.Type,
+				ID:   chunkRange.ID,
+				// TODO need schema
+				Schema: "",
+				// TODO need table
+				Table: "",
+				// TODO translate Bound to string
+				UpperBound: "",
+				ChunkState: state,
+			},
+			// TODO need random value
+			RandomValue: make([][]string, 0),
+		}
+		node = randomNode
+	}
+	df.cp.NodeChan <- node
 }
 
 func (df *Diff) handleChunks(ctx context.Context) {

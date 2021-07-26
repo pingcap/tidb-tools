@@ -42,5 +42,8 @@ type TableDiff struct {
 	// ignore check table's data
 	IgnoreDataCheck bool `json:"-"`
 
+	// set true will continue check from the latest checkpoint
+	UseCheckpoint bool `json:"use-checkpoint"`
+
 	Collation string `json:"collation"`
 }
