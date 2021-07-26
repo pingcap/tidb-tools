@@ -205,7 +205,7 @@ func (df *Diff) consume(chunk *chunk.Range) {
 			// TODO need random value
 			RandomValue: make([][]string, 0),
 		}
-		randomNode.ID = chunk.ID
+		node = randomNode
 	}
 	df.cp.NodeChan <- node
 }
