@@ -1,4 +1,4 @@
-package main
+package checkpoints
 
 import (
 	"context"
@@ -26,11 +26,12 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 	id, _ := checker.SaveChunk(ctx)
 	c.Assert(id, Equals, 0)
 	wg := &sync.WaitGroup{}
-	wg.Add(9999)
 	for i := 1; i < 10000; i++ {
+		wg.Add(1)
 		go func(i_ int) {
-			node := &Node{
-				ID: i_,
+			node := &BucketNode{
+				Inner:     Inner{ID: i_, Schema: "test", Table: "test", UpperBound: "(a,b,c)", Type: 1, ChunkState: "success"},
+				BucketID: i_,
 			}
 			if rand.Intn(4) == 0 {
 				time.Sleep(time.Duration(rand.Intn(3)) * time.Second)
@@ -43,4 +44,9 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 	wg.Wait()
 	id, _ = checker.SaveChunk(ctx)
 	c.Assert(id, Equals, 9999)
+}
+
+func (cp *testCheckpointSuit) TestLoadChunk(c *C) {
+	node, _ := LoadChunks()
+	c.Assert(node.(*BucketNode).BucketID, Equals, 9999)
 }

@@ -34,6 +34,14 @@ var (
 	normalMode = "normalMode"
 )
 
+type ChunkType int
+
+const (
+	Bucket ChunkType = iota + 1
+	Random
+	Others
+)
+
 // Bound represents a bound for a column
 type Bound struct {
 	Column string `json:"column"`
@@ -46,6 +54,8 @@ type Bound struct {
 
 // Range represents chunk range
 type Range struct {
+	// TODO when Next() generate a chunk, assign the corresponding chunk type
+	Type   ChunkType
 	ID     int      `json:"id"`
 	Bounds []*Bound `json:"bounds"`
 
