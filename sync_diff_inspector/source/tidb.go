@@ -95,7 +95,7 @@ func (s *TiDBChunksIterator) useBucket(diff *common.TableDiff) bool {
 func (s *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff) (splitter.Iterator, error) {
 	chunkSize := 1000
 	bucket := false
-	var node checkpoints.NodeInterface
+	var node checkpoints.Node
 	if tableDiff.UseCheckpoint {
 		// TODO error handling
 		var err error

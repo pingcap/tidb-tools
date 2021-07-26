@@ -161,7 +161,7 @@ func (df *Diff) consume(chunk *chunk.Range) {
 	if err != nil {
 		// retry or log this chunk's error to checkpoint.
 	}
-	var node checkpoints.NodeInterface
+	var node checkpoints.Node
 	var state string
 	if crc1 != crc2 {
 		// 1. compare rows
@@ -174,7 +174,7 @@ func (df *Diff) consume(chunk *chunk.Range) {
 	switch chunk.Type {
 	case checkpoints.Bucket:
 		bucketNode := &checkpoints.BucketNode{
-			Node: checkpoints.Node{
+			Inner: checkpoints.Inner{
 				Type: chunk.Type,
 				ID:   chunk.ID,
 				// TODO need schema
@@ -191,7 +191,7 @@ func (df *Diff) consume(chunk *chunk.Range) {
 		node = bucketNode
 	case checkpoints.Random:
 		randomNode := &checkpoints.RandomNode{
-			Node: checkpoints.Node{
+			Inner: checkpoints.Inner{
 				Type: chunk.Type,
 				ID:   chunk.ID,
 				// TODO need schema
