@@ -88,11 +88,6 @@ func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, cn
 
 }
 
-// TODO implement Seek
-func (s *RandomIterator) Seek(randomValues [][]string) {
-
-}
-
 func (s *RandomIterator) Next() (*chunk.Range, error) {
 	if uint(len(s.chunks)) <= s.nextChunk {
 		return nil, nil
