@@ -174,7 +174,18 @@ func (df *Diff) generateChunksIterator() (source.DBIterator, error) {
 	// if isTiDB(df.downstream) {
 	//		return df.downstream.GenerateChunksIterator()
 	//}
-	return df.downstream.GenerateChunksIterator(df.chunkSize)
+	var node checkpoints.Node
+	var err error
+	if df.useCheckpoint {
+		node, err = df.cp.LoadChunks()
+		if err != nil {
+			log.Warn("the checkpoint load process failed, diable checkpoint and start from begining")
+			df.useCheckpoint = false
+		}
+	}
+	// if node != nil, gernerateChunksIterator from checkpoint
+	// else gernerateChunkIterator from begining
+	return df.downstream.GenerateChunksIterator(df.chunkSize, node)
 }
 
 func (df *Diff) handleChunks(ctx context.Context) {

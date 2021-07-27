@@ -22,6 +22,7 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
@@ -146,7 +147,7 @@ type TableRange struct {
 }
 
 type Source interface {
-	GenerateChunksIterator(chunkSize int) (DBIterator, error)
+	GenerateChunksIterator(chunkSize int, node checkpoints.Node) (DBIterator, error)
 	GetCrc32(context.Context, *TableRange, chan *ChecksumInfo)
 	GetOrderKeyCols(int) []*model.ColumnInfo
 	GetRowsIterator(context.Context, *TableRange) (RowDataIterator, error)
