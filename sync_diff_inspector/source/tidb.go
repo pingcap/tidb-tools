@@ -113,9 +113,22 @@ func (s *TiDBChunksIterator) useBucket(diff *common.TableDiff) bool {
 	return true
 }
 
+func (s *TiDBChunksIterator) analyzeChunkSize(table *common.TableDiff) (int64, error) {
+	return dbutil.GetRowCount(context.Background(), s.dbConn, table.Schema, table.Table, table.Range, nil)
+	/*
+		if err != nil {
+			return 0, errors.Trace(err)
+		}
+	*/
+	// TODO analyze table
+
+}
+
 func (s *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff) (splitter.Iterator, error) {
 	// 1_000, 2_000, 4_000, 8_000, 16_000, 32_000, 64_000
 	chunkSize := 1000
+	// TODO if useCheckpoint, need analyzeChunkSize?
+	cnt, _ := s.analyzeChunkSize(tableDiff)
 	bucket := false
 	var node checkpoints.Node
 	if tableDiff.UseCheckpoint {
@@ -146,7 +159,7 @@ func (s *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff) (s
 		// TODO fall back to random splitter
 	}
 	// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
-	randIter, err := splitter.NewRandomIteratorWithCheckpoint(tableDiff, s.dbConn, s.chunkSize, tableDiff.Range, tableDiff.Collation, node.(*checkpoints.RandomNode))
+	randIter, err := splitter.NewRandomIteratorWithCheckpoint(tableDiff, s.dbConn, cnt, s.chunkSize, tableDiff.Range, tableDiff.Collation, node.(*checkpoints.RandomNode))
 
 	if err != nil {
 		return nil, errors.Trace(err)

@@ -23,10 +23,10 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"go.uber.org/zap"
 )
 
@@ -39,16 +39,12 @@ type RandomIterator struct {
 	dbConn *sql.DB
 }
 
-func NewRandomIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int, limits string, collation string) (*RandomIterator, error) {
-	return NewRandomIteratorWithCheckpoint(table, dbConn, chunkSize, limits, collation, nil)
+func NewRandomIterator(table *common.TableDiff, dbConn *sql.DB, cnt int64, chunkSize int, limits string, collation string) (*RandomIterator, error) {
+	return NewRandomIteratorWithCheckpoint(table, dbConn, cnt, chunkSize, limits, collation, nil)
 }
 
-func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, chunkSize int, limits string, collation string, node *checkpoints.RandomNode) (*RandomIterator, error) {
+func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, cnt int64, chunkSize int, limits string, collation string, node *checkpoints.RandomNode) (*RandomIterator, error) {
 	// get the chunk count by data count and chunk size
-	cnt, err := dbutil.GetRowCount(context.Background(), dbConn, table.Schema, table.Table, limits, nil)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
 
 	chunkCnt := (int(cnt) + chunkSize - 1) / chunkSize
 	log.Info("split range by random", zap.Int64("row count", cnt), zap.Int("split chunk num", chunkCnt))
@@ -67,12 +63,20 @@ func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, ch
 		return nil, errors.Trace(err)
 	}
 
-	chunks, err := splitRangeByRandom(dbConn, chunk.NewChunkRange(), chunkCnt, table.Schema, table.Table, fields, table.Range, table.Collation)
+	chunkRange := chunk.NewChunkRange()
+	if node != nil {
+		// TODO UpperBound sequence may not be the same as fields
+		for i := 0; i < len(fields); i++ {
+			chunkRange.Update(fields[i].Name.O, node.UpperBound[i], "", true, false)
+		}
+		// TODO chunkCnt
+		//chunkRange.Update()
+	}
+
+	chunks, err := splitRangeByRandom(dbConn, chunkRange, chunkCnt, table.Schema, table.Table, fields, table.Range, table.Collation)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-
-	// TODO checkpoints
 
 	return &RandomIterator{
 		table:     table,
@@ -148,6 +152,24 @@ func splitRangeByRandom(db *sql.DB, chunk *chunk.Range, count int, schema string
 		}
 
 		log.Debug("get split values by random", zap.Stringer("chunk", chunk), zap.String("column", column.Name.O), zap.Int("random values num", len(randomValues[i])))
+	}
+
+	for i := 0; i <= utils.MinLenInSlices(randomValues); i++ {
+		newChunk := chunk.Copy()
+
+		for j, column := range columns {
+			if i == 0 {
+				if len(randomValues[j]) == 0 {
+					break
+				}
+				newChunk.Update(column.Name.O, "", randomValues[j][i], false, true)
+			} else if i == len(randomValues[j]) {
+				newChunk.Update(column.Name.O, randomValues[j][i-1], "", true, false)
+			} else {
+				newChunk.Update(column.Name.O, randomValues[j][i-1], randomValues[j][i], true, true)
+			}
+		}
+		chunks = append(chunks, newChunk)
 	}
 
 	// TODO build random chunks

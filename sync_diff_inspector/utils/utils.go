@@ -325,3 +325,14 @@ func rowToString(row map[string]*dbutil.ColumnData) string {
 
 	return s.String()
 }
+
+func MinLenInSlices(slices [][]string) int {
+	min := 0
+	for i, slice := range slices {
+		if i == 0 || len(slice) < min {
+			min = len(slice)
+		}
+	}
+
+	return min
+}

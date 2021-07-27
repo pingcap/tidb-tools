@@ -257,7 +257,6 @@ func (df *Diff) consume(ctx context.Context, tableChunk *source.TableRange) (boo
 				ChunkState: state,
 			},
 			// TODO need random value
-			RandomValue: make([][]string, 0),
 		}
 		node = randomNode
 	}

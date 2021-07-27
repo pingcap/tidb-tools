@@ -46,7 +46,6 @@ type BucketNode struct {
 
 type RandomNode struct {
 	Inner
-	RandomValue [][]string `json:"random-values"`
 }
 
 func (n *BucketNode) MarshalJSON() ([]byte, error) {
@@ -87,13 +86,9 @@ func (n *BucketNode) GetBucketID() int {
 	return n.BucketID
 }
 
-func (n *RandomNode) GetRandomValues() [][]string {
-	return n.RandomValue
-}
-
 func (n RandomNode) MarshalJSON() ([]byte, error) {
 	// TODO: random value type is [][]string, this methoad will be updated when implement LoadChunk method
-	str := fmt.Sprintf(`{"type":%d, "chunk-id":%d, "schema":"%s", "table":"%s","random-values":"%s", "upper-bound":"%s","chunck-state":"%s", "random-values":"%s"}`, n.Type, n.ID, n.Schema, n.Table, n.RandomValue, n.UpperBound, n.ChunkState, n.RandomValue)
+	str := fmt.Sprintf(`{"type":%d, "chunk-id":%d, "schema":"%s", "table":"%s", "upper-bound":"%s","chunck-state":"%s"}`, n.Type, n.ID, n.Schema, n.Table, n.UpperBound, n.ChunkState)
 	return []byte(str), nil
 }
 

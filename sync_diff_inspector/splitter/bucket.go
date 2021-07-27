@@ -153,7 +153,7 @@ func (s *BucketIterator) createProducerWithCheckpoint(node *checkpoints.BucketNo
 		lowerValues = node.GetUpperBound()
 		beginBucket = node.GetBucketID()
 	}
-	// TODO split beginBucket
+	// TODO chunksize when checkpoint
 	for i := beginBucket; i < len(buckets); i++ {
 		count := buckets[i].Count - latestCount
 		if count < s.chunkSize {
