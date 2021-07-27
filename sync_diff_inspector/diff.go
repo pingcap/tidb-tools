@@ -201,22 +201,21 @@ OUTER:
 		case <-ctx.Done():
 			log.Info("Stop consumer chunks by user canceled")
 			// TODO: close worker gracefully
-		case c := <-df.chunkCh:
-			if c != nil {
-				pool.Apply(func() {
-					res, err := df.consume(ctx, c)
-					if err != nil {
-						// TODO: catch error
-					}
-					// TODO: handle res
-					if res {
-
-					}
-				})
-			} else {
+		case c, ok := <-df.chunkCh:
+			if !ok {
 				close(df.cp.NodeChan)
 				break OUTER
 			}
+			pool.Apply(func() {
+				res, err := df.consume(ctx, c)
+				if err != nil {
+					// TODO: catch error
+				}
+				// TODO: handle res
+				if res {
+
+				}
+			})
 		}
 	}
 }
