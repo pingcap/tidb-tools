@@ -195,6 +195,7 @@ func (df *Diff) generateChunksIterator() (source.DBIterator, error) {
 func (df *Diff) handleChunks(ctx context.Context) {
 	// TODO use a meaningfull count
 	pool := utils.NewWorkerPool(4, "consumer")
+OUTER:
 	for {
 		select {
 		case <-ctx.Done():
@@ -214,6 +215,7 @@ func (df *Diff) handleChunks(ctx context.Context) {
 				})
 			} else {
 				close(df.cp.NodeChan)
+				break OUTER
 			}
 		}
 	}
