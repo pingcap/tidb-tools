@@ -226,7 +226,7 @@ func (df *Diff) handleChunks(ctx context.Context) {
 	}
 }
 
-func (df *Diff) generateChunksIterator() (source.DBIterator, error) {
+func (df *Diff) generateChunksIterator(ctx context.Context) (source.DBIterator, error) {
 	// TODO choose upstream or downstream to generate chunks
 	// if isTiDB(df.upstream) {
 	//		return df.upstream.GenerateChunksIterator()
@@ -234,6 +234,16 @@ func (df *Diff) generateChunksIterator() (source.DBIterator, error) {
 	// if isTiDB(df.downstream) {
 	//		return df.downstream.GenerateChunksIterator()
 	//}
+	if df.useCheckpoint {
+		node, err := df.cp.LoadChunks(ctx)
+		if err != nil {
+			log.Warn("the checkpoint load process failed, diable checkpoint")
+			df.useCheckpoint = false
+		}
+		// this method is only run by a single thread, no synchronization need
+		df.cp.SetCurrentSavedID(node.GetID() - 1)
+		return df.downstream.GenerateChunksIterator(node)
+	}
 	return df.downstream.GenerateChunksIterator()
 }
 

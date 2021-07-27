@@ -124,10 +124,15 @@ type Heap struct {
 	CurrentSavedID int         // CurrentSavedID save the lastest save chunk id, initially was 0, updated by saveChunk method
 	mu             *sync.Mutex // protect critical section
 }
+
 type Checkpointer struct {
 	hp *Heap
 	// TODO close the channel
 	NodeChan chan Node
+}
+
+func (cp *Checkpointer) SetCurrentSavedID(id int) {
+	cp.hp.CurrentSavedID = id
 }
 
 func (cp *Checkpointer) Insert(node Node) {
@@ -257,7 +262,7 @@ func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 }
 
 // loadChunks loads chunk info from file `chunk`
-func LoadChunks() (Node, error) {
+func (cp *Checkpointer) LoadChunks(ctx context.Context) (Node, error) {
 	//chunks := make([]*chunk.Range, 0, 100)
 	bytes, err := os.ReadFile(checkpointFile)
 	if err != nil {
