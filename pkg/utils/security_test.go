@@ -110,7 +110,7 @@ func (s *securitySuite) TestCheckCN(c *C) {
 	c.Assert(err, IsNil)
 
 	caPath1, certPath1, keyPath1 := getTestCertFile(dir, "client1")
-	caData, certData, keyData := loadTLSContent(caPath1, certPath1, keyPath1)
+	caData, certData, keyData := loadTLSContent(c, caPath1, certPath1, keyPath1)
 	clientTLS1, err := ToTLSConfigWithVerifyByRawbytes(caData, certData, keyData, []string{})
 	c.Assert(err, IsNil)
 
@@ -162,20 +162,16 @@ func getTestCertFile(dir, role string) (string, string, string) {
 	return path.Join(dir, "ca.pem"), path.Join(dir, fmt.Sprintf("%s.pem", role)), path.Join(dir, fmt.Sprintf("%s.key", role))
 }
 
-func loadTLSContent(caPath, certPath, keyPath string) (caData, certData, keyData []byte) {
+func loadTLSContent(c *C, caPath, certPath, keyPath string) (caData, certData, keyData []byte) {
 	// NOTE we make sure the file exists,so we don't need to check the error
 	var err error
 	caData, err = ioutil.ReadFile(caPath)
-	if err != nil {
-		panic(err)
-	}
+	c.Assert(err, IsNil)
+
 	certData, err = ioutil.ReadFile(certPath)
-	if err != nil {
-		panic(err)
-	}
+	c.Assert(err, IsNil)
+
 	keyData, err = ioutil.ReadFile(keyPath)
-	if err != nil {
-		panic(err)
-	}
+	c.Assert(err, IsNil)
 	return
 }
