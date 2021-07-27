@@ -296,10 +296,12 @@ func (df *Diff) compareRows(ctx context.Context, tableChunk *source.TableRange) 
 	if err != nil {
 		return false, errors.Trace(err)
 	}
+	defer upstreamRowsIterator.Close()
 	downstreamRowsIterator, err := df.downstream.GetRowsIterator(ctx, tableChunk)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
+	defer downstreamRowsIterator.Close()
 
 	var lastUpstreamData, lastDownstreamData map[string]*dbutil.ColumnData
 	equal := true
@@ -398,8 +400,6 @@ func (df *Diff) compareRows(ctx context.Context, tableChunk *source.TableRange) 
 		case <-ctx.Done():
 			return false, nil
 		}
-		// TODO compare...
-
 	}
 
 	if equal {
