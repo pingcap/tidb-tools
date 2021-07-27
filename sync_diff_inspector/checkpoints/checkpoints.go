@@ -36,7 +36,7 @@ type Inner struct {
 	ID         int             `json:"chunk-id"`
 	Schema     string          `json:"schema"`
 	Table      string          `json:"table"`
-	UpperBound string          `json:"upper-bound"` // the upper bound should be like "(a, b, c)"
+	UpperBound []string        `json:"upper-bound"` // the upper bound should be like "(a, b, c)"
 	ChunkState string          `json:"chunk-state"` // indicate the state ("success" or "failed") of the chunk
 }
 type BucketNode struct {
@@ -46,7 +46,6 @@ type BucketNode struct {
 
 type RandomNode struct {
 	Inner
-	RandomValue [][]string `json:"random-values"`
 }
 
 func (n *BucketNode) MarshalJSON() ([]byte, error) {
@@ -87,13 +86,9 @@ func (n *BucketNode) GetBucketID() int {
 	return n.BucketID
 }
 
-func (n *RandomNode) GetRandomValues() [][]string {
-	return n.RandomValue
-}
-
 func (n RandomNode) MarshalJSON() ([]byte, error) {
 	// TODO: random value type is [][]string, this methoad will be updated when implement LoadChunk method
-	str := fmt.Sprintf(`{"type":%d, "chunk-id":%d, "schema":"%s", "table":"%s","random-values":"%s", "upper-bound":"%s","chunck-state":"%s", "random-values":"%s"}`, n.Type, n.ID, n.Schema, n.Table, n.RandomValue, n.UpperBound, n.ChunkState, n.RandomValue)
+	str := fmt.Sprintf(`{"type":%d, "chunk-id":%d, "schema":"%s", "table":"%s", "upper-bound":"%s","chunck-state":"%s"}`, n.Type, n.ID, n.Schema, n.Table, n.UpperBound, n.ChunkState)
 	return []byte(str), nil
 }
 
@@ -101,7 +96,7 @@ type Node interface {
 	GetID() int
 	GetSchema() string
 	GetTable() string
-	GetUpperBound() string
+	GetUpperBound() []string
 	GetType() chunk.ChunkType
 	GetChunkState() string
 }
@@ -112,7 +107,7 @@ func (n *Inner) GetSchema() string { return n.Schema }
 
 func (n *Inner) GetTable() string { return n.Table }
 
-func (n *Inner) GetUpperBound() string { return n.UpperBound }
+func (n *Inner) GetUpperBound() []string { return n.UpperBound }
 
 func (n *Inner) GetType() chunk.ChunkType { return n.Type }
 

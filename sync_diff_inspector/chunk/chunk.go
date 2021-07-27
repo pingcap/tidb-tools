@@ -190,7 +190,7 @@ func (c *Range) Update(column, lower, upper string, updateLower, updateUpper boo
 	})
 }
 
-func (c *Range) copy() *Range {
+func (c *Range) Copy() *Range {
 	newChunk := NewChunkRange()
 	for _, bound := range c.Bounds {
 		newChunk.addBound(&Bound{
@@ -206,7 +206,7 @@ func (c *Range) copy() *Range {
 }
 
 func (c *Range) copyAndUpdate(column, lower, upper string, updateLower, updateUpper bool) *Range {
-	newChunk := c.copy()
+	newChunk := c.Copy()
 	newChunk.Update(column, lower, upper, updateLower, updateUpper)
 	return newChunk
 }
