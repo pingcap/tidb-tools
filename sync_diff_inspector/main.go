@@ -76,7 +76,7 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 		log.Info("check data finished", zap.Duration("cost", time.Since(beginTime)))
 	}()
 
-	d, err := NewDiff(cfg)
+	d, err := NewDiff(ctx, cfg)
 	if err != nil {
 		log.Fatal("fail to initialize diff process", zap.Error(err))
 	}
