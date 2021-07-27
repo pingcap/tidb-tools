@@ -131,6 +131,8 @@ func (df *Diff) Equal(ctx context.Context) error {
 				_, err := df.cp.SaveChunk(ctx)
 				// TODO: error handling
 				if err != nil {
+					log.Warn("fail to save the chunk")
+					// maybe we should panic, because SaveChunk method should not failed
 				}
 			case node := <-df.cp.NodeChan:
 				df.cp.Insert(node)
@@ -145,6 +147,9 @@ func (df *Diff) Equal(ctx context.Context) error {
 		}
 		if c == nil {
 			// finish read the tables
+			// if the chunksIter is done, close the chunkCh and nodeCh
+			close(df.chunkCh)
+			close(df.cp.NodeChan)
 			break
 		}
 

@@ -73,7 +73,7 @@ func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, cn
 		//chunkRange.Update()
 	}
 
-	chunks, err := splitRangeByRandom(dbConn, chunkRange, chunkCnt, table.Schema, table.Table, fields, table.Range, table.Collation)
+	chunks, err := splitRangeByRandom(dbConn, chunkRange, chunkCnt, table.Schema, table.Table, fields, table.Range, table.Collation, node)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -140,7 +140,7 @@ func getSplitFields(table *model.TableInfo, splitFields []string) ([]*model.Colu
 }
 
 // splitRangeByRandom splits a chunk to multiple chunks by random
-func splitRangeByRandom(db *sql.DB, chunk *chunk.Range, count int, schema string, table string, columns []*model.ColumnInfo, limits, collation string) (chunks []*chunk.Range, err error) {
+func splitRangeByRandom(db *sql.DB, chunk *chunk.Range, count int, schema string, table string, columns []*model.ColumnInfo, limits, collation string, node checkpoints.Node) (chunks []*chunk.Range, err error) {
 	if count <= 1 {
 		chunks = append(chunks, chunk)
 		return chunks, nil
