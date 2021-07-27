@@ -47,9 +47,13 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 }
 
 func (cp *testCheckpointSuit) TestLoadChunk(c *C) {
+<<<<<<< HEAD:sync_diff_inspector/checkpoints/checkpoints_test.go
 	checker := new(Checkpointer)
 	checker.Init()
 	ctx := context.Background()
 	node, _ := checker.LoadChunks(ctx)
+=======
+	node, _ := LoadChunks()
+>>>>>>> 2dca78eb3ef607ad3a7f2a1933ff4be118d69060:sync_diff_inspector/checkpoints/checkpoints_test.go
 	c.Assert(node.(*BucketNode).BucketID, Equals, 9999)
 }

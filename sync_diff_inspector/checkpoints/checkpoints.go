@@ -36,7 +36,11 @@ type Inner struct {
 	ID         int             `json:"chunk-id"`
 	Schema     string          `json:"schema"`
 	Table      string          `json:"table"`
+<<<<<<< HEAD
 	UpperBound string          `json:"upper-bound"` // the upper bound should be like "(a, b, c)"
+=======
+	UpperBound []string        `json:"upper-bound"` // the upper bound should be like "(a, b, c)"
+>>>>>>> 2dca78eb3ef607ad3a7f2a1933ff4be118d69060
 	ChunkState string          `json:"chunk-state"` // indicate the state ("success" or "failed") of the chunk
 }
 type BucketNode struct {
@@ -46,7 +50,10 @@ type BucketNode struct {
 
 type RandomNode struct {
 	Inner
+<<<<<<< HEAD
 	RandomValue [][]string `json:"random-values"`
+=======
+>>>>>>> 2dca78eb3ef607ad3a7f2a1933ff4be118d69060
 }
 
 func (n *BucketNode) MarshalJSON() ([]byte, error) {
@@ -87,6 +94,7 @@ func (n *BucketNode) GetBucketID() int {
 	return n.BucketID
 }
 
+<<<<<<< HEAD
 func (n *RandomNode) GetRandomValues() [][]string {
 	return n.RandomValue
 }
@@ -94,6 +102,11 @@ func (n *RandomNode) GetRandomValues() [][]string {
 func (n RandomNode) MarshalJSON() ([]byte, error) {
 	// TODO: random value type is [][]string, this methoad will be updated when implement LoadChunk method
 	str := fmt.Sprintf(`{"type":%d, "chunk-id":%d, "schema":"%s", "table":"%s","random-values":"%s", "upper-bound":"%s","chunck-state":"%s", "random-values":"%s"}`, n.Type, n.ID, n.Schema, n.Table, n.RandomValue, n.UpperBound, n.ChunkState, n.RandomValue)
+=======
+func (n RandomNode) MarshalJSON() ([]byte, error) {
+	// TODO: random value type is [][]string, this methoad will be updated when implement LoadChunk method
+	str := fmt.Sprintf(`{"type":%d, "chunk-id":%d, "schema":"%s", "table":"%s", "upper-bound":"%s","chunck-state":"%s"}`, n.Type, n.ID, n.Schema, n.Table, n.UpperBound, n.ChunkState)
+>>>>>>> 2dca78eb3ef607ad3a7f2a1933ff4be118d69060
 	return []byte(str), nil
 }
 
@@ -101,7 +114,11 @@ type Node interface {
 	GetID() int
 	GetSchema() string
 	GetTable() string
+<<<<<<< HEAD
 	GetUpperBound() string
+=======
+	GetUpperBound() []string
+>>>>>>> 2dca78eb3ef607ad3a7f2a1933ff4be118d69060
 	GetType() chunk.ChunkType
 	GetChunkState() string
 }
@@ -112,7 +129,11 @@ func (n *Inner) GetSchema() string { return n.Schema }
 
 func (n *Inner) GetTable() string { return n.Table }
 
+<<<<<<< HEAD
 func (n *Inner) GetUpperBound() string { return n.UpperBound }
+=======
+func (n *Inner) GetUpperBound() []string { return n.UpperBound }
+>>>>>>> 2dca78eb3ef607ad3a7f2a1933ff4be118d69060
 
 func (n *Inner) GetType() chunk.ChunkType { return n.Type }
 
@@ -124,17 +145,23 @@ type Heap struct {
 	CurrentSavedID int         // CurrentSavedID save the lastest save chunk id, initially was 0, updated by saveChunk method
 	mu             *sync.Mutex // protect critical section
 }
+<<<<<<< HEAD
 
+=======
+>>>>>>> 2dca78eb3ef607ad3a7f2a1933ff4be118d69060
 type Checkpointer struct {
 	hp *Heap
 	// TODO close the channel
 	NodeChan chan Node
 }
 
+<<<<<<< HEAD
 func (cp *Checkpointer) SetCurrentSavedID(id int) {
 	cp.hp.CurrentSavedID = id
 }
 
+=======
+>>>>>>> 2dca78eb3ef607ad3a7f2a1933ff4be118d69060
 func (cp *Checkpointer) Insert(node Node) {
 	cp.hp.mu.Lock()
 	heap.Push(cp.hp, node)
@@ -262,7 +289,11 @@ func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 }
 
 // loadChunks loads chunk info from file `chunk`
+<<<<<<< HEAD
 func (cp *Checkpointer) LoadChunks(ctx context.Context) (Node, error) {
+=======
+func LoadChunks() (Node, error) {
+>>>>>>> 2dca78eb3ef607ad3a7f2a1933ff4be118d69060
 	//chunks := make([]*chunk.Range, 0, 100)
 	bytes, err := os.ReadFile(checkpointFile)
 	if err != nil {
