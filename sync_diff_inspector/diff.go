@@ -147,9 +147,8 @@ func (df *Diff) Equal(ctx context.Context) error {
 		}
 		if c == nil {
 			// finish read the tables
-			// if the chunksIter is done, close the chunkCh and nodeCh
+			// if the chunksIter is done, close the chunkCh
 			close(df.chunkCh)
-			close(df.cp.NodeChan)
 			break
 		}
 
@@ -202,16 +201,20 @@ func (df *Diff) handleChunks(ctx context.Context) {
 			log.Info("Stop consumer chunks by user canceled")
 			// TODO: close worker gracefully
 		case c := <-df.chunkCh:
-			pool.Apply(func() {
-				res, err := df.consume(ctx, c)
-				if err != nil {
-					// TODO: catch error
-				}
-				// TODO: handle res
-				if res {
+			if c != nil {
+				pool.Apply(func() {
+					res, err := df.consume(ctx, c)
+					if err != nil {
+						// TODO: catch error
+					}
+					// TODO: handle res
+					if res {
 
-				}
-			})
+					}
+				})
+			} else {
+				close(df.cp.NodeChan)
+			}
 		}
 	}
 }

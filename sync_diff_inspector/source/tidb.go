@@ -97,7 +97,7 @@ func (t *TiDBChunksIterator) nextTable(node checkpoints.Node) error {
 	if node != nil {
 		for i, tableDiff := range t.TableDiffs {
 			if tableDiff.Schema == node.GetSchema() && tableDiff.Table == node.GetTable() {
-				t.nextTableIndex = i
+				t.nextTableIndex = i + 1
 			}
 		}
 	}
