@@ -149,9 +149,6 @@ func (s *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff, no
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		if tableDiff.UseCheckpoint {
-			bucketIter.Seek(node.(*checkpoints.BucketNode).BucketID)
-		}
 		return bucketIter, nil
 		// TODO fall back to random splitter
 	}
