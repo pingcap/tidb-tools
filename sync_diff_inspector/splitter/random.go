@@ -39,7 +39,11 @@ type RandomIterator struct {
 	dbConn *sql.DB
 }
 
-func NewRandomIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int, limits string, collation string, node checkpoints.Node) (*RandomIterator, error) {
+func NewRandomIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int, limits string, collation string) (*RandomIterator, error) {
+	return NewRandomIteratorWithCheckpoint(table, dbConn, chunkSize, limits, collation, nil)
+}
+
+func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, chunkSize int, limits string, collation string, node checkpoints.Node) (*RandomIterator, error) {
 	// get the chunk count by data count and chunk size
 	cnt, err := dbutil.GetRowCount(context.Background(), dbConn, table.Schema, table.Table, limits, nil)
 	if err != nil {

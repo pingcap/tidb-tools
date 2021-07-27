@@ -360,8 +360,52 @@ func (df *Diff) compareRows(ctx context.Context, tableChunk *source.TableRange) 
 			break
 		}
 
+		// TODO where is orderKeycols from?
+		eq, cmp, err := utils.CompareData(lastUpstreamData, lastDownstreamData, df.downstream.GetOrderKeyCols(tableChunk.TableIndex))
+		if err != nil {
+			return false, errors.Trace(err)
+		}
+		if eq {
+			lastDownstreamData = nil
+			lastUpstreamData = nil
+			continue
+		}
+
+		equal = false
+		sql := ""
+
+		switch cmp {
+		case 1:
+			// delete
+			sql = df.downstream.GenerateDeleteDML(lastDownstreamData, tableChunk.TableIndex)
+			log.Info("[delete]", zap.String("sql", sql))
+			lastDownstreamData = nil
+		case -1:
+			// insert
+			sql = df.downstream.GenerateReplaceDML(lastUpstreamData, tableChunk.TableIndex)
+			log.Info("[insert]", zap.String("sql", sql))
+			lastUpstreamData = nil
+		case 0:
+			// update
+			sql = df.downstream.GenerateReplaceDML(lastUpstreamData, tableChunk.TableIndex)
+			log.Info("[update]", zap.String("sql", sql))
+			lastUpstreamData = nil
+			lastDownstreamData = nil
+		}
+
+		select {
+		case df.sqlCh <- sql:
+		case <-ctx.Done():
+			return false, nil
+		}
 		// TODO compare...
 
+	}
+
+	if equal {
+		// Log
+	} else {
+		// log
 	}
 
 	return equal, nil

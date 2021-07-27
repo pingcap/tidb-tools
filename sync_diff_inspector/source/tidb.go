@@ -136,7 +136,7 @@ func (s *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff) (s
 	}
 	// TODO merge bucket function into useBucket()
 	if (!tableDiff.UseCheckpoint && s.useBucket(tableDiff)) || bucket {
-		bucketIter, err := splitter.NewBucketIterator(tableDiff, s.dbConn, chunkSize, node)
+		bucketIter, err := splitter.NewBucketIteratorWithCheckpoint(tableDiff, s.dbConn, chunkSize, node)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -145,7 +145,7 @@ func (s *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff) (s
 		// TODO fall back to random splitter
 	}
 	// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
-	randIter, err := splitter.NewRandomIterator(tableDiff, s.dbConn, s.chunkSize, tableDiff.Range, tableDiff.Collation, node)
+	randIter, err := splitter.NewRandomIteratorWithCheckpoint(tableDiff, s.dbConn, s.chunkSize, tableDiff.Range, tableDiff.Collation, node)
 
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -214,6 +214,10 @@ func (s *TiDBSource) GetCrc32(ctx context.Context, tableChunk *TableRange, check
 		Err:      err,
 		Cost:     cost,
 	}
+}
+
+func (s *TiDBSource) GetOrderKeyCols(tableIndex int) []*model.ColumnInfo {
+	return s.tableRows[tableIndex].tableOrderKeyCols
 }
 
 func (s *TiDBSource) GenerateReplaceDML(data map[string]*dbutil.ColumnData, tableIndex int) string {

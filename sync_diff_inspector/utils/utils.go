@@ -15,8 +15,10 @@ package utils
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
+	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -205,4 +207,121 @@ func GenerateDeleteDML(data map[string]*dbutil.ColumnData, table *model.TableInf
 
 func needQuotes(tp byte) bool {
 	return !(dbutil.IsNumberType(tp) || dbutil.IsFloatType(tp))
+}
+
+// equal = true: map1 = map2
+// equal = false:
+// 		1. cmp = 0: map1 and map2 have the same orderkeycolumns, but other columns are in difference.
+//		2. cmp = -1: map1 < map2
+// 		3. cmp = 1: map1 > map2
+func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model.ColumnInfo) (equal bool, cmp int32, err error) {
+	var (
+		data1, data2 *dbutil.ColumnData
+		key          string
+		ok           bool
+	)
+
+	equal = true
+
+	defer func() {
+		if equal || err != nil {
+			return
+		}
+
+		if cmp == 0 {
+			log.Warn("find different row", zap.String("column", key), zap.String("row1", rowToString(map1)), zap.String("row2", rowToString(map2)))
+		} else if cmp > 0 {
+			log.Warn("target had superfluous data", zap.String("row", rowToString(map2)))
+		} else {
+			log.Warn("target lack data", zap.String("row", rowToString(map1)))
+		}
+	}()
+
+	for key, data1 = range map1 {
+		if data2, ok = map2[key]; !ok {
+			return false, 0, errors.Errorf("don't have key %s", key)
+		}
+		if (string(data1.Data) == string(data2.Data)) && (data1.IsNull == data2.IsNull) {
+			continue
+		}
+		equal = false
+
+		break
+	}
+	if equal {
+		return
+	}
+
+	for _, col := range orderKeyCols {
+		if data1, ok = map1[col.Name.O]; !ok {
+			err = errors.Errorf("don't have key %s", col.Name.O)
+			return
+		}
+		if data2, ok = map2[col.Name.O]; !ok {
+			err = errors.Errorf("don't have key %s", col.Name.O)
+			return
+		}
+
+		if needQuotes(col.FieldType.Tp) {
+			strData1 := string(data1.Data)
+			strData2 := string(data2.Data)
+
+			if len(strData1) == len(strData2) && strData1 == strData2 {
+				continue
+			}
+
+			if strData1 < strData2 {
+				cmp = -1
+			} else {
+				cmp = 1
+			}
+			break
+		} else if data1.IsNull || data2.IsNull {
+			if data1.IsNull && data2.IsNull {
+				continue
+			}
+
+			if data1.IsNull {
+				cmp = -1
+			} else {
+				cmp = 1
+			}
+			break
+		} else {
+			num1, err1 := strconv.ParseFloat(string(data1.Data), 64)
+			num2, err2 := strconv.ParseFloat(string(data2.Data), 64)
+			if err1 != nil || err2 != nil {
+				err = errors.Errorf("convert %s, %s to float failed, err1: %v, err2: %v", string(data1.Data), string(data2.Data), err1, err2)
+				return
+			}
+
+			if num1 == num2 {
+				continue
+			}
+
+			if num1 < num2 {
+				cmp = -1
+			} else {
+				cmp = 1
+			}
+			break
+		}
+	}
+
+	return
+}
+
+func rowToString(row map[string]*dbutil.ColumnData) string {
+	var s strings.Builder
+	s.WriteString("{ ")
+	for key, val := range row {
+		if val.IsNull {
+			s.WriteString(fmt.Sprintf("%s: IsNull, ", key))
+		} else {
+			s.WriteString(fmt.Sprintf("%s: %s, ", key, val.Data))
+		}
+	}
+	s.WriteString(" }")
+
+	return s.String()
 }

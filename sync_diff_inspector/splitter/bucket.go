@@ -42,7 +42,11 @@ type BucketIterator struct {
 	dbConn *sql.DB
 }
 
-func NewBucketIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int, node checkpoints.Node) (*BucketIterator, error) {
+func NewBucketIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int) (*BucketIterator, error) {
+	return NewBucketIteratorWithCheckpoint(table, dbConn, chunkSize, nil)
+}
+
+func NewBucketIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, chunkSize int, node checkpoints.Node) (*BucketIterator, error) {
 
 	bs := &BucketIterator{
 		table:     table,
@@ -52,7 +56,7 @@ func NewBucketIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int, n
 		ctrlCh:    make(chan bool, 2),
 		dbConn:    dbConn,
 	}
-	go bs.createProducer(node)
+	go bs.createProducerWithCheckpoint(node)
 
 	if err := bs.init(); err != nil {
 		return nil, errors.Trace(err)
@@ -126,7 +130,7 @@ func (s *BucketIterator) Close() {
 	s.ctrlCh <- true
 }
 
-func (s *BucketIterator) createProducer(node checkpoints.Node) {
+func (s *BucketIterator) createProducerWithCheckpoint(node checkpoints.Node) {
 	// close this goruntine gracefully.
 	// init control
 	ctrl := <-s.ctrlCh
