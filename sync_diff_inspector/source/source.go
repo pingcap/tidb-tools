@@ -146,12 +146,18 @@ type TableRange struct {
 }
 
 type Source interface {
-	GenerateChunksIterator() (DBIterator, error)
-	GetCrc32(context.Context, *TableRange, chan ChecksumInfo)
+	GenerateChunksIterator(chunkSize int) (DBIterator, error)
+	GetCrc32(context.Context, *TableRange, chan *ChecksumInfo)
 	GetOrderKeyCols(int) []*model.ColumnInfo
 	GetRowsIterator(context.Context, *TableRange) (RowDataIterator, error)
 	GenerateReplaceDML(map[string]*dbutil.ColumnData, int) string
 	GenerateDeleteDML(map[string]*dbutil.ColumnData, int) string
+}
+
+func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, upstream Source, err error) {
+	// upstream
+
+	return
 }
 
 func NewSource(ctx context.Context, tableDiffs []*common.TableDiff, cfg ...*config.DBConfig) (Source, error) {

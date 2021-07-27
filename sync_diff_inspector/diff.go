@@ -174,7 +174,7 @@ func (df *Diff) generateChunksIterator() (source.DBIterator, error) {
 	// if isTiDB(df.downstream) {
 	//		return df.downstream.GenerateChunksIterator()
 	//}
-	return df.downstream.GenerateChunksIterator()
+	return df.downstream.GenerateChunksIterator(df.chunkSize)
 }
 
 func (df *Diff) handleChunks(ctx context.Context) {
@@ -269,9 +269,9 @@ func (df *Diff) compareChecksum(ctx context.Context, tableChunk *source.TableRan
 	ctx1, cancel1 := context.WithCancel(ctx)
 	defer cancel1()
 	// TODO: if !UseChecksum
-	upstreamChecksumCh := make(chan source.ChecksumInfo, 1)
+	upstreamChecksumCh := make(chan *source.ChecksumInfo, 1)
 	go df.upstream.GetCrc32(ctx1, tableChunk, upstreamChecksumCh)
-	downstreamChecksumCh := make(chan source.ChecksumInfo, 1)
+	downstreamChecksumCh := make(chan *source.ChecksumInfo, 1)
 	go df.downstream.GetCrc32(ctx1, tableChunk, downstreamChecksumCh)
 	crc1Info := <-downstreamChecksumCh
 	crc2Info := <-upstreamChecksumCh

@@ -46,7 +46,7 @@ func NewBucketIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int) (
 	return NewBucketIteratorWithCheckpoint(table, dbConn, chunkSize, nil)
 }
 
-func NewBucketIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, chunkSize int, node checkpoints.Node) (*BucketIterator, error) {
+func NewBucketIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, chunkSize int, node *checkpoints.BucketNode) (*BucketIterator, error) {
 
 	bs := &BucketIterator{
 		table:     table,
@@ -130,7 +130,7 @@ func (s *BucketIterator) Close() {
 	s.ctrlCh <- true
 }
 
-func (s *BucketIterator) createProducerWithCheckpoint(node checkpoints.Node) {
+func (s *BucketIterator) createProducerWithCheckpoint(node *checkpoints.BucketNode) {
 	// close this goruntine gracefully.
 	// init control
 	ctrl := <-s.ctrlCh
@@ -151,7 +151,7 @@ func (s *BucketIterator) createProducerWithCheckpoint(node checkpoints.Node) {
 		lowerValues = make([]string, len(indexColumns), len(indexColumns))
 	} else {
 		lowerValues = node.GetUpperBound()
-		beginBucket = node.GetID()
+		beginBucket = node.GetBucketID()
 	}
 	// TODO split beginBucket
 	for i := beginBucket; i < len(buckets); i++ {

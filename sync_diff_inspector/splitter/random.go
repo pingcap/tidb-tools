@@ -43,7 +43,7 @@ func NewRandomIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int, l
 	return NewRandomIteratorWithCheckpoint(table, dbConn, chunkSize, limits, collation, nil)
 }
 
-func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, chunkSize int, limits string, collation string, node checkpoints.Node) (*RandomIterator, error) {
+func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, chunkSize int, limits string, collation string, node *checkpoints.RandomNode) (*RandomIterator, error) {
 	// get the chunk count by data count and chunk size
 	cnt, err := dbutil.GetRowCount(context.Background(), dbConn, table.Schema, table.Table, limits, nil)
 	if err != nil {
@@ -82,15 +82,6 @@ func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, ch
 		dbConn:    dbConn,
 	}, nil
 
-}
-
-// TODO implement Seek
-func (s *RandomIterator) StartProducerWithSeek(randomValues [][]string) {
-
-}
-
-func (s *RandomIterator) StartProducer() {
-	// No Producer, just empty
 }
 
 func (s *RandomIterator) Next() (*chunk.Range, error) {

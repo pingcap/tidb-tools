@@ -114,6 +114,7 @@ func (s *TiDBChunksIterator) useBucket(diff *common.TableDiff) bool {
 }
 
 func (s *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff) (splitter.Iterator, error) {
+	// 1_000, 2_000, 4_000, 8_000, 16_000, 32_000, 64_000
 	chunkSize := 1000
 	bucket := false
 	var node checkpoints.Node
@@ -136,7 +137,7 @@ func (s *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff) (s
 	}
 	// TODO merge bucket function into useBucket()
 	if (!tableDiff.UseCheckpoint && s.useBucket(tableDiff)) || bucket {
-		bucketIter, err := splitter.NewBucketIteratorWithCheckpoint(tableDiff, s.dbConn, chunkSize, node)
+		bucketIter, err := splitter.NewBucketIteratorWithCheckpoint(tableDiff, s.dbConn, chunkSize, node.(*checkpoints.BucketNode))
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -145,7 +146,7 @@ func (s *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff) (s
 		// TODO fall back to random splitter
 	}
 	// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
-	randIter, err := splitter.NewRandomIteratorWithCheckpoint(tableDiff, s.dbConn, s.chunkSize, tableDiff.Range, tableDiff.Collation, node)
+	randIter, err := splitter.NewRandomIteratorWithCheckpoint(tableDiff, s.dbConn, s.chunkSize, tableDiff.Range, tableDiff.Collation, node.(*checkpoints.RandomNode))
 
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -189,12 +190,12 @@ func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, dbCfg *c
 	return ts, nil
 }
 
-func (s *TiDBSource) GenerateChunksIterator() (DBIterator, error) {
+func (s *TiDBSource) GenerateChunksIterator(chunkSize int) (DBIterator, error) {
 	// TODO build Iterator with config.
 	dbIter := &TiDBChunksIterator{
 		TableDiffs:     s.tableDiffs,
 		nextTableIndex: 0,
-		chunkSize:      0,
+		chunkSize:      chunkSize,
 		limit:          0,
 		dbConn:         s.dbConn,
 	}
@@ -202,14 +203,14 @@ func (s *TiDBSource) GenerateChunksIterator() (DBIterator, error) {
 	return dbIter, err
 }
 
-func (s *TiDBSource) GetCrc32(ctx context.Context, tableChunk *TableRange, checksumInfoCh chan ChecksumInfo) {
+func (s *TiDBSource) GetCrc32(ctx context.Context, tableChunk *TableRange, checksumInfoCh chan *ChecksumInfo) {
 	// TODO get crc32 with sql
 	beginTime := time.Now()
 	table := s.tableDiffs[tableChunk.TableIndex]
 	checksum, err := dbutil.GetCRC32Checksum(ctx, s.dbConn, table.Schema, table.Table, table.Info, tableChunk.ChunkRange.Where, utils.StringsToInterfaces(tableChunk.ChunkRange.Args))
 	cost := time.Since(beginTime)
 
-	checksumInfoCh <- ChecksumInfo{
+	checksumInfoCh <- &ChecksumInfo{
 		Checksum: checksum,
 		Err:      err,
 		Cost:     cost,
