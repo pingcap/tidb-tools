@@ -14,7 +14,9 @@
 package source
 
 import (
+	"context"
 	"strconv"
+	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -23,7 +25,6 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb/types"
 	"go.uber.org/zap"
 )
@@ -128,23 +129,44 @@ func needQuotes(ft types.FieldType) bool {
 }
 
 type RowDataIterator interface {
-	Next() *RowData
+	Next() (map[string]*dbutil.ColumnData, error)
 	GenerateFixSQL(t DMLType) (string, error)
+	Close()
+}
+
+type ChecksumInfo struct {
+	Checksum int64
+	Err      error
+	Cost     time.Duration
+}
+
+type TableRange struct {
+	ChunkRange *chunk.Range
+	TableIndex int
 }
 
 type Source interface {
-	GenerateChunksIterator() (DBIterator, error)
-	GetCrc32(chunk *chunk.Range) (string, error)
-	GetRows(chunk *chunk.Range) (RowDataIterator, error)
+	GenerateChunksIterator(chunkSize int) (DBIterator, error)
+	GetCrc32(context.Context, *TableRange, chan *ChecksumInfo)
+	GetOrderKeyCols(int) []*model.ColumnInfo
+	GetRowsIterator(context.Context, *TableRange) (RowDataIterator, error)
+	GenerateReplaceDML(map[string]*dbutil.ColumnData, int) string
+	GenerateDeleteDML(map[string]*dbutil.ColumnData, int) string
 }
 
-func NewSource(tableDiffs []*common.TableDiff, cfg ...*config.DBConfig) (Source, error) {
+func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, upstream Source, err error) {
+	// upstream
+
+	return
+}
+
+func NewSource(ctx context.Context, tableDiffs []*common.TableDiff, cfg ...*config.DBConfig) (Source, error) {
 	if len(cfg) < 1 {
 		return nil, errors.New(" source config")
 	}
 	switch cfg[0].DBType {
 	case "tidb":
-		return NewTiDBSource(tableDiffs, cfg[0])
+		return NewTiDBSource(ctx, tableDiffs, cfg[0])
 	case "mysql":
 		// TODO implement NewMysqlSource and NewMysqlSources
 		if len(cfg) == 1 {
@@ -160,6 +182,7 @@ func NewSource(tableDiffs []*common.TableDiff, cfg ...*config.DBConfig) (Source,
 
 // DBIterator generate next chunk for the whole tables lazily.
 type DBIterator interface {
-	splitter.Iterator
+	Next() (*TableRange, error)
 	// Next seeks the next chunk, return nil if seeks to end.
+	Close()
 }
