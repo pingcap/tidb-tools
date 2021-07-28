@@ -26,7 +26,10 @@ import (
 	//"github.com/pingcap/errors"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
+	"go.uber.org/zap"
 )
 
 const localFilePerm os.FileMode = 0o644
@@ -37,22 +40,24 @@ type Inner struct {
 	Schema     string          `json:"schema"`
 	Table      string          `json:"table"`
 	UpperBound []string        `json:"upper-bound"` // the upper bound should be like "(a, b, c)"
+	ColumnName []string        `json:"column-names"`
 	ChunkState string          `json:"chunk-state"` // indicate the state ("success" or "failed") of the chunk
 }
 type BucketNode struct {
 	Inner
-	BucketID int `json:"bucket-id"`
+	BucketID int   `json:"bucket-id"`
+	IndexID  int64 `json:"index-id"`
 }
 
 type RandomNode struct {
 	Inner
 }
 
-func (n *BucketNode) MarshalJSON() ([]byte, error) {
-	str := fmt.Sprintf(`{"type":%d, "chunk-id":%d,"schema":"%s","table":"%s","upper-bound":"%s","chunck-state":"%s","bucket-id":%d}`, n.GetType(), n.GetID(), n.GetSchema(), n.GetTable(), n.GetUpperBound(), n.GetChunkState(), n.GetBucketID())
-	fmt.Printf("%s\n", str)
-	return []byte(str), nil
-}
+//func (n *BucketNode) MarshalJSON() ([]byte, error) {
+//	str := fmt.Sprintf(`{"type":%d, "chunk-id":%d,"schema":"%s","table":"%s","upper-bound":"%s","chunck-state":"%s","bucket-id":%d}`, n.GetType(), n.GetID(), n.GetSchema(), n.GetTable(), n.GetUpperBound(), n.GetChunkState(), n.GetBucketID())
+//	fmt.Printf("%s\n", str)
+//	return []byte(str), nil
+//}
 
 //func (n *BucketNode) UnmarshalJSON(data []byte) error {
 //	err := json.Unmarshal(data, &n.ID)
@@ -86,11 +91,11 @@ func (n *BucketNode) GetBucketID() int {
 	return n.BucketID
 }
 
-func (n RandomNode) MarshalJSON() ([]byte, error) {
-	// TODO: random value type is [][]string, this methoad will be updated when implement LoadChunk method
-	str := fmt.Sprintf(`{"type":%d, "chunk-id":%d, "schema":"%s", "table":"%s", "upper-bound":"%s","chunck-state":"%s"}`, n.Type, n.ID, n.Schema, n.Table, n.UpperBound, n.ChunkState)
-	return []byte(str), nil
-}
+//func (n RandomNode) MarshalJSON() ([]byte, error) {
+//	// TODO: random value type is [][]string, this methoad will be updated when implement LoadChunk method
+//	str := fmt.Sprintf(`{"type":%d, "chunk-id":%d, "schema":"%s", "table":"%s", "upper-bound":"%s","chunck-state":"%s"}`, n.Type, n.ID, n.Schema, n.Table, n.UpperBound, n.ChunkState)
+//	return []byte(str), nil
+//}
 
 type Node interface {
 	GetID() int
@@ -113,6 +118,8 @@ func (n *Inner) GetType() chunk.ChunkType { return n.Type }
 
 func (n *Inner) GetChunkState() string { return n.ChunkState }
 
+func (n *Inner) GetColumnName() []string { return n.ColumnName }
+
 // Heap maintain a Min Heap, which can be accessed by multiple threads and protected by mutex.
 type Heap struct {
 	Nodes          []Node
@@ -123,6 +130,11 @@ type Checkpointer struct {
 	hp *Heap
 	// TODO close the channel
 	NodeChan chan Node
+}
+
+// the method is unsynchronized, be cautious
+func (cp *Checkpointer) SetCurrentSavedID(id int) {
+	cp.hp.CurrentSavedID = id
 }
 
 func (cp *Checkpointer) Insert(node Node) {
@@ -245,6 +257,11 @@ func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 		if err := WriteFile(checkpointFile, CheckpointData); err != nil {
 			return 0, err
 		}
+		log.Info("load checkpoint",
+			zap.Int("id", cur.GetID()),
+			zap.String("table", dbutil.TableName(cur.GetSchema(), cur.GetTable())),
+			zap.Reflect("type", cur.GetType()),
+			zap.String("state", cur.GetChunkState()))
 		return cur.GetID(), nil
 	}
 	return 0, nil
@@ -252,7 +269,7 @@ func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 }
 
 // loadChunks loads chunk info from file `chunk`
-func LoadChunks() (Node, error) {
+func (cp *Checkpointer) LoadChunks() (Node, error) {
 	//chunks := make([]*chunk.Range, 0, 100)
 	bytes, err := os.ReadFile(checkpointFile)
 	if err != nil {
@@ -278,6 +295,7 @@ func LoadChunks() (Node, error) {
 		node := &BucketNode{}
 		err := json.Unmarshal(bytes, &node)
 		if err != nil {
+			fmt.Printf("%s\n", err.Error())
 			return nil, errors.Trace(err)
 		}
 		return node, nil
