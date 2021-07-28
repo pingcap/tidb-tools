@@ -20,7 +20,7 @@ var _ = Suite(&testCheckpointSuit{})
 type testCheckpointSuit struct{}
 
 func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
-	checker := new(Checkpointer)
+	checker := new(Checkpoint)
 	checker.Init()
 	ctx := context.Background()
 	id, _ := checker.SaveChunk(ctx)
@@ -49,8 +49,8 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 }
 
 func (cp *testCheckpointSuit) TestLoadChunk(c *C) {
-	checker := new(Checkpointer)
+	checker := new(Checkpoint)
 	checker.Init()
-	node, _ := checker.LoadChunks()
+	node, _ := checker.LoadChunk()
 	c.Assert(node.(*BucketNode).BucketID, Equals, 9999)
 }

@@ -47,7 +47,7 @@ func NewBucketIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int) (
 	return NewBucketIteratorWithCheckpoint(table, dbConn, chunkSize, nil)
 }
 
-func NewBucketIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, chunkSize int, node *checkpoints.BucketNode) (*BucketIterator, error) {
+func NewBucketIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, chunkSize int, node checkpoints.Node) (*BucketIterator, error) {
 
 	bs := &BucketIterator{
 		table:     table,
@@ -57,9 +57,19 @@ func NewBucketIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, ch
 		ctrlCh:    make(chan bool, 2),
 		dbConn:    dbConn,
 	}
-	go bs.createProducerWithCheckpoint(node)
 
-	if err := bs.init(node); err != nil {
+	var (
+		bucketNode *checkpoints.BucketNode
+		ok         bool
+	)
+
+	if node != nil {
+		if bucketNode, ok = node.(*checkpoints.BucketNode); ok {
+			go bs.createProducerWithCheckpoint(bucketNode)
+		}
+	}
+
+	if err := bs.init(bucketNode); err != nil {
 		return nil, errors.Trace(err)
 	}
 
@@ -113,13 +123,13 @@ func (s *BucketIterator) init(node *checkpoints.BucketNode) error {
 		}
 		log.Debug("buckets for index", zap.String("index", index.Name.O), zap.Reflect("buckets", buckets))
 
-		indexcolumns := utils.GetColumnsFromIndex(index, s.table.Info)
+		indexColumns := utils.GetColumnsFromIndex(index, s.table.Info)
 
-		if len(indexcolumns) == 0 {
+		if len(indexColumns) == 0 {
 			continue
 		}
 		s.buckets = bucket
-		s.indexColumns = indexcolumns
+		s.indexColumns = indexColumns
 		s.indexID = index.ID
 		break
 	}
@@ -137,7 +147,7 @@ func (s *BucketIterator) Close() {
 }
 
 func (s *BucketIterator) createProducerWithCheckpoint(node *checkpoints.BucketNode) {
-	// close this goruntine gracefully.
+	// close this goroutine gracefully.
 	// init control
 	ctrl := <-s.ctrlCh
 	if ctrl {

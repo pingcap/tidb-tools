@@ -52,7 +52,7 @@ type Diff struct {
 
 	chunkCh chan *source.TableRange
 	sqlCh   chan string
-	cp      *checkpoints.Checkpointer
+	cp      *checkpoints.Checkpoint
 }
 
 // NewDiff returns a Diff instance.
@@ -71,8 +71,8 @@ func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 		//fixSQLFile: ???,
 		// TODO use a meaningfull chunk channel buffer
 		chunkCh: make(chan *source.TableRange, 1024),
-		sqlCh:   make(chan string),
-		cp:      new(checkpoints.Checkpointer),
+		sqlCh:   make(chan string, 1024),
+		cp:      new(checkpoints.Checkpoint),
 	}
 
 	if err = diff.init(ctx, cfg); err != nil {
@@ -116,33 +116,10 @@ func (df *Diff) Equal(ctx context.Context) error {
 		return errors.Trace(err)
 	}
 	defer chunksIter.Close()
-	stopWriteSqlsCh := df.writeSqls(ctx)
-	tick := time.Tick(10 * time.Second)
-	go df.handleChunks(ctx)
-	// a background gorotine which will insert the verified chunk,
-	// and periodically save checkpoint
-	go func(ctx context.Context) {
-	CHECKPOINT_LOOP:
-		for {
-			select {
-			case <-ctx.Done():
-				log.Info("Stop do checkpoint")
-			case <-tick:
-				_, err := df.cp.SaveChunk(ctx)
-				// TODO: error handling
-				if err != nil {
-					log.Warn("fail to save the chunk")
-					// maybe we should panic, because SaveChunk method should not failed
-				}
 
-			case node, ok := <-df.cp.NodeChan:
-				if !ok {
-					break CHECKPOINT_LOOP
-				}
-				df.cp.Insert(node)
-			}
-		}
-	}(ctx)
+	go df.writeSQLs(ctx)
+	go df.handleChunks(ctx)
+	go df.handleCheckpoints(ctx)
 
 	for {
 		c, err := chunksIter.Next()
@@ -164,13 +141,12 @@ func (df *Diff) Equal(ctx context.Context) error {
 		}
 	}
 
-	select {
-	case <-ctx.Done():
-	case stopWriteSqlsCh <- true:
-	}
+	// close sql channel
+	close(df.sqlCh)
+	// close checkpoint channel
+	df.cp.Close()
 
 	df.wg.Wait()
-
 	return nil
 }
 
@@ -185,7 +161,7 @@ func (df *Diff) generateChunksIterator() (source.DBIterator, error) {
 	var node checkpoints.Node
 	var err error
 	if df.useCheckpoint {
-		node, err = df.cp.LoadChunks()
+		node, err = df.cp.LoadChunk()
 		if err != nil {
 			log.Warn("the checkpoint load process failed, diable checkpoint and start from begining")
 			df.useCheckpoint = false
@@ -199,25 +175,53 @@ func (df *Diff) generateChunksIterator() (source.DBIterator, error) {
 			df.cp.SetCurrentSavedID(node.GetID() + 1)
 		}
 	}
-	// if node != nil, gernerateChunksIterator from checkpoint
-	// else gernerateChunkIterator from begining
-	return df.downstream.GenerateChunksIterator(df.chunkSize, node, source.Downstream)
+	// if node != nil, generateChunksIterator from checkpoint
+	// else generateChunkIterator from beginning
+	return df.downstream.GenerateChunksIterator(node, source.Downstream)
+}
+
+func (df *Diff) handleCheckpoints(ctx context.Context) {
+	// a background goroutine which will insert the verified chunk,
+	// and periodically save checkpoint
+	df.wg.Add(1)
+	defer df.wg.Done()
+	for {
+		select {
+		case <-ctx.Done():
+			log.Info("Stop do checkpoint")
+			return
+		case <-time.After(10 * time.Second):
+			_, err := df.cp.SaveChunk(ctx)
+			if err != nil {
+				log.Warn("fail to save the chunk")
+				// maybe we should panic, because SaveChunk method should not failed.
+			}
+		case node, ok := <-df.cp.NodeChan:
+			if !ok {
+				log.Info("checkpoint channel closed")
+				return
+			}
+			df.cp.Insert(node)
+		}
+	}
 }
 
 func (df *Diff) handleChunks(ctx context.Context) {
+	df.wg.Add(1)
+	defer df.wg.Done()
 	// TODO use a meaningfull count
 	pool := utils.NewWorkerPool(4, "consumer")
-OUTER:
 	for {
 		select {
 		case <-ctx.Done():
 			log.Info("Stop consumer chunks by user canceled")
+			return
 			// TODO: close worker gracefully
 		case c, ok := <-df.chunkCh:
 			// if chunkCh closed, NodeChan should close too and break the loop
 			if !ok {
 				close(df.cp.NodeChan)
-				break OUTER
+				return
 			}
 			pool.Apply(func() {
 				res, err := df.consume(ctx, c)
@@ -234,9 +238,7 @@ OUTER:
 }
 
 func (df *Diff) consume(ctx context.Context, tableChunk *source.TableRange) (bool, error) {
-	// TODO: if !UseChecksum
-	res, err := df.compareChecksum(ctx, tableChunk)
-
+	isEqual, err := df.compareChecksum(ctx, tableChunk)
 	if err != nil {
 		// TODO // retry or log this chunk's error to checkpoint.
 		return false, err
@@ -244,13 +246,13 @@ func (df *Diff) consume(ctx context.Context, tableChunk *source.TableRange) (boo
 
 	var node checkpoints.Node
 	var state string
-	if !res {
+	if !isEqual {
 		// 1. compare rows
 		// 2. generate fix sql
 		// TODO binary search
 		// TODO state ?
 		state = "failed"
-		res, err = df.compareRows(ctx, tableChunk)
+		isEqual, err = df.compareRows(ctx, tableChunk)
 		if err != nil {
 			return false, err
 		}
@@ -300,17 +302,14 @@ func (df *Diff) consume(ctx context.Context, tableChunk *source.TableRange) (boo
 		node = randomNode
 	}
 	df.cp.NodeChan <- node
-	return res, nil
+	return isEqual, nil
 }
 
 func (df *Diff) compareChecksum(ctx context.Context, tableChunk *source.TableRange) (bool, error) {
-	ctx1, cancel1 := context.WithCancel(ctx)
-	defer cancel1()
-	// TODO: if !UseChecksum
 	upstreamChecksumCh := make(chan *source.ChecksumInfo)
-	go df.upstream.GetCrc32(ctx1, tableChunk, upstreamChecksumCh)
+	go df.upstream.GetCrc32(ctx, tableChunk, upstreamChecksumCh)
 	downstreamChecksumCh := make(chan *source.ChecksumInfo)
-	go df.downstream.GetCrc32(ctx1, tableChunk, downstreamChecksumCh)
+	go df.downstream.GetCrc32(ctx, tableChunk, downstreamChecksumCh)
 	crc1Info := <-downstreamChecksumCh
 	crc2Info := <-upstreamChecksumCh
 	if crc1Info.Err != nil {
@@ -323,13 +322,10 @@ func (df *Diff) compareChecksum(ctx context.Context, tableChunk *source.TableRan
 		return false, nil
 	}
 
-	// update chunk success state in summary
-
 	return true, nil
 }
 
 func (df *Diff) compareRows(ctx context.Context, tableChunk *source.TableRange) (bool, error) {
-
 	upstreamRowsIterator, err := df.upstream.GetRowsIterator(ctx, tableChunk)
 	if err != nil {
 		return false, errors.Trace(err)
@@ -449,41 +445,26 @@ func (df *Diff) compareRows(ctx context.Context, tableChunk *source.TableRange) 
 	return equal, nil
 }
 
-// WriteSqls write sqls to file
-func (df *Diff) writeSqls(ctx context.Context) chan bool {
+// WriteSQLs write sqls to file
+func (df *Diff) writeSQLs(ctx context.Context) {
 	df.wg.Add(1)
-	stopWriteCh := make(chan bool)
+	defer df.wg.Done()
 
-	go func() {
-		defer df.wg.Done()
-
-		stop := false
-		for {
-			select {
-			case dml, ok := <-df.sqlCh:
-				if !ok {
-					return
-				}
-
-				_, err := df.fixSQLFile.WriteString(fmt.Sprintf("%s\n", dml))
-				if err != nil {
-					log.Error("write sql failed", zap.String("sql", dml), zap.Error(err))
-				}
-			case <-stopWriteCh:
-				stop = true
-			case <-ctx.Done():
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case dml, ok := <-df.sqlCh:
+			if !ok {
+				log.Info("write sql channel closed")
 				return
-			// TODO Necessary?
-			default:
-				if stop {
-					return
-				}
-				time.Sleep(100 * time.Millisecond)
+			}
+			_, err := df.fixSQLFile.WriteString(fmt.Sprintf("%s\n", dml))
+			if err != nil {
+				log.Error("write sql failed", zap.String("sql", dml), zap.Error(err))
 			}
 		}
-	}()
-
-	return stopWriteCh
+	}
 }
 
 func setTiDBCfg() {

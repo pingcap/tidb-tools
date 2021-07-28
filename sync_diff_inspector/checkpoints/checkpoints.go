@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/siddontang/go/ioutil2"
 	"os"
 	"strconv"
 	"sync"
@@ -104,6 +105,7 @@ type Node interface {
 	GetUpperBound() []string
 	GetType() chunk.ChunkType
 	GetChunkState() string
+	GetColumnName() []string
 }
 
 func (n *Inner) GetID() int { return n.ID }
@@ -126,21 +128,25 @@ type Heap struct {
 	CurrentSavedID int         // CurrentSavedID save the lastest save chunk id, initially was 0, updated by saveChunk method
 	mu             *sync.Mutex // protect critical section
 }
-type Checkpointer struct {
+type Checkpoint struct {
 	hp *Heap
 	// TODO close the channel
 	NodeChan chan Node
 }
 
-// the method is unsynchronized, be cautious
-func (cp *Checkpointer) SetCurrentSavedID(id int) {
+// SetCurrentSavedID the method is unsynchronized, be cautious
+func (cp *Checkpoint) SetCurrentSavedID(id int) {
 	cp.hp.CurrentSavedID = id
 }
 
-func (cp *Checkpointer) Insert(node Node) {
+func (cp *Checkpoint) Insert(node Node) {
 	cp.hp.mu.Lock()
 	heap.Push(cp.hp, node)
 	cp.hp.mu.Unlock()
+}
+
+func (cp *Checkpoint) Close() {
+	close(cp.NodeChan)
 }
 
 // Len - get the length of the heap
@@ -203,11 +209,7 @@ var (
 	ignoreState = "ignore"
 )
 
-func WriteFile(path string, data []byte) error {
-	return os.WriteFile(path, data, localFilePerm)
-}
-
-func (cp *Checkpointer) Init() {
+func (cp *Checkpoint) Init() {
 	hp := new(Heap)
 	hp.mu = &sync.Mutex{}
 	hp.Nodes = make([]Node, 0)
@@ -217,17 +219,16 @@ func (cp *Checkpointer) Init() {
 	cp.NodeChan = make(chan Node, 1024)
 }
 
-// saveChunk saves the chunk to file.
-func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
-	// TODO save Chunk to file
+// SaveChunk saves the chunk to file.
+func (cp *Checkpoint) SaveChunk(ctx context.Context) (int, error) {
 	cp.hp.mu.Lock()
 	var cur, next Node
 	for {
-		next_id := cp.hp.CurrentSavedID + 1
+		nextId := cp.hp.CurrentSavedID + 1
 		if cp.hp.Len() == 0 {
 			break
 		}
-		if next_id == cp.hp.Nodes[0].GetID() {
+		if nextId == cp.hp.Nodes[0].GetID() {
 			cur = heap.Pop(cp.hp).(Node)
 			cp.hp.CurrentSavedID = cur.GetID()
 			if cp.hp.Len() == 0 {
@@ -243,21 +244,16 @@ func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 	}
 	cp.hp.mu.Unlock()
 	if cur != nil {
-		var CheckpointData []byte
-		var err error
-		switch cur := cur.(type) {
-		case *BucketNode, *RandomNode:
-			CheckpointData, err = json.Marshal(cur)
-			if err != nil {
-				return 0, errors.Trace(err)
-			}
-		default:
-			panic("error")
+		checkpointData, err := json.Marshal(cur)
+		if err != nil {
+			return 0, errors.Trace(err)
 		}
-		if err := WriteFile(checkpointFile, CheckpointData); err != nil {
+
+		if err = ioutil2.WriteFileAtomic(checkpointFile, checkpointData, localFilePerm); err != nil {
 			return 0, err
 		}
-		log.Info("load checkpoint",
+
+		log.Info("save checkpoint",
 			zap.Int("id", cur.GetID()),
 			zap.String("table", dbutil.TableName(cur.GetSchema(), cur.GetTable())),
 			zap.Reflect("type", cur.GetType()),
@@ -268,19 +264,19 @@ func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 
 }
 
-// loadChunks loads chunk info from file `chunk`
-func (cp *Checkpointer) LoadChunks() (Node, error) {
+// LoadChunk loads chunk info from file `chunk`
+func (cp *Checkpoint) LoadChunk() (Node, error) {
 	//chunks := make([]*chunk.Range, 0, 100)
 	bytes, err := os.ReadFile(checkpointFile)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	bytes_copy := make([]byte, len(bytes))
-	copy(bytes_copy, bytes)
+	bytesCopy := make([]byte, len(bytes))
+	copy(bytesCopy, bytes)
 	//str := string(bytes)
 	// TODO find a better way
 	m := make(map[string]interface{})
-	err = json.Unmarshal(bytes_copy, &m)
+	err = json.Unmarshal(bytesCopy, &m)
 	//t, err := strconv.Atoi(str[strings.Index(str, `"type"`)+len(`"type"`)+1 : strings.Index(str, `"type"`)+len(`"type"`)+2])
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -290,24 +286,17 @@ func (cp *Checkpointer) LoadChunks() (Node, error) {
 		return nil, errors.Trace(err)
 	}
 
+	var node Node
 	switch t {
 	case int(chunk.Bucket):
-		node := &BucketNode{}
-		err := json.Unmarshal(bytes, &node)
-		if err != nil {
-			fmt.Printf("%s\n", err.Error())
-			return nil, errors.Trace(err)
-		}
-		return node, nil
+		node = &BucketNode{}
 	case int(chunk.Random):
-		node := &RandomNode{}
-		err := json.Unmarshal(bytes, &node)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		return node, nil
-	default:
-		panic("LoadChunk error")
+		node = &RandomNode{}
 	}
+	err = json.Unmarshal(bytes, &node)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return node, nil
 	// TODO load chunks from files
 }
