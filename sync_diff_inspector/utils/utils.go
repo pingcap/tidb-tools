@@ -14,7 +14,9 @@
 package utils
 
 import (
+	"context"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -22,6 +24,7 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
@@ -335,4 +338,83 @@ func MinLenInSlices(slices [][]string) int {
 	}
 
 	return min
+}
+
+// SliceToMap converts slice to map
+func sliceToMap(slice []string) map[string]interface{} {
+	sMap := make(map[string]interface{})
+	for _, str := range slice {
+		sMap[str] = struct{}{}
+	}
+	return sMap
+}
+
+func GetAllTables(ctx context.Context, cfg *config.Config) (map[string]map[string]map[string]interface{}, error) {
+	// instanceID => schema => table
+	allTablesMap := make(map[string]map[string]map[string]interface{})
+
+	allTablesMap[cfg.TargetDBCfg.InstanceID] = make(map[string]map[string]interface{})
+	targetSchemas, err := dbutil.GetSchemas(ctx, cfg.TargetDBCfg.Conn)
+	if err != nil {
+		return nil, errors.Annotatef(err, "get schemas from %s", cfg.TargetDBCfg.InstanceID)
+	}
+
+	for _, schema := range targetSchemas {
+		allTables, err := dbutil.GetTables(ctx, cfg.TargetDBCfg.Conn, schema)
+		if err != nil {
+			return nil, errors.Annotatef(err, "get tables from %s.%s", cfg.TargetDBCfg.InstanceID, schema)
+		}
+		allTablesMap[cfg.TargetDBCfg.InstanceID][schema] = sliceToMap(allTables)
+	}
+
+	for _, source := range cfg.SourceDBCfg {
+		allTablesMap[source.InstanceID] = make(map[string]map[string]interface{})
+		sourceSchemas, err := dbutil.GetSchemas(ctx, source.Conn)
+		if err != nil {
+			return nil, errors.Annotatef(err, "get schemas from %s", source.InstanceID)
+		}
+
+		for _, schema := range sourceSchemas {
+			allTables, err := dbutil.GetTables(ctx, source.Conn, schema)
+			if err != nil {
+				return nil, errors.Annotatef(err, "get tables from %s.%s", source.InstanceID, schema)
+			}
+			allTablesMap[source.InstanceID][schema] = sliceToMap(allTables)
+		}
+	}
+
+	return allTablesMap, nil
+}
+
+// GetMatchTable returns all the matched table.
+func GetMatchTable(db *config.DBConfig, schema, table string, allTables map[string]interface{}) ([]string, error) {
+	tableNames := make([]string, 0, 1)
+
+	if table[0] == '~' {
+		tableRegex := regexp.MustCompile(fmt.Sprintf("(?i)%s", table[1:]))
+		for tableName := range allTables {
+			if !tableRegex.MatchString(tableName) {
+				continue
+			}
+			tableNames = append(tableNames, tableName)
+		}
+	} else {
+		if _, ok := allTables[table]; ok {
+			tableNames = append(tableNames, table)
+		} else {
+			return nil, errors.Errorf("%s.%s not found in %s", schema, table, db.InstanceID)
+		}
+	}
+
+	return tableNames, nil
+}
+
+// Judge if a table is in "exclude-tables" list
+func InExcludeTables(exclude_tables []string, table string) bool {
+	for _, exclude_table := range exclude_tables {
+		if strings.EqualFold(exclude_table, table) {
+			return true
+		}
+	}
+	return false
 }

@@ -27,7 +27,6 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	tidbconfig "github.com/pingcap/tidb/config"
 	"go.uber.org/zap"
@@ -48,7 +47,6 @@ type Diff struct {
 	ignoreDataCheck   bool
 	ignoreStructCheck bool
 	ignoreStats       bool
-	tables            map[string]map[string]*config.TableConfig
 	fixSQLFile        *os.File
 	wg                sync.WaitGroup
 
@@ -69,7 +67,6 @@ func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 		ignoreDataCheck:   cfg.IgnoreDataCheck,
 		ignoreStructCheck: cfg.IgnoreStructCheck,
 		ignoreStats:       cfg.IgnoreStats,
-		tables:            make(map[string]map[string]*config.TableConfig),
 		//TODO add fixSQLFile
 		//fixSQLFile: ???,
 		// TODO use a meaningfull chunk channel buffer
@@ -102,22 +99,8 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 	// TODO adjust config
 	setTiDBCfg()
 
-	tableDiffs := make([]*common.TableDiff, 0, len(cfg.Tables))
-	for _, table := range cfg.Tables {
-		tableDiffs = append(tableDiffs, &common.TableDiff{
-			// TODO build table diffs
-			Schema: table.Schema,
-		})
-	}
+	df.downstream, df.upstream, err = source.NewSources(ctx, cfg)
 
-	df.downstream, err = source.NewSource(ctx, tableDiffs, cfg.TargetDBCfg)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	df.upstream, err = source.NewSource(ctx, tableDiffs, cfg.SourceDBCfg...)
-	if err != nil {
-		return errors.Trace(err)
-	}
 	df.fixSQLFile, err = os.Create(cfg.FixSQLFile)
 	if err != nil {
 		return errors.Trace(err)
