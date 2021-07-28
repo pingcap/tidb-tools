@@ -38,6 +38,7 @@ type BucketIterator struct {
 	chunksCh     chan []*chunk.Range
 	errCh        chan error
 	ctrlCh       chan bool
+	indexID      int64
 
 	dbConn *sql.DB
 }
@@ -115,6 +116,7 @@ func (s *BucketIterator) init() error {
 		}
 		s.buckets = bucket
 		s.indexColumns = indexcolumns
+		s.indexID = index.ID
 		break
 	}
 

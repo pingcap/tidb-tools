@@ -139,7 +139,7 @@ func (s *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff, no
 	chunkSize := 1000
 	// TODO if useCheckpoint, need analyzeChunkSize?
 	cnt, _ := s.analyzeChunkSize(tableDiff)
-	var bucket bool
+	bucket := false
 	switch node.(type) {
 	case *checkpoints.BucketNode:
 		bucket = true
@@ -147,17 +147,31 @@ func (s *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff, no
 		bucket = false
 	}
 	// TODO merge bucket function into useBucket()
-	if (!tableDiff.UseCheckpoint && s.useBucket(tableDiff)) || bucket {
-		bucketIter, err := splitter.NewBucketIteratorWithCheckpoint(tableDiff, s.dbConn, chunkSize, node.(*checkpoints.BucketNode))
+	if (node == nil && s.useBucket(tableDiff)) || bucket {
+		if node != nil {
+			bucketIter, err := splitter.NewBucketIteratorWithCheckpoint(tableDiff, s.dbConn, chunkSize, node.(*checkpoints.BucketNode))
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+			return bucketIter, nil
+		}
+		bucketIter, err := splitter.NewBucketIterator(tableDiff, s.dbConn, chunkSize)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 		return bucketIter, nil
 		// TODO fall back to random splitter
 	}
-	// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
-	randIter, err := splitter.NewRandomIteratorWithCheckpoint(tableDiff, s.dbConn, cnt, s.chunkSize, tableDiff.Range, tableDiff.Collation, node.(*checkpoints.RandomNode))
 
+	if node != nil {
+		// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
+		randIter, err := splitter.NewRandomIteratorWithCheckpoint(tableDiff, s.dbConn, cnt, s.chunkSize, tableDiff.Range, tableDiff.Collation, node.(*checkpoints.RandomNode))
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		return randIter, nil
+	}
+	randIter, err := splitter.NewRandomIterator(tableDiff, s.dbConn, cnt, s.chunkSize, tableDiff.Range, tableDiff.Collation)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
