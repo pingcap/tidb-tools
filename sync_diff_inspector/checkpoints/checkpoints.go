@@ -35,6 +35,38 @@ import (
 
 const localFilePerm os.FileMode = 0o644
 
+var (
+
+	// checkpointFile represents the checkpoints' file name which used for save and loads chunks
+	checkpointFile = "sync_diff_checkpoints.pb"
+
+	// SuccessState
+	// for chunk: means this chunk's data is equal
+	// for table: means this all chunk in this table is equal(except ignore chunk)
+	SuccessState = "success"
+
+	// FailedState
+	// for chunk: means this chunk's data is not equal
+	// for table: means some chunks' data is not equal or some chunk check failed in this table
+	FailedState = "failed"
+
+	// for chunk: means meet error when check, don't know the chunk's data is equal or not equal
+	// for table: don't have this state
+	errorState = "error"
+
+	// for chunk: means this chunk is not in check
+	// for table: this table is checking but not finished
+	notCheckedState = "not_checked"
+
+	// for chunk: means this chunk is checking
+	// for table: don't have this state
+	checkingState = "checking"
+
+	// for chunk: this chunk is ignored. if sample is not 100%, will ignore some chunk
+	// for table: don't have this state
+	ignoreState = "ignore"
+)
+
 type Inner struct {
 	Type       chunk.ChunkType `json:"type"`
 	ID         int             `json:"chunk-id"`
@@ -179,35 +211,6 @@ func (hp *Heap) Pop() interface{} {
 	return item
 }
 
-var (
-
-	// checkpointFile represents the checkpoints' file name which used for save and loads chunks
-	checkpointFile = "sync_diff_checkpoints.pb"
-
-	// for chunk: means this chunk's data is equal
-	// for table: means this all chunk in this table is equal(except ignore chunk)
-	successState = "success"
-
-	// for chunk: means this chunk's data is not equal
-	// for table: means some chunks' data is not equal or some chunk check failed in this table
-	failedState = "failed"
-
-	// for chunk: means meet error when check, don't know the chunk's data is equal or not equal
-	// for table: don't have this state
-	errorState = "error"
-
-	// for chunk: means this chunk is not in check
-	// for table: this table is checking but not finished
-	notCheckedState = "not_checked"
-
-	// for chunk: means this chunk is checking
-	// for table: don't have this state
-	checkingState = "checking"
-
-	// for chunk: this chunk is ignored. if sample is not 100%, will ignore some chunk
-	// for table: don't have this state
-	ignoreState = "ignore"
-)
 
 func (cp *Checkpoint) Init() {
 	hp := new(Heap)

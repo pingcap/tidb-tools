@@ -196,7 +196,7 @@ func (df *Diff) handleCheckpoints(ctx context.Context) {
 		case <-time.After(10 * time.Second):
 			_, err := df.cp.SaveChunk(ctx)
 			if err != nil {
-				log.Warn("fail to save the chunk")
+				log.Warn("fail to save the chunk", zap.Error(err))
 				// maybe we should panic, because SaveChunk method should not failed.
 			}
 		case node, ok := <-df.cp.NodeChan:
@@ -241,25 +241,21 @@ func (df *Diff) handleChunks(ctx context.Context) {
 func (df *Diff) consume(ctx context.Context, tableChunk *source.TableRange) (bool, error) {
 	isEqual, err := df.compareChecksum(ctx, tableChunk)
 	if err != nil {
-		// TODO // retry or log this chunk's error to checkpoint.
+		// TODO retry or log this chunk's error to checkpoint.
 		return false, err
 	}
 
 	var node checkpoints.Node
 	var state string
 	if !isEqual {
-		// 1. compare rows
-		// 2. generate fix sql
-		// TODO binary search
-		// TODO state ?
-		state = "failed"
+		state = checkpoints.FailedState
 		isEqual, err = df.compareRows(ctx, tableChunk)
 		if err != nil {
 			return false, err
 		}
 	} else {
 		// update chunk success state in summary
-		state = "success"
+		state = checkpoints.SuccessState
 	}
 	var from source.Source
 	if tableChunk.From == source.Upstream {
@@ -277,11 +273,8 @@ func (df *Diff) consume(ctx context.Context, tableChunk *source.TableRange) (boo
 	inner := checkpoints.Inner{
 		Type: tableChunk.ChunkRange.Type,
 		ID:   tableChunk.ChunkRange.ID,
-		// TODO need schema
 		Schema: table.Schema,
-		// TODO need table
 		Table: table.Table,
-		// TODO translate Bound to string
 		UpperBound: uppers,
 		ColumnName: columnName,
 		ChunkState: state,
