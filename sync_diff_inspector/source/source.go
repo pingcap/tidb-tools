@@ -22,6 +22,7 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
@@ -30,7 +31,12 @@ import (
 )
 
 type DMLType int32
+type SourceSide bool
 
+const (
+	Upstream   SourceSide = true
+	Downstream            = false
+)
 const (
 	Insert DMLType = iota + 1
 	Delete
@@ -143,15 +149,18 @@ type ChecksumInfo struct {
 type TableRange struct {
 	ChunkRange *chunk.Range
 	TableIndex int
+	From       SourceSide
 }
 
 type Source interface {
-	GenerateChunksIterator(chunkSize int) (DBIterator, error)
+	GenerateChunksIterator(chunkSize int, node checkpoints.Node, from SourceSide) (DBIterator, error)
 	GetCrc32(context.Context, *TableRange, chan *ChecksumInfo)
 	GetOrderKeyCols(int) []*model.ColumnInfo
 	GetRowsIterator(context.Context, *TableRange) (RowDataIterator, error)
 	GenerateReplaceDML(map[string]*dbutil.ColumnData, int) string
 	GenerateDeleteDML(map[string]*dbutil.ColumnData, int) string
+	GetTable(i int) *common.TableDiff
+	Close()
 }
 
 func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, upstream Source, err error) {

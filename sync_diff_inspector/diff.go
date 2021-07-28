@@ -79,10 +79,23 @@ func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 	}
 
 	if err = diff.init(ctx, cfg); err != nil {
+		diff.Close()
 		return nil, errors.Trace(err)
 	}
 
 	return diff, nil
+}
+
+func (df *Diff) Close() {
+	if df.fixSQLFile != nil {
+		df.fixSQLFile.Close()
+	}
+	if df.upstream != nil {
+		df.upstream.Close()
+	}
+	if df.downstream != nil {
+		df.downstream.Close()
+	}
 }
 
 func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
@@ -105,7 +118,10 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 	if err != nil {
 		return errors.Trace(err)
 	}
-
+	df.fixSQLFile, err = os.Create(cfg.FixSQLFile)
+	if err != nil {
+		return errors.Trace(err)
+	}
 	df.cp.Init()
 	return nil
 }
@@ -123,6 +139,7 @@ func (df *Diff) Equal(ctx context.Context) error {
 	// a background gorotine which will insert the verified chunk,
 	// and periodically save checkpoint
 	go func(ctx context.Context) {
+	CHECKPOINT_LOOP:
 		for {
 			select {
 			case <-ctx.Done():
@@ -131,8 +148,14 @@ func (df *Diff) Equal(ctx context.Context) error {
 				_, err := df.cp.SaveChunk(ctx)
 				// TODO: error handling
 				if err != nil {
+					log.Warn("fail to save the chunk")
+					// maybe we should panic, because SaveChunk method should not failed
 				}
-			case node := <-df.cp.NodeChan:
+
+			case node, ok := <-df.cp.NodeChan:
+				if !ok {
+					break CHECKPOINT_LOOP
+				}
 				df.cp.Insert(node)
 			}
 		}
@@ -145,6 +168,8 @@ func (df *Diff) Equal(ctx context.Context) error {
 		}
 		if c == nil {
 			// finish read the tables
+			// if the chunksIter is done, close the chunkCh
+			close(df.chunkCh)
 			break
 		}
 
@@ -174,18 +199,43 @@ func (df *Diff) generateChunksIterator() (source.DBIterator, error) {
 	// if isTiDB(df.downstream) {
 	//		return df.downstream.GenerateChunksIterator()
 	//}
-	return df.downstream.GenerateChunksIterator(df.chunkSize)
+	var node checkpoints.Node
+	var err error
+	if df.useCheckpoint {
+		node, err = df.cp.LoadChunks()
+		if err != nil {
+			log.Warn("the checkpoint load process failed, diable checkpoint and start from begining")
+			df.useCheckpoint = false
+		} else {
+			// this need not be synchronized, because at the moment, the is only one thread access the section
+			log.Info("load checkpoint",
+				zap.Int("id", node.GetID()),
+				zap.String("table", dbutil.TableName(node.GetSchema(), node.GetTable())),
+				zap.Reflect("type", node.GetType()),
+				zap.String("state", node.GetChunkState()))
+			df.cp.SetCurrentSavedID(node.GetID() + 1)
+		}
+	}
+	// if node != nil, gernerateChunksIterator from checkpoint
+	// else gernerateChunkIterator from begining
+	return df.downstream.GenerateChunksIterator(df.chunkSize, node, source.Downstream)
 }
 
 func (df *Diff) handleChunks(ctx context.Context) {
 	// TODO use a meaningfull count
 	pool := utils.NewWorkerPool(4, "consumer")
+OUTER:
 	for {
 		select {
 		case <-ctx.Done():
 			log.Info("Stop consumer chunks by user canceled")
 			// TODO: close worker gracefully
-		case c := <-df.chunkCh:
+		case c, ok := <-df.chunkCh:
+			// if chunkCh closed, NodeChan should close too and break the loop
+			if !ok {
+				close(df.cp.NodeChan)
+				break OUTER
+			}
 			pool.Apply(func() {
 				res, err := df.consume(ctx, c)
 				if err != nil {
@@ -225,37 +275,43 @@ func (df *Diff) consume(ctx context.Context, tableChunk *source.TableRange) (boo
 		// update chunk success state in summary
 		state = "success"
 	}
+	var from source.Source
+	if tableChunk.From == source.Upstream {
+		from = df.upstream
+	} else {
+		from = df.downstream
+	}
+	table := from.GetTable(tableChunk.TableIndex)
+	uppers := make([]string, 0, len(tableChunk.ChunkRange.Bounds))
+	columnName := make([]string, 0, len(tableChunk.ChunkRange.Bounds))
+	for _, bound := range tableChunk.ChunkRange.Bounds {
+		uppers = append(uppers, bound.Upper)
+		columnName = append(columnName, bound.Column)
+	}
+	inner := checkpoints.Inner{
+		Type: tableChunk.ChunkRange.Type,
+		ID:   tableChunk.ChunkRange.ID,
+		// TODO need schema
+		Schema: table.Schema,
+		// TODO need table
+		Table: table.Table,
+		// TODO translate Bound to string
+		UpperBound: uppers,
+		ColumnName: columnName,
+		ChunkState: state,
+	}
 	switch tableChunk.ChunkRange.Type {
 	case chunk.Bucket:
 		bucketNode := &checkpoints.BucketNode{
-			Inner: checkpoints.Inner{
-				Type: tableChunk.ChunkRange.Type,
-				ID:   tableChunk.ChunkRange.ID,
-				// TODO need schema
-				Schema: "",
-				// TODO need table
-				Table: "",
-				// TODO translate Bound to string
-				UpperBound: []string{},
-				ChunkState: state,
-			},
+			Inner: inner,
 			// TODO need BucketID
 			BucketID: 0,
+			IndexID:  tableChunk.ChunkRange.IndexID,
 		}
 		node = bucketNode
 	case chunk.Random:
 		randomNode := &checkpoints.RandomNode{
-			Inner: checkpoints.Inner{
-				Type: tableChunk.ChunkRange.Type,
-				ID:   tableChunk.ChunkRange.ID,
-				// TODO need schema
-				Schema: "",
-				// TODO need table
-				Table: "",
-				// TODO translate Bound to string
-				UpperBound: []string{},
-				ChunkState: state,
-			},
+			Inner: inner,
 			// TODO need random value
 		}
 		node = randomNode
