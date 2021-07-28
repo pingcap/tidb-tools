@@ -184,7 +184,6 @@ func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, dbCfg *c
 		tableRows:  make([]*TableRows, 0, len(tableDiffs)),
 		dbConn:     dbConn,
 	}
-
 	for _, table := range tableDiffs {
 		tableRowsQuery, tableOrderKeyCols := utils.GetTableRowsQueryFormat(table.Schema, table.Table, table.Info, table.Collation)
 		ts.tableRows = append(ts.tableRows, &TableRows{
@@ -193,8 +192,11 @@ func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, dbCfg *c
 		})
 
 	}
-
 	return ts, nil
+}
+
+func (s *TiDBSource) Close() {
+	s.dbConn.Close()
 }
 
 func (s *TiDBSource) GenerateChunksIterator(chunkSize int, node checkpoints.Node) (DBIterator, error) {

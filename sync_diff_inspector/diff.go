@@ -79,10 +79,17 @@ func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 	}
 
 	if err = diff.init(ctx, cfg); err != nil {
+		diff.Close()
 		return nil, errors.Trace(err)
 	}
 
 	return diff, nil
+}
+
+func (df *Diff) Close() {
+	if df.fixSQLFile != nil {
+		df.fixSQLFile.Close()
+	}
 }
 
 func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
@@ -105,7 +112,10 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 	if err != nil {
 		return errors.Trace(err)
 	}
-
+	df.fixSQLFile, err = os.Create(cfg.FixSQLFile)
+	if err != nil {
+		return errors.Trace(err)
+	}
 	df.cp.Init()
 	return nil
 }
@@ -123,6 +133,7 @@ func (df *Diff) Equal(ctx context.Context) error {
 	// a background gorotine which will insert the verified chunk,
 	// and periodically save checkpoint
 	go func(ctx context.Context) {
+	CHECKPOINT_LOOP:
 		for {
 			select {
 			case <-ctx.Done():
@@ -134,7 +145,10 @@ func (df *Diff) Equal(ctx context.Context) error {
 					log.Warn("fail to save the chunk")
 					// maybe we should panic, because SaveChunk method should not failed
 				}
-			case node := <-df.cp.NodeChan:
+			case node, ok := <-df.cp.NodeChan:
+				if !ok {
+					break CHECKPOINT_LOOP
+				}
 				df.cp.Insert(node)
 			}
 		}
@@ -202,6 +216,7 @@ OUTER:
 			log.Info("Stop consumer chunks by user canceled")
 			// TODO: close worker gracefully
 		case c, ok := <-df.chunkCh:
+			// if chunkCh closed, NodeChan should close too and break the loop
 			if !ok {
 				close(df.cp.NodeChan)
 				break OUTER

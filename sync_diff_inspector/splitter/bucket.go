@@ -181,7 +181,7 @@ func (s *BucketIterator) createProducerWithCheckpoint(node *checkpoints.BucketNo
 
 		chunks := []*chunk.Range{}
 		if count >= 2*chunkSize {
-			splitChunks, err := splitRangeByRandom(s.dbConn, chunkRange, int(count/chunkSize), table.Schema, table.Table, indexColumns, table.Range, table.Collation, node)
+			splitChunks, err := splitRangeByRandom(s.dbConn, chunkRange, int(count/chunkSize), table.Schema, table.Table, indexColumns, table.Range, table.Collation)
 			if err != nil {
 				s.errCh <- errors.Trace(err)
 				return
