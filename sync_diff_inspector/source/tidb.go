@@ -38,6 +38,7 @@ type TiDBChunksIterator struct {
 
 	chunkSize int
 	limit     int
+	from      SourceSide
 
 	dbConn *sql.DB
 
@@ -59,6 +60,7 @@ func (t *TiDBChunksIterator) Next() (*TableRange, error) {
 		return &TableRange{
 			ChunkRange: chunks,
 			TableIndex: t.getCurTableIndex(),
+			From:       t.from,
 		}, nil
 	}
 
@@ -76,6 +78,7 @@ func (t *TiDBChunksIterator) Next() (*TableRange, error) {
 	return &TableRange{
 		ChunkRange: chunks,
 		TableIndex: t.getCurTableIndex(),
+		From:       t.from,
 	}, nil
 }
 
@@ -199,11 +202,11 @@ func (s *TiDBSource) Close() {
 	s.dbConn.Close()
 }
 
-func (s *TiDBSource) GetTables() []*common.TableDiff {
-	return s.tableDiffs
+func (s *TiDBSource) GetTable(i int) *common.TableDiff {
+	return s.tableDiffs[i]
 }
 
-func (s *TiDBSource) GenerateChunksIterator(chunkSize int, node checkpoints.Node) (DBIterator, error) {
+func (s *TiDBSource) GenerateChunksIterator(chunkSize int, node checkpoints.Node, from SourceSide) (DBIterator, error) {
 	// TODO build Iterator with config.
 	dbIter := &TiDBChunksIterator{
 		TableDiffs:     s.tableDiffs,
@@ -211,6 +214,7 @@ func (s *TiDBSource) GenerateChunksIterator(chunkSize int, node checkpoints.Node
 		chunkSize:      chunkSize,
 		limit:          0,
 		dbConn:         s.dbConn,
+		from:           from,
 	}
 	err := dbIter.nextTable(node)
 	return dbIter, err

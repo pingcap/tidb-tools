@@ -212,7 +212,7 @@ func (df *Diff) generateChunksIterator() (source.DBIterator, error) {
 	}
 	// if node != nil, gernerateChunksIterator from checkpoint
 	// else gernerateChunkIterator from begining
-	return df.downstream.GenerateChunksIterator(df.chunkSize, node)
+	return df.downstream.GenerateChunksIterator(df.chunkSize, node, source.Downstream)
 }
 
 func (df *Diff) handleChunks(ctx context.Context) {
@@ -269,37 +269,42 @@ func (df *Diff) consume(ctx context.Context, tableChunk *source.TableRange) (boo
 		// update chunk success state in summary
 		state = "success"
 	}
+	var from source.Source
+	if tableChunk.From == source.Upstream {
+		from = df.upstream
+	} else {
+		from = df.downstream
+	}
+	table := from.GetTable(tableChunk.TableIndex)
+	uppers := make([]string, 0, len(tableChunk.ChunkRange.Bounds))
+	columnName := make([]string, 0, len(tableChunk.ChunkRange.Bounds))
+	for _, bound := range tableChunk.ChunkRange.Bounds {
+		uppers = append(uppers, bound.Upper)
+		columnName = append(columnName, bound.Column)
+	}
+	inner := checkpoints.Inner{
+		Type: tableChunk.ChunkRange.Type,
+		ID:   tableChunk.ChunkRange.ID,
+		// TODO need schema
+		Schema: table.Schema,
+		// TODO need table
+		Table: table.Table,
+		// TODO translate Bound to string
+		UpperBound: uppers,
+		ColumnName: columnName,
+		ChunkState: state,
+	}
 	switch tableChunk.ChunkRange.Type {
 	case chunk.Bucket:
 		bucketNode := &checkpoints.BucketNode{
-			Inner: checkpoints.Inner{
-				Type: tableChunk.ChunkRange.Type,
-				ID:   tableChunk.ChunkRange.ID,
-				// TODO need schema
-				Schema: "",
-				// TODO need table
-				Table: "",
-				// TODO translate Bound to string
-				UpperBound: []string{},
-				ChunkState: state,
-			},
+			Inner: inner,
 			// TODO need BucketID
 			BucketID: 0,
 		}
 		node = bucketNode
 	case chunk.Random:
 		randomNode := &checkpoints.RandomNode{
-			Inner: checkpoints.Inner{
-				Type: tableChunk.ChunkRange.Type,
-				ID:   tableChunk.ChunkRange.ID,
-				// TODO need schema
-				Schema: "",
-				// TODO need table
-				Table: "",
-				// TODO translate Bound to string
-				UpperBound: []string{},
-				ChunkState: state,
-			},
+			Inner: inner,
 			// TODO need random value
 		}
 		node = randomNode

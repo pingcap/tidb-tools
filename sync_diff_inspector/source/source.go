@@ -31,7 +31,12 @@ import (
 )
 
 type DMLType int32
+type SourceSide bool
 
+const (
+	Upstream   SourceSide = true
+	Downstream            = false
+)
 const (
 	Insert DMLType = iota + 1
 	Delete
@@ -144,16 +149,17 @@ type ChecksumInfo struct {
 type TableRange struct {
 	ChunkRange *chunk.Range
 	TableIndex int
+	From       SourceSide
 }
 
 type Source interface {
-	GenerateChunksIterator(chunkSize int, node checkpoints.Node) (DBIterator, error)
+	GenerateChunksIterator(chunkSize int, node checkpoints.Node, from SourceSide) (DBIterator, error)
 	GetCrc32(context.Context, *TableRange, chan *ChecksumInfo)
 	GetOrderKeyCols(int) []*model.ColumnInfo
 	GetRowsIterator(context.Context, *TableRange) (RowDataIterator, error)
 	GenerateReplaceDML(map[string]*dbutil.ColumnData, int) string
 	GenerateDeleteDML(map[string]*dbutil.ColumnData, int) string
-	GetTables() []*common.TableDiff
+	GetTable(i int) *common.TableDiff
 	Close()
 }
 
