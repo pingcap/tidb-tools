@@ -37,11 +37,13 @@ type Inner struct {
 	Schema     string          `json:"schema"`
 	Table      string          `json:"table"`
 	UpperBound []string        `json:"upper-bound"` // the upper bound should be like "(a, b, c)"
+	ColumnName []string        `json:"column-names"`
 	ChunkState string          `json:"chunk-state"` // indicate the state ("success" or "failed") of the chunk
 }
 type BucketNode struct {
 	Inner
-	BucketID int `json:"bucket-id"`
+	BucketID int   `json:"bucket-id"`
+	IndexID  int64 `json:"index-id"`
 }
 
 type RandomNode struct {
@@ -112,6 +114,8 @@ func (n *Inner) GetUpperBound() []string { return n.UpperBound }
 func (n *Inner) GetType() chunk.ChunkType { return n.Type }
 
 func (n *Inner) GetChunkState() string { return n.ChunkState }
+
+func (n *Inner) GetColumnName() []string { return n.ColumnName }
 
 // Heap maintain a Min Heap, which can be accessed by multiple threads and protected by mutex.
 type Heap struct {

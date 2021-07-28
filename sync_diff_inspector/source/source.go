@@ -153,6 +153,7 @@ type Source interface {
 	GetRowsIterator(context.Context, *TableRange) (RowDataIterator, error)
 	GenerateReplaceDML(map[string]*dbutil.ColumnData, int) string
 	GenerateDeleteDML(map[string]*dbutil.ColumnData, int) string
+	GetTables() []*common.TableDiff
 	Close()
 }
 

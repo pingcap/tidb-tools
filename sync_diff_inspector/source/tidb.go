@@ -199,6 +199,10 @@ func (s *TiDBSource) Close() {
 	s.dbConn.Close()
 }
 
+func (s *TiDBSource) GetTables() []*common.TableDiff {
+	return s.tableDiffs
+}
+
 func (s *TiDBSource) GenerateChunksIterator(chunkSize int, node checkpoints.Node) (DBIterator, error) {
 	// TODO build Iterator with config.
 	dbIter := &TiDBChunksIterator{
