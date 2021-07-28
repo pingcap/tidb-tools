@@ -460,7 +460,7 @@ func initTables(ctx context.Context, cfg *config.Config) (connDBs map[string]*sq
 
 // DBIterator generate next chunk for the whole tables lazily.
 type DBIterator interface {
-	Next() (*TableRange, error)
 	// Next seeks the next chunk, return nil if seeks to end.
+	Next() (*TableRange, error)
 	Close()
 }

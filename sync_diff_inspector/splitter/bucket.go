@@ -37,7 +37,6 @@ type BucketIterator struct {
 	nextChunk    uint
 	chunksCh     chan []*chunk.Range
 	errCh        chan error
-	ctrlCh       chan bool
 	indexID      int64
 
 	dbConn *sql.DB
@@ -48,30 +47,22 @@ func NewBucketIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int) (
 }
 
 func NewBucketIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, chunkSize int, node checkpoints.Node) (*BucketIterator, error) {
-
 	bs := &BucketIterator{
 		table:     table,
 		chunkSize: int64(chunkSize),
-		chunksCh:  make(chan []*chunk.Range, 1),
+		chunksCh:  make(chan []*chunk.Range, 1024),
 		errCh:     make(chan error, 1),
-		ctrlCh:    make(chan bool, 2),
 		dbConn:    dbConn,
 	}
 
-	var (
-		bucketNode *checkpoints.BucketNode
-		ok         bool
-	)
-
-	if node != nil {
-		if bucketNode, ok = node.(*checkpoints.BucketNode); ok {
-			go bs.createProducerWithCheckpoint(bucketNode)
-		}
+	bucketNode, ok := node.(*checkpoints.BucketNode)
+	if !ok {
+		bucketNode = nil
 	}
-
 	if err := bs.init(bucketNode); err != nil {
 		return nil, errors.Trace(err)
 	}
+	go bs.produceChunkWithCheckpoint(bucketNode)
 
 	return bs, nil
 }
@@ -138,21 +129,13 @@ func (s *BucketIterator) init(node *checkpoints.BucketNode) error {
 		return errors.NotFoundf("no index to split buckets")
 	}
 
-	s.ctrlCh <- false
 	return nil
 }
 
 func (s *BucketIterator) Close() {
-	s.ctrlCh <- true
 }
 
-func (s *BucketIterator) createProducerWithCheckpoint(node *checkpoints.BucketNode) {
-	// close this goroutine gracefully.
-	// init control
-	ctrl := <-s.ctrlCh
-	if ctrl {
-		return
-	}
+func (s *BucketIterator) produceChunkWithCheckpoint(node *checkpoints.BucketNode) {
 	var (
 		lowerValues, upperValues []string
 		latestCount              int64
@@ -167,7 +150,6 @@ func (s *BucketIterator) createProducerWithCheckpoint(node *checkpoints.BucketNo
 	if node == nil {
 		lowerValues = make([]string, len(indexColumns), len(indexColumns))
 	} else {
-
 		bounds := node.GetUpperBound()
 		columns := node.GetColumnName()
 		lowerValues = make([]string, 0, len(indexColumns))
@@ -221,13 +203,7 @@ func (s *BucketIterator) createProducerWithCheckpoint(node *checkpoints.BucketNo
 		latestCount = buckets[i].Count
 		lowerValues = upperValues
 		chunkID = chunk.InitChunks(chunks, chunkID, table.Collation, table.Range)
-		select {
-		case _ = <-s.ctrlCh:
-			return
-		case s.chunksCh <- chunks:
-
-		}
-
+		s.chunksCh <- chunks
 	}
 
 	// merge the rest keys into one chunk
@@ -238,21 +214,6 @@ func (s *BucketIterator) createProducerWithCheckpoint(node *checkpoints.BucketNo
 		}
 		chunks := []*chunk.Range{chunkRange}
 		chunkID = chunk.InitChunks(chunks, chunkID, table.Collation, table.Range)
-		select {
-		case _ = <-s.ctrlCh:
-			return
-		case s.chunksCh <- chunks:
-
-		}
+		s.chunksCh <- chunks
 	}
-
-	// finish split this table.
-	for {
-		select {
-		case _ = <-s.ctrlCh:
-			return
-		case s.chunksCh <- nil:
-		}
-	}
-
 }

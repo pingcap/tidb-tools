@@ -84,6 +84,11 @@ func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 }
 
 func (df *Diff) Close() {
+	// close sql channel
+	close(df.sqlCh)
+	// close checkpoint channel
+	df.cp.Close()
+
 	if df.fixSQLFile != nil {
 		df.fixSQLFile.Close()
 	}
@@ -117,9 +122,10 @@ func (df *Diff) Equal(ctx context.Context) error {
 	}
 	defer chunksIter.Close()
 
-	go df.writeSQLs(ctx)
 	go df.handleChunks(ctx)
+
 	go df.handleCheckpoints(ctx)
+	go df.writeSQLs(ctx)
 
 	for {
 		c, err := chunksIter.Next()
@@ -141,11 +147,8 @@ func (df *Diff) Equal(ctx context.Context) error {
 		}
 	}
 
-	// close sql channel
-	close(df.sqlCh)
-	// close checkpoint channel
-	df.cp.Close()
-
+	// release source
+	df.Close()
 	df.wg.Wait()
 	return nil
 }
@@ -218,9 +221,7 @@ func (df *Diff) handleChunks(ctx context.Context) {
 			return
 			// TODO: close worker gracefully
 		case c, ok := <-df.chunkCh:
-			// if chunkCh closed, NodeChan should close too and break the loop
 			if !ok {
-				close(df.cp.NodeChan)
 				return
 			}
 			pool.Apply(func() {
