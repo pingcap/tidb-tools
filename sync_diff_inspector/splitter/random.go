@@ -39,15 +39,12 @@ type RandomIterator struct {
 	dbConn *sql.DB
 }
 
-func NewRandomIterator(table *common.TableDiff, dbConn *sql.DB, cnt int64, chunkSize int, limits string, collation string) (*RandomIterator, error) {
-	return NewRandomIteratorWithCheckpoint(table, dbConn, cnt, chunkSize, limits, collation, nil)
+func NewRandomIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int) (*RandomIterator, error) {
+	return NewRandomIteratorWithCheckpoint(table, dbConn, chunkSize, nil)
 }
 
-func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, cnt int64, chunkSize int, limits string, collation string, node *checkpoints.RandomNode) (*RandomIterator, error) {
+func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, chunkSize int, node *checkpoints.RandomNode) (*RandomIterator, error) {
 	// get the chunk count by data count and chunk size
-
-	chunkCnt := (int(cnt) + chunkSize - 1) / chunkSize
-	log.Info("split range by random", zap.Int64("row count", cnt), zap.Int("split chunk num", chunkCnt))
 
 	var splitFieldArr []string
 	if len(table.Fields) != 0 {
@@ -64,19 +61,39 @@ func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, cn
 	}
 
 	chunkRange := chunk.NewChunkRange()
+	where := table.Range
 	if node != nil {
-		// TODO UpperBound sequence may not be the same as fields
+		bounds := node.GetUpperBound()
+		columns := node.GetColumnName()
 		for i := 0; i < len(fields); i++ {
-			chunkRange.Update(fields[i].Name.O, node.UpperBound[i], "", true, false)
+			for j := 0; j < len(bounds); i++ {
+				if fields[i].Name.O == columns[j] {
+					chunkRange.Update(fields[i].Name.O, bounds[j], "", true, false)
+				}
+			}
+
 		}
-		// TODO chunkCnt
-		//chunkRange.Update()
+		conditions, _ := chunkRange.ToString(table.Collation)
+		if len(where) > 0 {
+			where = fmt.Sprintf("((%s) AND %s)", conditions, where)
+		} else {
+			where = fmt.Sprintf("(%s)", conditions)
+		}
 	}
+
+	cnt, err := dbutil.GetRowCount(context.Background(), dbConn, table.Schema, table.Table, where, nil)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	chunkCnt := (int(cnt) + chunkSize - 1) / chunkSize
+	log.Info("split range by random", zap.Int64("row count", cnt), zap.Int("split chunk num", chunkCnt))
 
 	chunks, err := splitRangeByRandom(dbConn, chunkRange, chunkCnt, table.Schema, table.Table, fields, table.Range, table.Collation)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+
+	chunk.InitChunks(chunks, 0, table.Collation, table.Range)
 
 	return &RandomIterator{
 		table:     table,

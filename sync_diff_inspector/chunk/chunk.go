@@ -211,3 +211,19 @@ func (c *Range) copyAndUpdate(column, lower, upper string, updateLower, updateUp
 	newChunk.Update(column, lower, upper, updateLower, updateUpper)
 	return newChunk
 }
+
+func InitChunks(chunks []*Range, chunkBeginID int, collation, limits string) int {
+	if chunks == nil {
+		return chunkBeginID
+	}
+	for _, chunk := range chunks {
+		conditions, args := chunk.ToString(collation)
+		chunk.ID = chunkBeginID
+		chunkBeginID++
+		chunk.Where = fmt.Sprintf("((%s) AND %s)", conditions, limits)
+		chunk.Args = args
+		// TODO
+		//chunk.State =
+	}
+	return chunkBeginID
+}
