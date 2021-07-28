@@ -26,7 +26,9 @@ import (
 	//"github.com/pingcap/errors"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
+	"go.uber.org/zap"
 )
 
 const localFilePerm os.FileMode = 0o644
@@ -254,6 +256,12 @@ func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 		if err := WriteFile(checkpointFile, CheckpointData); err != nil {
 			return 0, err
 		}
+		log.Info("load checkpoint",
+			zap.Int("id", cur.GetID()),
+			zap.String("schema", cur.GetSchema()),
+			zap.String("table", cur.GetTable()),
+			zap.Reflect("type", cur.GetType()),
+			zap.String("state", cur.GetChunkState()))
 		return cur.GetID(), nil
 	}
 	return 0, nil

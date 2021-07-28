@@ -151,6 +151,7 @@ func (df *Diff) Equal(ctx context.Context) error {
 					log.Warn("fail to save the chunk")
 					// maybe we should panic, because SaveChunk method should not failed
 				}
+
 			case node, ok := <-df.cp.NodeChan:
 				if !ok {
 					break CHECKPOINT_LOOP
@@ -207,6 +208,12 @@ func (df *Diff) generateChunksIterator() (source.DBIterator, error) {
 			df.useCheckpoint = false
 		} else {
 			// this need not be synchronized, because at the moment, the is only one thread access the section
+			log.Info("load checkpoint",
+				zap.Int("id", node.GetID()),
+				zap.String("schema", node.GetSchema()),
+				zap.String("table", node.GetTable()),
+				zap.Reflect("type", node.GetType()),
+				zap.String("state", node.GetChunkState()))
 			df.cp.SetCurrentSavedID(node.GetID() + 1)
 		}
 	}
