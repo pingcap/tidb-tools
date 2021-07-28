@@ -59,7 +59,7 @@ func NewBucketIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, ch
 	}
 	go bs.createProducerWithCheckpoint(node)
 
-	if err := bs.init(); err != nil {
+	if err := bs.init(node); err != nil {
 		return nil, errors.Trace(err)
 	}
 
@@ -91,7 +91,7 @@ func (s *BucketIterator) Next() (*chunk.Range, error) {
 	return chunk, nil
 }
 
-func (s *BucketIterator) init() error {
+func (s *BucketIterator) init(node *checkpoints.BucketNode) error {
 	s.nextChunk = 0
 	buckets, err := dbutil.GetBucketsInfo(context.Background(), s.dbConn, s.table.Schema, s.table.Table, s.table.Info)
 	if err != nil {
@@ -102,6 +102,9 @@ func (s *BucketIterator) init() error {
 	indices := dbutil.FindAllIndex(s.table.Info)
 	for _, index := range indices {
 		if index == nil {
+			continue
+		}
+		if node != nil && node.IndexID != index.ID {
 			continue
 		}
 		bucket, ok := buckets[index.Name.O]
@@ -150,10 +153,21 @@ func (s *BucketIterator) createProducerWithCheckpoint(node *checkpoints.BucketNo
 	buckets := s.buckets
 	indexColumns := s.indexColumns
 	beginBucket := 0
+	chunkID := 0
 	if node == nil {
 		lowerValues = make([]string, len(indexColumns), len(indexColumns))
 	} else {
-		lowerValues = node.GetUpperBound()
+
+		bounds := node.GetUpperBound()
+		columns := node.GetColumnName()
+		lowerValues = make([]string, 0, len(indexColumns))
+		for _, index := range indexColumns {
+			for i := 0; i < len(bounds); i++ {
+				if index.Name.O == columns[i] {
+					lowerValues = append(lowerValues, bounds[i])
+				}
+			}
+		}
 		beginBucket = node.GetBucketID()
 	}
 	// TODO chunksize when checkpoint
@@ -196,6 +210,7 @@ func (s *BucketIterator) createProducerWithCheckpoint(node *checkpoints.BucketNo
 
 		latestCount = buckets[i].Count
 		lowerValues = upperValues
+		chunkID = chunk.InitChunks(chunks, chunkID, table.Collation, table.Range)
 		select {
 		case _ = <-s.ctrlCh:
 			return
@@ -211,10 +226,12 @@ func (s *BucketIterator) createProducerWithCheckpoint(node *checkpoints.BucketNo
 		for j, column := range indexColumns {
 			chunkRange.Update(column.Name.O, lowerValues[j], "", true, false)
 		}
+		chunks := []*chunk.Range{chunkRange}
+		chunkID = chunk.InitChunks(chunks, chunkID, table.Collation, table.Range)
 		select {
 		case _ = <-s.ctrlCh:
 			return
-		case s.chunksCh <- []*chunk.Range{chunkRange}:
+		case s.chunksCh <- chunks:
 
 		}
 	}
