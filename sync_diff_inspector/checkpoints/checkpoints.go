@@ -27,6 +27,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"go.uber.org/zap"
 )
@@ -258,8 +259,7 @@ func (cp *Checkpointer) SaveChunk(ctx context.Context) (int, error) {
 		}
 		log.Info("load checkpoint",
 			zap.Int("id", cur.GetID()),
-			zap.String("schema", cur.GetSchema()),
-			zap.String("table", cur.GetTable()),
+			zap.String("table", dbutil.TableName(cur.GetSchema(), cur.GetTable())),
 			zap.Reflect("type", cur.GetType()),
 			zap.String("state", cur.GetChunkState()))
 		return cur.GetID(), nil

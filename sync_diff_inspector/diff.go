@@ -210,8 +210,7 @@ func (df *Diff) generateChunksIterator() (source.DBIterator, error) {
 			// this need not be synchronized, because at the moment, the is only one thread access the section
 			log.Info("load checkpoint",
 				zap.Int("id", node.GetID()),
-				zap.String("schema", node.GetSchema()),
-				zap.String("table", node.GetTable()),
+				zap.String("table", dbutil.TableName(node.GetSchema(), node.GetTable())),
 				zap.Reflect("type", node.GetType()),
 				zap.String("state", node.GetChunkState()))
 			df.cp.SetCurrentSavedID(node.GetID() + 1)
