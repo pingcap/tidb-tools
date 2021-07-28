@@ -24,7 +24,6 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
@@ -137,8 +136,6 @@ func (s *TiDBChunksIterator) analyzeChunkSize(table *common.TableDiff) (int64, e
 func (s *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff, node checkpoints.Node) (splitter.Iterator, error) {
 	// 1_000, 2_000, 4_000, 8_000, 16_000, 32_000, 64_000
 	chunkSize := 1000
-	// TODO if useCheckpoint, need analyzeChunkSize?
-	cnt, _ := s.analyzeChunkSize(tableDiff)
 	bucket := false
 	switch node.(type) {
 	case *checkpoints.BucketNode:
@@ -165,13 +162,13 @@ func (s *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff, no
 
 	if node != nil {
 		// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
-		randIter, err := splitter.NewRandomIteratorWithCheckpoint(tableDiff, s.dbConn, cnt, s.chunkSize, tableDiff.Range, tableDiff.Collation, node.(*checkpoints.RandomNode))
+		randIter, err := splitter.NewRandomIteratorWithCheckpoint(tableDiff, s.dbConn, s.chunkSize, node.(*checkpoints.RandomNode))
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 		return randIter, nil
 	}
-	randIter, err := splitter.NewRandomIterator(tableDiff, s.dbConn, cnt, s.chunkSize, tableDiff.Range, tableDiff.Collation)
+	randIter, err := splitter.NewRandomIterator(tableDiff, s.dbConn, s.chunkSize)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -189,13 +186,8 @@ type TiDBSource struct {
 	dbConn     *sql.DB
 }
 
-func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, dbCfg *config.DBConfig) (Source, error) {
+func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, dbConn *sql.DB) (Source, error) {
 	// TODO build TiDB Source
-	dbConn, err := common.CreateDB(ctx, &dbCfg.DBConfig, nil, 4)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
 	ts := &TiDBSource{
 		tableDiffs: tableDiffs,
 		tableRows:  make([]*TableRows, 0, len(tableDiffs)),
