@@ -38,6 +38,7 @@ type TiDBChunksIterator struct {
 
 	chunkSize int
 	limit     int
+	from      SourceSide
 
 	dbConn *sql.DB
 
@@ -59,10 +60,11 @@ func (t *TiDBChunksIterator) Next() (*TableRange, error) {
 		return &TableRange{
 			ChunkRange: chunks,
 			TableIndex: t.getCurTableIndex(),
+			From:       t.from,
 		}, nil
 	}
 
-	err = t.nextTable()
+	err = t.nextTable(nil)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -76,6 +78,7 @@ func (t *TiDBChunksIterator) Next() (*TableRange, error) {
 	return &TableRange{
 		ChunkRange: chunks,
 		TableIndex: t.getCurTableIndex(),
+		From:       t.from,
 	}, nil
 }
 
@@ -89,14 +92,21 @@ func (t *TiDBChunksIterator) getCurTableIndex() int {
 
 // if error is nil and t.iter is not nil,
 // then nextTable is done successfully.
-func (t *TiDBChunksIterator) nextTable() error {
+func (t *TiDBChunksIterator) nextTable(node checkpoints.Node) error {
 	if t.nextTableIndex >= len(t.TableDiffs) {
 		t.iter = nil
 		return nil
 	}
+	if node != nil {
+		for i, tableDiff := range t.TableDiffs {
+			if tableDiff.Schema == node.GetSchema() && tableDiff.Table == node.GetTable() {
+				t.nextTableIndex = i + 1
+			}
+		}
+	}
 	curTable := t.TableDiffs[t.nextTableIndex]
 	t.nextTableIndex++
-	chunkIter, err := t.splitChunksForTable(curTable)
+	chunkIter, err := t.splitChunksForTable(curTable, node)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -124,43 +134,44 @@ func (s *TiDBChunksIterator) analyzeChunkSize(table *common.TableDiff) (int64, e
 
 }
 
-func (s *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff) (splitter.Iterator, error) {
+func (s *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff, node checkpoints.Node) (splitter.Iterator, error) {
 	// 1_000, 2_000, 4_000, 8_000, 16_000, 32_000, 64_000
 	chunkSize := 1000
 	// TODO if useCheckpoint, need analyzeChunkSize?
 	cnt, _ := s.analyzeChunkSize(tableDiff)
 	bucket := false
-	var node checkpoints.Node
-	if tableDiff.UseCheckpoint {
-		// TODO error handling
-		var err error
-		node, err = checkpoints.LoadChunks()
-		// TODO add warn log
-		log.Warn("the checkpoint load failed, diable checkpoint")
-		if err != nil {
-			tableDiff.UseCheckpoint = false
-		} else {
-			switch node.(type) {
-			case *checkpoints.BucketNode:
-				bucket = true
-			case *checkpoints.RandomNode:
-				bucket = false
-			}
-		}
+	switch node.(type) {
+	case *checkpoints.BucketNode:
+		bucket = true
+	case *checkpoints.RandomNode:
+		bucket = false
 	}
 	// TODO merge bucket function into useBucket()
-	if (!tableDiff.UseCheckpoint && s.useBucket(tableDiff)) || bucket {
-		bucketIter, err := splitter.NewBucketIteratorWithCheckpoint(tableDiff, s.dbConn, chunkSize, node.(*checkpoints.BucketNode))
+	if (node == nil && s.useBucket(tableDiff)) || bucket {
+		if node != nil {
+			bucketIter, err := splitter.NewBucketIteratorWithCheckpoint(tableDiff, s.dbConn, chunkSize, node.(*checkpoints.BucketNode))
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+			return bucketIter, nil
+		}
+		bucketIter, err := splitter.NewBucketIterator(tableDiff, s.dbConn, chunkSize)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-
 		return bucketIter, nil
 		// TODO fall back to random splitter
 	}
-	// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
-	randIter, err := splitter.NewRandomIteratorWithCheckpoint(tableDiff, s.dbConn, cnt, s.chunkSize, tableDiff.Range, tableDiff.Collation, node.(*checkpoints.RandomNode))
 
+	if node != nil {
+		// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
+		randIter, err := splitter.NewRandomIteratorWithCheckpoint(tableDiff, s.dbConn, cnt, s.chunkSize, tableDiff.Range, tableDiff.Collation, node.(*checkpoints.RandomNode))
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		return randIter, nil
+	}
+	randIter, err := splitter.NewRandomIterator(tableDiff, s.dbConn, cnt, s.chunkSize, tableDiff.Range, tableDiff.Collation)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -190,7 +201,6 @@ func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, dbCfg *c
 		tableRows:  make([]*TableRows, 0, len(tableDiffs)),
 		dbConn:     dbConn,
 	}
-
 	for _, table := range tableDiffs {
 		tableRowsQuery, tableOrderKeyCols := utils.GetTableRowsQueryFormat(table.Schema, table.Table, table.Info, table.Collation)
 		ts.tableRows = append(ts.tableRows, &TableRows{
@@ -199,11 +209,18 @@ func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, dbCfg *c
 		})
 
 	}
-
 	return ts, nil
 }
 
-func (s *TiDBSource) GenerateChunksIterator(chunkSize int) (DBIterator, error) {
+func (s *TiDBSource) Close() {
+	s.dbConn.Close()
+}
+
+func (s *TiDBSource) GetTable(i int) *common.TableDiff {
+	return s.tableDiffs[i]
+}
+
+func (s *TiDBSource) GenerateChunksIterator(chunkSize int, node checkpoints.Node, from SourceSide) (DBIterator, error) {
 	// TODO build Iterator with config.
 	dbIter := &TiDBChunksIterator{
 		TableDiffs:     s.tableDiffs,
@@ -211,8 +228,9 @@ func (s *TiDBSource) GenerateChunksIterator(chunkSize int) (DBIterator, error) {
 		chunkSize:      chunkSize,
 		limit:          0,
 		dbConn:         s.dbConn,
+		from:           from,
 	}
-	err := dbIter.nextTable()
+	err := dbIter.nextTable(node)
 	return dbIter, err
 }
 
