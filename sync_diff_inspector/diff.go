@@ -306,6 +306,7 @@ func (df *Diff) consume(ctx context.Context, tableChunk *source.TableRange) (boo
 			Inner: inner,
 			// TODO need BucketID
 			BucketID: 0,
+			IndexID:  tableChunk.ChunkRange.IndexID,
 		}
 		node = bucketNode
 	case chunk.Random:
