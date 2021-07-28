@@ -90,6 +90,12 @@ func (df *Diff) Close() {
 	if df.fixSQLFile != nil {
 		df.fixSQLFile.Close()
 	}
+	if df.upstream != nil {
+		df.upstream.Close()
+	}
+	if df.downstream != nil {
+		df.downstream.Close()
+	}
 }
 
 func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
@@ -199,6 +205,9 @@ func (df *Diff) generateChunksIterator() (source.DBIterator, error) {
 		if err != nil {
 			log.Warn("the checkpoint load process failed, diable checkpoint and start from begining")
 			df.useCheckpoint = false
+		} else {
+			// this need not be synchronized, because at the moment, the is only one thread access the section
+			df.cp.SetCurrentSavedID(node.GetID() + 1)
 		}
 	}
 	// if node != nil, gernerateChunksIterator from checkpoint

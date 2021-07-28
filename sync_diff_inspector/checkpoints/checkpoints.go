@@ -125,6 +125,11 @@ type Checkpointer struct {
 	NodeChan chan Node
 }
 
+// the method is unsynchronized, be cautious
+func (cp *Checkpointer) SetCurrentSavedID(id int) {
+	cp.hp.CurrentSavedID = id
+}
+
 func (cp *Checkpointer) Insert(node Node) {
 	cp.hp.mu.Lock()
 	heap.Push(cp.hp, node)
