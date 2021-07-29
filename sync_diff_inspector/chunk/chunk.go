@@ -54,16 +54,15 @@ type Bound struct {
 
 // Range represents chunk range
 type Range struct {
-	// TODO when Next() generate a chunk, assign the corresponding chunk type
-	Type   ChunkType
-	ID     int      `json:"id"`
-	Bounds []*Bound `json:"bounds"`
+	ID     int       `json:"id"`
+	Type   ChunkType `json:"type"`
+	Bounds []*Bound  `json:"bounds"`
 
 	Where string   `json:"where"`
 	Args  []string `json:"args"`
 
 	columnOffset map[string]int
-	BucketID     int
+	BucketID     int `json:"bucket-id"`
 }
 
 // NewChunkRange return a Range.
@@ -210,7 +209,7 @@ func (c *Range) copyAndUpdate(column, lower, upper string, updateLower, updateUp
 	return newChunk
 }
 
-func InitChunks(chunks []*Range, chunkBeginID, bucketID int, collation, limits string) int {
+func InitChunks(chunks []*Range, t ChunkType, chunkBeginID, bucketID int, collation, limits string) int {
 	if chunks == nil {
 		return chunkBeginID
 	}
@@ -221,6 +220,7 @@ func InitChunks(chunks []*Range, chunkBeginID, bucketID int, collation, limits s
 		chunk.Where = fmt.Sprintf("((%s) AND %s)", conditions, limits)
 		chunk.Args = args
 		chunk.BucketID = bucketID
+		chunk.Type = t
 	}
 	return chunkBeginID
 }

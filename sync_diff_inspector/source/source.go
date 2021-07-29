@@ -150,7 +150,7 @@ type Source interface {
 	GetRowsIterator(context.Context, *splitter.RangeInfo) (RowDataIterator, error)
 	GenerateReplaceDML(map[string]*dbutil.ColumnData, int) string
 	GenerateDeleteDML(map[string]*dbutil.ColumnData, int) string
-	GetTable(i int) *common.TableDiff
+	GetDB() *sql.DB
 	Close()
 }
 

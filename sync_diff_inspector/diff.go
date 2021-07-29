@@ -67,12 +67,9 @@ func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 		ignoreDataCheck:   cfg.IgnoreDataCheck,
 		ignoreStructCheck: cfg.IgnoreStructCheck,
 		ignoreStats:       cfg.IgnoreStats,
-		//TODO add fixSQLFile
-		//fixSQLFile: ???,
-		// TODO use a meaningfull chunk channel buffer
-		chunkCh: make(chan *splitter.RangeInfo, 1024),
-		sqlCh:   make(chan string, 1024),
-		cp:      new(checkpoints.Checkpoint),
+		chunkCh:           make(chan *splitter.RangeInfo, splitter.DefaultChannelBuffer),
+		sqlCh:             make(chan string, splitter.DefaultChannelBuffer),
+		cp:                new(checkpoints.Checkpoint),
 	}
 
 	if err = diff.init(ctx, cfg); err != nil {
@@ -114,7 +111,7 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 
 // Equal tests whether two database have same data and schema.
 func (df *Diff) Equal(ctx context.Context) error {
-	chunksIter, err := df.generateChunksIterator()
+	chunksIter, err := df.generateChunksIterator(ctx)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -151,14 +148,7 @@ func (df *Diff) Equal(ctx context.Context) error {
 	return nil
 }
 
-func (df *Diff) generateChunksIterator() (source.DBIterator, error) {
-	// TODO choose upstream or downstream to generate chunks
-	// if isTiDB(df.upstream) {
-	//		return df.upstream.GenerateChunksIterator()
-	// }
-	// if isTiDB(df.downstream) {
-	//		return df.downstream.GenerateChunksIterator()
-	//}
+func (df *Diff) generateChunksIterator(ctx context.Context) (source.DBIterator, error) {
 	var startRange *splitter.RangeInfo
 	if df.useCheckpoint {
 		node, err := df.cp.LoadChunk()
@@ -176,6 +166,15 @@ func (df *Diff) generateChunksIterator() (source.DBIterator, error) {
 			startRange = splitter.FromNode(node)
 		}
 	}
+
+	if ok, _ := dbutil.IsTiDB(ctx, df.upstream.GetDB()); ok {
+		return df.upstream.GenerateChunksIterator(startRange)
+	}
+	if ok, _ := dbutil.IsTiDB(ctx, df.downstream.GetDB()); ok {
+		return df.downstream.GenerateChunksIterator(startRange)
+	}
+
+	// if both side are not TiDB, choose the any one would be ok
 	return df.downstream.GenerateChunksIterator(startRange)
 }
 
@@ -344,7 +343,6 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) 
 			break
 		}
 
-		// TODO where is orderKeycols from?
 		eq, cmp, err := utils.CompareData(lastUpstreamData, lastDownstreamData, df.downstream.GetOrderKeyCols(rangeInfo.GetTableIndex()))
 		if err != nil {
 			return false, errors.Trace(err)

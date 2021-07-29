@@ -181,7 +181,6 @@ type TiDBSource struct {
 }
 
 func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, dbConn *sql.DB) (Source, error) {
-	// TODO build TiDB Source
 	ts := &TiDBSource{
 		tableDiffs: tableDiffs,
 		tableRows:  make([]*TableRows, 0, len(tableDiffs)),
@@ -206,8 +205,11 @@ func (s *TiDBSource) GetTable(i int) *common.TableDiff {
 	return s.tableDiffs[i]
 }
 
+func (s *TiDBSource) GetDB() *sql.DB {
+	return s.dbConn
+}
+
 func (s *TiDBSource) GenerateChunksIterator(r *splitter.RangeInfo) (DBIterator, error) {
-	// TODO build Iterator with config.
 	dbIter := &TiDBChunksIterator{
 		TableDiffs:     s.tableDiffs,
 		nextTableIndex: 0,
