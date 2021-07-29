@@ -31,19 +31,8 @@ type RangeInfo struct {
 	ID         int          `json:"id"`
 	ChunkRange *chunk.Range `json:"chunk-range"`
 	TableIndex int          `json:"table-index"`
-	// for checkpoint
-	Schema string `json:"schema"`
-	Table  string `json:"table"`
 	// for bucket checkpoint
 	IndexID int64 `json:"index-id"`
-}
-
-func (r *RangeInfo) GetSchema() string {
-	return r.Schema
-}
-
-func (r *RangeInfo) GetTable() string {
-	return r.Table
 }
 
 func (r *RangeInfo) GetChunk() *chunk.Range {
@@ -60,8 +49,6 @@ func (r *RangeInfo) ToNode() *checkpoints.Node {
 	return &checkpoints.Node{
 		ChunkRange: r.ChunkRange,
 		TableIndex: r.TableIndex,
-		Schema:     r.Schema,
-		Table:      r.Table,
 		BucketID:   r.ChunkRange.BucketID,
 		IndexID:    r.IndexID,
 	}
@@ -72,8 +59,6 @@ func FromNode(n *checkpoints.Node) *RangeInfo {
 		ID:         n.GetID(),
 		ChunkRange: n.ChunkRange,
 		TableIndex: n.TableIndex,
-		Schema:     n.Schema,
-		Table:      n.Table,
 		IndexID:    n.IndexID,
 	}
 }
