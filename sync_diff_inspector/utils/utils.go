@@ -212,6 +212,7 @@ func needQuotes(tp byte) bool {
 	return !(dbutil.IsNumberType(tp) || dbutil.IsFloatType(tp))
 }
 
+// CompareData compare two row datas.
 // equal = true: map1 = map2
 // equal = false:
 // 		1. cmp = 0: map1 and map2 have the same orderkeycolumns, but other columns are in difference.

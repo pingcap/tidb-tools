@@ -35,9 +35,8 @@ type TiDBChunksIterator struct {
 	TableDiffs     []*common.TableDiff
 	nextTableIndex int
 
-	chunkSize int
-	limit     int
-	from      SourceSide
+	limit int
+	from  SourceSide
 
 	dbConn *sql.DB
 
@@ -50,7 +49,6 @@ func (t *TiDBChunksIterator) Next() (*TableRange, error) {
 		return nil, nil
 	}
 	chunks, err := t.iter.Next()
-
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -117,13 +115,13 @@ func (t *TiDBChunksIterator) nextTable(node checkpoints.Node) error {
 }
 
 // useBucket returns the tableInstance that can use bucket info whether in source or target.
-func (s *TiDBChunksIterator) useBucket(diff *common.TableDiff) bool {
+func (t *TiDBChunksIterator) useBucket(diff *common.TableDiff) bool {
 	// TODO check whether we can use bucket for this table to split chunks.
 	return true
 }
 
-func (s *TiDBChunksIterator) analyzeChunkSize(table *common.TableDiff) (int64, error) {
-	return dbutil.GetRowCount(context.Background(), s.dbConn, table.Schema, table.Table, table.Range, nil)
+func (t *TiDBChunksIterator) analyzeChunkSize(table *common.TableDiff) (int64, error) {
+	return dbutil.GetRowCount(context.Background(), t.dbConn, table.Schema, table.Table, table.Range, nil)
 	/*
 		if err != nil {
 			return 0, errors.Trace(err)
@@ -133,45 +131,27 @@ func (s *TiDBChunksIterator) analyzeChunkSize(table *common.TableDiff) (int64, e
 
 }
 
-func (s *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff, node checkpoints.Node) (splitter.Iterator, error) {
+func (t *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff, node checkpoints.Node) (splitter.Iterator, error) {
 	// 1_000, 2_000, 4_000, 8_000, 16_000, 32_000, 64_000
 	chunkSize := 1000
-	bucket := false
-	switch node.(type) {
-	case *checkpoints.BucketNode:
-		bucket = true
-	case *checkpoints.RandomNode:
-		bucket = false
-	}
-	// TODO merge bucket function into useBucket()
-	if (node == nil && s.useBucket(tableDiff)) || bucket {
-		if node != nil {
-			bucketIter, err := splitter.NewBucketIteratorWithCheckpoint(tableDiff, s.dbConn, chunkSize, node.(*checkpoints.BucketNode))
-			if err != nil {
-				return nil, errors.Trace(err)
-			}
+
+	// if we decide to use bucket to split chunks
+	// we always use bucksIter even we load from checkpoint is not bucketNode
+	if t.useBucket(tableDiff) {
+		bucketIter, err := splitter.NewBucketIteratorWithCheckpoint(tableDiff, t.dbConn, chunkSize, node)
+		if err == nil {
 			return bucketIter, nil
 		}
-		bucketIter, err := splitter.NewBucketIterator(tableDiff, s.dbConn, chunkSize)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		return bucketIter, nil
-		// TODO fall back to random splitter
+		log.Warn("build bucketIter failed", zap.Error(err))
+		// fall back to random splitter
 	}
 
-	if node != nil {
-		// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
-		randIter, err := splitter.NewRandomIteratorWithCheckpoint(tableDiff, s.dbConn, s.chunkSize, node.(*checkpoints.RandomNode))
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		return randIter, nil
-	}
-	randIter, err := splitter.NewRandomIterator(tableDiff, s.dbConn, s.chunkSize)
+	// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
+	randIter, err := splitter.NewRandomIteratorWithCheckpoint(tableDiff, t.dbConn, chunkSize, node)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+
 	return randIter, nil
 }
 
@@ -212,12 +192,11 @@ func (s *TiDBSource) GetTable(i int) *common.TableDiff {
 	return s.tableDiffs[i]
 }
 
-func (s *TiDBSource) GenerateChunksIterator(chunkSize int, node checkpoints.Node, from SourceSide) (DBIterator, error) {
+func (s *TiDBSource) GenerateChunksIterator(node checkpoints.Node, from SourceSide) (DBIterator, error) {
 	// TODO build Iterator with config.
 	dbIter := &TiDBChunksIterator{
 		TableDiffs:     s.tableDiffs,
 		nextTableIndex: 0,
-		chunkSize:      chunkSize,
 		limit:          0,
 		dbConn:         s.dbConn,
 		from:           from,
@@ -257,7 +236,6 @@ type TiDBRowsIterator struct {
 }
 
 func (s *TiDBSource) GetRowsIterator(ctx context.Context, tableChunk *TableRange) (RowDataIterator, error) {
-	// TODO get rowsdataIter with sql
 	args := utils.StringsToInterfaces(tableChunk.ChunkRange.Args)
 
 	query := fmt.Sprintf(s.tableRows[tableChunk.TableIndex].tableRowsQuery, tableChunk.ChunkRange.Where)
