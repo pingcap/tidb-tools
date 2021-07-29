@@ -70,6 +70,7 @@ type Diff struct {
 	ignoreStructCheck bool
 	ignoreStats       bool
 	wg                sync.WaitGroup
+	fromUpstream      bool
 
 	FixSQLDir     string
 	CheckpointDir string
