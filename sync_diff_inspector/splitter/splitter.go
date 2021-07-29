@@ -40,7 +40,9 @@ func (r *RangeInfo) GetChunk() *chunk.Range {
 }
 
 // GetTableIndex return the index of table diffs.
-// TODO check config before use checkpoint
+// IMPORTANT!!!
+// TODO We need to keep the tables order during checkpoint.
+// TODO So we should have to save the config info to checkpoint file too.
 func (r *RangeInfo) GetTableIndex() int {
 	return r.TableIndex
 }

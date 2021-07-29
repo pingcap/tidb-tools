@@ -31,6 +31,7 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 		go func(i_ int) {
 			node := &Node{
 				BucketID: i_,
+				State: SuccessState,
 			}
 			if rand.Intn(4) == 0 {
 				time.Sleep(time.Duration(rand.Intn(3)) * time.Second)
