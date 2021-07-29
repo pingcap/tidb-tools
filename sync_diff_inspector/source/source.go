@@ -152,11 +152,12 @@ type ChecksumInfo struct {
 type TableRange struct {
 	ChunkRange *chunk.Range
 	TableIndex int
-	From       SourceSide
+	Schema     string
+	Table      string
 }
 
 type Source interface {
-	GenerateChunksIterator(node checkpoints.Node, from SourceSide) (DBIterator, error)
+	GenerateChunksIterator(node *checkpoints.Node, from SourceSide) (DBIterator, error)
 	GetCrc32(context.Context, *TableRange, chan *ChecksumInfo)
 	GetOrderKeyCols(int) []*model.ColumnInfo
 	GetRowsIterator(context.Context, *TableRange) (RowDataIterator, error)

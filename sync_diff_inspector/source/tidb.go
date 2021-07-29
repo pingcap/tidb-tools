@@ -54,13 +54,15 @@ func (t *TiDBChunksIterator) Next() (*TableRange, error) {
 	}
 
 	if chunks != nil {
+		schema := t.TableDiffs[t.getCurTableIndex()].Schema
+		table := t.TableDiffs[t.getCurTableIndex()].Table
 		return &TableRange{
 			ChunkRange: chunks,
 			TableIndex: t.getCurTableIndex(),
-			From:       t.from,
+			Schema:     schema,
+			Table:      table,
 		}, nil
 	}
-
 	err = t.nextTable(nil)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -72,10 +74,13 @@ func (t *TiDBChunksIterator) Next() (*TableRange, error) {
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+	schema := t.TableDiffs[t.getCurTableIndex()].Schema
+	table := t.TableDiffs[t.getCurTableIndex()].Table
 	return &TableRange{
 		ChunkRange: chunks,
 		TableIndex: t.getCurTableIndex(),
-		From:       t.from,
+		Schema:     schema,
+		Table:      table,
 	}, nil
 }
 
@@ -89,7 +94,7 @@ func (t *TiDBChunksIterator) getCurTableIndex() int {
 
 // if error is nil and t.iter is not nil,
 // then nextTable is done successfully.
-func (t *TiDBChunksIterator) nextTable(node checkpoints.Node) error {
+func (t *TiDBChunksIterator) nextTable(node *checkpoints.Node) error {
 	if t.nextTableIndex >= len(t.TableDiffs) {
 		t.iter = nil
 		return nil
@@ -131,7 +136,7 @@ func (t *TiDBChunksIterator) analyzeChunkSize(table *common.TableDiff) (int64, e
 
 }
 
-func (t *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff, node checkpoints.Node) (splitter.Iterator, error) {
+func (t *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff, node *checkpoints.Node) (splitter.Iterator, error) {
 	// 1_000, 2_000, 4_000, 8_000, 16_000, 32_000, 64_000
 	chunkSize := 1000
 
@@ -192,7 +197,7 @@ func (s *TiDBSource) GetTable(i int) *common.TableDiff {
 	return s.tableDiffs[i]
 }
 
-func (s *TiDBSource) GenerateChunksIterator(node checkpoints.Node, from SourceSide) (DBIterator, error) {
+func (s *TiDBSource) GenerateChunksIterator(node *checkpoints.Node, from SourceSide) (DBIterator, error) {
 	// TODO build Iterator with config.
 	dbIter := &TiDBChunksIterator{
 		TableDiffs:     s.tableDiffs,

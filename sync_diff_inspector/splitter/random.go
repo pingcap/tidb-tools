@@ -43,7 +43,7 @@ func NewRandomIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int) (
 	return NewRandomIteratorWithCheckpoint(table, dbConn, chunkSize, nil)
 }
 
-func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, chunkSize int, node checkpoints.Node) (*RandomIterator, error) {
+func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, chunkSize int, node *checkpoints.Node) (*RandomIterator, error) {
 	// get the chunk count by data count and chunk size
 
 	var splitFieldArr []string
@@ -63,22 +63,25 @@ func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, ch
 	chunkRange := chunk.NewChunkRange()
 	where := table.Range
 	if node != nil {
-		if n, ok := node.(*checkpoints.RandomNode); ok {
-			bounds := n.GetUpperBound()
-			columns := n.GetColumnName()
-			for i := 0; i < len(fields); i++ {
-				for j := 0; j < len(bounds); i++ {
-					if fields[i].Name.O == columns[j] {
-						chunkRange.Update(fields[i].Name.O, bounds[j], "", true, false)
-					}
+		c := node.GetChunk()
+		uppers := make([]string, 1, len(c.Bounds))
+		columns := make([]string, 0, len(c.Bounds))
+		for _, bound := range c.Bounds {
+			uppers = append(uppers, bound.Upper)
+			columns = append(columns, bound.Column)
+		}
+		for i := 0; i < len(fields); i++ {
+			for j := 0; j < len(uppers); i++ {
+				if fields[i].Name.O == columns[j] {
+					chunkRange.Update(fields[i].Name.O, uppers[j], "", true, false)
 				}
 			}
-			conditions, _ := chunkRange.ToString(table.Collation)
-			if len(where) > 0 {
-				where = fmt.Sprintf("((%s) AND %s)", conditions, where)
-			} else {
-				where = fmt.Sprintf("(%s)", conditions)
-			}
+		}
+		conditions, _ := chunkRange.ToString(table.Collation)
+		if len(where) > 0 {
+			where = fmt.Sprintf("((%s) AND %s)", conditions, where)
+		} else {
+			where = fmt.Sprintf("(%s)", conditions)
 		}
 	}
 

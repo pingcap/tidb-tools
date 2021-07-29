@@ -65,7 +65,9 @@ type Range struct {
 	State string `json:"state"`
 
 	columnOffset map[string]int
-	IndexID      int64
+
+	BucketID int64
+	IndexID  int64
 }
 
 // NewChunkRange return a Range.

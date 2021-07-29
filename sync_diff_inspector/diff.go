@@ -24,7 +24,6 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
@@ -86,8 +85,6 @@ func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 func (df *Diff) Close() {
 	// close sql channel
 	close(df.sqlCh)
-	// close checkpoint channel
-	df.cp.Close()
 
 	if df.fixSQLFile != nil {
 		df.fixSQLFile.Close()
@@ -161,7 +158,7 @@ func (df *Diff) generateChunksIterator() (source.DBIterator, error) {
 	// if isTiDB(df.downstream) {
 	//		return df.downstream.GenerateChunksIterator()
 	//}
-	var node checkpoints.Node
+	var node *checkpoints.Node
 	var err error
 	if df.useCheckpoint {
 		node, err = df.cp.LoadChunk()
@@ -172,8 +169,7 @@ func (df *Diff) generateChunksIterator() (source.DBIterator, error) {
 			// this need not be synchronized, because at the moment, the is only one thread access the section
 			log.Info("load checkpoint",
 				zap.Int("id", node.GetID()),
-				zap.String("table", dbutil.TableName(node.GetSchema(), node.GetTable())),
-				zap.Reflect("type", node.GetType()),
+				zap.Reflect("chunk", node.GetChunk()),
 				zap.String("state", node.GetChunkState()))
 			df.cp.SetCurrentSavedID(node.GetID() + 1)
 		}
@@ -199,12 +195,6 @@ func (df *Diff) handleCheckpoints(ctx context.Context) {
 				log.Warn("fail to save the chunk", zap.Error(err))
 				// maybe we should panic, because SaveChunk method should not failed.
 			}
-		case node, ok := <-df.cp.NodeChan:
-			if !ok {
-				log.Info("checkpoint channel closed")
-				return
-			}
-			df.cp.Insert(node)
 		}
 	}
 }
@@ -245,7 +235,6 @@ func (df *Diff) consume(ctx context.Context, tableChunk *source.TableRange) (boo
 		return false, err
 	}
 
-	var node checkpoints.Node
 	var state string
 	if !isEqual {
 		state = checkpoints.FailedState
@@ -257,45 +246,15 @@ func (df *Diff) consume(ctx context.Context, tableChunk *source.TableRange) (boo
 		// update chunk success state in summary
 		state = checkpoints.SuccessState
 	}
-	var from source.Source
-	if tableChunk.From == source.Upstream {
-		from = df.upstream
-	} else {
-		from = df.downstream
-	}
-	table := from.GetTable(tableChunk.TableIndex)
-	uppers := make([]string, 0, len(tableChunk.ChunkRange.Bounds))
-	columnName := make([]string, 0, len(tableChunk.ChunkRange.Bounds))
-	for _, bound := range tableChunk.ChunkRange.Bounds {
-		uppers = append(uppers, bound.Upper)
-		columnName = append(columnName, bound.Column)
-	}
-	inner := checkpoints.Inner{
-		Type: tableChunk.ChunkRange.Type,
-		ID:   tableChunk.ChunkRange.ID,
-		Schema: table.Schema,
-		Table: table.Table,
-		UpperBound: uppers,
-		ColumnName: columnName,
+
+	inner := &checkpoints.Node{
+		ID:         tableChunk.ChunkRange.ID,
+		Chunk:      tableChunk.ChunkRange,
 		ChunkState: state,
+		Schema:     tableChunk.Schema,
+		Table:      tableChunk.Table,
 	}
-	switch tableChunk.ChunkRange.Type {
-	case chunk.Bucket:
-		bucketNode := &checkpoints.BucketNode{
-			Inner: inner,
-			// TODO need BucketID
-			BucketID: 0,
-			IndexID:  tableChunk.ChunkRange.IndexID,
-		}
-		node = bucketNode
-	case chunk.Random:
-		randomNode := &checkpoints.RandomNode{
-			Inner: inner,
-			// TODO need random value
-		}
-		node = randomNode
-	}
-	df.cp.NodeChan <- node
+	df.cp.Insert(inner)
 	return isEqual, nil
 }
 
