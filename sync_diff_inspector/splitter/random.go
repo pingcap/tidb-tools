@@ -23,7 +23,6 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
@@ -43,7 +42,7 @@ func NewRandomIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int) (
 	return NewRandomIteratorWithCheckpoint(table, dbConn, chunkSize, nil)
 }
 
-func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, chunkSize int, node *checkpoints.Node) (*RandomIterator, error) {
+func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, chunkSize int, startRange *RangeInfo) (*RandomIterator, error) {
 	// get the chunk count by data count and chunk size
 
 	var splitFieldArr []string
@@ -62,8 +61,8 @@ func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, ch
 
 	chunkRange := chunk.NewChunkRange()
 	where := table.Range
-	if node != nil {
-		c := node.GetChunk()
+	if startRange != nil {
+		c := startRange.GetChunk()
 		uppers := make([]string, 1, len(c.Bounds))
 		columns := make([]string, 0, len(c.Bounds))
 		for _, bound := range c.Bounds {

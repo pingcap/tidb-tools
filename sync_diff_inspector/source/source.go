@@ -24,21 +24,16 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"github.com/pingcap/tidb/types"
 	"go.uber.org/zap"
 )
 
 type DMLType int32
-type SourceSide bool
 
-const (
-	Upstream   SourceSide = true
-	Downstream            = false
-)
 const (
 	Insert DMLType = iota + 1
 	Delete
@@ -149,10 +144,10 @@ type ChecksumInfo struct {
 }
 
 type Source interface {
-	GenerateChunksIterator(node *checkpoints.Node) (DBIterator, error)
-	GetCrc32(context.Context, *checkpoints.Node, chan *ChecksumInfo)
+	GenerateChunksIterator(*splitter.RangeInfo) (DBIterator, error)
+	GetCrc32(context.Context, *splitter.RangeInfo, chan *ChecksumInfo)
 	GetOrderKeyCols(int) []*model.ColumnInfo
-	GetRowsIterator(context.Context, *checkpoints.Node) (RowDataIterator, error)
+	GetRowsIterator(context.Context, *splitter.RangeInfo) (RowDataIterator, error)
 	GenerateReplaceDML(map[string]*dbutil.ColumnData, int) string
 	GenerateDeleteDML(map[string]*dbutil.ColumnData, int) string
 	GetTable(i int) *common.TableDiff
@@ -454,6 +449,6 @@ func initTables(ctx context.Context, cfg *config.Config) (connDBs map[string]*sq
 // DBIterator generate next chunk for the whole tables lazily.
 type DBIterator interface {
 	// Next seeks the next chunk, return nil if seeks to end.
-	Next() (*checkpoints.Node, error)
+	Next() (*splitter.RangeInfo, error)
 	Close()
 }

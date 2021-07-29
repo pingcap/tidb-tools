@@ -21,7 +21,6 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
@@ -46,7 +45,7 @@ func NewBucketIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int) (
 	return NewBucketIteratorWithCheckpoint(table, dbConn, chunkSize, nil)
 }
 
-func NewBucketIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, chunkSize int, node *checkpoints.Node) (*BucketIterator, error) {
+func NewBucketIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, chunkSize int, startRange *RangeInfo) (*BucketIterator, error) {
 	bs := &BucketIterator{
 		table:     table,
 		chunkSize: int64(chunkSize),
@@ -55,10 +54,10 @@ func NewBucketIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, ch
 		dbConn:    dbConn,
 	}
 
-	if err := bs.init(node); err != nil {
+	if err := bs.init(startRange); err != nil {
 		return nil, errors.Trace(err)
 	}
-	go bs.produceChunkWithCheckpoint(node)
+	go bs.produceChunkWithCheckpoint(startRange)
 
 	return bs, nil
 }
@@ -89,7 +88,7 @@ func (s *BucketIterator) Next() (*chunk.Range, error) {
 	return c, nil
 }
 
-func (s *BucketIterator) init(node *checkpoints.Node) error {
+func (s *BucketIterator) init(startRange *RangeInfo) error {
 	s.nextChunk = 0
 	buckets, err := dbutil.GetBucketsInfo(context.Background(), s.dbConn, s.table.Schema, s.table.Table, s.table.Info)
 	if err != nil {
@@ -102,7 +101,7 @@ func (s *BucketIterator) init(node *checkpoints.Node) error {
 		if index == nil {
 			continue
 		}
-		if node != nil && node.IndexID != index.ID {
+		if startRange != nil && startRange.IndexID != index.ID {
 			continue
 		}
 		bucket, ok := buckets[index.Name.O]
@@ -132,7 +131,7 @@ func (s *BucketIterator) init(node *checkpoints.Node) error {
 func (s *BucketIterator) Close() {
 }
 
-func (s *BucketIterator) produceChunkWithCheckpoint(node *checkpoints.Node) {
+func (s *BucketIterator) produceChunkWithCheckpoint(startRange *RangeInfo) {
 	var (
 		lowerValues, upperValues []string
 		latestCount              int64
@@ -144,10 +143,10 @@ func (s *BucketIterator) produceChunkWithCheckpoint(node *checkpoints.Node) {
 	indexColumns := s.indexColumns
 	chunkID := 0
 	beginBucket := 0
-	if node == nil {
+	if startRange == nil {
 		lowerValues = make([]string, len(indexColumns), len(indexColumns))
 	} else {
-		c := node.GetChunk()
+		c := startRange.GetChunk()
 		uppers := make([]string, 0, len(c.Bounds))
 		columns := make([]string, 0, len(c.Bounds))
 		for _, bound := range c.Bounds {
