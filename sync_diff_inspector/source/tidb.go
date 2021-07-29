@@ -36,31 +36,35 @@ type TiDBChunksIterator struct {
 	nextTableIndex int
 
 	limit int
-	from  SourceSide
 
 	dbConn *sql.DB
 
 	iter splitter.Iterator
 }
 
-func (t *TiDBChunksIterator) Next() (*TableRange, error) {
+func (t *TiDBChunksIterator) Next() (*checkpoints.Node, error) {
 	// TODO: creates different tables chunks in parallel
 	if t.iter == nil {
 		return nil, nil
 	}
-	chunks, err := t.iter.Next()
+	chunk, err := t.iter.Next()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	if chunks != nil {
-		return &TableRange{
-			ChunkRange: chunks,
-			TableIndex: t.getCurTableIndex(),
-			From:       t.from,
+	if chunk != nil {
+		curIndex := t.getCurTableIndex()
+		schema := t.TableDiffs[curIndex].Schema
+		table := t.TableDiffs[curIndex].Table
+		return &checkpoints.Node{
+			ChunkRange: chunk,
+			TableIndex: curIndex,
+			Schema:     schema,
+			Table:      table,
+			BucketID:   chunk.BucketID,
+			IndexID:    t.getCurTableIndexID(),
 		}, nil
 	}
-
 	err = t.nextTable(nil)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -68,14 +72,20 @@ func (t *TiDBChunksIterator) Next() (*TableRange, error) {
 	if t.iter == nil {
 		return nil, nil
 	}
-	chunks, err = t.iter.Next()
+	chunk, err = t.iter.Next()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	return &TableRange{
-		ChunkRange: chunks,
-		TableIndex: t.getCurTableIndex(),
-		From:       t.from,
+	curIndex := t.getCurTableIndex()
+	schema := t.TableDiffs[curIndex].Schema
+	table := t.TableDiffs[curIndex].Table
+	return &checkpoints.Node{
+		ChunkRange: chunk,
+		TableIndex: curIndex,
+		Schema:     schema,
+		Table:      table,
+		BucketID:   chunk.BucketID,
+		IndexID:    t.getCurTableIndexID(),
 	}, nil
 }
 
@@ -87,9 +97,16 @@ func (t *TiDBChunksIterator) getCurTableIndex() int {
 	return t.nextTableIndex - 1
 }
 
+func (t *TiDBChunksIterator) getCurTableIndexID() int64 {
+	if bt, ok := t.iter.(*splitter.BucketIterator); ok {
+		return bt.GetIndexID()
+	}
+	return 0
+}
+
 // if error is nil and t.iter is not nil,
 // then nextTable is done successfully.
-func (t *TiDBChunksIterator) nextTable(node checkpoints.Node) error {
+func (t *TiDBChunksIterator) nextTable(node *checkpoints.Node) error {
 	if t.nextTableIndex >= len(t.TableDiffs) {
 		t.iter = nil
 		return nil
@@ -131,7 +148,7 @@ func (t *TiDBChunksIterator) analyzeChunkSize(table *common.TableDiff) (int64, e
 
 }
 
-func (t *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff, node checkpoints.Node) (splitter.Iterator, error) {
+func (t *TiDBChunksIterator) splitChunksForTable(tableDiff *common.TableDiff, node *checkpoints.Node) (splitter.Iterator, error) {
 	// 1_000, 2_000, 4_000, 8_000, 16_000, 32_000, 64_000
 	chunkSize := 1000
 
@@ -192,20 +209,19 @@ func (s *TiDBSource) GetTable(i int) *common.TableDiff {
 	return s.tableDiffs[i]
 }
 
-func (s *TiDBSource) GenerateChunksIterator(node checkpoints.Node, from SourceSide) (DBIterator, error) {
+func (s *TiDBSource) GenerateChunksIterator(node *checkpoints.Node) (DBIterator, error) {
 	// TODO build Iterator with config.
 	dbIter := &TiDBChunksIterator{
 		TableDiffs:     s.tableDiffs,
 		nextTableIndex: 0,
 		limit:          0,
 		dbConn:         s.dbConn,
-		from:           from,
 	}
 	err := dbIter.nextTable(node)
 	return dbIter, err
 }
 
-func (s *TiDBSource) GetCrc32(ctx context.Context, tableChunk *TableRange, checksumInfoCh chan *ChecksumInfo) {
+func (s *TiDBSource) GetCrc32(ctx context.Context, tableChunk *checkpoints.Node, checksumInfoCh chan *ChecksumInfo) {
 	// TODO get crc32 with sql
 	beginTime := time.Now()
 	table := s.tableDiffs[tableChunk.TableIndex]
@@ -235,7 +251,7 @@ type TiDBRowsIterator struct {
 	rows *sql.Rows
 }
 
-func (s *TiDBSource) GetRowsIterator(ctx context.Context, tableChunk *TableRange) (RowDataIterator, error) {
+func (s *TiDBSource) GetRowsIterator(ctx context.Context, tableChunk *checkpoints.Node) (RowDataIterator, error) {
 	args := utils.StringsToInterfaces(tableChunk.ChunkRange.Args)
 
 	query := fmt.Sprintf(s.tableRows[tableChunk.TableIndex].tableRowsQuery, tableChunk.ChunkRange.Where)
