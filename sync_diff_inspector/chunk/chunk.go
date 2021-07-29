@@ -224,8 +224,6 @@ func InitChunks(chunks []*Range, chunkBeginID int, collation, limits string) int
 		chunkBeginID++
 		chunk.Where = fmt.Sprintf("((%s) AND %s)", conditions, limits)
 		chunk.Args = args
-		// TODO
-		//chunk.State =
 	}
 	return chunkBeginID
 }

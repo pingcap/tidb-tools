@@ -3,7 +3,6 @@ package checkpoints
 import (
 	"context"
 	"fmt"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"math/rand"
 	"sync"
 	"testing"
@@ -31,13 +30,13 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 		wg.Add(1)
 		go func(i_ int) {
 			node := &Node{
-				ID:     i_,
-				Schema: "test",
-				Table:  "test",
-				Chunk: &chunk.Range{
-					BucketID: int64(i_),
+				ID: i_,
+				TableRange: &TableRange{
+					BucketID: i_,
+					Schema:   "test",
+					Table:    "test",
 				},
-				ChunkState: "success",
+				RangeState: "success",
 			}
 			if rand.Intn(4) == 0 {
 				time.Sleep(time.Duration(rand.Intn(3)) * time.Second)
@@ -56,5 +55,5 @@ func (cp *testCheckpointSuit) TestLoadChunk(c *C) {
 	checker := new(Checkpoint)
 	checker.Init()
 	node, _ := checker.LoadChunk()
-	c.Assert(node.GetChunk().BucketID, Equals, 9999)
+	c.Assert(node.GetTableRange().BucketID, Equals, 9999)
 }

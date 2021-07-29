@@ -1,1 +1,0 @@
-{"chunk-id":9999,"chunk":{"Type":0,"id":0,"bounds":null,"where":"","args":null,"state":"","BucketID":9999,"IndexID":0},"chunk-state":"success","schema":"test","table":"test"}

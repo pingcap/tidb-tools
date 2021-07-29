@@ -38,6 +38,7 @@ type BucketIterator struct {
 	chunksCh     chan []*chunk.Range
 	errCh        chan error
 	indexID      int64
+	beginBucket  int
 
 	dbConn *sql.DB
 }
@@ -61,6 +62,14 @@ func NewBucketIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, ch
 	go bs.produceChunkWithCheckpoint(node)
 
 	return bs, nil
+}
+
+func (s *BucketIterator) GetBucketID() int {
+	return s.beginBucket
+}
+
+func (s *BucketIterator) GetIndexID() int64 {
+	return s.indexID
 }
 
 func (s *BucketIterator) Next() (*chunk.Range, error) {
@@ -99,7 +108,7 @@ func (s *BucketIterator) init(node *checkpoints.Node) error {
 		if index == nil {
 			continue
 		}
-		if node != nil && node.GetChunk().IndexID != index.ID {
+		if node != nil && node.GetTableRange().IndexID != index.ID {
 			continue
 		}
 		bucket, ok := buckets[index.Name.O]
@@ -139,12 +148,12 @@ func (s *BucketIterator) produceChunkWithCheckpoint(node *checkpoints.Node) {
 	table := s.table
 	buckets := s.buckets
 	indexColumns := s.indexColumns
-	beginBucket := 0
 	chunkID := 0
+	s.beginBucket = 0
 	if node == nil {
 		lowerValues = make([]string, len(indexColumns), len(indexColumns))
 	} else {
-		c := node.GetChunk()
+		c := node.GetTableRange().ChunkRange
 		uppers := make([]string, 0, len(c.Bounds))
 		columns := make([]string, 0, len(c.Bounds))
 		for _, bound := range c.Bounds {
@@ -159,10 +168,10 @@ func (s *BucketIterator) produceChunkWithCheckpoint(node *checkpoints.Node) {
 				}
 			}
 		}
-		beginBucket = int(c.BucketID)
+		s.beginBucket = int(c.BucketID)
 	}
 	// TODO chunksize when checkpoint
-	for i := beginBucket; i < len(buckets); i++ {
+	for i := s.beginBucket; i < len(buckets); i++ {
 		count := buckets[i].Count - latestCount
 		if count < s.chunkSize {
 			// merge more buckets into one chunk

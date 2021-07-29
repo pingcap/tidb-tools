@@ -25,7 +25,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
@@ -149,18 +148,11 @@ type ChecksumInfo struct {
 	Cost     time.Duration
 }
 
-type TableRange struct {
-	ChunkRange *chunk.Range
-	TableIndex int
-	Schema     string
-	Table      string
-}
-
 type Source interface {
 	GenerateChunksIterator(node *checkpoints.Node) (DBIterator, error)
-	GetCrc32(context.Context, *TableRange, chan *ChecksumInfo)
+	GetCrc32(context.Context, *checkpoints.TableRange, chan *ChecksumInfo)
 	GetOrderKeyCols(int) []*model.ColumnInfo
-	GetRowsIterator(context.Context, *TableRange) (RowDataIterator, error)
+	GetRowsIterator(context.Context, *checkpoints.TableRange) (RowDataIterator, error)
 	GenerateReplaceDML(map[string]*dbutil.ColumnData, int) string
 	GenerateDeleteDML(map[string]*dbutil.ColumnData, int) string
 	GetTable(i int) *common.TableDiff
@@ -462,6 +454,6 @@ func initTables(ctx context.Context, cfg *config.Config) (connDBs map[string]*sq
 // DBIterator generate next chunk for the whole tables lazily.
 type DBIterator interface {
 	// Next seeks the next chunk, return nil if seeks to end.
-	Next() (*TableRange, error)
+	Next() (*checkpoints.TableRange, error)
 	Close()
 }

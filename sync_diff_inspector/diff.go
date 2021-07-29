@@ -49,7 +49,7 @@ type Diff struct {
 	fixSQLFile        *os.File
 	wg                sync.WaitGroup
 
-	chunkCh chan *source.TableRange
+	chunkCh chan *checkpoints.TableRange
 	sqlCh   chan string
 	cp      *checkpoints.Checkpoint
 }
@@ -69,7 +69,7 @@ func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 		//TODO add fixSQLFile
 		//fixSQLFile: ???,
 		// TODO use a meaningfull chunk channel buffer
-		chunkCh: make(chan *source.TableRange, 1024),
+		chunkCh: make(chan *checkpoints.TableRange, 1024),
 		sqlCh:   make(chan string, 1024),
 		cp:      new(checkpoints.Checkpoint),
 	}
@@ -169,14 +169,14 @@ func (df *Diff) generateChunksIterator() (source.DBIterator, error) {
 			// this need not be synchronized, because at the moment, the is only one thread access the section
 			log.Info("load checkpoint",
 				zap.Int("id", node.GetID()),
-				zap.Reflect("chunk", node.GetChunk()),
-				zap.String("state", node.GetChunkState()))
+				zap.Reflect("chunk", node.GetTableRange()),
+				zap.String("state", node.GetRangeState()))
 			df.cp.SetCurrentSavedID(node.GetID() + 1)
 		}
 	}
 	// if node != nil, generateChunksIterator from checkpoint
 	// else generateChunkIterator from beginning
-	return df.downstream.GenerateChunksIterator(node, source.Downstream)
+	return df.downstream.GenerateChunksIterator(node)
 }
 
 func (df *Diff) handleCheckpoints(ctx context.Context) {
@@ -228,7 +228,7 @@ func (df *Diff) handleChunks(ctx context.Context) {
 	}
 }
 
-func (df *Diff) consume(ctx context.Context, tableChunk *source.TableRange) (bool, error) {
+func (df *Diff) consume(ctx context.Context, tableChunk *checkpoints.TableRange) (bool, error) {
 	isEqual, err := df.compareChecksum(ctx, tableChunk)
 	if err != nil {
 		// TODO retry or log this chunk's error to checkpoint.
@@ -247,18 +247,15 @@ func (df *Diff) consume(ctx context.Context, tableChunk *source.TableRange) (boo
 		state = checkpoints.SuccessState
 	}
 
-	inner := &checkpoints.Node{
+	df.cp.Insert(&checkpoints.Node{
 		ID:         tableChunk.ChunkRange.ID,
-		Chunk:      tableChunk.ChunkRange,
-		ChunkState: state,
-		Schema:     tableChunk.Schema,
-		Table:      tableChunk.Table,
-	}
-	df.cp.Insert(inner)
+		TableRange: tableChunk,
+		RangeState: state,
+	})
 	return isEqual, nil
 }
 
-func (df *Diff) compareChecksum(ctx context.Context, tableChunk *source.TableRange) (bool, error) {
+func (df *Diff) compareChecksum(ctx context.Context, tableChunk *checkpoints.TableRange) (bool, error) {
 	upstreamChecksumCh := make(chan *source.ChecksumInfo)
 	go df.upstream.GetCrc32(ctx, tableChunk, upstreamChecksumCh)
 	downstreamChecksumCh := make(chan *source.ChecksumInfo)
@@ -278,7 +275,7 @@ func (df *Diff) compareChecksum(ctx context.Context, tableChunk *source.TableRan
 	return true, nil
 }
 
-func (df *Diff) compareRows(ctx context.Context, tableChunk *source.TableRange) (bool, error) {
+func (df *Diff) compareRows(ctx context.Context, tableChunk *checkpoints.TableRange) (bool, error) {
 	upstreamRowsIterator, err := df.upstream.GetRowsIterator(ctx, tableChunk)
 	if err != nil {
 		return false, errors.Trace(err)

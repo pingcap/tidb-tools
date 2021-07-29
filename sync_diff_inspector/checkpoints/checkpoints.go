@@ -17,6 +17,7 @@ import (
 	"container/heap"
 	"context"
 	"encoding/json"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/siddontang/go/ioutil2"
 	"os"
 	"sync"
@@ -26,7 +27,6 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"go.uber.org/zap"
 )
 
@@ -65,22 +65,31 @@ var (
 )
 
 type Node struct {
-	ID         int          `json:"chunk-id"`
-	Chunk      *chunk.Range `json:"chunk"`
-	ChunkState string       `json:"chunk-state"` // indicate the state ("success" or "failed") of the chunk
-	Schema     string       `json:"schema"`
-	Table      string       `json:"table"`
+	ID         int         `json:"chunk-id"`
+	TableRange *TableRange `json:"table-range"`
+	RangeState string      `json:"range-state"` // indicate the state ("success" or "failed") of the chunk
+}
+
+type TableRange struct {
+	ChunkRange *chunk.Range
+	TableIndex int
+	// for checkpoint
+	Schema string
+	Table  string
+	// for bucket checkpoint
+	BucketID int
+	IndexID  int64
 }
 
 func (n *Node) GetID() int { return n.ID }
 
-func (n *Node) GetChunk() *chunk.Range { return n.Chunk }
+func (n *Node) GetTableRange() *TableRange { return n.TableRange }
 
-func (n *Node) GetChunkState() string { return n.ChunkState }
+func (n *Node) GetRangeState() string { return n.RangeState }
 
-func (n *Node) GetSchema() string { return n.Schema }
+func (n *Node) GetSchema() string { return n.TableRange.Schema }
 
-func (n *Node) GetTable() string { return n.Table }
+func (n *Node) GetTable() string { return n.TableRange.Table }
 
 // Heap maintain a Min Heap, which can be accessed by multiple threads and protected by mutex.
 type Heap struct {
@@ -179,8 +188,8 @@ func (cp *Checkpoint) SaveChunk(ctx context.Context) (int, error) {
 
 		log.Info("save checkpoint",
 			zap.Int("id", cur.GetID()),
-			zap.Reflect("chunk", cur.GetChunk()),
-			zap.String("state", cur.GetChunkState()))
+			zap.Reflect("chunk", cur.GetTableRange()),
+			zap.String("state", cur.GetRangeState()))
 		return cur.GetID(), nil
 	}
 	return 0, nil

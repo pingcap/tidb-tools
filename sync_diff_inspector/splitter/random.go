@@ -63,7 +63,7 @@ func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, ch
 	chunkRange := chunk.NewChunkRange()
 	where := table.Range
 	if node != nil {
-		c := node.GetChunk()
+		c := node.GetTableRange().ChunkRange
 		uppers := make([]string, 1, len(c.Bounds))
 		columns := make([]string, 0, len(c.Bounds))
 		for _, bound := range c.Bounds {

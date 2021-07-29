@@ -42,7 +42,7 @@ type TiDBChunksIterator struct {
 	iter splitter.Iterator
 }
 
-func (t *TiDBChunksIterator) Next() (*TableRange, error) {
+func (t *TiDBChunksIterator) Next() (*checkpoints.TableRange, error) {
 	// TODO: creates different tables chunks in parallel
 	if t.iter == nil {
 		return nil, nil
@@ -53,13 +53,16 @@ func (t *TiDBChunksIterator) Next() (*TableRange, error) {
 	}
 
 	if chunks != nil {
-		schema := t.TableDiffs[t.getCurTableIndex()].Schema
-		table := t.TableDiffs[t.getCurTableIndex()].Table
-		return &TableRange{
+		curIndex := t.getCurTableIndex()
+		schema := t.TableDiffs[curIndex].Schema
+		table := t.TableDiffs[curIndex].Table
+		return &checkpoints.TableRange{
 			ChunkRange: chunks,
-			TableIndex: t.getCurTableIndex(),
+			TableIndex: curIndex,
 			Schema:     schema,
 			Table:      table,
+			BucketID:   t.getCurTableBucketID(),
+			IndexID:    t.getCurTableIndexID(),
 		}, nil
 	}
 	err = t.nextTable(nil)
@@ -73,13 +76,16 @@ func (t *TiDBChunksIterator) Next() (*TableRange, error) {
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	schema := t.TableDiffs[t.getCurTableIndex()].Schema
-	table := t.TableDiffs[t.getCurTableIndex()].Table
-	return &TableRange{
+	curIndex := t.getCurTableIndex()
+	schema := t.TableDiffs[curIndex].Schema
+	table := t.TableDiffs[curIndex].Table
+	return &checkpoints.TableRange{
 		ChunkRange: chunks,
-		TableIndex: t.getCurTableIndex(),
+		TableIndex: curIndex,
 		Schema:     schema,
 		Table:      table,
+		BucketID:   t.getCurTableBucketID(),
+		IndexID:    t.getCurTableIndexID(),
 	}, nil
 }
 
@@ -89,6 +95,20 @@ func (t *TiDBChunksIterator) Close() {
 
 func (t *TiDBChunksIterator) getCurTableIndex() int {
 	return t.nextTableIndex - 1
+}
+
+func (t *TiDBChunksIterator) getCurTableBucketID() int {
+	if bt, ok := t.iter.(*splitter.BucketIterator); ok {
+		return bt.GetBucketID()
+	}
+	return 0
+}
+
+func (t *TiDBChunksIterator) getCurTableIndexID() int64 {
+	if bt, ok := t.iter.(*splitter.BucketIterator); ok {
+		return bt.GetIndexID()
+	}
+	return 0
 }
 
 // if error is nil and t.iter is not nil,
@@ -208,7 +228,7 @@ func (s *TiDBSource) GenerateChunksIterator(node *checkpoints.Node) (DBIterator,
 	return dbIter, err
 }
 
-func (s *TiDBSource) GetCrc32(ctx context.Context, tableChunk *TableRange, checksumInfoCh chan *ChecksumInfo) {
+func (s *TiDBSource) GetCrc32(ctx context.Context, tableChunk *checkpoints.TableRange, checksumInfoCh chan *ChecksumInfo) {
 	// TODO get crc32 with sql
 	beginTime := time.Now()
 	table := s.tableDiffs[tableChunk.TableIndex]
@@ -238,7 +258,7 @@ type TiDBRowsIterator struct {
 	rows *sql.Rows
 }
 
-func (s *TiDBSource) GetRowsIterator(ctx context.Context, tableChunk *TableRange) (RowDataIterator, error) {
+func (s *TiDBSource) GetRowsIterator(ctx context.Context, tableChunk *checkpoints.TableRange) (RowDataIterator, error) {
 	args := utils.StringsToInterfaces(tableChunk.ChunkRange.Args)
 
 	query := fmt.Sprintf(s.tableRows[tableChunk.TableIndex].tableRowsQuery, tableChunk.ChunkRange.Where)
