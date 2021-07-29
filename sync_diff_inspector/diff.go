@@ -62,6 +62,7 @@ type Diff struct {
 	ignoreStats       bool
 	fixSQLFile        *os.File
 	wg                sync.WaitGroup
+	fromUpstream      bool
 
 	chunkCh chan *splitter.RangeInfo
 	sqlCh   chan string
