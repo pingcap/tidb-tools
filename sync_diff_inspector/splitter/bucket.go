@@ -37,7 +37,6 @@ type BucketIterator struct {
 	nextChunk    uint
 	chunksCh     chan []*chunk.Range
 	errCh        chan error
-	ctrlCh       chan bool
 	indexID      int64
 
 	dbConn *sql.DB
@@ -47,48 +46,48 @@ func NewBucketIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int) (
 	return NewBucketIteratorWithCheckpoint(table, dbConn, chunkSize, nil)
 }
 
-func NewBucketIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, chunkSize int, node *checkpoints.BucketNode) (*BucketIterator, error) {
-
+func NewBucketIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, chunkSize int, node checkpoints.Node) (*BucketIterator, error) {
 	bs := &BucketIterator{
 		table:     table,
 		chunkSize: int64(chunkSize),
-		chunksCh:  make(chan []*chunk.Range, 1),
+		chunksCh:  make(chan []*chunk.Range, 1024),
 		errCh:     make(chan error, 1),
-		ctrlCh:    make(chan bool, 2),
 		dbConn:    dbConn,
 	}
-	go bs.createProducerWithCheckpoint(node)
 
-	if err := bs.init(node); err != nil {
+	bucketNode, ok := node.(*checkpoints.BucketNode)
+	if !ok {
+		bucketNode = nil
+	}
+	if err := bs.init(bucketNode); err != nil {
 		return nil, errors.Trace(err)
 	}
+	go bs.produceChunkWithCheckpoint(bucketNode)
 
 	return bs, nil
 }
 
 func (s *BucketIterator) Next() (*chunk.Range, error) {
 	// `len(s.chunks) == 0` is included in this
+	var ok bool
 	if uint(len(s.chunks)) <= s.nextChunk {
-		// TODO: add timeout
-		// select {
-
-		// }
 		select {
 		case err := <-s.errCh:
-			return nil, err
-		case s.chunks = <-s.chunksCh:
-		}
-
-		if s.chunks == nil {
-			return nil, nil
+			return nil, errors.Trace(err)
+		case s.chunks, ok = <-s.chunksCh:
+			if !ok {
+				log.Info("close chunks channel for table",
+					zap.String("schema", s.table.Schema), zap.String("table", s.table.Table))
+				return nil, nil
+			}
 		}
 		s.nextChunk = 0
 	}
 
-	chunk := s.chunks[s.nextChunk]
-	chunk.IndexID = s.indexID
+	c := s.chunks[s.nextChunk]
+	c.IndexID = s.indexID
 	s.nextChunk = s.nextChunk + 1
-	return chunk, nil
+	return c, nil
 }
 
 func (s *BucketIterator) init(node *checkpoints.BucketNode) error {
@@ -113,13 +112,13 @@ func (s *BucketIterator) init(node *checkpoints.BucketNode) error {
 		}
 		log.Debug("buckets for index", zap.String("index", index.Name.O), zap.Reflect("buckets", buckets))
 
-		indexcolumns := utils.GetColumnsFromIndex(index, s.table.Info)
+		indexColumns := utils.GetColumnsFromIndex(index, s.table.Info)
 
-		if len(indexcolumns) == 0 {
+		if len(indexColumns) == 0 {
 			continue
 		}
 		s.buckets = bucket
-		s.indexColumns = indexcolumns
+		s.indexColumns = indexColumns
 		s.indexID = index.ID
 		break
 	}
@@ -128,21 +127,13 @@ func (s *BucketIterator) init(node *checkpoints.BucketNode) error {
 		return errors.NotFoundf("no index to split buckets")
 	}
 
-	s.ctrlCh <- false
 	return nil
 }
 
 func (s *BucketIterator) Close() {
-	s.ctrlCh <- true
 }
 
-func (s *BucketIterator) createProducerWithCheckpoint(node *checkpoints.BucketNode) {
-	// close this goruntine gracefully.
-	// init control
-	ctrl := <-s.ctrlCh
-	if ctrl {
-		return
-	}
+func (s *BucketIterator) produceChunkWithCheckpoint(node *checkpoints.BucketNode) {
 	var (
 		lowerValues, upperValues []string
 		latestCount              int64
@@ -157,7 +148,6 @@ func (s *BucketIterator) createProducerWithCheckpoint(node *checkpoints.BucketNo
 	if node == nil {
 		lowerValues = make([]string, len(indexColumns), len(indexColumns))
 	} else {
-
 		bounds := node.GetUpperBound()
 		columns := node.GetColumnName()
 		lowerValues = make([]string, 0, len(indexColumns))
@@ -211,13 +201,7 @@ func (s *BucketIterator) createProducerWithCheckpoint(node *checkpoints.BucketNo
 		latestCount = buckets[i].Count
 		lowerValues = upperValues
 		chunkID = chunk.InitChunks(chunks, chunkID, table.Collation, table.Range)
-		select {
-		case _ = <-s.ctrlCh:
-			return
-		case s.chunksCh <- chunks:
-
-		}
-
+		s.chunksCh <- chunks
 	}
 
 	// merge the rest keys into one chunk
@@ -228,21 +212,6 @@ func (s *BucketIterator) createProducerWithCheckpoint(node *checkpoints.BucketNo
 		}
 		chunks := []*chunk.Range{chunkRange}
 		chunkID = chunk.InitChunks(chunks, chunkID, table.Collation, table.Range)
-		select {
-		case _ = <-s.ctrlCh:
-			return
-		case s.chunksCh <- chunks:
-
-		}
+		s.chunksCh <- chunks
 	}
-
-	// finish split this table.
-	for {
-		select {
-		case _ = <-s.ctrlCh:
-			return
-		case s.chunksCh <- nil:
-		}
-	}
-
 }
