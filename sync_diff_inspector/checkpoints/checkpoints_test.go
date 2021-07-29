@@ -52,5 +52,5 @@ func (cp *testCheckpointSuit) TestLoadChunk(c *C) {
 	checker := new(Checkpoint)
 	checker.Init()
 	node, _ := checker.LoadChunk()
-	c.Assert(node.GetBucketID(), Equals, 9999)
+	c.Assert(node.BucketID, Equals, 9999)
 }

@@ -82,16 +82,6 @@ func (n *Node) GetID() int { return n.ChunkRange.ID }
 
 func (n *Node) GetState() string { return n.State }
 
-func (n *Node) GetSchema() string { return n.Schema }
-
-func (n *Node) GetTable() string { return n.Table }
-
-func (n *Node) GetChunk() *chunk.Range { return n.ChunkRange }
-
-func (n *Node) GetIndexID() int64 { return n.IndexID }
-
-func (n *Node) GetBucketID() int { return n.BucketID }
-
 // Heap maintain a Min Heap, which can be accessed by multiple threads and protected by mutex.
 type Heap struct {
 	Nodes          []*Node

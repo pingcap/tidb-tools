@@ -62,11 +62,8 @@ type Range struct {
 	Where string   `json:"where"`
 	Args  []string `json:"args"`
 
-	State string `json:"state"`
-
 	columnOffset map[string]int
-
-	BucketID int
+	BucketID     int
 }
 
 // NewChunkRange return a Range.
