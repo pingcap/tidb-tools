@@ -69,27 +69,25 @@ func NewBucketIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, ch
 
 func (s *BucketIterator) Next() (*chunk.Range, error) {
 	// `len(s.chunks) == 0` is included in this
+	var ok bool
 	if uint(len(s.chunks)) <= s.nextChunk {
-		// TODO: add timeout
-		// select {
-
-		// }
 		select {
 		case err := <-s.errCh:
-			return nil, err
-		case s.chunks = <-s.chunksCh:
-		}
-
-		if s.chunks == nil {
-			return nil, nil
+			return nil, errors.Trace(err)
+		case s.chunks, ok = <-s.chunksCh:
+			if !ok {
+				log.Info("close chunks channel for table",
+					zap.String("schema", s.table.Schema), zap.String("table", s.table.Table))
+				return nil, nil
+			}
 		}
 		s.nextChunk = 0
 	}
 
-	chunk := s.chunks[s.nextChunk]
-	chunk.IndexID = s.indexID
+	c := s.chunks[s.nextChunk]
+	c.IndexID = s.indexID
 	s.nextChunk = s.nextChunk + 1
-	return chunk, nil
+	return c, nil
 }
 
 func (s *BucketIterator) init(node *checkpoints.BucketNode) error {
