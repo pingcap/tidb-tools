@@ -202,6 +202,10 @@ func (s *TiDBSource) Close() {
 	s.dbConn.Close()
 }
 
+func (s *TiDBSource) GetDB() *sql.DB {
+	return s.dbConn
+}
+
 func (s *TiDBSource) GetTable(i int) *common.TableDiff {
 	return s.tableDiffs[i]
 }
@@ -216,6 +220,20 @@ func (s *TiDBSource) GenerateChunksIterator(r *splitter.RangeInfo) (DBIterator, 
 	}
 	err := dbIter.nextTable(r)
 	return dbIter, err
+}
+
+func (s *TiDBSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter.RangeInfo, countCh chan int64, checksumInfoCh chan *ChecksumInfo) {
+	beginTime := time.Now()
+	table := s.tableDiffs[tableRange.GetTableIndex()]
+	chunk := tableRange.GetChunk()
+	count, checksum, err := dbutil.GetCountAndCRC32Checksum(ctx, s.dbConn, table.Schema, table.Table, table.Info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
+	cost := time.Since(beginTime)
+	countCh <- count
+	checksumInfoCh <- &ChecksumInfo{
+		Checksum: checksum,
+		Err:      err,
+		Cost:     cost,
+	}
 }
 
 func (s *TiDBSource) GetCrc32(ctx context.Context, tableRange *splitter.RangeInfo, checksumInfoCh chan *ChecksumInfo) {

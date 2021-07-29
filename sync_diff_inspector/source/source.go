@@ -146,11 +146,13 @@ type ChecksumInfo struct {
 type Source interface {
 	GenerateChunksIterator(*splitter.RangeInfo) (DBIterator, error)
 	GetCrc32(context.Context, *splitter.RangeInfo, chan *ChecksumInfo)
+	GetCountAndCrc32(context.Context, *splitter.RangeInfo, chan int64, chan *ChecksumInfo)
 	GetOrderKeyCols(int) []*model.ColumnInfo
 	GetRowsIterator(context.Context, *splitter.RangeInfo) (RowDataIterator, error)
 	GenerateReplaceDML(map[string]*dbutil.ColumnData, int) string
 	GenerateDeleteDML(map[string]*dbutil.ColumnData, int) string
 	GetTable(i int) *common.TableDiff
+	GetDB() *sql.DB
 	Close()
 }
 

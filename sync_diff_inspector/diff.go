@@ -22,6 +22,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
+	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
@@ -31,6 +32,8 @@ import (
 	tidbconfig "github.com/pingcap/tidb/config"
 	"go.uber.org/zap"
 )
+
+const splitThreshold = 1000
 
 // Diff contains two sql DB, used for comparing.
 type Diff struct {
@@ -49,6 +52,7 @@ type Diff struct {
 	ignoreStats       bool
 	fixSQLFile        *os.File
 	wg                sync.WaitGroup
+	fromUpstream      bool
 
 	chunkCh chan *splitter.RangeInfo
 	sqlCh   chan string
@@ -176,6 +180,7 @@ func (df *Diff) generateChunksIterator() (source.DBIterator, error) {
 			startRange = splitter.FromNode(node)
 		}
 	}
+	df.fromUpstream = false
 	return df.downstream.GenerateChunksIterator(startRange)
 }
 
@@ -229,16 +234,49 @@ func (df *Diff) handleChunks(ctx context.Context) {
 }
 
 func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (bool, error) {
-	isEqual, err := df.compareChecksum(ctx, rangeInfo)
-	if err != nil {
-		// TODO retry or log this chunk's error to checkpoint.
-		return false, err
+	countCh := make(chan int64)
+	upstreamChecksumCh := make(chan *source.ChecksumInfo)
+	downstreamChecksumCh := make(chan *source.ChecksumInfo)
+	var targetSource source.Source
+	if df.fromUpstream {
+		targetSource = df.upstream
+		go df.upstream.GetCountAndCrc32(ctx, rangeInfo, countCh, upstreamChecksumCh)
+		go df.downstream.GetCrc32(ctx, rangeInfo, downstreamChecksumCh)
+	} else {
+		targetSource = df.downstream
+		go df.upstream.GetCrc32(ctx, rangeInfo, downstreamChecksumCh)
+		go df.downstream.GetCountAndCrc32(ctx, rangeInfo, countCh, upstreamChecksumCh)
+	}
+	count := <-countCh
+	crc1Info := <-downstreamChecksumCh
+	crc2Info := <-upstreamChecksumCh
+	if crc1Info.Err != nil {
+		return false, errors.Trace(crc1Info.Err)
+	}
+	if crc2Info.Err != nil {
+		return false, errors.Trace(crc2Info.Err)
+	}
+	var tableRange *splitter.RangeInfo
+	var err error
+	if crc1Info.Checksum != crc2Info.Checksum {
+		tableRange, err = df.BinGenerate(ctx, targetSource, rangeInfo, count)
+		if err != nil {
+			// TODO retry or log this chunk's error to checkpoint.
+			return false, err
+		}
+	} else {
+		tableRange = nil
 	}
 
 	var state string
-	if !isEqual {
+	isEqual := true
+	if tableRange != nil {
 		state = checkpoints.FailedState
-		isEqual, err = df.compareRows(ctx, rangeInfo)
+		// if the chunk's checksum differ, try to do binary check
+		if df.chunkSize > splitThreshold {
+			df.BinGenerate(ctx, targetSource, rangeInfo, count)
+		}
+		isEqual, err = df.compareRows(ctx, tableRange)
 		if err != nil {
 			return false, err
 		}
@@ -251,6 +289,112 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 	node.State = state
 	df.cp.Insert(node)
 	return isEqual, nil
+}
+
+func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tableRange *splitter.RangeInfo, count int64) (*splitter.RangeInfo, error) {
+	if count <= splitThreshold {
+		return tableRange, nil
+	}
+	// TODO Find great index
+	tableDiff := targetSource.GetTable(tableRange.TableIndex)
+	indices := dbutil.FindAllIndex(tableDiff.Info)
+	indexColumns := make([]*model.ColumnInfo, 0)
+	for _, index := range indices {
+		if index == nil {
+			continue
+		}
+		log.Debug("index for BinGerate", zap.String("index", index.Name.O))
+		indexColumns = utils.GetColumnsFromIndex(index, tableDiff.Info)
+		if len(indexColumns) == 0 {
+			continue
+		}
+		break
+	}
+	if len(indexColumns) == 0 {
+		log.Warn("no index to split")
+	}
+	chunkLimits, args := tableRange.ChunkRange.ToString(tableDiff.Collation)
+	limitRange := fmt.Sprintf("(%s) AND %s", chunkLimits, tableDiff.Range)
+	midValues, err := dbutil.GetApproximateMid(ctx, targetSource.GetDB(), tableRange.Schema, tableRange.Table, indexColumns, 1000, limitRange, utils.StringsToInterfaces(args), tableDiff.Collation)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	tableRange1 := &splitter.RangeInfo{
+		ID:         tableRange.ID,
+		ChunkRange: tableRange.ChunkRange.Copy(),
+		TableIndex: tableRange.TableIndex,
+		Schema:     tableRange.Schema,
+		Table:      tableRange.Table,
+		IndexID:    tableRange.IndexID,
+	}
+	tableRange2 := &splitter.RangeInfo{
+		ID:         tableRange.ID,
+		ChunkRange: tableRange.ChunkRange.Copy(),
+		TableIndex: tableRange.TableIndex,
+		Schema:     tableRange.Schema,
+		Table:      tableRange.Table,
+		IndexID:    tableRange.IndexID,
+	}
+	for i, value := range midValues {
+		tableRange1.ChunkRange.Update(indexColumns[i].Name.O, "", value, false, true)
+		tableRange2.ChunkRange.Update(indexColumns[i].Name.O, value, "", true, false)
+	}
+	isEqual1, count1, err1 := df.compareChecksumAndGetCount(ctx, tableRange1)
+	if err1 != nil {
+		return nil, errors.Trace(err1)
+	}
+	isEqual2, count2, err2 := df.compareChecksumAndGetCount(ctx, tableRange2)
+	if err2 != nil {
+		return nil, errors.Trace(err2)
+	}
+	var cnt int64
+	if df.fromUpstream {
+		cnt = count1
+	} else {
+		cnt = count2
+	}
+	if !isEqual1 && !isEqual2 {
+		return tableRange, nil
+	} else if !isEqual1 {
+		c, err := df.BinGenerate(ctx, targetSource, tableRange2, cnt)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		return c, nil
+	} else if !isEqual2 {
+		c, err := df.BinGenerate(ctx, targetSource, tableRange1, cnt)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		return c, nil
+	} else {
+		panic("error")
+	}
+
+	return nil, nil
+}
+
+func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *splitter.RangeInfo) (bool, int64, error) {
+	countCh := make(chan int64)
+	upstreamChecksumCh := make(chan *source.ChecksumInfo)
+	downstreamChecksumCh := make(chan *source.ChecksumInfo)
+	if df.fromUpstream {
+		go df.upstream.GetCountAndCrc32(ctx, tableRange, countCh, upstreamChecksumCh)
+		go df.downstream.GetCrc32(ctx, tableRange, downstreamChecksumCh)
+	} else {
+		go df.upstream.GetCrc32(ctx, tableRange, downstreamChecksumCh)
+		go df.downstream.GetCountAndCrc32(ctx, tableRange, countCh, upstreamChecksumCh)
+	}
+	count := <-countCh
+	crc1Info := <-downstreamChecksumCh
+	crc2Info := <-upstreamChecksumCh
+	if crc1Info.Err != nil {
+		return false, -1, errors.Trace(crc1Info.Err)
+	}
+	if crc2Info.Err != nil {
+		return false, -1, errors.Trace(crc2Info.Err)
+	}
+	return true, count, nil
 }
 
 func (df *Diff) compareChecksum(ctx context.Context, tableRange *splitter.RangeInfo) (bool, error) {
