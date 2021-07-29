@@ -46,7 +46,7 @@ func NewBucketIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int) (
 	return NewBucketIteratorWithCheckpoint(table, dbConn, chunkSize, nil)
 }
 
-func NewBucketIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, chunkSize int, node checkpoints.Node) (*BucketIterator, error) {
+func NewBucketIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, chunkSize int, node *checkpoints.Node) (*BucketIterator, error) {
 	bs := &BucketIterator{
 		table:     table,
 		chunkSize: int64(chunkSize),
@@ -55,16 +55,16 @@ func NewBucketIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, ch
 		dbConn:    dbConn,
 	}
 
-	bucketNode, ok := node.(*checkpoints.BucketNode)
-	if !ok {
-		bucketNode = nil
-	}
-	if err := bs.init(bucketNode); err != nil {
+	if err := bs.init(node); err != nil {
 		return nil, errors.Trace(err)
 	}
-	go bs.produceChunkWithCheckpoint(bucketNode)
+	go bs.produceChunkWithCheckpoint(node)
 
 	return bs, nil
+}
+
+func (s *BucketIterator) GetIndexID() int64 {
+	return s.indexID
 }
 
 func (s *BucketIterator) Next() (*chunk.Range, error) {
@@ -85,12 +85,11 @@ func (s *BucketIterator) Next() (*chunk.Range, error) {
 	}
 
 	c := s.chunks[s.nextChunk]
-	c.IndexID = s.indexID
 	s.nextChunk = s.nextChunk + 1
 	return c, nil
 }
 
-func (s *BucketIterator) init(node *checkpoints.BucketNode) error {
+func (s *BucketIterator) init(node *checkpoints.Node) error {
 	s.nextChunk = 0
 	buckets, err := dbutil.GetBucketsInfo(context.Background(), s.dbConn, s.table.Schema, s.table.Table, s.table.Info)
 	if err != nil {
@@ -133,7 +132,7 @@ func (s *BucketIterator) init(node *checkpoints.BucketNode) error {
 func (s *BucketIterator) Close() {
 }
 
-func (s *BucketIterator) produceChunkWithCheckpoint(node *checkpoints.BucketNode) {
+func (s *BucketIterator) produceChunkWithCheckpoint(node *checkpoints.Node) {
 	var (
 		lowerValues, upperValues []string
 		latestCount              int64
@@ -143,22 +142,27 @@ func (s *BucketIterator) produceChunkWithCheckpoint(node *checkpoints.BucketNode
 	table := s.table
 	buckets := s.buckets
 	indexColumns := s.indexColumns
-	beginBucket := 0
 	chunkID := 0
+	beginBucket := 0
 	if node == nil {
 		lowerValues = make([]string, len(indexColumns), len(indexColumns))
 	} else {
-		bounds := node.GetUpperBound()
-		columns := node.GetColumnName()
+		c := node.GetChunk()
+		uppers := make([]string, 0, len(c.Bounds))
+		columns := make([]string, 0, len(c.Bounds))
+		for _, bound := range c.Bounds {
+			uppers = append(uppers, bound.Upper)
+			columns = append(columns, bound.Column)
+		}
 		lowerValues = make([]string, 0, len(indexColumns))
 		for _, index := range indexColumns {
-			for i := 0; i < len(bounds); i++ {
+			for i := 0; i < len(uppers); i++ {
 				if index.Name.O == columns[i] {
-					lowerValues = append(lowerValues, bounds[i])
+					lowerValues = append(lowerValues, uppers[i])
 				}
 			}
 		}
-		beginBucket = node.GetBucketID()
+		beginBucket = int(c.BucketID)
 	}
 	// TODO chunksize when checkpoint
 	for i := beginBucket; i < len(buckets); i++ {
@@ -200,7 +204,7 @@ func (s *BucketIterator) produceChunkWithCheckpoint(node *checkpoints.BucketNode
 
 		latestCount = buckets[i].Count
 		lowerValues = upperValues
-		chunkID = chunk.InitChunks(chunks, chunkID, table.Collation, table.Range)
+		chunkID = chunk.InitChunks(chunks, chunkID, i, table.Collation, table.Range)
 		s.chunksCh <- chunks
 	}
 
@@ -211,7 +215,7 @@ func (s *BucketIterator) produceChunkWithCheckpoint(node *checkpoints.BucketNode
 			chunkRange.Update(column.Name.O, lowerValues[j], "", true, false)
 		}
 		chunks := []*chunk.Range{chunkRange}
-		chunkID = chunk.InitChunks(chunks, chunkID, table.Collation, table.Range)
+		chunkID = chunk.InitChunks(chunks, chunkID, len(buckets), table.Collation, table.Range)
 		s.chunksCh <- chunks
 	}
 }

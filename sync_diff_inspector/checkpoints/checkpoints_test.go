@@ -29,11 +29,11 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 	for i := 1; i < 10000; i++ {
 		wg.Add(1)
 		go func(i_ int) {
-			upperBound := make([]string, 0)
-			upperBound = append(upperBound, "hello")
-			node := &BucketNode{
-				Inner:    Inner{ID: i_, Schema: "test", Table: "test", UpperBound: upperBound, Type: 1, ChunkState: "success"},
+			node := &Node{
 				BucketID: i_,
+				Schema:   "test",
+				Table:    "test",
+				State:    "success",
 			}
 			if rand.Intn(4) == 0 {
 				time.Sleep(time.Duration(rand.Intn(3)) * time.Second)
@@ -52,5 +52,5 @@ func (cp *testCheckpointSuit) TestLoadChunk(c *C) {
 	checker := new(Checkpoint)
 	checker.Init()
 	node, _ := checker.LoadChunk()
-	c.Assert(node.(*BucketNode).BucketID, Equals, 9999)
+	c.Assert(node.GetBucketID(), Equals, 9999)
 }
