@@ -38,7 +38,6 @@ type BucketIterator struct {
 	chunksCh     chan []*chunk.Range
 	errCh        chan error
 	indexID      int64
-	beginBucket  int
 
 	dbConn *sql.DB
 }
@@ -64,10 +63,6 @@ func NewBucketIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, ch
 	return bs, nil
 }
 
-func (s *BucketIterator) GetBucketID() int {
-	return s.beginBucket
-}
-
 func (s *BucketIterator) GetIndexID() int64 {
 	return s.indexID
 }
@@ -90,7 +85,6 @@ func (s *BucketIterator) Next() (*chunk.Range, error) {
 	}
 
 	c := s.chunks[s.nextChunk]
-	c.IndexID = s.indexID
 	s.nextChunk = s.nextChunk + 1
 	return c, nil
 }
@@ -149,7 +143,7 @@ func (s *BucketIterator) produceChunkWithCheckpoint(node *checkpoints.Node) {
 	buckets := s.buckets
 	indexColumns := s.indexColumns
 	chunkID := 0
-	s.beginBucket = 0
+	beginBucket := 0
 	if node == nil {
 		lowerValues = make([]string, len(indexColumns), len(indexColumns))
 	} else {
@@ -168,10 +162,10 @@ func (s *BucketIterator) produceChunkWithCheckpoint(node *checkpoints.Node) {
 				}
 			}
 		}
-		s.beginBucket = int(c.BucketID)
+		beginBucket = int(c.BucketID)
 	}
 	// TODO chunksize when checkpoint
-	for i := s.beginBucket; i < len(buckets); i++ {
+	for i := beginBucket; i < len(buckets); i++ {
 		count := buckets[i].Count - latestCount
 		if count < s.chunkSize {
 			// merge more buckets into one chunk
@@ -210,7 +204,7 @@ func (s *BucketIterator) produceChunkWithCheckpoint(node *checkpoints.Node) {
 
 		latestCount = buckets[i].Count
 		lowerValues = upperValues
-		chunkID = chunk.InitChunks(chunks, chunkID, table.Collation, table.Range)
+		chunkID = chunk.InitChunks(chunks, chunkID, i, table.Collation, table.Range)
 		s.chunksCh <- chunks
 	}
 
@@ -221,7 +215,7 @@ func (s *BucketIterator) produceChunkWithCheckpoint(node *checkpoints.Node) {
 			chunkRange.Update(column.Name.O, lowerValues[j], "", true, false)
 		}
 		chunks := []*chunk.Range{chunkRange}
-		chunkID = chunk.InitChunks(chunks, chunkID, table.Collation, table.Range)
+		chunkID = chunk.InitChunks(chunks, chunkID, len(buckets), table.Collation, table.Range)
 		s.chunksCh <- chunks
 	}
 }

@@ -47,21 +47,21 @@ func (t *TiDBChunksIterator) Next() (*checkpoints.Node, error) {
 	if t.iter == nil {
 		return nil, nil
 	}
-	chunks, err := t.iter.Next()
+	chunk, err := t.iter.Next()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	if chunks != nil {
+	if chunk != nil {
 		curIndex := t.getCurTableIndex()
 		schema := t.TableDiffs[curIndex].Schema
 		table := t.TableDiffs[curIndex].Table
 		return &checkpoints.Node{
-			ChunkRange: chunks,
+			ChunkRange: chunk,
 			TableIndex: curIndex,
 			Schema:     schema,
 			Table:      table,
-			BucketID:   t.getCurTableBucketID(),
+			BucketID:   chunk.BucketID,
 			IndexID:    t.getCurTableIndexID(),
 		}, nil
 	}
@@ -72,7 +72,7 @@ func (t *TiDBChunksIterator) Next() (*checkpoints.Node, error) {
 	if t.iter == nil {
 		return nil, nil
 	}
-	chunks, err = t.iter.Next()
+	chunk, err = t.iter.Next()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -80,11 +80,11 @@ func (t *TiDBChunksIterator) Next() (*checkpoints.Node, error) {
 	schema := t.TableDiffs[curIndex].Schema
 	table := t.TableDiffs[curIndex].Table
 	return &checkpoints.Node{
-		ChunkRange: chunks,
+		ChunkRange: chunk,
 		TableIndex: curIndex,
 		Schema:     schema,
 		Table:      table,
-		BucketID:   t.getCurTableBucketID(),
+		BucketID:   chunk.BucketID,
 		IndexID:    t.getCurTableIndexID(),
 	}, nil
 }
@@ -95,13 +95,6 @@ func (t *TiDBChunksIterator) Close() {
 
 func (t *TiDBChunksIterator) getCurTableIndex() int {
 	return t.nextTableIndex - 1
-}
-
-func (t *TiDBChunksIterator) getCurTableBucketID() int {
-	if bt, ok := t.iter.(*splitter.BucketIterator); ok {
-		return bt.GetBucketID()
-	}
-	return 0
 }
 
 func (t *TiDBChunksIterator) getCurTableIndexID() int64 {

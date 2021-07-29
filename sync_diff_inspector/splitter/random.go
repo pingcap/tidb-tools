@@ -97,7 +97,7 @@ func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, ch
 		return nil, errors.Trace(err)
 	}
 
-	chunk.InitChunks(chunks, 0, table.Collation, table.Range)
+	chunk.InitChunks(chunks, 0, 0, table.Collation, table.Range)
 
 	return &RandomIterator{
 		table:     table,

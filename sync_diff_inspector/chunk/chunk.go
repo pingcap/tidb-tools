@@ -66,8 +66,7 @@ type Range struct {
 
 	columnOffset map[string]int
 
-	BucketID int64
-	IndexID  int64
+	BucketID int
 }
 
 // NewChunkRange return a Range.
@@ -214,7 +213,7 @@ func (c *Range) copyAndUpdate(column, lower, upper string, updateLower, updateUp
 	return newChunk
 }
 
-func InitChunks(chunks []*Range, chunkBeginID int, collation, limits string) int {
+func InitChunks(chunks []*Range, chunkBeginID, bucketID int, collation, limits string) int {
 	if chunks == nil {
 		return chunkBeginID
 	}
@@ -224,6 +223,7 @@ func InitChunks(chunks []*Range, chunkBeginID int, collation, limits string) int
 		chunkBeginID++
 		chunk.Where = fmt.Sprintf("((%s) AND %s)", conditions, limits)
 		chunk.Args = args
+		chunk.BucketID = bucketID
 	}
 	return chunkBeginID
 }
