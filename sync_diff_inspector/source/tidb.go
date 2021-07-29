@@ -36,7 +36,6 @@ type TiDBChunksIterator struct {
 	nextTableIndex int
 
 	limit int
-	from  SourceSide
 
 	dbConn *sql.DB
 
@@ -197,14 +196,13 @@ func (s *TiDBSource) GetTable(i int) *common.TableDiff {
 	return s.tableDiffs[i]
 }
 
-func (s *TiDBSource) GenerateChunksIterator(node *checkpoints.Node, from SourceSide) (DBIterator, error) {
+func (s *TiDBSource) GenerateChunksIterator(node *checkpoints.Node) (DBIterator, error) {
 	// TODO build Iterator with config.
 	dbIter := &TiDBChunksIterator{
 		TableDiffs:     s.tableDiffs,
 		nextTableIndex: 0,
 		limit:          0,
 		dbConn:         s.dbConn,
-		from:           from,
 	}
 	err := dbIter.nextTable(node)
 	return dbIter, err

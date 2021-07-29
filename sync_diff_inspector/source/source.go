@@ -157,7 +157,7 @@ type TableRange struct {
 }
 
 type Source interface {
-	GenerateChunksIterator(node *checkpoints.Node, from SourceSide) (DBIterator, error)
+	GenerateChunksIterator(node *checkpoints.Node) (DBIterator, error)
 	GetCrc32(context.Context, *TableRange, chan *ChecksumInfo)
 	GetOrderKeyCols(int) []*model.ColumnInfo
 	GetRowsIterator(context.Context, *TableRange) (RowDataIterator, error)
