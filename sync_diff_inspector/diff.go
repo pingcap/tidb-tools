@@ -26,6 +26,7 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	tidbconfig "github.com/pingcap/tidb/config"
 	"go.uber.org/zap"
@@ -49,7 +50,7 @@ type Diff struct {
 	fixSQLFile        *os.File
 	wg                sync.WaitGroup
 
-	chunkCh chan *checkpoints.Node
+	chunkCh chan *splitter.RangeInfo
 	sqlCh   chan string
 	cp      *checkpoints.Checkpoint
 }
@@ -69,7 +70,7 @@ func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 		//TODO add fixSQLFile
 		//fixSQLFile: ???,
 		// TODO use a meaningfull chunk channel buffer
-		chunkCh: make(chan *checkpoints.Node, 1024),
+		chunkCh: make(chan *splitter.RangeInfo, 1024),
 		sqlCh:   make(chan string, 1024),
 		cp:      new(checkpoints.Checkpoint),
 	}
@@ -158,13 +159,11 @@ func (df *Diff) generateChunksIterator() (source.DBIterator, error) {
 	// if isTiDB(df.downstream) {
 	//		return df.downstream.GenerateChunksIterator()
 	//}
-	var node *checkpoints.Node
-	var err error
+	var startRange *splitter.RangeInfo
 	if df.useCheckpoint {
-		node, err = df.cp.LoadChunk()
+		node, err := df.cp.LoadChunk()
 		if err != nil {
-			log.Warn("the checkpoint load process failed, diable checkpoint and start from begining")
-			df.useCheckpoint = false
+			return nil, errors.Annotate(err, "the checkpoint load process failed")
 		} else {
 			// this need not be synchronized, because at the moment, the is only one thread access the section
 			log.Info("load checkpoint",
@@ -173,10 +172,11 @@ func (df *Diff) generateChunksIterator() (source.DBIterator, error) {
 				zap.String("state", node.GetState()))
 			df.cp.SetCurrentSavedID(node.GetID() + 1)
 		}
+		if node != nil {
+			startRange = splitter.FromNode(node)
+		}
 	}
-	// if node != nil, generateChunksIterator from checkpoint
-	// else generateChunkIterator from beginning
-	return df.downstream.GenerateChunksIterator(node)
+	return df.downstream.GenerateChunksIterator(startRange)
 }
 
 func (df *Diff) handleCheckpoints(ctx context.Context) {
@@ -228,8 +228,8 @@ func (df *Diff) handleChunks(ctx context.Context) {
 	}
 }
 
-func (df *Diff) consume(ctx context.Context, tableChunk *checkpoints.Node) (bool, error) {
-	isEqual, err := df.compareChecksum(ctx, tableChunk)
+func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (bool, error) {
+	isEqual, err := df.compareChecksum(ctx, rangeInfo)
 	if err != nil {
 		// TODO retry or log this chunk's error to checkpoint.
 		return false, err
@@ -238,7 +238,7 @@ func (df *Diff) consume(ctx context.Context, tableChunk *checkpoints.Node) (bool
 	var state string
 	if !isEqual {
 		state = checkpoints.FailedState
-		isEqual, err = df.compareRows(ctx, tableChunk)
+		isEqual, err = df.compareRows(ctx, rangeInfo)
 		if err != nil {
 			return false, err
 		}
@@ -247,16 +247,17 @@ func (df *Diff) consume(ctx context.Context, tableChunk *checkpoints.Node) (bool
 		state = checkpoints.SuccessState
 	}
 
-	tableChunk.State = state
-	df.cp.Insert(tableChunk)
+	node := rangeInfo.ToNode()
+	node.State = state
+	df.cp.Insert(node)
 	return isEqual, nil
 }
 
-func (df *Diff) compareChecksum(ctx context.Context, tableChunk *checkpoints.Node) (bool, error) {
+func (df *Diff) compareChecksum(ctx context.Context, tableRange *splitter.RangeInfo) (bool, error) {
 	upstreamChecksumCh := make(chan *source.ChecksumInfo)
-	go df.upstream.GetCrc32(ctx, tableChunk, upstreamChecksumCh)
+	go df.upstream.GetCrc32(ctx, tableRange, upstreamChecksumCh)
 	downstreamChecksumCh := make(chan *source.ChecksumInfo)
-	go df.downstream.GetCrc32(ctx, tableChunk, downstreamChecksumCh)
+	go df.downstream.GetCrc32(ctx, tableRange, downstreamChecksumCh)
 	crc1Info := <-downstreamChecksumCh
 	crc2Info := <-upstreamChecksumCh
 	if crc1Info.Err != nil {
@@ -272,13 +273,13 @@ func (df *Diff) compareChecksum(ctx context.Context, tableChunk *checkpoints.Nod
 	return true, nil
 }
 
-func (df *Diff) compareRows(ctx context.Context, tableChunk *checkpoints.Node) (bool, error) {
-	upstreamRowsIterator, err := df.upstream.GetRowsIterator(ctx, tableChunk)
+func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) (bool, error) {
+	upstreamRowsIterator, err := df.upstream.GetRowsIterator(ctx, rangeInfo)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
 	defer upstreamRowsIterator.Close()
-	downstreamRowsIterator, err := df.downstream.GetRowsIterator(ctx, tableChunk)
+	downstreamRowsIterator, err := df.downstream.GetRowsIterator(ctx, rangeInfo)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
@@ -305,7 +306,7 @@ func (df *Diff) compareRows(ctx context.Context, tableChunk *checkpoints.Node) (
 		if lastUpstreamData == nil {
 			// don't have source data, so all the targetRows's data is redundant, should be deleted
 			for lastDownstreamData != nil {
-				sql := df.downstream.GenerateDeleteDML(lastDownstreamData, tableChunk.TableIndex)
+				sql := df.downstream.GenerateDeleteDML(lastDownstreamData, rangeInfo.GetTableIndex())
 				log.Info("[delete]", zap.String("sql", sql))
 
 				select {
@@ -325,7 +326,7 @@ func (df *Diff) compareRows(ctx context.Context, tableChunk *checkpoints.Node) (
 		if lastDownstreamData != nil {
 			// target lack some data, should insert the last source datas
 			for lastUpstreamData != nil {
-				sql := df.downstream.GenerateReplaceDML(lastUpstreamData, tableChunk.TableIndex)
+				sql := df.downstream.GenerateReplaceDML(lastUpstreamData, rangeInfo.GetTableIndex())
 				log.Info("[insert]", zap.String("sql", sql))
 
 				select {
@@ -344,7 +345,7 @@ func (df *Diff) compareRows(ctx context.Context, tableChunk *checkpoints.Node) (
 		}
 
 		// TODO where is orderKeycols from?
-		eq, cmp, err := utils.CompareData(lastUpstreamData, lastDownstreamData, df.downstream.GetOrderKeyCols(tableChunk.TableIndex))
+		eq, cmp, err := utils.CompareData(lastUpstreamData, lastDownstreamData, df.downstream.GetOrderKeyCols(rangeInfo.GetTableIndex()))
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -360,17 +361,17 @@ func (df *Diff) compareRows(ctx context.Context, tableChunk *checkpoints.Node) (
 		switch cmp {
 		case 1:
 			// delete
-			sql = df.downstream.GenerateDeleteDML(lastDownstreamData, tableChunk.TableIndex)
+			sql = df.downstream.GenerateDeleteDML(lastDownstreamData, rangeInfo.GetTableIndex())
 			log.Info("[delete]", zap.String("sql", sql))
 			lastDownstreamData = nil
 		case -1:
 			// insert
-			sql = df.downstream.GenerateReplaceDML(lastUpstreamData, tableChunk.TableIndex)
+			sql = df.downstream.GenerateReplaceDML(lastUpstreamData, rangeInfo.GetTableIndex())
 			log.Info("[insert]", zap.String("sql", sql))
 			lastUpstreamData = nil
 		case 0:
 			// update
-			sql = df.downstream.GenerateReplaceDML(lastUpstreamData, tableChunk.TableIndex)
+			sql = df.downstream.GenerateReplaceDML(lastUpstreamData, rangeInfo.GetTableIndex())
 			log.Info("[update]", zap.String("sql", sql))
 			lastUpstreamData = nil
 			lastDownstreamData = nil
