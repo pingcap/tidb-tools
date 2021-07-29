@@ -217,4 +217,6 @@ func (s *BucketIterator) produceChunkWithCheckpoint(startRange *RangeInfo) {
 		chunkID = chunk.InitChunks(chunks, chunkID, len(buckets), table.Collation, table.Range)
 		s.chunksCh <- chunks
 	}
+	// close s.chunksCh for this table buckets
+	close(s.chunksCh)
 }
