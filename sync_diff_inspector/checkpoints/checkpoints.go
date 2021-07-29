@@ -65,31 +65,32 @@ var (
 )
 
 type Node struct {
-	ID         int         `json:"chunk-id"`
-	TableRange *TableRange `json:"table-range"`
-	RangeState string      `json:"range-state"` // indicate the state ("success" or "failed") of the chunk
-}
+	State string `json:"state"` // indicate the state ("success" or "failed") of the chunk
 
-type TableRange struct {
-	ChunkRange *chunk.Range
-	TableIndex int
+	ChunkRange *chunk.Range `json:"chunk-range"`
+	TableIndex int          `json:"table-index"`
 	// for checkpoint
-	Schema string
-	Table  string
+	Schema string `json:"schema"`
+	Table  string `json:"table"`
+
 	// for bucket checkpoint
-	BucketID int
-	IndexID  int64
+	BucketID int   `json:"bucket-id"`
+	IndexID  int64 `json:"index-id"`
 }
 
-func (n *Node) GetID() int { return n.ID }
+func (n *Node) GetID() int { return n.ChunkRange.ID }
 
-func (n *Node) GetTableRange() *TableRange { return n.TableRange }
+func (n *Node) GetState() string { return n.State }
 
-func (n *Node) GetRangeState() string { return n.RangeState }
+func (n *Node) GetSchema() string { return n.Schema }
 
-func (n *Node) GetSchema() string { return n.TableRange.Schema }
+func (n *Node) GetTable() string { return n.Table }
 
-func (n *Node) GetTable() string { return n.TableRange.Table }
+func (n *Node) GetChunk() *chunk.Range { return n.ChunkRange }
+
+func (n *Node) GetIndexID() int64 { return n.IndexID }
+
+func (n *Node) GetBucketID() int { return n.BucketID }
 
 // Heap maintain a Min Heap, which can be accessed by multiple threads and protected by mutex.
 type Heap struct {
@@ -188,8 +189,8 @@ func (cp *Checkpoint) SaveChunk(ctx context.Context) (int, error) {
 
 		log.Info("save checkpoint",
 			zap.Int("id", cur.GetID()),
-			zap.Reflect("chunk", cur.GetTableRange()),
-			zap.String("state", cur.GetRangeState()))
+			zap.Reflect("chunk", cur),
+			zap.String("state", cur.GetState()))
 		return cur.GetID(), nil
 	}
 	return 0, nil

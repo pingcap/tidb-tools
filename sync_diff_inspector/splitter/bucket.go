@@ -108,7 +108,7 @@ func (s *BucketIterator) init(node *checkpoints.Node) error {
 		if index == nil {
 			continue
 		}
-		if node != nil && node.GetTableRange().IndexID != index.ID {
+		if node != nil && node.IndexID != index.ID {
 			continue
 		}
 		bucket, ok := buckets[index.Name.O]
@@ -153,7 +153,7 @@ func (s *BucketIterator) produceChunkWithCheckpoint(node *checkpoints.Node) {
 	if node == nil {
 		lowerValues = make([]string, len(indexColumns), len(indexColumns))
 	} else {
-		c := node.GetTableRange().ChunkRange
+		c := node.GetChunk()
 		uppers := make([]string, 0, len(c.Bounds))
 		columns := make([]string, 0, len(c.Bounds))
 		for _, bound := range c.Bounds {

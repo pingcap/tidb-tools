@@ -42,7 +42,7 @@ type TiDBChunksIterator struct {
 	iter splitter.Iterator
 }
 
-func (t *TiDBChunksIterator) Next() (*checkpoints.TableRange, error) {
+func (t *TiDBChunksIterator) Next() (*checkpoints.Node, error) {
 	// TODO: creates different tables chunks in parallel
 	if t.iter == nil {
 		return nil, nil
@@ -56,7 +56,7 @@ func (t *TiDBChunksIterator) Next() (*checkpoints.TableRange, error) {
 		curIndex := t.getCurTableIndex()
 		schema := t.TableDiffs[curIndex].Schema
 		table := t.TableDiffs[curIndex].Table
-		return &checkpoints.TableRange{
+		return &checkpoints.Node{
 			ChunkRange: chunks,
 			TableIndex: curIndex,
 			Schema:     schema,
@@ -79,7 +79,7 @@ func (t *TiDBChunksIterator) Next() (*checkpoints.TableRange, error) {
 	curIndex := t.getCurTableIndex()
 	schema := t.TableDiffs[curIndex].Schema
 	table := t.TableDiffs[curIndex].Table
-	return &checkpoints.TableRange{
+	return &checkpoints.Node{
 		ChunkRange: chunks,
 		TableIndex: curIndex,
 		Schema:     schema,
@@ -228,7 +228,7 @@ func (s *TiDBSource) GenerateChunksIterator(node *checkpoints.Node) (DBIterator,
 	return dbIter, err
 }
 
-func (s *TiDBSource) GetCrc32(ctx context.Context, tableChunk *checkpoints.TableRange, checksumInfoCh chan *ChecksumInfo) {
+func (s *TiDBSource) GetCrc32(ctx context.Context, tableChunk *checkpoints.Node, checksumInfoCh chan *ChecksumInfo) {
 	// TODO get crc32 with sql
 	beginTime := time.Now()
 	table := s.tableDiffs[tableChunk.TableIndex]
@@ -258,7 +258,7 @@ type TiDBRowsIterator struct {
 	rows *sql.Rows
 }
 
-func (s *TiDBSource) GetRowsIterator(ctx context.Context, tableChunk *checkpoints.TableRange) (RowDataIterator, error) {
+func (s *TiDBSource) GetRowsIterator(ctx context.Context, tableChunk *checkpoints.Node) (RowDataIterator, error) {
 	args := utils.StringsToInterfaces(tableChunk.ChunkRange.Args)
 
 	query := fmt.Sprintf(s.tableRows[tableChunk.TableIndex].tableRowsQuery, tableChunk.ChunkRange.Where)

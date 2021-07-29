@@ -150,9 +150,9 @@ type ChecksumInfo struct {
 
 type Source interface {
 	GenerateChunksIterator(node *checkpoints.Node) (DBIterator, error)
-	GetCrc32(context.Context, *checkpoints.TableRange, chan *ChecksumInfo)
+	GetCrc32(context.Context, *checkpoints.Node, chan *ChecksumInfo)
 	GetOrderKeyCols(int) []*model.ColumnInfo
-	GetRowsIterator(context.Context, *checkpoints.TableRange) (RowDataIterator, error)
+	GetRowsIterator(context.Context, *checkpoints.Node) (RowDataIterator, error)
 	GenerateReplaceDML(map[string]*dbutil.ColumnData, int) string
 	GenerateDeleteDML(map[string]*dbutil.ColumnData, int) string
 	GetTable(i int) *common.TableDiff
@@ -454,6 +454,6 @@ func initTables(ctx context.Context, cfg *config.Config) (connDBs map[string]*sq
 // DBIterator generate next chunk for the whole tables lazily.
 type DBIterator interface {
 	// Next seeks the next chunk, return nil if seeks to end.
-	Next() (*checkpoints.TableRange, error)
+	Next() (*checkpoints.Node, error)
 	Close()
 }
