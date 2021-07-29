@@ -894,3 +894,58 @@ func GetParserForDB(db *sql.DB) (*parser.Parser, error) {
 	parser2.SetSQLMode(mode)
 	return parser2, nil
 }
+
+// GetApproximateMid get a mid point from index columns by doing multiple sample, and get mid point from sample points
+func GetApproximateMid(ctx context.Context, db *sql.DB, schema, table string, columns []*model.ColumnInfo, num int, limitRange string, limitArgs []interface{}, collation string) ([]string, error) {
+	if len(columns) == 0 {
+		return nil, errors.Annotate(errors.NotValidf("not valid columns"), "the columns is empty")
+	}
+	midValues := make([]string, len(columns))
+	for i, column := range columns {
+		randomValues, err := GetRandomValues(ctx, db, schema, table, column.Name.O, num, limitRange, limitArgs, collation)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		midValues[i] = randomValues[len(randomValues)/2]
+	}
+	return midValues, nil
+}
+
+// GetCRC32Checksum returns checksum code of some data by given condition
+func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, int64, error) {
+	/*
+		calculate CRC32 checksum example:
+		mysql> SELECT BIT_XOR() AS checksum FROM test.test WHERE id > 0 AND id < 10;
+		select count(t.checksum), BIT_XOR(t.checksum) from (select CAST(CRC32(CONCAT_WS(',', id, name, age, CONCAT(ISNULL(id), ISNULL(name), ISNULL(age))))AS UNSIGNED) as checksum from test.test where id > 0 and id < 10 ) as t;
+		+------------+
+		| checksum   |
+		+------------+
+		| 1466098199 |
+		+------------+
+	*/
+	columnNames := make([]string, 0, len(tbInfo.Columns))
+	columnIsNull := make([]string, 0, len(tbInfo.Columns))
+	for _, col := range tbInfo.Columns {
+		columnNames = append(columnNames, ColumnName(col.Name.O))
+		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", ColumnName(col.Name.O)))
+	}
+
+	query := fmt.Sprintf("SELECT COUNT(T.checksum), BIT_XOR(T.checksum) from (SELECT CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED) AS checksum FROM %s WHERE %s;",
+		strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), TableName(schemaName, tableName), limitRange)
+
+	log.Debug("count and checksum", zap.String("sql", query), zap.Reflect("args", args))
+
+	var count sql.NullInt64
+	var checksum sql.NullInt64
+	err := db.QueryRowContext(ctx, query, args...).Scan(&count, &checksum)
+	if err != nil {
+		return -1, -1, errors.Trace(err)
+	}
+	if !checksum.Valid {
+		// if don't have any data, the checksum will be `NULL`
+		log.Warn("get empty checksum", zap.String("sql", query), zap.Reflect("args", args))
+		return 0, 0, nil
+	}
+
+	return count.Int64, checksum.Int64, nil
+}
