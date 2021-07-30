@@ -53,13 +53,9 @@ func (t *TiDBChunksIterator) Next() (*splitter.RangeInfo, error) {
 
 	if c != nil {
 		curIndex := t.getCurTableIndex()
-		schema := t.TableDiffs[curIndex].Schema
-		table := t.TableDiffs[curIndex].Table
 		return &splitter.RangeInfo{
 			ChunkRange: c,
 			TableIndex: curIndex,
-			Schema:     schema,
-			Table:      table,
 			IndexID:    t.getCurTableIndexID(),
 		}, nil
 	}
@@ -75,13 +71,9 @@ func (t *TiDBChunksIterator) Next() (*splitter.RangeInfo, error) {
 		return nil, errors.Trace(err)
 	}
 	curIndex := t.getCurTableIndex()
-	schema := t.TableDiffs[curIndex].Schema
-	table := t.TableDiffs[curIndex].Table
 	return &splitter.RangeInfo{
 		ChunkRange: c,
 		TableIndex: curIndex,
-		Schema:     schema,
-		Table:      table,
 		IndexID:    t.getCurTableIndexID(),
 	}, nil
 }
@@ -108,15 +100,16 @@ func (t *TiDBChunksIterator) nextTable(startRange *splitter.RangeInfo) error {
 		t.iter = nil
 		return nil
 	}
-	if startRange != nil {
-		for i, tableDiff := range t.TableDiffs {
-			if tableDiff.Schema == startRange.GetSchema() && tableDiff.Table == startRange.GetTable() {
-				t.nextTableIndex = i + 1
-			}
-		}
-	}
 	curTable := t.TableDiffs[t.nextTableIndex]
 	t.nextTableIndex++
+
+	// reads table index from checkpoint at the beginning
+	if startRange != nil {
+		curIndex := startRange.GetTableIndex()
+		curTable = t.TableDiffs[curIndex]
+		t.nextTableIndex = curIndex + 1
+	}
+
 	chunkIter, err := t.splitChunksForTable(curTable, startRange)
 	if err != nil {
 		return errors.Trace(err)
@@ -181,7 +174,6 @@ type TiDBSource struct {
 }
 
 func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, dbConn *sql.DB) (Source, error) {
-	// TODO build TiDB Source
 	ts := &TiDBSource{
 		tableDiffs: tableDiffs,
 		tableRows:  make([]*TableRows, 0, len(tableDiffs)),
@@ -202,12 +194,11 @@ func (s *TiDBSource) Close() {
 	s.dbConn.Close()
 }
 
-func (s *TiDBSource) GetTable(i int) *common.TableDiff {
-	return s.tableDiffs[i]
+func (s *TiDBSource) GetDB() *sql.DB {
+	return s.dbConn
 }
 
 func (s *TiDBSource) GenerateChunksIterator(r *splitter.RangeInfo) (DBIterator, error) {
-	// TODO build Iterator with config.
 	dbIter := &TiDBChunksIterator{
 		TableDiffs:     s.tableDiffs,
 		nextTableIndex: 0,
