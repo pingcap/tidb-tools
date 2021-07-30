@@ -54,7 +54,7 @@ func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, ch
 		splitFieldArr[i] = strings.TrimSpace(splitFieldArr[i])
 	}
 
-	fields, err := getSplitFields(table.Info, splitFieldArr)
+	fields, err := GetSplitFields(table.Info, splitFieldArr)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -121,8 +121,8 @@ func (s *RandomIterator) Close() {
 
 }
 
-// getSplitFields returns fields to split chunks, order by pk, uk, index, columns.
-func getSplitFields(table *model.TableInfo, splitFields []string) ([]*model.ColumnInfo, error) {
+// GetSplitFields returns fields to split chunks, order by pk, uk, index, columns.
+func GetSplitFields(table *model.TableInfo, splitFields []string) ([]*model.ColumnInfo, error) {
 	cols := make([]*model.ColumnInfo, 0, len(table.Columns))
 	colsMap := make(map[string]*model.ColumnInfo)
 
