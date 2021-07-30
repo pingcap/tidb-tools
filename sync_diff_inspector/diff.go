@@ -370,7 +370,7 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 			zap.Int("chunk id", tableRange.ID),
 			zap.Int64("count1", count1),
 			zap.Int64("count2", count2))
-		if diff := float64(count1) / float64(count2); diff > splitBound || diff < 1/splitBound {
+		if diff := float64(count1) / float64(count2); diff > splitBound || diff < 1.0/splitBound {
 			log.Warn("the split is not great, retry", zap.Int64("count1", count1), zap.Int64("count2", count2))
 			continue
 		}
