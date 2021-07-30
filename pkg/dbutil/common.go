@@ -933,16 +933,28 @@ func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table stri
 		limitRange,
 		strings.Join(columnNames, ", "),
 		strconv.FormatInt(count/2, 10))
-	cs := make([]interface{}, len(tbInfo.Columns))
-	err := db.QueryRowContext(ctx, query, args...).Scan(cs...)
+	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	columns := make([]string, len(tbInfo.Columns))
-	for i, column := range cs {
-		columns[i] = fmt.Sprint(column)
+	defer rows.Close()
+	columns := make([]interface{}, len(tbInfo.Columns))
+	for i := range columns {
+		var s string
+		columns[i] = &s
 	}
-	return columns, nil
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return nil, errors.Trace(err)
+		}
+		log.Error("there is no row in result set")
+	}
+	err = rows.Scan(columns...)
+	columnValues := make([]string, len(columns))
+	for i, column := range columns {
+		columnValues[i] = fmt.Sprint(column)
+	}
+	return columnValues, nil
 }
 
 // GetCRC32Checksum returns checksum code of some data by given condition
