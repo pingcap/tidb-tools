@@ -50,6 +50,17 @@ func (r *RangeInfo) GetChunk() *chunk.Range {
 	return r.ChunkRange
 }
 
+func (r *RangeInfo) Copy() *RangeInfo {
+	return &RangeInfo{
+		ID:         r.ID,
+		ChunkRange: r.ChunkRange.Copy(),
+		TableIndex: r.TableIndex,
+		Schema:     r.Schema,
+		Table:      r.Table,
+		IndexID:    r.IndexID,
+	}
+}
+
 // GetTableIndex return the index of table diffs.
 // TODO check config before use checkpoint
 func (r *RangeInfo) GetTableIndex() int {
