@@ -169,7 +169,7 @@ func (df *Diff) pickSource(ctx context.Context) source.Source {
 	return df.downstream
 }
 
-func (df *Diff) generateChunksIterator(ctx context.Context) (source.DBIterator, error) {
+func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterator, error) {
 	var startRange *splitter.RangeInfo
 	if df.useCheckpoint {
 		node, err := df.cp.LoadChunk()
@@ -188,7 +188,7 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.DBIterator, 
 		}
 	}
 
-	return df.workSource.GetDBIter(startRange, df.workSource.GetTableIter())
+	return df.workSource.GetRangeIterator(startRange, df.workSource.GetTableAnalyzer())
 }
 
 func (df *Diff) handleCheckpoints(ctx context.Context) {
@@ -318,7 +318,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) 
 		if lastUpstreamData == nil {
 			// don't have source data, so all the targetRows's data is redundant, should be deleted
 			for lastDownstreamData != nil {
-				sql := df.downstream.GenerateDeleteDML(lastDownstreamData, rangeInfo.GetTableIndex())
+				sql := df.downstream.GenerateFixSQL(source.Delete, lastDownstreamData, rangeInfo.GetTableIndex())
 				log.Info("[delete]", zap.String("sql", sql))
 
 				select {
@@ -338,7 +338,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) 
 		if lastDownstreamData != nil {
 			// target lack some data, should insert the last source datas
 			for lastUpstreamData != nil {
-				sql := df.downstream.GenerateReplaceDML(lastUpstreamData, rangeInfo.GetTableIndex())
+				sql := df.downstream.GenerateFixSQL(source.Replace, lastUpstreamData, rangeInfo.GetTableIndex())
 				log.Info("[insert]", zap.String("sql", sql))
 
 				select {
@@ -372,17 +372,17 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) 
 		switch cmp {
 		case 1:
 			// delete
-			sql = df.downstream.GenerateDeleteDML(lastDownstreamData, rangeInfo.GetTableIndex())
+			sql = df.downstream.GenerateFixSQL(source.Delete, lastDownstreamData, rangeInfo.GetTableIndex())
 			log.Info("[delete]", zap.String("sql", sql))
 			lastDownstreamData = nil
 		case -1:
 			// insert
-			sql = df.downstream.GenerateReplaceDML(lastUpstreamData, rangeInfo.GetTableIndex())
+			sql = df.downstream.GenerateFixSQL(source.Replace, lastUpstreamData, rangeInfo.GetTableIndex())
 			log.Info("[insert]", zap.String("sql", sql))
 			lastUpstreamData = nil
 		case 0:
 			// update
-			sql = df.downstream.GenerateReplaceDML(lastUpstreamData, rangeInfo.GetTableIndex())
+			sql = df.downstream.GenerateFixSQL(source.Replace, lastUpstreamData, rangeInfo.GetTableIndex())
 			log.Info("[update]", zap.String("sql", sql))
 			lastUpstreamData = nil
 			lastDownstreamData = nil

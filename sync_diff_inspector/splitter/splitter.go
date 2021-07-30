@@ -18,8 +18,8 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 )
 
-// TableIterator generate next chunk for only one table lazily.
-type TableIterator interface {
+// ChunkIterator generate next chunk for only one table lazily.
+type ChunkIterator interface {
 	// Next seeks the next chunk, return nil if seeks to end.
 	Next() (*chunk.Range, error)
 	Close()

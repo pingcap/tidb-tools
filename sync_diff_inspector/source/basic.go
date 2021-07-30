@@ -35,7 +35,7 @@ type BasicSource struct {
 	dbConn     *sql.DB
 }
 
-func (s *BasicSource) GetDBIter(r *splitter.RangeInfo, analyzer TableIter) (DBIterator, error) {
+func (s *BasicSource) GetRangeIterator(r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
 	dbIter := &BasicChunksIterator{
 		tableAnalyzer:  analyzer,
 		TableDiffs:     s.tableDiffs,
@@ -69,12 +69,15 @@ func (s *BasicSource) GetOrderKeyCols(tableIndex int) []*model.ColumnInfo {
 	return s.tableRows[tableIndex].tableOrderKeyCols
 }
 
-func (s *BasicSource) GenerateReplaceDML(data map[string]*dbutil.ColumnData, tableIndex int) string {
-	return utils.GenerateReplaceDML(data, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
-}
-
-func (s *BasicSource) GenerateDeleteDML(data map[string]*dbutil.ColumnData, tableIndex int) string {
-	return utils.GenerateDeleteDML(data, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
+func (s *BasicSource) GenerateFixSQL(t DMLType, data map[string]*dbutil.ColumnData, tableIndex int) string {
+	if t == Replace {
+		return utils.GenerateReplaceDML(data, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
+	}
+	if t == Delete {
+		return utils.GenerateDeleteDML(data, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
+	}
+	log.Fatal("Don't support this type", zap.Any("dml type", t))
+	return ""
 }
 
 func (s *BasicSource) GetRowsIterator(ctx context.Context, tableRange *splitter.RangeInfo) (RowDataIterator, error) {
@@ -88,7 +91,7 @@ func (s *BasicSource) GetRowsIterator(ctx context.Context, tableRange *splitter.
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	return &RowsIterator{
+	return &BasicRowsIterator{
 		rows,
 	}, nil
 }
@@ -99,7 +102,7 @@ func (s *BasicSource) GetDB() *sql.DB {
 
 // BasicChunksIterator is used for single mysql/tidb source.
 type BasicChunksIterator struct {
-	tableAnalyzer TableIter
+	tableAnalyzer TableAnalyzer
 
 	TableDiffs     []*common.TableDiff
 	nextTableIndex int
@@ -107,7 +110,7 @@ type BasicChunksIterator struct {
 	limit  int
 	dbConn *sql.DB
 
-	tableIter splitter.TableIterator
+	tableIter splitter.ChunkIterator
 }
 
 func (t *BasicChunksIterator) Next() (*splitter.RangeInfo, error) {
@@ -179,7 +182,7 @@ func (t *BasicChunksIterator) nextTable(startRange *splitter.RangeInfo) error {
 		t.nextTableIndex = curIndex + 1
 	}
 
-	chunkIter, err := t.tableAnalyzer.GetIterForTable(curTable, startRange)
+	chunkIter, err := t.tableAnalyzer.AnalyzeSplitter(curTable, startRange)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -188,14 +191,4 @@ func (t *BasicChunksIterator) nextTable(startRange *splitter.RangeInfo) error {
 	}
 	t.tableIter = chunkIter
 	return nil
-}
-
-func (t *BasicChunksIterator) analyzeChunkSize(table *common.TableDiff) (int64, error) {
-	return dbutil.GetRowCount(context.Background(), t.dbConn, table.Schema, table.Table, table.Range, nil)
-	/*
-		if err != nil {
-			return 0, errors.Trace(err)
-		}
-	*/
-	// TODO analyze table
 }

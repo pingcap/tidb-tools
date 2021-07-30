@@ -16,7 +16,6 @@ package source
 import (
 	"context"
 	"database/sql"
-	"strconv"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -28,7 +27,6 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
-	"github.com/pingcap/tidb/types"
 	"go.uber.org/zap"
 )
 
@@ -40,125 +38,61 @@ const (
 	Replace
 )
 
-type RowData struct {
-	Data   map[string]*dbutil.ColumnData
-	Source int
-}
-
-// RowDatas is a heap of MergeItems.
-type RowDatas struct {
-	Rows         []RowData
-	OrderKeyCols []*model.ColumnInfo
-}
-
-func (r RowDatas) Len() int { return len(r.Rows) }
-func (r RowDatas) Less(i, j int) bool {
-	for _, col := range r.OrderKeyCols {
-		col1, ok := r.Rows[i].Data[col.Name.O]
-		if !ok {
-			log.Fatal("data don't have column", zap.String("column", col.Name.O), zap.Reflect("data", r.Rows[i].Data))
-		}
-		col2, ok := r.Rows[j].Data[col.Name.O]
-		if !ok {
-			log.Fatal("data don't have column", zap.String("column", col.Name.O), zap.Reflect("data", r.Rows[j].Data))
-		}
-
-		if col1.IsNull {
-			if col2.IsNull {
-				continue
-			}
-
-			return true
-		}
-		if col2.IsNull {
-			return false
-		}
-
-		strData1 := string(col1.Data)
-		strData2 := string(col2.Data)
-
-		if needQuotes(col.FieldType) {
-			if strData1 == strData2 {
-				continue
-			}
-			if strData1 > strData2 {
-				return false
-			}
-			return true
-		}
-
-		num1, err1 := strconv.ParseFloat(strData1, 64)
-		if err1 != nil {
-			log.Fatal("convert string to float failed", zap.String("column", col.Name.O), zap.String("data", strData1), zap.Error(err1))
-		}
-		num2, err2 := strconv.ParseFloat(strData2, 64)
-		if err2 != nil {
-			log.Fatal("convert string to float failed", zap.String("column", col.Name.O), zap.String("data", strData2), zap.Error(err2))
-		}
-
-		if num1 == num2 {
-			continue
-		}
-		if num1 > num2 {
-			return false
-		}
-		return true
-
-	}
-
-	return false
-}
-func (r RowDatas) Swap(i, j int) { r.Rows[i], r.Rows[j] = r.Rows[j], r.Rows[i] }
-
-// Push implements heap.Interface's Push function
-func (r *RowDatas) Push(x interface{}) {
-	r.Rows = append(r.Rows, x.(RowData))
-}
-
-// Pop implements heap.Interface's Pop function
-func (r *RowDatas) Pop() interface{} {
-	if len(r.Rows) == 0 {
-		return nil
-	}
-	old := r.Rows
-	n := len(old)
-	x := old[n-1]
-	r.Rows = old[0 : n-1]
-	return x
-}
-
-func needQuotes(ft types.FieldType) bool {
-	return !(dbutil.IsNumberType(ft.Tp) || dbutil.IsFloatType(ft.Tp))
-}
-
-type RowDataIterator interface {
-	Next() (map[string]*dbutil.ColumnData, error)
-	GenerateFixSQL(t DMLType) (string, error)
-	Close()
-}
-
 type ChecksumInfo struct {
 	Checksum int64
 	Err      error
 	Cost     time.Duration
 }
 
-type Source interface {
-	// the implement of this function is different in mysql/tidb.
-	GetTableIter() TableIter
+// RowDataIterator represents the row data in source.
+type RowDataIterator interface {
+	// Next seeks the next row data, it used when compared rows.
+	Next() (map[string]*dbutil.ColumnData, error)
+	// GenerateFixSQL generates the firx sql to downstream source according to the rows.
+	GenerateFixSQL(t DMLType) (string, error)
 
-	GetDBIter(*splitter.RangeInfo, TableIter) (DBIterator, error)
-	GetCrc32(context.Context, *splitter.RangeInfo, chan *ChecksumInfo)
-	GetOrderKeyCols(int) []*model.ColumnInfo
-	GetRowsIterator(context.Context, *splitter.RangeInfo) (RowDataIterator, error)
-	GenerateReplaceDML(map[string]*dbutil.ColumnData, int) string
-	GenerateDeleteDML(map[string]*dbutil.ColumnData, int) string
-	GetDB() *sql.DB
+	// Close release the resource.
 	Close()
 }
 
-type TableIter interface {
-	GetIterForTable(*common.TableDiff, *splitter.RangeInfo) (splitter.TableIterator, error)
+// TableAnalyzer represents the method in different source.
+// each source has its own analyze function.
+type TableAnalyzer interface {
+	// AnalyzeSplitter picks the proper splitter.ChunkIterator according to table and source.
+	AnalyzeSplitter(*common.TableDiff, *splitter.RangeInfo) (splitter.ChunkIterator, error)
+
+	// AnalyzeChunkSize analyze the proper chunk size according to the table and source.
+ 	AnalyzeChunkSize(table *common.TableDiff) (int64, error)
+}
+
+type Source interface {
+	// GetTableAnalyzer pick the proper analyzer for different source.
+	// the implement of this function is different in mysql/tidb.
+	GetTableAnalyzer() TableAnalyzer
+
+	// GetRangeIterator generates the range iterator with the checkpoint(*splitter.RangeInfo) and analyzer.
+	// this is the mainly iterator across the whole sync diff.
+	// One source has one range iterator to produce the range to channel.
+	// there are many workers consume the range from the channel to compare.
+	GetRangeIterator(*splitter.RangeInfo, TableAnalyzer) (RangeIterator, error)
+
+	// GetCrc32 gets the crc32 result from given range.
+	GetCrc32(context.Context, *splitter.RangeInfo, chan *ChecksumInfo)
+
+	// GetOrderKeyCols ...
+	GetOrderKeyCols(int) []*model.ColumnInfo
+
+	// GetRowsIterator gets the row data iterator from given range.
+	GetRowsIterator(context.Context, *splitter.RangeInfo) (RowDataIterator, error)
+
+	// GenerateFixSQL generates the fix sql with given type.
+	GenerateFixSQL(DMLType, map[string]*dbutil.ColumnData, int) string
+
+	// GetDB represents the db connection.
+	GetDB() *sql.DB
+
+	// Close ...
+	Close()
 }
 
 func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, upstream Source, err error) {
@@ -214,7 +148,7 @@ func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, dbs
 	} else {
 		if ok {
 			// TiDB
-			log.Fatal("Don't support check table in multiple tidb instance, please specify on tidb instance.")
+			log.Fatal("Don't support check table in multiple tidb instance, please specify one tidb instance.")
 		} else {
 			return NewMySQLSources(ctx)
 		}
@@ -409,8 +343,8 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 	return cfgTables, nil
 }
 
-// DBIterator generate next chunk for the whole tables lazily.
-type DBIterator interface {
+// RangeIterator generate next chunk for the whole tables lazily.
+type RangeIterator interface {
 	// Next seeks the next chunk, return nil if seeks to end.
 	Next() (*splitter.RangeInfo, error)
 
@@ -422,21 +356,21 @@ type TableRows struct {
 	tableOrderKeyCols []*model.ColumnInfo
 }
 
-type RowsIterator struct {
+type BasicRowsIterator struct {
 	rows *sql.Rows
 }
 
-func (s *RowsIterator) Close() {
+func (s *BasicRowsIterator) Close() {
 	s.rows.Close()
 }
 
-func (s *RowsIterator) Next() (map[string]*dbutil.ColumnData, error) {
+func (s *BasicRowsIterator) Next() (map[string]*dbutil.ColumnData, error) {
 	if s.rows.Next() {
 		return dbutil.ScanRow(s.rows)
 	}
 	return nil, nil
 }
 
-func (s *RowsIterator) GenerateFixSQL(t DMLType) (string, error) {
+func (s *BasicRowsIterator) GenerateFixSQL(t DMLType) (string, error) {
 	return "", nil
 }
