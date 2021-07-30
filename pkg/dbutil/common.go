@@ -950,6 +950,9 @@ func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table stri
 		log.Error("there is no row in result set")
 	}
 	err = rows.Scan(columns...)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
 	columnValues := make([]string, len(columns))
 	for i, column := range columns {
 		columnValues[i] = fmt.Sprint(column)
