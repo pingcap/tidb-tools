@@ -922,21 +922,14 @@ func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table stri
 		limitRange,
 		strings.Join(columnNames, ", "),
 		strconv.FormatInt(count/2, 10))
-	rows, err := db.QueryContext(ctx, query, args...)
+	cs := make([]interface{}, len(tbInfo.Columns), len(tbInfo.Columns))
+	err := db.QueryRowContext(ctx, query, args...).Scan(cs...)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	defer rows.Close()
-	columns := make([]string, 0, len(tbInfo.Columns))
-	for rows.Next() {
-		var value sql.NullString
-		err = rows.Scan(&value)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		if value.Valid {
-			columns = append(columns, value.String)
-		}
+	columns := make([]string, len(tbInfo.Columns), len(tbInfo.Columns))
+	for i, column := range cs {
+		columns[i] = fmt.Sprint(column)
 	}
 	return columns, nil
 }
