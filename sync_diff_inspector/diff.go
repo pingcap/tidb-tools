@@ -330,22 +330,16 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 		zap.Int64("count1", count1),
 		zap.Int64("count2", count2))
 
-	var cnt int64
-	if df.fromUpstream {
-		cnt = count1
-	} else {
-		cnt = count2
-	}
 	if !isEqual1 && !isEqual2 {
 		return tableRange, nil
 	} else if !isEqual1 {
-		c, err := df.BinGenerate(ctx, targetSource, tableRange2, cnt)
+		c, err := df.BinGenerate(ctx, targetSource, tableRange2, count2)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 		return c, nil
 	} else if !isEqual2 {
-		c, err := df.BinGenerate(ctx, targetSource, tableRange1, cnt)
+		c, err := df.BinGenerate(ctx, targetSource, tableRange1, count1)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
