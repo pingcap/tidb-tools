@@ -38,6 +38,9 @@ type Diff struct {
 	upstream   source.Source
 	downstream source.Source
 
+	// workSource is one of upstream/downstream by some policy in #pickSource.
+	workSource source.Source
+
 	chunkSize         int
 	sample            int
 	checkThreadCount  int
@@ -101,6 +104,8 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 
 	df.downstream, df.upstream, err = source.NewSources(ctx, cfg)
 
+	df.workSource = df.pickSource(ctx)
+
 	df.fixSQLFile, err = os.Create(cfg.FixSQLFile)
 	if err != nil {
 		return errors.Trace(err)
@@ -148,6 +153,22 @@ func (df *Diff) Equal(ctx context.Context) error {
 	return nil
 }
 
+// pickSource pick one proper source to do some work. e.g. generate chunks
+func (df *Diff) pickSource(ctx context.Context) source.Source {
+	if ok, _ := dbutil.IsTiDB(ctx, df.upstream.GetDB()); ok {
+		log.Info("The upstream is TiDB. pick it as work source")
+		return df.upstream
+	}
+	if ok, _ := dbutil.IsTiDB(ctx, df.downstream.GetDB()); ok {
+		log.Info("The downstream is TiDB. pick it as work source")
+		return df.downstream
+	}
+
+	// if the both sides are not TiDB, choose any one of them would be ok
+	log.Info("pick the downstream as work source")
+	return df.downstream
+}
+
 func (df *Diff) generateChunksIterator(ctx context.Context) (source.DBIterator, error) {
 	var startRange *splitter.RangeInfo
 	if df.useCheckpoint {
@@ -167,15 +188,7 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.DBIterator, 
 		}
 	}
 
-	if ok, _ := dbutil.IsTiDB(ctx, df.upstream.GetDB()); ok {
-		return df.upstream.GenerateChunksIterator(startRange)
-	}
-	if ok, _ := dbutil.IsTiDB(ctx, df.downstream.GetDB()); ok {
-		return df.downstream.GenerateChunksIterator(startRange)
-	}
-
-	// if both side are not TiDB, choose the any one would be ok
-	return df.downstream.GenerateChunksIterator(startRange)
+	return df.workSource.GenerateChunksIterator(startRange)
 }
 
 func (df *Diff) handleCheckpoints(ctx context.Context) {
@@ -343,7 +356,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) 
 			break
 		}
 
-		eq, cmp, err := utils.CompareData(lastUpstreamData, lastDownstreamData, df.downstream.GetOrderKeyCols(rangeInfo.GetTableIndex()))
+		eq, cmp, err := utils.CompareData(lastUpstreamData, lastDownstreamData, df.workSource.GetOrderKeyCols(rangeInfo.GetTableIndex()))
 		if err != nil {
 			return false, errors.Trace(err)
 		}
