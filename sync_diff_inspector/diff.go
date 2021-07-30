@@ -249,6 +249,10 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 		go df.downstream.GetCountAndCrc32(ctx, rangeInfo, countCh, upstreamChecksumCh)
 	}
 	count := <-countCh
+	log.Info("chunk size",
+		zap.Int("chunk id", rangeInfo.ID),
+		zap.String("schema", rangeInfo.Schema),
+		zap.String("table", rangeInfo.Table))
 	crc1Info := <-downstreamChecksumCh
 	crc2Info := <-upstreamChecksumCh
 	if crc1Info.Err != nil {
@@ -356,9 +360,16 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 			return nil, errors.Trace(err)
 		}
 		if count1+count2 != count {
-			log.Error("the count is not correct", zap.Int64("count1", count1), zap.Int64("count2", count2), zap.Int64("count", count))
+			log.Error("the count is not correct",
+				zap.Int64("count1", count1),
+				zap.Int64("count2", count2),
+				zap.Int64("count", count))
 			panic("count is not correct")
 		}
+		log.Info("chunk split successfully",
+			zap.Int("chunk id", tableRange.ID),
+			zap.Int64("count1", count1),
+			zap.Int64("count2", count2))
 		if diff := float64(count1) / float64(count2); diff > splitBound || diff < 1/splitBound {
 			log.Warn("the split is not great, retry", zap.Int64("count1", count1), zap.Int64("count2", count2))
 			continue
