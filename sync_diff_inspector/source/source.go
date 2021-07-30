@@ -155,17 +155,15 @@ type Source interface {
 }
 
 func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, upstream Source, err error) {
-	// downstream only tidb now
-	// TODO support mysql?
-	sourceDBs, cfgTables, err := initTables(ctx, cfg)
+	tablesToBeCheck, err := initTables(ctx, cfg)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
 
-	targetTableDiffs := make([]*common.TableDiff, 0, len(cfgTables))
-	for _, tables := range cfgTables {
+	tableDiffs := make([]*common.TableDiff, 0, len(tablesToBeCheck))
+	for _, tables := range tablesToBeCheck {
 		for _, tableConfig := range tables {
-			targetTableDiffs = append(targetTableDiffs, &common.TableDiff{
+			tableDiffs = append(tableDiffs, &common.TableDiff{
 				Schema:        tableConfig.Schema,
 				Table:         tableConfig.Table,
 				Info:          tableConfig.TargetTableInfo,
@@ -173,52 +171,49 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 				Fields:        tableConfig.Fields,
 				Range:         tableConfig.Range,
 				Collation:     tableConfig.Collation,
-				// TODO table different?
-				UseChecksum:       cfg.UseChecksum,
-				OnlyUseChecksum:   cfg.OnlyUseChecksum,
-				IgnoreStructCheck: cfg.IgnoreStructCheck,
-				IgnoreDataCheck:   cfg.IgnoreDataCheck,
-				UseCheckpoint:     cfg.UseCheckpoint,
 			})
 		}
 	}
 
-	downstream, err = NewTiDBSource(ctx, targetTableDiffs, cfg.TargetDBCfg.Conn)
+	upstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.SourceDBCfg...)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
 
-	switch cfg.SourceDBCfg[0].DBType {
-	case "TiDB":
-		sourceTablesDiffs := make([]*common.TableDiff, 0, len(cfgTables))
-		for _, tables := range cfgTables {
-			for _, tableConfig := range tables {
-				sourceTable := tableConfig.SourceTables[0]
-				sourceTablesDiffs = append(sourceTablesDiffs, &common.TableDiff{
-					Schema: sourceTable.Schema,
-					Table:  sourceTable.Table,
-				})
-			}
-		}
-		upstream, err = NewTiDBSource(ctx, sourceTablesDiffs, cfg.SourceDBCfg[0].Conn)
-		if err != nil {
-			return nil, nil, errors.Trace(err)
-		}
-	case "mysql":
-		sourceTablesDiffs := make([][]config.TableInstance, 0, len(cfgTables))
-		for _, tables := range cfgTables {
-			for _, tableConfig := range tables {
-				sourceTablesDiffs = append(sourceTablesDiffs, tableConfig.SourceTables)
-			}
-		}
-		upstream, err = NewMysqlSource(ctx, sourceTablesDiffs, sourceDBs)
-		if err != nil {
-			return nil, nil, errors.Trace(err)
-		}
+	downstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.TargetDBCfg)
+	if err != nil {
+		return nil, nil, errors.Trace(err)
+	}
+	return upstream, downstream, nil
+}
 
+func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, dbs ...*config.DBConfig) (Source, error) {
+	if len(dbs) < 1 {
+		return nil, errors.Errorf("no db config detected")
+	}
+	ok, err := dbutil.IsTiDB(ctx, dbs[0].Conn)
+	if err != nil {
+		return nil, errors.Annotatef(err, "connect to db failed" )
 	}
 
-	return
+	if len(dbs) == 1 {
+		if ok {
+			// TiDB
+			return NewTiDBSource(ctx, tableDiffs, dbs[0].Conn)
+		} else {
+			// Single Mysql
+			return NewMySQLSource(ctx, tableDiffs, dbs[0].Conn)
+		}
+	} else {
+		if ok {
+			// TiDB
+			log.Fatal("Don't support check table in multiple tidb instance, please specify on tidb instance.")
+		} else {
+			return NewMySQLSources(ctx, tableDiffs, dbs)
+		}
+	}
+	// unreachable
+	return nil, nil
 }
 
 func initDBConn(ctx context.Context, cfg *config.Config) (sourceDBs map[string]*config.DBConfig, err error) {
@@ -254,20 +249,15 @@ func initDBConn(ctx context.Context, cfg *config.Config) (sourceDBs map[string]*
 	return
 }
 
-func initTables(ctx context.Context, cfg *config.Config) (connDBs map[string]*sql.DB, cfgTables map[string]map[string]*config.TableConfig, err error) {
-	sourceDBs, err := initDBConn(ctx, cfg)
-	if err != nil {
-		return nil, nil, errors.Trace(err)
-	}
-
+func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]map[string]*config.TableConfig, err error) {
 	tableRouter, err := router.NewTableRouter(false, cfg.TableRules)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
 
 	allTablesMap, err := utils.GetAllTables(ctx, cfg)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
 
 	// get all source table's matched target table
@@ -282,7 +272,7 @@ func initTables(ctx context.Context, cfg *config.Config) (connDBs map[string]*sq
 			for table := range allTables {
 				targetSchema, targetTable, err := tableRouter.Route(schema, table)
 				if err != nil {
-					return nil, nil, errors.Errorf("get route result for %s.%s.%s failed, error %v", instanceID, schema, table, err)
+					return nil, errors.Errorf("get route result for %s.%s.%s failed, error %v", instanceID, schema, table, err)
 				}
 
 				if _, ok := sourceTablesMap[targetSchema]; !ok {
@@ -311,13 +301,13 @@ func initTables(ctx context.Context, cfg *config.Config) (connDBs map[string]*sq
 		tables := make([]string, 0, len(schemaTables.Tables))
 		allTables, ok := allTablesMap[cfg.TargetDBCfg.InstanceID][schemaTables.Schema]
 		if !ok {
-			return nil, nil, errors.NotFoundf("schema %s.%s", cfg.TargetDBCfg.InstanceID, schemaTables.Schema)
+			return nil, errors.NotFoundf("schema %s.%s", cfg.TargetDBCfg.InstanceID, schemaTables.Schema)
 		}
 
 		for _, table := range schemaTables.Tables {
 			matchedTables, err := utils.GetMatchTable(cfg.TargetDBCfg, schemaTables.Schema, table, allTables)
 			if err != nil {
-				return nil, nil, errors.Trace(err)
+				return nil, errors.Trace(err)
 			}
 
 			//exclude those in "exclude-tables"
@@ -333,7 +323,7 @@ func initTables(ctx context.Context, cfg *config.Config) (connDBs map[string]*sq
 		for _, tableName := range tables {
 			tableInfo, err := dbutil.GetTableInfo(ctx, cfg.TargetDBCfg.Conn, schemaTables.Schema, tableName)
 			if err != nil {
-				return nil, nil, errors.Errorf("get table %s.%s's information error %s", schemaTables.Schema, tableName, errors.ErrorStack(err))
+				return nil, errors.Errorf("get table %s.%s's information error %s", schemaTables.Schema, tableName, errors.ErrorStack(err))
 			}
 
 			if _, ok := cfgTables[schemaTables.Schema][tableName]; ok {
@@ -368,40 +358,40 @@ func initTables(ctx context.Context, cfg *config.Config) (connDBs map[string]*sq
 
 	for _, table := range cfg.TableCfgs {
 		if _, ok := cfgTables[table.Schema]; !ok {
-			return nil, nil, errors.NotFoundf("schema %s in check tables", table.Schema)
+			return nil, errors.NotFoundf("schema %s in check tables", table.Schema)
 		}
 		if _, ok := cfgTables[table.Schema][table.Table]; !ok {
-			return nil, nil, errors.NotFoundf("table %s.%s in check tables", table.Schema, table.Table)
+			return nil, errors.NotFoundf("table %s.%s in check tables", table.Schema, table.Table)
 		}
 
-		sourceTables := make([]config.TableInstance, 0, len(table.SourceTables))
-		for _, sourceTable := range table.SourceTables {
-			if _, ok := sourceDBs[sourceTable.InstanceID]; !ok {
-				return nil, nil, errors.Errorf("unkonwn database instance id %s", sourceTable.InstanceID)
-			}
+		//sourceTables := make([]config.TableInstance, 0, len(table.SourceTables))
+		//for _, sourceTable := range table.SourceTables {
+		//	if _, ok := sourceDBs[sourceTable.InstanceID]; !ok {
+		//		return nil, errors.Errorf("unkonwn database instance id %s", sourceTable.InstanceID)
+		//	}
+		//
+		//	allTables, ok := allTablesMap[sourceDBs[sourceTable.InstanceID].InstanceID][sourceTable.Schema]
+		//	if !ok {
+		//		return nil, errors.Errorf("unknown schema %s in database %+v", sourceTable.Schema, sourceDBs[sourceTable.InstanceID])
+		//	}
+		//
+		//	tables, err := utils.GetMatchTable(sourceDBs[sourceTable.InstanceID], sourceTable.Schema, sourceTable.Table, allTables)
+		//	if err != nil {
+		//		return nil, errors.Trace(err)
+		//	}
+		//
+		//	for _, table := range tables {
+		//		sourceTables = append(sourceTables, config.TableInstance{
+		//			InstanceID: sourceTable.InstanceID,
+		//			Schema:     sourceTable.Schema,
+		//			Table:      table,
+		//		})
+		//	}
+		//}
 
-			allTables, ok := allTablesMap[sourceDBs[sourceTable.InstanceID].InstanceID][sourceTable.Schema]
-			if !ok {
-				return nil, nil, errors.Errorf("unknown schema %s in database %+v", sourceTable.Schema, sourceDBs[sourceTable.InstanceID])
-			}
-
-			tables, err := utils.GetMatchTable(sourceDBs[sourceTable.InstanceID], sourceTable.Schema, sourceTable.Table, allTables)
-			if err != nil {
-				return nil, nil, errors.Trace(err)
-			}
-
-			for _, table := range tables {
-				sourceTables = append(sourceTables, config.TableInstance{
-					InstanceID: sourceTable.InstanceID,
-					Schema:     sourceTable.Schema,
-					Table:      table,
-				})
-			}
-		}
-
-		if len(sourceTables) != 0 {
-			cfgTables[table.Schema][table.Table].SourceTables = sourceTables
-		}
+		//if len(sourceTables) != 0 {
+		//	cfgTables[table.Schema][table.Table].SourceTables = sourceTables
+		//}
 		if table.Range != "" {
 			cfgTables[table.Schema][table.Table].Range = table.Range
 		}
@@ -409,41 +399,7 @@ func initTables(ctx context.Context, cfg *config.Config) (connDBs map[string]*sq
 		cfgTables[table.Schema][table.Table].Fields = table.Fields
 		cfgTables[table.Schema][table.Table].Collation = table.Collation
 	}
-
-	// we need to increase max open connections for upstream, because one chunk needs accessing N shard tables in one
-	// upstream, and there are `CheckThreadCount` processing chunks. At most we need N*`CheckThreadCount` connections
-	// for an upstream
-	// instanceID -> max number of upstream shard tables every target table
-	maxNumShardTablesOneRun := map[string]int{}
-	for _, targetTables := range cfgTables {
-		for _, sourceCfg := range targetTables {
-			upstreamCount := map[string]int{}
-			for _, sourceTables := range sourceCfg.SourceTables {
-				upstreamCount[sourceTables.InstanceID]++
-			}
-			for id, count := range upstreamCount {
-				if count > maxNumShardTablesOneRun[id] {
-					maxNumShardTablesOneRun[id] = count
-				}
-			}
-		}
-	}
-
-	connDBs = make(map[string]*sql.DB)
-	for instanceId, count := range maxNumShardTablesOneRun {
-		db := sourceDBs[instanceId].Conn
-		if db == nil {
-			return nil, nil, errors.Errorf("didn't found sourceDB for instance %s", instanceId)
-		}
-		log.Info("will increase connection configurations for DB of instance",
-			zap.String("instance id", instanceId),
-			zap.Int("connection limit", count*cfg.CheckThreadCount))
-		db.SetMaxOpenConns(count * cfg.CheckThreadCount)
-		db.SetMaxIdleConns(count * cfg.CheckThreadCount)
-		connDBs[instanceId] = db
-	}
-
-	return
+	return cfgTables, nil
 }
 
 // DBIterator generate next chunk for the whole tables lazily.
