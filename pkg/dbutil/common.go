@@ -937,14 +937,16 @@ func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table stri
 // GetCRC32Checksum returns checksum code of some data by given condition
 func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, int64, error) {
 	/*
-		calculate CRC32 checksum example:
-		mysql> SELECT BIT_XOR() AS checksum FROM test.test WHERE id > 0 AND id < 10;
-		select count(t.checksum), BIT_XOR(t.checksum) from (select CAST(CRC32(CONCAT_WS(',', id, name, age, CONCAT(ISNULL(id), ISNULL(name), ISNULL(age))))AS UNSIGNED) as checksum from test.test where id > 0 and id < 10 ) as t;
-		+------------+
-		| checksum   |
-		+------------+
-		| 1466098199 |
-		+------------+
+		calculate CRC32 checksum and count example:
+		mysql> SELECT COUNT(t.ch) as count, BIT_XOR(t.ch) as checksum from (select CAST(CRC32(CONCAT_WS(',', i_id, i_im_id, i_name, i_price, i_data, CONCAT(ISNULL(i_id), ISNULL(i_im_id), ISNULL(i_name), ISNULL(
+		i_price), ISNULL(
+		+--------+------------+
+		| count  | checksum   |
+		+--------+------------+
+		| 100000 | 1128664311 |
+		+--------+------------+
+		1 row in set (0.46 sec)
+
 	*/
 	columnNames := make([]string, 0, len(tbInfo.Columns))
 	columnIsNull := make([]string, 0, len(tbInfo.Columns))
