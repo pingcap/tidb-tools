@@ -930,7 +930,7 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", ColumnName(col.Name.O)))
 	}
 
-	query := fmt.Sprintf("SELECT COUNT(T.checksum), BIT_XOR(T.checksum) from (SELECT CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED) AS checksum FROM %s WHERE %s;",
+	query := fmt.Sprintf("SELECT COUNT(t.checksum), BIT_XOR(t.checksum) from (SELECT CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED) AS checksum FROM %s WHERE %s) as t;",
 		strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), TableName(schemaName, tableName), limitRange)
 
 	log.Debug("count and checksum", zap.String("sql", query), zap.Reflect("args", args))
