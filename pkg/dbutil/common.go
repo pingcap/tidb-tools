@@ -940,8 +940,7 @@ func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table stri
 	defer rows.Close()
 	columns := make([]interface{}, len(tbInfo.Columns))
 	for i := range columns {
-		var s string
-		columns[i] = &s
+		columns[i] = new(string)
 	}
 	if !rows.Next() {
 		if err := rows.Err(); err != nil {
