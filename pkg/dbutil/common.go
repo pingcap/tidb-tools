@@ -911,6 +911,36 @@ func GetApproximateMid(ctx context.Context, db *sql.DB, schema, table string, co
 	return midValues, nil
 }
 
+func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table string, tbInfo *model.TableInfo, limitRange string, args []interface{}, count int64) ([]string, error) {
+	columnNames := make([]string, 0, len(tbInfo.Columns))
+	for _, col := range tbInfo.Columns {
+		columnNames = append(columnNames, ColumnName(col.Name.O))
+	}
+	query := fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s OFFSET %s LIMIT 1",
+		strings.Join(columnNames, ", "),
+		TableName(schema, table),
+		limitRange,
+		strings.Join(columnNames, ", "),
+		strconv.FormatInt(count/2, 10))
+	rows, err := db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	defer rows.Close()
+	columns := make([]string, 0, len(tbInfo.Columns))
+	for rows.Next() {
+		var value sql.NullString
+		err = rows.Scan(&value)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		if value.Valid {
+			columns = append(columns, value.String)
+		}
+	}
+	return columns, nil
+}
+
 // GetCRC32Checksum returns checksum code of some data by given condition
 func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, int64, error) {
 	/*
