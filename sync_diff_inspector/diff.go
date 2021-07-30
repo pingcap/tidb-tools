@@ -312,47 +312,46 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 	// if no index, do not split
 	if len(indices) == 0 {
 		return tableRange, nil
-	} else {
-		// using the index
-		index := indices[tableRange.IndexID]
-		if index == nil {
-			return nil, errors.NotFoundf("cannot found a index to split")
-		}
-		log.Debug("index for BinGerate", zap.String("index", index.Name.O))
-		indexColumns := utils.GetColumnsFromIndex(index, tableDiff.Info)
-		if len(indexColumns) == 0 {
-			log.Warn("no index to split")
-		}
-		chunkLimits, args := tableRange.ChunkRange.ToString(tableDiff.Collation)
-		limitRange := fmt.Sprintf("(%s) AND %s", chunkLimits, tableDiff.Range)
-		midValues, err := dbutil.GetApproximateMidBySize(ctx, targetSource.GetDB(), tableRange.Schema, tableRange.Table, tableDiff.Info, limitRange, utils.StringsToInterfaces(args), count)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		for i, value := range midValues {
-			tableRange1.ChunkRange.Update(indexColumns[i].Name.O, "", value, false, true)
-			tableRange2.ChunkRange.Update(indexColumns[i].Name.O, value, "", true, false)
-		}
-		isEqual1, count1, err = df.compareChecksumAndGetCount(ctx, tableRange1)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		isEqual2, count2, err = df.compareChecksumAndGetCount(ctx, tableRange2)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		if count1+count2 != count {
-			log.Error("the count is not correct",
-				zap.Int64("count1", count1),
-				zap.Int64("count2", count2),
-				zap.Int64("count", count))
-			panic("count is not correct")
-		}
-		log.Info("chunk split successfully",
-			zap.Int("chunk id", tableRange.ID),
-			zap.Int64("count1", count1),
-			zap.Int64("count2", count2))
 	}
+	// using the index
+	index := indices[tableRange.IndexID]
+	if index == nil {
+		return nil, errors.NotFoundf("cannot found a index to split")
+	}
+	log.Debug("index for BinGerate", zap.String("index", index.Name.O))
+	indexColumns := utils.GetColumnsFromIndex(index, tableDiff.Info)
+	if len(indexColumns) == 0 {
+		log.Warn("no index to split")
+	}
+	chunkLimits, args := tableRange.ChunkRange.ToString(tableDiff.Collation)
+	limitRange := fmt.Sprintf("(%s) AND %s", chunkLimits, tableDiff.Range)
+	midValues, err := dbutil.GetApproximateMidBySize(ctx, targetSource.GetDB(), tableRange.Schema, tableRange.Table, tableDiff.Info, limitRange, utils.StringsToInterfaces(args), count)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	for i, value := range midValues {
+		tableRange1.ChunkRange.Update(indexColumns[i].Name.O, "", value, false, true)
+		tableRange2.ChunkRange.Update(indexColumns[i].Name.O, value, "", true, false)
+	}
+	isEqual1, count1, err = df.compareChecksumAndGetCount(ctx, tableRange1)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	isEqual2, count2, err = df.compareChecksumAndGetCount(ctx, tableRange2)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	if count1+count2 != count {
+		log.Error("the count is not correct",
+			zap.Int64("count1", count1),
+			zap.Int64("count2", count2),
+			zap.Int64("count", count))
+		panic("count is not correct")
+	}
+	log.Info("chunk split successfully",
+		zap.Int("chunk id", tableRange.ID),
+		zap.Int64("count1", count1),
+		zap.Int64("count2", count2))
 
 	var cnt int64
 	if df.fromUpstream {
