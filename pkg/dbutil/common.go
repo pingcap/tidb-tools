@@ -912,11 +912,22 @@ func GetApproximateMid(ctx context.Context, db *sql.DB, schema, table string, co
 }
 
 func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table string, tbInfo *model.TableInfo, limitRange string, args []interface{}, count int64) ([]string, error) {
+	/*
+		example
+		mysql> select i_id, i_im_id, i_name from item where i_id > 0 order by i_id, i_im_id limit 5000,1;
+		+------+---------+-----------------+
+		| i_id | i_im_id | i_name          |
+		+------+---------+-----------------+
+		| 5001 |    3494 | S66WiWB3t1FUG02 |
+		+------+---------+-----------------+
+		1 row in set (0.09 sec)
+
+	*/
 	columnNames := make([]string, 0, len(tbInfo.Columns))
 	for _, col := range tbInfo.Columns {
 		columnNames = append(columnNames, ColumnName(col.Name.O))
 	}
-	query := fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s OFFSET %s LIMIT 1",
+	query := fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s LIMIT %s,1",
 		strings.Join(columnNames, ", "),
 		TableName(schema, table),
 		limitRange,
