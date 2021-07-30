@@ -234,53 +234,30 @@ func (df *Diff) handleChunks(ctx context.Context) {
 }
 
 func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (bool, error) {
-	countCh := make(chan int64)
-	upstreamChecksumCh := make(chan *source.ChecksumInfo)
-	downstreamChecksumCh := make(chan *source.ChecksumInfo)
 	var targetSource source.Source
 	if df.fromUpstream {
 		targetSource = df.upstream
-		go df.upstream.GetCountAndCrc32(ctx, rangeInfo, countCh, upstreamChecksumCh)
-		go df.downstream.GetCrc32(ctx, rangeInfo, downstreamChecksumCh)
 	} else {
 		targetSource = df.downstream
-		go df.upstream.GetCrc32(ctx, rangeInfo, downstreamChecksumCh)
-		go df.downstream.GetCountAndCrc32(ctx, rangeInfo, countCh, upstreamChecksumCh)
 	}
-	count := <-countCh
-	log.Info("chunk size",
+	isEqual, count, err := df.compareChecksumAndGetCount(ctx, rangeInfo)
+	if err != nil {
+		return false, errors.Trace(err)
+	}
+	log.Info("count size",
 		zap.Int("chunk id", rangeInfo.ID),
-		zap.String("schema", rangeInfo.Schema),
-		zap.String("table", rangeInfo.Table))
-	crc1Info := <-downstreamChecksumCh
-	crc2Info := <-upstreamChecksumCh
-	if crc1Info.Err != nil {
-		return false, errors.Trace(crc1Info.Err)
-	}
-	if crc2Info.Err != nil {
-		return false, errors.Trace(crc2Info.Err)
-	}
-	var tableRange *splitter.RangeInfo
-	var err error
-	if crc1Info.Checksum != crc2Info.Checksum {
-		tableRange, err = df.BinGenerate(ctx, targetSource, rangeInfo, count)
-		if err != nil {
-			// TODO retry or log this chunk's error to checkpoint.
-			return false, err
-		}
-	} else {
-		tableRange = nil
-	}
-
+		zap.Int64("chunk size", count))
 	var state string
-	isEqual := true
-	if tableRange != nil {
+	if !isEqual {
 		state = checkpoints.FailedState
 		// if the chunk's checksum differ, try to do binary check
 		if df.chunkSize > splitThreshold {
-			df.BinGenerate(ctx, targetSource, rangeInfo, count)
+			rangeInfo, err = df.BinGenerate(ctx, targetSource, rangeInfo, count)
+			if err != nil {
+				return false, errors.Trace(err)
+			}
 		}
-		isEqual, err = df.compareRows(ctx, tableRange)
+		isEqual, err = df.compareRows(ctx, rangeInfo)
 		if err != nil {
 			return false, err
 		}
