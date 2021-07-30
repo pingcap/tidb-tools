@@ -144,7 +144,10 @@ type ChecksumInfo struct {
 }
 
 type Source interface {
-	GenerateChunksIterator(*splitter.RangeInfo) (DBIterator, error)
+	// the implement of this function is different in mysql/tidb.
+	GetTableIter() TableIter
+
+	GetDBIter(*splitter.RangeInfo, TableIter) (DBIterator, error)
 	GetCrc32(context.Context, *splitter.RangeInfo, chan *ChecksumInfo)
 	GetOrderKeyCols(int) []*model.ColumnInfo
 	GetRowsIterator(context.Context, *splitter.RangeInfo) (RowDataIterator, error)
@@ -152,6 +155,10 @@ type Source interface {
 	GenerateDeleteDML(map[string]*dbutil.ColumnData, int) string
 	GetDB() *sql.DB
 	Close()
+}
+
+type TableIter interface {
+	GetIterForTable(*common.TableDiff, *splitter.RangeInfo) (splitter.TableIterator, error)
 }
 
 func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, upstream Source, err error) {
@@ -193,7 +200,7 @@ func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, dbs
 	}
 	ok, err := dbutil.IsTiDB(ctx, dbs[0].Conn)
 	if err != nil {
-		return nil, errors.Annotatef(err, "connect to db failed" )
+		return nil, errors.Annotatef(err, "connect to db failed")
 	}
 
 	if len(dbs) == 1 {
@@ -209,7 +216,7 @@ func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, dbs
 			// TiDB
 			log.Fatal("Don't support check table in multiple tidb instance, please specify on tidb instance.")
 		} else {
-			return NewMySQLSources(ctx, tableDiffs, dbs)
+			return NewMySQLSources(ctx)
 		}
 	}
 	// unreachable
@@ -406,5 +413,30 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 type DBIterator interface {
 	// Next seeks the next chunk, return nil if seeks to end.
 	Next() (*splitter.RangeInfo, error)
+
 	Close()
+}
+
+type TableRows struct {
+	tableRowsQuery    string
+	tableOrderKeyCols []*model.ColumnInfo
+}
+
+type RowsIterator struct {
+	rows *sql.Rows
+}
+
+func (s *RowsIterator) Close() {
+	s.rows.Close()
+}
+
+func (s *RowsIterator) Next() (map[string]*dbutil.ColumnData, error) {
+	if s.rows.Next() {
+		return dbutil.ScanRow(s.rows)
+	}
+	return nil, nil
+}
+
+func (s *RowsIterator) GenerateFixSQL(t DMLType) (string, error) {
+	return "", nil
 }

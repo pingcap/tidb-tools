@@ -188,7 +188,7 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.DBIterator, 
 		}
 	}
 
-	return df.workSource.GenerateChunksIterator(startRange)
+	return df.workSource.GetDBIter(startRange, df.workSource.GetTableIter())
 }
 
 func (df *Diff) handleCheckpoints(ctx context.Context) {
