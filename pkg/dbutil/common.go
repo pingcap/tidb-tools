@@ -922,12 +922,12 @@ func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table stri
 		limitRange,
 		strings.Join(columnNames, ", "),
 		strconv.FormatInt(count/2, 10))
-	cs := make([]interface{}, len(tbInfo.Columns), len(tbInfo.Columns))
+	cs := make([]interface{}, len(tbInfo.Columns))
 	err := db.QueryRowContext(ctx, query, args...).Scan(cs...)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	columns := make([]string, len(tbInfo.Columns), len(tbInfo.Columns))
+	columns := make([]string, len(tbInfo.Columns))
 	for i, column := range cs {
 		columns[i] = fmt.Sprint(column)
 	}
@@ -966,9 +966,9 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 	if err != nil {
 		return -1, -1, errors.Trace(err)
 	}
-	if !checksum.Valid {
+	if !count.Valid || !checksum.Valid {
 		// if don't have any data, the checksum will be `NULL`
-		log.Warn("get empty checksum", zap.String("sql", query), zap.Reflect("args", args))
+		log.Warn("get empty count or checksum", zap.String("sql", query), zap.Reflect("args", args))
 		return 0, 0, nil
 	}
 
