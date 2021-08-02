@@ -55,7 +55,7 @@ func (s *BasicSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter
 	beginTime := time.Now()
 	table := s.tableDiffs[tableRange.GetTableIndex()]
 	chunk := tableRange.GetChunk()
-	count, checksum, err := dbutil.GetCountAndCRC32Checksum(ctx, s.dbConn, table.Schema, table.Table, table.Info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
+	count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, s.dbConn, table.Schema, table.Table, table.Info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
 	cost := time.Since(beginTime)
 	countCh <- count
 	checksumInfoCh <- &ChecksumInfo{

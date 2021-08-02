@@ -317,7 +317,7 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 	}
 	chunkLimits, args := tableRange.ChunkRange.ToString(tableDiff.Collation)
 	limitRange := fmt.Sprintf("(%s) AND %s", chunkLimits, tableDiff.Range)
-	midValues, err := dbutil.GetApproximateMidBySize(ctx, targetSource.GetDB(), tableDiff.Schema, tableDiff.Table, tableDiff.Info, limitRange, utils.StringsToInterfaces(args), count)
+	midValues, err := utils.GetApproximateMidBySize(ctx, targetSource.GetDB(), tableDiff.Schema, tableDiff.Table, tableDiff.Info, limitRange, utils.StringsToInterfaces(args), count)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
