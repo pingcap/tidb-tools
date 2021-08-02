@@ -169,7 +169,7 @@ func (df *Diff) generateChunksIterator() (source.DBIterator, error) {
 	//}
 	var startRange *splitter.RangeInfo
 	if df.useCheckpoint {
-		node, err := df.cp.LoadChunk()
+		node, err := df.cp.LoadChunk(checkpointFile)
 		if err != nil {
 			return nil, errors.Annotate(err, "the checkpoint load process failed")
 		} else {
@@ -199,7 +199,7 @@ func (df *Diff) handleCheckpoints(ctx context.Context) {
 			log.Info("Stop do checkpoint")
 			return
 		case <-time.After(10 * time.Second):
-			_, err := df.cp.SaveChunk(ctx)
+			_, err := df.cp.SaveChunk(ctx, checkpointFile)
 			if err != nil {
 				log.Warn("fail to save the chunk", zap.Error(err))
 				// maybe we should panic, because SaveChunk method should not failed.

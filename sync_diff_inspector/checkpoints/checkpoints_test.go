@@ -69,6 +69,6 @@ func (cp *testCheckpointSuit) TestLoadChunk(c *C) {
 	id, err := checker.SaveChunk(ctx, "TestLoadChunk")
 	c.Assert(err, IsNil)
 	node, err := checker.LoadChunk("TestLoadChunk")
+	c.Assert(err, IsNil)
 	c.Assert(node.GetID(), Equals, id)
-
 }
