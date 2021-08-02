@@ -255,7 +255,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 	if !isEqual {
 		state = checkpoints.FailedState
 		// if the chunk's checksum differ, try to do binary check
-		if df.chunkSize > splitThreshold {
+		if count > splitThreshold {
 			rangeInfo, err = df.BinGenerate(ctx, targetSource, rangeInfo, count)
 			if err != nil {
 				return false, errors.Trace(err)
