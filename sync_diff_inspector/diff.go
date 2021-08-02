@@ -59,7 +59,6 @@ type Diff struct {
 	ignoreStats       bool
 	fixSQLFile        *os.File
 	wg                sync.WaitGroup
-	fromUpstream      bool
 
 	chunkCh chan *splitter.RangeInfo
 	sqlCh   chan string
@@ -249,12 +248,6 @@ func (df *Diff) handleChunks(ctx context.Context) {
 }
 
 func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (bool, error) {
-	var targetSource source.Source
-	if df.fromUpstream {
-		targetSource = df.upstream
-	} else {
-		targetSource = df.downstream
-	}
 	isEqual, count, err := df.compareChecksumAndGetCount(ctx, rangeInfo)
 	if err != nil {
 		return false, errors.Trace(err)
@@ -267,7 +260,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 		state = checkpoints.FailedState
 		// if the chunk's checksum differ, try to do binary check
 		if count > splitThreshold {
-			rangeInfo, err = df.BinGenerate(ctx, targetSource, rangeInfo, count)
+			rangeInfo, err = df.BinGenerate(ctx, df.workSource, rangeInfo, count)
 			if err != nil {
 				return false, errors.Trace(err)
 			}
@@ -368,7 +361,7 @@ func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *spli
 	countCh := make(chan int64)
 	upstreamChecksumCh := make(chan *source.ChecksumInfo)
 	downstreamChecksumCh := make(chan *source.ChecksumInfo)
-	if df.fromUpstream {
+	if df.workSource == df.upstream {
 		go df.upstream.GetCountAndCrc32(ctx, tableRange, countCh, upstreamChecksumCh)
 		go df.downstream.GetCrc32(ctx, tableRange, downstreamChecksumCh)
 	} else {
