@@ -32,8 +32,12 @@ import (
 	"go.uber.org/zap"
 )
 
-const splitThreshold = 1000
-const splitBound float64 = 3.
+const (
+	splitThreshold         = 1000
+	splitBound     float64 = 3.
+	// checkpointFile represents the checkpoints' file name which used for save and loads chunks
+	checkpointFile = "sync_diff_checkpoints.pb"
+)
 
 // Diff contains two sql DB, used for comparing.
 type Diff struct {
