@@ -67,10 +67,6 @@ type Node struct {
 
 	ChunkRange *chunk.Range `json:"chunk-range"`
 	TableIndex int          `json:"table-index"`
-	// for checkpoint
-	Schema string `json:"schema"`
-	Table  string `json:"table"`
-
 	// for bucket checkpoint
 	BucketID int   `json:"bucket-id"`
 	IndexID  int64 `json:"index-id"`

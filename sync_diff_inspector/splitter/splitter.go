@@ -18,8 +18,8 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 )
 
-// Iterator generate next chunk for only one table lazily.
-type Iterator interface {
+// ChunkIterator generate next chunk for only one table lazily.
+type ChunkIterator interface {
 	// Next seeks the next chunk, return nil if seeks to end.
 	Next() (*chunk.Range, error)
 	Close()
@@ -31,19 +31,8 @@ type RangeInfo struct {
 	ID         int          `json:"id"`
 	ChunkRange *chunk.Range `json:"chunk-range"`
 	TableIndex int          `json:"table-index"`
-	// for checkpoint
-	Schema string `json:"schema"`
-	Table  string `json:"table"`
 	// for bucket checkpoint
 	IndexID int64 `json:"index-id"`
-}
-
-func (r *RangeInfo) GetSchema() string {
-	return r.Schema
-}
-
-func (r *RangeInfo) GetTable() string {
-	return r.Table
 }
 
 func (r *RangeInfo) GetChunk() *chunk.Range {
@@ -55,14 +44,14 @@ func (r *RangeInfo) Copy() *RangeInfo {
 		ID:         r.ID,
 		ChunkRange: r.ChunkRange.Copy(),
 		TableIndex: r.TableIndex,
-		Schema:     r.Schema,
-		Table:      r.Table,
 		IndexID:    r.IndexID,
 	}
 }
 
 // GetTableIndex return the index of table diffs.
-// TODO check config before use checkpoint
+// IMPORTANT!!!
+// TODO We need to keep the tables order during checkpoint.
+// TODO So we should have to save the config info to checkpoint file too.
 func (r *RangeInfo) GetTableIndex() int {
 	return r.TableIndex
 }
@@ -71,8 +60,6 @@ func (r *RangeInfo) ToNode() *checkpoints.Node {
 	return &checkpoints.Node{
 		ChunkRange: r.ChunkRange,
 		TableIndex: r.TableIndex,
-		Schema:     r.Schema,
-		Table:      r.Table,
 		BucketID:   r.ChunkRange.BucketID,
 		IndexID:    r.IndexID,
 	}
@@ -83,8 +70,6 @@ func FromNode(n *checkpoints.Node) *RangeInfo {
 		ID:         n.GetID(),
 		ChunkRange: n.ChunkRange,
 		TableIndex: n.TableIndex,
-		Schema:     n.Schema,
-		Table:      n.Table,
 		IndexID:    n.IndexID,
 	}
 }

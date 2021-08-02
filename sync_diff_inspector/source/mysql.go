@@ -16,10 +16,63 @@ package source
 import (
 	"context"
 	"database/sql"
-
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
+	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 )
 
-func NewMysqlSource(ctx context.Context, tableDiffs [][]config.TableInstance, sourceDBs map[string]*sql.DB) (Source, error) {
+type MySQLSource struct {
+	BasicSource
+}
+
+func (s *MySQLSource) GetTableAnalyzer() TableAnalyzer {
+	return &MySQLTableAnalyzer{s.dbConn}
+}
+
+type MySQLTableAnalyzer struct {
+	dbConn *sql.DB
+}
+
+func (a *MySQLTableAnalyzer) AnalyzeSplitter(table *common.TableDiff, startRange *splitter.RangeInfo) (splitter.ChunkIterator, error) {
+	chunkSize := 1000
+	// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
+	randIter, err := splitter.NewRandomIteratorWithCheckpoint(table, a.dbConn, chunkSize, startRange)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return randIter, nil
+}
+
+func (a *MySQLTableAnalyzer) AnalyzeChunkSize(table *common.TableDiff) (int64, error) {
+	// TODO analyze chunk size with table
+	return dbutil.GetRowCount(context.Background(), a.dbConn, table.Schema, table.Table, table.Range, nil)
+}
+
+func NewMySQLSource(ctx context.Context, tableDiffs []*common.TableDiff, dbConn *sql.DB) (Source, error) {
+	ts := &MySQLSource{
+		BasicSource{
+			tableDiffs: tableDiffs,
+			tableRows:  make([]*TableRows, 0, len(tableDiffs)),
+			dbConn:     dbConn,
+		},
+	}
+	for _, table := range tableDiffs {
+		tableRowsQuery, tableOrderKeyCols := utils.GetTableRowsQueryFormat(table.Schema, table.Table, table.Info, table.Collation)
+		ts.tableRows = append(ts.tableRows, &TableRows{
+			tableRowsQuery,
+			tableOrderKeyCols,
+		})
+	}
+	return ts, nil
+}
+
+type MySQLSources struct {
+
+}
+
+
+func NewMySQLSources(ctx context.Context) (Source, error) {
 	return nil, nil
 }

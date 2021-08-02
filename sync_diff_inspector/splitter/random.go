@@ -96,7 +96,7 @@ func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, ch
 		return nil, errors.Trace(err)
 	}
 
-	chunk.InitChunks(chunks, 0, 0, table.Collation, table.Range)
+	chunk.InitChunks(chunks, chunk.Random, 0, 0, table.Collation, table.Range)
 
 	return &RandomIterator{
 		table:     table,
@@ -191,9 +191,6 @@ func splitRangeByRandom(db *sql.DB, chunk *chunk.Range, count int, schema string
 		}
 		chunks = append(chunks, newChunk)
 	}
-
-	// TODO build random chunks
 	log.Debug("split range by random", zap.Stringer("origin chunk", chunk), zap.Int("split num", len(chunks)))
-
 	return chunks, nil
 }

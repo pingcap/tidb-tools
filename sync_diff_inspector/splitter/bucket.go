@@ -27,6 +27,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const DefaultChannelBuffer = 1024
+
 type BucketIterator struct {
 	table        *common.TableDiff
 	indexColumns []*model.ColumnInfo
@@ -49,7 +51,7 @@ func NewBucketIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, ch
 	bs := &BucketIterator{
 		table:     table,
 		chunkSize: int64(chunkSize),
-		chunksCh:  make(chan []*chunk.Range, 1024),
+		chunksCh:  make(chan []*chunk.Range, DefaultChannelBuffer),
 		errCh:     make(chan error, 1),
 		dbConn:    dbConn,
 	}
@@ -57,7 +59,7 @@ func NewBucketIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, ch
 	if err := bs.init(startRange); err != nil {
 		return nil, errors.Trace(err)
 	}
-	go bs.produceChunkWithCheckpoint(startRange)
+	go bs.produceChunks(startRange)
 
 	return bs, nil
 }
@@ -131,7 +133,7 @@ func (s *BucketIterator) init(startRange *RangeInfo) error {
 func (s *BucketIterator) Close() {
 }
 
-func (s *BucketIterator) produceChunkWithCheckpoint(startRange *RangeInfo) {
+func (s *BucketIterator) produceChunks(startRange *RangeInfo) {
 	var (
 		lowerValues, upperValues []string
 		latestCount              int64
@@ -203,7 +205,7 @@ func (s *BucketIterator) produceChunkWithCheckpoint(startRange *RangeInfo) {
 
 		latestCount = buckets[i].Count
 		lowerValues = upperValues
-		chunkID = chunk.InitChunks(chunks, chunkID, i, table.Collation, table.Range)
+		chunkID = chunk.InitChunks(chunks, chunk.Bucket, chunkID, i, table.Collation, table.Range)
 		s.chunksCh <- chunks
 	}
 
@@ -214,7 +216,7 @@ func (s *BucketIterator) produceChunkWithCheckpoint(startRange *RangeInfo) {
 			chunkRange.Update(column.Name.O, lowerValues[j], "", true, false)
 		}
 		chunks := []*chunk.Range{chunkRange}
-		chunkID = chunk.InitChunks(chunks, chunkID, len(buckets), table.Collation, table.Range)
+		chunkID = chunk.InitChunks(chunks, chunk.Bucket, chunkID, len(buckets), table.Collation, table.Range)
 		s.chunksCh <- chunks
 	}
 	// close s.chunksCh for this table buckets

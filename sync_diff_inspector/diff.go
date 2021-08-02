@@ -45,6 +45,9 @@ type Diff struct {
 	upstream   source.Source
 	downstream source.Source
 
+	// workSource is one of upstream/downstream by some policy in #pickSource.
+	workSource source.Source
+
 	chunkSize         int
 	sample            int
 	checkThreadCount  int
@@ -75,12 +78,9 @@ func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 		ignoreDataCheck:   cfg.IgnoreDataCheck,
 		ignoreStructCheck: cfg.IgnoreStructCheck,
 		ignoreStats:       cfg.IgnoreStats,
-		//TODO add fixSQLFile
-		//fixSQLFile: ???,
-		// TODO use a meaningfull chunk channel buffer
-		chunkCh: make(chan *splitter.RangeInfo, 1024),
-		sqlCh:   make(chan string, 1024),
-		cp:      new(checkpoints.Checkpoint),
+		chunkCh:           make(chan *splitter.RangeInfo, splitter.DefaultChannelBuffer),
+		sqlCh:             make(chan string, splitter.DefaultChannelBuffer),
+		cp:                new(checkpoints.Checkpoint),
 	}
 
 	if err = diff.init(ctx, cfg); err != nil {
@@ -112,6 +112,8 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 
 	df.downstream, df.upstream, err = source.NewSources(ctx, cfg)
 
+	df.workSource = df.pickSource(ctx)
+
 	df.fixSQLFile, err = os.Create(cfg.FixSQLFile)
 	if err != nil {
 		return errors.Trace(err)
@@ -122,7 +124,7 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 
 // Equal tests whether two database have same data and schema.
 func (df *Diff) Equal(ctx context.Context) error {
-	chunksIter, err := df.generateChunksIterator()
+	chunksIter, err := df.generateChunksIterator(ctx)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -159,14 +161,23 @@ func (df *Diff) Equal(ctx context.Context) error {
 	return nil
 }
 
-func (df *Diff) generateChunksIterator() (source.DBIterator, error) {
-	// TODO choose upstream or downstream to generate chunks
-	// if isTiDB(df.upstream) {
-	//		return df.upstream.GenerateChunksIterator()
-	// }
-	// if isTiDB(df.downstream) {
-	//		return df.downstream.GenerateChunksIterator()
-	//}
+// pickSource pick one proper source to do some work. e.g. generate chunks
+func (df *Diff) pickSource(ctx context.Context) source.Source {
+	if ok, _ := dbutil.IsTiDB(ctx, df.upstream.GetDB()); ok {
+		log.Info("The upstream is TiDB. pick it as work source")
+		return df.upstream
+	}
+	if ok, _ := dbutil.IsTiDB(ctx, df.downstream.GetDB()); ok {
+		log.Info("The downstream is TiDB. pick it as work source")
+		return df.downstream
+	}
+
+	// if the both sides are not TiDB, choose any one of them would be ok
+	log.Info("pick the downstream as work source")
+	return df.downstream
+}
+
+func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterator, error) {
 	var startRange *splitter.RangeInfo
 	if df.useCheckpoint {
 		node, err := df.cp.LoadChunk(checkpointFile)
@@ -184,8 +195,8 @@ func (df *Diff) generateChunksIterator() (source.DBIterator, error) {
 			startRange = splitter.FromNode(node)
 		}
 	}
-	df.fromUpstream = false
-	return df.downstream.GenerateChunksIterator(startRange)
+
+	return df.workSource.GetRangeIterator(startRange, df.workSource.GetTableAnalyzer())
 }
 
 func (df *Diff) handleCheckpoints(ctx context.Context) {
@@ -281,7 +292,7 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 		return tableRange, nil
 	}
 	// TODO Find great index
-	tableDiff := targetSource.GetTable(tableRange.TableIndex)
+	tableDiff := targetSource.GetTable(tableRange.GetTableIndex())
 	indices := dbutil.FindAllIndex(tableDiff.Info)
 
 	var (
@@ -306,7 +317,7 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 	}
 	chunkLimits, args := tableRange.ChunkRange.ToString(tableDiff.Collation)
 	limitRange := fmt.Sprintf("(%s) AND %s", chunkLimits, tableDiff.Range)
-	midValues, err := dbutil.GetApproximateMidBySize(ctx, targetSource.GetDB(), tableRange.Schema, tableRange.Table, tableDiff.Info, limitRange, utils.StringsToInterfaces(args), count)
+	midValues, err := dbutil.GetApproximateMidBySize(ctx, targetSource.GetDB(), tableDiff.Schema, tableDiff.Table, tableDiff.Info, limitRange, utils.StringsToInterfaces(args), count)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -429,7 +440,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) 
 		if lastUpstreamData == nil {
 			// don't have source data, so all the targetRows's data is redundant, should be deleted
 			for lastDownstreamData != nil {
-				sql := df.downstream.GenerateDeleteDML(lastDownstreamData, rangeInfo.GetTableIndex())
+				sql := df.downstream.GenerateFixSQL(source.Delete, lastDownstreamData, rangeInfo.GetTableIndex())
 				log.Info("[delete]", zap.String("sql", sql))
 
 				select {
@@ -449,7 +460,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) 
 		if lastDownstreamData != nil {
 			// target lack some data, should insert the last source datas
 			for lastUpstreamData != nil {
-				sql := df.downstream.GenerateReplaceDML(lastUpstreamData, rangeInfo.GetTableIndex())
+				sql := df.downstream.GenerateFixSQL(source.Replace, lastUpstreamData, rangeInfo.GetTableIndex())
 				log.Info("[insert]", zap.String("sql", sql))
 
 				select {
@@ -467,8 +478,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) 
 			break
 		}
 
-		// TODO where is orderKeycols from?
-		eq, cmp, err := utils.CompareData(lastUpstreamData, lastDownstreamData, df.downstream.GetOrderKeyCols(rangeInfo.GetTableIndex()))
+		eq, cmp, err := utils.CompareData(lastUpstreamData, lastDownstreamData, df.workSource.GetOrderKeyCols(rangeInfo.GetTableIndex()))
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -484,17 +494,17 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) 
 		switch cmp {
 		case 1:
 			// delete
-			sql = df.downstream.GenerateDeleteDML(lastDownstreamData, rangeInfo.GetTableIndex())
+			sql = df.downstream.GenerateFixSQL(source.Delete, lastDownstreamData, rangeInfo.GetTableIndex())
 			log.Info("[delete]", zap.String("sql", sql))
 			lastDownstreamData = nil
 		case -1:
 			// insert
-			sql = df.downstream.GenerateReplaceDML(lastUpstreamData, rangeInfo.GetTableIndex())
+			sql = df.downstream.GenerateFixSQL(source.Replace, lastUpstreamData, rangeInfo.GetTableIndex())
 			log.Info("[insert]", zap.String("sql", sql))
 			lastUpstreamData = nil
 		case 0:
 			// update
-			sql = df.downstream.GenerateReplaceDML(lastUpstreamData, rangeInfo.GetTableIndex())
+			sql = df.downstream.GenerateFixSQL(source.Replace, lastUpstreamData, rangeInfo.GetTableIndex())
 			log.Info("[update]", zap.String("sql", sql))
 			lastUpstreamData = nil
 			lastDownstreamData = nil
