@@ -44,8 +44,6 @@ type DBConfig struct {
 	InstanceID string `toml:"instance-id" json:"instance-id"`
 
 	Conn *sql.DB
-
-	DBType string
 }
 
 // Valid returns true if database's config is valide.
