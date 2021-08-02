@@ -16,7 +16,6 @@ package source
 import (
 	"context"
 	"database/sql"
-	"strconv"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -28,7 +27,6 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
-	"github.com/pingcap/tidb/types"
 	"go.uber.org/zap"
 )
 
@@ -40,132 +38,73 @@ const (
 	Replace
 )
 
-type RowData struct {
-	Data   map[string]*dbutil.ColumnData
-	Source int
-}
-
-// RowDatas is a heap of MergeItems.
-type RowDatas struct {
-	Rows         []RowData
-	OrderKeyCols []*model.ColumnInfo
-}
-
-func (r RowDatas) Len() int { return len(r.Rows) }
-func (r RowDatas) Less(i, j int) bool {
-	for _, col := range r.OrderKeyCols {
-		col1, ok := r.Rows[i].Data[col.Name.O]
-		if !ok {
-			log.Fatal("data don't have column", zap.String("column", col.Name.O), zap.Reflect("data", r.Rows[i].Data))
-		}
-		col2, ok := r.Rows[j].Data[col.Name.O]
-		if !ok {
-			log.Fatal("data don't have column", zap.String("column", col.Name.O), zap.Reflect("data", r.Rows[j].Data))
-		}
-
-		if col1.IsNull {
-			if col2.IsNull {
-				continue
-			}
-
-			return true
-		}
-		if col2.IsNull {
-			return false
-		}
-
-		strData1 := string(col1.Data)
-		strData2 := string(col2.Data)
-
-		if needQuotes(col.FieldType) {
-			if strData1 == strData2 {
-				continue
-			}
-			if strData1 > strData2 {
-				return false
-			}
-			return true
-		}
-
-		num1, err1 := strconv.ParseFloat(strData1, 64)
-		if err1 != nil {
-			log.Fatal("convert string to float failed", zap.String("column", col.Name.O), zap.String("data", strData1), zap.Error(err1))
-		}
-		num2, err2 := strconv.ParseFloat(strData2, 64)
-		if err2 != nil {
-			log.Fatal("convert string to float failed", zap.String("column", col.Name.O), zap.String("data", strData2), zap.Error(err2))
-		}
-
-		if num1 == num2 {
-			continue
-		}
-		if num1 > num2 {
-			return false
-		}
-		return true
-
-	}
-
-	return false
-}
-func (r RowDatas) Swap(i, j int) { r.Rows[i], r.Rows[j] = r.Rows[j], r.Rows[i] }
-
-// Push implements heap.Interface's Push function
-func (r *RowDatas) Push(x interface{}) {
-	r.Rows = append(r.Rows, x.(RowData))
-}
-
-// Pop implements heap.Interface's Pop function
-func (r *RowDatas) Pop() interface{} {
-	if len(r.Rows) == 0 {
-		return nil
-	}
-	old := r.Rows
-	n := len(old)
-	x := old[n-1]
-	r.Rows = old[0 : n-1]
-	return x
-}
-
-func needQuotes(ft types.FieldType) bool {
-	return !(dbutil.IsNumberType(ft.Tp) || dbutil.IsFloatType(ft.Tp))
-}
-
-type RowDataIterator interface {
-	Next() (map[string]*dbutil.ColumnData, error)
-	GenerateFixSQL(t DMLType) (string, error)
-	Close()
-}
-
 type ChecksumInfo struct {
 	Checksum int64
 	Err      error
 	Cost     time.Duration
 }
 
+// RowDataIterator represents the row data in source.
+type RowDataIterator interface {
+	// Next seeks the next row data, it used when compared rows.
+	Next() (map[string]*dbutil.ColumnData, error)
+	// GenerateFixSQL generates the firx sql to downstream source according to the rows.
+	GenerateFixSQL(t DMLType) (string, error)
+
+	// Close release the resource.
+	Close()
+}
+
+// TableAnalyzer represents the method in different source.
+// each source has its own analyze function.
+type TableAnalyzer interface {
+	// AnalyzeSplitter picks the proper splitter.ChunkIterator according to table and source.
+	AnalyzeSplitter(*common.TableDiff, *splitter.RangeInfo) (splitter.ChunkIterator, error)
+
+	// AnalyzeChunkSize analyze the proper chunk size according to the table and source.
+ 	AnalyzeChunkSize(table *common.TableDiff) (int64, error)
+}
+
 type Source interface {
-	GenerateChunksIterator(*splitter.RangeInfo) (DBIterator, error)
+	// GetTableAnalyzer pick the proper analyzer for different source.
+	// the implement of this function is different in mysql/tidb.
+	GetTableAnalyzer() TableAnalyzer
+
+	// GetRangeIterator generates the range iterator with the checkpoint(*splitter.RangeInfo) and analyzer.
+	// this is the mainly iterator across the whole sync diff.
+	// One source has one range iterator to produce the range to channel.
+	// there are many workers consume the range from the channel to compare.
+	GetRangeIterator(*splitter.RangeInfo, TableAnalyzer) (RangeIterator, error)
+
+	// GetCrc32 gets the crc32 result from given range.
 	GetCrc32(context.Context, *splitter.RangeInfo, chan *ChecksumInfo)
+
+	// GetOrderKeyCols ...
 	GetOrderKeyCols(int) []*model.ColumnInfo
+
+	// GetRowsIterator gets the row data iterator from given range.
 	GetRowsIterator(context.Context, *splitter.RangeInfo) (RowDataIterator, error)
-	GenerateReplaceDML(map[string]*dbutil.ColumnData, int) string
-	GenerateDeleteDML(map[string]*dbutil.ColumnData, int) string
+
+	// GenerateFixSQL generates the fix sql with given type.
+	GenerateFixSQL(DMLType, map[string]*dbutil.ColumnData, int) string
+
+	// GetDB represents the db connection.
 	GetDB() *sql.DB
+
+	// Close ...
 	Close()
 }
 
 func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, upstream Source, err error) {
-	// downstream only tidb now
-	// TODO support mysql?
-	sourceDBs, cfgTables, err := initTables(ctx, cfg)
+	tablesToBeCheck, err := initTables(ctx, cfg)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
 
-	targetTableDiffs := make([]*common.TableDiff, 0, len(cfgTables))
-	for _, tables := range cfgTables {
+	tableDiffs := make([]*common.TableDiff, 0, len(tablesToBeCheck))
+	for _, tables := range tablesToBeCheck {
 		for _, tableConfig := range tables {
-			targetTableDiffs = append(targetTableDiffs, &common.TableDiff{
+			tableDiffs = append(tableDiffs, &common.TableDiff{
 				Schema:        tableConfig.Schema,
 				Table:         tableConfig.Table,
 				Info:          tableConfig.TargetTableInfo,
@@ -173,52 +112,49 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 				Fields:        tableConfig.Fields,
 				Range:         tableConfig.Range,
 				Collation:     tableConfig.Collation,
-				// TODO table different?
-				UseChecksum:       cfg.UseChecksum,
-				OnlyUseChecksum:   cfg.OnlyUseChecksum,
-				IgnoreStructCheck: cfg.IgnoreStructCheck,
-				IgnoreDataCheck:   cfg.IgnoreDataCheck,
-				UseCheckpoint:     cfg.UseCheckpoint,
 			})
 		}
 	}
 
-	downstream, err = NewTiDBSource(ctx, targetTableDiffs, cfg.TargetDBCfg.Conn)
+	upstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.SourceDBCfg...)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
 
-	switch cfg.SourceDBCfg[0].DBType {
-	case "TiDB":
-		sourceTablesDiffs := make([]*common.TableDiff, 0, len(cfgTables))
-		for _, tables := range cfgTables {
-			for _, tableConfig := range tables {
-				sourceTable := tableConfig.SourceTables[0]
-				sourceTablesDiffs = append(sourceTablesDiffs, &common.TableDiff{
-					Schema: sourceTable.Schema,
-					Table:  sourceTable.Table,
-				})
-			}
-		}
-		upstream, err = NewTiDBSource(ctx, sourceTablesDiffs, cfg.SourceDBCfg[0].Conn)
-		if err != nil {
-			return nil, nil, errors.Trace(err)
-		}
-	case "mysql":
-		sourceTablesDiffs := make([][]config.TableInstance, 0, len(cfgTables))
-		for _, tables := range cfgTables {
-			for _, tableConfig := range tables {
-				sourceTablesDiffs = append(sourceTablesDiffs, tableConfig.SourceTables)
-			}
-		}
-		upstream, err = NewMysqlSource(ctx, sourceTablesDiffs, sourceDBs)
-		if err != nil {
-			return nil, nil, errors.Trace(err)
-		}
+	downstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.TargetDBCfg)
+	if err != nil {
+		return nil, nil, errors.Trace(err)
+	}
+	return upstream, downstream, nil
+}
 
+func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, dbs ...*config.DBConfig) (Source, error) {
+	if len(dbs) < 1 {
+		return nil, errors.Errorf("no db config detected")
+	}
+	ok, err := dbutil.IsTiDB(ctx, dbs[0].Conn)
+	if err != nil {
+		return nil, errors.Annotatef(err, "connect to db failed")
 	}
 
-	return
+	if len(dbs) == 1 {
+		if ok {
+			// TiDB
+			return NewTiDBSource(ctx, tableDiffs, dbs[0].Conn)
+		} else {
+			// Single Mysql
+			return NewMySQLSource(ctx, tableDiffs, dbs[0].Conn)
+		}
+	} else {
+		if ok {
+			// TiDB
+			log.Fatal("Don't support check table in multiple tidb instance, please specify one tidb instance.")
+		} else {
+			return NewMySQLSources(ctx)
+		}
+	}
+	// unreachable
+	return nil, nil
 }
 
 func initDBConn(ctx context.Context, cfg *config.Config) (sourceDBs map[string]*config.DBConfig, err error) {
@@ -254,20 +190,15 @@ func initDBConn(ctx context.Context, cfg *config.Config) (sourceDBs map[string]*
 	return
 }
 
-func initTables(ctx context.Context, cfg *config.Config) (connDBs map[string]*sql.DB, cfgTables map[string]map[string]*config.TableConfig, err error) {
-	sourceDBs, err := initDBConn(ctx, cfg)
-	if err != nil {
-		return nil, nil, errors.Trace(err)
-	}
-
+func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]map[string]*config.TableConfig, err error) {
 	tableRouter, err := router.NewTableRouter(false, cfg.TableRules)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
 
 	allTablesMap, err := utils.GetAllTables(ctx, cfg)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, errors.Trace(err)
 	}
 
 	// get all source table's matched target table
@@ -282,7 +213,7 @@ func initTables(ctx context.Context, cfg *config.Config) (connDBs map[string]*sq
 			for table := range allTables {
 				targetSchema, targetTable, err := tableRouter.Route(schema, table)
 				if err != nil {
-					return nil, nil, errors.Errorf("get route result for %s.%s.%s failed, error %v", instanceID, schema, table, err)
+					return nil, errors.Errorf("get route result for %s.%s.%s failed, error %v", instanceID, schema, table, err)
 				}
 
 				if _, ok := sourceTablesMap[targetSchema]; !ok {
@@ -311,13 +242,13 @@ func initTables(ctx context.Context, cfg *config.Config) (connDBs map[string]*sq
 		tables := make([]string, 0, len(schemaTables.Tables))
 		allTables, ok := allTablesMap[cfg.TargetDBCfg.InstanceID][schemaTables.Schema]
 		if !ok {
-			return nil, nil, errors.NotFoundf("schema %s.%s", cfg.TargetDBCfg.InstanceID, schemaTables.Schema)
+			return nil, errors.NotFoundf("schema %s.%s", cfg.TargetDBCfg.InstanceID, schemaTables.Schema)
 		}
 
 		for _, table := range schemaTables.Tables {
 			matchedTables, err := utils.GetMatchTable(cfg.TargetDBCfg, schemaTables.Schema, table, allTables)
 			if err != nil {
-				return nil, nil, errors.Trace(err)
+				return nil, errors.Trace(err)
 			}
 
 			//exclude those in "exclude-tables"
@@ -333,7 +264,7 @@ func initTables(ctx context.Context, cfg *config.Config) (connDBs map[string]*sq
 		for _, tableName := range tables {
 			tableInfo, err := dbutil.GetTableInfo(ctx, cfg.TargetDBCfg.Conn, schemaTables.Schema, tableName)
 			if err != nil {
-				return nil, nil, errors.Errorf("get table %s.%s's information error %s", schemaTables.Schema, tableName, errors.ErrorStack(err))
+				return nil, errors.Errorf("get table %s.%s's information error %s", schemaTables.Schema, tableName, errors.ErrorStack(err))
 			}
 
 			if _, ok := cfgTables[schemaTables.Schema][tableName]; ok {
@@ -368,40 +299,40 @@ func initTables(ctx context.Context, cfg *config.Config) (connDBs map[string]*sq
 
 	for _, table := range cfg.TableCfgs {
 		if _, ok := cfgTables[table.Schema]; !ok {
-			return nil, nil, errors.NotFoundf("schema %s in check tables", table.Schema)
+			return nil, errors.NotFoundf("schema %s in check tables", table.Schema)
 		}
 		if _, ok := cfgTables[table.Schema][table.Table]; !ok {
-			return nil, nil, errors.NotFoundf("table %s.%s in check tables", table.Schema, table.Table)
+			return nil, errors.NotFoundf("table %s.%s in check tables", table.Schema, table.Table)
 		}
 
-		sourceTables := make([]config.TableInstance, 0, len(table.SourceTables))
-		for _, sourceTable := range table.SourceTables {
-			if _, ok := sourceDBs[sourceTable.InstanceID]; !ok {
-				return nil, nil, errors.Errorf("unkonwn database instance id %s", sourceTable.InstanceID)
-			}
+		//sourceTables := make([]config.TableInstance, 0, len(table.SourceTables))
+		//for _, sourceTable := range table.SourceTables {
+		//	if _, ok := sourceDBs[sourceTable.InstanceID]; !ok {
+		//		return nil, errors.Errorf("unkonwn database instance id %s", sourceTable.InstanceID)
+		//	}
+		//
+		//	allTables, ok := allTablesMap[sourceDBs[sourceTable.InstanceID].InstanceID][sourceTable.Schema]
+		//	if !ok {
+		//		return nil, errors.Errorf("unknown schema %s in database %+v", sourceTable.Schema, sourceDBs[sourceTable.InstanceID])
+		//	}
+		//
+		//	tables, err := utils.GetMatchTable(sourceDBs[sourceTable.InstanceID], sourceTable.Schema, sourceTable.Table, allTables)
+		//	if err != nil {
+		//		return nil, errors.Trace(err)
+		//	}
+		//
+		//	for _, table := range tables {
+		//		sourceTables = append(sourceTables, config.TableInstance{
+		//			InstanceID: sourceTable.InstanceID,
+		//			Schema:     sourceTable.Schema,
+		//			Table:      table,
+		//		})
+		//	}
+		//}
 
-			allTables, ok := allTablesMap[sourceDBs[sourceTable.InstanceID].InstanceID][sourceTable.Schema]
-			if !ok {
-				return nil, nil, errors.Errorf("unknown schema %s in database %+v", sourceTable.Schema, sourceDBs[sourceTable.InstanceID])
-			}
-
-			tables, err := utils.GetMatchTable(sourceDBs[sourceTable.InstanceID], sourceTable.Schema, sourceTable.Table, allTables)
-			if err != nil {
-				return nil, nil, errors.Trace(err)
-			}
-
-			for _, table := range tables {
-				sourceTables = append(sourceTables, config.TableInstance{
-					InstanceID: sourceTable.InstanceID,
-					Schema:     sourceTable.Schema,
-					Table:      table,
-				})
-			}
-		}
-
-		if len(sourceTables) != 0 {
-			cfgTables[table.Schema][table.Table].SourceTables = sourceTables
-		}
+		//if len(sourceTables) != 0 {
+		//	cfgTables[table.Schema][table.Table].SourceTables = sourceTables
+		//}
 		if table.Range != "" {
 			cfgTables[table.Schema][table.Table].Range = table.Range
 		}
@@ -409,46 +340,37 @@ func initTables(ctx context.Context, cfg *config.Config) (connDBs map[string]*sq
 		cfgTables[table.Schema][table.Table].Fields = table.Fields
 		cfgTables[table.Schema][table.Table].Collation = table.Collation
 	}
-
-	// we need to increase max open connections for upstream, because one chunk needs accessing N shard tables in one
-	// upstream, and there are `CheckThreadCount` processing chunks. At most we need N*`CheckThreadCount` connections
-	// for an upstream
-	// instanceID -> max number of upstream shard tables every target table
-	maxNumShardTablesOneRun := map[string]int{}
-	for _, targetTables := range cfgTables {
-		for _, sourceCfg := range targetTables {
-			upstreamCount := map[string]int{}
-			for _, sourceTables := range sourceCfg.SourceTables {
-				upstreamCount[sourceTables.InstanceID]++
-			}
-			for id, count := range upstreamCount {
-				if count > maxNumShardTablesOneRun[id] {
-					maxNumShardTablesOneRun[id] = count
-				}
-			}
-		}
-	}
-
-	connDBs = make(map[string]*sql.DB)
-	for instanceId, count := range maxNumShardTablesOneRun {
-		db := sourceDBs[instanceId].Conn
-		if db == nil {
-			return nil, nil, errors.Errorf("didn't found sourceDB for instance %s", instanceId)
-		}
-		log.Info("will increase connection configurations for DB of instance",
-			zap.String("instance id", instanceId),
-			zap.Int("connection limit", count*cfg.CheckThreadCount))
-		db.SetMaxOpenConns(count * cfg.CheckThreadCount)
-		db.SetMaxIdleConns(count * cfg.CheckThreadCount)
-		connDBs[instanceId] = db
-	}
-
-	return
+	return cfgTables, nil
 }
 
-// DBIterator generate next chunk for the whole tables lazily.
-type DBIterator interface {
+// RangeIterator generate next chunk for the whole tables lazily.
+type RangeIterator interface {
 	// Next seeks the next chunk, return nil if seeks to end.
 	Next() (*splitter.RangeInfo, error)
+
 	Close()
+}
+
+type TableRows struct {
+	tableRowsQuery    string
+	tableOrderKeyCols []*model.ColumnInfo
+}
+
+type BasicRowsIterator struct {
+	rows *sql.Rows
+}
+
+func (s *BasicRowsIterator) Close() {
+	s.rows.Close()
+}
+
+func (s *BasicRowsIterator) Next() (map[string]*dbutil.ColumnData, error) {
+	if s.rows.Next() {
+		return dbutil.ScanRow(s.rows)
+	}
+	return nil, nil
+}
+
+func (s *BasicRowsIterator) GenerateFixSQL(t DMLType) (string, error) {
+	return "", nil
 }
