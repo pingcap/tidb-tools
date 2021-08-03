@@ -479,7 +479,7 @@ func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table stri
 	}
 	columnValues := make([]string, len(columns))
 	for i, column := range columns {
-		columnValues[i] = fmt.Sprint(column)
+		columnValues[i] = *column.(*string)
 	}
 	return columnValues, nil
 }
@@ -488,8 +488,8 @@ func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table stri
 func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, int64, error) {
 	/*
 		calculate CRC32 checksum and count example:
-		mysql> SELECT COUNT(t.ch) as count, BIT_XOR(t.ch) as checksum from (select CAST(CRC32(CONCAT_WS(',', i_id, i_im_id, i_name, i_price, i_data, CONCAT(ISNULL(i_id), ISNULL(i_im_id), ISNULL(i_name), ISNULL(
-		i_price), ISNULL(
+		mysql> select count(t.checksum), BIT_XOR(t.checksum) from
+		(select CAST(CRC32(CONCAT_WS(',', id, name, age, CONCAT(ISNULL(id), ISNULL(name), ISNULL(age))))AS UNSIGNED) as checksum from test.test where id > 0) as t;
 		+--------+------------+
 		| count  | checksum   |
 		+--------+------------+
@@ -504,9 +504,9 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", dbutil.ColumnName(col.Name.O)))
 	}
 
-	query := fmt.Sprintf("SELECT COUNT(t.checksum), BIT_XOR(t.checksum) from (SELECT CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED) AS checksum FROM %s WHERE %s) as t;",
+	query := fmt.Sprintf("SELECT COUNT(t.crc32) as CNT, BIT_XOR(t.crc32) as CHECKSUM from (SELECT CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED) AS crc32 FROM %s WHERE %s) as t;",
 		strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), dbutil.TableName(schemaName, tableName), limitRange)
-
+	fmt.Println(query)
 	log.Debug("count and checksum", zap.String("sql", query), zap.Reflect("args", args))
 
 	var count sql.NullInt64
