@@ -71,10 +71,6 @@ func (s *BasicSource) GetTable(i int) *common.TableDiff {
 	return s.tableDiffs[i]
 }
 
-func (s *BasicSource) GetCrc32(ctx context.Context, tableRange *splitter.RangeInfo, checksumInfoCh chan *ChecksumInfo) {
-	s.GetCountAndCrc32(ctx, tableRange, nil, checksumInfoCh)
-}
-
 func (s *BasicSource) GetOrderKeyCols(tableIndex int) []*model.ColumnInfo {
 	return s.tableRows[tableIndex].tableOrderKeyCols
 }

@@ -368,17 +368,18 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 }
 
 func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *splitter.RangeInfo) (bool, int64, error) {
-	countCh := make(chan int64)
+	upstreamCountCh := make(chan int64)
+	downstreamCountCh := make(chan int64)
 	upstreamChecksumCh := make(chan *source.ChecksumInfo)
 	downstreamChecksumCh := make(chan *source.ChecksumInfo)
+	go df.upstream.GetCountAndCrc32(ctx, tableRange, upstreamCountCh, upstreamChecksumCh)
+	go df.downstream.GetCountAndCrc32(ctx, tableRange, downstreamCountCh, downstreamChecksumCh)
+	var count int64
 	if df.workSource == df.upstream {
-		go df.upstream.GetCountAndCrc32(ctx, tableRange, countCh, upstreamChecksumCh)
-		go df.downstream.GetCrc32(ctx, tableRange, downstreamChecksumCh)
+		count = <-upstreamCountCh
 	} else {
-		go df.upstream.GetCrc32(ctx, tableRange, downstreamChecksumCh)
-		go df.downstream.GetCountAndCrc32(ctx, tableRange, countCh, upstreamChecksumCh)
+		count = <-downstreamCountCh
 	}
-	count := <-countCh
 	crc1Info := <-downstreamChecksumCh
 	crc2Info := <-upstreamChecksumCh
 	if crc1Info.Err != nil {
@@ -388,26 +389,6 @@ func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *spli
 		return false, -1, errors.Trace(crc2Info.Err)
 	}
 	return true, count, nil
-}
-
-func (df *Diff) compareChecksum(ctx context.Context, tableRange *splitter.RangeInfo) (bool, error) {
-	upstreamChecksumCh := make(chan *source.ChecksumInfo)
-	go df.upstream.GetCrc32(ctx, tableRange, upstreamChecksumCh)
-	downstreamChecksumCh := make(chan *source.ChecksumInfo)
-	go df.downstream.GetCrc32(ctx, tableRange, downstreamChecksumCh)
-	crc1Info := <-downstreamChecksumCh
-	crc2Info := <-upstreamChecksumCh
-	if crc1Info.Err != nil {
-		return false, errors.Trace(crc1Info.Err)
-	}
-	if crc2Info.Err != nil {
-		return false, errors.Trace(crc2Info.Err)
-	}
-	if crc1Info.Checksum != crc2Info.Checksum {
-		return false, nil
-	}
-
-	return true, nil
 }
 
 func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) (bool, error) {

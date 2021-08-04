@@ -76,8 +76,7 @@ type Source interface {
 	// there are many workers consume the range from the channel to compare.
 	GetRangeIterator(*splitter.RangeInfo, TableAnalyzer) (RangeIterator, error)
 
-	// GetCrc32 gets the crc32 result from given range.
-	GetCrc32(context.Context, *splitter.RangeInfo, chan *ChecksumInfo)
+	// GetCountAndCrc32 gets the crc32 result from given range.
 	GetCountAndCrc32(context.Context, *splitter.RangeInfo, chan int64, chan *ChecksumInfo)
 
 	// GetOrderKeyCols ...
