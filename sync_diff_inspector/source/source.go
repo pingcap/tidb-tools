@@ -62,7 +62,7 @@ type TableAnalyzer interface {
 	AnalyzeSplitter(*common.TableDiff, *splitter.RangeInfo) (splitter.ChunkIterator, error)
 
 	// AnalyzeChunkSize analyze the proper chunk size according to the table and source.
- 	AnalyzeChunkSize(table *common.TableDiff) (int64, error)
+	AnalyzeChunkSize(table *common.TableDiff) (int64, error)
 }
 
 type Source interface {
@@ -76,8 +76,8 @@ type Source interface {
 	// there are many workers consume the range from the channel to compare.
 	GetRangeIterator(*splitter.RangeInfo, TableAnalyzer) (RangeIterator, error)
 
-	// GetCrc32 gets the crc32 result from given range.
-	GetCrc32(context.Context, *splitter.RangeInfo, chan *ChecksumInfo)
+	// GetCountAndCrc32 gets the crc32 result from given range.
+	GetCountAndCrc32(context.Context, *splitter.RangeInfo, chan int64, chan *ChecksumInfo)
 
 	// GetOrderKeyCols ...
 	GetOrderKeyCols(int) []*model.ColumnInfo
@@ -90,6 +90,8 @@ type Source interface {
 
 	// GetDB represents the db connection.
 	GetDB() *sql.DB
+
+	GetTable(int) *common.TableDiff
 
 	// Close ...
 	Close()
