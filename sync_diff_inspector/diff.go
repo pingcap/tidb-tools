@@ -22,6 +22,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
+	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
@@ -298,8 +299,14 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 	if len(indices) == 0 {
 		return tableRange, nil
 	}
+	var index *model.IndexInfo
 	// using the index
-	index := indices[tableRange.IndexID]
+	for _, i := range indices {
+		if tableRange.IndexID == i.ID {
+			index = i
+			break
+		}
+	}
 	if index == nil {
 		return nil, errors.NotFoundf("cannot found a index to split")
 	}
