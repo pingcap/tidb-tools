@@ -20,7 +20,6 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
-	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
@@ -40,6 +39,7 @@ const (
 
 type ChecksumInfo struct {
 	Checksum int64
+	Count    int64
 	Err      error
 	Cost     time.Duration
 }
@@ -48,9 +48,6 @@ type ChecksumInfo struct {
 type RowDataIterator interface {
 	// Next seeks the next row data, it used when compared rows.
 	Next() (map[string]*dbutil.ColumnData, error)
-	// GenerateFixSQL generates the firx sql to downstream source according to the rows.
-	GenerateFixSQL(t DMLType) (string, error)
-
 	// Close release the resource.
 	Close()
 }
@@ -77,10 +74,7 @@ type Source interface {
 	GetRangeIterator(*splitter.RangeInfo, TableAnalyzer) (RangeIterator, error)
 
 	// GetCountAndCrc32 gets the crc32 result and the count from given range.
-	GetCountAndCrc32(context.Context, *splitter.RangeInfo, chan int64, chan *ChecksumInfo)
-
-	// GetOrderKeyCols ...
-	GetOrderKeyCols(int) []*model.ColumnInfo
+	GetCountAndCrc32(context.Context, *splitter.RangeInfo, chan *ChecksumInfo)
 
 	// GetRowsIterator gets the row data iterator from given range.
 	GetRowsIterator(context.Context, *splitter.RangeInfo) (RowDataIterator, error)
@@ -88,8 +82,11 @@ type Source interface {
 	// GenerateFixSQL generates the fix sql with given type.
 	GenerateFixSQL(DMLType, map[string]*dbutil.ColumnData, int) string
 
+	// GetTable represents the tableDiff of given index.
 	GetTable(int) *common.TableDiff
 
+	// GetDB represents the db connection.
+	GetDB() *sql.DB
 	// Close ...
 	Close()
 }
@@ -304,34 +301,6 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 			return nil, errors.NotFoundf("table %s.%s in check tables", table.Schema, table.Table)
 		}
 
-		//sourceTables := make([]config.TableInstance, 0, len(table.SourceTables))
-		//for _, sourceTable := range table.SourceTables {
-		//	if _, ok := sourceDBs[sourceTable.InstanceID]; !ok {
-		//		return nil, errors.Errorf("unkonwn database instance id %s", sourceTable.InstanceID)
-		//	}
-		//
-		//	allTables, ok := allTablesMap[sourceDBs[sourceTable.InstanceID].InstanceID][sourceTable.Schema]
-		//	if !ok {
-		//		return nil, errors.Errorf("unknown schema %s in database %+v", sourceTable.Schema, sourceDBs[sourceTable.InstanceID])
-		//	}
-		//
-		//	tables, err := utils.GetMatchTable(sourceDBs[sourceTable.InstanceID], sourceTable.Schema, sourceTable.Table, allTables)
-		//	if err != nil {
-		//		return nil, errors.Trace(err)
-		//	}
-		//
-		//	for _, table := range tables {
-		//		sourceTables = append(sourceTables, config.TableInstance{
-		//			InstanceID: sourceTable.InstanceID,
-		//			Schema:     sourceTable.Schema,
-		//			Table:      table,
-		//		})
-		//	}
-		//}
-
-		//if len(sourceTables) != 0 {
-		//	cfgTables[table.Schema][table.Table].SourceTables = sourceTables
-		//}
 		if table.Range != "" {
 			cfgTables[table.Schema][table.Table].Range = table.Range
 		}
@@ -363,8 +332,4 @@ func (s *BasicRowsIterator) Next() (map[string]*dbutil.ColumnData, error) {
 		return dbutil.ScanRow(s.rows)
 	}
 	return nil, nil
-}
-
-func (s *BasicRowsIterator) GenerateFixSQL(t DMLType) (string, error) {
-	return "", nil
 }

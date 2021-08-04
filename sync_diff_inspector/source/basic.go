@@ -21,7 +21,6 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
-	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
@@ -50,28 +49,22 @@ func (s *BasicSource) GetRangeIterator(r *splitter.RangeInfo, analyzer TableAnal
 func (s *BasicSource) Close() {
 	s.dbConn.Close()
 }
-func (s *BasicSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter.RangeInfo, countCh chan int64, checksumInfoCh chan *ChecksumInfo) {
+func (s *BasicSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter.RangeInfo, checksumInfoCh chan *ChecksumInfo) {
 	beginTime := time.Now()
 	table := s.tableDiffs[tableRange.GetTableIndex()]
 	chunk := tableRange.GetChunk()
 	count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, s.dbConn, table.Schema, table.Table, table.Info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
 	cost := time.Since(beginTime)
-	if countCh != nil {
-		countCh <- count
-	}
 	checksumInfoCh <- &ChecksumInfo{
 		Checksum: checksum,
+		Count:    count,
 		Err:      err,
 		Cost:     cost,
 	}
 }
 
-func (s *BasicSource) GetTable(i int) *common.TableDiff {
-	return s.tableDiffs[i]
-}
-
-func (s *BasicSource) GetOrderKeyCols(tableIndex int) []*model.ColumnInfo {
-	return s.tableDiffs[tableIndex].TableOrderKeyCols
+func (s *BasicSource) GetTable(index int) *common.TableDiff {
+	return s.tableDiffs[index]
 }
 
 func (s *BasicSource) GenerateFixSQL(t DMLType, data map[string]*dbutil.ColumnData, tableIndex int) string {
