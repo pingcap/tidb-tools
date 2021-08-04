@@ -67,12 +67,3 @@ func NewMySQLSource(ctx context.Context, tableDiffs []*common.TableDiff, dbConn 
 	}
 	return ts, nil
 }
-
-type MySQLSources struct {
-
-}
-
-
-func NewMySQLSources(ctx context.Context) (Source, error) {
-	return nil, nil
-}

@@ -76,7 +76,7 @@ type Source interface {
 	// there are many workers consume the range from the channel to compare.
 	GetRangeIterator(*splitter.RangeInfo, TableAnalyzer) (RangeIterator, error)
 
-	// GetCountAndCrc32 gets the crc32 result from given range.
+	// GetCountAndCrc32 gets the crc32 result and the count from given range.
 	GetCountAndCrc32(context.Context, *splitter.RangeInfo, chan int64, chan *ChecksumInfo)
 
 	// GetOrderKeyCols ...
@@ -87,9 +87,6 @@ type Source interface {
 
 	// GenerateFixSQL generates the fix sql with given type.
 	GenerateFixSQL(DMLType, map[string]*dbutil.ColumnData, int) string
-
-	// GetDB represents the db connection.
-	GetDB() *sql.DB
 
 	GetTable(int) *common.TableDiff
 
@@ -102,6 +99,9 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
+
+	// init db connection for upstream / downstream.
+	err = initDBConn(ctx, cfg)
 
 	tableDiffs := make([]*common.TableDiff, 0, len(tablesToBeCheck))
 	for _, tables := range tablesToBeCheck {
@@ -152,23 +152,23 @@ func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, dbs
 			// TiDB
 			log.Fatal("Don't support check table in multiple tidb instance, please specify one tidb instance.")
 		} else {
-			return NewMySQLSources(ctx)
+			return NewMySQLSources(ctx, tableDiffs, dbs)
 		}
 	}
 	// unreachable
 	return nil, nil
 }
 
-func initDBConn(ctx context.Context, cfg *config.Config) (sourceDBs map[string]*config.DBConfig, err error) {
+func initDBConn(ctx context.Context, cfg *config.Config) error {
+	var err error
 	cfg.TargetDBCfg.Conn, err = common.CreateDB(ctx, &cfg.TargetDBCfg.DBConfig, nil, cfg.CheckThreadCount)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return errors.Trace(err)
 	}
 
-	// TODO targetTZOffset?
 	targetTZOffset, err := dbutil.GetTimeZoneOffset(ctx, cfg.TargetDBCfg.Conn)
 	if err != nil {
-		return nil, errors.Annotatef(err, "fetch target db %s time zone offset failed", cfg.TargetDBCfg.DBConfig.String())
+		return errors.Annotatef(err, "fetch target db %s time zone offset failed", cfg.TargetDBCfg.DBConfig.String())
 	}
 	vars := map[string]string{
 		"time_zone": dbutil.FormatTimeZoneOffset(targetTZOffset),
@@ -176,20 +176,17 @@ func initDBConn(ctx context.Context, cfg *config.Config) (sourceDBs map[string]*
 
 	// upstream
 	if len(cfg.SourceDBCfg) < 1 {
-		return nil, errors.New(" source config")
+		return errors.New(" source config")
 	}
 
-	sourceDBs = make(map[string]*config.DBConfig)
 	for _, source := range cfg.SourceDBCfg {
 		// connect source db with target db time_zone
 		source.Conn, err = common.CreateDB(ctx, &source.DBConfig, vars, cfg.CheckThreadCount)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return errors.Trace(err)
 		}
-		sourceDBs[source.InstanceID] = source
 	}
-
-	return
+	return nil
 }
 
 func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]map[string]*config.TableConfig, err error) {

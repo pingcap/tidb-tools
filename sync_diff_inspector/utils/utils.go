@@ -141,7 +141,6 @@ func StringsToInterfaces(strs []string) []interface{} {
 }
 
 func GetTableRowsQueryFormat(schema, table string, tableInfo *model.TableInfo, collation string) (string, []*model.ColumnInfo) {
-
 	orderKeys, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
 
 	columnNames := make([]string, 0, len(tableInfo.Columns))
