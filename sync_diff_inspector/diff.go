@@ -308,7 +308,9 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 		}
 	}
 	if index == nil {
-		return nil, errors.NotFoundf("cannot found a index to split")
+		log.Error("cannot found a index to split and disable the BinGenerate",
+			zap.String("table", dbutil.TableName(tableDiff.Schema, tableDiff.Table)))
+		return nil, nil
 	}
 	log.Debug("index for BinGerate", zap.String("index", index.Name.O))
 	indexColumns := utils.GetColumnsFromIndex(index, tableDiff.Info)
@@ -348,19 +350,20 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 	if !isEqual1 && !isEqual2 {
 		return tableRange, nil
 	} else if !isEqual1 {
-		c, err := df.BinGenerate(ctx, targetSource, tableRange2, count2)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		return c, nil
-	} else if !isEqual2 {
 		c, err := df.BinGenerate(ctx, targetSource, tableRange1, count1)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 		return c, nil
+	} else if !isEqual2 {
+		c, err := df.BinGenerate(ctx, targetSource, tableRange2, count2)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		return c, nil
 	} else {
-		panic("error")
+		log.Fatal("the isEqual1 and isEqual2 cannot be both true")
+		return nil, nil
 	}
 }
 
