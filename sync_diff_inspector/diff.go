@@ -22,6 +22,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
+	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
@@ -30,6 +31,13 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	tidbconfig "github.com/pingcap/tidb/config"
 	"go.uber.org/zap"
+)
+
+const (
+	splitThreshold         = 1000
+	splitBound     float64 = 3.
+	// checkpointFile represents the checkpoints' file name which used for save and loads chunks
+	checkpointFile = "sync_diff_checkpoints.pb"
 )
 
 // Diff contains two sql DB, used for comparing.
@@ -172,7 +180,7 @@ func (df *Diff) pickSource(ctx context.Context) source.Source {
 func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterator, error) {
 	var startRange *splitter.RangeInfo
 	if df.useCheckpoint {
-		node, err := df.cp.LoadChunk()
+		node, err := df.cp.LoadChunk(checkpointFile)
 		if err != nil {
 			return nil, errors.Annotate(err, "the checkpoint load process failed")
 		} else {
@@ -202,7 +210,7 @@ func (df *Diff) handleCheckpoints(ctx context.Context) {
 			log.Info("Stop do checkpoint")
 			return
 		case <-time.After(10 * time.Second):
-			_, err := df.cp.SaveChunk(ctx)
+			_, err := df.cp.SaveChunk(ctx, checkpointFile)
 			if err != nil {
 				log.Warn("fail to save the chunk", zap.Error(err))
 				// maybe we should panic, because SaveChunk method should not failed.
@@ -241,15 +249,23 @@ func (df *Diff) handleChunks(ctx context.Context) {
 }
 
 func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (bool, error) {
-	isEqual, err := df.compareChecksum(ctx, rangeInfo)
+	isEqual, count, err := df.compareChecksumAndGetCount(ctx, rangeInfo)
 	if err != nil {
-		// TODO retry or log this chunk's error to checkpoint.
-		return false, err
+		return false, errors.Trace(err)
 	}
-
+	log.Info("count size",
+		zap.Int("chunk id", rangeInfo.ID),
+		zap.Int64("chunk size", count))
 	var state string
 	if !isEqual {
 		state = checkpoints.FailedState
+		// if the chunk's checksum differ, try to do binary check
+		if count > splitThreshold {
+			rangeInfo, err = df.BinGenerate(ctx, df.workSource, rangeInfo, count)
+			if err != nil {
+				return false, errors.Trace(err)
+			}
+		}
 		isEqual, err = df.compareRows(ctx, rangeInfo)
 		if err != nil {
 			return false, err
@@ -265,24 +281,114 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 	return isEqual, nil
 }
 
-func (df *Diff) compareChecksum(ctx context.Context, tableRange *splitter.RangeInfo) (bool, error) {
+func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tableRange *splitter.RangeInfo, count int64) (*splitter.RangeInfo, error) {
+	if count <= splitThreshold {
+		return tableRange, nil
+	}
+	// TODO Find great index
+	tableDiff := targetSource.GetTable(tableRange.GetTableIndex())
+	indices := dbutil.FindAllIndex(tableDiff.Info)
+
+	var (
+		isEqual1, isEqual2 bool
+		count1, count2     int64
+	)
+	tableRange1 := tableRange.Copy()
+	tableRange2 := tableRange.Copy()
+	// if no index, do not split
+	if len(indices) == 0 {
+		return tableRange, nil
+	}
+	var index *model.IndexInfo
+	// using the index
+	for _, i := range indices {
+		if tableRange.IndexID == i.ID {
+			index = i
+			break
+		}
+	}
+	if index == nil {
+		log.Error("cannot found a index to split and disable the BinGenerate",
+			zap.String("table", dbutil.TableName(tableDiff.Schema, tableDiff.Table)))
+		return nil, nil
+	}
+	log.Debug("index for BinGerate", zap.String("index", index.Name.O))
+	indexColumns := utils.GetColumnsFromIndex(index, tableDiff.Info)
+	if len(indexColumns) == 0 {
+		log.Warn("no index to split")
+	}
+	chunkLimits, args := tableRange.ChunkRange.ToString(tableDiff.Collation)
+	limitRange := fmt.Sprintf("(%s) AND %s", chunkLimits, tableDiff.Range)
+	midValues, err := utils.GetApproximateMidBySize(ctx, targetSource.GetDB(), tableDiff.Schema, tableDiff.Table, tableDiff.Info, limitRange, utils.StringsToInterfaces(args), count)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	for i, value := range midValues {
+		tableRange1.ChunkRange.Update(indexColumns[i].Name.O, "", value, false, true)
+		tableRange2.ChunkRange.Update(indexColumns[i].Name.O, value, "", true, false)
+	}
+	isEqual1, count1, err = df.compareChecksumAndGetCount(ctx, tableRange1)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	isEqual2, count2, err = df.compareChecksumAndGetCount(ctx, tableRange2)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	if count1+count2 != count {
+		log.Error("the count is not correct",
+			zap.Int64("count1", count1),
+			zap.Int64("count2", count2),
+			zap.Int64("count", count))
+		panic("count is not correct")
+	}
+	log.Info("chunk split successfully",
+		zap.Int("chunk id", tableRange.ID),
+		zap.Int64("count1", count1),
+		zap.Int64("count2", count2))
+
+	if !isEqual1 && !isEqual2 {
+		return tableRange, nil
+	} else if !isEqual1 {
+		c, err := df.BinGenerate(ctx, targetSource, tableRange1, count1)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		return c, nil
+	} else if !isEqual2 {
+		c, err := df.BinGenerate(ctx, targetSource, tableRange2, count2)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		return c, nil
+	} else {
+		log.Fatal("the isEqual1 and isEqual2 cannot be both true")
+		return nil, nil
+	}
+}
+
+func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *splitter.RangeInfo) (bool, int64, error) {
+	upstreamCountCh := make(chan int64)
+	downstreamCountCh := make(chan int64)
 	upstreamChecksumCh := make(chan *source.ChecksumInfo)
-	go df.upstream.GetCrc32(ctx, tableRange, upstreamChecksumCh)
 	downstreamChecksumCh := make(chan *source.ChecksumInfo)
-	go df.downstream.GetCrc32(ctx, tableRange, downstreamChecksumCh)
+	go df.upstream.GetCountAndCrc32(ctx, tableRange, upstreamCountCh, upstreamChecksumCh)
+	go df.downstream.GetCountAndCrc32(ctx, tableRange, downstreamCountCh, downstreamChecksumCh)
+	var count int64
+	if df.workSource == df.upstream {
+		count = <-upstreamCountCh
+	} else {
+		count = <-downstreamCountCh
+	}
 	crc1Info := <-downstreamChecksumCh
 	crc2Info := <-upstreamChecksumCh
 	if crc1Info.Err != nil {
-		return false, errors.Trace(crc1Info.Err)
+		return false, -1, errors.Trace(crc1Info.Err)
 	}
 	if crc2Info.Err != nil {
-		return false, errors.Trace(crc2Info.Err)
+		return false, -1, errors.Trace(crc2Info.Err)
 	}
-	if crc1Info.Checksum != crc2Info.Checksum {
-		return false, nil
-	}
-
-	return true, nil
+	return true, count, nil
 }
 
 func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) (bool, error) {

@@ -23,10 +23,12 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 	checker := new(Checkpoint)
 	checker.Init()
 	ctx := context.Background()
-	id, _ := checker.SaveChunk(ctx)
+	id, err := checker.SaveChunk(ctx, "TestSaveChunk")
+	c.Assert(err, IsNil)
 	c.Assert(id, Equals, 0)
 	wg := &sync.WaitGroup{}
-	for i := 1; i < 10000; i++ {
+	rounds := 10000
+	for i := 1; i < rounds; i++ {
 		wg.Add(1)
 		go func(i_ int) {
 			node := &Node{
@@ -42,13 +44,29 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 		}(i)
 	}
 	wg.Wait()
-	id, _ = checker.SaveChunk(ctx)
+	id, err = checker.SaveChunk(ctx, "TestSaveChunk")
+	c.Assert(err, IsNil)
 	c.Assert(id, Equals, 9999)
 }
 
 func (cp *testCheckpointSuit) TestLoadChunk(c *C) {
 	checker := new(Checkpoint)
 	checker.Init()
-	node, _ := checker.LoadChunk()
-	c.Assert(node.BucketID, Equals, 9999)
+	ctx := context.Background()
+	rounds := 100
+	wg := &sync.WaitGroup{}
+	for i := 1; i < rounds; i++ {
+		wg.Add(1)
+		go func(i int) {
+			node := &Node{}
+			checker.Insert(node)
+			wg.Done()
+		}(i)
+	}
+	wg.Wait()
+	id, err := checker.SaveChunk(ctx, "TestLoadChunk")
+	c.Assert(err, IsNil)
+	node, err := checker.LoadChunk("TestLoadChunk")
+	c.Assert(err, IsNil)
+	c.Assert(node.GetID(), Equals, id)
 }

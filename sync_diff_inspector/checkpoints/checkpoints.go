@@ -17,10 +17,11 @@ import (
 	"container/heap"
 	"context"
 	"encoding/json"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
-	"github.com/siddontang/go/ioutil2"
 	"os"
 	"sync"
+
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
+	"github.com/siddontang/go/ioutil2"
 
 	//"github.com/golang/protobuf/proto"
 	//"github.com/pingcap/errors"
@@ -33,9 +34,6 @@ import (
 const localFilePerm os.FileMode = 0o644
 
 var (
-
-	// checkpointFile represents the checkpoints' file name which used for save and loads chunks
-	checkpointFile = "sync_diff_checkpoints.pb"
 
 	// SuccessState
 	// for chunk: means this chunk's data is equal
@@ -140,7 +138,7 @@ func (cp *Checkpoint) Init() {
 }
 
 // SaveChunk saves the chunk to file.
-func (cp *Checkpoint) SaveChunk(ctx context.Context) (int, error) {
+func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string) (int, error) {
 	cp.hp.mu.Lock()
 	var cur, next *Node
 	for {
@@ -169,7 +167,7 @@ func (cp *Checkpoint) SaveChunk(ctx context.Context) (int, error) {
 			return 0, errors.Trace(err)
 		}
 
-		if err = ioutil2.WriteFileAtomic(checkpointFile, checkpointData, localFilePerm); err != nil {
+		if err = ioutil2.WriteFileAtomic(fileName, checkpointData, localFilePerm); err != nil {
 			return 0, err
 		}
 
@@ -183,8 +181,8 @@ func (cp *Checkpoint) SaveChunk(ctx context.Context) (int, error) {
 }
 
 // LoadChunk loads chunk info from file `chunk`
-func (cp *Checkpoint) LoadChunk() (*Node, error) {
-	bytes, err := os.ReadFile(checkpointFile)
+func (cp *Checkpoint) LoadChunk(fileName string) (*Node, error) {
+	bytes, err := os.ReadFile(fileName)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
