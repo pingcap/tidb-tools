@@ -17,6 +17,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
+
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
@@ -25,7 +27,6 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"go.uber.org/zap"
-	"time"
 )
 
 // BasicSource is the basic source for single MySQL/TiDB.
@@ -50,19 +51,24 @@ func (s *BasicSource) GetRangeIterator(r *splitter.RangeInfo, analyzer TableAnal
 func (s *BasicSource) Close() {
 	s.dbConn.Close()
 }
-
-func (s *BasicSource) GetCrc32(ctx context.Context, tableRange *splitter.RangeInfo, checksumInfoCh chan *ChecksumInfo) {
+func (s *BasicSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter.RangeInfo, countCh chan int64, checksumInfoCh chan *ChecksumInfo) {
 	beginTime := time.Now()
 	table := s.tableDiffs[tableRange.GetTableIndex()]
 	chunk := tableRange.GetChunk()
-	checksum, err := dbutil.GetCRC32Checksum(ctx, s.dbConn, table.Schema, table.Table, table.Info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
+	count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, s.dbConn, table.Schema, table.Table, table.Info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
 	cost := time.Since(beginTime)
-
+	if countCh != nil {
+		countCh <- count
+	}
 	checksumInfoCh <- &ChecksumInfo{
 		Checksum: checksum,
 		Err:      err,
 		Cost:     cost,
 	}
+}
+
+func (s *BasicSource) GetTable(i int) *common.TableDiff {
+	return s.tableDiffs[i]
 }
 
 func (s *BasicSource) GetOrderKeyCols(tableIndex int) []*model.ColumnInfo {
