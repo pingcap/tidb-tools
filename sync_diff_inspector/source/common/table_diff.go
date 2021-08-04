@@ -17,9 +17,11 @@ import "github.com/pingcap/parser/model"
 
 // TableDiff saves config for diff table
 type TableDiff struct {
-	Schema string           `json:"schema"`
-	Table  string           `json:"table"`
-	Info   *model.TableInfo `json:"info"`
+	Schema string `json:"schema"`
+
+	Table string `json:"table"`
+
+	Info *model.TableInfo `json:"info"`
 
 	// columns be ignored
 	IgnoreColumns []string `json:"-"`
@@ -46,4 +48,8 @@ type TableDiff struct {
 	UseCheckpoint bool `json:"use-checkpoint"`
 
 	Collation string `json:"collation"`
+
+	TableRowsQuery string
+
+	TableOrderKeyCols []*model.ColumnInfo
 }

@@ -54,16 +54,11 @@ func NewMySQLSource(ctx context.Context, tableDiffs []*common.TableDiff, dbConn 
 	ts := &MySQLSource{
 		BasicSource{
 			tableDiffs: tableDiffs,
-			tableRows:  make([]*TableRows, 0, len(tableDiffs)),
 			dbConn:     dbConn,
 		},
 	}
 	for _, table := range tableDiffs {
-		tableRowsQuery, tableOrderKeyCols := utils.GetTableRowsQueryFormat(table.Schema, table.Table, table.Info, table.Collation)
-		ts.tableRows = append(ts.tableRows, &TableRows{
-			tableRowsQuery,
-			tableOrderKeyCols,
-		})
+		table.TableRowsQuery, table.TableOrderKeyCols = utils.GetTableRowsQueryFormat(table.Schema, table.Table, table.Info, table.Collation)
 	}
 	return ts, nil
 }

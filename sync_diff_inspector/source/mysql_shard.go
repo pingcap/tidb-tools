@@ -23,7 +23,6 @@ import (
 
 type MySQLSources struct {
 	tableDiffs []*common.TableDiff
-	tableRows []*TableRows
 
 	sourceDBs map[string]*sql.DB
 }
@@ -35,15 +34,12 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, dbs []
 	}
 
 	for _, table := range tableDiffs {
-		tableRowsQuery, tableOrderKeyCols := utils.GetTableRowsQueryFormat(table.Schema, table.Table, table.Info, table.Collation)
-		ts.tableRows = append(ts.tableRows, &TableRows{
-			tableRowsQuery,
-			tableOrderKeyCols,
-		})
+		table.TableRowsQuery, table.TableOrderKeyCols = utils.GetTableRowsQueryFormat(table.Schema, table.Table, table.Info, table.Collation)
 	}
-	mss := &MySQLSources {
+
+	mss := &MySQLSources{
 		tableDiffs: tableDiffs,
-		sourceDBs: sourceDBs,
+		sourceDBs:  sourceDBs,
 	}
 	return mss, nil
 }

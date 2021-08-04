@@ -32,7 +32,6 @@ import (
 // BasicSource is the basic source for single MySQL/TiDB.
 type BasicSource struct {
 	tableDiffs []*common.TableDiff
-	tableRows  []*TableRows
 	dbConn     *sql.DB
 }
 
@@ -72,7 +71,7 @@ func (s *BasicSource) GetTable(i int) *common.TableDiff {
 }
 
 func (s *BasicSource) GetOrderKeyCols(tableIndex int) []*model.ColumnInfo {
-	return s.tableRows[tableIndex].tableOrderKeyCols
+	return s.tableDiffs[tableIndex].TableOrderKeyCols
 }
 
 func (s *BasicSource) GenerateFixSQL(t DMLType, data map[string]*dbutil.ColumnData, tableIndex int) string {
@@ -90,7 +89,7 @@ func (s *BasicSource) GetRowsIterator(ctx context.Context, tableRange *splitter.
 	chunk := tableRange.GetChunk()
 	args := utils.StringsToInterfaces(chunk.Args)
 
-	query := fmt.Sprintf(s.tableRows[tableRange.GetTableIndex()].tableRowsQuery, chunk.Where)
+	query := fmt.Sprintf(s.tableDiffs[tableRange.GetTableIndex()].TableRowsQuery, chunk.Where)
 
 	log.Debug("select data", zap.String("sql", query), zap.Reflect("args", args))
 	rows, err := s.dbConn.QueryContext(ctx, query, args...)

@@ -350,11 +350,6 @@ type RangeIterator interface {
 	Close()
 }
 
-type TableRows struct {
-	tableRowsQuery    string
-	tableOrderKeyCols []*model.ColumnInfo
-}
-
 type BasicRowsIterator struct {
 	rows *sql.Rows
 }
