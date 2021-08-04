@@ -203,7 +203,7 @@ func (c *Range) Copy() *Range {
 	return newChunk
 }
 
-func (c *Range) copyAndUpdate(column, lower, upper string, updateLower, updateUpper bool) *Range {
+func (c *Range) CopyAndUpdate(column, lower, upper string, updateLower, updateUpper bool) *Range {
 	newChunk := c.Copy()
 	newChunk.Update(column, lower, upper, updateLower, updateUpper)
 	return newChunk

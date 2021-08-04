@@ -38,11 +38,11 @@ type RandomIterator struct {
 	dbConn *sql.DB
 }
 
-func NewRandomIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int) (*RandomIterator, error) {
-	return NewRandomIteratorWithCheckpoint(table, dbConn, chunkSize, nil)
+func NewRandomIterator(ctx context.Context, table *common.TableDiff, dbConn *sql.DB, chunkSize int) (*RandomIterator, error) {
+	return NewRandomIteratorWithCheckpoint(ctx, table, dbConn, chunkSize, nil)
 }
 
-func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, chunkSize int, startRange *RangeInfo) (*RandomIterator, error) {
+func NewRandomIteratorWithCheckpoint(ctx context.Context, table *common.TableDiff, dbConn *sql.DB, chunkSize int, startRange *RangeInfo) (*RandomIterator, error) {
 	// get the chunk count by data count and chunk size
 
 	var splitFieldArr []string
@@ -63,18 +63,8 @@ func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, ch
 	where := table.Range
 	if startRange != nil {
 		c := startRange.GetChunk()
-		uppers := make([]string, 1, len(c.Bounds))
-		columns := make([]string, 0, len(c.Bounds))
 		for _, bound := range c.Bounds {
-			uppers = append(uppers, bound.Upper)
-			columns = append(columns, bound.Column)
-		}
-		for i := 0; i < len(fields); i++ {
-			for j := 0; j < len(uppers); i++ {
-				if fields[i].Name.O == columns[j] {
-					chunkRange.Update(fields[i].Name.O, uppers[j], "", true, false)
-				}
-			}
+			chunkRange.Update(bound.Column, bound.Upper, "", true, false)
 		}
 		conditions, _ := chunkRange.ToString(table.Collation)
 		if len(where) > 0 {
@@ -84,7 +74,7 @@ func NewRandomIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, ch
 		}
 	}
 
-	cnt, err := dbutil.GetRowCount(context.Background(), dbConn, table.Schema, table.Table, where, nil)
+	cnt, err := dbutil.GetRowCount(ctx, dbConn, table.Schema, table.Table, where, nil)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

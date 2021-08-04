@@ -16,7 +16,6 @@ package source
 import (
 	"context"
 	"database/sql"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -38,13 +37,13 @@ type TiDBTableAnalyzer struct {
 	dbConn *sql.DB
 }
 
-func (a *TiDBTableAnalyzer) AnalyzeSplitter(table *common.TableDiff, startRange *splitter.RangeInfo) (splitter.ChunkIterator, error) {
-	chunkSize := 1000
+func (a *TiDBTableAnalyzer) AnalyzeSplitter(ctx context.Context, table *common.TableDiff, startRange *splitter.RangeInfo) (splitter.ChunkIterator, error) {
+	chunkSize := 0
 	// if we decide to use bucket to split chunks
 	// we always use bucksIter even we load from checkpoint is not bucketNode
 	// TODO check whether we can use bucket for this table to split chunks.
 	if true {
-		bucketIter, err := splitter.NewBucketIteratorWithCheckpoint(table, a.dbConn, chunkSize, startRange)
+		bucketIter, err := splitter.NewBucketIteratorWithCheckpoint(ctx, table, a.dbConn, chunkSize, startRange)
 		if err == nil {
 			return bucketIter, nil
 		}
@@ -53,16 +52,11 @@ func (a *TiDBTableAnalyzer) AnalyzeSplitter(table *common.TableDiff, startRange 
 	}
 
 	// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
-	randIter, err := splitter.NewRandomIteratorWithCheckpoint(table, a.dbConn, chunkSize, startRange)
+	randIter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, table, a.dbConn, chunkSize, startRange)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	return randIter, nil
-}
-
-func (a *TiDBTableAnalyzer) AnalyzeChunkSize(table *common.TableDiff) (int64, error) {
-	// TODO analyze chunk size with table
-	return dbutil.GetRowCount(context.Background(), a.dbConn, table.Schema, table.Table, table.Range, nil)
 }
 
 func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, dbConn *sql.DB) (Source, error) {
@@ -71,6 +65,7 @@ func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, dbConn *
 			tableDiffs: tableDiffs,
 			tableRows:  make([]*TableRows, 0, len(tableDiffs)),
 			dbConn:     dbConn,
+			ctx:        ctx,
 		},
 	}
 	for _, table := range tableDiffs {

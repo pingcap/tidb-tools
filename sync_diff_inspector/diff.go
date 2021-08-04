@@ -372,8 +372,8 @@ func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *spli
 	downstreamCountCh := make(chan int64)
 	upstreamChecksumCh := make(chan *source.ChecksumInfo)
 	downstreamChecksumCh := make(chan *source.ChecksumInfo)
-	go df.upstream.GetCountAndCrc32(ctx, tableRange, upstreamCountCh, upstreamChecksumCh)
-	go df.downstream.GetCountAndCrc32(ctx, tableRange, downstreamCountCh, downstreamChecksumCh)
+	go df.upstream.GetCountAndCrc32(tableRange, upstreamCountCh, upstreamChecksumCh)
+	go df.downstream.GetCountAndCrc32(tableRange, downstreamCountCh, downstreamChecksumCh)
 	var count int64
 	if df.workSource == df.upstream {
 		count = <-upstreamCountCh
@@ -392,12 +392,12 @@ func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *spli
 }
 
 func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) (bool, error) {
-	upstreamRowsIterator, err := df.upstream.GetRowsIterator(ctx, rangeInfo)
+	upstreamRowsIterator, err := df.upstream.GetRowsIterator(rangeInfo)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
 	defer upstreamRowsIterator.Close()
-	downstreamRowsIterator, err := df.downstream.GetRowsIterator(ctx, rangeInfo)
+	downstreamRowsIterator, err := df.downstream.GetRowsIterator(rangeInfo)
 	if err != nil {
 		return false, errors.Trace(err)
 	}

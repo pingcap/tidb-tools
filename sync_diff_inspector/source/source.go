@@ -59,10 +59,7 @@ type RowDataIterator interface {
 // each source has its own analyze function.
 type TableAnalyzer interface {
 	// AnalyzeSplitter picks the proper splitter.ChunkIterator according to table and source.
-	AnalyzeSplitter(*common.TableDiff, *splitter.RangeInfo) (splitter.ChunkIterator, error)
-
-	// AnalyzeChunkSize analyze the proper chunk size according to the table and source.
-	AnalyzeChunkSize(table *common.TableDiff) (int64, error)
+	AnalyzeSplitter(context.Context, *common.TableDiff, *splitter.RangeInfo) (splitter.ChunkIterator, error)
 }
 
 type Source interface {
@@ -77,13 +74,13 @@ type Source interface {
 	GetRangeIterator(*splitter.RangeInfo, TableAnalyzer) (RangeIterator, error)
 
 	// GetCountAndCrc32 gets the crc32 result from given range.
-	GetCountAndCrc32(context.Context, *splitter.RangeInfo, chan int64, chan *ChecksumInfo)
+	GetCountAndCrc32(*splitter.RangeInfo, chan int64, chan *ChecksumInfo)
 
 	// GetOrderKeyCols ...
 	GetOrderKeyCols(int) []*model.ColumnInfo
 
 	// GetRowsIterator gets the row data iterator from given range.
-	GetRowsIterator(context.Context, *splitter.RangeInfo) (RowDataIterator, error)
+	GetRowsIterator(*splitter.RangeInfo) (RowDataIterator, error)
 
 	// GenerateFixSQL generates the fix sql with given type.
 	GenerateFixSQL(DMLType, map[string]*dbutil.ColumnData, int) string
