@@ -127,12 +127,18 @@ func (s *BucketIterator) init(startRange *RangeInfo) error {
 		return errors.NotFoundf("no index to split buckets")
 	}
 
-	var cnt int64 = 0
-	for _, bucket := range s.buckets {
-		cnt = cnt + bucket.Count
+	// There are only 10k chunks at most
+	if s.chunkSize <= 0 {
+		var cnt int64 = 0
+		for _, bucket := range s.buckets {
+			cnt = cnt + bucket.Count
+		}
+		chunkSize := cnt / 10000
+		if chunkSize < SplitThreshold {
+			chunkSize = 2 * SplitThreshold
+		}
+		s.chunkSize = chunkSize
 	}
-
-	//
 
 	return nil
 }

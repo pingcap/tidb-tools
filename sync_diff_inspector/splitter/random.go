@@ -78,6 +78,17 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, table *common.TableDif
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+
+	// There are only 10k chunks at most
+	if chunkSize <= 0 {
+		chunkSize = 2 * SplitThreshold
+		if len(table.Info.Indices) != 0 {
+			chunkSize2 := cnt / 10000
+			if chunkSize2 >= SplitThreshold {
+				chunkSize = int(chunkSize2)
+			}
+		}
+	}
 	chunkCnt := (int(cnt) + chunkSize - 1) / chunkSize
 	log.Info("split range by random", zap.Int64("row count", cnt), zap.Int("split chunk num", chunkCnt))
 
