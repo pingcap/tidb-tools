@@ -57,7 +57,9 @@ func (s *BasicSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter
 	chunk := tableRange.GetChunk()
 	count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, s.dbConn, table.Schema, table.Table, table.Info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
 	cost := time.Since(beginTime)
-	countCh <- count
+	if countCh != nil {
+		countCh <- count
+	}
 	checksumInfoCh <- &ChecksumInfo{
 		Checksum: checksum,
 		Err:      err,
@@ -70,17 +72,7 @@ func (s *BasicSource) GetTable(i int) *common.TableDiff {
 }
 
 func (s *BasicSource) GetCrc32(ctx context.Context, tableRange *splitter.RangeInfo, checksumInfoCh chan *ChecksumInfo) {
-	beginTime := time.Now()
-	table := s.tableDiffs[tableRange.GetTableIndex()]
-	chunk := tableRange.GetChunk()
-	checksum, err := dbutil.GetCRC32Checksum(ctx, s.dbConn, table.Schema, table.Table, table.Info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
-	cost := time.Since(beginTime)
-
-	checksumInfoCh <- &ChecksumInfo{
-		Checksum: checksum,
-		Err:      err,
-		Cost:     cost,
-	}
+	s.GetCountAndCrc32(ctx, tableRange, nil, checksumInfoCh)
 }
 
 func (s *BasicSource) GetOrderKeyCols(tableIndex int) []*model.ColumnInfo {
