@@ -39,6 +39,15 @@ func (r *RangeInfo) GetChunk() *chunk.Range {
 	return r.ChunkRange
 }
 
+func (r *RangeInfo) Copy() *RangeInfo {
+	return &RangeInfo{
+		ID:         r.ID,
+		ChunkRange: r.ChunkRange.Copy(),
+		TableIndex: r.TableIndex,
+		IndexID:    r.IndexID,
+	}
+}
+
 // GetTableIndex return the index of table diffs.
 // IMPORTANT!!!
 // TODO We need to keep the tables order during checkpoint.
