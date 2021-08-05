@@ -18,6 +18,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
+
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -26,7 +28,6 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"go.uber.org/zap"
-	"time"
 )
 
 type MySQLSources struct {
@@ -94,6 +95,10 @@ func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitte
 
 func (s *MySQLSources) GetTable(index int) *common.TableDiff {
 	return s.tableDiffs[index]
+}
+
+func (s *MySQLSources) GetTables() []*common.TableDiff {
+	return s.tableDiffs
 }
 
 func (s *MySQLSources) GenerateFixSQL(t DMLType, data map[string]*dbutil.ColumnData, tableIndex int) string {
