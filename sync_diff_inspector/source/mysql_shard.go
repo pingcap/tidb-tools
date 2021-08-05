@@ -101,6 +101,10 @@ func (s *MySQLSources) GetTable(index int) *common.TableDiff {
 	return s.tableDiffs[index]
 }
 
+func (s *MySQLSources) GetTables() []*common.TableDiff {
+	return s.tableDiffs
+}
+
 func (s *MySQLSources) GenerateFixSQL(t DMLType, data map[string]*dbutil.ColumnData, tableIndex int) string {
 	if t == Replace {
 		return utils.GenerateReplaceDML(data, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
