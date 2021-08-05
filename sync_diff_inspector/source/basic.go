@@ -52,7 +52,7 @@ func (s *BasicSource) Close() {
 	s.dbConn.Close()
 }
 
-func (s *BasicSource) GetCountAndCrc32(tableRange *splitter.RangeInfo, countCh chan int64, checksumInfoCh chan *ChecksumInfo) {
+func (s *BasicSource) GetCountAndCrc32(tableRange *splitter.RangeInfo, checksumInfoCh chan *ChecksumInfo) {
 	beginTime := time.Now()
 	table := s.tableDiffs[tableRange.GetTableIndex()]
 	chunk := tableRange.GetChunk()

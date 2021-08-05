@@ -122,11 +122,10 @@ func (s *testSourceSuite) TestBasicSource(c *C) {
 		},
 	}
 
-	tableDiffs, tableRows := prepareTiDBTables(c, ctx, conn, tableCases)
+	tableDiffs := prepareTiDBTables(c, ctx, conn, tableCases)
 
 	basic := &BasicSource{
 		tableDiffs: tableDiffs,
-		tableRows:  tableRows,
 		dbConn:     conn,
 		ctx:        ctx,
 	}
@@ -136,7 +135,7 @@ func (s *testSourceSuite) TestBasicSource(c *C) {
 		countRows := sqlmock.NewRows([]string{"CNT", "CHECKSUM"}).AddRow(123, 456)
 		mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
 		checksumInfo := make(chan *ChecksumInfo, 1)
-		go basic.GetCountAndCrc32(tableCase.rangeInfo, nil, checksumInfo)
+		go basic.GetCountAndCrc32(tableCase.rangeInfo, checksumInfo)
 		checksum := <-checksumInfo
 		c.Assert(checksum.Err, IsNil)
 		//c.Assert(checksum, Equals, tableCase.checksum)
@@ -187,19 +186,16 @@ func (s *testSourceSuite) TestBasicSource(c *C) {
 
 }
 
-func prepareTiDBTables(c *C, ctx context.Context, conn *sql.DB, tableCases []*tableCaseType) ([]*common.TableDiff, []*TableRows) {
+func prepareTiDBTables(c *C, ctx context.Context, conn *sql.DB, tableCases []*tableCaseType) []*common.TableDiff {
 	tableDiffs := make([]*common.TableDiff, 0, len(tableCases))
-	tableRows := make([]*TableRows, 0, len(tableCases))
 	for n, tableCase := range tableCases {
 		tableInfo, err := dbutil.GetTableInfoBySQL(tableCase.createTableSQL, parser.New())
 		c.Assert(err, IsNil)
 		tableDiffs = append(tableDiffs, &common.TableDiff{
-			Schema: "source_test",
-			Table:  fmt.Sprintf("test%d", n),
-			Info:   tableInfo,
-		})
-		tableRows = append(tableRows, &TableRows{
-			tableRowsQuery: tableCase.rowQuery,
+			Schema:         "source_test",
+			Table:          fmt.Sprintf("test%d", n),
+			Info:           tableInfo,
+			TableRowsQuery: tableCase.rowQuery,
 		})
 
 		chunkRange := chunk.NewChunkRange()
@@ -215,5 +211,5 @@ func prepareTiDBTables(c *C, ctx context.Context, conn *sql.DB, tableCases []*ta
 		tableCase.rangeInfo = rangeInfo
 	}
 
-	return tableDiffs, tableRows
+	return tableDiffs
 }

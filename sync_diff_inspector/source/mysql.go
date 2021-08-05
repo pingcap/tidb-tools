@@ -49,6 +49,7 @@ func NewMySQLSource(ctx context.Context, tableDiffs []*common.TableDiff, dbConn 
 		BasicSource{
 			tableDiffs: tableDiffs,
 			dbConn:     dbConn,
+			ctx:        ctx,
 		},
 	}
 	return ts, nil

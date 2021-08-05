@@ -367,8 +367,8 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 
 func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *splitter.RangeInfo) (bool, int64, error) {
 	checkSumCh := make(chan *source.ChecksumInfo, 2)
-	go df.upstream.GetCountAndCrc32(ctx, tableRange, checkSumCh)
-	go df.downstream.GetCountAndCrc32(ctx, tableRange, checkSumCh)
+	go df.upstream.GetCountAndCrc32(tableRange, checkSumCh)
+	go df.downstream.GetCountAndCrc32(tableRange, checkSumCh)
 
 	crc1Info := <-checkSumCh
 	crc2Info := <-checkSumCh
