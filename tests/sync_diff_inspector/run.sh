@@ -14,9 +14,11 @@ mysql -uroot -h 127.0.0.1 -P 4000 -e "create database if not exists diff_test"
 # will exit with parser error, need to fix it in importer later, just change column name by mysql client now
 importer -t "create table diff_test.test(a int, b varchar(10), c float, d datetime, primary key(a));" -c 10 -n 10000 -P 4000 -h 127.0.0.1 -D diff_test -b 1000
 mysql -uroot -h 127.0.0.1 -P 4000 -e "alter table diff_test.test change column a \`table\` int"
+mysql -uroot -h 127.0.0.1 -P 4000 -e "CREATE TABLE diff_test.test_expr (col1 INT  PRIMARY KEY, col2 INT, INDEX func_index ((ABS(col1))));"
+mysql -uroot -h 127.0.0.1 -P 4000 -e "insert into diff_test.test_expr values (0, 0), (1, 1), (-1, -1);"
 
 echo "dump data and then load to tidb"
-mydumper --host 127.0.0.1 --port 4000 --user root --outputdir $OUT_DIR/dump_diff -B diff_test -T test
+mydumper --host 127.0.0.1 --port 4000 --user root --outputdir $OUT_DIR/dump_diff -B diff_test
 loader -h 127.0.0.1 -P 4001 -u root -d $OUT_DIR/dump_diff
 
 echo "use sync_diff_inspector to compare data"
