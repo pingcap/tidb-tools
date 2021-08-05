@@ -20,7 +20,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 )
 
 type MySQLSource struct {
@@ -56,9 +55,6 @@ func NewMySQLSource(ctx context.Context, tableDiffs []*common.TableDiff, dbConn 
 			tableDiffs: tableDiffs,
 			dbConn:     dbConn,
 		},
-	}
-	for _, table := range tableDiffs {
-		table.TableRowsQuery, table.TableOrderKeyCols = utils.GetTableRowsQueryFormat(table.Schema, table.Table, table.Info, table.Collation)
 	}
 	return ts, nil
 }

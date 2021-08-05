@@ -103,6 +103,7 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 	tableDiffs := make([]*common.TableDiff, 0, len(tablesToBeCheck))
 	for _, tables := range tablesToBeCheck {
 		for _, tableConfig := range tables {
+			tableRowsQuery, tableOrderKeyCols := utils.GetTableRowsQueryFormat(tableConfig.Schema, tableConfig.Table, tableConfig.TargetTableInfo, tableConfig.Collation)
 			tableDiffs = append(tableDiffs, &common.TableDiff{
 				Schema:        tableConfig.Schema,
 				Table:         tableConfig.Table,
@@ -111,6 +112,8 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 				Fields:        tableConfig.Fields,
 				Range:         tableConfig.Range,
 				Collation:     tableConfig.Collation,
+				TableOrderKeyCols: tableOrderKeyCols,
+				TableRowsQuery: tableRowsQuery,
 			})
 		}
 	}

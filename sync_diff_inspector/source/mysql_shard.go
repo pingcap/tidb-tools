@@ -209,11 +209,6 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, dbs []
 	for _, db := range dbs {
 		sourceDBs[db.InstanceID] = db.Conn
 	}
-
-	for _, table := range tableDiffs {
-		table.TableRowsQuery, table.TableOrderKeyCols = utils.GetTableRowsQueryFormat(table.Schema, table.Table, table.Info, table.Collation)
-	}
-
 	mss := &MySQLSources{
 		tableDiffs: tableDiffs,
 		sourceDBs:  sourceDBs,
