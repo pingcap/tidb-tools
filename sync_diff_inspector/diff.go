@@ -15,6 +15,8 @@ package main
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/json"
 	"fmt"
 	"os"
 	"sync"
@@ -177,6 +179,53 @@ func (df *Diff) pickSource(ctx context.Context) source.Source {
 	return df.downstream
 }
 
+func (df *Diff) ComputeConfigHash(rangeInfo *splitter.RangeInfo) (string, error) {
+	checkConfig, err := df.GetCheckConfig(rangeInfo)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	bytes, err := json.Marshal(checkConfig)
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	return fmt.Sprintf("%x", md5.Sum(bytes)), nil
+}
+
+func (df *Diff) GetCheckConfig(rangeInfo *splitter.RangeInfo) (*checkpoints.CheckConfig, error) {
+	tableDiff := df.workSource.GetTable(rangeInfo.TableIndex)
+	sourceTables := make([]config.TableInstance, 0)
+	var targetTable config.TableInstance
+	instance := config.TableInstance{
+		InstanceID: tableDiff.InstanceID,
+		Schema:     tableDiff.Schema,
+		Table:      tableDiff.Table,
+	}
+	if df.workSource == df.upstream {
+		for targetInstace, sourceInstances := range tableDiff.TableMaps {
+			if len(sourceInstances) != 1 {
+				return nil, errors.NotSupportedf("we do not support using shard mysql as chunk splitter")
+			}
+			if sourceInstances[0] == instance {
+				sourceTables = sourceInstances
+				targetTable = targetInstace
+				break
+			}
+		}
+	} else {
+		targetTable = instance
+		sourceTables = tableDiff.TableMaps[targetTable]
+	}
+	return &checkpoints.CheckConfig{
+		SourceTables: sourceTables,
+		TargetTables: targetTable,
+		Fields:       tableDiff.Fields,
+		Range:        tableDiff.Range,
+		// TODO get snapshot
+		Snapshot:  "",
+		Collation: tableDiff.Collation,
+	}, nil
+}
+
 func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterator, error) {
 	var startRange *splitter.RangeInfo
 	if df.useCheckpoint {
@@ -193,6 +242,16 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 		}
 		if node != nil {
 			startRange = splitter.FromNode(node)
+		}
+		configHash, err := df.ComputeConfigHash(startRange)
+		if err != nil {
+			return nil, errors.Annotate(err, "fail to compute the config hash")
+		}
+		if configHash != node.ConfigHash {
+			log.Warn("the table's config setting is defferent, cannot using checkpoint",
+				zap.String("current config hash", configHash),
+				zap.String("checkpoint's conifg hash", node.ConfigHash))
+			df.useCheckpoint = false
 		}
 	}
 
@@ -276,6 +335,10 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 	}
 
 	node := rangeInfo.ToNode()
+	node.ConfigHash, err = df.ComputeConfigHash(rangeInfo)
+	if err != nil {
+		return false, errors.Trace(err)
+	}
 	node.State = state
 	df.cp.Insert(node)
 	return isEqual, nil

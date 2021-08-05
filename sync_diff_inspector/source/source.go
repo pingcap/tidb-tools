@@ -84,6 +84,7 @@ type Source interface {
 
 	// GetTable represents the tableDiff of given index.
 	GetTable(int) *common.TableDiff
+	GetTables() []*common.TableDiff
 
 	// GetDB represents the db connection.
 	GetDB() *sql.DB
@@ -92,7 +93,7 @@ type Source interface {
 }
 
 func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, upstream Source, err error) {
-	tablesToBeCheck, err := initTables(ctx, cfg)
+	tablesToBeCheck, sourceTaleMaps, err := initTables(ctx, cfg)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
@@ -105,15 +106,16 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 		for _, tableConfig := range tables {
 			tableRowsQuery, tableOrderKeyCols := utils.GetTableRowsQueryFormat(tableConfig.Schema, tableConfig.Table, tableConfig.TargetTableInfo, tableConfig.Collation)
 			tableDiffs = append(tableDiffs, &common.TableDiff{
-				Schema:        tableConfig.Schema,
-				Table:         tableConfig.Table,
-				Info:          tableConfig.TargetTableInfo,
-				IgnoreColumns: tableConfig.IgnoreColumns,
-				Fields:        tableConfig.Fields,
-				Range:         tableConfig.Range,
-				Collation:     tableConfig.Collation,
+				InstanceID:        tableConfig.InstanceID,
+				Schema:            tableConfig.Schema,
+				Table:             tableConfig.Table,
+				Info:              tableConfig.TargetTableInfo,
+				IgnoreColumns:     tableConfig.IgnoreColumns,
+				Fields:            tableConfig.Fields,
+				Range:             tableConfig.Range,
+				Collation:         tableConfig.Collation,
 				TableOrderKeyCols: tableOrderKeyCols,
-				TableRowsQuery: tableRowsQuery,
+				TableRowsQuery:    tableRowsQuery,
 			})
 		}
 	}
@@ -189,22 +191,27 @@ func initDBConn(ctx context.Context, cfg *config.Config) error {
 	return nil
 }
 
-func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]map[string]*config.TableConfig, err error) {
+func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]map[string]*config.TableConfig, tableMaps map[config.TableInstance][]config.TableInstance, err error) {
 	tableRouter, err := router.NewTableRouter(false, cfg.TableRules)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
 
 	allTablesMap, err := utils.GetAllTables(ctx, cfg)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
-
+	tableMaps = make(map[config.TableInstance][]config.TableInstance)
 	// get all source table's matched target table
 	// target database name => target table name => all matched source table instance
 	sourceTablesMap := make(map[string]map[string][]config.TableInstance)
 	for instanceID, allSchemas := range allTablesMap {
 		if instanceID == cfg.TargetDBCfg.InstanceID {
+			for schema, allTables := range allSchemas {
+				for table := range allTables {
+					tableMaps[config.TableInstance{InstanceID: instanceID, Schema: schema, Table: table}] = make([]config.TableInstance, 0)
+				}
+			}
 			continue
 		}
 
@@ -212,9 +219,18 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 			for table := range allTables {
 				targetSchema, targetTable, err := tableRouter.Route(schema, table)
 				if err != nil {
-					return nil, errors.Errorf("get route result for %s.%s.%s failed, error %v", instanceID, schema, table, err)
+					return nil, nil, errors.Errorf("get route result for %s.%s.%s failed, error %v", instanceID, schema, table, err)
 				}
-
+				for targetInstance := range tableMaps {
+					if targetSchema == targetInstance.Schema && targetTable == targetInstance.Table {
+						tableMaps[targetInstance] = append(tableMaps[targetInstance], config.TableInstance{
+							InstanceID: instanceID,
+							Schema:     schema,
+							Table:      table,
+						})
+						break
+					}
+				}
 				if _, ok := sourceTablesMap[targetSchema]; !ok {
 					sourceTablesMap[targetSchema] = make(map[string][]config.TableInstance)
 				}
@@ -241,13 +257,13 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 		tables := make([]string, 0, len(schemaTables.Tables))
 		allTables, ok := allTablesMap[cfg.TargetDBCfg.InstanceID][schemaTables.Schema]
 		if !ok {
-			return nil, errors.NotFoundf("schema %s.%s", cfg.TargetDBCfg.InstanceID, schemaTables.Schema)
+			return nil, nil, errors.NotFoundf("schema %s.%s", cfg.TargetDBCfg.InstanceID, schemaTables.Schema)
 		}
 
 		for _, table := range schemaTables.Tables {
 			matchedTables, err := utils.GetMatchTable(cfg.TargetDBCfg, schemaTables.Schema, table, allTables)
 			if err != nil {
-				return nil, errors.Trace(err)
+				return nil, nil, errors.Trace(err)
 			}
 
 			//exclude those in "exclude-tables"
@@ -263,7 +279,7 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 		for _, tableName := range tables {
 			tableInfo, err := dbutil.GetTableInfo(ctx, cfg.TargetDBCfg.Conn, schemaTables.Schema, tableName)
 			if err != nil {
-				return nil, errors.Errorf("get table %s.%s's information error %s", schemaTables.Schema, tableName, errors.ErrorStack(err))
+				return nil, nil, errors.Errorf("get table %s.%s's information error %s", schemaTables.Schema, tableName, errors.ErrorStack(err))
 			}
 
 			if _, ok := cfgTables[schemaTables.Schema][tableName]; ok {
@@ -298,10 +314,10 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 
 	for _, table := range cfg.TableCfgs {
 		if _, ok := cfgTables[table.Schema]; !ok {
-			return nil, errors.NotFoundf("schema %s in check tables", table.Schema)
+			return nil, nil, errors.NotFoundf("schema %s in check tables", table.Schema)
 		}
 		if _, ok := cfgTables[table.Schema][table.Table]; !ok {
-			return nil, errors.NotFoundf("table %s.%s in check tables", table.Schema, table.Table)
+			return nil, nil, errors.NotFoundf("table %s.%s in check tables", table.Schema, table.Table)
 		}
 
 		if table.Range != "" {
@@ -311,7 +327,7 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 		cfgTables[table.Schema][table.Table].Fields = table.Fields
 		cfgTables[table.Schema][table.Table].Collation = table.Collation
 	}
-	return cfgTables, nil
+	return cfgTables, tableMaps, nil
 }
 
 // RangeIterator generate next chunk for the whole tables lazily.
