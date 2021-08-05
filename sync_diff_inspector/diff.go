@@ -667,6 +667,7 @@ func setTiDBCfg() {
 	tidbCfg := tidbconfig.GetGlobalConfig()
 	// 3027 * 4 is the max value the MaxIndexLength can be set
 	tidbCfg.MaxIndexLength = 3027 * 4
+	tidbCfg.Experimental.AllowsExpressionIndex = true
 	tidbconfig.StoreGlobalConfig(tidbCfg)
 
 	fmt.Println("set tidb cfg")
