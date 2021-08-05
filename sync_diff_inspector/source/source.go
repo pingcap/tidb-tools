@@ -93,7 +93,7 @@ type Source interface {
 }
 
 func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, upstream Source, err error) {
-	tablesToBeCheck, sourceTaleMaps, err := initTables(ctx, cfg)
+	tablesToBeCheck, tableMaps, err := initTables(ctx, cfg)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
@@ -116,6 +116,7 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 				Collation:         tableConfig.Collation,
 				TableOrderKeyCols: tableOrderKeyCols,
 				TableRowsQuery:    tableRowsQuery,
+				TableMaps:         tableMaps,
 			})
 		}
 	}
