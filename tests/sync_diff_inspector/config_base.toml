@@ -31,7 +31,7 @@ fix-sql-file = "/tmp/tidb_tools_test/sync_diff_inspector/fix.sql"
 schema = "diff_test"
 
 # table list which need check in target database.
-tables = ["test"]
+tables = ["test", "test_expr"]
 
 # tables that should be exclude when checked
 exclude-tables = ["a_table", "should_not_compare"]
