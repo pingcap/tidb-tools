@@ -69,9 +69,8 @@ type Node struct {
 	ChunkRange *chunk.Range `json:"chunk-range"`
 	TableIndex int          `json:"table-index"`
 	// for bucket checkpoint
-	BucketID   int    `json:"bucket-id"`
-	IndexID    int64  `json:"index-id"`
-	ConfigHash string `json:"contig-hash`
+	BucketID int   `json:"bucket-id"`
+	IndexID  int64 `json:"index-id"`
 }
 
 func (n *Node) GetID() int { return n.ChunkRange.ID }
