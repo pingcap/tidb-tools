@@ -13,15 +13,17 @@
 
 package common
 
-import "github.com/pingcap/parser/model"
+import (
+	"github.com/pingcap/parser/model"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
+)
 
 // TableDiff saves config for diff table
 type TableDiff struct {
-	Schema string `json:"schema"`
-
-	Table string `json:"table"`
-
-	Info *model.TableInfo `json:"info"`
+	InstanceID string           `json:"instance-id"`
+	Schema     string           `json:"schema"`
+	Table      string           `json:"table"`
+	Info       *model.TableInfo `json:"info"`
 
 	// columns be ignored
 	IgnoreColumns []string `json:"-"`
@@ -44,8 +46,9 @@ type TableDiff struct {
 	// ignore check table's data
 	IgnoreDataCheck bool `json:"-"`
 
-	// set true will continue check from the latest checkpoint
-	UseCheckpoint bool `json:"use-checkpoint"`
+	// tableMap record the map relationship of upstream tables and downstream table
+	// target table instance => source table instances
+	TableMaps map[config.TableInstance][]config.TableInstance `json:"table-map`
 
 	Collation string `json:"collation"`
 
