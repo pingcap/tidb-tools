@@ -70,14 +70,16 @@ func (s *MySQLSources) GetCountAndCrc32(tableRange *splitter.RangeInfo, checksum
 			}
 		}(sourceDB)
 	}
-	close(infoCh)
+	defer close(infoCh)
 
 	var (
 		err           error
 		totalCount    int64
 		totalChecksum int64
 	)
-	for info := range infoCh {
+
+	for i := 0; i < len(s.sourceDBs); i++ {
+		info := <-infoCh
 		// catch the first error
 		if err == nil && info.Err != nil {
 			err = info.Err
