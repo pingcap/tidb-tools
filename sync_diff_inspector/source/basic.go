@@ -63,8 +63,12 @@ func (s *BasicSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter
 	}
 }
 
-func (s *BasicSource) GetTable(index int) *common.TableDiff {
-	return s.tableDiffs[index]
+func (s *BasicSource) GetTable(i int) *common.TableDiff {
+	return s.tableDiffs[i]
+}
+
+func (s *BasicSource) GetTables() []*common.TableDiff {
+	return s.tableDiffs
 }
 
 func (s *BasicSource) GenerateFixSQL(t DMLType, data map[string]*dbutil.ColumnData, tableIndex int) string {
