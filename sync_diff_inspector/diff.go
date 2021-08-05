@@ -263,6 +263,16 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 		} else {
 			df.useCheckpoint = false
 		}
+		configHash, err := df.ComputeConfigHash(startRange)
+		if err != nil {
+			return nil, errors.Annotate(err, "fail to compute the config hash")
+		}
+		if configHash != node.ConfigHash {
+			log.Warn("the table's config setting is defferent, cannot using checkpoint",
+				zap.String("current config hash", configHash),
+				zap.String("checkpoint's conifg hash", node.ConfigHash))
+			df.useCheckpoint = false
+		}
 	}
 
 	return df.workSource.GetRangeIterator(ctx, startRange, df.workSource.GetTableAnalyzer())

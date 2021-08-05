@@ -90,13 +90,16 @@ type Source interface {
 }
 
 func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, upstream Source, err error) {
-	tablesToBeCheck, tableMaps, err := initTables(ctx, cfg)
+	// init db connection for upstream / downstream.
+	err = initDBConn(ctx, cfg)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
 
-	// init db connection for upstream / downstream.
-	err = initDBConn(ctx, cfg)
+	tablesToBeCheck, sourceTaleMaps, err := initTables(ctx, cfg)
+	if err != nil {
+		return nil, nil, errors.Trace(err)
+	}
 
 	tableDiffs := make([]*common.TableDiff, 0, len(tablesToBeCheck))
 	for _, tables := range tablesToBeCheck {
