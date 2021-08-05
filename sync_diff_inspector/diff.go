@@ -366,27 +366,25 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 }
 
 func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *splitter.RangeInfo) (bool, int64, error) {
-	upstreamCountCh := make(chan int64)
-	downstreamCountCh := make(chan int64)
-	upstreamChecksumCh := make(chan *source.ChecksumInfo)
-	downstreamChecksumCh := make(chan *source.ChecksumInfo)
-	go df.upstream.GetCountAndCrc32(tableRange, upstreamCountCh, upstreamChecksumCh)
-	go df.downstream.GetCountAndCrc32(tableRange, downstreamCountCh, downstreamChecksumCh)
-	var count int64
-	if df.workSource == df.upstream {
-		count = <-upstreamCountCh
-	} else {
-		count = <-downstreamCountCh
-	}
-	crc1Info := <-downstreamChecksumCh
-	crc2Info := <-upstreamChecksumCh
+	checkSumCh := make(chan *source.ChecksumInfo, 2)
+	go df.upstream.GetCountAndCrc32(ctx, tableRange, checkSumCh)
+	go df.downstream.GetCountAndCrc32(ctx, tableRange, checkSumCh)
+
+	crc1Info := <-checkSumCh
+	crc2Info := <-checkSumCh
+	close(checkSumCh)
+
 	if crc1Info.Err != nil {
 		return false, -1, errors.Trace(crc1Info.Err)
 	}
 	if crc2Info.Err != nil {
 		return false, -1, errors.Trace(crc2Info.Err)
+
 	}
-	return true, count, nil
+	if crc1Info.Count == crc2Info.Count && crc1Info.Checksum == crc2Info.Checksum {
+		return true, crc1Info.Count, nil
+	}
+	return false, -1, nil
 }
 
 func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) (bool, error) {
@@ -460,7 +458,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) 
 			break
 		}
 
-		eq, cmp, err := utils.CompareData(lastUpstreamData, lastDownstreamData, df.workSource.GetOrderKeyCols(rangeInfo.GetTableIndex()))
+		eq, cmp, err := utils.CompareData(lastUpstreamData, lastDownstreamData, df.workSource.GetTable(rangeInfo.GetTableIndex()).TableOrderKeyCols)
 		if err != nil {
 			return false, errors.Trace(err)
 		}

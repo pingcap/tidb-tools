@@ -20,7 +20,6 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
-	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
@@ -40,6 +39,7 @@ const (
 
 type ChecksumInfo struct {
 	Checksum int64
+	Count    int64
 	Err      error
 	Cost     time.Duration
 }
@@ -48,9 +48,6 @@ type ChecksumInfo struct {
 type RowDataIterator interface {
 	// Next seeks the next row data, it used when compared rows.
 	Next() (map[string]*dbutil.ColumnData, error)
-	// GenerateFixSQL generates the firx sql to downstream source according to the rows.
-	GenerateFixSQL(t DMLType) (string, error)
-
 	// Close release the resource.
 	Close()
 }
@@ -73,11 +70,8 @@ type Source interface {
 	// there are many workers consume the range from the channel to compare.
 	GetRangeIterator(*splitter.RangeInfo, TableAnalyzer) (RangeIterator, error)
 
-	// GetCountAndCrc32 gets the crc32 result from given range.
-	GetCountAndCrc32(*splitter.RangeInfo, chan int64, chan *ChecksumInfo)
-
-	// GetOrderKeyCols ...
-	GetOrderKeyCols(int) []*model.ColumnInfo
+	// GetCountAndCrc32 gets the crc32 result and the count from given range.
+	GetCountAndCrc32(context.Context, *splitter.RangeInfo, chan *ChecksumInfo)
 
 	// GetRowsIterator gets the row data iterator from given range.
 	GetRowsIterator(*splitter.RangeInfo) (RowDataIterator, error)
@@ -85,11 +79,11 @@ type Source interface {
 	// GenerateFixSQL generates the fix sql with given type.
 	GenerateFixSQL(DMLType, map[string]*dbutil.ColumnData, int) string
 
-	// GetDB represents the db connection.
-	GetDB() *sql.DB
-
+	// GetTable represents the tableDiff of given index.
 	GetTable(int) *common.TableDiff
 
+	// GetDB represents the db connection.
+	GetDB() *sql.DB
 	// Close ...
 	Close()
 }
@@ -100,9 +94,13 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 		return nil, nil, errors.Trace(err)
 	}
 
+	// init db connection for upstream / downstream.
+	err = initDBConn(ctx, cfg)
+
 	tableDiffs := make([]*common.TableDiff, 0, len(tablesToBeCheck))
 	for _, tables := range tablesToBeCheck {
 		for _, tableConfig := range tables {
+			tableRowsQuery, tableOrderKeyCols := utils.GetTableRowsQueryFormat(tableConfig.Schema, tableConfig.Table, tableConfig.TargetTableInfo, tableConfig.Collation)
 			tableDiffs = append(tableDiffs, &common.TableDiff{
 				Schema:        tableConfig.Schema,
 				Table:         tableConfig.Table,
@@ -111,6 +109,8 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 				Fields:        tableConfig.Fields,
 				Range:         tableConfig.Range,
 				Collation:     tableConfig.Collation,
+				TableOrderKeyCols: tableOrderKeyCols,
+				TableRowsQuery: tableRowsQuery,
 			})
 		}
 	}
@@ -149,23 +149,23 @@ func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, dbs
 			// TiDB
 			log.Fatal("Don't support check table in multiple tidb instance, please specify one tidb instance.")
 		} else {
-			return NewMySQLSources(ctx)
+			return NewMySQLSources(ctx, tableDiffs, dbs)
 		}
 	}
 	// unreachable
 	return nil, nil
 }
 
-func initDBConn(ctx context.Context, cfg *config.Config) (sourceDBs map[string]*config.DBConfig, err error) {
+func initDBConn(ctx context.Context, cfg *config.Config) error {
+	var err error
 	cfg.TargetDBCfg.Conn, err = common.CreateDB(ctx, &cfg.TargetDBCfg.DBConfig, nil, cfg.CheckThreadCount)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return errors.Trace(err)
 	}
 
-	// TODO targetTZOffset?
 	targetTZOffset, err := dbutil.GetTimeZoneOffset(ctx, cfg.TargetDBCfg.Conn)
 	if err != nil {
-		return nil, errors.Annotatef(err, "fetch target db %s time zone offset failed", cfg.TargetDBCfg.DBConfig.String())
+		return errors.Annotatef(err, "fetch target db %s time zone offset failed", cfg.TargetDBCfg.DBConfig.String())
 	}
 	vars := map[string]string{
 		"time_zone": dbutil.FormatTimeZoneOffset(targetTZOffset),
@@ -173,20 +173,17 @@ func initDBConn(ctx context.Context, cfg *config.Config) (sourceDBs map[string]*
 
 	// upstream
 	if len(cfg.SourceDBCfg) < 1 {
-		return nil, errors.New(" source config")
+		return errors.New(" source config")
 	}
 
-	sourceDBs = make(map[string]*config.DBConfig)
 	for _, source := range cfg.SourceDBCfg {
 		// connect source db with target db time_zone
 		source.Conn, err = common.CreateDB(ctx, &source.DBConfig, vars, cfg.CheckThreadCount)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return errors.Trace(err)
 		}
-		sourceDBs[source.InstanceID] = source
 	}
-
-	return
+	return nil
 }
 
 func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]map[string]*config.TableConfig, err error) {
@@ -304,34 +301,6 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 			return nil, errors.NotFoundf("table %s.%s in check tables", table.Schema, table.Table)
 		}
 
-		//sourceTables := make([]config.TableInstance, 0, len(table.SourceTables))
-		//for _, sourceTable := range table.SourceTables {
-		//	if _, ok := sourceDBs[sourceTable.InstanceID]; !ok {
-		//		return nil, errors.Errorf("unkonwn database instance id %s", sourceTable.InstanceID)
-		//	}
-		//
-		//	allTables, ok := allTablesMap[sourceDBs[sourceTable.InstanceID].InstanceID][sourceTable.Schema]
-		//	if !ok {
-		//		return nil, errors.Errorf("unknown schema %s in database %+v", sourceTable.Schema, sourceDBs[sourceTable.InstanceID])
-		//	}
-		//
-		//	tables, err := utils.GetMatchTable(sourceDBs[sourceTable.InstanceID], sourceTable.Schema, sourceTable.Table, allTables)
-		//	if err != nil {
-		//		return nil, errors.Trace(err)
-		//	}
-		//
-		//	for _, table := range tables {
-		//		sourceTables = append(sourceTables, config.TableInstance{
-		//			InstanceID: sourceTable.InstanceID,
-		//			Schema:     sourceTable.Schema,
-		//			Table:      table,
-		//		})
-		//	}
-		//}
-
-		//if len(sourceTables) != 0 {
-		//	cfgTables[table.Schema][table.Table].SourceTables = sourceTables
-		//}
 		if table.Range != "" {
 			cfgTables[table.Schema][table.Table].Range = table.Range
 		}
@@ -350,11 +319,6 @@ type RangeIterator interface {
 	Close()
 }
 
-type TableRows struct {
-	tableRowsQuery    string
-	tableOrderKeyCols []*model.ColumnInfo
-}
-
 type BasicRowsIterator struct {
 	rows *sql.Rows
 }
@@ -368,8 +332,4 @@ func (s *BasicRowsIterator) Next() (map[string]*dbutil.ColumnData, error) {
 		return dbutil.ScanRow(s.rows)
 	}
 	return nil, nil
-}
-
-func (s *BasicRowsIterator) GenerateFixSQL(t DMLType) (string, error) {
-	return "", nil
 }

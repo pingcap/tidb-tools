@@ -21,7 +21,6 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"go.uber.org/zap"
 )
 
@@ -63,18 +62,9 @@ func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, dbConn *
 	ts := &TiDBSource{
 		BasicSource{
 			tableDiffs: tableDiffs,
-			tableRows:  make([]*TableRows, 0, len(tableDiffs)),
 			dbConn:     dbConn,
 			ctx:        ctx,
 		},
-	}
-	for _, table := range tableDiffs {
-		tableRowsQuery, tableOrderKeyCols := utils.GetTableRowsQueryFormat(table.Schema, table.Table, table.Info, table.Collation)
-		ts.tableRows = append(ts.tableRows, &TableRows{
-			tableRowsQuery,
-			tableOrderKeyCols,
-		})
-
 	}
 	return ts, nil
 }

@@ -20,7 +20,6 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 )
 
 type MySQLSource struct {
@@ -49,23 +48,8 @@ func NewMySQLSource(ctx context.Context, tableDiffs []*common.TableDiff, dbConn 
 	ts := &MySQLSource{
 		BasicSource{
 			tableDiffs: tableDiffs,
-			tableRows:  make([]*TableRows, 0, len(tableDiffs)),
 			dbConn:     dbConn,
 		},
 	}
-	for _, table := range tableDiffs {
-		tableRowsQuery, tableOrderKeyCols := utils.GetTableRowsQueryFormat(table.Schema, table.Table, table.Info, table.Collation)
-		ts.tableRows = append(ts.tableRows, &TableRows{
-			tableRowsQuery,
-			tableOrderKeyCols,
-		})
-	}
 	return ts, nil
-}
-
-type MySQLSources struct {
-}
-
-func NewMySQLSources(ctx context.Context) (Source, error) {
-	return nil, nil
 }

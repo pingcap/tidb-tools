@@ -21,7 +21,6 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
-	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
@@ -32,7 +31,6 @@ import (
 // BasicSource is the basic source for single MySQL/TiDB.
 type BasicSource struct {
 	tableDiffs []*common.TableDiff
-	tableRows  []*TableRows
 	dbConn     *sql.DB
 	ctx        context.Context
 }
@@ -53,28 +51,23 @@ func (s *BasicSource) GetRangeIterator(r *splitter.RangeInfo, analyzer TableAnal
 func (s *BasicSource) Close() {
 	s.dbConn.Close()
 }
+
 func (s *BasicSource) GetCountAndCrc32(tableRange *splitter.RangeInfo, countCh chan int64, checksumInfoCh chan *ChecksumInfo) {
 	beginTime := time.Now()
 	table := s.tableDiffs[tableRange.GetTableIndex()]
 	chunk := tableRange.GetChunk()
 	count, checksum, err := utils.GetCountAndCRC32Checksum(s.ctx, s.dbConn, table.Schema, table.Table, table.Info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
 	cost := time.Since(beginTime)
-	if countCh != nil {
-		countCh <- count
-	}
 	checksumInfoCh <- &ChecksumInfo{
 		Checksum: checksum,
+		Count:    count,
 		Err:      err,
 		Cost:     cost,
 	}
 }
 
-func (s *BasicSource) GetTable(i int) *common.TableDiff {
-	return s.tableDiffs[i]
-}
-
-func (s *BasicSource) GetOrderKeyCols(tableIndex int) []*model.ColumnInfo {
-	return s.tableRows[tableIndex].tableOrderKeyCols
+func (s *BasicSource) GetTable(index int) *common.TableDiff {
+	return s.tableDiffs[index]
 }
 
 func (s *BasicSource) GenerateFixSQL(t DMLType, data map[string]*dbutil.ColumnData, tableIndex int) string {
@@ -92,7 +85,7 @@ func (s *BasicSource) GetRowsIterator(tableRange *splitter.RangeInfo) (RowDataIt
 	chunk := tableRange.GetChunk()
 	args := utils.StringsToInterfaces(chunk.Args)
 
-	query := fmt.Sprintf(s.tableRows[tableRange.GetTableIndex()].tableRowsQuery, chunk.Where)
+	query := fmt.Sprintf(s.tableDiffs[tableRange.GetTableIndex()].TableRowsQuery, chunk.Where)
 
 	log.Debug("select data", zap.String("sql", query), zap.Reflect("args", args))
 	rows, err := s.dbConn.QueryContext(s.ctx, query, args...)
