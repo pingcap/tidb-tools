@@ -32,7 +32,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const localFilePerm os.FileMode = 0o644
+const LocalFilePerm os.FileMode = 0o644
 
 var (
 
@@ -69,9 +69,8 @@ type Node struct {
 	ChunkRange *chunk.Range `json:"chunk-range"`
 	TableIndex int          `json:"table-index"`
 	// for bucket checkpoint
-	BucketID   int    `json:"bucket-id"`
-	IndexID    int64  `json:"index-id"`
-	ConfigHash string `json:"contig-hash`
+	BucketID int   `json:"bucket-id"`
+	IndexID  int64 `json:"index-id"`
 }
 
 func (n *Node) GetID() int { return n.ChunkRange.ID }
@@ -169,7 +168,7 @@ func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string) (int, erro
 			return 0, errors.Trace(err)
 		}
 
-		if err = ioutil2.WriteFileAtomic(fileName, checkpointData, localFilePerm); err != nil {
+		if err = ioutil2.WriteFileAtomic(fileName, checkpointData, LocalFilePerm); err != nil {
 			return 0, err
 		}
 
