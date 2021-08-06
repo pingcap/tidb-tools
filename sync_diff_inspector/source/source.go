@@ -103,10 +103,11 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 		for _, tableConfig := range tables {
 			tableRowsQuery, tableOrderKeyCols := utils.GetTableRowsQueryFormat(tableConfig.Schema, tableConfig.Table, tableConfig.TargetTableInfo, tableConfig.Collation)
 			tableDiffs = append(tableDiffs, &common.TableDiff{
-				InstanceID:        tableConfig.InstanceID,
-				Schema:            tableConfig.Schema,
-				Table:             tableConfig.Table,
-				Info:              tableConfig.TargetTableInfo,
+				InstanceID: tableConfig.InstanceID,
+				Schema:     tableConfig.Schema,
+				Table:      tableConfig.Table,
+				Info:       utils.IgnoreColumns(tableConfig.TargetTableInfo, tableConfig.IgnoreColumns),
+				// TODO: field `IgnoreColumns` can be deleted.
 				IgnoreColumns:     tableConfig.IgnoreColumns,
 				Fields:            tableConfig.Fields,
 				Range:             tableConfig.Range,

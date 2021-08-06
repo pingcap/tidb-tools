@@ -158,3 +158,27 @@ func (*testUtilsSuite) TestGenerateSQLs(c *C) {
 	c.Assert(replaceSQL, Equals, "REPLACE INTO `diff_test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (NULL,'a\\'a','2018-01-01 00:00:00','10:10:10',11.1111);")
 	c.Assert(deleteSQL, Equals, "DELETE FROM `diff_test`.`atest` WHERE `id` is NULL AND `name` = 'a\\'a' AND `birthday` = '2018-01-01 00:00:00' AND `update_time` = '10:10:10' AND `money` = 11.1111;")
 }
+
+func (s *testUtilsSuite) TestIgnoreColumns(c *C) {
+	createTableSQL1 := "CREATE TABLE `test`.`atest` (`a` int, `b` int, `c` int, `d` int, primary key(`a`))"
+	tableInfo1, err := dbutil.GetTableInfoBySQL(createTableSQL1, parser.New())
+	c.Assert(err, IsNil)
+	tbInfo := IgnoreColumns(tableInfo1, []string{"a"})
+	c.Assert(tbInfo.Columns, HasLen, 3)
+	c.Assert(tbInfo.Indices, HasLen, 0)
+	c.Assert(tbInfo.Columns[2].Offset, Equals, 2)
+
+	createTableSQL2 := "CREATE TABLE `test`.`atest` (`a` int, `b` int, `c` int, `d` int, primary key(`a`), index idx(`b`, `c`))"
+	tableInfo2, err := dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
+	c.Assert(err, IsNil)
+	tbInfo = IgnoreColumns(tableInfo2, []string{"a", "b"})
+	c.Assert(tbInfo.Columns, HasLen, 2)
+	c.Assert(tbInfo.Indices, HasLen, 0)
+
+	createTableSQL3 := "CREATE TABLE `test`.`atest` (`a` int, `b` int, `c` int, `d` int, primary key(`a`), index idx(`b`, `c`))"
+	tableInfo3, err := dbutil.GetTableInfoBySQL(createTableSQL3, parser.New())
+	c.Assert(err, IsNil)
+	tbInfo = IgnoreColumns(tableInfo3, []string{"b", "c"})
+	c.Assert(tbInfo.Columns, HasLen, 2)
+	c.Assert(tbInfo.Indices, HasLen, 1)
+}
