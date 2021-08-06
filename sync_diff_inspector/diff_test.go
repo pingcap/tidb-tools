@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package diff
+package main
 
 import (
 	"testing"
@@ -28,7 +28,8 @@ var _ = Suite(&testDiffSuite{})
 
 type testDiffSuite struct{}
 
-func (s *testDiffSuite) TestSplitRangeByRandom(c *C) {
+func (s *testDiffSuite) TestDiff(c *C) {
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
+
 }
