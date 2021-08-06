@@ -43,11 +43,11 @@ type BucketIterator struct {
 	dbConn *sql.DB
 }
 
-func NewBucketIterator(table *common.TableDiff, dbConn *sql.DB, chunkSize int) (*BucketIterator, error) {
-	return NewBucketIteratorWithCheckpoint(table, dbConn, chunkSize, nil)
+func NewBucketIterator(ctx context.Context, table *common.TableDiff, dbConn *sql.DB, chunkSize int) (*BucketIterator, error) {
+	return NewBucketIteratorWithCheckpoint(ctx, table, dbConn, chunkSize, nil)
 }
 
-func NewBucketIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, chunkSize int, startRange *RangeInfo) (*BucketIterator, error) {
+func NewBucketIteratorWithCheckpoint(ctx context.Context, table *common.TableDiff, dbConn *sql.DB, chunkSize int, startRange *RangeInfo) (*BucketIterator, error) {
 	bs := &BucketIterator{
 		table:     table,
 		chunkSize: int64(chunkSize),
@@ -59,7 +59,7 @@ func NewBucketIteratorWithCheckpoint(table *common.TableDiff, dbConn *sql.DB, ch
 	if err := bs.init(startRange); err != nil {
 		return nil, errors.Trace(err)
 	}
-	go bs.produceChunks(startRange)
+	go bs.produceChunks(ctx, startRange)
 
 	return bs, nil
 }
@@ -127,48 +127,82 @@ func (s *BucketIterator) init(startRange *RangeInfo) error {
 		return errors.NotFoundf("no index to split buckets")
 	}
 
+	// There are only 10k chunks at most
+	if s.chunkSize <= 0 {
+		var cnt int64 = 0
+		for _, bucket := range s.buckets {
+			cnt = cnt + bucket.Count
+		}
+		chunkSize := cnt / 10000
+		if chunkSize < SplitThreshold {
+			chunkSize = 2 * SplitThreshold
+		}
+		s.chunkSize = chunkSize
+	}
+
 	return nil
 }
 
 func (s *BucketIterator) Close() {
 }
 
-func (s *BucketIterator) produceChunks(startRange *RangeInfo) {
+func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInfo) {
 	var (
 		lowerValues, upperValues []string
 		latestCount              int64
 		err                      error
 	)
 	chunkSize := s.chunkSize
+	halfChunkSize := chunkSize / 2
 	table := s.table
 	buckets := s.buckets
 	indexColumns := s.indexColumns
 	chunkID := 0
 	beginBucket := 0
-	if startRange == nil {
-		lowerValues = make([]string, len(indexColumns), len(indexColumns))
-	} else {
+	if startRange != nil {
+		chunkRange := chunk.NewChunkRange()
 		c := startRange.GetChunk()
-		uppers := make([]string, 0, len(c.Bounds))
-		columns := make([]string, 0, len(c.Bounds))
+
 		for _, bound := range c.Bounds {
-			uppers = append(uppers, bound.Upper)
-			columns = append(columns, bound.Column)
+			chunkRange.Update(bound.Column, bound.Upper, "", true, false)
 		}
-		lowerValues = make([]string, 0, len(indexColumns))
-		for _, index := range indexColumns {
-			for i := 0; i < len(uppers); i++ {
-				if index.Name.O == columns[i] {
-					lowerValues = append(lowerValues, uppers[i])
-				}
+
+		nextUpperValues, err := dbutil.AnalyzeValuesFromBuckets(buckets[c.BucketID].UpperBound, indexColumns)
+		for i, column := range indexColumns {
+			chunkRange.Update(column.Name.O, "", nextUpperValues[i], false, true)
+		}
+
+		where, _ := chunkRange.ToString(table.Collation)
+
+		count, err := dbutil.GetRowCount(ctx, s.dbConn, table.Schema, table.Table, where, nil)
+		if err != nil {
+			s.errCh <- errors.Trace(err)
+			return
+		}
+		if count > 0 {
+			chunkCnt := int((count + halfChunkSize) / chunkSize)
+			chunks, err := splitRangeByRandom(s.dbConn, chunkRange, chunkCnt, table.Schema, table.Table, indexColumns, table.Range, table.Collation)
+			if err != nil {
+				s.errCh <- errors.Trace(err)
+				return
 			}
+			chunkID = chunk.InitChunks(chunks, chunk.Bucket, chunkID, c.BucketID, table.Collation, table.Range)
+			s.chunksCh <- chunks
+
 		}
-		beginBucket = int(c.BucketID)
+		latestCount = buckets[c.BucketID].Count
+		beginBucket = int(c.BucketID + 1)
+		lowerValues, err = dbutil.AnalyzeValuesFromBuckets(buckets[beginBucket].LowerBound, indexColumns)
+		if err != nil {
+			s.errCh <- errors.Trace(err)
+			return
+		}
 	}
+	chunkRange := chunk.NewChunkRange()
 	// TODO chunksize when checkpoint
 	for i := beginBucket; i < len(buckets); i++ {
 		count := buckets[i].Count - latestCount
-		if count < s.chunkSize {
+		if count < chunkSize {
 			// merge more buckets into one chunk
 			continue
 		}
@@ -179,7 +213,6 @@ func (s *BucketIterator) produceChunks(startRange *RangeInfo) {
 			return
 		}
 
-		chunkRange := chunk.NewChunkRange()
 		for j, column := range indexColumns {
 			var lowerValue, upperValue string
 			if len(lowerValues) > 0 {
@@ -191,18 +224,19 @@ func (s *BucketIterator) produceChunks(startRange *RangeInfo) {
 			chunkRange.Update(column.Name.O, lowerValue, upperValue, len(lowerValues) > 0, len(upperValues) > 0)
 		}
 
-		chunks := []*chunk.Range{}
-		if count >= 2*chunkSize {
-			splitChunks, err := splitRangeByRandom(s.dbConn, chunkRange, int(count/chunkSize), table.Schema, table.Table, indexColumns, table.Range, table.Collation)
-			if err != nil {
-				s.errCh <- errors.Trace(err)
-				return
-			}
-			chunks = append(chunks, splitChunks...)
-		} else {
-			chunks = append(chunks, chunkRange)
+		// That count = 0 and then chunkCnt = 0 is OK.
+		// `splitRangeByRandom` will skip when chunkCnt <= 1
+		//            count                     chunkCnt
+		// 0 ... 0.5x ... x ... 1.5x   ------->   1
+		//       1.5x ... 2x ... 2.5x  ------->   2
+		chunkCnt := int((count + halfChunkSize) / chunkSize)
+		chunks, err := splitRangeByRandom(s.dbConn, chunkRange, chunkCnt, table.Schema, table.Table, indexColumns, table.Range, table.Collation)
+		if err != nil {
+			s.errCh <- errors.Trace(err)
+			return
 		}
 
+		chunkRange = chunk.NewChunkRange()
 		latestCount = buckets[i].Count
 		lowerValues = upperValues
 		chunkID = chunk.InitChunks(chunks, chunk.Bucket, chunkID, i, table.Collation, table.Range)
@@ -211,7 +245,6 @@ func (s *BucketIterator) produceChunks(startRange *RangeInfo) {
 
 	// merge the rest keys into one chunk
 	if len(lowerValues) > 0 {
-		chunkRange := chunk.NewChunkRange()
 		for j, column := range indexColumns {
 			chunkRange.Update(column.Name.O, lowerValues[j], "", true, false)
 		}

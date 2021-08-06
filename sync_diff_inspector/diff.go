@@ -38,8 +38,6 @@ import (
 )
 
 const (
-	splitThreshold         = 1000
-	splitBound     float64 = 3.
 	// checkpointFile represents the checkpoints' file name which used for save and loads chunks
 	checkpointFile = "sync_diff_checkpoints.pb"
 )
@@ -146,7 +144,7 @@ func (df *Diff) Equal(ctx context.Context) error {
 	go df.writeSQLs(ctx)
 
 	for {
-		c, err := chunksIter.Next()
+		c, err := chunksIter.Next(ctx)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -267,7 +265,7 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 		}
 	}
 
-	return df.workSource.GetRangeIterator(startRange, df.workSource.GetTableAnalyzer())
+	return df.workSource.GetRangeIterator(ctx, startRange, df.workSource.GetTableAnalyzer())
 }
 
 func (df *Diff) handleCheckpoints(ctx context.Context) {
@@ -337,7 +335,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 	if !isEqual {
 		state = checkpoints.FailedState
 		// if the chunk's checksum differ, try to do binary check
-		if count > splitThreshold {
+		if count > splitter.SplitThreshold {
 			rangeInfo, err = df.BinGenerate(ctx, df.workSource, rangeInfo, count)
 			if err != nil {
 				return false, errors.Trace(err)
@@ -362,7 +360,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 }
 
 func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tableRange *splitter.RangeInfo, count int64) (*splitter.RangeInfo, error) {
-	if count <= splitThreshold {
+	if count <= splitter.SplitThreshold {
 		return tableRange, nil
 	}
 	// TODO Find great index

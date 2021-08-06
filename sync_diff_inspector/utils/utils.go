@@ -522,3 +522,50 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 
 	return count.Int64, checksum.Int64, nil
 }
+
+func IgnoreColumns(tableInfo *model.TableInfo, columns []string) *model.TableInfo {
+	if len(columns) == 0 {
+		return tableInfo
+	}
+
+	removeColMap := sliceToMap(columns)
+	for i := 0; i < len(tableInfo.Indices); i++ {
+		index := tableInfo.Indices[i]
+		for j := 0; j < len(index.Columns); j++ {
+			col := index.Columns[j]
+			if _, ok := removeColMap[col.Name.O]; ok {
+				tableInfo.Indices = append(tableInfo.Indices[:i], tableInfo.Indices[i+1:]...)
+				i--
+				break
+			}
+		}
+	}
+
+	for j := 0; j < len(tableInfo.Columns); j++ {
+		col := tableInfo.Columns[j]
+		if _, ok := removeColMap[col.Name.O]; ok {
+			tableInfo.Columns = append(tableInfo.Columns[:j], tableInfo.Columns[j+1:]...)
+			j--
+		}
+	}
+
+	// calculate column offset
+	colMap := make(map[string]int, len(tableInfo.Columns))
+	for i, col := range tableInfo.Columns {
+		col.Offset = i
+		colMap[col.Name.O] = i
+	}
+
+	for _, index := range tableInfo.Indices {
+		for _, col := range index.Columns {
+			offset, ok := colMap[col.Name.O]
+			if !ok {
+				// this should never happened
+				log.Fatal("column not exists", zap.String("column", col.Name.O))
+			}
+			col.Offset = offset
+		}
+	}
+
+	return tableInfo
+}
