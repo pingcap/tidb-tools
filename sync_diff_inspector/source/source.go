@@ -56,10 +56,7 @@ type RowDataIterator interface {
 // each source has its own analyze function.
 type TableAnalyzer interface {
 	// AnalyzeSplitter picks the proper splitter.ChunkIterator according to table and source.
-	AnalyzeSplitter(*common.TableDiff, *splitter.RangeInfo) (splitter.ChunkIterator, error)
-
-	// AnalyzeChunkSize analyze the proper chunk size according to the table and source.
-	AnalyzeChunkSize(table *common.TableDiff) (int64, error)
+	AnalyzeSplitter(context.Context, *common.TableDiff, *splitter.RangeInfo) (splitter.ChunkIterator, error)
 }
 
 type Source interface {
@@ -71,7 +68,7 @@ type Source interface {
 	// this is the mainly iterator across the whole sync diff.
 	// One source has one range iterator to produce the range to channel.
 	// there are many workers consume the range from the channel to compare.
-	GetRangeIterator(*splitter.RangeInfo, TableAnalyzer) (RangeIterator, error)
+	GetRangeIterator(context.Context, *splitter.RangeInfo, TableAnalyzer) (RangeIterator, error)
 
 	// GetCountAndCrc32 gets the crc32 result and the count from given range.
 	GetCountAndCrc32(context.Context, *splitter.RangeInfo, chan *ChecksumInfo)
@@ -106,10 +103,11 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 		for _, tableConfig := range tables {
 			tableRowsQuery, tableOrderKeyCols := utils.GetTableRowsQueryFormat(tableConfig.Schema, tableConfig.Table, tableConfig.TargetTableInfo, tableConfig.Collation)
 			tableDiffs = append(tableDiffs, &common.TableDiff{
-				InstanceID:        tableConfig.InstanceID,
-				Schema:            tableConfig.Schema,
-				Table:             tableConfig.Table,
-				Info:              tableConfig.TargetTableInfo,
+				InstanceID: tableConfig.InstanceID,
+				Schema:     tableConfig.Schema,
+				Table:      tableConfig.Table,
+				Info:       utils.IgnoreColumns(tableConfig.TargetTableInfo, tableConfig.IgnoreColumns),
+				// TODO: field `IgnoreColumns` can be deleted.
 				IgnoreColumns:     tableConfig.IgnoreColumns,
 				Fields:            tableConfig.Fields,
 				Range:             tableConfig.Range,
@@ -334,7 +332,7 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 // RangeIterator generate next chunk for the whole tables lazily.
 type RangeIterator interface {
 	// Next seeks the next chunk, return nil if seeks to end.
-	Next() (*splitter.RangeInfo, error)
+	Next(context.Context) (*splitter.RangeInfo, error)
 
 	Close()
 }

@@ -34,7 +34,7 @@ type BasicSource struct {
 	dbConn     *sql.DB
 }
 
-func (s *BasicSource) GetRangeIterator(r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
+func (s *BasicSource) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
 	dbIter := &BasicChunksIterator{
 		tableAnalyzer:  analyzer,
 		TableDiffs:     s.tableDiffs,
@@ -42,13 +42,14 @@ func (s *BasicSource) GetRangeIterator(r *splitter.RangeInfo, analyzer TableAnal
 		limit:          0,
 		dbConn:         s.dbConn,
 	}
-	err := dbIter.nextTable(r)
+	err := dbIter.nextTable(ctx, r)
 	return dbIter, err
 }
 
 func (s *BasicSource) Close() {
 	s.dbConn.Close()
 }
+
 func (s *BasicSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter.RangeInfo, checksumInfoCh chan *ChecksumInfo) {
 	beginTime := time.Now()
 	table := s.tableDiffs[tableRange.GetTableIndex()]
@@ -115,7 +116,7 @@ type BasicChunksIterator struct {
 	tableIter splitter.ChunkIterator
 }
 
-func (t *BasicChunksIterator) Next() (*splitter.RangeInfo, error) {
+func (t *BasicChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, error) {
 	// TODO: creates different tables chunks in parallel
 	if t.tableIter == nil {
 		return nil, nil
@@ -133,7 +134,7 @@ func (t *BasicChunksIterator) Next() (*splitter.RangeInfo, error) {
 			IndexID:    t.getCurTableIndexID(),
 		}, nil
 	}
-	err = t.nextTable(nil)
+	err = t.nextTable(ctx, nil)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -169,7 +170,7 @@ func (t *BasicChunksIterator) getCurTableIndexID() int64 {
 
 // if error is nil and t.iter is not nil,
 // then nextTable is done successfully.
-func (t *BasicChunksIterator) nextTable(startRange *splitter.RangeInfo) error {
+func (t *BasicChunksIterator) nextTable(ctx context.Context, startRange *splitter.RangeInfo) error {
 	if t.nextTableIndex >= len(t.TableDiffs) {
 		t.tableIter = nil
 		return nil
@@ -184,7 +185,7 @@ func (t *BasicChunksIterator) nextTable(startRange *splitter.RangeInfo) error {
 		t.nextTableIndex = curIndex + 1
 	}
 
-	chunkIter, err := t.tableAnalyzer.AnalyzeSplitter(curTable, startRange)
+	chunkIter, err := t.tableAnalyzer.AnalyzeSplitter(ctx, curTable, startRange)
 	if err != nil {
 		return errors.Trace(err)
 	}

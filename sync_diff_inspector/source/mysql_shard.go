@@ -41,7 +41,7 @@ func (s *MySQLSources) GetTableAnalyzer() TableAnalyzer {
 	return nil
 }
 
-func (s *MySQLSources) GetRangeIterator(r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
+func (s *MySQLSources) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
 	log.Fatal("[UnReachable] we won't choose multi-mysql as work source to call GetRangeIterator")
 	return nil, nil
 }
@@ -68,14 +68,16 @@ func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitte
 			}
 		}(sourceDB)
 	}
-	close(infoCh)
+	defer close(infoCh)
 
 	var (
 		err           error
 		totalCount    int64
 		totalChecksum int64
 	)
-	for info := range infoCh {
+
+	for i := 0; i < len(s.sourceDBs); i++ {
+		info := <-infoCh
 		// catch the first error
 		if err == nil && info.Err != nil {
 			err = info.Err
