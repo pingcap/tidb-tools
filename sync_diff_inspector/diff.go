@@ -15,8 +15,11 @@ package main
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -30,6 +33,7 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	tidbconfig "github.com/pingcap/tidb/config"
+	"github.com/siddontang/go/ioutil2"
 	"go.uber.org/zap"
 )
 
@@ -62,6 +66,8 @@ type Diff struct {
 	chunkCh chan *splitter.RangeInfo
 	sqlCh   chan string
 	cp      *checkpoints.Checkpoint
+
+	configHash string
 }
 
 // NewDiff returns a Diff instance.
@@ -117,6 +123,10 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 		return errors.Trace(err)
 	}
 	df.cp.Init()
+	df.configHash, err = df.ComputeConfigHash()
+	if err != nil {
+		return errors.Trace(err)
+	}
 	return nil
 }
 
@@ -175,22 +185,83 @@ func (df *Diff) pickSource(ctx context.Context) source.Source {
 	return df.downstream
 }
 
+func (df *Diff) ComputeConfigHash() (string, error) {
+	checkConfigs, err := df.GetCheckConfig()
+	if err != nil {
+		return "", errors.Trace(err)
+	}
+	bytes := make([]byte, 0)
+	for _, config := range checkConfigs {
+		configBytes, err := json.Marshal(config)
+		if err != nil {
+			return "", errors.Trace(err)
+		}
+		bytes = append(bytes, configBytes...)
+	}
+	return fmt.Sprintf("%x", md5.Sum(bytes)), nil
+}
+
+func (df *Diff) GetCheckConfig() ([]*checkpoints.CheckConfig, error) {
+	tableDiffs := df.workSource.GetTables()
+	checkConfigs := make([]*checkpoints.CheckConfig, len(tableDiffs))
+	for i, tableDiff := range tableDiffs {
+		sourceTables := make([]config.TableInstance, 0)
+		var targetTable config.TableInstance
+		instance := config.TableInstance{
+			InstanceID: tableDiff.InstanceID,
+			Schema:     tableDiff.Schema,
+			Table:      tableDiff.Table,
+		}
+		if df.workSource == df.upstream {
+			for targetInstace, sourceInstances := range tableDiff.TableMaps {
+				if len(sourceInstances) != 1 {
+					return nil, errors.NotSupportedf("we do not support using shard mysql as chunk splitter")
+				}
+				if sourceInstances[0] == instance {
+					sourceTables = sourceInstances
+					targetTable = targetInstace
+					break
+				}
+			}
+		} else {
+			targetTable = instance
+			sourceTables = tableDiff.TableMaps[targetTable]
+		}
+		checkConfigs[i] = &checkpoints.CheckConfig{
+			SourceTables: sourceTables,
+			TargetTables: targetTable,
+			Fields:       tableDiff.Fields,
+			Range:        tableDiff.Range,
+			// TODO get snapshot
+			Snapshot:  "",
+			Collation: tableDiff.Collation,
+		}
+	}
+	return checkConfigs, nil
+}
+
 func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterator, error) {
 	var startRange *splitter.RangeInfo
 	if df.useCheckpoint {
-		node, err := df.cp.LoadChunk(checkpointFile)
-		if err != nil {
-			return nil, errors.Annotate(err, "the checkpoint load process failed")
+		path := filepath.Join(df.configHash, checkpointFile)
+		if ioutil2.FileExists(path) {
+			node, err := df.cp.LoadChunk(path)
+			if err != nil {
+				return nil, errors.Annotate(err, "the checkpoint load process failed")
+			} else {
+				// this need not be synchronized, because at the moment, the is only one thread access the section
+				log.Info("load checkpoint",
+					zap.String("config hash", df.configHash),
+					zap.Int("id", node.GetID()),
+					zap.Reflect("chunk", node),
+					zap.String("state", node.GetState()))
+				df.cp.SetCurrentSavedID(node.GetID() + 1)
+			}
+			if node != nil {
+				startRange = splitter.FromNode(node)
+			}
 		} else {
-			// this need not be synchronized, because at the moment, the is only one thread access the section
-			log.Info("load checkpoint",
-				zap.Int("id", node.GetID()),
-				zap.Reflect("chunk", node),
-				zap.String("state", node.GetState()))
-			df.cp.SetCurrentSavedID(node.GetID() + 1)
-		}
-		if node != nil {
-			startRange = splitter.FromNode(node)
+			df.useCheckpoint = false
 		}
 	}
 
@@ -208,7 +279,13 @@ func (df *Diff) handleCheckpoints(ctx context.Context) {
 			log.Info("Stop do checkpoint")
 			return
 		case <-time.After(10 * time.Second):
-			_, err := df.cp.SaveChunk(ctx, checkpointFile)
+			if !ioutil2.FileExists(df.configHash) {
+				err := os.Mkdir(df.configHash, checkpoints.LocalFilePerm)
+				if err != nil {
+					log.Error("fail to create checkpoint directory", zap.String("config hash", df.configHash))
+				}
+			}
+			_, err := df.cp.SaveChunk(ctx, filepath.Join(df.configHash, checkpointFile))
 			if err != nil {
 				log.Warn("fail to save the chunk", zap.Error(err))
 				// maybe we should panic, because SaveChunk method should not failed.
@@ -274,6 +351,9 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 	}
 
 	node := rangeInfo.ToNode()
+	if err != nil {
+		return false, errors.Trace(err)
+	}
 	node.State = state
 	df.cp.Insert(node)
 	return isEqual, nil

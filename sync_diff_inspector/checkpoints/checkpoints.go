@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/siddontang/go/ioutil2"
 
 	//"github.com/golang/protobuf/proto"
@@ -31,7 +32,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const localFilePerm os.FileMode = 0o644
+const LocalFilePerm os.FileMode = 0o644
 
 var (
 
@@ -167,7 +168,7 @@ func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string) (int, erro
 			return 0, errors.Trace(err)
 		}
 
-		if err = ioutil2.WriteFileAtomic(fileName, checkpointData, localFilePerm); err != nil {
+		if err = ioutil2.WriteFileAtomic(fileName, checkpointData, LocalFilePerm); err != nil {
 			return 0, err
 		}
 
@@ -192,4 +193,13 @@ func (cp *Checkpoint) LoadChunk(fileName string) (*Node, error) {
 		return nil, errors.Trace(err)
 	}
 	return n, nil
+}
+
+type CheckConfig struct {
+	SourceTables []config.TableInstance `json:"source-tables"`
+	TargetTables config.TableInstance   `json:"target-tables"`
+	Fields       string                 `json:"fields"`
+	Range        string                 `json:"range"`
+	Snapshot     string                 `json:"snapshot"`
+	Collation    string                 `json:"collation"`
 }
