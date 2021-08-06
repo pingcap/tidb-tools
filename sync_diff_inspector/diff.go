@@ -144,7 +144,7 @@ func (df *Diff) Equal(ctx context.Context) error {
 	go df.writeSQLs(ctx)
 
 	for {
-		c, err := chunksIter.Next()
+		c, err := chunksIter.Next(ctx)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -265,7 +265,7 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 		}
 	}
 
-	return df.workSource.GetRangeIterator(startRange, df.workSource.GetTableAnalyzer())
+	return df.workSource.GetRangeIterator(ctx, startRange, df.workSource.GetTableAnalyzer())
 }
 
 func (df *Diff) handleCheckpoints(ctx context.Context) {
@@ -447,8 +447,8 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 
 func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *splitter.RangeInfo) (bool, int64, error) {
 	checkSumCh := make(chan *source.ChecksumInfo, 2)
-	go df.upstream.GetCountAndCrc32(tableRange, checkSumCh)
-	go df.downstream.GetCountAndCrc32(tableRange, checkSumCh)
+	go df.upstream.GetCountAndCrc32(ctx, tableRange, checkSumCh)
+	go df.downstream.GetCountAndCrc32(ctx, tableRange, checkSumCh)
 
 	crc1Info := <-checkSumCh
 	crc2Info := <-checkSumCh
@@ -468,12 +468,12 @@ func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *spli
 }
 
 func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) (bool, error) {
-	upstreamRowsIterator, err := df.upstream.GetRowsIterator(rangeInfo)
+	upstreamRowsIterator, err := df.upstream.GetRowsIterator(ctx, rangeInfo)
 	if err != nil {
 		return false, errors.Trace(err)
 	}
 	defer upstreamRowsIterator.Close()
-	downstreamRowsIterator, err := df.downstream.GetRowsIterator(rangeInfo)
+	downstreamRowsIterator, err := df.downstream.GetRowsIterator(ctx, rangeInfo)
 	if err != nil {
 		return false, errors.Trace(err)
 	}

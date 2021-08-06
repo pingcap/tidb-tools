@@ -34,8 +34,6 @@ type MySQLSources struct {
 	tableDiffs []*common.TableDiff
 
 	sourceDBs map[string]*sql.DB
-
-	ctx context.Context
 }
 
 func (s *MySQLSources) GetTableAnalyzer() TableAnalyzer {
@@ -43,7 +41,7 @@ func (s *MySQLSources) GetTableAnalyzer() TableAnalyzer {
 	return nil
 }
 
-func (s *MySQLSources) GetRangeIterator(r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
+func (s *MySQLSources) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
 	log.Fatal("[UnReachable] we won't choose multi-mysql as work source to call GetRangeIterator")
 	return nil, nil
 }
@@ -54,7 +52,7 @@ func (s *MySQLSources) Close() {
 	}
 }
 
-func (s *MySQLSources) GetCountAndCrc32(tableRange *splitter.RangeInfo, checksumInfoCh chan *ChecksumInfo) {
+func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitter.RangeInfo, checksumInfoCh chan *ChecksumInfo) {
 	beginTime := time.Now()
 	table := s.tableDiffs[tableRange.GetTableIndex()]
 	chunk := tableRange.GetChunk()
@@ -62,7 +60,7 @@ func (s *MySQLSources) GetCountAndCrc32(tableRange *splitter.RangeInfo, checksum
 	infoCh := make(chan *ChecksumInfo, len(s.sourceDBs))
 	for _, sourceDB := range s.sourceDBs {
 		go func(sourceDB *sql.DB) {
-			count, checksum, err := utils.GetCountAndCRC32Checksum(s.ctx, sourceDB, table.Schema, table.Table, table.Info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
+			count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, sourceDB, table.Schema, table.Table, table.Info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
 			infoCh <- &ChecksumInfo{
 				Checksum: checksum,
 				Count:    count,
@@ -116,7 +114,7 @@ func (s *MySQLSources) GenerateFixSQL(t DMLType, data map[string]*dbutil.ColumnD
 	return ""
 }
 
-func (s *MySQLSources) GetRowsIterator(tableRange *splitter.RangeInfo) (RowDataIterator, error) {
+func (s *MySQLSources) GetRowsIterator(ctx context.Context, tableRange *splitter.RangeInfo) (RowDataIterator, error) {
 	chunk := tableRange.GetChunk()
 	args := utils.StringsToInterfaces(chunk.Args)
 
@@ -124,7 +122,7 @@ func (s *MySQLSources) GetRowsIterator(tableRange *splitter.RangeInfo) (RowDataI
 
 	for i, db := range s.sourceDBs {
 		query := fmt.Sprintf(s.tableDiffs[tableRange.GetTableIndex()].TableRowsQuery, chunk.Where)
-		rows, err := db.QueryContext(s.ctx, query, args...)
+		rows, err := db.QueryContext(ctx, query, args...)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -221,7 +219,6 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, dbs []
 	mss := &MySQLSources{
 		tableDiffs: tableDiffs,
 		sourceDBs:  sourceDBs,
-		ctx:        ctx,
 	}
 	return mss, nil
 }

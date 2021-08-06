@@ -129,7 +129,6 @@ func (s *testSourceSuite) TestBasicSource(c *C) {
 	basic := &BasicSource{
 		tableDiffs: tableDiffs,
 		dbConn:     conn,
-		ctx:        ctx,
 	}
 
 	for n, tableCase := range tableCases {
@@ -137,7 +136,7 @@ func (s *testSourceSuite) TestBasicSource(c *C) {
 		countRows := sqlmock.NewRows([]string{"CNT", "CHECKSUM"}).AddRow(123, 456)
 		mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
 		checksumInfo := make(chan *ChecksumInfo, 1)
-		go basic.GetCountAndCrc32(tableCase.rangeInfo, checksumInfo)
+		go basic.GetCountAndCrc32(ctx, tableCase.rangeInfo, checksumInfo)
 		checksum := <-checksumInfo
 		c.Assert(checksum.Err, IsNil)
 		c.Assert(checksum.Count, Equals, int64(123))
@@ -146,11 +145,11 @@ func (s *testSourceSuite) TestBasicSource(c *C) {
 	}
 
 	// Test ChunkIterator
-	iter, err := basic.GetRangeIterator(nil, &MockAnalyzer{})
+	iter, err := basic.GetRangeIterator(ctx, nil, &MockAnalyzer{})
 	c.Assert(err, IsNil)
 	i := 0
 	for {
-		chunk, err := iter.Next()
+		chunk, err := iter.Next(ctx)
 		c.Assert(err, IsNil)
 		if chunk == nil {
 			c.Assert(i, Equals, 5*len(tableCases))
@@ -167,7 +166,7 @@ func (s *testSourceSuite) TestBasicSource(c *C) {
 		dataRows.AddRow(row...)
 	}
 	mock.ExpectQuery(tableCase.rowQuery).WillReturnRows(dataRows)
-	rowIter, err := basic.GetRowsIterator(tableCase.rangeInfo)
+	rowIter, err := basic.GetRowsIterator(ctx, tableCase.rangeInfo)
 	c.Assert(err, IsNil)
 
 	i = 0
@@ -266,7 +265,7 @@ func (s *testSourceSuite) TestMysqlShardSources(c *C) {
 		}
 
 		checksumInfo := make(chan *ChecksumInfo, 1)
-		go shard.GetCountAndCrc32(tableCase.rangeInfo, checksumInfo)
+		go shard.GetCountAndCrc32(ctx, tableCase.rangeInfo, checksumInfo)
 		checksum := <-checksumInfo
 		c.Assert(checksum.Err, IsNil)
 		c.Assert(checksum.Count, Equals, int64(len(dbs)))
@@ -288,7 +287,7 @@ func (s *testSourceSuite) TestMysqlShardSources(c *C) {
 		mock.ExpectQuery(tableCase.rowQuery).WillReturnRows(dataRows)
 	}
 
-	rowIter, err := shard.GetRowsIterator(tableCase.rangeInfo)
+	rowIter, err := shard.GetRowsIterator(ctx, tableCase.rangeInfo)
 	c.Assert(err, IsNil)
 
 	i = 0

@@ -68,13 +68,13 @@ type Source interface {
 	// this is the mainly iterator across the whole sync diff.
 	// One source has one range iterator to produce the range to channel.
 	// there are many workers consume the range from the channel to compare.
-	GetRangeIterator(*splitter.RangeInfo, TableAnalyzer) (RangeIterator, error)
+	GetRangeIterator(context.Context, *splitter.RangeInfo, TableAnalyzer) (RangeIterator, error)
 
 	// GetCountAndCrc32 gets the crc32 result and the count from given range.
-	GetCountAndCrc32(*splitter.RangeInfo, chan *ChecksumInfo)
+	GetCountAndCrc32(context.Context, *splitter.RangeInfo, chan *ChecksumInfo)
 
 	// GetRowsIterator gets the row data iterator from given range.
-	GetRowsIterator(*splitter.RangeInfo) (RowDataIterator, error)
+	GetRowsIterator(context.Context, *splitter.RangeInfo) (RowDataIterator, error)
 
 	// GenerateFixSQL generates the fix sql with given type.
 	GenerateFixSQL(DMLType, map[string]*dbutil.ColumnData, int) string
@@ -332,7 +332,7 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 // RangeIterator generate next chunk for the whole tables lazily.
 type RangeIterator interface {
 	// Next seeks the next chunk, return nil if seeks to end.
-	Next() (*splitter.RangeInfo, error)
+	Next(context.Context) (*splitter.RangeInfo, error)
 
 	Close()
 }

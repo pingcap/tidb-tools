@@ -187,7 +187,7 @@ func (cp *Checkpoint) LoadChunk(fileName string) (*Node, error) {
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	var n *Node
+	n := &Node{}
 	err = json.Unmarshal(bytes, n)
 	if err != nil {
 		return nil, errors.Trace(err)

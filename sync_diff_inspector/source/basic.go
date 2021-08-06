@@ -32,19 +32,17 @@ import (
 type BasicSource struct {
 	tableDiffs []*common.TableDiff
 	dbConn     *sql.DB
-	ctx        context.Context
 }
 
-func (s *BasicSource) GetRangeIterator(r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
+func (s *BasicSource) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
 	dbIter := &BasicChunksIterator{
 		tableAnalyzer:  analyzer,
 		TableDiffs:     s.tableDiffs,
 		nextTableIndex: 0,
 		limit:          0,
 		dbConn:         s.dbConn,
-		ctx:            s.ctx,
 	}
-	err := dbIter.nextTable(r)
+	err := dbIter.nextTable(ctx, r)
 	return dbIter, err
 }
 
@@ -52,11 +50,11 @@ func (s *BasicSource) Close() {
 	s.dbConn.Close()
 }
 
-func (s *BasicSource) GetCountAndCrc32(tableRange *splitter.RangeInfo, checksumInfoCh chan *ChecksumInfo) {
+func (s *BasicSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter.RangeInfo, checksumInfoCh chan *ChecksumInfo) {
 	beginTime := time.Now()
 	table := s.tableDiffs[tableRange.GetTableIndex()]
 	chunk := tableRange.GetChunk()
-	count, checksum, err := utils.GetCountAndCRC32Checksum(s.ctx, s.dbConn, table.Schema, table.Table, table.Info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
+	count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, s.dbConn, table.Schema, table.Table, table.Info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
 	cost := time.Since(beginTime)
 	checksumInfoCh <- &ChecksumInfo{
 		Checksum: checksum,
@@ -85,14 +83,14 @@ func (s *BasicSource) GenerateFixSQL(t DMLType, data map[string]*dbutil.ColumnDa
 	return ""
 }
 
-func (s *BasicSource) GetRowsIterator(tableRange *splitter.RangeInfo) (RowDataIterator, error) {
+func (s *BasicSource) GetRowsIterator(ctx context.Context, tableRange *splitter.RangeInfo) (RowDataIterator, error) {
 	chunk := tableRange.GetChunk()
 	args := utils.StringsToInterfaces(chunk.Args)
 
 	query := fmt.Sprintf(s.tableDiffs[tableRange.GetTableIndex()].TableRowsQuery, chunk.Where)
 
 	log.Debug("select data", zap.String("sql", query), zap.Reflect("args", args))
-	rows, err := s.dbConn.QueryContext(s.ctx, query, args...)
+	rows, err := s.dbConn.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -115,12 +113,10 @@ type BasicChunksIterator struct {
 	limit  int
 	dbConn *sql.DB
 
-	ctx context.Context
-
 	tableIter splitter.ChunkIterator
 }
 
-func (t *BasicChunksIterator) Next() (*splitter.RangeInfo, error) {
+func (t *BasicChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, error) {
 	// TODO: creates different tables chunks in parallel
 	if t.tableIter == nil {
 		return nil, nil
@@ -138,7 +134,7 @@ func (t *BasicChunksIterator) Next() (*splitter.RangeInfo, error) {
 			IndexID:    t.getCurTableIndexID(),
 		}, nil
 	}
-	err = t.nextTable(nil)
+	err = t.nextTable(ctx, nil)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -174,7 +170,7 @@ func (t *BasicChunksIterator) getCurTableIndexID() int64 {
 
 // if error is nil and t.iter is not nil,
 // then nextTable is done successfully.
-func (t *BasicChunksIterator) nextTable(startRange *splitter.RangeInfo) error {
+func (t *BasicChunksIterator) nextTable(ctx context.Context, startRange *splitter.RangeInfo) error {
 	if t.nextTableIndex >= len(t.TableDiffs) {
 		t.tableIter = nil
 		return nil
@@ -189,7 +185,7 @@ func (t *BasicChunksIterator) nextTable(startRange *splitter.RangeInfo) error {
 		t.nextTableIndex = curIndex + 1
 	}
 
-	chunkIter, err := t.tableAnalyzer.AnalyzeSplitter(t.ctx, curTable, startRange)
+	chunkIter, err := t.tableAnalyzer.AnalyzeSplitter(ctx, curTable, startRange)
 	if err != nil {
 		return errors.Trace(err)
 	}
