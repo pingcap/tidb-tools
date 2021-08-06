@@ -16,8 +16,8 @@ package source
 import (
 	"context"
 	"database/sql"
+
 	"github.com/pingcap/errors"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 )
@@ -34,19 +34,14 @@ type MySQLTableAnalyzer struct {
 	dbConn *sql.DB
 }
 
-func (a *MySQLTableAnalyzer) AnalyzeSplitter(table *common.TableDiff, startRange *splitter.RangeInfo) (splitter.ChunkIterator, error) {
+func (a *MySQLTableAnalyzer) AnalyzeSplitter(ctx context.Context, table *common.TableDiff, startRange *splitter.RangeInfo) (splitter.ChunkIterator, error) {
 	chunkSize := 1000
 	// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
-	randIter, err := splitter.NewRandomIteratorWithCheckpoint(table, a.dbConn, chunkSize, startRange)
+	randIter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, table, a.dbConn, chunkSize, startRange)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	return randIter, nil
-}
-
-func (a *MySQLTableAnalyzer) AnalyzeChunkSize(table *common.TableDiff) (int64, error) {
-	// TODO analyze chunk size with table
-	return dbutil.GetRowCount(context.Background(), a.dbConn, table.Schema, table.Table, table.Range, nil)
 }
 
 func NewMySQLSource(ctx context.Context, tableDiffs []*common.TableDiff, dbConn *sql.DB) (Source, error) {
