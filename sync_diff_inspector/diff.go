@@ -115,6 +115,9 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 	setTiDBCfg()
 
 	df.downstream, df.upstream, err = source.NewSources(ctx, cfg)
+	if err != nil {
+		return errors.Trace(err)
+	}
 
 	df.workSource = df.pickSource(ctx)
 
@@ -261,16 +264,6 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 				startRange = splitter.FromNode(node)
 			}
 		} else {
-			df.useCheckpoint = false
-		}
-		configHash, err := df.ComputeConfigHash(startRange)
-		if err != nil {
-			return nil, errors.Annotate(err, "fail to compute the config hash")
-		}
-		if configHash != node.ConfigHash {
-			log.Warn("the table's config setting is defferent, cannot using checkpoint",
-				zap.String("current config hash", configHash),
-				zap.String("checkpoint's conifg hash", node.ConfigHash))
 			df.useCheckpoint = false
 		}
 	}
