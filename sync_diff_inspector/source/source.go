@@ -95,8 +95,7 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
-
-	tablesToBeCheck, sourceTaleMaps, err := initTables(ctx, cfg)
+	tablesToBeCheck, tableMaps, err := initTables(ctx, cfg)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}

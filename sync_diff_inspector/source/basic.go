@@ -36,6 +36,7 @@ type BasicSource struct {
 
 func (s *BasicSource) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
 	dbIter := &BasicChunksIterator{
+		currentID:      0,
 		tableAnalyzer:  analyzer,
 		TableDiffs:     s.tableDiffs,
 		nextTableIndex: 0,
@@ -105,6 +106,7 @@ func (s *BasicSource) GetDB() *sql.DB {
 
 // BasicChunksIterator is used for single mysql/tidb source.
 type BasicChunksIterator struct {
+	currentID     int
 	tableAnalyzer TableAnalyzer
 
 	TableDiffs     []*common.TableDiff
@@ -118,6 +120,7 @@ type BasicChunksIterator struct {
 
 func (t *BasicChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, error) {
 	// TODO: creates different tables chunks in parallel
+	t.currentID += 1
 	if t.tableIter == nil {
 		return nil, nil
 	}
@@ -129,6 +132,7 @@ func (t *BasicChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, er
 	if c != nil {
 		curIndex := t.getCurTableIndex()
 		return &splitter.RangeInfo{
+			ID:         t.currentID,
 			ChunkRange: c,
 			TableIndex: curIndex,
 			IndexID:    t.getCurTableIndexID(),
@@ -147,6 +151,7 @@ func (t *BasicChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, er
 	}
 	curIndex := t.getCurTableIndex()
 	return &splitter.RangeInfo{
+		ID:         t.currentID,
 		ChunkRange: c,
 		TableIndex: curIndex,
 		IndexID:    t.getCurTableIndexID(),
