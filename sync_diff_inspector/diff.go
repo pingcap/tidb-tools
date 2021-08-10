@@ -217,7 +217,6 @@ func (df *Diff) GetCheckConfig() ([]*checkpoints.CheckConfig, error) {
 		}
 		if df.workSource == df.upstream {
 			for targetInstace, sourceInstances := range tableDiff.TableMaps {
-				log.Warn("source instances length", zap.Int("length", len(sourceInstances)))
 				if len(sourceInstances) != 1 {
 					return nil, errors.NotSupportedf("we do not support using shard mysql as chunk splitter")
 				}
