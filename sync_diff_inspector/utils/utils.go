@@ -505,13 +505,13 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 
 	query := fmt.Sprintf("SELECT COUNT(t.crc32) as CNT, BIT_XOR(t.crc32) as CHECKSUM from (SELECT CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED) AS crc32 FROM %s WHERE %s) as t;",
 		strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), dbutil.TableName(schemaName, tableName), limitRange)
-	fmt.Println(query)
 	log.Debug("count and checksum", zap.String("sql", query), zap.Reflect("args", args))
 
 	var count sql.NullInt64
 	var checksum sql.NullInt64
 	err := db.QueryRowContext(ctx, query, args...).Scan(&count, &checksum)
 	if err != nil {
+		log.Warn("execute checksum query fail", zap.String("query", query), zap.Reflect("args", args))
 		return -1, -1, errors.Trace(err)
 	}
 	if !count.Valid || !checksum.Valid {

@@ -133,7 +133,7 @@ func (cp *Checkpoint) Init() {
 	hp := new(Heap)
 	hp.mu = &sync.Mutex{}
 	hp.Nodes = make([]*Node, 0)
-	hp.CurrentSavedID = 0
+	hp.CurrentSavedID = -1
 	heap.Init(hp)
 	cp.hp = hp
 }
@@ -163,8 +163,13 @@ func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string) (int, erro
 	}
 	cp.hp.mu.Unlock()
 	if cur != nil {
+		log.Info("save checkpoint",
+			zap.Int("id", cur.GetID()),
+			zap.Reflect("chunk", cur),
+			zap.String("state", cur.GetState()))
 		checkpointData, err := json.Marshal(cur)
 		if err != nil {
+			log.Warn("fail to save the chunk to the file", zap.Int("id", cur.GetID()))
 			return 0, errors.Trace(err)
 		}
 
@@ -172,10 +177,6 @@ func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string) (int, erro
 			return 0, err
 		}
 
-		log.Info("save checkpoint",
-			zap.Int("id", cur.GetID()),
-			zap.Reflect("chunk", cur),
-			zap.String("state", cur.GetState()))
 		return cur.GetID(), nil
 	}
 	return 0, nil
