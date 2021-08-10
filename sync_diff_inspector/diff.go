@@ -319,12 +319,10 @@ func (df *Diff) handleChunks(ctx context.Context) {
 			// TODO: close worker gracefully
 		case c, ok := <-df.chunkCh:
 			if !ok {
-				log.Info("the chunk channel has closed")
 				return
 			}
 			pool.Apply(func() {
 				res, err := df.consume(ctx, c)
-				log.Debug("chunk consume", zap.Int("chunk id", c.ID), zap.Bool("isEqual", res))
 				if err != nil {
 					// TODO: catch error
 				}
@@ -349,7 +347,6 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 	var state string
 	if !isEqual {
 		state = checkpoints.FailedState
-		log.Debug("the checksum is not equal, compare the row data", zap.Int("chunk id", rangeInfo.ID))
 		// if the chunk's checksum differ, try to do binary check
 		if count > splitter.SplitThreshold {
 			rangeInfo, err = df.BinGenerate(ctx, df.workSource, rangeInfo, count)
@@ -362,7 +359,6 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 			return false, err
 		}
 	} else {
-		log.Debug("the checksum equal", zap.Int("chunk id", rangeInfo.ID))
 		// update chunk success state in summary
 		state = checkpoints.SuccessState
 	}

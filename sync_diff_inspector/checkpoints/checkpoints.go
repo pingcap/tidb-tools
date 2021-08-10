@@ -141,7 +141,6 @@ func (cp *Checkpoint) Init() {
 // SaveChunk saves the chunk to file.
 func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string) (int, error) {
 	cp.hp.mu.Lock()
-	log.Info("grasp the lock, start to save the chunk", zap.String("file name", fileName))
 	var cur, next *Node
 	for {
 		nextId := cp.hp.CurrentSavedID + 1

@@ -228,7 +228,6 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 				}
 				for targetInstance := range tableMaps {
 					if targetSchema == targetInstance.Schema && targetTable == targetInstance.Table {
-						log.Info("find matched table", zap.String("target table", dbutil.TableName(targetSchema, targetTable)), zap.String("source table", dbutil.TableName(schema, table)))
 						tableMaps[targetInstance] = append(tableMaps[targetInstance], config.TableInstance{
 							InstanceID: instanceID,
 							Schema:     schema,
