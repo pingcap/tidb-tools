@@ -48,7 +48,7 @@ type TableDiff struct {
 
 	// tableMap record the map relationship of upstream tables and downstream table
 	// target table instance => source table instances
-	TableMaps map[config.TableInstance][]config.TableInstance `json:"table-map`
+	TableMaps map[config.TableInstance][]config.TableInstance `json:"table-map"`
 
 	Collation string `json:"collation"`
 
