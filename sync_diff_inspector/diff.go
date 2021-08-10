@@ -305,12 +305,14 @@ func (df *Diff) handleCheckpoints(ctx context.Context) {
 func (df *Diff) handleChunks(ctx context.Context) {
 	df.wg.Add(1)
 	log.Debug("start handleChunks goroutine")
+	// TODO use a meaningfull count
+	pool := utils.NewWorkerPool(64, "consumer")
 	defer func() {
+		pool.WaitFinished()
 		log.Debug("close handleChunks goroutine")
 		df.wg.Done()
 	}()
-	// TODO use a meaningfull count
-	pool := utils.NewWorkerPool(64, "consumer")
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -318,7 +320,7 @@ func (df *Diff) handleChunks(ctx context.Context) {
 			return
 			// TODO: close worker gracefully
 		case c, ok := <-df.chunkCh:
-			if !ok {
+			if !ok && c == nil {
 				return
 			}
 			pool.Apply(func() {

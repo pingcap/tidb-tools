@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -35,6 +36,7 @@ type WorkerPool struct {
 	limit   uint
 	workers chan *Worker
 	name    string
+	wg      sync.WaitGroup
 }
 
 // Worker identified by ID.
@@ -62,6 +64,8 @@ func NewWorkerPool(limit uint, name string) *WorkerPool {
 func (pool *WorkerPool) Apply(fn taskFunc) {
 	worker := pool.apply()
 	go func() {
+		pool.wg.Add(1)
+		defer pool.wg.Done()
 		defer pool.recycle(worker)
 		fn()
 	}()
@@ -71,6 +75,8 @@ func (pool *WorkerPool) Apply(fn taskFunc) {
 func (pool *WorkerPool) ApplyWithID(fn identifiedTaskFunc) {
 	worker := pool.apply()
 	go func() {
+		pool.wg.Add(1)
+		defer pool.wg.Done()
 		defer pool.recycle(worker)
 		fn(worker.ID)
 	}()
@@ -80,6 +86,8 @@ func (pool *WorkerPool) ApplyWithID(fn identifiedTaskFunc) {
 func (pool *WorkerPool) ApplyOnErrorGroup(eg *errgroup.Group, fn func() error) {
 	worker := pool.apply()
 	eg.Go(func() error {
+		pool.wg.Add(1)
+		defer pool.wg.Done()
 		defer pool.recycle(worker)
 		return fn()
 	})
@@ -89,6 +97,8 @@ func (pool *WorkerPool) ApplyOnErrorGroup(eg *errgroup.Group, fn func() error) {
 func (pool *WorkerPool) ApplyWithIDInErrorGroup(eg *errgroup.Group, fn func(id uint64) error) {
 	worker := pool.apply()
 	eg.Go(func() error {
+		pool.wg.Add(1)
+		defer pool.wg.Done()
 		defer pool.recycle(worker)
 		return fn(worker.ID)
 	})
@@ -115,6 +125,11 @@ func (pool *WorkerPool) recycle(worker *Worker) {
 // HasWorker checks if the pool has unallocated workers.
 func (pool *WorkerPool) HasWorker() bool {
 	return len(pool.workers) > 0
+}
+
+// WaitFinished waits till the pool finishs all the tasks.
+func (pool *WorkerPool) WaitFinished() {
+	pool.wg.Wait()
 }
 
 func GetColumnsFromIndex(index *model.IndexInfo, tableInfo *model.TableInfo) []*model.ColumnInfo {
