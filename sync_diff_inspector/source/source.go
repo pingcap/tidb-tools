@@ -192,7 +192,7 @@ func initDBConn(ctx context.Context, cfg *config.Config) error {
 	return nil
 }
 
-func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]map[string]*config.TableConfig, tableMaps map[config.TableInstance][]config.TableInstance, err error) {
+func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]map[string]*config.TableConfig, matchedTableMaps map[config.TableInstance][]config.TableInstance, err error) {
 	tableRouter, err := router.NewTableRouter(false, cfg.TableRules)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
@@ -202,7 +202,7 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
-	tableMaps = make(map[config.TableInstance][]config.TableInstance)
+	tableMaps := make(map[config.TableInstance][]config.TableInstance)
 	// get all source table's matched target table
 	// target database name => target table name => all matched source table instance
 	sourceTablesMap := make(map[string]map[string][]config.TableInstance)
@@ -213,6 +213,10 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 					tableMaps[config.TableInstance{InstanceID: instanceID, Schema: schema, Table: table}] = make([]config.TableInstance, 0)
 				}
 			}
+		}
+	}
+	for instanceID, allSchemas := range allTablesMap {
+		if instanceID == cfg.TargetDBCfg.InstanceID {
 			continue
 		}
 
@@ -224,12 +228,12 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 				}
 				for targetInstance := range tableMaps {
 					if targetSchema == targetInstance.Schema && targetTable == targetInstance.Table {
+						log.Info("find matched table", zap.String("target table", dbutil.TableName(targetSchema, targetTable)), zap.String("source table", dbutil.TableName(schema, table)))
 						tableMaps[targetInstance] = append(tableMaps[targetInstance], config.TableInstance{
 							InstanceID: instanceID,
 							Schema:     schema,
 							Table:      table,
 						})
-						break
 					}
 				}
 				if _, ok := sourceTablesMap[targetSchema]; !ok {
@@ -249,6 +253,7 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 		}
 	}
 
+	matchedTableMaps = make(map[config.TableInstance][]config.TableInstance)
 	// fill the table information.
 	// will add default source information, don't worry, we will use table config's info replace this later.
 	// cfg.Tables.Schema => cfg.Tables.Tables => target/source Schema.Table
@@ -276,13 +281,17 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 				}
 			}
 		}
-
 		for _, tableName := range tables {
 			tableInfo, err := dbutil.GetTableInfo(ctx, cfg.TargetDBCfg.Conn, schemaTables.Schema, tableName)
 			if err != nil {
 				return nil, nil, errors.Errorf("get table %s.%s's information error %s", schemaTables.Schema, tableName, errors.ErrorStack(err))
 			}
-
+			instance := config.TableInstance{
+				InstanceID: cfg.TargetDBCfg.InstanceID,
+				Schema:     schemaTables.Schema,
+				Table:      tableName,
+			}
+			matchedTableMaps[instance] = tableMaps[instance]
 			if _, ok := cfgTables[schemaTables.Schema][tableName]; ok {
 				log.Error("duplicate config for one table", zap.String("table", dbutil.TableName(schemaTables.Schema, tableName)))
 				continue
@@ -328,7 +337,7 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 		cfgTables[table.Schema][table.Table].Fields = table.Fields
 		cfgTables[table.Schema][table.Table].Collation = table.Collation
 	}
-	return cfgTables, tableMaps, nil
+	return cfgTables, matchedTableMaps, nil
 }
 
 // RangeIterator generate next chunk for the whole tables lazily.

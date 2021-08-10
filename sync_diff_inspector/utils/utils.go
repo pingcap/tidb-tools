@@ -99,7 +99,7 @@ func (pool *WorkerPool) apply() *Worker {
 	select {
 	case worker = <-pool.workers:
 	default:
-		log.Debug("wait for workers", zap.String("pool", pool.name))
+		log.Info("wait for workers", zap.String("pool", pool.name))
 		worker = <-pool.workers
 	}
 	return worker
@@ -511,6 +511,7 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 	var checksum sql.NullInt64
 	err := db.QueryRowContext(ctx, query, args...).Scan(&count, &checksum)
 	if err != nil {
+		log.Warn("execute checksum query fail", zap.String("query", query), zap.Reflect("args", args))
 		return -1, -1, errors.Trace(err)
 	}
 	if !count.Valid || !checksum.Valid {

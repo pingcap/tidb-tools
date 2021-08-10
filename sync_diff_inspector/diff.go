@@ -217,6 +217,7 @@ func (df *Diff) GetCheckConfig() ([]*checkpoints.CheckConfig, error) {
 		}
 		if df.workSource == df.upstream {
 			for targetInstace, sourceInstances := range tableDiff.TableMaps {
+				log.Warn("source instances length", zap.Int("length", len(sourceInstances)))
 				if len(sourceInstances) != 1 {
 					return nil, errors.NotSupportedf("we do not support using shard mysql as chunk splitter")
 				}
@@ -275,7 +276,11 @@ func (df *Diff) handleCheckpoints(ctx context.Context) {
 	// a background goroutine which will insert the verified chunk,
 	// and periodically save checkpoint
 	df.wg.Add(1)
-	defer df.wg.Done()
+	log.Debug("start handleCheckpoint goroutine")
+	defer func() {
+		log.Debug("close handleCheckpoint goroutine")
+		df.wg.Done()
+	}()
 	for {
 		select {
 		case <-ctx.Done():
@@ -299,9 +304,13 @@ func (df *Diff) handleCheckpoints(ctx context.Context) {
 
 func (df *Diff) handleChunks(ctx context.Context) {
 	df.wg.Add(1)
-	defer df.wg.Done()
+	log.Debug("start handleChunks goroutine")
+	defer func() {
+		log.Debug("close handleChunks goroutine")
+		df.wg.Done()
+	}()
 	// TODO use a meaningfull count
-	pool := utils.NewWorkerPool(4, "consumer")
+	pool := utils.NewWorkerPool(64, "consumer")
 	for {
 		select {
 		case <-ctx.Done():
@@ -310,10 +319,12 @@ func (df *Diff) handleChunks(ctx context.Context) {
 			// TODO: close worker gracefully
 		case c, ok := <-df.chunkCh:
 			if !ok {
+				log.Info("the chunk channel has closed")
 				return
 			}
 			pool.Apply(func() {
 				res, err := df.consume(ctx, c)
+				log.Debug("chunk consume", zap.Int("chunk id", c.ID), zap.Bool("isEqual", res))
 				if err != nil {
 					// TODO: catch error
 				}
@@ -329,6 +340,7 @@ func (df *Diff) handleChunks(ctx context.Context) {
 func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (bool, error) {
 	isEqual, count, err := df.compareChecksumAndGetCount(ctx, rangeInfo)
 	if err != nil {
+		log.Warn("compute checksum error", zap.Int("chunk id", rangeInfo.ID))
 		return false, errors.Trace(err)
 	}
 	log.Info("count size",
@@ -337,6 +349,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 	var state string
 	if !isEqual {
 		state = checkpoints.FailedState
+		log.Debug("the checksum is not equal, compare the row data", zap.Int("chunk id", rangeInfo.ID))
 		// if the chunk's checksum differ, try to do binary check
 		if count > splitter.SplitThreshold {
 			rangeInfo, err = df.BinGenerate(ctx, df.workSource, rangeInfo, count)
@@ -349,6 +362,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 			return false, err
 		}
 	} else {
+		log.Debug("the checksum equal", zap.Int("chunk id", rangeInfo.ID))
 		// update chunk success state in summary
 		state = checkpoints.SuccessState
 	}
@@ -458,9 +472,11 @@ func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *spli
 	close(checkSumCh)
 
 	if crc1Info.Err != nil {
+		log.Warn("checksum fail")
 		return false, -1, errors.Trace(crc1Info.Err)
 	}
 	if crc2Info.Err != nil {
+		log.Warn("checksum fail")
 		return false, -1, errors.Trace(crc2Info.Err)
 
 	}
@@ -592,8 +608,11 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) 
 // WriteSQLs write sqls to file
 func (df *Diff) writeSQLs(ctx context.Context) {
 	df.wg.Add(1)
-	defer df.wg.Done()
-
+	log.Info("start writeSQLs goroutine")
+	defer func() {
+		log.Info("close writeSQLs goroutine")
+		df.wg.Done()
+	}()
 	for {
 		select {
 		case <-ctx.Done():
