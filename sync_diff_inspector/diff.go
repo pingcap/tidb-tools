@@ -427,7 +427,6 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 	if !isEqual {
 		log.Debug("checksum failed", zap.Int("chunk id", rangeInfo.ChunkRange.ID), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTables()[rangeInfo.TableIndex].Table))
 		state = checkpoints.FailedState
-		log.Debug("the checksum is not equal, compare the row data", zap.Int("chunk id", rangeInfo.ID))
 		// if the chunk's checksum differ, try to do binary check
 		if count > splitter.SplitThreshold {
 			log.Debug("count greater than threshold, start do bingenerate", zap.Int("chunk id", rangeInfo.ChunkRange.ID), zap.Int64("chunk size", count))
@@ -443,7 +442,6 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 			return false, 0, 0, 0, errors.Trace(err)
 		}
 	} else {
-		log.Debug("the checksum equal", zap.Int("chunk id", rangeInfo.ID))
 		// update chunk success state in summary
 		log.Debug("checksum success", zap.Int("chunk id", rangeInfo.ChunkRange.ID), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTables()[rangeInfo.TableIndex].Table))
 		state = checkpoints.SuccessState
