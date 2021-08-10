@@ -72,6 +72,7 @@ func (s *BucketIterator) Next() (*chunk.Range, error) {
 	if uint(len(s.chunks)) <= s.nextChunk {
 		select {
 		case err := <-s.errCh:
+			close(s.chunksCh)
 			return nil, errors.Trace(err)
 		case s.chunks = <-s.chunksCh:
 			if s.chunks == nil {
@@ -166,14 +167,27 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 			chunkRange.Update(bound.Column, bound.Upper, "", true, false)
 		}
 
-		nextUpperValues, err := dbutil.AnalyzeValuesFromBuckets(buckets[c.BucketID].UpperBound, indexColumns)
-		for i, column := range indexColumns {
-			chunkRange.Update(column.Name.O, "", nextUpperValues[i], false, true)
+		beginBucket = int(c.BucketID + 1)
+		if c.BucketID < len(buckets) {
+			nextUpperValues, err := dbutil.AnalyzeValuesFromBuckets(buckets[c.BucketID].UpperBound, indexColumns)
+			if err != nil {
+				s.errCh <- errors.Trace(err)
+				return
+			}
+			for i, column := range indexColumns {
+				chunkRange.Update(column.Name.O, "", nextUpperValues[i], false, true)
+			}
+			latestCount = buckets[c.BucketID].Count
+			lowerValues, err = dbutil.AnalyzeValuesFromBuckets(buckets[beginBucket].LowerBound, indexColumns)
+			if err != nil {
+				s.errCh <- errors.Trace(err)
+				return
+			}
 		}
 
-		where, _ := chunkRange.ToString(table.Collation)
+		where, args := chunkRange.ToString(table.Collation)
 
-		count, err := dbutil.GetRowCount(ctx, s.dbConn, table.Schema, table.Table, where, nil)
+		count, err := dbutil.GetRowCount(ctx, s.dbConn, table.Schema, table.Table, where, utils.StringsToInterfaces(args))
 		if err != nil {
 			s.errCh <- errors.Trace(err)
 			return
@@ -188,13 +202,6 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 			chunkID = chunk.InitChunks(chunks, chunk.Bucket, chunkID, c.BucketID, table.Collation, table.Range)
 			s.chunksCh <- chunks
 
-		}
-		latestCount = buckets[c.BucketID].Count
-		beginBucket = int(c.BucketID + 1)
-		lowerValues, err = dbutil.AnalyzeValuesFromBuckets(buckets[beginBucket].LowerBound, indexColumns)
-		if err != nil {
-			s.errCh <- errors.Trace(err)
-			return
 		}
 	}
 	chunkRange := chunk.NewChunkRange()
