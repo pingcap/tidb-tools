@@ -163,9 +163,10 @@ func (df *Diff) Equal(ctx context.Context) error {
 		}
 	}
 
-	// release source
-	df.Close()
 	df.wg.Wait()
+	// release source
+	// TODO: close by main?
+	df.Close()
 	return nil
 }
 

@@ -69,16 +69,15 @@ func (s *BucketIterator) GetIndexID() int64 {
 }
 
 func (s *BucketIterator) Next() (*chunk.Range, error) {
-	// `len(s.chunks) == 0` is included in this
-	var ok bool
 	if uint(len(s.chunks)) <= s.nextChunk {
 		select {
 		case err := <-s.errCh:
 			return nil, errors.Trace(err)
-		case s.chunks, ok = <-s.chunksCh:
-			if !ok {
+		case s.chunks = <-s.chunksCh:
+			if s.chunks == nil {
 				log.Info("close chunks channel for table",
 					zap.String("schema", s.table.Schema), zap.String("table", s.table.Table))
+				close(s.chunksCh)
 				return nil, nil
 			}
 		}
@@ -252,6 +251,7 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 		chunkID = chunk.InitChunks(chunks, chunk.Bucket, chunkID, len(buckets), table.Collation, table.Range)
 		s.chunksCh <- chunks
 	}
-	// close s.chunksCh for this table buckets
-	close(s.chunksCh)
+
+	// send `nil` to notify consumer that none of chunk is left.
+	s.chunksCh <- nil
 }
