@@ -15,6 +15,7 @@ package common
 
 import (
 	"database/sql"
+
 	"github.com/pingcap/parser/model"
 )
 
