@@ -129,6 +129,7 @@ func (t *BasicChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, er
 	if c != nil {
 		curIndex := t.getCurTableIndex()
 		return &splitter.RangeInfo{
+			ID:         c.ID,
 			ChunkRange: c,
 			TableIndex: curIndex,
 			IndexID:    t.getCurTableIndexID(),
@@ -147,6 +148,7 @@ func (t *BasicChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, er
 	}
 	curIndex := t.getCurTableIndex()
 	return &splitter.RangeInfo{
+		ID:         c.ID,
 		ChunkRange: c,
 		TableIndex: curIndex,
 		IndexID:    t.getCurTableIndexID(),

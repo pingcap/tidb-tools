@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"os"
 	"sync"
 	"testing"
 	"time"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 )
 
 func TestClient(t *testing.T) {
@@ -32,6 +34,9 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 		wg.Add(1)
 		go func(i_ int) {
 			node := &Node{
+				ChunkRange: &chunk.Range{
+					ID: i_,
+				},
 				BucketID: i_,
 				State:    SuccessState,
 			}
@@ -44,6 +49,7 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 		}(i)
 	}
 	wg.Wait()
+	defer os.Remove("TestSaveChunk")
 	id, err = checker.SaveChunk(ctx, "TestSaveChunk")
 	c.Assert(err, IsNil)
 	c.Assert(id, Equals, 9999)
@@ -58,12 +64,17 @@ func (cp *testCheckpointSuit) TestLoadChunk(c *C) {
 	for i := 1; i < rounds; i++ {
 		wg.Add(1)
 		go func(i int) {
-			node := &Node{}
+			node := &Node{
+				ChunkRange: &chunk.Range{
+					ID: i,
+				},
+			}
 			checker.Insert(node)
 			wg.Done()
 		}(i)
 	}
 	wg.Wait()
+	defer os.Remove("TestLoadChunk")
 	id, err := checker.SaveChunk(ctx, "TestLoadChunk")
 	c.Assert(err, IsNil)
 	node, err := checker.LoadChunk("TestLoadChunk")

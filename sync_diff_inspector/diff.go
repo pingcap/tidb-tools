@@ -115,6 +115,9 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 	setTiDBCfg()
 
 	df.downstream, df.upstream, err = source.NewSources(ctx, cfg)
+	if err != nil {
+		return errors.Trace(err)
+	}
 
 	df.workSource = df.pickSource(ctx)
 
@@ -273,7 +276,11 @@ func (df *Diff) handleCheckpoints(ctx context.Context) {
 	// a background goroutine which will insert the verified chunk,
 	// and periodically save checkpoint
 	df.wg.Add(1)
-	defer df.wg.Done()
+	log.Debug("start handleCheckpoint goroutine")
+	defer func() {
+		log.Debug("close handleCheckpoint goroutine")
+		df.wg.Done()
+	}()
 	for {
 		select {
 		case <-ctx.Done():
@@ -297,9 +304,13 @@ func (df *Diff) handleCheckpoints(ctx context.Context) {
 
 func (df *Diff) handleChunks(ctx context.Context) {
 	df.wg.Add(1)
-	defer df.wg.Done()
+	log.Debug("start handleChunks goroutine")
+	defer func() {
+		log.Debug("close handleChunks goroutine")
+		df.wg.Done()
+	}()
 	// TODO use a meaningfull count
-	pool := utils.NewWorkerPool(4, "consumer")
+	pool := utils.NewWorkerPool(64, "consumer")
 	for {
 		select {
 		case <-ctx.Done():
@@ -327,6 +338,7 @@ func (df *Diff) handleChunks(ctx context.Context) {
 func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (bool, error) {
 	isEqual, count, err := df.compareChecksumAndGetCount(ctx, rangeInfo)
 	if err != nil {
+		log.Warn("compute checksum error", zap.Int("chunk id", rangeInfo.ID))
 		return false, errors.Trace(err)
 	}
 	log.Info("count size",
@@ -456,9 +468,11 @@ func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *spli
 	close(checkSumCh)
 
 	if crc1Info.Err != nil {
+		log.Warn("checksum fail")
 		return false, -1, errors.Trace(crc1Info.Err)
 	}
 	if crc2Info.Err != nil {
+		log.Warn("checksum fail")
 		return false, -1, errors.Trace(crc2Info.Err)
 
 	}
@@ -590,8 +604,11 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) 
 // WriteSQLs write sqls to file
 func (df *Diff) writeSQLs(ctx context.Context) {
 	df.wg.Add(1)
-	defer df.wg.Done()
-
+	log.Info("start writeSQLs goroutine")
+	defer func() {
+		log.Info("close writeSQLs goroutine")
+		df.wg.Done()
+	}()
 	for {
 		select {
 		case <-ctx.Done():
