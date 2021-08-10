@@ -96,9 +96,6 @@ func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 }
 
 func (df *Diff) Close() {
-	// close sql channel
-	close(df.sqlCh)
-
 	if df.fixSQLFile != nil {
 		df.fixSQLFile.Close()
 	}
@@ -140,8 +137,12 @@ func (df *Diff) Equal(ctx context.Context) error {
 		return errors.Trace(err)
 	}
 	defer chunksIter.Close()
+	// TODO use a meaningfull count
+	pool := utils.NewWorkerPool(64, "consumer")
+	stopCh := make(chan struct{})
 
-	go df.handleChunks(ctx)
+	go df.handleCheckpoints(ctx, stopCh)
+	go df.writeSQLs(ctx)
 
 	for {
 		c, err := chunksIter.Next(ctx)
@@ -151,18 +152,26 @@ func (df *Diff) Equal(ctx context.Context) error {
 		if c == nil {
 			// finish read the tables
 			// if the chunksIter is done, close the chunkCh
-			close(df.chunkCh)
+			//close(df.chunkCh)
 			break
 		}
 
-		select {
-		case <-ctx.Done():
-			log.Info("Stop generate chunks by user canceled")
-		// Produce chunk
-		case df.chunkCh <- c:
-		}
+		pool.Apply(func() {
+			res, err := df.consume(ctx, c)
+			if err != nil {
+				// TODO: catch error
+			}
+			// TODO: handle res
+			if res {
+
+			}
+		})
 	}
 
+	pool.WaitFinished()
+	stopCh <- struct{}{}
+	// close the sql channel
+	close(df.sqlCh)
 	df.wg.Wait()
 	// release source
 	// TODO: close by main?
@@ -302,47 +311,6 @@ func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
 			return
 		case <-time.After(10 * time.Second):
 			flush()
-		}
-	}
-}
-
-func (df *Diff) handleChunks(ctx context.Context) {
-	df.wg.Add(1)
-	log.Debug("start handleChunks goroutine")
-	// TODO use a meaningfull count
-	pool := utils.NewWorkerPool(64, "consumer")
-	stopCh := make(chan struct{})
-	defer func() {
-		pool.WaitFinished()
-		stopCh <- struct{}{}
-		stopCh <- struct{}{}
-		log.Debug("close handleChunks goroutine")
-		df.wg.Done()
-	}()
-
-	go df.handleCheckpoints(ctx, stopCh)
-	go df.writeSQLs(ctx, stopCh)
-
-	for {
-		select {
-		case <-ctx.Done():
-			log.Info("Stop consumer chunks by user canceled")
-			return
-			// TODO: close worker gracefully
-		case c, ok := <-df.chunkCh:
-			if !ok && c == nil {
-				return
-			}
-			pool.Apply(func() {
-				res, err := df.consume(ctx, c)
-				if err != nil {
-					// TODO: catch error
-				}
-				// TODO: handle res
-				if res {
-
-				}
-			})
 		}
 	}
 }
@@ -614,7 +582,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) 
 }
 
 // WriteSQLs write sqls to file
-func (df *Diff) writeSQLs(ctx context.Context, stopCh chan struct{}) {
+func (df *Diff) writeSQLs(ctx context.Context) {
 	df.wg.Add(1)
 	log.Info("start writeSQLs goroutine")
 	defer func() {
@@ -624,8 +592,6 @@ func (df *Diff) writeSQLs(ctx context.Context, stopCh chan struct{}) {
 	for {
 		select {
 		case <-ctx.Done():
-			return
-		case <-stopCh:
 			return
 		case dml, ok := <-df.sqlCh:
 			if !ok {
