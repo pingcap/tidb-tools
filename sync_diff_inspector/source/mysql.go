@@ -16,10 +16,11 @@ package source
 import (
 	"context"
 	"database/sql"
-
 	"github.com/pingcap/errors"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 )
 
 type MySQLSource struct {
@@ -27,28 +28,38 @@ type MySQLSource struct {
 }
 
 func (s *MySQLSource) GetTableAnalyzer() TableAnalyzer {
-	return &MySQLTableAnalyzer{s.dbConn}
+	return &MySQLTableAnalyzer{s.sourceTableMap}
 }
 
 type MySQLTableAnalyzer struct {
-	dbConn *sql.DB
+	sourceTableMap map[string]*common.SourceTable
 }
 
 func (a *MySQLTableAnalyzer) AnalyzeSplitter(ctx context.Context, table *common.TableDiff, startRange *splitter.RangeInfo) (splitter.ChunkIterator, error) {
 	chunkSize := 1000
+	uniqueID := utils.UniqueID(table.Schema, table.Table)
+	dbConn := a.sourceTableMap[uniqueID].DBConn
+	originTable := a.sourceTableMap[uniqueID].OriginTable
+	originSchema := a.sourceTableMap[uniqueID].OriginSchema
+	table.Schema = originSchema
+	table.Table = originTable
 	// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
-	randIter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, table, a.dbConn, chunkSize, startRange)
+	randIter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, table, dbConn, chunkSize, startRange)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	return randIter, nil
 }
 
-func NewMySQLSource(ctx context.Context, tableDiffs []*common.TableDiff, dbConn *sql.DB) (Source, error) {
+func NewMySQLSource(ctx context.Context, tableDiffs []*common.TableDiff, tableRouter *router.Table, dbConn *sql.DB) (Source, error) {
+	sourceTableMap, err := getSourceMap(ctx, tableDiffs, tableRouter, dbConn)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
 	ts := &MySQLSource{
 		BasicSource{
-			tableDiffs: tableDiffs,
-			dbConn:     dbConn,
+			sourceTableMap: sourceTableMap,
+			tableDiffs:     tableDiffs,
 		},
 	}
 	return ts, nil

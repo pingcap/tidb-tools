@@ -14,16 +14,24 @@
 package common
 
 import (
+	"database/sql"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 )
 
+type SourceTable struct {
+	OriginTable  string
+	OriginSchema string
+	DBConn       *sql.DB
+}
+
 // TableDiff saves config for diff table
 type TableDiff struct {
-	InstanceID string           `json:"instance-id"`
-	Schema     string           `json:"schema"`
-	Table      string           `json:"table"`
-	Info       *model.TableInfo `json:"info"`
+	Schema string `json:"schema"`
+
+	Table string `json:"table"`
+
+	Info *model.TableInfo `json:"info"`
 
 	// columns be ignored
 	IgnoreColumns []string `json:"-"`
@@ -48,11 +56,7 @@ type TableDiff struct {
 
 	// tableMap record the map relationship of upstream tables and downstream table
 	// target table instance => source table instances
-	TableMaps map[config.TableInstance][]config.TableInstance `json:"table-map"`
+	TableMaps map[string][]config.TableInstance `json:"table-map"`
 
 	Collation string `json:"collation"`
-
-	TableRowsQuery string
-
-	TableOrderKeyCols []*model.ColumnInfo
 }

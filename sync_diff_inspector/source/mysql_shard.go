@@ -18,6 +18,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/pingcap/parser/model"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -33,7 +35,7 @@ import (
 type MySQLSources struct {
 	tableDiffs []*common.TableDiff
 
-	sourceDBs map[string]*sql.DB
+	sourceTablesMap map[string][]*common.SourceTable
 }
 
 func (s *MySQLSources) GetTableAnalyzer() TableAnalyzer {
@@ -47,8 +49,10 @@ func (s *MySQLSources) GetRangeIterator(ctx context.Context, r *splitter.RangeIn
 }
 
 func (s *MySQLSources) Close() {
-	for _, db := range s.sourceDBs {
-		db.Close()
+	for _, t := range s.sourceTablesMap {
+		for _, db := range t {
+			db.DBConn.Close()
+		}
 	}
 }
 
@@ -57,16 +61,20 @@ func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitte
 	table := s.tableDiffs[tableRange.GetTableIndex()]
 	chunk := tableRange.GetChunk()
 
-	infoCh := make(chan *ChecksumInfo, len(s.sourceDBs))
-	for _, sourceDB := range s.sourceDBs {
-		go func(sourceDB *sql.DB) {
-			count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, sourceDB, table.Schema, table.Table, table.Info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
+	infoCh := make(chan *ChecksumInfo, len(s.sourceTablesMap))
+	matchSources, ok := s.sourceTablesMap[utils.UniqueID(table.Schema, table.Table)]
+	if !ok {
+		log.Fatal("unreachable, no match source tables in mysql shard source.")
+	}
+	for _, ms := range matchSources {
+		go func(ms *common.SourceTable) {
+			count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
 			infoCh <- &ChecksumInfo{
 				Checksum: checksum,
 				Count:    count,
 				Err:      err,
 			}
-		}(sourceDB)
+		}(ms)
 	}
 	defer close(infoCh)
 
@@ -76,7 +84,7 @@ func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitte
 		totalChecksum int64
 	)
 
-	for i := 0; i < len(s.sourceDBs); i++ {
+	for i := 0; i < len(matchSources); i++ {
 		info := <-infoCh
 		// catch the first error
 		if err == nil && info.Err != nil {
@@ -118,11 +126,20 @@ func (s *MySQLSources) GetRowsIterator(ctx context.Context, tableRange *splitter
 	chunk := tableRange.GetChunk()
 	args := utils.StringsToInterfaces(chunk.Args)
 
-	sourceRows := make(map[string]*sql.Rows)
+	sourceRows := make(map[int]*sql.Rows)
 
-	for i, db := range s.sourceDBs {
-		query := fmt.Sprintf(s.tableDiffs[tableRange.GetTableIndex()].TableRowsQuery, chunk.Where)
-		rows, err := db.QueryContext(ctx, query, args...)
+	table := s.tableDiffs[tableRange.GetTableIndex()]
+	matchSources, ok := s.sourceTablesMap[utils.UniqueID(table.Schema, table.Table)]
+	if !ok {
+		log.Fatal("unreachable, no match source tables in mysql shard source GetRowsIterator.")
+	}
+
+	var rowsQuery string
+	var orderKeyCols []*model.ColumnInfo
+	for i, ms := range matchSources {
+		rowsQuery, orderKeyCols = utils.GetTableRowsQueryFormat(ms.OriginSchema, ms.OriginTable, table.Info, table.Collation)
+		query := fmt.Sprintf(rowsQuery, chunk.Where)
+		rows, err := ms.DBConn.QueryContext(ctx, query, args...)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -131,7 +148,7 @@ func (s *MySQLSources) GetRowsIterator(ctx context.Context, tableRange *splitter
 
 	sourceRowDatas := &common.RowDatas{
 		Rows:         make([]common.RowData, 0, len(sourceRows)),
-		OrderKeyCols: s.tableDiffs[tableRange.GetTableIndex()].TableOrderKeyCols,
+		OrderKeyCols: orderKeyCols,
 	}
 	heap.Init(sourceRowDatas)
 	// first push one row from all the sources into heap
@@ -160,14 +177,16 @@ func (s *MySQLSources) GetRowsIterator(ctx context.Context, tableRange *splitter
 
 func (s *MySQLSources) GetDB() *sql.DB {
 	// return any of them is ok
-	for _, db := range s.sourceDBs {
-		return db
+	for _, st := range s.sourceTablesMap {
+		for _, db := range st {
+			return db.DBConn
+		}
 	}
 	return nil
 }
 
 type MultiSourceRowsIterator struct {
-	sourceRows     map[string]*sql.Rows
+	sourceRows     map[int]*sql.Rows
 	sourceRowDatas *common.RowDatas
 }
 
@@ -211,14 +230,62 @@ func (ms *MultiSourceRowsIterator) Close() {
 	}
 }
 
-func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, dbs []*config.DBConfig) (Source, error) {
-	sourceDBs := make(map[string]*sql.DB)
-	for _, db := range dbs {
-		sourceDBs[db.InstanceID] = db.Conn
+func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, tableRouter *router.Table, dbs []*config.DBConfig) (Source, error) {
+	sourceTablesMap := make(map[string][]*common.SourceTable)
+
+	if tableRouter != nil {
+		// we should get the real table name
+		// and real table row query from source.
+		uniqueMap := make(map[string]struct{})
+		for _, tableDiff := range tableDiffs {
+			uniqueMap[utils.UniqueID(tableDiff.Schema, tableDiff.Table)] = struct{}{}
+		}
+
+		sourceDBs := make(map[string]*sql.DB)
+		// instance -> db -> table
+		allTablesMap := make(map[string]map[string]map[string]interface{})
+		for _, source := range dbs {
+			sourceDBs[source.InstanceID] = source.Conn
+			allTablesMap[source.InstanceID] = make(map[string]map[string]interface{})
+			sourceSchemas, err := dbutil.GetSchemas(ctx, source.Conn)
+			if err != nil {
+				return nil, errors.Annotatef(err, "get schemas from %s", source.InstanceID)
+			}
+
+			for _, schema := range sourceSchemas {
+				allTables, err := dbutil.GetTables(ctx, source.Conn, schema)
+				if err != nil {
+					return nil, errors.Annotatef(err, "get tables from %s.%s", source.InstanceID, schema)
+				}
+				allTablesMap[source.InstanceID][schema] = utils.SliceToMap(allTables)
+			}
+		}
+		for instanceID, allSchemas := range allTablesMap {
+			for schema, allTables := range allSchemas {
+				for table := range allTables {
+					targetSchema, targetTable, err := tableRouter.Route(schema, table)
+					if err != nil {
+						return nil, errors.Errorf("get route result for %s.%s.%s failed, error %v", instanceID, schema, table, err)
+					}
+					uniqueId := utils.UniqueID(targetSchema, targetTable)
+					if _, ok := uniqueMap[uniqueId]; !ok {
+						sourceTablesMap[uniqueId] = make([]*common.SourceTable, 0)
+					}
+					if _, ok := uniqueMap[uniqueId]; ok {
+						sourceTablesMap[uniqueId] = append(sourceTablesMap[uniqueId], &common.SourceTable{
+							OriginSchema: schema,
+							OriginTable:  table,
+							DBConn:       sourceDBs[instanceID],
+						})
+					}
+				}
+			}
+		}
 	}
+
 	mss := &MySQLSources{
-		tableDiffs: tableDiffs,
-		sourceDBs:  sourceDBs,
+		tableDiffs:      tableDiffs,
+		sourceTablesMap: sourceTablesMap,
 	}
 	return mss, nil
 }
