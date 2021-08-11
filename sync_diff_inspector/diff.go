@@ -96,9 +96,6 @@ func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 }
 
 func (df *Diff) Close() {
-	// close sql channel
-	close(df.sqlCh)
-
 	if df.fixSQLFile != nil {
 		df.fixSQLFile.Close()
 	}
@@ -140,10 +137,11 @@ func (df *Diff) Equal(ctx context.Context) error {
 		return errors.Trace(err)
 	}
 	defer chunksIter.Close()
+	// TODO use a meaningfull count
+	pool := utils.NewWorkerPool(64, "consumer")
+	stopCh := make(chan struct{})
 
-	go df.handleChunks(ctx)
-
-	go df.handleCheckpoints(ctx)
+	go df.handleCheckpoints(ctx, stopCh)
 	go df.writeSQLs(ctx)
 
 	for {
@@ -154,21 +152,30 @@ func (df *Diff) Equal(ctx context.Context) error {
 		if c == nil {
 			// finish read the tables
 			// if the chunksIter is done, close the chunkCh
-			close(df.chunkCh)
+			//close(df.chunkCh)
 			break
 		}
 
-		select {
-		case <-ctx.Done():
-			log.Info("Stop generate chunks by user canceled")
-		// Produce chunk
-		case df.chunkCh <- c:
-		}
+		pool.Apply(func() {
+			res, err := df.consume(ctx, c)
+			if err != nil {
+				// TODO: catch error
+			}
+			// TODO: handle res
+			if res {
+
+			}
+		})
 	}
 
-	// release source
-	df.Close()
+	pool.WaitFinished()
+	stopCh <- struct{}{}
+	// close the sql channel
+	close(df.sqlCh)
 	df.wg.Wait()
+	// release source
+	// TODO: close by main?
+	df.Close()
 	return nil
 }
 
@@ -271,7 +278,7 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 	return df.workSource.GetRangeIterator(ctx, startRange, df.workSource.GetTableAnalyzer())
 }
 
-func (df *Diff) handleCheckpoints(ctx context.Context) {
+func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
 	// a background goroutine which will insert the verified chunk,
 	// and periodically save checkpoint
 	df.wg.Add(1)
@@ -280,56 +287,30 @@ func (df *Diff) handleCheckpoints(ctx context.Context) {
 		log.Debug("close handleCheckpoint goroutine")
 		df.wg.Done()
 	}()
+	flush := func() {
+		if !ioutil2.FileExists(df.configHash) {
+			err := os.Mkdir(df.configHash, checkpoints.LocalFilePerm)
+			if err != nil {
+				log.Error("fail to create checkpoint directory", zap.String("config hash", df.configHash))
+			}
+		}
+		_, err := df.cp.SaveChunk(ctx, filepath.Join(df.configHash, checkpointFile))
+		if err != nil {
+			log.Warn("fail to save the chunk", zap.Error(err))
+			// maybe we should panic, because SaveChunk method should not failed.
+		}
+	}
+	defer flush()
 	for {
 		select {
 		case <-ctx.Done():
 			log.Info("Stop do checkpoint")
 			return
-		case <-time.After(10 * time.Second):
-			if !ioutil2.FileExists(df.configHash) {
-				err := os.Mkdir(df.configHash, checkpoints.LocalFilePerm)
-				if err != nil {
-					log.Error("fail to create checkpoint directory", zap.String("config hash", df.configHash))
-				}
-			}
-			_, err := df.cp.SaveChunk(ctx, filepath.Join(df.configHash, checkpointFile))
-			if err != nil {
-				log.Warn("fail to save the chunk", zap.Error(err))
-				// maybe we should panic, because SaveChunk method should not failed.
-			}
-		}
-	}
-}
-
-func (df *Diff) handleChunks(ctx context.Context) {
-	df.wg.Add(1)
-	log.Debug("start handleChunks goroutine")
-	defer func() {
-		log.Debug("close handleChunks goroutine")
-		df.wg.Done()
-	}()
-	// TODO use a meaningfull count
-	pool := utils.NewWorkerPool(64, "consumer")
-	for {
-		select {
-		case <-ctx.Done():
-			log.Info("Stop consumer chunks by user canceled")
+		case <-stopCh:
+			log.Info("Stop do checkpoint")
 			return
-			// TODO: close worker gracefully
-		case c, ok := <-df.chunkCh:
-			if !ok {
-				return
-			}
-			pool.Apply(func() {
-				res, err := df.consume(ctx, c)
-				if err != nil {
-					// TODO: catch error
-				}
-				// TODO: handle res
-				if res {
-
-				}
-			})
+		case <-time.After(10 * time.Second):
+			flush()
 		}
 	}
 }

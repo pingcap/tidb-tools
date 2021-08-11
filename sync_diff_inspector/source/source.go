@@ -130,7 +130,7 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
-	return upstream, downstream, nil
+	return downstream, upstream, nil
 }
 
 func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, dbs ...*config.DBConfig) (Source, error) {
