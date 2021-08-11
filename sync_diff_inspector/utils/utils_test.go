@@ -107,7 +107,7 @@ func (*testUtilsSuite) TestGetApproximateMidBySize(c *C) {
 	bounds, err := GetApproximateMidBySize(ctx, conn, "test", "test_utils", tableInfo, "a>-1", utils.StringsToInterfaces([]string{}), int64(dataCount))
 	c.Assert(err, IsNil)
 	c.Assert(len(bounds), Equals, 2)
-	c.Assert(bounds[0], Equals, "5000")
+	c.Assert(bounds["a"], Equals, "5000")
 }
 
 func (*testUtilsSuite) TestGenerateSQLs(c *C) {
