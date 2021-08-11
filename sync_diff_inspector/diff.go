@@ -144,9 +144,9 @@ func (df *Diff) Equal(ctx context.Context) error {
 
 	defer func() {
 		pool.WaitFinished()
-		stopCh <- struct{}{}
 		// close the sql channel
 		close(df.sqlCh)
+		stopCh <- struct{}{}
 		df.wg.Wait()
 	}()
 
