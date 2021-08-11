@@ -203,6 +203,28 @@ func (c *Range) Copy() *Range {
 	return newChunk
 }
 
+func (c *Range) Clone() *Range {
+	newChunk := NewChunkRange()
+	for _, bound := range c.Bounds {
+		newChunk.addBound(&Bound{
+			Column:   bound.Column,
+			Lower:    bound.Lower,
+			Upper:    bound.Upper,
+			HasLower: bound.HasLower,
+			HasUpper: bound.HasUpper,
+		})
+	}
+	newChunk.ID = c.ID
+	newChunk.Type = c.Type
+	newChunk.Where = c.Where
+	copy(newChunk.Args, c.Args)
+	for i, v := range c.columnOffset {
+		newChunk.columnOffset[i] = v
+	}
+	newChunk.BucketID = c.BucketID
+	return newChunk
+}
+
 func (c *Range) CopyAndUpdate(column, lower, upper string, updateLower, updateUpper bool) *Range {
 	newChunk := c.Copy()
 	newChunk.Update(column, lower, upper, updateLower, updateUpper)
