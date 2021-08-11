@@ -465,6 +465,7 @@ func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *spli
 		return false, -1, errors.Trace(crc2Info.Err)
 
 	}
+	// TODO two counts are not necessary equal
 	if crc1Info.Count == crc2Info.Count && crc1Info.Checksum == crc2Info.Checksum {
 		return true, crc1Info.Count, nil
 	}
