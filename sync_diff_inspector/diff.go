@@ -360,7 +360,7 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 			zap.String("table", dbutil.TableName(tableDiff.Schema, tableDiff.Table)))
 		return nil, nil
 	}
-	log.Debug("index for BinGerate", zap.String("index", index.Name.O))
+	log.Debug("index for BinGenerate", zap.String("index", index.Name.O))
 	indexColumns := utils.GetColumnsFromIndex(index, tableDiff.Info)
 	if len(indexColumns) == 0 {
 		log.Warn("no index to split")

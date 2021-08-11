@@ -16,7 +16,6 @@ package common
 import (
 	"database/sql"
 	"github.com/pingcap/parser/model"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 )
 
 type SourceTable struct {
@@ -53,10 +52,6 @@ type TableDiff struct {
 
 	// ignore check table's data
 	IgnoreDataCheck bool `json:"-"`
-
-	// tableMap record the map relationship of upstream tables and downstream table
-	// target table instance => source table instances
-	TableMaps map[string][]config.TableInstance `json:"table-map"`
 
 	Collation string `json:"collation"`
 }
