@@ -103,10 +103,6 @@ func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitte
 	}
 }
 
-func (s *MySQLSources) GetTable(index int) *common.TableDiff {
-	return s.tableDiffs[index]
-}
-
 func (s *MySQLSources) GetTables() []*common.TableDiff {
 	return s.tableDiffs
 }

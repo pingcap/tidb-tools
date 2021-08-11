@@ -334,7 +334,7 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 		return tableRange, nil
 	}
 	// TODO Find great index
-	tableDiff := targetSource.GetTable(tableRange.GetTableIndex())
+	tableDiff := targetSource.GetTables()[tableRange.GetTableIndex()]
 	indices := dbutil.FindAllIndex(tableDiff.Info)
 
 	var (
@@ -506,7 +506,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 			}
 			break
 		}
-		_, orderKeyCols := dbutil.SelectUniqueOrderKey(df.workSource.GetTable(rangeInfo.GetTableIndex()).Info)
+		_, orderKeyCols := dbutil.SelectUniqueOrderKey(df.workSource.GetTables()[rangeInfo.GetTableIndex()].Info)
 		eq, cmp, err := utils.CompareData(lastUpstreamData, lastDownstreamData, orderKeyCols)
 		if err != nil {
 			return false, errors.Trace(err)

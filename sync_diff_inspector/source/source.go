@@ -79,8 +79,7 @@ type Source interface {
 	// GenerateFixSQL generates the fix sql with given type.
 	GenerateFixSQL(DMLType, map[string]*dbutil.ColumnData, int) string
 
-	// GetTable represents the tableDiff of given index.
-	GetTable(int) *common.TableDiff
+	// GetTables represents the tableDiffs.
 	GetTables() []*common.TableDiff
 
 	// GetDB represents the db connection.
