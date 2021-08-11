@@ -451,7 +451,7 @@ func GetApproximateMid(ctx context.Context, db *sql.DB, schema, table string, co
 	return midValues, nil
 }
 
-func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table string, tbInfo *model.TableInfo, limitRange string, args []interface{}, count int64) ([]string, error) {
+func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table string, tbInfo *model.TableInfo, limitRange string, args []interface{}, count int64) (map[string]string, error) {
 	/*
 		example
 		mysql> select i_id, i_im_id, i_name from item where i_id > 0 order by i_id, i_im_id limit 5000,1;
@@ -491,9 +491,9 @@ func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table stri
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	columnValues := make([]string, len(columns))
+	columnValues := make(map[string]string)
 	for i, column := range columns {
-		columnValues[i] = *column.(*string)
+		columnValues[columnNames[i][1:len(columnNames[i])-1]] = *column.(*string)
 	}
 	return columnValues, nil
 }

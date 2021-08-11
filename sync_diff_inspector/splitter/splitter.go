@@ -14,6 +14,8 @@
 package splitter
 
 import (
+	"fmt"
+
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 )
@@ -47,10 +49,17 @@ func (r *RangeInfo) GetChunk() *chunk.Range {
 func (r *RangeInfo) Copy() *RangeInfo {
 	return &RangeInfo{
 		ID:         r.ID,
-		ChunkRange: r.ChunkRange.Copy(),
+		ChunkRange: r.ChunkRange.Clone(),
 		TableIndex: r.TableIndex,
 		IndexID:    r.IndexID,
 	}
+}
+
+func (r *RangeInfo) Update(column, lower, upper string, updateLower, updateUpper bool, collation, limits string) {
+	r.ChunkRange.Update(column, lower, upper, updateLower, updateUpper)
+	conditions, args := r.ChunkRange.ToString(collation)
+	r.ChunkRange.Where = fmt.Sprintf("((%s) AND %s)", conditions, limits)
+	r.ChunkRange.Args = args
 }
 
 // GetTableIndex return the index of table diffs.

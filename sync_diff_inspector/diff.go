@@ -155,6 +155,7 @@ func (df *Diff) Equal(ctx context.Context) error {
 			//close(df.chunkCh)
 			break
 		}
+		log.Debug("generate chunk", zap.Int("chunk id", c.ID))
 
 		pool.Apply(func() {
 			res, err := df.consume(ctx, c)
@@ -326,10 +327,13 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 		zap.Int64("chunk size", count))
 	var state string
 	if !isEqual {
+		log.Debug("checksum failed", zap.Int("chunk id", rangeInfo.ID), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTable(rangeInfo.TableIndex).Table))
 		state = checkpoints.FailedState
 		// if the chunk's checksum differ, try to do binary check
 		if count > splitter.SplitThreshold {
+			log.Debug("count greater than threshold, start do bingenerate", zap.Int("chunk id", rangeInfo.ID), zap.Int64("chunk size", count))
 			rangeInfo, err = df.BinGenerate(ctx, df.workSource, rangeInfo, count)
+			log.Debug("bingenerate finished", zap.Reflect("chunk", rangeInfo.ChunkRange), zap.Int("chunk id", rangeInfo.ID))
 			if err != nil {
 				return false, errors.Trace(err)
 			}
@@ -340,6 +344,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 		}
 	} else {
 		// update chunk success state in summary
+		log.Debug("checksum success", zap.Int("chunk id", rangeInfo.ID), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTable(rangeInfo.TableIndex).Table))
 		state = checkpoints.SuccessState
 	}
 
@@ -391,13 +396,17 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 	chunkLimits, args := tableRange.ChunkRange.ToString(tableDiff.Collation)
 	limitRange := fmt.Sprintf("(%s) AND %s", chunkLimits, tableDiff.Range)
 	midValues, err := utils.GetApproximateMidBySize(ctx, targetSource.GetDB(), tableDiff.Schema, tableDiff.Table, tableDiff.Info, limitRange, utils.StringsToInterfaces(args), count)
+	log.Debug("mid values", zap.Reflect("mid values", midValues), zap.Reflect("indices", indexColumns), zap.Reflect("bounds", tableRange.ChunkRange.Bounds))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	for i, value := range midValues {
-		tableRange1.ChunkRange.Update(indexColumns[i].Name.O, "", value, false, true)
-		tableRange2.ChunkRange.Update(indexColumns[i].Name.O, value, "", true, false)
+	log.Debug("table ranges", zap.Reflect("original range", tableRange))
+	for i := range indexColumns {
+		log.Debug("update tableRange", zap.String("field", indexColumns[i].Name.O), zap.String("value", midValues[indexColumns[i].Name.O]))
+		tableRange1.Update(indexColumns[i].Name.O, "", midValues[indexColumns[i].Name.O], false, true, tableDiff.Collation, tableDiff.Range)
+		tableRange2.Update(indexColumns[i].Name.O, midValues[indexColumns[i].Name.O], "", true, false, tableDiff.Collation, tableDiff.Range)
 	}
+	log.Debug("table ranges", zap.Reflect("tableRange 1", tableRange1), zap.Reflect("tableRange 2", tableRange2))
 	isEqual1, count1, err = df.compareChecksumAndGetCount(ctx, tableRange1)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -456,10 +465,11 @@ func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *spli
 		return false, -1, errors.Trace(crc2Info.Err)
 
 	}
+	// TODO two counts are not necessary equal
 	if crc1Info.Count == crc2Info.Count && crc1Info.Checksum == crc2Info.Checksum {
 		return true, crc1Info.Count, nil
 	}
-	return false, -1, nil
+	return false, crc1Info.Count, nil
 }
 
 func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) (bool, error) {
@@ -512,7 +522,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) 
 			break
 		}
 
-		if lastDownstreamData != nil {
+		if lastDownstreamData == nil {
 			// target lack some data, should insert the last source datas
 			for lastUpstreamData != nil {
 				sql := df.downstream.GenerateFixSQL(source.Replace, lastUpstreamData, rangeInfo.GetTableIndex())
