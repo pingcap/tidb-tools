@@ -80,6 +80,7 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 	if err != nil {
 		log.Fatal("fail to initialize diff process", zap.Error(err))
 	}
+	defer d.Close()
 
 	err = d.Equal(ctx)
 	if err != nil {
