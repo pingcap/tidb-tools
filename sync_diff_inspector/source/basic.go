@@ -162,7 +162,9 @@ func (t *BasicChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, er
 }
 
 func (t *BasicChunksIterator) Close() {
-	t.tableIter.Close()
+	if t.tableIter != nil {
+		t.tableIter.Close()
+	}
 }
 
 func (t *BasicChunksIterator) getCurTableIndex() int {
