@@ -44,7 +44,6 @@ func NewRandomIterator(ctx context.Context, table *common.TableDiff, dbConn *sql
 
 func NewRandomIteratorWithCheckpoint(ctx context.Context, table *common.TableDiff, dbConn *sql.DB, chunkSize int, startRange *RangeInfo) (*RandomIterator, error) {
 	// get the chunk count by data count and chunk size
-
 	var splitFieldArr []string
 	if len(table.Fields) != 0 {
 		splitFieldArr = strings.Split(table.Fields, ",")
@@ -99,7 +98,7 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, table *common.TableDif
 		return nil, errors.Trace(err)
 	}
 
-	chunk.InitChunks(chunks, chunk.Random, 0, 0, table.Collation, table.Range)
+	chunk.InitChunks(chunks, chunk.Random, startRange.GetChunk().ID+1, 0, table.Collation, table.Range)
 
 	return &RandomIterator{
 		table:     table,

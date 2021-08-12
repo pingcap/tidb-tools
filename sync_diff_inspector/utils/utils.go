@@ -357,7 +357,7 @@ func MinLenInSlices(slices [][]string) int {
 }
 
 // SliceToMap converts slice to map
-func sliceToMap(slice []string) map[string]interface{} {
+func SliceToMap(slice []string) map[string]interface{} {
 	sMap := make(map[string]interface{})
 	for _, str := range slice {
 		sMap[str] = struct{}{}
@@ -380,7 +380,7 @@ func GetAllTables(ctx context.Context, cfg *config.Config) (map[string]map[strin
 		if err != nil {
 			return nil, errors.Annotatef(err, "get tables from %s.%s", cfg.TargetDBCfg.InstanceID, schema)
 		}
-		allTablesMap[cfg.TargetDBCfg.InstanceID][schema] = sliceToMap(allTables)
+		allTablesMap[cfg.TargetDBCfg.InstanceID][schema] = SliceToMap(allTables)
 	}
 
 	for _, source := range cfg.SourceDBCfg {
@@ -395,7 +395,7 @@ func GetAllTables(ctx context.Context, cfg *config.Config) (map[string]map[strin
 			if err != nil {
 				return nil, errors.Annotatef(err, "get tables from %s.%s", source.InstanceID, schema)
 			}
-			allTablesMap[source.InstanceID][schema] = sliceToMap(allTables)
+			allTablesMap[source.InstanceID][schema] = SliceToMap(allTables)
 		}
 	}
 
@@ -543,7 +543,7 @@ func IgnoreColumns(tableInfo *model.TableInfo, columns []string) *model.TableInf
 		return tableInfo
 	}
 
-	removeColMap := sliceToMap(columns)
+	removeColMap := SliceToMap(columns)
 	for i := 0; i < len(tableInfo.Indices); i++ {
 		index := tableInfo.Indices[i]
 		for j := 0; j < len(index.Columns); j++ {
@@ -583,4 +583,8 @@ func IgnoreColumns(tableInfo *model.TableInfo, columns []string) *model.TableInf
 	}
 
 	return tableInfo
+}
+
+func UniqueID(schema string, table string) string {
+	return schema + ":" + table
 }
