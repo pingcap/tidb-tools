@@ -72,6 +72,7 @@ func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, tableRou
 		BasicSource{
 			tableDiffs:     tableDiffs,
 			sourceTableMap: sourceMap,
+			dbConn: dbConn,
 		},
 	}
 	return ts, nil
