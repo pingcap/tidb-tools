@@ -513,7 +513,6 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 	iter.GetIndexID()
 
 	rangeInfo := &RangeInfo{
-		ID:         0,
 		ChunkRange: chunk,
 		TableIndex: 0,
 		IndexID:    iter.GetIndexID(),

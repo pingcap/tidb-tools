@@ -193,7 +193,6 @@ func (t *BasicChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, er
 		c.ID = t.currentID
 		t.currentID++
 		return &splitter.RangeInfo{
-			ID:         c.ID,
 			ChunkRange: c,
 			TableIndex: curIndex,
 			IndexID:    t.getCurTableIndexID(),
@@ -214,7 +213,6 @@ func (t *BasicChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, er
 	c.ID = t.currentID
 	t.currentID++
 	return &splitter.RangeInfo{
-		ID:         c.ID,
 		ChunkRange: c,
 		TableIndex: curIndex,
 		IndexID:    t.getCurTableIndexID(),
