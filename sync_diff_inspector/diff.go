@@ -416,11 +416,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 	isEqual, count, err := df.compareChecksumAndGetCount(ctx, rangeInfo)
 	if err != nil {
 		log.Warn("compute checksum error", zap.Int("chunk id", rangeInfo.ChunkRange.ID))
-		return false, 0, 0, 0, errors.Trace(err)
 	}
-	log.Info("count size",
-		zap.Int("chunk id", rangeInfo.ChunkRange.ID),
-		zap.Int64("chunk size", count))
 	var state string
 	dml := &ChunkDML{}
 	rowsAdd, rowsDelete := 0, 0
@@ -443,11 +439,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 		}
 	} else {
 		// update chunk success state in summary
-		log.Debug("checksum success", zap.Int("chunk id", rangeInfo.ChunkRange.ID), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTables()[rangeInfo.TableIndex].Table))
 		state = checkpoints.SuccessState
-	}
-
-	dml.node = rangeInfo.ToNode()
 	dml.node.State = state
 	df.sqlCh <- dml
 	return isEqual, rowsAdd, rowsDelete, count, nil
