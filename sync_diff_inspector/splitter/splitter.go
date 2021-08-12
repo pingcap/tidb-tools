@@ -35,7 +35,6 @@ type ChunkIterator interface {
 // RangeInfo represents the unit of a process chunk.
 // It's the only entrance of checkpoint.
 type RangeInfo struct {
-	ID         int          `json:"id"`
 	ChunkRange *chunk.Range `json:"chunk-range"`
 	TableIndex int          `json:"table-index"`
 	// for bucket checkpoint
@@ -48,7 +47,6 @@ func (r *RangeInfo) GetChunk() *chunk.Range {
 
 func (r *RangeInfo) Copy() *RangeInfo {
 	return &RangeInfo{
-		ID:         r.ID,
 		ChunkRange: r.ChunkRange.Clone(),
 		TableIndex: r.TableIndex,
 		IndexID:    r.IndexID,
@@ -81,7 +79,6 @@ func (r *RangeInfo) ToNode() *checkpoints.Node {
 
 func FromNode(n *checkpoints.Node) *RangeInfo {
 	return &RangeInfo{
-		ID:         n.GetID(),
 		ChunkRange: n.ChunkRange,
 		TableIndex: n.TableIndex,
 		IndexID:    n.IndexID,
