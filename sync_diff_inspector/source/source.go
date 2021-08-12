@@ -79,8 +79,7 @@ type Source interface {
 	// GenerateFixSQL generates the fix sql with given type.
 	GenerateFixSQL(DMLType, map[string]*dbutil.ColumnData, int) string
 
-	// GetTable represents the tableDiff of given index.
-	GetTable(int) *common.TableDiff
+	// GetTables represents the tableDiffs.
 	GetTables() []*common.TableDiff
 
 	// GetDB represents the db connection.
@@ -95,7 +94,7 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
-	tablesToBeCheck, tableMaps, err := initTables(ctx, cfg)
+	tablesToBeCheck, _, err := initTables(ctx, cfg)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
@@ -103,37 +102,36 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 	tableDiffs := make([]*common.TableDiff, 0, len(tablesToBeCheck))
 	for _, tables := range tablesToBeCheck {
 		for _, tableConfig := range tables {
-			tableRowsQuery, tableOrderKeyCols := utils.GetTableRowsQueryFormat(tableConfig.Schema, tableConfig.Table, tableConfig.TargetTableInfo, tableConfig.Collation)
 			tableDiffs = append(tableDiffs, &common.TableDiff{
-				InstanceID: tableConfig.InstanceID,
-				Schema:     tableConfig.Schema,
-				Table:      tableConfig.Table,
-				Info:       utils.IgnoreColumns(tableConfig.TargetTableInfo, tableConfig.IgnoreColumns),
+				Schema: tableConfig.Schema,
+				Table:  tableConfig.Table,
+				Info:   utils.IgnoreColumns(tableConfig.TargetTableInfo, tableConfig.IgnoreColumns),
 				// TODO: field `IgnoreColumns` can be deleted.
-				IgnoreColumns:     tableConfig.IgnoreColumns,
-				Fields:            tableConfig.Fields,
-				Range:             tableConfig.Range,
-				Collation:         tableConfig.Collation,
-				TableOrderKeyCols: tableOrderKeyCols,
-				TableRowsQuery:    tableRowsQuery,
-				TableMaps:         tableMaps,
+				IgnoreColumns: tableConfig.IgnoreColumns,
+				Fields:        tableConfig.Fields,
+				Range:         tableConfig.Range,
+				Collation:     tableConfig.Collation,
 			})
 		}
 	}
 
-	upstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.SourceDBCfg...)
+	tableRouter, err := router.NewTableRouter(false, cfg.TableRules)
+	if err != nil {
+		return nil, nil, errors.Trace(err)
+	}
+	upstream, err = buildSourceFromCfg(ctx, tableDiffs, tableRouter, cfg.SourceDBCfg...)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
 
-	downstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.TargetDBCfg)
+	downstream, err = buildSourceFromCfg(ctx, tableDiffs, nil, cfg.TargetDBCfg)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
 	return downstream, upstream, nil
 }
 
-func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, dbs ...*config.DBConfig) (Source, error) {
+func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, tableRouter *router.Table, dbs ...*config.DBConfig) (Source, error) {
 	if len(dbs) < 1 {
 		return nil, errors.Errorf("no db config detected")
 	}
@@ -145,17 +143,17 @@ func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, dbs
 	if len(dbs) == 1 {
 		if ok {
 			// TiDB
-			return NewTiDBSource(ctx, tableDiffs, dbs[0].Conn)
+			return NewTiDBSource(ctx, tableDiffs, tableRouter, dbs[0].Conn)
 		} else {
 			// Single Mysql
-			return NewMySQLSource(ctx, tableDiffs, dbs[0].Conn)
+			return NewMySQLSource(ctx, tableDiffs, tableRouter, dbs[0].Conn)
 		}
 	} else {
 		if ok {
 			// TiDB
 			log.Fatal("Don't support check table in multiple tidb instance, please specify one tidb instance.")
 		} else {
-			return NewMySQLSources(ctx, tableDiffs, dbs)
+			return NewMySQLSources(ctx, tableDiffs, tableRouter, dbs)
 		}
 	}
 	// unreachable

@@ -212,33 +212,10 @@ func (df *Diff) GetCheckConfig() ([]*checkpoints.CheckConfig, error) {
 	tableDiffs := df.workSource.GetTables()
 	checkConfigs := make([]*checkpoints.CheckConfig, len(tableDiffs))
 	for i, tableDiff := range tableDiffs {
-		sourceTables := make([]config.TableInstance, 0)
-		var targetTable config.TableInstance
-		instance := config.TableInstance{
-			InstanceID: tableDiff.InstanceID,
-			Schema:     tableDiff.Schema,
-			Table:      tableDiff.Table,
-		}
-		if df.workSource == df.upstream {
-			for targetInstace, sourceInstances := range tableDiff.TableMaps {
-				if len(sourceInstances) != 1 {
-					return nil, errors.NotSupportedf("we do not support using shard mysql as chunk splitter")
-				}
-				if sourceInstances[0] == instance {
-					sourceTables = sourceInstances
-					targetTable = targetInstace
-					break
-				}
-			}
-		} else {
-			targetTable = instance
-			sourceTables = tableDiff.TableMaps[targetTable]
-		}
 		checkConfigs[i] = &checkpoints.CheckConfig{
-			SourceTables: sourceTables,
-			TargetTables: targetTable,
-			Fields:       tableDiff.Fields,
-			Range:        tableDiff.Range,
+			Table:  utils.UniqueID(tableDiff.Schema, tableDiff.Table),
+			Fields: tableDiff.Fields,
+			Range:  tableDiff.Range,
 			// TODO get snapshot
 			Snapshot:  "",
 			Collation: tableDiff.Collation,
@@ -357,7 +334,7 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 		return tableRange, nil
 	}
 	// TODO Find great index
-	tableDiff := targetSource.GetTable(tableRange.GetTableIndex())
+	tableDiff := targetSource.GetTables()[tableRange.GetTableIndex()]
 	indices := dbutil.FindAllIndex(tableDiff.Info)
 
 	var (
@@ -383,7 +360,7 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 			zap.String("table", dbutil.TableName(tableDiff.Schema, tableDiff.Table)))
 		return nil, nil
 	}
-	log.Debug("index for BinGerate", zap.String("index", index.Name.O))
+	log.Debug("index for BinGenerate", zap.String("index", index.Name.O))
 	indexColumns := utils.GetColumnsFromIndex(index, tableDiff.Info)
 	if len(indexColumns) == 0 {
 		log.Warn("no index to split")
@@ -529,8 +506,8 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 			}
 			break
 		}
-
-		eq, cmp, err := utils.CompareData(lastUpstreamData, lastDownstreamData, df.workSource.GetTable(rangeInfo.GetTableIndex()).TableOrderKeyCols)
+		_, orderKeyCols := dbutil.SelectUniqueOrderKey(df.workSource.GetTables()[rangeInfo.GetTableIndex()].Info)
+		eq, cmp, err := utils.CompareData(lastUpstreamData, lastDownstreamData, orderKeyCols)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
