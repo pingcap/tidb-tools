@@ -16,11 +16,9 @@ package source
 import (
 	"context"
 	"database/sql"
-	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
-
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"go.uber.org/zap"
@@ -31,25 +29,26 @@ type TiDBSource struct {
 }
 
 func (s *TiDBSource) GetTableAnalyzer() TableAnalyzer {
-	return &TiDBTableAnalyzer{s.sourceTableMap}
+	return &TiDBTableAnalyzer{
+		s.dbConn,
+		s.sourceTableMap,
+	}
 }
 
 type TiDBTableAnalyzer struct {
-	sourceTableMap map[string]*common.SourceTable
+	dbConn         *sql.DB
+	sourceTableMap map[string]*common.TableSource
 }
 
 func (a *TiDBTableAnalyzer) AnalyzeSplitter(ctx context.Context, table *common.TableDiff, startRange *splitter.RangeInfo) (splitter.ChunkIterator, error) {
 	chunkSize := 0
-	uniqueID := utils.UniqueID(table.Schema, table.Table)
-	dbConn := a.sourceTableMap[uniqueID].DBConn
-	originTable := a.sourceTableMap[uniqueID].OriginTable
-	originSchema := a.sourceTableMap[uniqueID].OriginSchema
+	originSchema, originTable := getOriginTable(a.sourceTableMap, table)
 	table.Schema = originSchema
 	table.Table = originTable
 	// if we decide to use bucket to split chunks
 	// we always use bucksIter even we load from checkpoint is not bucketNode
 	// TODO check whether we can use bucket for this table to split chunks.
-	bucketIter, err := splitter.NewBucketIteratorWithCheckpoint(ctx, table, dbConn, chunkSize, startRange)
+	bucketIter, err := splitter.NewBucketIteratorWithCheckpoint(ctx, table, a.dbConn, chunkSize, startRange)
 	if err == nil {
 		return bucketIter, nil
 	}
@@ -57,7 +56,7 @@ func (a *TiDBTableAnalyzer) AnalyzeSplitter(ctx context.Context, table *common.T
 	// fall back to random splitter
 
 	// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
-	randIter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, table, dbConn, chunkSize, startRange)
+	randIter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, table, a.dbConn, chunkSize, startRange)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -65,7 +64,7 @@ func (a *TiDBTableAnalyzer) AnalyzeSplitter(ctx context.Context, table *common.T
 }
 
 func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, tableRouter *router.Table, dbConn *sql.DB) (Source, error) {
-	sourceMap, err := getSourceMap(ctx, tableDiffs, tableRouter, dbConn)
+	sourceMap, err := getSourceTableMap(ctx, tableDiffs, tableRouter, dbConn)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

@@ -20,7 +20,6 @@ import (
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 )
 
 type MySQLSource struct {
@@ -28,23 +27,24 @@ type MySQLSource struct {
 }
 
 func (s *MySQLSource) GetTableAnalyzer() TableAnalyzer {
-	return &MySQLTableAnalyzer{s.sourceTableMap}
+	return &MySQLTableAnalyzer{
+		s.dbConn,
+		s.sourceTableMap,
+	}
 }
 
 type MySQLTableAnalyzer struct {
-	sourceTableMap map[string]*common.SourceTable
+	dbConn         *sql.DB
+	sourceTableMap map[string]*common.TableSource
 }
 
 func (a *MySQLTableAnalyzer) AnalyzeSplitter(ctx context.Context, table *common.TableDiff, startRange *splitter.RangeInfo) (splitter.ChunkIterator, error) {
 	chunkSize := 1000
-	uniqueID := utils.UniqueID(table.Schema, table.Table)
-	dbConn := a.sourceTableMap[uniqueID].DBConn
-	originTable := a.sourceTableMap[uniqueID].OriginTable
-	originSchema := a.sourceTableMap[uniqueID].OriginSchema
+	originSchema, originTable := getOriginTable(a.sourceTableMap, table)
 	table.Schema = originSchema
 	table.Table = originTable
 	// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
-	randIter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, table, dbConn, chunkSize, startRange)
+	randIter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, table, a.dbConn, chunkSize, startRange)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -52,7 +52,7 @@ func (a *MySQLTableAnalyzer) AnalyzeSplitter(ctx context.Context, table *common.
 }
 
 func NewMySQLSource(ctx context.Context, tableDiffs []*common.TableDiff, tableRouter *router.Table, dbConn *sql.DB) (Source, error) {
-	sourceTableMap, err := getSourceMap(ctx, tableDiffs, tableRouter, dbConn)
+	sourceTableMap, err := getSourceTableMap(ctx, tableDiffs, tableRouter, dbConn)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

@@ -18,18 +18,32 @@ import (
 	"github.com/pingcap/parser/model"
 )
 
-type SourceTable struct {
-	OriginTable  string
+// TableShardSource represents the origin schema and table and DB connection before router.
+// It used for MySQL Shard source.
+type TableShardSource struct {
+	TableSource
+	// DBConn represents the origin DB connection for this TableSource.
+	// This TableSource may exists in different MySQL shard.
+	DBConn *sql.DB
+}
+
+// TableSource represents the origin schema and table before router.
+// It used for TiDB/MySQL source.
+type TableSource struct {
 	OriginSchema string
-	DBConn       *sql.DB
+	OriginTable  string
 }
 
 // TableDiff saves config for diff table
 type TableDiff struct {
+	// Schema represents the database name.
 	Schema string `json:"schema"`
 
+	// Table represents the table name.
 	Table string `json:"table"`
 
+	// Info is the parser.TableInfo, include some meta infos for this table.
+	// It used for TiDB/MySQL/MySQL Shard sources.
 	Info *model.TableInfo `json:"info"`
 
 	// columns be ignored

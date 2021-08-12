@@ -32,10 +32,16 @@ import (
 // BasicSource is the basic source for single MySQL/TiDB.
 type BasicSource struct {
 	tableDiffs     []*common.TableDiff
-	sourceTableMap map[string]*common.SourceTable
+	sourceTableMap map[string]*common.TableSource
+
+	dbConn *sql.DB
 }
 
-func getSourceMap(ctx context.Context, tableDiffs []*common.TableDiff, tableRouter *router.Table, dbConn *sql.DB) (map[string]*common.SourceTable, error) {
+func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, tableRouter *router.Table, dbConn *sql.DB) (map[string]*common.TableSource, error) {
+	if tableRouter == nil {
+		log.Info("no router for source, use the origin table name to diff table")
+		return nil, nil
+	}
 	// we should get the real table name
 	// and real table row query from source.
 	uniqueMap := make(map[string]struct{})
@@ -43,7 +49,7 @@ func getSourceMap(ctx context.Context, tableDiffs []*common.TableDiff, tableRout
 		uniqueMap[utils.UniqueID(tableDiff.Schema, tableDiff.Table)] = struct{}{}
 	}
 
-	sourceTableMap := make(map[string]*common.SourceTable)
+	sourceTableMap := make(map[string]*common.TableSource)
 	// instance -> db -> table
 	allTablesMap := make(map[string]map[string]interface{})
 	sourceSchemas, err := dbutil.GetSchemas(ctx, dbConn)
@@ -61,25 +67,31 @@ func getSourceMap(ctx context.Context, tableDiffs []*common.TableDiff, tableRout
 
 	for schema, allTables := range allTablesMap {
 		for table := range allTables {
-			targetSchema, targetTable := schema, table
-			if tableRouter != nil {
-				targetSchema, targetTable, err = tableRouter.Route(schema, table)
-				if err != nil {
-					return nil, errors.Errorf("get route result for %s.%s failed, error %v", schema, table, err)
-				}
+			targetSchema, targetTable, err := tableRouter.Route(schema, table)
+			if err != nil {
+				return nil, errors.Errorf("get route result for %s.%s failed, error %v", schema, table, err)
 			}
 			uniqueId := utils.UniqueID(targetSchema, targetTable)
 			if _, ok := uniqueMap[uniqueId]; ok {
-				sourceTableMap[uniqueId] = &common.SourceTable{
+				sourceTableMap[uniqueId] = &common.TableSource{
 					OriginSchema: schema,
 					OriginTable:  table,
-					DBConn:       dbConn,
 				}
 			}
 		}
 	}
-
 	return sourceTableMap, nil
+}
+
+func getOriginTable(sourceTableMap map[string]*common.TableSource, table *common.TableDiff) (string, string) {
+	if len(sourceTableMap) == 0 {
+		// no sourceTableMap, return the origin table name
+		return table.Schema, table.Table
+	}
+	uniqueID := utils.UniqueID(table.Schema, table.Table)
+	originTable := sourceTableMap[uniqueID].OriginTable
+	originSchema := sourceTableMap[uniqueID].OriginSchema
+	return originSchema, originTable
 }
 
 func (s *BasicSource) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
@@ -95,9 +107,7 @@ func (s *BasicSource) GetRangeIterator(ctx context.Context, r *splitter.RangeInf
 }
 
 func (s *BasicSource) Close() {
-	for _, st := range s.sourceTableMap {
-		st.DBConn.Close()
-	}
+	s.dbConn.Close()
 }
 
 func (s *BasicSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter.RangeInfo, checksumInfoCh chan *ChecksumInfo) {
@@ -105,12 +115,8 @@ func (s *BasicSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter
 	table := s.tableDiffs[tableRange.GetTableIndex()]
 	chunk := tableRange.GetChunk()
 
-	uniqueID := utils.UniqueID(table.Schema, table.Table)
-	dbConn := s.sourceTableMap[uniqueID].DBConn
-	originTable := s.sourceTableMap[uniqueID].OriginTable
-	originSchema := s.sourceTableMap[uniqueID].OriginSchema
-
-	count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, dbConn, originSchema, originTable, table.Info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
+	originSchema, originTable := getOriginTable(s.sourceTableMap, table)
+	count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, s.dbConn, originSchema, originTable, table.Info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
 	cost := time.Since(beginTime)
 	checksumInfoCh <- &ChecksumInfo{
 		Checksum: checksum,
@@ -140,15 +146,12 @@ func (s *BasicSource) GetRowsIterator(ctx context.Context, tableRange *splitter.
 	args := utils.StringsToInterfaces(chunk.Args)
 
 	table := s.tableDiffs[tableRange.GetTableIndex()]
-	uniqueID := utils.UniqueID(table.Schema, table.Table)
-	dbConn := s.sourceTableMap[uniqueID].DBConn
-	originTable := s.sourceTableMap[uniqueID].OriginTable
-	originSchema := s.sourceTableMap[uniqueID].OriginSchema
+	originSchema, originTable := getOriginTable(s.sourceTableMap, table)
 	rowsQuery, _ := utils.GetTableRowsQueryFormat(originSchema, originTable, table.Info, table.Collation)
 	query := fmt.Sprintf(rowsQuery, chunk.Where)
 
 	log.Debug("select data", zap.String("sql", query), zap.Reflect("args", args))
-	rows, err := dbConn.QueryContext(ctx, query, args...)
+	rows, err := s.dbConn.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -158,10 +161,7 @@ func (s *BasicSource) GetRowsIterator(ctx context.Context, tableRange *splitter.
 }
 
 func (s *BasicSource) GetDB() *sql.DB {
-	for _, st := range s.sourceTableMap {
-		return st.DBConn
-	}
-	return nil
+	return s.dbConn
 }
 
 // BasicChunksIterator is used for single mysql/tidb source.

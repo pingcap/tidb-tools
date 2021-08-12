@@ -126,7 +126,7 @@ func (s *testSourceSuite) TestBasicSource(c *C) {
 
 	tableDiffs := prepareTiDBTables(c, ctx, conn, tableCases)
 
-	souceMap, err := getSourceMap(ctx, tableDiffs, nil, conn)
+	souceMap, err := getSourceTableMap(ctx, tableDiffs, nil, conn)
 	c.Assert(err, IsNil)
 	basic := &BasicSource{
 		tableDiffs:     tableDiffs,
