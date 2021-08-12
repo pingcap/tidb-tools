@@ -42,7 +42,7 @@ const (
 	checkpointFile = "sync_diff_checkpoints.pb"
 )
 
-// DML SQL struct for each chunk
+// ChunkDML SQL struct for each chunk
 type ChunkDML struct {
 	node *checkpoints.Node
 	sqls []string
@@ -198,8 +198,8 @@ func (df *Diff) ComputeConfigHash() (string, error) {
 		return "", errors.Trace(err)
 	}
 	bytes := make([]byte, 0)
-	for _, config := range checkConfigs {
-		configBytes, err := json.Marshal(config)
+	for _, c := range checkConfigs {
+		configBytes, err := json.Marshal(c)
 		if err != nil {
 			return "", errors.Trace(err)
 		}
@@ -245,7 +245,7 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 				startRange = splitter.FromNode(node)
 			}
 		} else {
-			df.useCheckpoint = false
+			log.Info("not found checkpoint file, start from beginning")
 		}
 	}
 
@@ -307,7 +307,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 		if count > splitter.SplitThreshold {
 			log.Debug("count greater than threshold, start do bingenerate", zap.Int("chunk id", rangeInfo.ID), zap.Int64("chunk size", count))
 			rangeInfo, err = df.BinGenerate(ctx, df.workSource, rangeInfo, count)
-			log.Debug("bingenerate finished", zap.Reflect("chunk", rangeInfo.ChunkRange), zap.Int("chunk id", rangeInfo.ID))
+			log.Debug("bin generate finished", zap.Reflect("chunk", rangeInfo.ChunkRange), zap.Int("chunk id", rangeInfo.ID))
 			if err != nil {
 				return false, errors.Trace(err)
 			}
@@ -570,7 +570,6 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 			}
 			if len(dml.sqls) > 0 {
 				fixSQLFile, err := os.Create(fmt.Sprintf("%s_%d", df.fixSQLFilePath, dml.node.GetID()))
-				defer fixSQLFile.Close()
 				if err != nil {
 					log.Error("write sql failed: cannot create file", zap.Strings("sql", dml.sqls), zap.Error(err))
 					continue
@@ -581,6 +580,7 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 						log.Error("write sql failed", zap.String("sql", sql), zap.Error(err))
 					}
 				}
+				fixSQLFile.Close()
 			}
 			df.cp.Insert(dml.node)
 		}
