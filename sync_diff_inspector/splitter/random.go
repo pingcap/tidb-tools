@@ -97,8 +97,13 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, table *common.TableDif
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-
-	chunk.InitChunks(chunks, chunk.Random, startRange.GetChunk().ID+1, 0, table.Collation, table.Range)
+	var chunk_id int
+	if startRange != nil {
+		chunk_id = startRange.GetChunk().ID + 1
+	} else {
+		chunk_id = 0
+	}
+	chunk.InitChunks(chunks, chunk.Random, chunk_id, 0, table.Collation, table.Range)
 
 	return &RandomIterator{
 		table:     table,
