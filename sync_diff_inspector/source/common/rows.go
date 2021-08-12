@@ -24,7 +24,7 @@ import (
 
 type RowData struct {
 	Data   map[string]*dbutil.ColumnData
-	Source string
+	Source int
 }
 
 // RowDatas is a heap of MergeItems.
