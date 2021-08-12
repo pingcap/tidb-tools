@@ -14,16 +14,37 @@
 package common
 
 import (
+	"database/sql"
 	"github.com/pingcap/parser/model"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 )
+
+// TableShardSource represents the origin schema and table and DB connection before router.
+// It used for MySQL Shard source.
+type TableShardSource struct {
+	TableSource
+	// DBConn represents the origin DB connection for this TableSource.
+	// This TableSource may exists in different MySQL shard.
+	DBConn *sql.DB
+}
+
+// TableSource represents the origin schema and table before router.
+// It used for TiDB/MySQL source.
+type TableSource struct {
+	OriginSchema string
+	OriginTable  string
+}
 
 // TableDiff saves config for diff table
 type TableDiff struct {
-	InstanceID string           `json:"instance-id"`
-	Schema     string           `json:"schema"`
-	Table      string           `json:"table"`
-	Info       *model.TableInfo `json:"info"`
+	// Schema represents the database name.
+	Schema string `json:"schema"`
+
+	// Table represents the table name.
+	Table string `json:"table"`
+
+	// Info is the parser.TableInfo, include some meta infos for this table.
+	// It used for TiDB/MySQL/MySQL Shard sources.
+	Info *model.TableInfo `json:"info"`
 
 	// columns be ignored
 	IgnoreColumns []string `json:"-"`
@@ -46,13 +67,5 @@ type TableDiff struct {
 	// ignore check table's data
 	IgnoreDataCheck bool `json:"-"`
 
-	// tableMap record the map relationship of upstream tables and downstream table
-	// target table instance => source table instances
-	TableMaps map[config.TableInstance][]config.TableInstance `json:"table-map"`
-
 	Collation string `json:"collation"`
-
-	TableRowsQuery string
-
-	TableOrderKeyCols []*model.ColumnInfo
 }

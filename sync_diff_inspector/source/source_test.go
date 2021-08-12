@@ -126,9 +126,11 @@ func (s *testSourceSuite) TestBasicSource(c *C) {
 
 	tableDiffs := prepareTiDBTables(c, ctx, conn, tableCases)
 
+	souceMap, err := getSourceTableMap(ctx, tableDiffs, nil, conn)
+	c.Assert(err, IsNil)
 	basic := &BasicSource{
-		tableDiffs: tableDiffs,
-		dbConn:     conn,
+		tableDiffs:     tableDiffs,
+		sourceTableMap: souceMap,
 	}
 
 	for n, tableCase := range tableCases {
@@ -252,7 +254,7 @@ func (s *testSourceSuite) TestMysqlShardSources(c *C) {
 		},
 	}
 
-	shard, err := NewMySQLSources(ctx, tableDiffs, dbs)
+	shard, err := NewMySQLSources(ctx, tableDiffs, nil, dbs)
 	c.Assert(err, IsNil)
 
 	for n, tableCase := range tableCases {
@@ -323,11 +325,11 @@ func prepareTiDBTables(c *C, ctx context.Context, conn *sql.DB, tableCases []*ta
 			})
 		}
 		tableDiffs = append(tableDiffs, &common.TableDiff{
-			Schema:            "source_test",
-			Table:             fmt.Sprintf("test%d", n),
-			Info:              tableInfo,
-			TableRowsQuery:    tableCase.rowQuery,
-			TableOrderKeyCols: orderKeyCols,
+			Schema: "source_test",
+			Table:  fmt.Sprintf("test%d", n),
+			Info:   tableInfo,
+			// TableRowsQuery:    tableCase.rowQuery,
+			// TableOrderKeyCols: orderKeyCols,
 		})
 
 		chunkRange := chunk.NewChunkRange()
