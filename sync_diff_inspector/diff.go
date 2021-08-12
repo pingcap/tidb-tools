@@ -42,6 +42,12 @@ const (
 	checkpointFile = "sync_diff_checkpoints.pb"
 )
 
+// DML SQL struct for each chunk
+type ChunkDML struct {
+	node *checkpoints.Node
+	sqls []string
+}
+
 // Diff contains two sql DB, used for comparing.
 type Diff struct {
 	// we may have multiple sources in dm sharding sync.
@@ -60,12 +66,11 @@ type Diff struct {
 	ignoreDataCheck   bool
 	ignoreStructCheck bool
 	ignoreStats       bool
-	fixSQLFile        *os.File
+	fixSQLFilePath    string
 	wg                sync.WaitGroup
 
-	chunkCh chan *splitter.RangeInfo
-	sqlCh   chan string
-	cp      *checkpoints.Checkpoint
+	sqlCh chan *ChunkDML
+	cp    *checkpoints.Checkpoint
 
 	configHash string
 }
@@ -82,8 +87,7 @@ func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 		ignoreDataCheck:   cfg.IgnoreDataCheck,
 		ignoreStructCheck: cfg.IgnoreStructCheck,
 		ignoreStats:       cfg.IgnoreStats,
-		chunkCh:           make(chan *splitter.RangeInfo, splitter.DefaultChannelBuffer),
-		sqlCh:             make(chan string, splitter.DefaultChannelBuffer),
+		sqlCh:             make(chan *ChunkDML, splitter.DefaultChannelBuffer),
 		cp:                new(checkpoints.Checkpoint),
 	}
 
@@ -96,9 +100,6 @@ func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 }
 
 func (df *Diff) Close() {
-	if df.fixSQLFile != nil {
-		df.fixSQLFile.Close()
-	}
 	if df.upstream != nil {
 		df.upstream.Close()
 	}
@@ -117,11 +118,8 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 	}
 
 	df.workSource = df.pickSource(ctx)
+	df.fixSQLFilePath = cfg.FixSQLFile
 
-	df.fixSQLFile, err = os.Create(cfg.FixSQLFile)
-	if err != nil {
-		return errors.Trace(err)
-	}
 	df.cp.Init()
 	df.configHash, err = df.ComputeConfigHash()
 	if err != nil {
@@ -144,6 +142,14 @@ func (df *Diff) Equal(ctx context.Context) error {
 	go df.handleCheckpoints(ctx, stopCh)
 	go df.writeSQLs(ctx)
 
+	defer func() {
+		pool.WaitFinished()
+		// close the sql channel
+		close(df.sqlCh)
+		stopCh <- struct{}{}
+		df.wg.Wait()
+	}()
+
 	for {
 		c, err := chunksIter.Next(ctx)
 		if err != nil {
@@ -151,8 +157,6 @@ func (df *Diff) Equal(ctx context.Context) error {
 		}
 		if c == nil {
 			// finish read the tables
-			// if the chunksIter is done, close the chunkCh
-			//close(df.chunkCh)
 			break
 		}
 		log.Debug("generate chunk", zap.Int("chunk id", c.ID))
@@ -169,14 +173,6 @@ func (df *Diff) Equal(ctx context.Context) error {
 		})
 	}
 
-	pool.WaitFinished()
-	stopCh <- struct{}{}
-	// close the sql channel
-	close(df.sqlCh)
-	df.wg.Wait()
-	// release source
-	// TODO: close by main?
-	df.Close()
 	return nil
 }
 
@@ -326,6 +322,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 		zap.Int("chunk id", rangeInfo.ID),
 		zap.Int64("chunk size", count))
 	var state string
+	dml := &ChunkDML{}
 	if !isEqual {
 		log.Debug("checksum failed", zap.Int("chunk id", rangeInfo.ID), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTable(rangeInfo.TableIndex).Table))
 		state = checkpoints.FailedState
@@ -338,9 +335,10 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 				return false, errors.Trace(err)
 			}
 		}
-		isEqual, err = df.compareRows(ctx, rangeInfo)
+		dml.sqls = make([]string, 0, 4)
+		isEqual, err = df.compareRows(ctx, rangeInfo, dml)
 		if err != nil {
-			return false, err
+			return false, errors.Trace(err)
 		}
 	} else {
 		// update chunk success state in summary
@@ -348,12 +346,9 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 		state = checkpoints.SuccessState
 	}
 
-	node := rangeInfo.ToNode()
-	if err != nil {
-		return false, errors.Trace(err)
-	}
-	node.State = state
-	df.cp.Insert(node)
+	dml.node = rangeInfo.ToNode()
+	dml.node.State = state
+	df.sqlCh <- dml
 	return isEqual, nil
 }
 
@@ -472,7 +467,7 @@ func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *spli
 	return false, crc1Info.Count, nil
 }
 
-func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) (bool, error) {
+func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, dml *ChunkDML) (bool, error) {
 	upstreamRowsIterator, err := df.upstream.GetRowsIterator(ctx, rangeInfo)
 	if err != nil {
 		return false, errors.Trace(err)
@@ -508,11 +503,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) 
 				sql := df.downstream.GenerateFixSQL(source.Delete, lastDownstreamData, rangeInfo.GetTableIndex())
 				log.Info("[delete]", zap.String("sql", sql))
 
-				select {
-				case df.sqlCh <- sql:
-				case <-ctx.Done():
-					return false, nil
-				}
+				dml.sqls = append(dml.sqls, sql)
 				equal = false
 				lastDownstreamData, err = downstreamRowsIterator.Next()
 				if err != nil {
@@ -528,11 +519,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) 
 				sql := df.downstream.GenerateFixSQL(source.Replace, lastUpstreamData, rangeInfo.GetTableIndex())
 				log.Info("[insert]", zap.String("sql", sql))
 
-				select {
-				case df.sqlCh <- sql:
-				case <-ctx.Done():
-					return false, nil
-				}
+				dml.sqls = append(dml.sqls, sql)
 				equal = false
 
 				lastUpstreamData, err = upstreamRowsIterator.Next()
@@ -575,11 +562,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo) 
 			lastDownstreamData = nil
 		}
 
-		select {
-		case df.sqlCh <- sql:
-		case <-ctx.Done():
-			return false, nil
-		}
+		dml.sqls = append(dml.sqls, sql)
 	}
 
 	if equal {
@@ -608,10 +591,21 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 				log.Info("write sql channel closed")
 				return
 			}
-			_, err := df.fixSQLFile.WriteString(fmt.Sprintf("%s\n", dml))
-			if err != nil {
-				log.Error("write sql failed", zap.String("sql", dml), zap.Error(err))
+			if len(dml.sqls) > 0 {
+				fixSQLFile, err := os.Create(fmt.Sprintf("%s_%d", df.fixSQLFilePath, dml.node.GetID()))
+				defer fixSQLFile.Close()
+				if err != nil {
+					log.Error("write sql failed: cannot create file", zap.Strings("sql", dml.sqls), zap.Error(err))
+					continue
+				}
+				for _, sql := range dml.sqls {
+					_, err = fixSQLFile.WriteString(fmt.Sprintf("%s\n", sql))
+					if err != nil {
+						log.Error("write sql failed", zap.String("sql", sql), zap.Error(err))
+					}
+				}
 			}
+			df.cp.Insert(dml.node)
 		}
 	}
 }
