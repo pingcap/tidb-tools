@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"time"
 
@@ -58,6 +59,10 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, tabl
 	}
 
 	for _, schema := range sourceSchemas {
+		if filter.IsSystemSchema(schema) {
+			// ignore system schema
+			continue
+		}
 		allTables, err := dbutil.GetTables(ctx, dbConn, schema)
 		if err != nil {
 			return nil, errors.Annotatef(err, "get tables from %s", schema)

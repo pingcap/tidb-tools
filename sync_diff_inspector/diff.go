@@ -62,7 +62,6 @@ type Diff struct {
 	checkThreadCount  int
 	useChecksum       bool
 	useCheckpoint     bool
-	onlyUseChecksum   bool
 	ignoreDataCheck   bool
 	ignoreStructCheck bool
 	ignoreStats       bool
@@ -78,12 +77,10 @@ type Diff struct {
 // NewDiff returns a Diff instance.
 func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 	diff = &Diff{
-		chunkSize:         cfg.ChunkSize,
 		sample:            cfg.Sample,
 		checkThreadCount:  cfg.CheckThreadCount,
 		useChecksum:       cfg.UseChecksum,
 		useCheckpoint:     cfg.UseCheckpoint,
-		onlyUseChecksum:   cfg.OnlyUseChecksum,
 		ignoreDataCheck:   cfg.IgnoreDataCheck,
 		ignoreStructCheck: cfg.IgnoreStructCheck,
 		ignoreStats:       cfg.IgnoreStats,
@@ -117,9 +114,8 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 	}
 
 	df.workSource = df.pickSource(ctx)
-	df.fixSQLFilePath = cfg.FixSQLFile
-
-	df.cp.Init()
+	df.fixSQLFilePath = cfg.Task.
+		df.cp.Init()
 	df.configHash, err = df.ComputeConfigHash()
 	if err != nil {
 		return errors.Trace(err)

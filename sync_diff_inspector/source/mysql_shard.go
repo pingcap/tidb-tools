@@ -254,6 +254,7 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, tableR
 		}
 
 		for _, schema := range sourceSchemas {
+			// TODO Add filter and also in mysql/tidb source.
 			allTables, err := dbutil.GetTables(ctx, source.Conn, schema)
 			if err != nil {
 				return nil, errors.Annotatef(err, "get tables from %s.%s", source.InstanceID, schema)
