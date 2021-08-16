@@ -60,20 +60,22 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, table *common.TableDif
 
 	chunkRange := chunk.NewChunkRange()
 	where := table.Range
+	var iargs []interface{}
 	if startRange != nil {
 		c := startRange.GetChunk()
 		for _, bound := range c.Bounds {
 			chunkRange.Update(bound.Column, bound.Upper, "", true, false)
 		}
-		conditions, _ := chunkRange.ToString(table.Collation)
+		conditions, args := chunkRange.ToString(table.Collation)
 		if len(where) > 0 {
 			where = fmt.Sprintf("((%s) AND %s)", conditions, where)
 		} else {
 			where = fmt.Sprintf("(%s)", conditions)
 		}
+		iargs = utils.StringsToInterfaces(args)
 	}
 
-	cnt, err := dbutil.GetRowCount(ctx, dbConn, table.Schema, table.Table, where, nil)
+	cnt, err := dbutil.GetRowCount(ctx, dbConn, table.Schema, table.Table, where, iargs)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
