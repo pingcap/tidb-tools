@@ -510,8 +510,6 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 	}
 	bounds1 := chunk.Bounds
 
-	iter.GetIndexID()
-
 	rangeInfo := &RangeInfo{
 		ChunkRange: chunk,
 		TableIndex: 0,
@@ -572,5 +570,114 @@ func createFakeResultForRandom(mock sqlmock.Sqlmock, aRandomValues, bRandomValue
 		bRandomRows := sqlmock.NewRows([]string{"b"})
 		bRandomRows.AddRow(bRandomValues[i])
 		mock.ExpectQuery("ORDER BY rand_value").WillReturnRows(bRandomRows)
+	}
+}
+
+func (s *testSplitterSuite) TestLimitSpliter(c *C) {
+	ctx := context.Background()
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+
+	createTableSQL := "create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
+	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
+	c.Assert(err, IsNil)
+
+	testCases := []struct {
+		chunkSize    int
+		limitAValues []string
+		limitBValues []string
+		expectResult []chunkResult
+	}{
+		{
+			// chunk size less than the count of bucket 64, and the bucket's count 64 >= 32, so will split by random in every bucket
+			1000,
+			[]string{"1000", "2000", "3000", "4000"},
+			[]string{"a", "b", "c", "d"},
+			[]chunkResult{
+				{
+					"(`a` < ?) OR (`a` = ? AND `b` <= ?)",
+					[]string{"1000", "1000", "a"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"1000", "1000", "a", "2000", "2000", "b"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"2000", "2000", "b", "3000", "3000", "c"},
+				}, {
+					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
+					[]string{"3000", "3000", "c", "4000", "4000", "d"},
+				}, {
+					"(`a` > ?) OR (`a` = ? AND `b` > ?)",
+					[]string{"4000", "4000", "d"},
+				},
+			},
+		},
+	}
+
+	tableDiff := &common.TableDiff{
+		Schema: "test",
+		Table:  "test",
+		Info:   tableInfo,
+	}
+
+	for i, testCase := range testCases {
+		createFakeResultForLimitSplit(mock, testCase.limitAValues, testCase.limitBValues, true)
+
+		iter, err := NewLimitIterator(ctx, tableDiff, db, testCase.chunkSize)
+		c.Assert(err, IsNil)
+
+		j := 0
+		for {
+			chunk, err := iter.Next()
+			c.Assert(err, IsNil)
+			if chunk == nil {
+				break
+			}
+			chunkStr, args := chunk.ToString("")
+			c.Log(i, j, chunkStr, args)
+			c.Assert(chunkStr, Equals, testCase.expectResult[j].chunkStr)
+			c.Assert(args, DeepEquals, testCase.expectResult[j].args)
+			j = j + 1
+		}
+	}
+
+	// Test Checkpoint
+	stopJ := 2
+	createFakeResultForLimitSplit(mock, testCases[0].limitAValues[:stopJ], testCases[0].limitBValues[:stopJ], false)
+	iter, err := NewLimitIterator(ctx, tableDiff, db, testCases[0].chunkSize)
+	c.Assert(err, IsNil)
+	j := 0
+	var chunk *chunk.Range
+	for ; j < stopJ; j++ {
+		chunk, err = iter.Next()
+		c.Assert(err, IsNil)
+	}
+	bounds1 := chunk.Bounds
+
+	rangeInfo := &RangeInfo{
+		ChunkRange: chunk,
+		IndexID:    iter.GetIndexID(),
+	}
+
+	createFakeResultForLimitSplit(mock, testCases[0].limitAValues[stopJ:], testCases[0].limitBValues[stopJ:], true)
+	iter, err = NewLimitIteratorWithCheckpoint(ctx, tableDiff, db, testCases[0].chunkSize, rangeInfo)
+	c.Assert(err, IsNil)
+	chunk, err = iter.Next()
+	c.Assert(err, IsNil)
+
+	for i, bound := range chunk.Bounds {
+		c.Assert(bounds1[i].Upper, DeepEquals, bound.Lower)
+	}
+}
+
+func createFakeResultForLimitSplit(mock sqlmock.Sqlmock, aValues []string, bValues []string, needEnd bool) {
+	for i, a := range aValues {
+		limitRows := sqlmock.NewRows([]string{"a", "b"})
+		limitRows.AddRow(a, bValues[i])
+		mock.ExpectQuery("SELECT `a`,.*").WillReturnRows(limitRows)
+	}
+
+	if needEnd {
+		mock.ExpectQuery("SELECT `a`,.*").WillReturnRows(sqlmock.NewRows([]string{"a", "b"}))
 	}
 }
