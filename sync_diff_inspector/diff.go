@@ -15,11 +15,10 @@ package main
 
 import (
 	"context"
-	"crypto/md5"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -65,13 +64,13 @@ type Diff struct {
 	ignoreDataCheck   bool
 	ignoreStructCheck bool
 	ignoreStats       bool
-	fixSQLFilePath    string
 	wg                sync.WaitGroup
+
+	FixSQLDir     string
+	CheckpointDir string
 
 	sqlCh chan *ChunkDML
 	cp    *checkpoints.Checkpoint
-
-	configHash string
 }
 
 // NewDiff returns a Diff instance.
@@ -114,11 +113,9 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 	}
 
 	df.workSource = df.pickSource(ctx)
-	df.fixSQLFilePath = cfg.Task.FixDir
-	df.configHash, err = df.ComputeConfigHash()
-	if err != nil {
-		return errors.Trace(err)
-	}
+	df.FixSQLDir = cfg.Task.FixDir
+	df.CheckpointDir = cfg.Task.CheckpointDir
+
 	return nil
 }
 
@@ -186,42 +183,10 @@ func (df *Diff) pickSource(ctx context.Context) source.Source {
 	return df.downstream
 }
 
-func (df *Diff) ComputeConfigHash() (string, error) {
-	checkConfigs, err := df.GetCheckConfig()
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-	bytes := make([]byte, 0)
-	for _, c := range checkConfigs {
-		configBytes, err := json.Marshal(c)
-		if err != nil {
-			return "", errors.Trace(err)
-		}
-		bytes = append(bytes, configBytes...)
-	}
-	return fmt.Sprintf("%x", md5.Sum(bytes)), nil
-}
-
-func (df *Diff) GetCheckConfig() ([]*checkpoints.CheckConfig, error) {
-	tableDiffs := df.workSource.GetTables()
-	checkConfigs := make([]*checkpoints.CheckConfig, len(tableDiffs))
-	for i, tableDiff := range tableDiffs {
-		checkConfigs[i] = &checkpoints.CheckConfig{
-			Table:  utils.UniqueID(tableDiff.Schema, tableDiff.Table),
-			Fields: tableDiff.Fields,
-			Range:  tableDiff.Range,
-			// TODO get snapshot
-			Snapshot:  "",
-			Collation: tableDiff.Collation,
-		}
-	}
-	return checkConfigs, nil
-}
-
 func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterator, error) {
 	var startRange *splitter.RangeInfo
 	if df.useCheckpoint {
-		path := filepath.Join(df.configHash, checkpointFile)
+		path := filepath.Join(df.CheckpointDir, checkpointFile)
 		if ioutil2.FileExists(path) {
 			node, err := df.cp.LoadChunk(path)
 			if err != nil {
@@ -229,7 +194,6 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 			} else {
 				// this need not be synchronized, because at the moment, the is only one thread access the section
 				log.Info("load checkpoint",
-					zap.String("config hash", df.configHash),
 					zap.Int("id", node.GetID()),
 					zap.Reflect("chunk", node),
 					zap.String("state", node.GetState()))
@@ -256,13 +220,7 @@ func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
 		df.wg.Done()
 	}()
 	flush := func() {
-		if !ioutil2.FileExists(df.configHash) {
-			err := os.Mkdir(df.configHash, config.LocalFilePerm)
-			if err != nil {
-				log.Error("fail to create checkpoint directory", zap.String("config hash", df.configHash))
-			}
-		}
-		_, err := df.cp.SaveChunk(ctx, filepath.Join(df.configHash, checkpointFile))
+		_, err := df.cp.SaveChunk(ctx, filepath.Join(df.CheckpointDir, checkpointFile))
 		if err != nil {
 			log.Warn("fail to save the chunk", zap.Error(err))
 			// maybe we should panic, because SaveChunk method should not failed.
@@ -563,7 +521,12 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 				return
 			}
 			if len(dml.sqls) > 0 {
-				fixSQLFile, err := os.Create(fmt.Sprintf("%s_%d", df.fixSQLFilePath, dml.node.GetID()))
+				fixSQLPath := filepath.Join(df.FixSQLDir, strconv.Itoa(dml.node.GetID()))
+				if ok := ioutil2.FileExists(fixSQLPath); ok {
+					// unreachable
+					log.Fatal("write sql failed: repeat sql happen", zap.Strings("sql", dml.sqls))
+				}
+				fixSQLFile, err := os.Create(fixSQLPath)
 				if err != nil {
 					log.Error("write sql failed: cannot create file", zap.Strings("sql", dml.sqls), zap.Error(err))
 					continue

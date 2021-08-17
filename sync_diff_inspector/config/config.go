@@ -15,7 +15,6 @@ package config
 
 import (
 	"crypto/md5"
-	"database/sql"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -40,43 +39,11 @@ const (
 	LocalFilePerm os.FileMode = 0o644
 )
 
-var sourceInstanceMap map[string]interface{} = make(map[string]interface{})
-
-// DBConfig is the config of database, and keep the connection.
-type DBConfig struct {
-	dbutil.DBConfig
-
-	InstanceID string `toml:"instance-id" json:"instance-id"`
-
-	Conn *sql.DB
-}
-
-// Valid returns true if database's config is valide.
-func (c *DBConfig) Valid() bool {
-	if c.InstanceID == "" {
-		log.Error("must specify source database's instance id")
-		return false
-	}
-	sourceInstanceMap[c.InstanceID] = struct{}{}
-
-	return true
-}
-
-// CheckTables saves the tables need to check.
-type CheckTables struct {
-	// schema name
-	Schema string `toml:"schema" json:"schema"`
-
-	// table list
-	Tables []string `toml:"tables" json:"tables"`
-
-	ExcludeTables []string `toml:"exclude-tables" json:"exclude-tables"`
-}
-
 // TableConfig is the config of table.
 type TableConfig struct {
 	// table's origin information
-	TableInstance
+	Schema string `toml:"schema" json:"schema"`
+	Table  string `toml:"table" json:"table"`
 	// columns be ignored, will not check this column's data
 	IgnoreColumns []string `toml:"ignore-columns"`
 	// field should be the primary key, unique key or field with index
@@ -85,12 +52,7 @@ type TableConfig struct {
 	Range string `toml:"range"`
 	// set true if comparing sharding tables with target table, should have more than one source tables.
 	IsSharding bool `toml:"is-sharding"`
-	// saves the source tables's info.
-	// may have more than one source for sharding tables.
-	// or you want to compare table with different schema and table name.
-	// SourceTables can be nil when source and target is one-to-one correspondence.
-	// Deprecated
-	SourceTables    []TableInstance `toml:"source-tables"`
+
 	TargetTableInfo *model.TableInfo
 
 	// collation config in mysql/tidb
@@ -99,56 +61,6 @@ type TableConfig struct {
 
 // Valid returns true if table's config is valide.
 func (t *TableConfig) Valid() bool {
-	if t.Schema == "" || t.Table == "" {
-		log.Error("schema and table's name can't be empty")
-		return false
-	}
-
-	if t.IsSharding {
-		if len(t.SourceTables) <= 1 {
-			log.Error("must have more than one source tables if comparing sharding tables")
-			return false
-		}
-
-	} else {
-		if len(t.SourceTables) > 1 {
-			log.Error("have more than one source table in no sharding mode")
-			return false
-		}
-	}
-
-	for _, sourceTable := range t.SourceTables {
-		if !sourceTable.Valid() {
-			return false
-		}
-	}
-
-	return true
-}
-
-// TableInstance saves the base information of table.
-type TableInstance struct {
-	// database's instance id
-	InstanceID string `toml:"instance-id" json:"instance-id"`
-	// schema name
-	Schema string `toml:"schema"`
-	// table name
-	Table string `toml:"table"`
-}
-
-// Valid returns true if table instance's info is valide.
-// should be executed after source database's check.
-func (t *TableInstance) Valid() bool {
-	if t.InstanceID == "" {
-		log.Error("must specify the database's instance id for source table")
-		return false
-	}
-
-	if _, ok := sourceInstanceMap[t.InstanceID]; !ok {
-		log.Error("unknown database instance id", zap.String("instance id", t.InstanceID))
-		return false
-	}
-
 	if t.Schema == "" || t.Table == "" {
 		log.Error("schema and table's name can't be empty")
 		return false
@@ -187,6 +99,7 @@ type TaskConfig struct {
 	// 2. fix-target-sql Dir
 	// 3. summary file
 	// 4. sync diff log file
+	// 5. fix
 	OutputDir string `toml:"output-dir" json:"output-dir"`
 
 	SourceInstances    []*DataSource
@@ -197,6 +110,7 @@ type TaskConfig struct {
 
 	FixDir        string
 	CheckpointDir string
+	HashFile      string
 }
 
 func (t *TaskConfig) Init(

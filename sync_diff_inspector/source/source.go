@@ -17,6 +17,8 @@ import (
 	"context"
 	"database/sql"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -91,11 +93,11 @@ type Source interface {
 
 func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, upstream Source, err error) {
 	// init db connection for upstream / downstream.
-	upstreamConns, downstreamConn, err := initDBConn(ctx, cfg)
+	upStreamConns, downStreamConn, err := initDBConn(ctx, cfg)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
-	tablesToBeCheck, err := initTables(ctx, cfg, downstreamConn)
+	tablesToBeCheck, err := initTables(ctx, cfg, downStreamConn)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
@@ -116,12 +118,20 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 		}
 	}
 
-	upstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.Task.SourceRoute, upstreamConns...)
+	// Sort TableDiff is important!
+	// because we compare table one by one.
+	sort.Slice(tableDiffs, func(i, j int) bool {
+		ti := utils.UniqueID(tableDiffs[i].Schema, tableDiffs[i].Table)
+		tj := utils.UniqueID(tableDiffs[j].Schema, tableDiffs[j].Table)
+		return strings.Compare(ti, tj) > 0
+	})
+
+	upstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.Task.SourceRoute, upStreamConns...)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
 
-	downstream, err = buildSourceFromCfg(ctx, tableDiffs, nil, downstreamConn)
+	downstream, err = buildSourceFromCfg(ctx, tableDiffs, nil, downStreamConn)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
@@ -183,9 +193,9 @@ func initDBConn(ctx context.Context, cfg *config.Config) (sourceConns []*sql.DB,
 	return sourceConns, targetConn, nil
 }
 
-func initTables(ctx context.Context, cfg *config.Config, DownStreamConn *sql.DB) (cfgTables map[string]map[string]*config.TableConfig, err error) {
+func initTables(ctx context.Context, cfg *config.Config, downStreamConn *sql.DB) (cfgTables map[string]map[string]*config.TableConfig, err error) {
 	TargetTablesList := make([]*common.TableSource, 0)
-	targetSchemas, err := dbutil.GetSchemas(ctx, DownStreamConn)
+	targetSchemas, err := dbutil.GetSchemas(ctx, downStreamConn)
 	if err != nil {
 		return nil, errors.Annotatef(err, "get schemas from target source")
 	}
@@ -194,7 +204,7 @@ func initTables(ctx context.Context, cfg *config.Config, DownStreamConn *sql.DB)
 		if filter.IsSystemSchema(schema) {
 			continue
 		}
-		allTables, err := dbutil.GetTables(ctx, DownStreamConn, schema)
+		allTables, err := dbutil.GetTables(ctx, downStreamConn, schema)
 		if err != nil {
 			return nil, errors.Annotatef(err, "get tables from target source %s", schema)
 		}
@@ -213,7 +223,7 @@ func initTables(ctx context.Context, cfg *config.Config, DownStreamConn *sql.DB)
 	for _, tables := range TargetTablesList {
 		if cfg.Task.TargetCheckTables.MatchTable(tables.OriginSchema, tables.OriginTable) {
 			log.Info("table", zap.String("table", dbutil.TableName(tables.OriginSchema, tables.OriginTable)))
-			tableInfo, err := dbutil.GetTableInfo(ctx, DownStreamConn, tables.OriginSchema, tables.OriginTable)
+			tableInfo, err := dbutil.GetTableInfo(ctx, downStreamConn, tables.OriginSchema, tables.OriginTable)
 			if err != nil {
 				return nil, errors.Errorf("get table %s.%s's information error %s", tables.OriginSchema, tables.OriginTable, errors.ErrorStack(err))
 			}
@@ -223,10 +233,8 @@ func initTables(ctx context.Context, cfg *config.Config, DownStreamConn *sql.DB)
 			}
 
 			cfgTables[tables.OriginSchema][tables.OriginTable] = &config.TableConfig{
-				TableInstance: config.TableInstance{
-					Schema: tables.OriginSchema,
-					Table:  tables.OriginTable,
-				},
+				Schema:          tables.OriginSchema,
+				Table:           tables.OriginTable,
 				TargetTableInfo: tableInfo,
 				Range:           "TRUE",
 			}
