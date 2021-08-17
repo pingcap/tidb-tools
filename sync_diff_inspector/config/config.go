@@ -92,8 +92,11 @@ func (d *DataSource) ToDBConfig() *dbutil.DBConfig {
 }
 
 type TaskConfig struct {
-	Source map[string]map[string][]string `toml:"source" json:"source"`
-	Target map[string]map[string][]string `toml:"target" json:"target"`
+	Source       []string `toml:"source-instances" json:"source-instances"`
+	Routes       []string `toml:"source-routes" json:"source-routes"`
+	Target       []string `toml:"target-instance" json:"target-instance"`
+	CheckTables  []string `toml:"target-check-tables" json:"target-check-tables"`
+	TableConfigs []string `toml:"target-configs" json:"target-configs"`
 	// OutputDir include these
 	// 1. checkpoint Dir
 	// 2. fix-target-sql Dir
@@ -119,16 +122,8 @@ func (t *TaskConfig) Init(
 	tableConfigs map[string]*TableConfig,
 ) (err error) {
 	// Parse Source/Target
-	sourceMap, ok := t.Source["source"]
-	if !ok {
-		log.Fatal("not found source, please correct the config")
-	}
-	sourceInstances, ok := sourceMap["instances"]
-	if !ok {
-		log.Fatal("not found source instances, please correct the config")
-	}
-	dataSourceList := make([]*DataSource, 0, len(sourceInstances))
-	for _, si := range sourceInstances {
+	dataSourceList := make([]*DataSource, 0, len(t.Source))
+	for _, si := range t.Source {
 		ds, ok := dataSources[si]
 		if !ok {
 			log.Fatal("not found source instance, please correct the config", zap.String("instance", si))
@@ -137,11 +132,10 @@ func (t *TaskConfig) Init(
 	}
 	t.SourceInstances = dataSourceList
 
-	routeRules, ok := sourceMap["routes"]
-	if ok {
+	if t.Routes != nil {
 		// if we had rules
-		routeRuleList := make([]*router.TableRule, 0, len(routeRules))
-		for _, r := range routeRules {
+		routeRuleList := make([]*router.TableRule, 0, len(t.Routes))
+		for _, r := range t.Routes {
 			rr, ok := routes[r]
 			if !ok {
 				log.Fatal("not found source routes, please correct the config", zap.String("rule", r))
@@ -152,24 +146,16 @@ func (t *TaskConfig) Init(
 		t.SourceRoute, err = router.NewTableRouter(false, routeRuleList)
 	}
 
-	targetMap, ok := t.Target["target"]
-	if !ok {
-		log.Fatal("not found target, please correct the config")
-	}
-	targetInstance, ok := targetMap["instance"]
-	if !ok {
-		log.Fatal("not found target instances, please correct the config")
-	}
-	if len(targetInstance) != 1 {
+	if len(t.Target) != 1 {
 		log.Fatal("only support one target instance for now")
 	}
-	ts, ok := dataSources[targetInstance[0]]
+	ts, ok := dataSources[t.Target[0]]
 	if !ok {
-		log.Fatal("not found target instance, please correct the config", zap.String("instance", targetInstance[0]))
+		log.Fatal("not found target instance, please correct the config", zap.String("instance", t.Target[0]))
 	}
 	t.TargetInstance = ts
 
-	targetCheckTables, ok := targetMap["check-tables"]
+	targetCheckTables := t.CheckTables
 	if !ok {
 		log.Fatal("not found target check tables, please correct the config")
 	}
@@ -178,8 +164,8 @@ func (t *TaskConfig) Init(
 		log.Fatal("parse check tables failed", zap.Error(err))
 	}
 
-	targetConfigs, ok := targetMap["configs"]
-	if ok {
+	targetConfigs := t.TableConfigs
+	if targetConfigs != nil {
 		// table config can be nil
 		tableConfigsList := make([]*TableConfig, 0, len(targetConfigs))
 		for _, c := range targetConfigs {
@@ -209,7 +195,7 @@ func (t *TaskConfig) Init(
 		return errors.Trace(err)
 	}
 
-	target := targetInstance[0]
+	target := t.Target[0]
 	t.FixDir = filepath.Join(t.OutputDir, hash, fmt.Sprintf("fix-on-%s", target))
 	t.CheckpointDir = filepath.Join(t.OutputDir, hash, "checkpoint")
 	return nil
@@ -242,10 +228,7 @@ func (t *TaskConfig) ComputeConfigHash() (string, error) {
 		}
 		hash = append(hash, configBytes...)
 	}
-	targetCheckTables, ok := t.Target["target"]["check-tables"]
-	if !ok {
-		log.Fatal("not found target check tables, please correct the config")
-	}
+	targetCheckTables := t.CheckTables
 	for _, c := range targetCheckTables {
 		hash = append(hash, []byte(c)...)
 	}
@@ -278,10 +261,9 @@ type Config struct {
 
 	Routes map[string]*router.TableRule `toml:"routes" json:"routes"`
 
-	Task TaskConfig `toml:"task" json:"task"`
-
 	TableConfigs map[string]*TableConfig `toml:"table-configs" json:"table-configs"`
 
+	Task TaskConfig `toml:"task" json:"task"`
 	// config file
 	ConfigFile string
 

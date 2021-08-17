@@ -131,7 +131,7 @@ func (cp *Checkpoint) Init() {
 	hp := new(Heap)
 	hp.mu = &sync.Mutex{}
 	hp.Nodes = make([]*Node, 0)
-	hp.CurrentSavedID = -1
+	hp.CurrentSavedID = 0
 	heap.Init(hp)
 	cp.hp = hp
 }

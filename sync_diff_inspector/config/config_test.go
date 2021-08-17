@@ -14,9 +14,6 @@
 package config
 
 import (
-	"io/ioutil"
-	"path/filepath"
-	"strings"
 	"testing"
 
 	. "github.com/pingcap/check"
@@ -30,7 +27,7 @@ var _ = Suite(&testConfigSuite{})
 
 type testConfigSuite struct{}
 
-func (s *testConfigSuite) TestUnknownFlagOrItem(c *C) {
+func (s *testConfigSuite) TestParseConfig(c *C) {
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-L", "info"}), IsNil)
 
@@ -39,14 +36,8 @@ func (s *testConfigSuite) TestUnknownFlagOrItem(c *C) {
 	c.Assert(err, ErrorMatches, ".*LL.*")
 
 	c.Assert(cfg.Parse([]string{"-config", "config.toml"}), IsNil)
+	c.Assert(cfg.Task.Init(cfg.DataSources, cfg.Routes, cfg.TableConfigs), IsNil)
 
-	dir := c.MkDir()
-	path := filepath.Join(dir, "wrong.toml")
-	content, err := ioutil.ReadFile("config.toml")
-	c.Assert(err, IsNil)
-	// table_rules is a typo
-	wrongContentStr := strings.ReplaceAll(string(content), "#[[table-rules]]", "[[table_rules]]")
-	c.Assert(ioutil.WriteFile(path, []byte(wrongContentStr), 0644), IsNil)
-	err = cfg.Parse([]string{"-config", path})
-	c.Assert(err, ErrorMatches, ".*table_rules.*")
+	c.Assert(cfg.Parse([]string{"-config", "config_sharding.toml"}), IsNil)
+	c.Assert(cfg.Task.Init(cfg.DataSources, cfg.Routes, cfg.TableConfigs), IsNil)
 }

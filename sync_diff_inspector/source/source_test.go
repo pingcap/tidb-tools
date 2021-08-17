@@ -104,7 +104,7 @@ func (s *testSourceSuite) TestBasicSource(c *C) {
 			rangeColumns:   []string{"a", "b"},
 			rangeLeft:      []string{"3", "b"},
 			rangeRight:     []string{"5", "f"},
-			rowQuery:       "SELECT a, b",
+			rowQuery:       "SELECT",
 			rowColumns:     []string{"a", "b"},
 			rows: [][]driver.Value{
 				{"1", "a"},
@@ -123,13 +123,15 @@ func (s *testSourceSuite) TestBasicSource(c *C) {
 		},
 	}
 
-	tableDiffs := prepareTiDBTables(c, ctx, conn, tableCases)
+	tableDiffs := prepareTiDBTables(c, tableCases)
 
-	souceMap, err := getSourceTableMap(ctx, tableDiffs, nil, conn)
+	sourceMap, err := getSourceTableMap(ctx, tableDiffs, nil, conn)
+
 	c.Assert(err, IsNil)
 	basic := &BasicSource{
 		tableDiffs:     tableDiffs,
-		sourceTableMap: souceMap,
+		sourceTableMap: sourceMap,
+		dbConn:         conn,
 	}
 
 	for n, tableCase := range tableCases {
@@ -156,7 +158,7 @@ func (s *testSourceSuite) TestBasicSource(c *C) {
 			c.Assert(i, Equals, 5*len(tableCases))
 			break
 		}
-		c.Assert(chunk.ChunkRange.ID, Equals, (i%5)+1)
+		c.Assert(chunk.ChunkRange.ID, Equals, i+1)
 		i++
 	}
 
@@ -193,10 +195,6 @@ func (s *testSourceSuite) TestMysqlShardSources(c *C) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	conn, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
-	defer conn.Close()
-
 	tableCases := []*tableCaseType{
 		{
 			schema:         "source_test",
@@ -232,10 +230,19 @@ func (s *testSourceSuite) TestMysqlShardSources(c *C) {
 		},
 	}
 
-	tableDiffs := prepareTiDBTables(c, ctx, conn, tableCases)
+	tableDiffs := prepareTiDBTables(c, tableCases)
+
+	conn, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	defer conn.Close()
 
 	dbs := []*sql.DB{
 		conn, conn, conn, conn,
+	}
+
+	for range dbs {
+		mock.ExpectQuery("SHOW DATABASES").WillReturnRows(sqlmock.NewRows([]string{"Database"}).AddRow("mysql").AddRow("source_test"))
+		mock.ExpectQuery("SHOW FULL TABLES*").WillReturnRows(sqlmock.NewRows([]string{"Table", "type"}).AddRow("test1", "base").AddRow("test2", "base"))
 	}
 
 	shard, err := NewMySQLSources(ctx, tableDiffs, nil, dbs)
@@ -297,7 +304,7 @@ func (s *testSourceSuite) TestMysqlShardSources(c *C) {
 
 }
 
-func prepareTiDBTables(c *C, ctx context.Context, conn *sql.DB, tableCases []*tableCaseType) []*common.TableDiff {
+func prepareTiDBTables(c *C, tableCases []*tableCaseType) []*common.TableDiff {
 	tableDiffs := make([]*common.TableDiff, 0, len(tableCases))
 	for n, tableCase := range tableCases {
 		tableInfo, err := dbutil.GetTableInfoBySQL(tableCase.createTableSQL, parser.New())
@@ -310,10 +317,8 @@ func prepareTiDBTables(c *C, ctx context.Context, conn *sql.DB, tableCases []*ta
 		}
 		tableDiffs = append(tableDiffs, &common.TableDiff{
 			Schema: "source_test",
-			Table:  fmt.Sprintf("test%d", n),
+			Table:  fmt.Sprintf("test%d", n+1),
 			Info:   tableInfo,
-			// TableRowsQuery:    tableCase.rowQuery,
-			// TableOrderKeyCols: orderKeyCols,
 		})
 
 		chunkRange := chunk.NewChunkRange()
