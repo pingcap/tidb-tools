@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 
@@ -220,6 +221,7 @@ func (df *Diff) GetCheckConfig() ([]*checkpoints.CheckConfig, error) {
 			Collation: tableDiff.Collation,
 		}
 	}
+	sort.Slice(checkConfigs, func(i, j int) bool { return checkConfigs[i].Table < checkConfigs[j].Table })
 	return checkConfigs, nil
 }
 

@@ -17,8 +17,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"time"
+
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -95,8 +96,14 @@ func getOriginTable(sourceTableMap map[string]*common.TableSource, table *common
 }
 
 func (s *BasicSource) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
+	var id int
+	if r != nil {
+		id = r.GetChunk().ID + 1
+	} else {
+		id = 0
+	}
 	dbIter := &BasicChunksIterator{
-		currentID:      0,
+		currentID:      id,
 		tableAnalyzer:  analyzer,
 		TableDiffs:     s.tableDiffs,
 		nextTableIndex: 0,
