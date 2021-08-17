@@ -26,7 +26,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	filter "github.com/pingcap/tidb-tools/pkg/table-filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"go.uber.org/zap"
 	"os"
 	"path/filepath"
@@ -90,6 +89,7 @@ type TableConfig struct {
 	// may have more than one source for sharding tables.
 	// or you want to compare table with different schema and table name.
 	// SourceTables can be nil when source and target is one-to-one correspondence.
+	// Deprecated
 	SourceTables    []TableInstance `toml:"source-tables"`
 	TargetTableInfo *model.TableInfo
 
@@ -160,13 +160,23 @@ func (t *TableInstance) Valid() bool {
 // DataSource represents the Source Config.
 type DataSource struct {
 	Host     string `toml:"host" json:"host"`
-	Port     string `toml:"port" json:"port"`
+	Port     int    `toml:"port" json:"port"`
 	User     string `toml:"user" json:"user"`
 	Password string `toml:"password" json:"password"`
 	SqlMode  string `toml:"sql-mode" json:"sql-mode"`
 	Snapshot string `toml:"snapshot" json:"snapshot"`
 
 	// SourceType string `toml:"source-type" json:"source-type"`
+}
+
+func (d *DataSource) ToDBConfig() *dbutil.DBConfig {
+	return &dbutil.DBConfig{
+		Host:     d.Host,
+		Port:     d.Port,
+		User:     d.User,
+		Password: d.Password,
+		Snapshot: d.Snapshot,
+	}
 }
 
 type TaskConfig struct {
@@ -179,11 +189,11 @@ type TaskConfig struct {
 	// 4. sync diff log file
 	OutputDir string `toml:"output-dir" json:"output-dir"`
 
-	sourceInstances    []*DataSource
-	sourceRoute        *router.Table
-	targetInstance     *DataSource
-	targetCheckTables  filter.Filter
-	targetTableConfigs []*TableConfig
+	SourceInstances    []*DataSource
+	SourceRoute        *router.Table
+	TargetInstance     *DataSource
+	TargetCheckTables  filter.Filter
+	TargetTableConfigs []*TableConfig
 
 	FixDir        string
 	CheckpointDir string
@@ -211,7 +221,7 @@ func (t *TaskConfig) Init(
 		}
 		dataSourceList = append(dataSourceList, ds)
 	}
-	t.sourceInstances = dataSourceList
+	t.SourceInstances = dataSourceList
 
 	routeRules, ok := sourceMap["routes"]
 	if ok {
@@ -224,8 +234,8 @@ func (t *TaskConfig) Init(
 			}
 			routeRuleList = append(routeRuleList, rr)
 		}
-		// t.sourceRoute can be nil, the caller should check it.
-		t.sourceRoute, err = router.NewTableRouter(false, routeRuleList)
+		// t.SourceRoute can be nil, the caller should check it.
+		t.SourceRoute, err = router.NewTableRouter(false, routeRuleList)
 	}
 
 	targetMap, ok := t.Target["target"]
@@ -243,13 +253,13 @@ func (t *TaskConfig) Init(
 	if !ok {
 		log.Fatal("not found target instance, please correct the config", zap.String("instance", targetInstance[0]))
 	}
-	t.targetInstance = ts
+	t.TargetInstance = ts
 
 	targetCheckTables, ok := targetMap["check-tables"]
 	if !ok {
 		log.Fatal("not found target check tables, please correct the config")
 	}
-	t.targetCheckTables, err = filter.Parse(targetCheckTables)
+	t.TargetCheckTables, err = filter.Parse(targetCheckTables)
 	if err != nil {
 		log.Fatal("parse check tables failed", zap.Error(err))
 	}
@@ -265,16 +275,16 @@ func (t *TaskConfig) Init(
 			}
 			tableConfigsList = append(tableConfigsList, tc)
 		}
-		t.targetTableConfigs = tableConfigsList
+		t.TargetTableConfigs = tableConfigsList
 	}
 
 	// Create output Dir if not exists
-	ok, err = utils.PathExists(t.OutputDir)
+	ok, err = pathExists(t.OutputDir)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	if !ok {
-		err = utils.MkdirAll(t.OutputDir)
+		err = mkdirAll(t.OutputDir)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -293,11 +303,11 @@ func (t *TaskConfig) Init(
 
 // ComputeConfigHash compute the hash according to the task
 // if ConfigHash is as same as checkpoint.hash
-// we think the two times sync diff can use the checkpoint.
+// we think the second sync diff can use the checkpoint.
 func (t *TaskConfig) ComputeConfigHash() (string, error) {
 	hash := make([]byte, 0)
 	// compute sources
-	for _, c := range t.sourceInstances {
+	for _, c := range t.SourceInstances {
 		configBytes, err := json.Marshal(c)
 		if err != nil {
 			return "", errors.Trace(err)
@@ -305,13 +315,13 @@ func (t *TaskConfig) ComputeConfigHash() (string, error) {
 		hash = append(hash, configBytes...)
 	}
 	// compute target
-	configBytes, err := json.Marshal(t.targetInstance)
+	configBytes, err := json.Marshal(t.TargetInstance)
 	if err != nil {
 		return "", errors.Trace(err)
 	}
 	hash = append(hash, configBytes...)
 	// compute check-tables and table config
-	for _, c := range t.targetTableConfigs {
+	for _, c := range t.TargetTableConfigs {
 		configBytes, err = json.Marshal(c)
 		if err != nil {
 			return "", errors.Trace(err)
@@ -350,11 +360,13 @@ type Config struct {
 	// set true will continue check from the latest checkpoint
 	UseCheckpoint bool `toml:"use-checkpoint" json:"use-checkpoint"`
 
-	DataSources map[string]DataSource `toml:"data-sources" json:"data-sources"`
+	DataSources map[string]*DataSource `toml:"data-sources" json:"data-sources"`
 
 	Routes map[string]*router.TableRule `toml:"routes" json:"routes"`
 
 	Task TaskConfig `toml:"task" json:"task"`
+
+	TableConfigs map[string]*TableConfig `toml:"table-configs" json:"table-configs"`
 
 	// config file
 	ConfigFile string
@@ -443,10 +455,16 @@ func (c *Config) CheckConfig() bool {
 		return false
 	}
 
+	err := c.Task.Init(c.DataSources, c.Routes, c.TableConfigs)
+	if err != nil {
+		log.Error("Task init failed", zap.Error(err))
+		return false
+	}
+
 	return true
 }
 
-func PathExists(_path string) (bool, error) {
+func pathExists(_path string) (bool, error) {
 	_, err := os.Stat(_path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -457,7 +475,7 @@ func PathExists(_path string) (bool, error) {
 	return true, nil
 }
 
-func MkdirAll(base string) error {
+func mkdirAll(base string) error {
 	mask := syscall.Umask(0)
 	err := os.MkdirAll(base, LocalDirPerm)
 	syscall.Umask(mask)

@@ -171,7 +171,7 @@ func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string) (int, erro
 			return 0, errors.Trace(err)
 		}
 
-		if err = ioutil2.WriteFileAtomic(fileName, checkpointData, .LocalFilePerm); err != nil {
+		if err = ioutil2.WriteFileAtomic(fileName, checkpointData, config.LocalFilePerm); err != nil {
 			return 0, err
 		}
 

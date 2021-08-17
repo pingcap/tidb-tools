@@ -27,7 +27,6 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 )
@@ -235,23 +234,8 @@ func (s *testSourceSuite) TestMysqlShardSources(c *C) {
 
 	tableDiffs := prepareTiDBTables(c, ctx, conn, tableCases)
 
-	dbs := []*config.DBConfig{
-		{
-			InstanceID: "0",
-			Conn:       conn,
-		},
-		{
-			InstanceID: "1",
-			Conn:       conn,
-		},
-		{
-			InstanceID: "2",
-			Conn:       conn,
-		},
-		{
-			InstanceID: "3",
-			Conn:       conn,
-		},
+	dbs := []*sql.DB{
+		conn, conn, conn, conn,
 	}
 
 	shard, err := NewMySQLSources(ctx, tableDiffs, nil, dbs)

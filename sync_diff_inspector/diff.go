@@ -114,8 +114,7 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 	}
 
 	df.workSource = df.pickSource(ctx)
-	df.fixSQLFilePath = cfg.Task.
-		df.cp.Init()
+	df.fixSQLFilePath = cfg.Task.FixDir
 	df.configHash, err = df.ComputeConfigHash()
 	if err != nil {
 		return errors.Trace(err)
@@ -258,7 +257,7 @@ func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
 	}()
 	flush := func() {
 		if !ioutil2.FileExists(df.configHash) {
-			err := os.Mkdir(df.configHash, checkpoints.LocalFilePerm)
+			err := os.Mkdir(df.configHash, config.LocalFilePerm)
 			if err != nil {
 				log.Error("fail to create checkpoint directory", zap.String("config hash", df.configHash))
 			}

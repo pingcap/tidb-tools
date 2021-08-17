@@ -30,49 +30,6 @@ var _ = Suite(&testConfigSuite{})
 
 type testConfigSuite struct{}
 
-func (s *testConfigSuite) TestUseDMConfig(c *C) {
-	cfg := NewConfig()
-	cfg.DMAddr = "127.0.0.1:8261"
-	isValid := cfg.CheckConfig()
-	c.Assert(isValid, IsFalse)
-
-	cfg.DMAddr = "http://127.0.0.1:8261"
-	isValid = cfg.CheckConfig()
-	c.Assert(isValid, IsFalse)
-
-	cfg.DMTask = "test"
-	isValid = cfg.CheckConfig()
-	c.Assert(isValid, IsTrue)
-
-	cfg.TargetDBCfg = &DBConfig{
-		InstanceID: "target",
-	}
-	isValid = cfg.CheckConfig()
-	c.Assert(isValid, IsFalse)
-
-	cfg.TargetDBCfg.InstanceID = ""
-	isValid = cfg.CheckConfig()
-	c.Assert(isValid, IsTrue)
-
-	cfg.SourceDBCfg = []*DBConfig{
-		{
-			InstanceID: "source-1",
-		},
-	}
-	isValid = cfg.CheckConfig()
-	c.Assert(isValid, IsFalse)
-
-	cfg.SourceDBCfg = nil
-	isValid = cfg.CheckConfig()
-	c.Assert(isValid, IsTrue)
-
-	cfg.Tables = []*CheckTables{
-		{}, {},
-	}
-	isValid = cfg.CheckConfig()
-	c.Assert(isValid, IsFalse)
-}
-
 func (s *testConfigSuite) TestUnknownFlagOrItem(c *C) {
 	cfg := NewConfig()
 	c.Assert(cfg.Parse([]string{"-L", "info"}), IsNil)
