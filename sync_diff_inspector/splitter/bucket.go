@@ -114,7 +114,8 @@ func (s *BucketIterator) init(startRange *RangeInfo) error {
 
 		indexColumns := utils.GetColumnsFromIndex(index, s.table.Info)
 
-		if len(indexColumns) == 0 {
+		if len(indexColumns) < len(index.Columns) {
+			// some column in index is ignored.
 			continue
 		}
 		s.buckets = bucket
@@ -129,10 +130,7 @@ func (s *BucketIterator) init(startRange *RangeInfo) error {
 
 	// There are only 10k chunks at most
 	if s.chunkSize <= 0 {
-		var cnt int64 = 0
-		for _, bucket := range s.buckets {
-			cnt = cnt + bucket.Count
-		}
+		cnt := s.buckets[len(s.buckets)-1].Count
 		chunkSize := cnt / 10000
 		if chunkSize < SplitThreshold {
 			chunkSize = 2 * SplitThreshold

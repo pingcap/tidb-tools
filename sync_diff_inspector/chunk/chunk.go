@@ -39,6 +39,7 @@ type ChunkType int
 const (
 	Bucket ChunkType = iota + 1
 	Random
+	Limit
 	Others
 )
 
@@ -245,4 +246,12 @@ func InitChunks(chunks []*Range, t ChunkType, chunkBeginID, bucketID int, collat
 		chunk.Type = t
 	}
 	return chunkBeginID
+}
+
+func InitChunk(chunk *Range, t ChunkType, bucketID int, collation, limits string) {
+	conditions, args := chunk.ToString(collation)
+	chunk.Where = fmt.Sprintf("((%s) AND %s)", conditions, limits)
+	chunk.Args = args
+	chunk.BucketID = bucketID
+	chunk.Type = t
 }
