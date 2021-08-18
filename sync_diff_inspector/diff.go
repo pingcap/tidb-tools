@@ -16,9 +16,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -200,6 +202,12 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 				df.cp.SetCurrentSavedID(node.GetID() + 1)
 			}
 			if node != nil {
+				// remove the sql file that ID bigger than node.
+				// cause we will generate these sql again.
+				err = df.removeSQLFiles(node.GetID())
+				if err != nil {
+					return nil, errors.Trace(err)
+				}
 				startRange = splitter.FromNode(node)
 			}
 		} else {
@@ -521,7 +529,9 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 				return
 			}
 			if len(dml.sqls) > 0 {
-				fixSQLPath := filepath.Join(df.FixSQLDir, strconv.Itoa(dml.node.GetID()))
+				// TODO refine this name
+				fileName := fmt.Sprintf("%d.sql", dml.node.GetID())
+				fixSQLPath := filepath.Join(df.FixSQLDir, fileName)
 				if ok := ioutil2.FileExists(fixSQLPath); ok {
 					// unreachable
 					log.Fatal("write sql failed: repeat sql happen", zap.Strings("sql", dml.sqls))
@@ -542,6 +552,60 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 			df.cp.Insert(dml.node)
 		}
 	}
+}
+
+func (df *Diff) removeSQLFiles(checkPointId int) error {
+	ts := time.Now().Format("2006-01-02T15:04:05Z07:00")
+	dirName := fmt.Sprintf(".trash-%s", ts)
+	folderPath := filepath.Join(df.FixSQLDir, dirName)
+
+	if _, err := os.Stat(folderPath); os.IsNotExist(err) {
+		err = os.MkdirAll(folderPath, os.ModePerm)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+
+	err := filepath.Walk(df.FixSQLDir, func(path string, f fs.FileInfo, err error) error {
+		if os.IsNotExist(err) {
+			// if path not exists, we should return nil to continue.
+			return nil
+		}
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		if f == nil || f.IsDir() {
+			return nil
+		}
+
+		name := f.Name()
+		// in mac osx, the path parameter is absolute path; in linux, the path is relative path to execution base dir,
+		// so use Rel to convert to relative path to l.base
+		relPath, _ := filepath.Rel(df.FixSQLDir, path)
+		oldPath := filepath.Join(df.FixSQLDir, relPath)
+		newPath := filepath.Join(folderPath, relPath)
+
+		if strings.HasSuffix(name, ".sql") {
+			fileIDStr := strings.TrimRight(name, ".sql")
+			fileID, err := strconv.Atoi(fileIDStr)
+			if err != nil {
+				return errors.Trace(err)
+			}
+			if fileID > checkPointId {
+				// move to trash
+				err = os.Rename(oldPath, newPath)
+				if err != nil {
+					return errors.Trace(err)
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return errors.Trace(err)
+	}
+	return nil
 }
 
 func setTiDBCfg() {
