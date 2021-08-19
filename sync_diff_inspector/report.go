@@ -14,22 +14,33 @@
 package main
 
 import (
+<<<<<<< HEAD
 	"context"
 	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
+=======
+	"fmt"
+>>>>>>> dc55153 (impl report)
 	"strings"
 	"sync"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/olekukonko/tablewriter"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
+=======
+	"github.com/pingcap/log"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
+	"go.uber.org/zap"
+>>>>>>> dc55153 (impl report)
 )
 
 const (
@@ -55,9 +66,12 @@ type TableResult struct {
 	StructEqual bool   `json:"struct-equal"`
 	DataEqual   bool   `json:"data-equal"`
 	MeetError   error  `json:"meet-error"`
+<<<<<<< HEAD
 	RowsAdd     int    `json:"rows-add"`
 	RowsDelete  int    `json:"rows-delete"`
 	RowsCnt     int64  `json:"rows-count"`
+=======
+>>>>>>> dc55153 (impl report)
 }
 
 // Report saves the check results.
@@ -68,11 +82,50 @@ type Report struct {
 	PassNum      int32                              `json:"pass-num"`
 	FailedNum    int32                              `json:"failed-num"`
 	TableResults map[string]map[string]*TableResult `json:"table-results"`
+<<<<<<< HEAD
 	StartTime    time.Time                          `json:"start-time"`
 	EndTime      time.Time                          `json:"end-time"`
 	TotalSize    int64                              `json:"total-sizes"`
 	SourceConfig [][]byte                           `json:"source-configs"`
 	TargetConfig []byte                             `json:"target-config"`
+=======
+}
+
+// CommitSummary commit summary info
+func (r *Report) CommitSummary(fileName string) error {
+	var summary strings.Builder
+	if r.Result == Pass {
+		summary.WriteString(fmt.Sprintf("A total of %d table have been compared and all are equal.\n", r.FailedNum+r.PassNum))
+		summary.WriteString(fmt.Sprintf("You can view the comparision details through './output_dir/%s'\n", fileName))
+	} else if r.Result == Fail {
+		for schema, tableMap := range r.TableResults {
+			for table, result := range tableMap {
+				if !result.StructEqual {
+					summary.WriteString(fmt.Sprintf("The structure of %s is not equal\n", dbutil.TableName(schema, table)))
+				}
+				if !result.DataEqual {
+					summary.WriteString(fmt.Sprintf("The data of %s is not equal\n", dbutil.TableName(schema, table)))
+				}
+			}
+		}
+		summary.WriteString("\n")
+		summary.WriteString("The rest of tables are all equal.\n")
+		summary.WriteString("The patch file has been generated to './output_dir/patch.sql'\n")
+		summary.WriteString(fmt.Sprintf("You can view the comparision details through './output_dir/%s'\n", fileName))
+	} else {
+		summary.WriteString("Error in comparison process:\n")
+		for schema, tableMap := range r.TableResults {
+			for table, result := range tableMap {
+				summary.WriteString(fmt.Sprintf("%s error occured in %s\n", result.MeetError.Error(), dbutil.TableName(schema, table)))
+			}
+		}
+		summary.WriteString(fmt.Sprintf("You can view the comparision details through './output_dir/%s'\n", fileName))
+	}
+	summary.WriteString("Press any key to exist.\n")
+	log.Info(summary.String())
+	utils.GetChar()
+	return nil
+>>>>>>> dc55153 (impl report)
 }
 
 func (r *Report) getSortedTables() []string {
@@ -214,11 +267,16 @@ func (r *Report) Print(fileName string) error {
 	return nil
 }
 
+<<<<<<< HEAD
 // NewReport returns a new Report.
 func NewReport() *Report {
 	return &Report{
 		TableResults: make(map[string]map[string]*TableResult),
 		Result:       Pass,
+=======
+	if !equal && r.Result != Error {
+		r.Result = Fail
+>>>>>>> dc55153 (impl report)
 	}
 }
 
@@ -248,13 +306,27 @@ func (r *Report) Init(tableDiffs []*common.TableDiff, sourceConfig [][]byte, tar
 func (r *Report) SetTableStructCheckResult(schema, table string, equal bool) {
 	r.Lock()
 	defer r.Unlock()
+<<<<<<< HEAD
 
 	r.TableResults[schema][table].StructEqual = equal
 	if !equal && r.Result != Error {
 		r.Result = Fail
+=======
+	if _, ok := r.TableResults[schema]; !ok {
+		r.TableResults[schema] = make(map[string]*TableResult)
+	}
+
+	if tableResult, ok := r.TableResults[schema][table]; ok {
+		tableResult.DataEqual = equal
+	} else {
+		r.TableResults[schema][table] = &TableResult{
+			DataEqual: equal,
+		}
+>>>>>>> dc55153 (impl report)
 	}
 }
 
+<<<<<<< HEAD
 // SetTableDataCheckResult sets the data check result for table.
 func (r *Report) SetTableDataCheckResult(schema, table string, equal bool, rowsAdd int, rowsDelete int) {
 	r.Lock()
@@ -262,6 +334,8 @@ func (r *Report) SetTableDataCheckResult(schema, table string, equal bool, rowsA
 	r.TableResults[schema][table].DataEqual = equal
 	r.TableResults[schema][table].RowsAdd += rowsAdd
 	r.TableResults[schema][table].RowsDelete += rowsDelete
+=======
+>>>>>>> dc55153 (impl report)
 	if !equal && r.Result != Error {
 		r.Result = Fail
 	}
@@ -279,8 +353,12 @@ func (r *Report) SetTableMeetError(schema, table string, err error) {
 	r.Result = Error
 }
 
+<<<<<<< HEAD
 func (r *Report) AddRowsCnt(schema, table string, cnt int64) {
 	r.Lock()
 	defer r.Unlock()
 	r.TableResults[schema][table].RowsCnt += cnt
+=======
+	r.Result = Error
+>>>>>>> dc55153 (impl report)
 }

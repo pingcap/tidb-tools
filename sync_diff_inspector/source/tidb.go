@@ -17,6 +17,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
+	"time"
+
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
@@ -27,7 +30,6 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"go.uber.org/zap"
-	"time"
 )
 
 type TiDBTableAnalyzer struct {
@@ -246,6 +248,9 @@ func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *conf
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+	sort.Slice(tableDiffs, func(i, j int) bool {
+		return dbutil.TableName(tableDiffs[i].Schema, tableDiffs[i].Table) < dbutil.TableName(tableDiffs[j].Schema, tableDiffs[j].Table)
+	})
 	ts := &TiDBSource{
 		tableDiffs:     tableDiffs,
 		sourceTableMap: sourceTableMap,

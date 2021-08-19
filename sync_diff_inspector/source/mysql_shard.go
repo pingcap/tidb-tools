@@ -71,6 +71,10 @@ func getMatchedSourcesForTable(sourceTablesMap map[string][]*common.TableShardSo
 	return matchSources
 }
 
+func (s *MySQLSources) GetSourceTableMap() map[string][]*common.TableShardSource {
+	return s.sourceTablesMap
+}
+
 func (s *MySQLSources) GetTableAnalyzer() TableAnalyzer {
 	return &MySQLTableAnalyzer{
 		s.sourceTablesMap,
