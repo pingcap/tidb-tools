@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"time"
 
@@ -58,6 +59,10 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, tabl
 	}
 
 	for _, schema := range sourceSchemas {
+		if filter.IsSystemSchema(schema) {
+			// ignore system schema
+			continue
+		}
 		allTables, err := dbutil.GetTables(ctx, dbConn, schema)
 		if err != nil {
 			return nil, errors.Annotatef(err, "get tables from %s", schema)
@@ -190,8 +195,8 @@ func (t *BasicChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, er
 
 	if c != nil {
 		curIndex := t.getCurTableIndex()
-		c.ID = t.currentID
 		t.currentID++
+		c.ID = t.currentID
 		return &splitter.RangeInfo{
 			ChunkRange: c,
 			TableIndex: curIndex,
@@ -210,8 +215,8 @@ func (t *BasicChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, er
 		return nil, errors.Trace(err)
 	}
 	curIndex := t.getCurTableIndex()
-	c.ID = t.currentID
 	t.currentID++
+	c.ID = t.currentID
 	return &splitter.RangeInfo{
 		ChunkRange: c,
 		TableIndex: curIndex,
