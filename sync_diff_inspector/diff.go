@@ -15,11 +15,12 @@ package main
 
 import (
 	"context"
-	"crypto/md5"
-	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -62,28 +63,25 @@ type Diff struct {
 	checkThreadCount  int
 	useChecksum       bool
 	useCheckpoint     bool
-	onlyUseChecksum   bool
 	ignoreDataCheck   bool
 	ignoreStructCheck bool
 	ignoreStats       bool
-	fixSQLFilePath    string
 	wg                sync.WaitGroup
+
+	FixSQLDir     string
+	CheckpointDir string
 
 	sqlCh chan *ChunkDML
 	cp    *checkpoints.Checkpoint
-
-	configHash string
 }
 
 // NewDiff returns a Diff instance.
 func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 	diff = &Diff{
-		chunkSize:         cfg.ChunkSize,
 		sample:            cfg.Sample,
 		checkThreadCount:  cfg.CheckThreadCount,
 		useChecksum:       cfg.UseChecksum,
 		useCheckpoint:     cfg.UseCheckpoint,
-		onlyUseChecksum:   cfg.OnlyUseChecksum,
 		ignoreDataCheck:   cfg.IgnoreDataCheck,
 		ignoreStructCheck: cfg.IgnoreStructCheck,
 		ignoreStats:       cfg.IgnoreStats,
@@ -117,13 +115,9 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 	}
 
 	df.workSource = df.pickSource(ctx)
-	df.fixSQLFilePath = cfg.FixSQLFile
+	df.FixSQLDir = cfg.Task.FixDir
+	df.CheckpointDir = cfg.Task.CheckpointDir
 
-	df.cp.Init()
-	df.configHash, err = df.ComputeConfigHash()
-	if err != nil {
-		return errors.Trace(err)
-	}
 	return nil
 }
 
@@ -191,42 +185,10 @@ func (df *Diff) pickSource(ctx context.Context) source.Source {
 	return df.downstream
 }
 
-func (df *Diff) ComputeConfigHash() (string, error) {
-	checkConfigs, err := df.GetCheckConfig()
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-	bytes := make([]byte, 0)
-	for _, c := range checkConfigs {
-		configBytes, err := json.Marshal(c)
-		if err != nil {
-			return "", errors.Trace(err)
-		}
-		bytes = append(bytes, configBytes...)
-	}
-	return fmt.Sprintf("%x", md5.Sum(bytes)), nil
-}
-
-func (df *Diff) GetCheckConfig() ([]*checkpoints.CheckConfig, error) {
-	tableDiffs := df.workSource.GetTables()
-	checkConfigs := make([]*checkpoints.CheckConfig, len(tableDiffs))
-	for i, tableDiff := range tableDiffs {
-		checkConfigs[i] = &checkpoints.CheckConfig{
-			Table:  utils.UniqueID(tableDiff.Schema, tableDiff.Table),
-			Fields: tableDiff.Fields,
-			Range:  tableDiff.Range,
-			// TODO get snapshot
-			Snapshot:  "",
-			Collation: tableDiff.Collation,
-		}
-	}
-	return checkConfigs, nil
-}
-
 func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterator, error) {
 	var startRange *splitter.RangeInfo
 	if df.useCheckpoint {
-		path := filepath.Join(df.configHash, checkpointFile)
+		path := filepath.Join(df.CheckpointDir, checkpointFile)
 		if ioutil2.FileExists(path) {
 			node, err := df.cp.LoadChunk(path)
 			if err != nil {
@@ -234,13 +196,18 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 			} else {
 				// this need not be synchronized, because at the moment, the is only one thread access the section
 				log.Info("load checkpoint",
-					zap.String("config hash", df.configHash),
 					zap.Int("id", node.GetID()),
 					zap.Reflect("chunk", node),
 					zap.String("state", node.GetState()))
 				df.cp.SetCurrentSavedID(node.GetID() + 1)
 			}
 			if node != nil {
+				// remove the sql file that ID bigger than node.
+				// cause we will generate these sql again.
+				err = df.removeSQLFiles(node.GetID())
+				if err != nil {
+					return nil, errors.Trace(err)
+				}
 				startRange = splitter.FromNode(node)
 			}
 		} else {
@@ -261,13 +228,7 @@ func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
 		df.wg.Done()
 	}()
 	flush := func() {
-		if !ioutil2.FileExists(df.configHash) {
-			err := os.Mkdir(df.configHash, checkpoints.LocalFilePerm)
-			if err != nil {
-				log.Error("fail to create checkpoint directory", zap.String("config hash", df.configHash))
-			}
-		}
-		_, err := df.cp.SaveChunk(ctx, filepath.Join(df.configHash, checkpointFile))
+		_, err := df.cp.SaveChunk(ctx, filepath.Join(df.CheckpointDir, checkpointFile))
 		if err != nil {
 			log.Warn("fail to save the chunk", zap.Error(err))
 			// maybe we should panic, because SaveChunk method should not failed.
@@ -568,7 +529,14 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 				return
 			}
 			if len(dml.sqls) > 0 {
-				fixSQLFile, err := os.Create(fmt.Sprintf("%s_%d", df.fixSQLFilePath, dml.node.GetID()))
+				// TODO refine this name
+				fileName := fmt.Sprintf("%d.sql", dml.node.GetID())
+				fixSQLPath := filepath.Join(df.FixSQLDir, fileName)
+				if ok := ioutil2.FileExists(fixSQLPath); ok {
+					// unreachable
+					log.Fatal("write sql failed: repeat sql happen", zap.Strings("sql", dml.sqls))
+				}
+				fixSQLFile, err := os.Create(fixSQLPath)
 				if err != nil {
 					log.Error("write sql failed: cannot create file", zap.Strings("sql", dml.sqls), zap.Error(err))
 					continue
@@ -584,6 +552,60 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 			df.cp.Insert(dml.node)
 		}
 	}
+}
+
+func (df *Diff) removeSQLFiles(checkPointId int) error {
+	ts := time.Now().Format("2006-01-02T15:04:05Z07:00")
+	dirName := fmt.Sprintf(".trash-%s", ts)
+	folderPath := filepath.Join(df.FixSQLDir, dirName)
+
+	if _, err := os.Stat(folderPath); os.IsNotExist(err) {
+		err = os.MkdirAll(folderPath, os.ModePerm)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+
+	err := filepath.Walk(df.FixSQLDir, func(path string, f fs.FileInfo, err error) error {
+		if os.IsNotExist(err) {
+			// if path not exists, we should return nil to continue.
+			return nil
+		}
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		if f == nil || f.IsDir() {
+			return nil
+		}
+
+		name := f.Name()
+		// in mac osx, the path parameter is absolute path; in linux, the path is relative path to execution base dir,
+		// so use Rel to convert to relative path to l.base
+		relPath, _ := filepath.Rel(df.FixSQLDir, path)
+		oldPath := filepath.Join(df.FixSQLDir, relPath)
+		newPath := filepath.Join(folderPath, relPath)
+
+		if strings.HasSuffix(name, ".sql") {
+			fileIDStr := strings.TrimRight(name, ".sql")
+			fileID, err := strconv.Atoi(fileIDStr)
+			if err != nil {
+				return errors.Trace(err)
+			}
+			if fileID > checkPointId {
+				// move to trash
+				err = os.Rename(oldPath, newPath)
+				if err != nil {
+					return errors.Trace(err)
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return errors.Trace(err)
+	}
+	return nil
 }
 
 func setTiDBCfg() {
