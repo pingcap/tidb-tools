@@ -17,6 +17,7 @@ import (
 	"container/heap"
 	"context"
 	"encoding/json"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"os"
 	"sync"
 
@@ -30,8 +31,6 @@ import (
 	"github.com/pingcap/log"
 	"go.uber.org/zap"
 )
-
-const LocalFilePerm os.FileMode = 0o644
 
 var (
 
@@ -132,7 +131,7 @@ func (cp *Checkpoint) Init() {
 	hp := new(Heap)
 	hp.mu = &sync.Mutex{}
 	hp.Nodes = make([]*Node, 0)
-	hp.CurrentSavedID = -1
+	hp.CurrentSavedID = 0
 	heap.Init(hp)
 	cp.hp = hp
 }
@@ -172,7 +171,7 @@ func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string) (int, erro
 			return 0, errors.Trace(err)
 		}
 
-		if err = ioutil2.WriteFileAtomic(fileName, checkpointData, LocalFilePerm); err != nil {
+		if err = ioutil2.WriteFileAtomic(fileName, checkpointData, config.LocalFilePerm); err != nil {
 			return 0, err
 		}
 

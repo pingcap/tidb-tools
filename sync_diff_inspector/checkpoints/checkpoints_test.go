@@ -29,7 +29,7 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(id, Equals, 0)
 	wg := &sync.WaitGroup{}
-	rounds := 10000
+	rounds := 100
 	for i := 1; i < rounds; i++ {
 		wg.Add(1)
 		go func(i_ int) {
@@ -52,7 +52,7 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 	defer os.Remove("TestSaveChunk")
 	id, err = checker.SaveChunk(ctx, "TestSaveChunk")
 	c.Assert(err, IsNil)
-	c.Assert(id, Equals, 9999)
+	c.Assert(id, Equals, 99)
 }
 
 func (cp *testCheckpointSuit) TestLoadChunk(c *C) {
