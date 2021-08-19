@@ -74,6 +74,7 @@ type Diff struct {
 	cp    *checkpoints.Checkpoint
 
 	configHash string
+	report     *Report
 }
 
 // NewDiff returns a Diff instance.
@@ -90,6 +91,7 @@ func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 		ignoreStats:       cfg.IgnoreStats,
 		sqlCh:             make(chan *ChunkDML, splitter.DefaultChannelBuffer),
 		cp:                new(checkpoints.Checkpoint),
+		report:            NewReport(),
 	}
 	if err = diff.init(ctx, cfg); err != nil {
 		diff.Close()
@@ -162,18 +164,61 @@ func (df *Diff) Equal(ctx context.Context) error {
 		log.Debug("generate chunk", zap.Int("chunk id", c.ChunkRange.ID))
 
 		pool.Apply(func() {
-			res, err := df.consume(ctx, c)
-			if err != nil {
-				// TODO: catch error
-			}
-			// TODO: handle res
-			if res {
-
+			tableDiff := df.workSource.GetTables()[c.TableIndex]
+			structEq, err := df.compareStruct(ctx, c)
+			if err == nil {
+				df.report.SetTableStructCheckResult(tableDiff.Schema, tableDiff.Table, structEq)
+				res, err := df.consume(ctx, c)
+				if err != nil {
+					df.report.SetTableMeetError(tableDiff.Schema, tableDiff.Table, err)
+				}
+				// TODO: handle res
+				// We only care about the fail cases
+				df.report.SetTableDataCheckResult(tableDiff.Schema, tableDiff.Table, res)
+			} else {
+				df.report.SetTableMeetError(tableDiff.Schema, tableDiff.Table, err)
 			}
 		})
 	}
 
 	return nil
+}
+
+func (df *Diff) compareStruct(ctx context.Context, c *splitter.RangeInfo) (structEq bool, err error) {
+	tableDiff := df.downstream.GetTables()[c.TableIndex]
+	targetID := utils.UniqueID(tableDiff.Schema, tableDiff.Table)
+	switch upstream := df.upstream.(type) {
+	case *(source.TiDBSource):
+		sourceSchema, sourceTable := upstream.GetSourceTableMap()[targetID].OriginSchema, upstream.GetSourceTableMap()[targetID].OriginTable
+		sourceTableInfo, err := dbutil.GetTableInfo(ctx, df.upstream.GetDB(), sourceSchema, sourceTable)
+		if err != nil {
+			return false, errors.Trace(err)
+		}
+		// TODO whether we should notice the user the difference of the struct
+		structEq, _ = dbutil.EqualTableInfo(sourceTableInfo, tableDiff.Info)
+	case *(source.MySQLSource):
+		sourceSchema, sourceTable := upstream.GetSourceTableMap()[targetID].OriginSchema, upstream.GetSourceTableMap()[targetID].OriginTable
+		sourceTableInfo, err := dbutil.GetTableInfo(ctx, df.upstream.GetDB(), sourceSchema, sourceTable)
+		if err != nil {
+			return false, errors.Trace(err)
+		}
+		// TODO whether we should notice the user the difference of the struct
+		structEq, _ = dbutil.EqualTableInfo(sourceTableInfo, tableDiff.Info)
+	case *(source.MySQLSources):
+		tableSources := upstream.GetSourceTableMap()[targetID]
+		structEq = true
+		for _, tableSource := range tableSources {
+			sourceSchema, sourceTable := tableSource.OriginSchema, tableSource.OriginTable
+			sourceTableInfo, err := dbutil.GetTableInfo(ctx, tableSource.DBConn, sourceSchema, sourceTable)
+			if err != nil {
+				return false, errors.Trace(err)
+			}
+			// TODO if we do not need the info of which pair of table structures diff, we can quit early
+			eq, _ := dbutil.EqualTableInfo(sourceTableInfo, tableDiff.Info)
+			structEq = structEq && eq
+		}
+	}
+	return structEq, nil
 }
 
 // pickSource pick one proper source to do some work. e.g. generate chunks
@@ -240,7 +285,10 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 					zap.Int("id", node.GetID()),
 					zap.Reflect("chunk", node),
 					zap.String("state", node.GetState()))
-				df.cp.SetCurrentSavedID(node.GetID() + 1)
+				df.cp.SetCurrentSavedID(node.GetID())
+			}
+			if err = df.loadReport(path + "_report"); err != nil {
+				return nil, errors.Annotate(err, "the report data load process failed")
 			}
 			if node != nil {
 				startRange = splitter.FromNode(node)
@@ -251,6 +299,71 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 	}
 
 	return df.workSource.GetRangeIterator(ctx, startRange, df.workSource.GetTableAnalyzer())
+}
+
+func (df *Diff) loadReport(fileName string) error {
+	bytes, err := os.ReadFile(fileName)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	report := Report{}
+	err = json.Unmarshal(bytes, &report)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	df.report.Lock()
+	df.report.PassNum = report.PassNum
+	df.report.FailedNum = report.FailedNum
+	df.report.Result = report.Result
+	df.report.TableResults = report.TableResults
+	return nil
+}
+
+func (df *Diff) getReportSnapshot(i int) *Report {
+	tableDiff := df.downstream.GetTables()[i]
+	targetID := utils.UniqueID(tableDiff.Schema, tableDiff.Table)
+	df.report.Lock()
+	reserveMap := make(map[string]map[string]*TableResult)
+	for schema, tableMap := range df.report.TableResults {
+		reserveMap[schema] = make(map[string]*TableResult)
+		for table, result := range tableMap {
+			reportID := utils.UniqueID(schema, table)
+			if reportID < targetID {
+				reserveMap[schema][table] = result
+			}
+		}
+	}
+	passNum, failedNum := int32(0), int32(0)
+	for _, tableMap := range reserveMap {
+		for _, result := range tableMap {
+			if result.StructEqual && result.DataEqual {
+				passNum++
+			} else {
+				failedNum++
+			}
+		}
+	}
+	result := df.report.Result
+	df.report.Unlock()
+	return &Report{
+		PassNum:      passNum,
+		FailedNum:    failedNum,
+		Result:       result,
+		TableResults: reserveMap,
+	}
+}
+
+func (df *Diff) storeReport(i int) error {
+	report := df.getReportSnapshot(i)
+	log.Warn("get report snapshot", zap.Reflect("report", report))
+	reportData, err := json.Marshal(report)
+	if err != nil {
+		log.Warn("fail to save the report", zap.Error(err))
+	}
+	return ioutil2.WriteFileAtomic(
+		filepath.Join(df.configHash, checkpointFile+"_report"),
+		reportData,
+		checkpoints.LocalFilePerm)
 }
 
 func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
@@ -269,10 +382,15 @@ func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
 				log.Error("fail to create checkpoint directory", zap.String("config hash", df.configHash))
 			}
 		}
-		_, err := df.cp.SaveChunk(ctx, filepath.Join(df.configHash, checkpointFile))
+		tableIndex, err := df.cp.SaveChunk(ctx, filepath.Join(df.configHash, checkpointFile))
 		if err != nil {
 			log.Warn("fail to save the chunk", zap.Error(err))
 			// maybe we should panic, because SaveChunk method should not failed.
+		}
+		if tableIndex != -1 {
+			if err := df.storeReport(tableIndex); err != nil {
+				log.Warn("fail to save the report", zap.Error(err))
+			}
 		}
 	}
 	defer flush()

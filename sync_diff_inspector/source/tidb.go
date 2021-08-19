@@ -16,8 +16,11 @@ package source
 import (
 	"context"
 	"database/sql"
+	"sort"
+
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
@@ -68,6 +71,9 @@ func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, tableRou
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+	sort.Slice(tableDiffs, func(i, j int) bool {
+		return dbutil.TableName(tableDiffs[i].Schema, tableDiffs[i].Table) < dbutil.TableName(tableDiffs[j].Schema, tableDiffs[j].Table)
+	})
 	ts := &TiDBSource{
 		BasicSource{
 			tableDiffs:     tableDiffs,

@@ -18,9 +18,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
+
 	"github.com/pingcap/parser/model"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -47,6 +48,10 @@ func (s *MySQLSources) getMatchedSourcesForTable(table *common.TableDiff) []*com
 		log.Fatal("unreachable, no match source tables in mysql shard source.")
 	}
 	return matchSources
+}
+
+func (s *MySQLSources) GetSourceTableMap() map[string][]*common.TableShardSource {
+	return s.sourceTablesMap
 }
 
 func (s *MySQLSources) GetTableAnalyzer() TableAnalyzer {

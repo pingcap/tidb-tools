@@ -166,6 +166,7 @@ func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string) (int, erro
 			zap.Int("id", cur.GetID()),
 			zap.Reflect("chunk", cur),
 			zap.String("state", cur.GetState()))
+		tableIndex := cur.TableIndex
 		checkpointData, err := json.Marshal(cur)
 		if err != nil {
 			log.Warn("fail to save the chunk to the file", zap.Int("id", cur.GetID()))
@@ -175,10 +176,9 @@ func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string) (int, erro
 		if err = ioutil2.WriteFileAtomic(fileName, checkpointData, LocalFilePerm); err != nil {
 			return 0, err
 		}
-
-		return cur.GetID(), nil
+		return tableIndex, nil
 	}
-	return 0, nil
+	return -1, nil
 }
 
 // LoadChunk loads chunk info from file `chunk`

@@ -87,7 +87,9 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 		log.Fatal("check data difference failed", zap.Error(err))
 	}
 
+	// TODO: do summary
 	//d.report.Print()
 	// TODO update report
-	return false
+	d.report.CommitSummary("sync_diff.log")
+	return d.report.Result == Pass
 }
