@@ -21,12 +21,12 @@ import (
 	"time"
 
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
@@ -237,44 +237,36 @@ func (ms *MultiSourceRowsIterator) Close() {
 	}
 }
 
-func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, tableRouter *router.Table, dbs []*config.DBConfig) (Source, error) {
+func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, tableRouter *router.Table, dbs []*sql.DB) (Source, error) {
 	sourceTablesMap := make(map[string][]*common.TableShardSource)
-
 	// we should get the real table name
-	// and real table row query from source.
+	// and real table row query from sourceDB.
 	uniqueMap := make(map[string]struct{})
 	for _, tableDiff := range tableDiffs {
 		uniqueMap[utils.UniqueID(tableDiff.Schema, tableDiff.Table)] = struct{}{}
 	}
 
-	sourceDBs := make(map[string]*sql.DB)
-	// instance -> db -> table
-	allTablesMap := make(map[string]map[string]map[string]interface{})
-	for _, source := range dbs {
-		sourceDBs[source.InstanceID] = source.Conn
-		allTablesMap[source.InstanceID] = make(map[string]map[string]interface{})
-		sourceSchemas, err := dbutil.GetSchemas(ctx, source.Conn)
+	for i, sourceDB := range dbs {
+		sourceSchemas, err := dbutil.GetSchemas(ctx, sourceDB)
 		if err != nil {
-			return nil, errors.Annotatef(err, "get schemas from %s", source.InstanceID)
+			return nil, errors.Annotatef(err, "get schemas from %d source", i)
 		}
 
 		for _, schema := range sourceSchemas {
-			allTables, err := dbutil.GetTables(ctx, source.Conn, schema)
-			if err != nil {
-				return nil, errors.Annotatef(err, "get tables from %s.%s", source.InstanceID, schema)
+			// Skip system schema.
+			if filter.IsSystemSchema(schema) {
+				continue
 			}
-			allTablesMap[source.InstanceID][schema] = utils.SliceToMap(allTables)
-		}
-	}
-	for instanceID, allSchemas := range allTablesMap {
-		for schema, allTables := range allSchemas {
-			for table := range allTables {
+			allTables, err := dbutil.GetTables(ctx, sourceDB, schema)
+			if err != nil {
+				return nil, errors.Annotatef(err, "get tables from %d source %s", i, schema)
+			}
+			for _, table := range allTables {
 				targetSchema, targetTable := schema, table
 				if tableRouter != nil {
-					var err error
 					targetSchema, targetTable, err = tableRouter.Route(schema, table)
 					if err != nil {
-						return nil, errors.Errorf("get route result for %s.%s.%s failed, error %v", instanceID, schema, table, err)
+						return nil, errors.Errorf("get route result for %d source %s.%s failed, error %v", i, schema, table, err)
 					}
 				}
 				uniqueId := utils.UniqueID(targetSchema, targetTable)
@@ -287,7 +279,7 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, tableR
 							OriginSchema: schema,
 							OriginTable:  table,
 						},
-						DBConn: sourceDBs[instanceID],
+						DBConn: sourceDB,
 					})
 				}
 			}

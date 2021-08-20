@@ -16,7 +16,11 @@ package source
 import (
 	"context"
 	"database/sql"
+	"sort"
+	"strings"
 	"time"
+
+	"github.com/pingcap/tidb-tools/pkg/filter"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -90,11 +94,11 @@ type Source interface {
 
 func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, upstream Source, err error) {
 	// init db connection for upstream / downstream.
-	err = initDBConn(ctx, cfg)
+	upStreamConns, downStreamConn, err := initDBConn(ctx, cfg)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
-	tablesToBeCheck, err := initTables(ctx, cfg)
+	tablesToBeCheck, err := initTables(ctx, cfg, downStreamConn)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
@@ -115,27 +119,31 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 		}
 	}
 
-	tableRouter, err := router.NewTableRouter(false, cfg.TableRules)
-	if err != nil {
-		return nil, nil, errors.Trace(err)
-	}
-	upstream, err = buildSourceFromCfg(ctx, tableDiffs, tableRouter, cfg.SourceDBCfg...)
+	// Sort TableDiff is important!
+	// because we compare table one by one.
+	sort.Slice(tableDiffs, func(i, j int) bool {
+		ti := utils.UniqueID(tableDiffs[i].Schema, tableDiffs[i].Table)
+		tj := utils.UniqueID(tableDiffs[j].Schema, tableDiffs[j].Table)
+		return strings.Compare(ti, tj) > 0
+	})
+
+	upstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.Task.SourceRoute, upStreamConns...)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
 
-	downstream, err = buildSourceFromCfg(ctx, tableDiffs, nil, cfg.TargetDBCfg)
+	downstream, err = buildSourceFromCfg(ctx, tableDiffs, nil, downStreamConn)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
 	return downstream, upstream, nil
 }
 
-func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, tableRouter *router.Table, dbs ...*config.DBConfig) (Source, error) {
+func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, tableRouter *router.Table, dbs ...*sql.DB) (Source, error) {
 	if len(dbs) < 1 {
 		return nil, errors.Errorf("no db config detected")
 	}
-	ok, err := dbutil.IsTiDB(ctx, dbs[0].Conn)
+	ok, err := dbutil.IsTiDB(ctx, dbs[0])
 	if err != nil {
 		return nil, errors.Annotatef(err, "connect to db failed")
 	}
@@ -143,10 +151,10 @@ func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, tab
 	if len(dbs) == 1 {
 		if ok {
 			// TiDB
-			return NewTiDBSource(ctx, tableDiffs, tableRouter, dbs[0].Conn)
+			return NewTiDBSource(ctx, tableDiffs, tableRouter, dbs[0])
 		} else {
 			// Single Mysql
-			return NewMySQLSource(ctx, tableDiffs, tableRouter, dbs[0].Conn)
+			return NewMySQLSource(ctx, tableDiffs, tableRouter, dbs[0])
 		}
 	} else {
 		if ok {
@@ -160,74 +168,52 @@ func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, tab
 	return nil, nil
 }
 
-func initDBConn(ctx context.Context, cfg *config.Config) error {
-	var err error
-	cfg.TargetDBCfg.Conn, err = common.CreateDB(ctx, &cfg.TargetDBCfg.DBConfig, nil, cfg.CheckThreadCount)
+func initDBConn(ctx context.Context, cfg *config.Config) (sourceConns []*sql.DB, targetConn *sql.DB, err error) {
+	targetConn, err = common.CreateDB(ctx, cfg.Task.TargetInstance.ToDBConfig(), nil, cfg.CheckThreadCount)
 	if err != nil {
-		return errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
 
-	targetTZOffset, err := dbutil.GetTimeZoneOffset(ctx, cfg.TargetDBCfg.Conn)
+	targetTZOffset, err := dbutil.GetTimeZoneOffset(ctx, targetConn)
 	if err != nil {
-		return errors.Annotatef(err, "fetch target db %s time zone offset failed", cfg.TargetDBCfg.DBConfig.String())
+		return nil, nil, errors.Annotatef(err, "fetch target db %s time zone offset failed", cfg.Task.TargetInstance.ToDBConfig().String())
 	}
 	vars := map[string]string{
 		"time_zone": dbutil.FormatTimeZoneOffset(targetTZOffset),
 	}
 
-	// upstream
-	if len(cfg.SourceDBCfg) < 1 {
-		return errors.New(" source config")
-	}
-
-	for _, source := range cfg.SourceDBCfg {
+	sourceConns = make([]*sql.DB, 0, len(cfg.Task.SourceInstances))
+	for _, source := range cfg.Task.SourceInstances {
 		// connect source db with target db time_zone
-		source.Conn, err = common.CreateDB(ctx, &source.DBConfig, vars, cfg.CheckThreadCount)
+		conn, err := common.CreateDB(ctx, source.ToDBConfig(), vars, cfg.CheckThreadCount)
 		if err != nil {
-			return errors.Trace(err)
+			return nil, nil, errors.Trace(err)
 		}
+		sourceConns = append(sourceConns, conn)
 	}
-	return nil
+	return sourceConns, targetConn, nil
 }
 
-func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]map[string]*config.TableConfig, err error) {
-	tableRouter, err := router.NewTableRouter(false, cfg.TableRules)
+func initTables(ctx context.Context, cfg *config.Config, downStreamConn *sql.DB) (cfgTables map[string]map[string]*config.TableConfig, err error) {
+	TargetTablesList := make([]*common.TableSource, 0)
+	targetSchemas, err := dbutil.GetSchemas(ctx, downStreamConn)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.Annotatef(err, "get schemas from target source")
 	}
 
-	allTablesMap, err := utils.GetAllTables(ctx, cfg)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	// get all source table's matched target table
-	// target database name => target table name => all matched source table instance
-	sourceTablesMap := make(map[string]map[string][]config.TableInstance)
-	for instanceID, allSchemas := range allTablesMap {
-		if instanceID == cfg.TargetDBCfg.InstanceID {
+	for _, schema := range targetSchemas {
+		if filter.IsSystemSchema(schema) {
 			continue
 		}
-
-		for schema, allTables := range allSchemas {
-			for table := range allTables {
-				targetSchema, targetTable, err := tableRouter.Route(schema, table)
-				if err != nil {
-					return nil, errors.Errorf("get route result for %s.%s.%s failed, error %v", instanceID, schema, table, err)
-				}
-				if _, ok := sourceTablesMap[targetSchema]; !ok {
-					sourceTablesMap[targetSchema] = make(map[string][]config.TableInstance)
-				}
-
-				if _, ok := sourceTablesMap[targetSchema][targetTable]; !ok {
-					sourceTablesMap[targetSchema][targetTable] = make([]config.TableInstance, 0, 1)
-				}
-
-				sourceTablesMap[targetSchema][targetTable] = append(sourceTablesMap[targetSchema][targetTable], config.TableInstance{
-					InstanceID: instanceID,
-					Schema:     schema,
-					Table:      table,
-				})
-			}
+		allTables, err := dbutil.GetTables(ctx, downStreamConn, schema)
+		if err != nil {
+			return nil, errors.Annotatef(err, "get tables from target source %s", schema)
+		}
+		for _, t := range allTables {
+			TargetTablesList = append(TargetTablesList, &common.TableSource{
+				OriginSchema: schema,
+				OriginTable:  t,
+			})
 		}
 	}
 
@@ -235,66 +221,30 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 	// will add default source information, don't worry, we will use table config's info replace this later.
 	// cfg.Tables.Schema => cfg.Tables.Tables => target/source Schema.Table
 	cfgTables = make(map[string]map[string]*config.TableConfig)
-	for _, schemaTables := range cfg.Tables {
-		cfgTables[schemaTables.Schema] = make(map[string]*config.TableConfig)
-		tables := make([]string, 0, len(schemaTables.Tables))
-		allTables, ok := allTablesMap[cfg.TargetDBCfg.InstanceID][schemaTables.Schema]
-		if !ok {
-			return nil, errors.NotFoundf("schema %s.%s", cfg.TargetDBCfg.InstanceID, schemaTables.Schema)
-		}
-
-		for _, table := range schemaTables.Tables {
-			matchedTables, err := utils.GetMatchTable(cfg.TargetDBCfg, schemaTables.Schema, table, allTables)
+	for _, tables := range TargetTablesList {
+		if cfg.Task.TargetCheckTables.MatchTable(tables.OriginSchema, tables.OriginTable) {
+			log.Info("table", zap.String("table", dbutil.TableName(tables.OriginSchema, tables.OriginTable)))
+			tableInfo, err := dbutil.GetTableInfo(ctx, downStreamConn, tables.OriginSchema, tables.OriginTable)
 			if err != nil {
-				return nil, errors.Trace(err)
+				return nil, errors.Errorf("get table %s.%s's information error %s", tables.OriginSchema, tables.OriginTable, errors.ErrorStack(err))
 			}
-
-			//exclude those in "exclude-tables"
-			for _, t := range matchedTables {
-				if utils.InExcludeTables(schemaTables.ExcludeTables, t) {
-					continue
-				} else {
-					tables = append(tables, t)
-				}
+			if _, ok := cfgTables[tables.OriginSchema]; !ok {
+				cfgTables[tables.OriginSchema] = make(map[string]*config.TableConfig)
 			}
-		}
-		for _, tableName := range tables {
-			log.Info("table", zap.String("table", dbutil.TableName(schemaTables.Schema, tableName)))
-			tableInfo, err := dbutil.GetTableInfo(ctx, cfg.TargetDBCfg.Conn, schemaTables.Schema, tableName)
-			if err != nil {
-				return nil, errors.Errorf("get table %s.%s's information error %s", schemaTables.Schema, tableName, errors.ErrorStack(err))
-			}
-			if _, ok := cfgTables[schemaTables.Schema][tableName]; ok {
-				log.Error("duplicate config for one table", zap.String("table", dbutil.TableName(schemaTables.Schema, tableName)))
+			if _, ok := cfgTables[tables.OriginSchema][tables.OriginTable]; ok {
+				log.Error("duplicate config for one table", zap.String("table", dbutil.TableName(tables.OriginSchema, tables.OriginTable)))
 				continue
 			}
-
-			sourceTables := make([]config.TableInstance, 0, 1)
-			if _, ok := sourceTablesMap[schemaTables.Schema][tableName]; ok {
-				log.Info("find matched source tables", zap.Reflect("source tables", sourceTablesMap[schemaTables.Schema][tableName]), zap.String("target schema", schemaTables.Schema), zap.String("table", tableName))
-				sourceTables = sourceTablesMap[schemaTables.Schema][tableName]
-			} else {
-				// use same database name and table name
-				sourceTables = append(sourceTables, config.TableInstance{
-					InstanceID: cfg.SourceDBCfg[0].InstanceID,
-					Schema:     schemaTables.Schema,
-					Table:      tableName,
-				})
-			}
-
-			cfgTables[schemaTables.Schema][tableName] = &config.TableConfig{
-				TableInstance: config.TableInstance{
-					Schema: schemaTables.Schema,
-					Table:  tableName,
-				},
+			cfgTables[tables.OriginSchema][tables.OriginTable] = &config.TableConfig{
+				Schema:          tables.OriginSchema,
+				Table:           tables.OriginTable,
 				TargetTableInfo: tableInfo,
 				Range:           "TRUE",
-				SourceTables:    sourceTables,
 			}
 		}
 	}
 
-	for _, table := range cfg.TableCfgs {
+	for _, table := range cfg.Task.TargetTableConfigs {
 		if _, ok := cfgTables[table.Schema]; !ok {
 			return nil, errors.NotFoundf("schema %s in check tables", table.Schema)
 		}

@@ -14,16 +14,19 @@
 package main
 
 import (
+	"bytes"
 	"context"
-	"crypto/md5"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
@@ -63,29 +66,26 @@ type Diff struct {
 	checkThreadCount  int
 	useChecksum       bool
 	useCheckpoint     bool
-	onlyUseChecksum   bool
 	ignoreDataCheck   bool
 	ignoreStructCheck bool
 	ignoreStats       bool
-	fixSQLFilePath    string
 	wg                sync.WaitGroup
 
-	sqlCh chan *ChunkDML
-	cp    *checkpoints.Checkpoint
+	FixSQLDir     string
+	CheckpointDir string
 
-	configHash string
-	report     *Report
+	sqlCh  chan *ChunkDML
+	cp     *checkpoints.Checkpoint
+	report *Report
 }
 
 // NewDiff returns a Diff instance.
 func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 	diff = &Diff{
-		chunkSize:         cfg.ChunkSize,
 		sample:            cfg.Sample,
 		checkThreadCount:  cfg.CheckThreadCount,
 		useChecksum:       cfg.UseChecksum,
 		useCheckpoint:     cfg.UseCheckpoint,
-		onlyUseChecksum:   cfg.OnlyUseChecksum,
 		ignoreDataCheck:   cfg.IgnoreDataCheck,
 		ignoreStructCheck: cfg.IgnoreStructCheck,
 		ignoreStats:       cfg.IgnoreStats,
@@ -120,14 +120,58 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 	}
 
 	df.workSource = df.pickSource(ctx)
-	df.fixSQLFilePath = cfg.FixSQLFile
-
+	df.FixSQLDir = cfg.Task.FixDir
+	df.CheckpointDir = cfg.Task.CheckpointDir
 	df.cp.Init()
-	df.configHash, err = df.ComputeConfigHash()
+	sourceConfigs, targetConfig, err := getConfigsForReport(cfg)
 	if err != nil {
 		return errors.Trace(err)
 	}
+	df.report.Init(df.downstream.GetTables(), sourceConfigs, targetConfig)
 	return nil
+}
+
+func encodeReportConfig(config *ReportConfig) ([]byte, error) {
+	buf := new(bytes.Buffer)
+	if err := toml.NewEncoder(buf).Encode(config); err != nil {
+		return nil, errors.Trace(err)
+	}
+	return buf.Bytes(), nil
+}
+
+func getConfigsForReport(cfg *config.Config) ([][]byte, []byte, error) {
+	sourceConfigs := make([]*ReportConfig, len(cfg.Task.SourceInstances))
+	for i := 0; i < len(cfg.Task.SourceInstances); i++ {
+		instance := cfg.Task.SourceInstances[i]
+		sourceConfigs[i] = &ReportConfig{
+			Host:     instance.Host,
+			Port:     instance.Port,
+			User:     instance.User,
+			Snapshot: instance.Snapshot,
+			SqlMode:  instance.SqlMode,
+		}
+	}
+	instance := cfg.Task.TargetInstance
+	targetConfig := &ReportConfig{
+		Host:     instance.Host,
+		Port:     instance.Port,
+		User:     instance.User,
+		Snapshot: instance.Snapshot,
+		SqlMode:  instance.SqlMode,
+	}
+	sourceBytes := make([][]byte, len(sourceConfigs))
+	var err error
+	for i := range sourceBytes {
+		sourceBytes[i], err = encodeReportConfig(sourceConfigs[i])
+		if err != nil {
+			return nil, nil, errors.Trace(err)
+		}
+	}
+	targetBytes, err := encodeReportConfig(targetConfig)
+	if err != nil {
+		return nil, nil, errors.Trace(err)
+	}
+	return sourceBytes, targetBytes, nil
 }
 
 // Equal tests whether two database have same data and schema.
@@ -161,22 +205,26 @@ func (df *Diff) Equal(ctx context.Context) error {
 			// finish read the tables
 			break
 		}
-		log.Debug("generate chunk", zap.Int("chunk id", c.ChunkRange.ID))
-
+		tableDiff := df.downstream.GetTables()[c.TableIndex]
+		log.Info("generate chunk", zap.Int("chunk id", c.ChunkRange.ID), zap.String("table", dbutil.TableName(tableDiff.Schema, tableDiff.Table)))
 		pool.Apply(func() {
 			tableDiff := df.workSource.GetTables()[c.TableIndex]
+			schema, table := tableDiff.Schema, tableDiff.Table
 			structEq, err := df.compareStruct(ctx, c)
 			if err == nil {
-				df.report.SetTableStructCheckResult(tableDiff.Schema, tableDiff.Table, structEq)
-				res, err := df.consume(ctx, c)
-				if err != nil {
-					df.report.SetTableMeetError(tableDiff.Schema, tableDiff.Table, err)
+				if !structEq {
+					df.report.SetTableStructCheckResult(schema, table, structEq)
 				}
-				// TODO: handle res
-				// We only care about the fail cases
-				df.report.SetTableDataCheckResult(tableDiff.Schema, tableDiff.Table, res)
+				res, rowsAdd, rowsDelete, rowsCnt, err := df.consume(ctx, c)
+				if err != nil {
+					df.report.SetTableMeetError(schema, table, err)
+				}
+				df.report.AddRowsCnt(schema, table, rowsCnt)
+				if !res {
+					df.report.SetTableDataCheckResult(schema, table, res, rowsAdd, rowsDelete)
+				}
 			} else {
-				df.report.SetTableMeetError(tableDiff.Schema, tableDiff.Table, err)
+				df.report.SetTableMeetError(schema, table, err)
 			}
 		})
 	}
@@ -187,9 +235,13 @@ func (df *Diff) Equal(ctx context.Context) error {
 func (df *Diff) compareStruct(ctx context.Context, c *splitter.RangeInfo) (structEq bool, err error) {
 	tableDiff := df.downstream.GetTables()[c.TableIndex]
 	targetID := utils.UniqueID(tableDiff.Schema, tableDiff.Table)
+	sourceSchema, sourceTable := tableDiff.Schema, tableDiff.Table
 	switch upstream := df.upstream.(type) {
 	case *(source.TiDBSource):
-		sourceSchema, sourceTable := upstream.GetSourceTableMap()[targetID].OriginSchema, upstream.GetSourceTableMap()[targetID].OriginTable
+		sourceTableMap := upstream.GetSourceTableMap()
+		if sourceTableMap != nil {
+			sourceSchema, sourceTable = sourceTableMap[targetID].OriginSchema, upstream.GetSourceTableMap()[targetID].OriginTable
+		}
 		sourceTableInfo, err := dbutil.GetTableInfo(ctx, df.upstream.GetDB(), sourceSchema, sourceTable)
 		if err != nil {
 			return false, errors.Trace(err)
@@ -197,7 +249,10 @@ func (df *Diff) compareStruct(ctx context.Context, c *splitter.RangeInfo) (struc
 		// TODO whether we should notice the user the difference of the struct
 		structEq, _ = dbutil.EqualTableInfo(sourceTableInfo, tableDiff.Info)
 	case *(source.MySQLSource):
-		sourceSchema, sourceTable := upstream.GetSourceTableMap()[targetID].OriginSchema, upstream.GetSourceTableMap()[targetID].OriginTable
+		sourceTableMap := upstream.GetSourceTableMap()
+		if sourceTableMap != nil {
+			sourceSchema, sourceTable = sourceTableMap[targetID].OriginSchema, upstream.GetSourceTableMap()[targetID].OriginTable
+		}
 		sourceTableInfo, err := dbutil.GetTableInfo(ctx, df.upstream.GetDB(), sourceSchema, sourceTable)
 		if err != nil {
 			return false, errors.Trace(err)
@@ -237,43 +292,10 @@ func (df *Diff) pickSource(ctx context.Context) source.Source {
 	return df.downstream
 }
 
-func (df *Diff) ComputeConfigHash() (string, error) {
-	checkConfigs, err := df.GetCheckConfig()
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-	bytes := make([]byte, 0)
-	for _, c := range checkConfigs {
-		configBytes, err := json.Marshal(c)
-		if err != nil {
-			return "", errors.Trace(err)
-		}
-		bytes = append(bytes, configBytes...)
-	}
-	return fmt.Sprintf("%x", md5.Sum(bytes)), nil
-}
-
-func (df *Diff) GetCheckConfig() ([]*checkpoints.CheckConfig, error) {
-	tableDiffs := df.workSource.GetTables()
-	checkConfigs := make([]*checkpoints.CheckConfig, len(tableDiffs))
-	for i, tableDiff := range tableDiffs {
-		checkConfigs[i] = &checkpoints.CheckConfig{
-			Table:  utils.UniqueID(tableDiff.Schema, tableDiff.Table),
-			Fields: tableDiff.Fields,
-			Range:  tableDiff.Range,
-			// TODO get snapshot
-			Snapshot:  "",
-			Collation: tableDiff.Collation,
-		}
-	}
-	sort.Slice(checkConfigs, func(i, j int) bool { return checkConfigs[i].Table < checkConfigs[j].Table })
-	return checkConfigs, nil
-}
-
 func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterator, error) {
 	var startRange *splitter.RangeInfo
 	if df.useCheckpoint {
-		path := filepath.Join(df.configHash, checkpointFile)
+		path := filepath.Join(df.CheckpointDir, checkpointFile)
 		if ioutil2.FileExists(path) {
 			node, err := df.cp.LoadChunk(path)
 			if err != nil {
@@ -281,7 +303,6 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 			} else {
 				// this need not be synchronized, because at the moment, the is only one thread access the section
 				log.Info("load checkpoint",
-					zap.String("config hash", df.configHash),
 					zap.Int("id", node.GetID()),
 					zap.Reflect("chunk", node),
 					zap.String("state", node.GetState()))
@@ -291,6 +312,12 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 				return nil, errors.Annotate(err, "the report data load process failed")
 			}
 			if node != nil {
+				// remove the sql file that ID bigger than node.
+				// cause we will generate these sql again.
+				err = df.removeSQLFiles(node.GetID())
+				if err != nil {
+					return nil, errors.Trace(err)
+				}
 				startRange = splitter.FromNode(node)
 			}
 		} else {
@@ -319,7 +346,7 @@ func (df *Diff) loadReport(fileName string) error {
 	return nil
 }
 
-func (df *Diff) getReportSnapshot(i int) *Report {
+func (df *Diff) getReportSnapshot(i int) (*Report, error) {
 	tableDiff := df.downstream.GetTables()[i]
 	targetID := utils.UniqueID(tableDiff.Schema, tableDiff.Table)
 	df.report.Lock()
@@ -344,26 +371,36 @@ func (df *Diff) getReportSnapshot(i int) *Report {
 		}
 	}
 	result := df.report.Result
+	startTime := df.report.StartTime
+	totalSize := df.report.TotalSize
 	df.report.Unlock()
 	return &Report{
 		PassNum:      passNum,
 		FailedNum:    failedNum,
 		Result:       result,
 		TableResults: reserveMap,
-	}
+		StartTime:    startTime,
+		EndTime:      time.Now(),
+		TotalSize:    totalSize,
+	}, nil
 }
 
 func (df *Diff) storeReport(i int) error {
-	report := df.getReportSnapshot(i)
+	report, err := df.getReportSnapshot(i)
+	if err != nil {
+		log.Warn("fail to save the report", zap.Error(err))
+		return errors.Trace(err)
+	}
 	log.Warn("get report snapshot", zap.Reflect("report", report))
 	reportData, err := json.Marshal(report)
 	if err != nil {
 		log.Warn("fail to save the report", zap.Error(err))
+		return errors.Trace(err)
 	}
 	return ioutil2.WriteFileAtomic(
-		filepath.Join(df.configHash, checkpointFile+"_report"),
+		filepath.Join(df.CheckpointDir, checkpointFile+"_report"),
 		reportData,
-		checkpoints.LocalFilePerm)
+		config.LocalFilePerm)
 }
 
 func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
@@ -376,13 +413,7 @@ func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
 		df.wg.Done()
 	}()
 	flush := func() {
-		if !ioutil2.FileExists(df.configHash) {
-			err := os.Mkdir(df.configHash, checkpoints.LocalFilePerm)
-			if err != nil {
-				log.Error("fail to create checkpoint directory", zap.String("config hash", df.configHash))
-			}
-		}
-		tableIndex, err := df.cp.SaveChunk(ctx, filepath.Join(df.configHash, checkpointFile))
+		_, tableIndex, err := df.cp.SaveChunk(ctx, filepath.Join(df.CheckpointDir, checkpointFile))
 		if err != nil {
 			log.Warn("fail to save the chunk", zap.Error(err))
 			// maybe we should panic, because SaveChunk method should not failed.
@@ -408,17 +439,18 @@ func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
 	}
 }
 
-func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (bool, error) {
+func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (bool, int, int, int64, error) {
 	isEqual, count, err := df.compareChecksumAndGetCount(ctx, rangeInfo)
 	if err != nil {
 		log.Warn("compute checksum error", zap.Int("chunk id", rangeInfo.ChunkRange.ID))
-		return false, errors.Trace(err)
+		return false, 0, 0, 0, errors.Trace(err)
 	}
 	log.Info("count size",
 		zap.Int("chunk id", rangeInfo.ChunkRange.ID),
 		zap.Int64("chunk size", count))
 	var state string
 	dml := &ChunkDML{}
+	rowsAdd, rowsDelete := 0, 0
 	if !isEqual {
 		log.Debug("checksum failed", zap.Int("chunk id", rangeInfo.ChunkRange.ID), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTables()[rangeInfo.TableIndex].Table))
 		state = checkpoints.FailedState
@@ -428,13 +460,13 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 			rangeInfo, err = df.BinGenerate(ctx, df.workSource, rangeInfo, count)
 			log.Debug("bin generate finished", zap.Reflect("chunk", rangeInfo.ChunkRange), zap.Int("chunk id", rangeInfo.ChunkRange.ID))
 			if err != nil {
-				return false, errors.Trace(err)
+				return false, 0, 0, 0, errors.Trace(err)
 			}
 		}
 		dml.sqls = make([]string, 0, 4)
-		isEqual, err = df.compareRows(ctx, rangeInfo, dml)
+		isEqual, rowsAdd, rowsDelete, err = df.compareRows(ctx, rangeInfo, dml)
 		if err != nil {
-			return false, errors.Trace(err)
+			return false, 0, 0, 0, errors.Trace(err)
 		}
 	} else {
 		// update chunk success state in summary
@@ -445,7 +477,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 	dml.node = rangeInfo.ToNode()
 	dml.node.State = state
 	df.sqlCh <- dml
-	return isEqual, nil
+	return isEqual, rowsAdd, rowsDelete, count, nil
 }
 
 func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tableRange *splitter.RangeInfo, count int64) (*splitter.RangeInfo, error) {
@@ -563,15 +595,16 @@ func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *spli
 	return false, crc1Info.Count, nil
 }
 
-func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, dml *ChunkDML) (bool, error) {
+func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, dml *ChunkDML) (bool, int, int, error) {
+	rowsAdd, rowsDelete := 0, 0
 	upstreamRowsIterator, err := df.upstream.GetRowsIterator(ctx, rangeInfo)
 	if err != nil {
-		return false, errors.Trace(err)
+		return false, 0, 0, errors.Trace(err)
 	}
 	defer upstreamRowsIterator.Close()
 	downstreamRowsIterator, err := df.downstream.GetRowsIterator(ctx, rangeInfo)
 	if err != nil {
-		return false, errors.Trace(err)
+		return false, 0, 0, errors.Trace(err)
 	}
 	defer downstreamRowsIterator.Close()
 
@@ -582,14 +615,14 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 		if lastUpstreamData == nil {
 			lastUpstreamData, err = upstreamRowsIterator.Next()
 			if err != nil {
-				return false, err
+				return false, 0, 0, err
 			}
 		}
 
 		if lastDownstreamData == nil {
 			lastDownstreamData, err = downstreamRowsIterator.Next()
 			if err != nil {
-				return false, err
+				return false, 0, 0, err
 			}
 		}
 
@@ -603,7 +636,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 				equal = false
 				lastDownstreamData, err = downstreamRowsIterator.Next()
 				if err != nil {
-					return false, err
+					return false, 0, 0, err
 				}
 			}
 			break
@@ -620,7 +653,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 
 				lastUpstreamData, err = upstreamRowsIterator.Next()
 				if err != nil {
-					return false, err
+					return false, 0, 0, err
 				}
 			}
 			break
@@ -628,7 +661,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 		_, orderKeyCols := dbutil.SelectUniqueOrderKey(df.workSource.GetTables()[rangeInfo.GetTableIndex()].Info)
 		eq, cmp, err := utils.CompareData(lastUpstreamData, lastDownstreamData, orderKeyCols)
 		if err != nil {
-			return false, errors.Trace(err)
+			return false, 0, 0, errors.Trace(err)
 		}
 		if eq {
 			lastDownstreamData = nil
@@ -643,16 +676,20 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 		case 1:
 			// delete
 			sql = df.downstream.GenerateFixSQL(source.Delete, lastDownstreamData, rangeInfo.GetTableIndex())
+			rowsDelete++
 			log.Info("[delete]", zap.String("sql", sql))
 			lastDownstreamData = nil
 		case -1:
 			// insert
 			sql = df.downstream.GenerateFixSQL(source.Replace, lastUpstreamData, rangeInfo.GetTableIndex())
+			rowsAdd++
 			log.Info("[insert]", zap.String("sql", sql))
 			lastUpstreamData = nil
 		case 0:
 			// update
 			sql = df.downstream.GenerateFixSQL(source.Replace, lastUpstreamData, rangeInfo.GetTableIndex())
+			rowsAdd++
+			rowsDelete++
 			log.Info("[update]", zap.String("sql", sql))
 			lastUpstreamData = nil
 			lastDownstreamData = nil
@@ -667,7 +704,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 		// log
 	}
 
-	return equal, nil
+	return equal, rowsAdd, rowsDelete, nil
 }
 
 // WriteSQLs write sqls to file
@@ -688,7 +725,14 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 				return
 			}
 			if len(dml.sqls) > 0 {
-				fixSQLFile, err := os.Create(fmt.Sprintf("%s_%d", df.fixSQLFilePath, dml.node.GetID()))
+				// TODO refine this name
+				fileName := fmt.Sprintf("%d.sql", dml.node.GetID())
+				fixSQLPath := filepath.Join(df.FixSQLDir, fileName)
+				if ok := ioutil2.FileExists(fixSQLPath); ok {
+					// unreachable
+					log.Fatal("write sql failed: repeat sql happen", zap.Strings("sql", dml.sqls))
+				}
+				fixSQLFile, err := os.Create(fixSQLPath)
 				if err != nil {
 					log.Error("write sql failed: cannot create file", zap.Strings("sql", dml.sqls), zap.Error(err))
 					continue
@@ -704,6 +748,60 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 			df.cp.Insert(dml.node)
 		}
 	}
+}
+
+func (df *Diff) removeSQLFiles(checkPointId int) error {
+	ts := time.Now().Format("2006-01-02T15:04:05Z07:00")
+	dirName := fmt.Sprintf(".trash-%s", ts)
+	folderPath := filepath.Join(df.FixSQLDir, dirName)
+
+	if _, err := os.Stat(folderPath); os.IsNotExist(err) {
+		err = os.MkdirAll(folderPath, os.ModePerm)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
+
+	err := filepath.Walk(df.FixSQLDir, func(path string, f fs.FileInfo, err error) error {
+		if os.IsNotExist(err) {
+			// if path not exists, we should return nil to continue.
+			return nil
+		}
+		if err != nil {
+			return errors.Trace(err)
+		}
+
+		if f == nil || f.IsDir() {
+			return nil
+		}
+
+		name := f.Name()
+		// in mac osx, the path parameter is absolute path; in linux, the path is relative path to execution base dir,
+		// so use Rel to convert to relative path to l.base
+		relPath, _ := filepath.Rel(df.FixSQLDir, path)
+		oldPath := filepath.Join(df.FixSQLDir, relPath)
+		newPath := filepath.Join(folderPath, relPath)
+
+		if strings.HasSuffix(name, ".sql") {
+			fileIDStr := strings.TrimRight(name, ".sql")
+			fileID, err := strconv.Atoi(fileIDStr)
+			if err != nil {
+				return errors.Trace(err)
+			}
+			if fileID > checkPointId {
+				// move to trash
+				err = os.Rename(oldPath, newPath)
+				if err != nil {
+					return errors.Trace(err)
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return errors.Trace(err)
+	}
+	return nil
 }
 
 func setTiDBCfg() {

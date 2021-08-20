@@ -86,10 +86,14 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 	if err != nil {
 		log.Fatal("check data difference failed", zap.Error(err))
 	}
-
+	d.report.EndTime = time.Now()
+	if err := d.report.CalculateTotalSize(ctx, d.downstream.GetDB()); err != nil {
+		log.Warn("fail to calculate the total size", zap.Error(err))
+	}
+	d.report.CommitSummary(&cfg.Task)
 	// TODO: do summary
 	//d.report.Print()
 	// TODO update report
-	d.report.CommitSummary("sync_diff.log")
+	d.report.Print("sync_diff.log")
 	return d.report.Result == Pass
 }

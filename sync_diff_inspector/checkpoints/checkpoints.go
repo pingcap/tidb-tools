@@ -20,6 +20,8 @@ import (
 	"os"
 	"sync"
 
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
+
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/siddontang/go/ioutil2"
 
@@ -30,8 +32,6 @@ import (
 	"github.com/pingcap/log"
 	"go.uber.org/zap"
 )
-
-const LocalFilePerm os.FileMode = 0o644
 
 var (
 
@@ -132,13 +132,13 @@ func (cp *Checkpoint) Init() {
 	hp := new(Heap)
 	hp.mu = &sync.Mutex{}
 	hp.Nodes = make([]*Node, 0)
-	hp.CurrentSavedID = -1
+	hp.CurrentSavedID = 0
 	heap.Init(hp)
 	cp.hp = hp
 }
 
 // SaveChunk saves the chunk to file.
-func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string) (int, error) {
+func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string) (int, int, error) {
 	cp.hp.mu.Lock()
 	var cur, next *Node
 	for {
@@ -170,15 +170,15 @@ func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string) (int, erro
 		checkpointData, err := json.Marshal(cur)
 		if err != nil {
 			log.Warn("fail to save the chunk to the file", zap.Int("id", cur.GetID()))
-			return 0, errors.Trace(err)
+			return 0, -1, errors.Trace(err)
 		}
 
-		if err = ioutil2.WriteFileAtomic(fileName, checkpointData, LocalFilePerm); err != nil {
-			return 0, err
+		if err = ioutil2.WriteFileAtomic(fileName, checkpointData, config.LocalFilePerm); err != nil {
+			return 0, -1, err
 		}
-		return tableIndex, nil
+		return cur.GetID(), tableIndex, nil
 	}
-	return -1, nil
+	return 0, -1, nil
 }
 
 // LoadChunk loads chunk info from file `chunk`

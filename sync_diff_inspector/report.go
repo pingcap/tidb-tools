@@ -14,12 +14,22 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/olekukonko/tablewriter"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"go.uber.org/zap"
 )
@@ -32,6 +42,14 @@ const (
 	Error = "error"
 )
 
+type ReportConfig struct {
+	Host     string `toml:"host"`
+	Port     int    `toml:"port"`
+	User     string `toml:"user"`
+	Snapshot string `toml:"snapshot"`
+	SqlMode  string `toml:"sql-mode"`
+}
+
 // TableResult saves the check result for every table.
 type TableResult struct {
 	Schema      string `json:"schma"`
@@ -39,21 +57,120 @@ type TableResult struct {
 	StructEqual bool   `json:"struct-equal"`
 	DataEqual   bool   `json:"data-equal"`
 	MeetError   error  `json:"meet-error"`
+	RowsAdd     int    `json:"rows-add"`
+	RowsDelete  int    `json:"rows-delete"`
+	RowsCnt     int64  `json:"rows-count"`
 }
 
 // Report saves the check results.
 type Report struct {
 	sync.RWMutex
-
 	// Result is pass or fail
 	Result       string                             `json:"result"`
 	PassNum      int32                              `json:"pass-num"`
 	FailedNum    int32                              `json:"failed-num"`
 	TableResults map[string]map[string]*TableResult `json:"table-results"`
+	StartTime    time.Time                          `json:"start-time"`
+	EndTime      time.Time                          `json:"end-time"`
+	TotalSize    int64                              `json:"total-sizes"`
+	SourceConfig [][]byte                           `json:"source-configs"`
+	TargetConfig []byte                             `json:"target-config"`
+}
+
+func (r *Report) getSortedTables() []string {
+	equalTables := make([]string, 0)
+	for schema, tableMap := range r.TableResults {
+		for table, result := range tableMap {
+			if result.StructEqual && result.DataEqual {
+				equalTables = append(equalTables, dbutil.TableName(schema, table))
+			}
+		}
+	}
+	sort.Slice(equalTables, func(i, j int) bool { return equalTables[i] < equalTables[j] })
+	return equalTables
+}
+
+func (r *Report) getDiffRows() [][]string {
+	diffRows := make([][]string, 0)
+	for schema, tableMap := range r.TableResults {
+		for table, result := range tableMap {
+			if result.StructEqual && result.DataEqual {
+				continue
+			}
+			diffRow := make([]string, 0)
+			diffRow = append(diffRow, dbutil.TableName(schema, table))
+			if !result.StructEqual {
+				diffRow = append(diffRow, "true")
+			} else {
+				diffRow = append(diffRow, "true")
+			}
+			diffRow = append(diffRow, fmt.Sprintf("+%d/-%d", result.RowsAdd, result.RowsDelete))
+			diffRows = append(diffRows, diffRow)
+		}
+	}
+	return diffRows
+}
+
+func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB) error {
+	for schema, tableMap := range r.TableResults {
+		for table := range tableMap {
+			size, err := utils.GetTableSize(ctx, db, schema, table)
+			if err != nil {
+				return errors.Trace(err)
+			}
+			log.Info("table size", zap.Int64("size", size))
+			r.TotalSize += size
+		}
+	}
+	return nil
+}
+
+func (r *Report) CommitSummary(taskConfig *config.TaskConfig) error {
+	summaryPath := filepath.Join(taskConfig.OutputDir, "summary.txt")
+	summaryFile, err := os.Create(summaryPath)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	summaryFile.WriteString("Summary\n\n\n\n")
+	summaryFile.WriteString("Source Database\n\n\n\n")
+	for i := 0; i < len(r.SourceConfig); i++ {
+		summaryFile.Write(r.SourceConfig[i])
+		summaryFile.WriteString("\n")
+	}
+	summaryFile.WriteString("Target Databases\n\n\n\n")
+	summaryFile.Write(r.TargetConfig)
+	summaryFile.WriteString("\n")
+
+	summaryFile.WriteString("Comparison Result\n\n\n\n")
+	summaryFile.WriteString("The table structure and data in following tables are equivalent\n\n")
+	equalTables := r.getSortedTables()
+	for _, table := range equalTables {
+		summaryFile.WriteString(table + "\n")
+	}
+	if r.Result == Fail {
+		summaryFile.WriteString("\nThe following tables contains inconsistent data\n\n")
+		tableString := &strings.Builder{}
+		table := tablewriter.NewWriter(tableString)
+		table.SetHeader([]string{"Table", "Structure equality", "Data diff rows"})
+		diffRows := r.getDiffRows()
+		for _, v := range diffRows {
+			table.Append(v)
+		}
+		table.Render()
+		summaryFile.WriteString(tableString.String())
+	}
+	duration := r.EndTime.Sub(r.StartTime)
+	summaryFile.WriteString(fmt.Sprintf("Time Cost: %s\n", duration))
+	summaryFile.WriteString(fmt.Sprintf("Average Speed: %fMB/s\n", float64(r.TotalSize)/(1024.0*1024.0*duration.Seconds())))
+	return nil
+}
+
+func Print(msg string) {
+	fmt.Print(msg)
 }
 
 // CommitSummary commit summary info
-func (r *Report) CommitSummary(fileName string) error {
+func (r *Report) Print(fileName string) error {
 	var summary strings.Builder
 	if r.Result == Pass {
 		summary.WriteString(fmt.Sprintf("A total of %d table have been compared and all are equal.\n", r.FailedNum+r.PassNum))
@@ -83,7 +200,7 @@ func (r *Report) CommitSummary(fileName string) error {
 		summary.WriteString(fmt.Sprintf("You can view the comparision details through './output_dir/%s'\n", fileName))
 	}
 	summary.WriteString("Press any key to exist.\n")
-	log.Info(summary.String())
+	Print(summary.String())
 	utils.GetChar()
 	return nil
 }
@@ -96,41 +213,26 @@ func NewReport() *Report {
 	}
 }
 
-// Print prints the check report.
-func (r *Report) Print() {
-	r.RLock()
-	defer r.RUnlock()
-	/*
-		output example:
-		check result: fail!
-		1 tables' check passed, 2 tables' check failed.
-
-		table: test1
-		table's struct equal
-		table's data not equal
-
-		table: test2
-		table's struct equal
-		table's data not equal
-
-		table: test3
-		table's struct equal
-		table's data equal
-	*/
-
-	log.Info("check result summary", zap.Int32("check passed num", r.PassNum), zap.Int32("check failed num", r.FailedNum))
-
-	for schema, tableMap := range r.TableResults {
-		for table, result := range tableMap {
-			if result.MeetError != nil {
-				log.Error("table check result", zap.String("schema", schema), zap.String("table", table), zap.String("meet error", result.MeetError.Error()))
-			} else {
-				log.Info("table check result", zap.String("schema", schema), zap.String("table", table), zap.Bool("struct equal", result.StructEqual), zap.Bool("data equal", result.DataEqual))
-			}
+func (r *Report) Init(tableDiffs []*common.TableDiff, sourceConfig [][]byte, targetConfig []byte) {
+	r.StartTime = time.Now()
+	r.SourceConfig = sourceConfig
+	r.TargetConfig = targetConfig
+	for _, tableDiff := range tableDiffs {
+		schema, table := tableDiff.Schema, tableDiff.Table
+		if _, ok := r.TableResults[schema]; !ok {
+			r.TableResults[schema] = make(map[string]*TableResult)
+		}
+		r.TableResults[schema][table] = &TableResult{
+			Schema:      schema,
+			Table:       table,
+			StructEqual: true,
+			DataEqual:   true,
+			MeetError:   nil,
+			RowsAdd:     0,
+			RowsDelete:  0,
+			RowsCnt:     0,
 		}
 	}
-
-	return
 }
 
 // SetTableStructCheckResult sets the struct check result for table.
@@ -138,39 +240,19 @@ func (r *Report) SetTableStructCheckResult(schema, table string, equal bool) {
 	r.Lock()
 	defer r.Unlock()
 
-	if _, ok := r.TableResults[schema]; !ok {
-		r.TableResults[schema] = make(map[string]*TableResult)
-	}
-
-	if tableResult, ok := r.TableResults[schema][table]; ok {
-		tableResult.StructEqual = equal
-	} else {
-		r.TableResults[schema][table] = &TableResult{
-			StructEqual: equal,
-		}
-	}
-
+	r.TableResults[schema][table].StructEqual = equal
 	if !equal && r.Result != Error {
 		r.Result = Fail
 	}
 }
 
 // SetTableDataCheckResult sets the data check result for table.
-func (r *Report) SetTableDataCheckResult(schema, table string, equal bool) {
+func (r *Report) SetTableDataCheckResult(schema, table string, equal bool, rowsAdd int, rowsDelete int) {
 	r.Lock()
 	defer r.Unlock()
-	if _, ok := r.TableResults[schema]; !ok {
-		r.TableResults[schema] = make(map[string]*TableResult)
-	}
-
-	if tableResult, ok := r.TableResults[schema][table]; ok {
-		tableResult.DataEqual = equal
-	} else {
-		r.TableResults[schema][table] = &TableResult{
-			DataEqual: equal,
-		}
-	}
-
+	r.TableResults[schema][table].DataEqual = equal
+	r.TableResults[schema][table].RowsAdd += rowsAdd
+	r.TableResults[schema][table].RowsDelete += rowsDelete
 	if !equal && r.Result != Error {
 		r.Result = Fail
 	}
@@ -178,17 +260,18 @@ func (r *Report) SetTableDataCheckResult(schema, table string, equal bool) {
 
 // SetTableMeetError sets meet error when check the table.
 func (r *Report) SetTableMeetError(schema, table string, err error) {
+	r.Lock()
+	defer r.Unlock()
 	if _, ok := r.TableResults[schema]; !ok {
 		r.TableResults[schema] = make(map[string]*TableResult)
 	}
 
-	if tableResult, ok := r.TableResults[schema][table]; ok {
-		tableResult.MeetError = err
-	} else {
-		r.TableResults[schema][table] = &TableResult{
-			MeetError: err,
-		}
-	}
-
+	r.TableResults[schema][table].MeetError = err
 	r.Result = Error
+}
+
+func (r *Report) AddRowsCnt(schema, table string, cnt int64) {
+	r.Lock()
+	defer r.Unlock()
+	r.TableResults[schema][table].RowsCnt += cnt
 }

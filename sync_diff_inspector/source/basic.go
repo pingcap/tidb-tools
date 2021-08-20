@@ -19,11 +19,11 @@ import (
 	"fmt"
 	"time"
 
-	router "github.com/pingcap/tidb-tools/pkg/table-router"
-
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/pkg/filter"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
@@ -59,13 +59,16 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, tabl
 	}
 
 	for _, schema := range sourceSchemas {
+		if filter.IsSystemSchema(schema) {
+			// ignore system schema
+			continue
+		}
 		allTables, err := dbutil.GetTables(ctx, dbConn, schema)
 		if err != nil {
 			return nil, errors.Annotatef(err, "get tables from %s", schema)
 		}
 		allTablesMap[schema] = utils.SliceToMap(allTables)
 	}
-
 	for schema, allTables := range allTablesMap {
 		for table := range allTables {
 			targetSchema, targetTable, err := tableRouter.Route(schema, table)
@@ -201,8 +204,8 @@ func (t *BasicChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, er
 
 	if c != nil {
 		curIndex := t.getCurTableIndex()
-		c.ID = t.currentID
 		t.currentID++
+		c.ID = t.currentID
 		return &splitter.RangeInfo{
 			ChunkRange: c,
 			TableIndex: curIndex,
@@ -221,8 +224,8 @@ func (t *BasicChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, er
 		return nil, errors.Trace(err)
 	}
 	curIndex := t.getCurTableIndex()
-	c.ID = t.currentID
 	t.currentID++
+	c.ID = t.currentID
 	return &splitter.RangeInfo{
 		ChunkRange: c,
 		TableIndex: curIndex,
