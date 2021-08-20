@@ -50,10 +50,6 @@ func (s *MySQLSources) getMatchedSourcesForTable(table *common.TableDiff) []*com
 	return matchSources
 }
 
-func (s *MySQLSources) GetSourceTableMap() map[string][]*common.TableShardSource {
-	return s.sourceTablesMap
-}
-
 func (s *MySQLSources) GetTableAnalyzer() TableAnalyzer {
 	log.Fatal("[UnReachable] we won't choose multi-mysql as work source to call GetTableAnalyzer")
 	return nil

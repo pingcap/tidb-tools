@@ -99,10 +99,6 @@ func getOriginTable(sourceTableMap map[string]*common.TableSource, table *common
 	return originSchema, originTable
 }
 
-func (s *BasicSource) GetSourceTableMap() map[string]*common.TableSource {
-	return s.sourceTableMap
-}
-
 func (s *BasicSource) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
 	var id int
 	if r != nil {
