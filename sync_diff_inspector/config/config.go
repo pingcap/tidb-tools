@@ -187,11 +187,11 @@ func (t *TaskConfig) Init(
 
 	target := t.Target[0]
 	t.FixDir = filepath.Join(t.OutputDir, hash, fmt.Sprintf("fix-on-%s", target))
-	if err := mkdirAll(t.FixDir); err != nil {
+	if err = mkdirAll(t.FixDir); err != nil {
 		return errors.Trace(err)
 	}
 	t.CheckpointDir = filepath.Join(t.OutputDir, hash, "checkpoint")
-	if err := mkdirAll(t.CheckpointDir); err != nil {
+	if err = mkdirAll(t.CheckpointDir); err != nil {
 		return errors.Trace(err)
 	}
 	return nil
