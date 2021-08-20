@@ -174,7 +174,7 @@ func (s *TiDBSource) GetDB() *sql.DB {
 
 func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource) (map[string]*common.TableSource, error) {
 	sourceTableMap := make(map[string]*common.TableSource)
-	if ds.Route != nil {
+	if ds.Router != nil {
 		log.Info("find router for tidb source")
 		// we should get the real table name
 		// and real table row query from source.
@@ -204,7 +204,7 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 
 		for schema, allTables := range allTablesMap {
 			for table := range allTables {
-				targetSchema, targetTable, err := ds.Route.Route(schema, table)
+				targetSchema, targetTable, err := ds.Router.Route(schema, table)
 				if err != nil {
 					return nil, errors.Errorf("get route result for %s.%s failed, error %v", schema, table, err)
 				}

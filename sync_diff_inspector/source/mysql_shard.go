@@ -280,7 +280,7 @@ func (ms *MultiSourceRowsIterator) Close() {
 	}
 }
 
-func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*config.DataSource) (Source, error) {
+func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*config.DataSource, threadCount int) (Source, error) {
 	sourceTablesMap := make(map[string][]*common.TableShardSource)
 	// we should get the real table name
 	// and real table row query from sourceDB.
@@ -295,6 +295,8 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 			return nil, errors.Annotatef(err, "get schemas from %d source", i)
 		}
 
+		// use this map to record max Connection for this source.
+		maxSourceRouteTableCount := make(map[string]int)
 		for _, schema := range sourceSchemas {
 			// Skip system schema.
 			if filter.IsSystemSchema(schema) {
@@ -306,13 +308,14 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 			}
 			for _, table := range allTables {
 				targetSchema, targetTable := schema, table
-				if sourceDB.Route != nil {
-					targetSchema, targetTable, err = sourceDB.Route.Route(schema, table)
+				if sourceDB.Router != nil {
+					targetSchema, targetTable, err = sourceDB.Router.Route(schema, table)
 					if err != nil {
 						return nil, errors.Errorf("get route result for %d source %s.%s failed, error %v", i, schema, table, err)
 					}
 				}
 				uniqueId := utils.UniqueID(targetSchema, targetTable)
+				maxSourceRouteTableCount[uniqueId] ++
 				if _, ok := uniqueMap[uniqueId]; !ok {
 					sourceTablesMap[uniqueId] = make([]*common.TableShardSource, 0)
 				}
@@ -327,6 +330,18 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 				}
 			}
 		}
+		maxConn := 0
+		for _, c := range maxSourceRouteTableCount {
+			if c > maxConn {
+				maxConn = c
+			}
+		}
+		log.Info("will increase connection configurations for DB of instance",
+			zap.Int("connection limit", maxConn*threadCount))
+		// Set this conn to max
+		sourceDB.Conn.SetMaxOpenConns(maxConn*threadCount)
+		sourceDB.Conn.SetMaxIdleConns(maxConn*threadCount)
+
 	}
 
 	mss := &MySQLSources{

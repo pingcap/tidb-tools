@@ -131,19 +131,19 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 		return strings.Compare(ti, tj) > 0
 	})
 
-	upstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.Task.SourceInstances...)
+	upstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.CheckThreadCount, cfg.Task.SourceInstances...)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
 
-	downstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.Task.TargetInstance)
+	downstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.CheckThreadCount, cfg.Task.TargetInstance)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
 	return downstream, upstream, nil
 }
 
-func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, dbs ...*config.DataSource) (Source, error) {
+func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, checkThreadCount int, dbs ...*config.DataSource) (Source, error) {
 	if len(dbs) < 1 {
 		return nil, errors.Errorf("no db config detected")
 	}
@@ -159,7 +159,7 @@ func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, dbs
 			log.Fatal("Don't support check table in multiple tidb instance, please specify one tidb instance.")
 		}
 	}
-	return NewMySQLSources(ctx, tableDiffs, dbs)
+	return NewMySQLSources(ctx, tableDiffs, dbs, checkThreadCount)
 }
 
 func initDBConn(ctx context.Context, cfg *config.Config) error {

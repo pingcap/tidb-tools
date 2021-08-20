@@ -81,10 +81,18 @@ type DataSource struct {
 	Snapshot string `toml:"snapshot" json:"snapshot"`
 
 	RouteRules []string `toml:"route-rules" json:"route-rules"`
-	Route      *router.Table
+	Router     *router.Table
 
 	Conn *sql.DB
 	// SourceType string `toml:"source-type" json:"source-type"`
+}
+
+func (d *DataSource) HashCode() string{
+	b, err := json.Marshal(d)
+	if err != nil {
+		log.Fatal("invalid data source config")
+	}
+	return fmt.Sprintf("%x", md5.Sum(b))
 }
 
 func (d *DataSource) ToDBConfig() *dbutil.DBConfig {
@@ -348,7 +356,7 @@ func (c *Config) Init() (err error) {
 			routeRuleList = append(routeRuleList, rr)
 		}
 		// t.SourceRoute can be nil, the caller should check it.
-		d.Route, err = router.NewTableRouter(false, routeRuleList)
+		d.Router, err = router.NewTableRouter(false, routeRuleList)
 		if err != nil {
 			return errors.Annotate(err, "failed to build route config")
 		}
