@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 
 	"github.com/pingcap/errors"
@@ -85,6 +86,9 @@ type Source interface {
 
 	// GetTables represents the tableDiffs.
 	GetTables() []*common.TableDiff
+
+	// GetSourceStructInfo get the source table info from a given target table
+	GetSourceStructInfo(context.Context, int) ([]*model.TableInfo, error)
 
 	// GetDB represents the db connection.
 	GetDB() *sql.DB

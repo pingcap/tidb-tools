@@ -233,43 +233,30 @@ func (df *Diff) Equal(ctx context.Context) error {
 }
 
 func (df *Diff) compareStruct(ctx context.Context, c *splitter.RangeInfo) (structEq bool, err error) {
-	tableDiff := df.downstream.GetTables()[c.TableIndex]
-	targetID := utils.UniqueID(tableDiff.Schema, tableDiff.Table)
-	sourceSchema, sourceTable := tableDiff.Schema, tableDiff.Table
 	switch upstream := df.upstream.(type) {
 	case *(source.TiDBSource):
-		sourceTableMap := upstream.GetSourceTableMap()
-		if sourceTableMap != nil {
-			sourceSchema, sourceTable = sourceTableMap[targetID].OriginSchema, upstream.GetSourceTableMap()[targetID].OriginTable
-		}
-		sourceTableInfo, err := dbutil.GetTableInfo(ctx, df.upstream.GetDB(), sourceSchema, sourceTable)
+		sourceTableInfos, err := upstream.GetSourceStructInfo(ctx, c.TableIndex)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
 		// TODO whether we should notice the user the difference of the struct
-		structEq, _ = dbutil.EqualTableInfo(sourceTableInfo, tableDiff.Info)
+		structEq, _ = dbutil.EqualTableInfo(sourceTableInfos[0], df.downstream.GetTables()[c.TableIndex].Info)
 	case *(source.MySQLSource):
-		sourceTableMap := upstream.GetSourceTableMap()
-		if sourceTableMap != nil {
-			sourceSchema, sourceTable = sourceTableMap[targetID].OriginSchema, upstream.GetSourceTableMap()[targetID].OriginTable
-		}
-		sourceTableInfo, err := dbutil.GetTableInfo(ctx, df.upstream.GetDB(), sourceSchema, sourceTable)
+		sourceTableInfos, err := upstream.GetSourceStructInfo(ctx, c.TableIndex)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
 		// TODO whether we should notice the user the difference of the struct
-		structEq, _ = dbutil.EqualTableInfo(sourceTableInfo, tableDiff.Info)
+		structEq, _ = dbutil.EqualTableInfo(sourceTableInfos[0], df.downstream.GetTables()[c.TableIndex].Info)
 	case *(source.MySQLSources):
-		tableSources := upstream.GetSourceTableMap()[targetID]
+		sourceTableInfos, err := upstream.GetSourceStructInfo(ctx, c.TableIndex)
+		if err != nil {
+			return false, errors.Trace(err)
+		}
 		structEq = true
-		for _, tableSource := range tableSources {
-			sourceSchema, sourceTable := tableSource.OriginSchema, tableSource.OriginTable
-			sourceTableInfo, err := dbutil.GetTableInfo(ctx, tableSource.DBConn, sourceSchema, sourceTable)
-			if err != nil {
-				return false, errors.Trace(err)
-			}
+		for _, tableInfo := range sourceTableInfos {
 			// TODO if we do not need the info of which pair of table structures diff, we can quit early
-			eq, _ := dbutil.EqualTableInfo(sourceTableInfo, tableDiff.Info)
+			eq, _ := dbutil.EqualTableInfo(tableInfo, df.downstream.GetTables()[c.TableIndex].Info)
 			structEq = structEq && eq
 		}
 	}

@@ -192,6 +192,22 @@ func (s *MySQLSources) GetDB() *sql.DB {
 	return nil
 }
 
+func (s *MySQLSources) GetSourceStructInfo(ctx context.Context, tableIndex int) ([]*model.TableInfo, error) {
+	tableDiff := s.GetTables()[tableIndex]
+	targetID := utils.UniqueID(tableDiff.Schema, tableDiff.Table)
+	tableSources := s.sourceTablesMap[targetID]
+	sourceTableInfos := make([]*model.TableInfo, len(tableSources))
+	for i, tableSource := range tableSources {
+		sourceSchema, sourceTable := tableSource.OriginSchema, tableSource.OriginTable
+		sourceTableInfo, err := dbutil.GetTableInfo(ctx, tableSource.DBConn, sourceSchema, sourceTable)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		sourceTableInfos[i] = sourceTableInfo
+	}
+	return sourceTableInfos, nil
+}
+
 type MultiSourceRowsIterator struct {
 	sourceRows     map[int]*sql.Rows
 	sourceRowDatas *common.RowDatas
