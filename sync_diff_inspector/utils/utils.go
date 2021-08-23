@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -158,7 +159,13 @@ func GetTableRowsQueryFormat(schema, table string, tableInfo *model.TableInfo, c
 
 	columnNames := make([]string, 0, len(tableInfo.Columns))
 	for _, col := range tableInfo.Columns {
-		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
+		name := dbutil.ColumnName(col.Name.O)
+		if col.FieldType.Tp == mysql.TypeFloat {
+			name = fmt.Sprintf("round(%s, 6-log10(%s))", name, name)
+		} else if col.FieldType.Tp == mysql.TypeDouble {
+			name = fmt.Sprintf("round(%s, 15-log10(%s)", name, name)
+		}
+		columnNames = append(columnNames, name)
 	}
 	columns := strings.Join(columnNames, ", ")
 	if collation != "" {
@@ -442,7 +449,13 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 	columnNames := make([]string, 0, len(tbInfo.Columns))
 	columnIsNull := make([]string, 0, len(tbInfo.Columns))
 	for _, col := range tbInfo.Columns {
-		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
+		name := dbutil.ColumnName(col.Name.O)
+		if col.FieldType.Tp == mysql.TypeFloat {
+			name = fmt.Sprintf("round(%s, 6-log10(%s))", name, name)
+		} else if col.FieldType.Tp == mysql.TypeDouble {
+			name = fmt.Sprintf("round(%s, 15-log10(%s)", name, name)
+		}
+		columnNames = append(columnNames, name)
 		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", dbutil.ColumnName(col.Name.O)))
 	}
 
@@ -515,4 +528,24 @@ func IgnoreColumns(tableInfo *model.TableInfo, columns []string) *model.TableInf
 
 func UniqueID(schema string, table string) string {
 	return schema + ":" + table
+}
+
+func GenerateDiffSQL(source, target map[string]*dbutil.ColumnData) (string, error) {
+	var key string
+	var data1, data2 *dbutil.ColumnData
+	var ok bool
+	var same, sameKey []string
+	var diff string
+	for key, data1 = range source {
+		if data2, ok = target[key]; !ok {
+			return "", errors.Errorf("don't have key %s", key)
+		}
+		if (string(data1.Data) == string(data2.Data)) && (data1.IsNull == data2.IsNull) {
+			sameKey = append(sameKey, key)
+			same = append(same, string(data1.Data))
+		} else {
+			diff = fmt.Sprintf("%s[key = %s][source = %s][target = %s]\n", diff, key, data1.Data, data2.Data)
+		}
+	}
+	return fmt.Sprintf("[same]\n(%s)=(%s)\n[diff]\n%s[fixSQL]\n", strings.Join(sameKey, ","), strings.Join(same, ","), diff), nil
 }

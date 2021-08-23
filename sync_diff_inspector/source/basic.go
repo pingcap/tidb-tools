@@ -17,9 +17,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
+
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
