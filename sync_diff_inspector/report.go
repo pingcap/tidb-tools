@@ -26,12 +26,10 @@ import (
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/pingcap/errors"
-	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
-	"go.uber.org/zap"
 )
 
 const (
@@ -118,7 +116,6 @@ func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB) error {
 			if err != nil {
 				return errors.Trace(err)
 			}
-			log.Info("table size", zap.Int64("size", size))
 			r.TotalSize += size
 		}
 	}
@@ -126,6 +123,18 @@ func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB) error {
 }
 
 func (r *Report) CommitSummary(taskConfig *config.TaskConfig) error {
+	passNum, failedNum := int32(0), int32(0)
+	for _, tableMap := range r.TableResults {
+		for _, result := range tableMap {
+			if result.StructEqual && result.DataEqual {
+				passNum++
+			} else {
+				failedNum++
+			}
+		}
+	}
+	r.PassNum = passNum
+	r.FailedNum = failedNum
 	summaryPath := filepath.Join(taskConfig.OutputDir, "summary.txt")
 	summaryFile, err := os.Create(summaryPath)
 	if err != nil {

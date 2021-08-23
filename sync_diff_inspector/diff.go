@@ -108,6 +108,9 @@ func (df *Diff) Close() {
 	if df.downstream != nil {
 		df.downstream.Close()
 	}
+	if err := os.Remove(filepath.Join(df.CheckpointDir, checkpointFile+"_report")); err != nil {
+		log.Fatal("fail to remove the report file")
+	}
 }
 
 func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
@@ -208,23 +211,15 @@ func (df *Diff) Equal(ctx context.Context) error {
 		tableDiff := df.downstream.GetTables()[c.TableIndex]
 		log.Debug("generate chunk", zap.Int("chunk id", c.ChunkRange.ID), zap.String("table", dbutil.TableName(tableDiff.Schema, tableDiff.Table)))
 		pool.Apply(func() {
-			tableDiff := df.workSource.GetTables()[c.TableIndex]
+			tableDiff := df.downstream.GetTables()[c.TableIndex]
 			schema, table := tableDiff.Schema, tableDiff.Table
-			structEq, err := df.compareStruct(ctx, c)
-			if err == nil {
-				if !structEq {
-					df.report.SetTableStructCheckResult(schema, table, structEq)
-				}
-				res, rowsAdd, rowsDelete, rowsCnt, err := df.consume(ctx, c)
-				if err != nil {
-					df.report.SetTableMeetError(schema, table, err)
-				}
-				df.report.AddRowsCnt(schema, table, rowsCnt)
-				if !res {
-					df.report.SetTableDataCheckResult(schema, table, res, rowsAdd, rowsDelete)
-				}
-			} else {
+			res, rowsAdd, rowsDelete, rowsCnt, err := df.consume(ctx, c)
+			if err != nil {
 				df.report.SetTableMeetError(schema, table, err)
+			}
+			df.report.AddRowsCnt(schema, table, rowsCnt)
+			if !res {
+				df.report.SetTableDataCheckResult(schema, table, res, rowsAdd, rowsDelete)
 			}
 		})
 	}
@@ -232,33 +227,29 @@ func (df *Diff) Equal(ctx context.Context) error {
 	return nil
 }
 
-func (df *Diff) compareStruct(ctx context.Context, c *splitter.RangeInfo) (structEq bool, err error) {
-	switch upstream := df.upstream.(type) {
-	case *(source.TiDBSource):
-		sourceTableInfos, err := upstream.GetSourceStructInfo(ctx, c.TableIndex)
+func (df *Diff) StructEqual(ctx context.Context) error {
+	tables := df.downstream.GetTables()
+	for tableIndex, _ := range tables {
+		structEq, err := df.compareStruct(ctx, tableIndex)
 		if err != nil {
-			return false, errors.Trace(err)
+			return errors.Trace(err)
 		}
-		// TODO whether we should notice the user the difference of the struct
-		structEq, _ = dbutil.EqualTableInfo(sourceTableInfos[0], df.downstream.GetTables()[c.TableIndex].Info)
-	case *(source.MySQLSource):
-		sourceTableInfos, err := upstream.GetSourceStructInfo(ctx, c.TableIndex)
-		if err != nil {
-			return false, errors.Trace(err)
+		if !structEq {
+			df.report.SetTableStructCheckResult(tables[tableIndex].Schema, tables[tableIndex].Table, structEq)
 		}
-		// TODO whether we should notice the user the difference of the struct
-		structEq, _ = dbutil.EqualTableInfo(sourceTableInfos[0], df.downstream.GetTables()[c.TableIndex].Info)
-	case *(source.MySQLSources):
-		sourceTableInfos, err := upstream.GetSourceStructInfo(ctx, c.TableIndex)
-		if err != nil {
-			return false, errors.Trace(err)
-		}
-		structEq = true
-		for _, tableInfo := range sourceTableInfos {
-			// TODO if we do not need the info of which pair of table structures diff, we can quit early
-			eq, _ := dbutil.EqualTableInfo(tableInfo, df.downstream.GetTables()[c.TableIndex].Info)
-			structEq = structEq && eq
-		}
+	}
+	return nil
+}
+
+func (df *Diff) compareStruct(ctx context.Context, tableIndex int) (structEq bool, err error) {
+	sourceTableInfos, err := df.upstream.GetSourceStructInfo(ctx, tableIndex)
+	if err != nil {
+		return false, errors.Trace(err)
+	}
+	structEq = true
+	for _, tableInfo := range sourceTableInfos {
+		eq, _ := dbutil.EqualTableInfo(tableInfo, df.downstream.GetTables()[tableIndex].Info)
+		structEq = structEq && eq
 	}
 	return structEq, nil
 }
@@ -293,7 +284,7 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 					zap.Int("id", node.GetID()),
 					zap.Reflect("chunk", node),
 					zap.String("state", node.GetState()))
-				df.cp.SetCurrentSavedID(node.GetID())
+				df.cp.SetCurrentSavedID(node.GetID() + 1)
 			}
 			if err = df.loadReport(path + "_report"); err != nil {
 				return nil, errors.Annotate(err, "the report data load process failed")
@@ -330,7 +321,11 @@ func (df *Diff) loadReport(fileName string) error {
 	df.report.PassNum = report.PassNum
 	df.report.FailedNum = report.FailedNum
 	df.report.Result = report.Result
-	df.report.TableResults = report.TableResults
+	for schema, tableMap := range report.TableResults {
+		for table, result := range tableMap {
+			df.report.TableResults[schema][table] = result
+		}
+	}
 	return nil
 }
 
@@ -343,28 +338,19 @@ func (df *Diff) getReportSnapshot(i int) (*Report, error) {
 		reserveMap[schema] = make(map[string]*TableResult)
 		for table, result := range tableMap {
 			reportID := utils.UniqueID(schema, table)
-			if reportID < targetID {
+			if reportID >= targetID {
 				reserveMap[schema][table] = result
 			}
 		}
 	}
-	passNum, failedNum := int32(0), int32(0)
-	for _, tableMap := range reserveMap {
-		for _, result := range tableMap {
-			if result.StructEqual && result.DataEqual {
-				passNum++
-			} else {
-				failedNum++
-			}
-		}
-	}
+
 	result := df.report.Result
 	startTime := df.report.StartTime
 	totalSize := df.report.TotalSize
 	df.report.Unlock()
 	return &Report{
-		PassNum:      passNum,
-		FailedNum:    failedNum,
+		PassNum:      0,
+		FailedNum:    0,
 		Result:       result,
 		TableResults: reserveMap,
 		StartTime:    startTime,
@@ -379,7 +365,6 @@ func (df *Diff) storeReport(i int) error {
 		log.Warn("fail to save the report", zap.Error(err))
 		return errors.Trace(err)
 	}
-	log.Warn("get report snapshot", zap.Reflect("report", report))
 	reportData, err := json.Marshal(report)
 	if err != nil {
 		log.Warn("fail to save the report", zap.Error(err))
@@ -472,10 +457,8 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 	if count <= splitter.SplitThreshold {
 		return tableRange, nil
 	}
-	// TODO Find great index
 	tableDiff := targetSource.GetTables()[tableRange.GetTableIndex()]
 	indices := dbutil.FindAllIndex(tableDiff.Info)
-
 	var (
 		isEqual1, isEqual2 bool
 		count1, count2     int64

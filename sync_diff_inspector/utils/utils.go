@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -565,4 +566,40 @@ func IgnoreColumns(tableInfo *model.TableInfo, columns []string) *model.TableInf
 
 func UniqueID(schema string, table string) string {
 	return schema + ":" + table
+}
+
+func GetBetterIndex(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo, indices []*model.IndexInfo) error {
+	// SELECT COUNT(DISTINCT city)/COUNT(*) FROM `schema`.`table`;
+	sels := make([]float64, len(indices))
+	for _, index := range indices {
+		column := GetColumnsFromIndex(index, tableInfo)[0]
+		selectivity, err := GetSelectivity(ctx, db, schema, table, column.Name.O, tableInfo)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		log.Debug("index selectivity", zap.String("table", dbutil.TableName(schema, table)), zap.Float64("selectivity", selectivity))
+		sels = append(sels, selectivity)
+		if selectivity >= 0.9 {
+			break
+		}
+	}
+	sort.Slice(indices, func(i, j int) bool { return sels[i] > sels[j] })
+	return nil
+}
+
+func GetSelectivity(ctx context.Context, db *sql.DB, schemaName, tableName, columnName string, tbInfo *model.TableInfo) (float64, error) {
+	query := fmt.Sprintf("SELECT COUNT(DISTINCE %s)/COUNT(1) as SEL FROM %s;", columnName, dbutil.TableName(schemaName, tableName))
+	var selectivity sql.NullFloat64
+	args := []interface{}{}
+	err := db.QueryRowContext(ctx, query, args...).Scan(&selectivity)
+	if err != nil {
+		log.Warn("execute get selectivity query fail", zap.String("query", query))
+		return 0.0, errors.Trace(err)
+	}
+	if !selectivity.Valid {
+		// if don't have any data, the checksum will be `NULL`
+		log.Warn("get empty count or checksum", zap.String("sql", query))
+		return 0.0, nil
+	}
+	return selectivity.Float64, nil
 }

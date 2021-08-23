@@ -99,6 +99,7 @@ func (s *BucketIterator) init(startRange *RangeInfo) error {
 	// TODO: 1. ignore some columns
 	//		 2. how to choose index
 	indices := dbutil.FindAllIndex(s.table.Info)
+	utils.GetBetterIndex(context.Background(), s.dbConn, s.table.Schema, s.table.Table, s.table.Info, indices)
 	for _, index := range indices {
 		if index == nil {
 			continue

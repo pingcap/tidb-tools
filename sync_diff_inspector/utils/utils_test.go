@@ -3,10 +3,12 @@ package utils
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -21,6 +23,16 @@ func TestClient(t *testing.T) {
 var _ = Suite(&testUtilsSuite{})
 
 type testUtilsSuite struct{}
+
+type tableCaseType struct {
+	schema         string
+	table          string
+	createTableSQL string
+	rowColumns     []string
+	rows           [][]driver.Value
+	indices        []string
+	sels           []float64
+}
 
 func createConn() (*sql.DB, error) {
 	return dbutil.OpenDB(dbutil.GetDBConfigFromEnv(""), nil)
@@ -181,4 +193,73 @@ func (s *testUtilsSuite) TestIgnoreColumns(c *C) {
 	tbInfo = IgnoreColumns(tableInfo3, []string{"b", "c"})
 	c.Assert(tbInfo.Columns, HasLen, 2)
 	c.Assert(tbInfo.Indices, HasLen, 1)
+}
+
+func (s *testUtilsSuite) TestGetTableSize(c *C) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	defer conn.Close()
+	dataRows := sqlmock.NewRows([]string{"a", "b"})
+	rowNums := 1000
+	for k := 0; k < rowNums; k++ {
+		str := fmt.Sprintf("%d", k)
+		dataRows.AddRow(str, str)
+	}
+	sizeRows := sqlmock.NewRows([]string{"data"})
+	sizeRows.AddRow("8000")
+	mock.ExpectQuery("data").WillReturnRows(sizeRows)
+	size, err := GetTableSize(ctx, conn, "test", "test")
+	c.Assert(err, IsNil)
+	c.Assert(size, Equals, int64(8000))
+}
+
+func (s *testUtilsSuite) TestGetBetterIndex(c *C) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	conn, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	defer conn.Close()
+	tableCases := []*tableCaseType{
+		{
+			schema:         "single_index",
+			table:          "test1",
+			createTableSQL: "CREATE TABLE `single_index`.`test1` (`a` int, `b` char, primary key(`a`), index(`b`))",
+			rowColumns:     []string{"a", "b"},
+			rows: [][]driver.Value{
+				{"1", "a"},
+				{"2", "a"},
+				{"3", "b"},
+				{"4", "b"},
+				{"5", "c"},
+				{"6", "c"},
+				{"7", "d"},
+				{"8", "d"},
+				{"9", "e"},
+				{"A", "e"},
+				{"B", "f"},
+				{"C", "f"},
+			},
+			indices: []string{"PRIMARY", "b"},
+			sels:    []float64{1.0, 0.5},
+		},
+	}
+	for _, tableCase := range tableCases {
+		tableInfo, err := dbutil.GetTableInfoBySQL(tableCase.createTableSQL, parser.New())
+		c.Assert(err, IsNil)
+		indices := dbutil.FindAllIndex(tableInfo)
+		for i, index := range indices {
+			c.Assert(index.Name.O, Equals, tableCase.indices[i])
+		}
+		for i, col := range tableCase.rowColumns {
+			retRows := sqlmock.NewRows([]string{"SEL"})
+			retRows.AddRow(tableCase.sels[i])
+			mock.ExpectQuery("SELECT").WillReturnRows(retRows)
+			sel, err := GetSelectivity(ctx, conn, tableCase.schema, tableCase.table, col, tableInfo)
+			c.Assert(err, IsNil)
+			c.Assert(sel, Equals, tableCase.sels[i])
+		}
+	}
 }
