@@ -493,13 +493,8 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 			lastUpstreamData = nil
 		case 0:
 			// update
-			sql = df.downstream.GenerateFixSQL(source.Replace, lastUpstreamData, rangeInfo.GetTableIndex())
+			sql = df.downstream.GenerateFixSQLWithAnnotation(source.Replace, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
 			log.Info("[update]", zap.String("sql", sql))
-			diffSQL, err := utils.GenerateDiffSQL(lastUpstreamData, lastDownstreamData)
-			if err != nil {
-				return false, errors.Trace(err)
-			}
-			sql = diffSQL + sql
 			lastUpstreamData = nil
 			lastDownstreamData = nil
 		}
@@ -549,7 +544,7 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 				// write chunk meta
 				chunkRange := dml.node.ChunkRange
 				tableDiff := df.workSource.GetTables()[dml.node.TableIndex]
-				fixSQLFile.WriteString(fmt.Sprintf("[table]\n[%s.%s]\n[range]\n[%s] [%v]\n", tableDiff.Schema, tableDiff.Table, chunkRange.Where, chunkRange.Args))
+				fixSQLFile.WriteString(fmt.Sprintf("-- [table = %s.%s]\n-- [where = %s] [args = %v]\n", tableDiff.Schema, tableDiff.Table, chunkRange.Where, chunkRange.Args))
 				for _, sql := range dml.sqls {
 					_, err = fixSQLFile.WriteString(fmt.Sprintf("%s\n", sql))
 					if err != nil {

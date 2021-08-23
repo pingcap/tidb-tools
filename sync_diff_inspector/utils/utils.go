@@ -206,6 +206,46 @@ func GenerateReplaceDML(data map[string]*dbutil.ColumnData, table *model.TableIn
 	return fmt.Sprintf("REPLACE INTO %s(%s) VALUES (%s);", dbutil.TableName(schema, table.Name.O), strings.Join(colNames, ","), strings.Join(values, ","))
 }
 
+func GenerateReplaceDMLWithAnnotation(source, target map[string]*dbutil.ColumnData, table *model.TableInfo, schema string) string {
+	colNames := make([]string, 0, len(table.Columns))
+	values1 := make([]string, 0, len(table.Columns))
+	values2 := make([]string, 0, len(table.Columns))
+	for _, col := range table.Columns {
+		if col.IsGenerated() {
+			continue
+		}
+
+		var data1, data2 *dbutil.ColumnData
+
+		colNames = append(colNames, dbutil.ColumnName(col.Name.O))
+
+		data1 = source[col.Name.O]
+		if data1.IsNull {
+			values1 = append(values1, "NULL")
+		} else {
+			if needQuotes(col.FieldType.Tp) {
+				values1 = append(values1, fmt.Sprintf("'%s'", strings.Replace(string(data1.Data), "'", "\\'", -1)))
+			} else {
+				values1 = append(values1, string(data1.Data))
+			}
+		}
+
+		data2 = target[col.Name.O]
+		if source[col.Name.O].IsNull {
+			values2 = append(values2, "NULL")
+		} else {
+			if needQuotes(col.FieldType.Tp) {
+				values2 = append(values2, fmt.Sprintf("'%s'", strings.Replace(string(data2.Data), "'", "\\'", -1)))
+			} else {
+				values2 = append(values2, string(data2.Data))
+			}
+		}
+
+	}
+
+	return fmt.Sprintf("-- original data: (%s) VALUES (%s) \nREPLACE INTO %s(%s) VALUES (%s);", strings.Join(colNames, ","), strings.Join(values2, ","), dbutil.TableName(schema, table.Name.O), strings.Join(colNames, ","), strings.Join(values1, ","))
+}
+
 func GenerateDeleteDML(data map[string]*dbutil.ColumnData, table *model.TableInfo, schema string) string {
 	kvs := make([]string, 0, len(table.Columns))
 	for _, col := range table.Columns {
@@ -528,24 +568,4 @@ func IgnoreColumns(tableInfo *model.TableInfo, columns []string) *model.TableInf
 
 func UniqueID(schema string, table string) string {
 	return schema + ":" + table
-}
-
-func GenerateDiffSQL(source, target map[string]*dbutil.ColumnData) (string, error) {
-	var key string
-	var data1, data2 *dbutil.ColumnData
-	var ok bool
-	var same, sameKey []string
-	var diff string
-	for key, data1 = range source {
-		if data2, ok = target[key]; !ok {
-			return "", errors.Errorf("don't have key %s", key)
-		}
-		if (string(data1.Data) == string(data2.Data)) && (data1.IsNull == data2.IsNull) {
-			sameKey = append(sameKey, key)
-			same = append(same, string(data1.Data))
-		} else {
-			diff = fmt.Sprintf("%s[key = %s][source = %s][target = %s]\n", diff, key, data1.Data, data2.Data)
-		}
-	}
-	return fmt.Sprintf("[same]\n(%s)=(%s)\n[diff]\n%s[fixSQL]\n", strings.Join(sameKey, ","), strings.Join(same, ","), diff), nil
 }

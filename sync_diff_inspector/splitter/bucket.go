@@ -168,7 +168,6 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 		}
 		if !flag {
 			// the last checkpoint range is the last chunk so return
-			s.chunksCh <- nil
 			return
 		}
 

@@ -18,10 +18,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
+
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -122,6 +123,14 @@ func (s *MySQLSources) GenerateFixSQL(t DMLType, data map[string]*dbutil.ColumnD
 	}
 	if t == Delete {
 		return utils.GenerateDeleteDML(data, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
+	}
+	log.Fatal("Don't support this type", zap.Any("dml type", t))
+	return ""
+}
+
+func (s *MySQLSources) GenerateFixSQLWithAnnotation(t DMLType, source, target map[string]*dbutil.ColumnData, tableIndex int) string {
+	if t == Replace {
+		return utils.GenerateReplaceDMLWithAnnotation(source, target, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
 	}
 	log.Fatal("Don't support this type", zap.Any("dml type", t))
 	return ""

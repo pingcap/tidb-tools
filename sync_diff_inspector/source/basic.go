@@ -147,6 +147,14 @@ func (s *BasicSource) GenerateFixSQL(t DMLType, data map[string]*dbutil.ColumnDa
 	return ""
 }
 
+func (s *BasicSource) GenerateFixSQLWithAnnotation(t DMLType, source, target map[string]*dbutil.ColumnData, tableIndex int) string {
+	if t == Replace {
+		return utils.GenerateReplaceDMLWithAnnotation(source, target, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
+	}
+	log.Fatal("Don't support this type", zap.Any("dml type", t))
+	return ""
+}
+
 func (s *BasicSource) GetRowsIterator(ctx context.Context, tableRange *splitter.RangeInfo) (RowDataIterator, error) {
 	chunk := tableRange.GetChunk()
 	args := utils.StringsToInterfaces(chunk.Args)

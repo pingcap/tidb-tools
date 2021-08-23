@@ -16,10 +16,11 @@ package source
 import (
 	"context"
 	"database/sql"
-	"github.com/pingcap/tidb-tools/pkg/filter"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/pingcap/tidb-tools/pkg/filter"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -81,6 +82,9 @@ type Source interface {
 
 	// GenerateFixSQL generates the fix sql with given type.
 	GenerateFixSQL(DMLType, map[string]*dbutil.ColumnData, int) string
+
+	// GenerateFixSQLWithAnnotation generates the fix sql with given type.
+	GenerateFixSQLWithAnnotation(DMLType, map[string]*dbutil.ColumnData, map[string]*dbutil.ColumnData, int) string
 
 	// GetTables represents the tableDiffs.
 	GetTables() []*common.TableDiff
