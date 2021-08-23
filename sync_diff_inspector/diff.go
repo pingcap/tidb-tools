@@ -206,7 +206,7 @@ func (df *Diff) Equal(ctx context.Context) error {
 			break
 		}
 		tableDiff := df.downstream.GetTables()[c.TableIndex]
-		log.Info("generate chunk", zap.Int("chunk id", c.ChunkRange.ID), zap.String("table", dbutil.TableName(tableDiff.Schema, tableDiff.Table)))
+		log.Debug("generate chunk", zap.Int("chunk id", c.ChunkRange.ID), zap.String("table", dbutil.TableName(tableDiff.Schema, tableDiff.Table)))
 		pool.Apply(func() {
 			tableDiff := df.workSource.GetTables()[c.TableIndex]
 			schema, table := tableDiff.Schema, tableDiff.Table
@@ -326,6 +326,7 @@ func (df *Diff) loadReport(fileName string) error {
 		return errors.Trace(err)
 	}
 	df.report.Lock()
+	defer df.report.Unlock()
 	df.report.PassNum = report.PassNum
 	df.report.FailedNum = report.FailedNum
 	df.report.Result = report.Result
