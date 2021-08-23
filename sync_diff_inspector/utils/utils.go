@@ -161,9 +161,9 @@ func GetTableRowsQueryFormat(schema, table string, tableInfo *model.TableInfo, c
 	for _, col := range tableInfo.Columns {
 		name := dbutil.ColumnName(col.Name.O)
 		if col.FieldType.Tp == mysql.TypeFloat {
-			name = fmt.Sprintf("round(%s, 6-log10(%s))", name, name)
+			name = fmt.Sprintf("round(%s, 5-floor(log10(%s))) as %s", name, name, name)
 		} else if col.FieldType.Tp == mysql.TypeDouble {
-			name = fmt.Sprintf("round(%s, 15-log10(%s)", name, name)
+			name = fmt.Sprintf("round(%s, 14-floor(log10(%s))) as %s", name, name, name)
 		}
 		columnNames = append(columnNames, name)
 	}
@@ -451,9 +451,9 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 	for _, col := range tbInfo.Columns {
 		name := dbutil.ColumnName(col.Name.O)
 		if col.FieldType.Tp == mysql.TypeFloat {
-			name = fmt.Sprintf("round(%s, 6-log10(%s))", name, name)
+			name = fmt.Sprintf("round(%s, 5-floor(log10(%s)))", name, name)
 		} else if col.FieldType.Tp == mysql.TypeDouble {
-			name = fmt.Sprintf("round(%s, 15-log10(%s)", name, name)
+			name = fmt.Sprintf("round(%s, 14-floor(log10(%s)))", name, name)
 		}
 		columnNames = append(columnNames, name)
 		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", dbutil.ColumnName(col.Name.O)))
