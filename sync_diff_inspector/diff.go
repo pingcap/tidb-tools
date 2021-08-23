@@ -284,7 +284,7 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 					zap.Int("id", node.GetID()),
 					zap.Reflect("chunk", node),
 					zap.String("state", node.GetState()))
-				df.cp.SetCurrentSavedID(node.GetID())
+				df.cp.SetCurrentSavedID(node.GetID() + 1)
 			}
 			if err = df.loadReport(path + "_report"); err != nil {
 				return nil, errors.Annotate(err, "the report data load process failed")
