@@ -26,7 +26,6 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
@@ -92,17 +91,18 @@ type Source interface {
 
 	// GetDB represents the db connection.
 	GetDB() *sql.DB
+
 	// Close ...
 	Close()
 }
 
 func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, upstream Source, err error) {
 	// init db connection for upstream / downstream.
-	upStreamConns, downStreamConn, err := initDBConn(ctx, cfg)
+	err = initDBConn(ctx, cfg)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
-	tablesToBeCheck, err := initTables(ctx, cfg, downStreamConn)
+	tablesToBeCheck, err := initTables(ctx, cfg)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
@@ -131,74 +131,65 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 		return strings.Compare(ti, tj) > 0
 	})
 
-	upstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.Task.SourceRoute, upStreamConns...)
+	upstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.CheckThreadCount, cfg.Task.SourceInstances...)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
 
-	downstream, err = buildSourceFromCfg(ctx, tableDiffs, nil, downStreamConn)
+	downstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.CheckThreadCount, cfg.Task.TargetInstance)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
 	return downstream, upstream, nil
 }
 
-func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, tableRouter *router.Table, dbs ...*sql.DB) (Source, error) {
+func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, checkThreadCount int, dbs ...*config.DataSource) (Source, error) {
 	if len(dbs) < 1 {
 		return nil, errors.Errorf("no db config detected")
 	}
-	ok, err := dbutil.IsTiDB(ctx, dbs[0])
+	ok, err := dbutil.IsTiDB(ctx, dbs[0].Conn)
 	if err != nil {
 		return nil, errors.Annotatef(err, "connect to db failed")
 	}
 
-	if len(dbs) == 1 {
-		if ok {
-			// TiDB
-			return NewTiDBSource(ctx, tableDiffs, tableRouter, dbs[0])
+	if ok {
+		if len(dbs) == 1 {
+			return NewTiDBSource(ctx, tableDiffs, dbs[0])
 		} else {
-			// Single Mysql
-			return NewMySQLSource(ctx, tableDiffs, tableRouter, dbs[0])
-		}
-	} else {
-		if ok {
-			// TiDB
 			log.Fatal("Don't support check table in multiple tidb instance, please specify one tidb instance.")
-		} else {
-			return NewMySQLSources(ctx, tableDiffs, tableRouter, dbs)
 		}
 	}
-	// unreachable
-	return nil, nil
+	return NewMySQLSources(ctx, tableDiffs, dbs, checkThreadCount)
 }
 
-func initDBConn(ctx context.Context, cfg *config.Config) (sourceConns []*sql.DB, targetConn *sql.DB, err error) {
-	targetConn, err = common.CreateDB(ctx, cfg.Task.TargetInstance.ToDBConfig(), nil, cfg.CheckThreadCount)
+func initDBConn(ctx context.Context, cfg *config.Config) error {
+	targetConn, err := common.CreateDB(ctx, cfg.Task.TargetInstance.ToDBConfig(), nil, cfg.CheckThreadCount)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return errors.Trace(err)
 	}
 
 	targetTZOffset, err := dbutil.GetTimeZoneOffset(ctx, targetConn)
 	if err != nil {
-		return nil, nil, errors.Annotatef(err, "fetch target db %s time zone offset failed", cfg.Task.TargetInstance.ToDBConfig().String())
+		return errors.Annotatef(err, "fetch target db %s time zone offset failed", cfg.Task.TargetInstance.ToDBConfig().String())
 	}
 	vars := map[string]string{
 		"time_zone": dbutil.FormatTimeZoneOffset(targetTZOffset),
 	}
+	cfg.Task.TargetInstance.Conn = targetConn
 
-	sourceConns = make([]*sql.DB, 0, len(cfg.Task.SourceInstances))
 	for _, source := range cfg.Task.SourceInstances {
 		// connect source db with target db time_zone
 		conn, err := common.CreateDB(ctx, source.ToDBConfig(), vars, cfg.CheckThreadCount)
 		if err != nil {
-			return nil, nil, errors.Trace(err)
+			return errors.Trace(err)
 		}
-		sourceConns = append(sourceConns, conn)
+		source.Conn = conn
 	}
-	return sourceConns, targetConn, nil
+	return nil
 }
 
-func initTables(ctx context.Context, cfg *config.Config, downStreamConn *sql.DB) (cfgTables map[string]map[string]*config.TableConfig, err error) {
+func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]map[string]*config.TableConfig, err error) {
+	downStreamConn := cfg.Task.TargetInstance.Conn
 	TargetTablesList := make([]*common.TableSource, 0)
 	targetSchemas, err := dbutil.GetSchemas(ctx, downStreamConn)
 	if err != nil {
@@ -272,19 +263,4 @@ type RangeIterator interface {
 	Next(context.Context) (*splitter.RangeInfo, error)
 
 	Close()
-}
-
-type BasicRowsIterator struct {
-	rows *sql.Rows
-}
-
-func (s *BasicRowsIterator) Close() {
-	s.rows.Close()
-}
-
-func (s *BasicRowsIterator) Next() (map[string]*dbutil.ColumnData, error) {
-	if s.rows.Next() {
-		return dbutil.ScanRow(s.rows)
-	}
-	return nil, nil
 }
