@@ -136,22 +136,17 @@ func (s *BasicSource) GetTables() []*common.TableDiff {
 	return s.tableDiffs
 }
 
-func (s *BasicSource) GenerateFixSQL(t DMLType, data map[string]*dbutil.ColumnData, tableIndex int) string {
-	if t == Replace {
-		return utils.GenerateReplaceDML(data, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
+func (s *BasicSource) GenerateFixSQL(t DMLType, upstreamData, downstreamData map[string]*dbutil.ColumnData, tableIndex int) string {
+	switch t {
+	case Insert:
+		return utils.GenerateReplaceDML(upstreamData, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
+	case Delete:
+		return utils.GenerateDeleteDML(downstreamData, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
+	case Replace:
+		return utils.GenerateReplaceDMLWithAnnotation(upstreamData, downstreamData, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
+	default:
+		log.Fatal("Don't support this type", zap.Any("dml type", t))
 	}
-	if t == Delete {
-		return utils.GenerateDeleteDML(data, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
-	}
-	log.Fatal("Don't support this type", zap.Any("dml type", t))
-	return ""
-}
-
-func (s *BasicSource) GenerateFixSQLWithAnnotation(t DMLType, source, target map[string]*dbutil.ColumnData, tableIndex int) string {
-	if t == Replace {
-		return utils.GenerateReplaceDMLWithAnnotation(source, target, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
-	}
-	log.Fatal("Don't support this type", zap.Any("dml type", t))
 	return ""
 }
 

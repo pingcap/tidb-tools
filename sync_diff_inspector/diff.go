@@ -419,6 +419,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 	var lastUpstreamData, lastDownstreamData map[string]*dbutil.ColumnData
 	equal := true
 
+	_, orderKeyCols := dbutil.SelectUniqueOrderKey(df.workSource.GetTables()[rangeInfo.GetTableIndex()].Info)
 	for {
 		if lastUpstreamData == nil {
 			lastUpstreamData, err = upstreamRowsIterator.Next()
@@ -437,7 +438,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 		if lastUpstreamData == nil {
 			// don't have source data, so all the targetRows's data is redundant, should be deleted
 			for lastDownstreamData != nil {
-				sql := df.downstream.GenerateFixSQL(source.Delete, lastDownstreamData, rangeInfo.GetTableIndex())
+				sql := df.downstream.GenerateFixSQL(source.Delete, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
 				log.Info("[delete]", zap.String("sql", sql))
 
 				dml.sqls = append(dml.sqls, sql)
@@ -453,7 +454,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 		if lastDownstreamData == nil {
 			// target lack some data, should insert the last source datas
 			for lastUpstreamData != nil {
-				sql := df.downstream.GenerateFixSQL(source.Replace, lastUpstreamData, rangeInfo.GetTableIndex())
+				sql := df.downstream.GenerateFixSQL(source.Insert, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
 				log.Info("[insert]", zap.String("sql", sql))
 
 				dml.sqls = append(dml.sqls, sql)
@@ -466,7 +467,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 			}
 			break
 		}
-		_, orderKeyCols := dbutil.SelectUniqueOrderKey(df.workSource.GetTables()[rangeInfo.GetTableIndex()].Info)
+
 		eq, cmp, err := utils.CompareData(lastUpstreamData, lastDownstreamData, orderKeyCols)
 		if err != nil {
 			return false, errors.Trace(err)
@@ -483,17 +484,17 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 		switch cmp {
 		case 1:
 			// delete
-			sql = df.downstream.GenerateFixSQL(source.Delete, lastDownstreamData, rangeInfo.GetTableIndex())
+			sql = df.downstream.GenerateFixSQL(source.Delete, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
 			log.Info("[delete]", zap.String("sql", sql))
 			lastDownstreamData = nil
 		case -1:
 			// insert
-			sql = df.downstream.GenerateFixSQL(source.Replace, lastUpstreamData, rangeInfo.GetTableIndex())
+			sql = df.downstream.GenerateFixSQL(source.Insert, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
 			log.Info("[insert]", zap.String("sql", sql))
 			lastUpstreamData = nil
 		case 0:
 			// update
-			sql = df.downstream.GenerateFixSQLWithAnnotation(source.Replace, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
+			sql = df.downstream.GenerateFixSQL(source.Replace, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
 			log.Info("[update]", zap.String("sql", sql))
 			lastUpstreamData = nil
 			lastDownstreamData = nil
@@ -544,7 +545,7 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 				// write chunk meta
 				chunkRange := dml.node.ChunkRange
 				tableDiff := df.workSource.GetTables()[dml.node.TableIndex]
-				fixSQLFile.WriteString(fmt.Sprintf("-- [table = %s.%s]\n-- [where = %s] [args = %v]\n", tableDiff.Schema, tableDiff.Table, chunkRange.Where, chunkRange.Args))
+				fixSQLFile.WriteString(fmt.Sprintf("-- [table = %s.%s]\n-- [where = %s]\n", tableDiff.Schema, tableDiff.Table, fmt.Sprintf(strings.Replace(chunkRange.Where, "?", "%s", -1), utils.StringsToInterfaces(chunkRange.Args)...)))
 				for _, sql := range dml.sqls {
 					_, err = fixSQLFile.WriteString(fmt.Sprintf("%s\n", sql))
 					if err != nil {
