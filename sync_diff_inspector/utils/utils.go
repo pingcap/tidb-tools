@@ -25,6 +25,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pkg/term"
 	"go.uber.org/zap"
@@ -199,7 +200,13 @@ func GetTableRowsQueryFormat(schema, table string, tableInfo *model.TableInfo, c
 
 	columnNames := make([]string, 0, len(tableInfo.Columns))
 	for _, col := range tableInfo.Columns {
-		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
+		name := dbutil.ColumnName(col.Name.O)
+		if col.FieldType.Tp == mysql.TypeFloat {
+			name = fmt.Sprintf("round(%s, 5-floor(log10(%s))) as %s", name, name, name)
+		} else if col.FieldType.Tp == mysql.TypeDouble {
+			name = fmt.Sprintf("round(%s, 14-floor(log10(%s))) as %s", name, name, name)
+		}
+		columnNames = append(columnNames, name)
 	}
 	columns := strings.Join(columnNames, ", ")
 	if collation != "" {
@@ -238,6 +245,46 @@ func GenerateReplaceDML(data map[string]*dbutil.ColumnData, table *model.TableIn
 	}
 
 	return fmt.Sprintf("REPLACE INTO %s(%s) VALUES (%s);", dbutil.TableName(schema, table.Name.O), strings.Join(colNames, ","), strings.Join(values, ","))
+}
+
+func GenerateReplaceDMLWithAnnotation(source, target map[string]*dbutil.ColumnData, table *model.TableInfo, schema string) string {
+	colNames := make([]string, 0, len(table.Columns))
+	values1 := make([]string, 0, len(table.Columns))
+	values2 := make([]string, 0, len(table.Columns))
+	for _, col := range table.Columns {
+		if col.IsGenerated() {
+			continue
+		}
+
+		var data1, data2 *dbutil.ColumnData
+
+		colNames = append(colNames, dbutil.ColumnName(col.Name.O))
+
+		data1 = source[col.Name.O]
+		if data1.IsNull {
+			values1 = append(values1, "NULL")
+		} else {
+			if needQuotes(col.FieldType.Tp) {
+				values1 = append(values1, fmt.Sprintf("'%s'", strings.Replace(string(data1.Data), "'", "\\'", -1)))
+			} else {
+				values1 = append(values1, string(data1.Data))
+			}
+		}
+
+		data2 = target[col.Name.O]
+		if source[col.Name.O].IsNull {
+			values2 = append(values2, "NULL")
+		} else {
+			if needQuotes(col.FieldType.Tp) {
+				values2 = append(values2, fmt.Sprintf("'%s'", strings.Replace(string(data2.Data), "'", "\\'", -1)))
+			} else {
+				values2 = append(values2, string(data2.Data))
+			}
+		}
+
+	}
+
+	return fmt.Sprintf("-- original data: (%s) VALUES (%s) \nREPLACE INTO %s(%s) VALUES (%s);", strings.Join(colNames, ","), strings.Join(values2, ","), dbutil.TableName(schema, table.Name.O), strings.Join(colNames, ","), strings.Join(values1, ","))
 }
 
 func GenerateDeleteDML(data map[string]*dbutil.ColumnData, table *model.TableInfo, schema string) string {
@@ -493,7 +540,13 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 	columnNames := make([]string, 0, len(tbInfo.Columns))
 	columnIsNull := make([]string, 0, len(tbInfo.Columns))
 	for _, col := range tbInfo.Columns {
-		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
+		name := dbutil.ColumnName(col.Name.O)
+		if col.FieldType.Tp == mysql.TypeFloat {
+			name = fmt.Sprintf("round(%s, 5-floor(log10(%s)))", name, name)
+		} else if col.FieldType.Tp == mysql.TypeDouble {
+			name = fmt.Sprintf("round(%s, 14-floor(log10(%s)))", name, name)
+		}
+		columnNames = append(columnNames, name)
 		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", dbutil.ColumnName(col.Name.O)))
 	}
 
