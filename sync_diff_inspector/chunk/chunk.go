@@ -160,14 +160,19 @@ func (c *Range) ToMeta() string {
 		columnName = append(columnName, bound.Column)
 		if bound.HasLower {
 			lowerCondition = append(lowerCondition, bound.Lower)
-		} else {
-			lowerCondition = append(lowerCondition, "-inf")
 		}
 		if bound.HasUpper {
 			upperCondition = append(upperCondition, bound.Upper)
-		} else {
-			upperCondition = append(upperCondition, "+inf")
 		}
+	}
+	if len(upperCondition) == 0 && len(lowerCondition) == 0 {
+		return "range in sequence: Full"
+	}
+	if len(upperCondition) == 0 {
+		return fmt.Sprintf("range in sequence: (%s) < (%s)", strings.Join(lowerCondition, ","), strings.Join(columnName, ","))
+	}
+	if len(lowerCondition) == 0 {
+		return fmt.Sprintf("range in sequence: (%s) <= (%s)", strings.Join(columnName, ","), strings.Join(upperCondition, ","))
 	}
 	return fmt.Sprintf("range in sequence: (%s) < (%s) <= (%s)", strings.Join(lowerCondition, ","), strings.Join(columnName, ","), strings.Join(upperCondition, ","))
 }
