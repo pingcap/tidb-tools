@@ -18,6 +18,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"os"
+	"path/filepath"
+	"syscall"
+
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -27,9 +31,6 @@ import (
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 
 	"go.uber.org/zap"
-	"os"
-	"path/filepath"
-	"syscall"
 )
 
 const (
@@ -198,7 +199,13 @@ func (t *TaskConfig) Init(
 
 	target := t.Target[0]
 	t.FixDir = filepath.Join(t.OutputDir, hash, fmt.Sprintf("fix-on-%s", target))
+	if err := mkdirAll(t.FixDir); err != nil {
+		return errors.Trace(err)
+	}
 	t.CheckpointDir = filepath.Join(t.OutputDir, hash, "checkpoint")
+	if err := mkdirAll(t.CheckpointDir); err != nil {
+		return errors.Trace(err)
+	}
 	return nil
 }
 
