@@ -572,6 +572,9 @@ func GetBetterIndex(ctx context.Context, db *sql.DB, schema, table string, table
 	// SELECT COUNT(DISTINCT city)/COUNT(*) FROM `schema`.`table`;
 	sels := make([]float64, len(indices))
 	for _, index := range indices {
+		if index.Primary || index.Unique {
+			return nil
+		}
 		column := GetColumnsFromIndex(index, tableInfo)[0]
 		selectivity, err := GetSelectivity(ctx, db, schema, table, column.Name.O, tableInfo)
 		if err != nil {
@@ -579,9 +582,6 @@ func GetBetterIndex(ctx context.Context, db *sql.DB, schema, table string, table
 		}
 		log.Debug("index selectivity", zap.String("table", dbutil.TableName(schema, table)), zap.Float64("selectivity", selectivity))
 		sels = append(sels, selectivity)
-		if selectivity >= 0.9 {
-			break
-		}
 	}
 	sort.Slice(indices, func(i, j int) bool { return sels[i] > sels[j] })
 	return nil

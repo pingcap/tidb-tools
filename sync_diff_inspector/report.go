@@ -98,7 +98,7 @@ func (r *Report) getDiffRows() [][]string {
 			diffRow := make([]string, 0)
 			diffRow = append(diffRow, dbutil.TableName(schema, table))
 			if !result.StructEqual {
-				diffRow = append(diffRow, "true")
+				diffRow = append(diffRow, "false")
 			} else {
 				diffRow = append(diffRow, "true")
 			}
