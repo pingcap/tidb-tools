@@ -36,8 +36,10 @@ func (s *testConfigSuite) TestParseConfig(c *C) {
 	c.Assert(err, ErrorMatches, ".*LL.*")
 
 	c.Assert(cfg.Parse([]string{"-config", "config.toml"}), IsNil)
-	c.Assert(cfg.Task.Init(cfg.DataSources, cfg.Routes, cfg.TableConfigs), IsNil)
+	c.Assert(cfg.Init(), IsNil)
+	c.Assert(cfg.Task.Init(cfg.DataSources, cfg.TableConfigs), IsNil)
 
 	c.Assert(cfg.Parse([]string{"-config", "config_sharding.toml"}), IsNil)
-	c.Assert(cfg.Task.Init(cfg.DataSources, cfg.Routes, cfg.TableConfigs), IsNil)
+	c.Assert(cfg.Init(), IsNil)
+	c.Assert(cfg.Task.Init(cfg.DataSources, cfg.TableConfigs), IsNil)
 }

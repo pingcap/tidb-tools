@@ -18,6 +18,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"testing"
 	"time"
 
@@ -125,10 +126,10 @@ func (s *testSourceSuite) TestBasicSource(c *C) {
 
 	tableDiffs := prepareTiDBTables(c, tableCases)
 
-	sourceMap, err := getSourceTableMap(ctx, tableDiffs, nil, conn)
-
+	sourceMap, err := getSourceTableMap(ctx, tableDiffs, &config.DataSource{Conn: conn})
 	c.Assert(err, IsNil)
-	basic := &BasicSource{
+
+	basic := &TiDBSource{
 		tableDiffs:     tableDiffs,
 		sourceTableMap: sourceMap,
 		dbConn:         conn,
@@ -240,12 +241,14 @@ func (s *testSourceSuite) TestMysqlShardSources(c *C) {
 		conn, conn, conn, conn,
 	}
 
-	for range dbs {
+	cs := make([]*config.DataSource, 4)
+	for i := range dbs {
 		mock.ExpectQuery("SHOW DATABASES").WillReturnRows(sqlmock.NewRows([]string{"Database"}).AddRow("mysql").AddRow("source_test"))
 		mock.ExpectQuery("SHOW FULL TABLES*").WillReturnRows(sqlmock.NewRows([]string{"Table", "type"}).AddRow("test1", "base").AddRow("test2", "base"))
+		cs[i].Conn = conn
 	}
 
-	shard, err := NewMySQLSources(ctx, tableDiffs, nil, dbs)
+	shard, err := NewMySQLSources(ctx, tableDiffs, cs)
 	c.Assert(err, IsNil)
 
 	for n, tableCase := range tableCases {

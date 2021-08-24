@@ -19,12 +19,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/pingcap/tidb-tools/pkg/filter"
-	router "github.com/pingcap/tidb-tools/pkg/table-router"
-
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
+	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/pkg/filter"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
@@ -70,7 +70,6 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, tabl
 		}
 		allTablesMap[schema] = utils.SliceToMap(allTables)
 	}
-
 	for schema, allTables := range allTablesMap {
 		for table := range allTables {
 			targetSchema, targetTable, err := tableRouter.Route(schema, table)
@@ -101,8 +100,14 @@ func getOriginTable(sourceTableMap map[string]*common.TableSource, table *common
 }
 
 func (s *BasicSource) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
+	var id int
+	if r != nil {
+		id = r.GetChunk().ID + 1
+	} else {
+		id = 0
+	}
 	dbIter := &BasicChunksIterator{
-		currentID:      0,
+		currentID:      id,
 		tableAnalyzer:  analyzer,
 		TableDiffs:     s.tableDiffs,
 		nextTableIndex: 0,
@@ -148,6 +153,22 @@ func (s *BasicSource) GenerateFixSQL(t DMLType, upstreamData, downstreamData map
 		log.Fatal("Don't support this type", zap.Any("dml type", t))
 	}
 	return ""
+}
+
+func (s BasicSource) GetSourceStructInfo(ctx context.Context, tableIndex int) ([]*model.TableInfo, error) {
+	tableInfos := make([]*model.TableInfo, 1)
+	tableDiff := s.GetTables()[tableIndex]
+	sourceSchema, sourceTable := tableDiff.Schema, tableDiff.Table
+	targetID := utils.UniqueID(tableDiff.Schema, tableDiff.Table)
+	if s.sourceTableMap != nil {
+		sourceSchema, sourceTable = s.sourceTableMap[targetID].OriginSchema, s.sourceTableMap[targetID].OriginTable
+	}
+	var err error
+	tableInfos[0], err = dbutil.GetTableInfo(ctx, s.GetDB(), sourceSchema, sourceTable)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return tableInfos, nil
 }
 
 func (s *BasicSource) GetRowsIterator(ctx context.Context, tableRange *splitter.RangeInfo) (RowDataIterator, error) {

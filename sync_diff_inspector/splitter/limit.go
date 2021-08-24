@@ -48,6 +48,9 @@ func NewLimitIterator(ctx context.Context, table *common.TableDiff, dbConn *sql.
 
 func NewLimitIteratorWithCheckpoint(ctx context.Context, table *common.TableDiff, dbConn *sql.DB, chunkSize int, startRange *RangeInfo) (*LimitIterator, error) {
 	indices := dbutil.FindAllIndex(table.Info)
+	if err := utils.GetBetterIndex(ctx, dbConn, table.Schema, table.Table, table.Info, indices); err != nil {
+		return nil, errors.Trace(err)
+	}
 	var indexColumns []*model.ColumnInfo
 	tagChunk := chunk.NewChunkRange()
 	chunksCh := make(chan *chunk.Range, DefaultChannelBuffer)

@@ -27,11 +27,34 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+  "github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"go.uber.org/zap"
 )
+
+type MySQLTableAnalyzer struct {
+	sourceTableMap map[string][]*common.TableShardSource
+}
+
+func (a *MySQLTableAnalyzer) AnalyzeSplitter(ctx context.Context, table *common.TableDiff, startRange *splitter.RangeInfo) (splitter.ChunkIterator, error) {
+	chunkSize := 1000
+	matchedSources := getMatchedSourcesForTable(a.sourceTableMap, table)
+
+	// It's useful we are not able to pick shard merge source as workSource to generate ChunksIterator.
+	if len(matchedSources) > 1 {
+		log.Fatal("unreachable, shard merge table cannot generate splitter for now.")
+	}
+	table.Schema = matchedSources[0].OriginSchema
+	table.Table = matchedSources[0].OriginTable
+	// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
+	randIter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, table, matchedSources[0].DBConn, chunkSize, startRange)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return randIter, nil
+}
 
 type MySQLSources struct {
 	tableDiffs []*common.TableDiff
@@ -39,11 +62,11 @@ type MySQLSources struct {
 	sourceTablesMap map[string][]*common.TableShardSource
 }
 
-func (s *MySQLSources) getMatchedSourcesForTable(table *common.TableDiff) []*common.TableShardSource {
-	if s.sourceTablesMap == nil {
+func getMatchedSourcesForTable(sourceTablesMap map[string][]*common.TableShardSource, table *common.TableDiff) []*common.TableShardSource {
+	if sourceTablesMap == nil {
 		log.Fatal("unreachable, source tables map shouldn't be nil.")
 	}
-	matchSources, ok := s.sourceTablesMap[utils.UniqueID(table.Schema, table.Table)]
+	matchSources, ok := sourceTablesMap[utils.UniqueID(table.Schema, table.Table)]
 	if !ok {
 		log.Fatal("unreachable, no match source tables in mysql shard source.")
 	}
@@ -51,13 +74,21 @@ func (s *MySQLSources) getMatchedSourcesForTable(table *common.TableDiff) []*com
 }
 
 func (s *MySQLSources) GetTableAnalyzer() TableAnalyzer {
-	log.Fatal("[UnReachable] we won't choose multi-mysql as work source to call GetTableAnalyzer")
-	return nil
+	return &MySQLTableAnalyzer{
+		s.sourceTablesMap,
+	}
 }
 
 func (s *MySQLSources) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
-	log.Fatal("[UnReachable] we won't choose multi-mysql as work source to call GetRangeIterator")
-	return nil, nil
+	dbIter := &ChunksIterator{
+		currentID:      0,
+		tableAnalyzer:  analyzer,
+		TableDiffs:     s.tableDiffs,
+		nextTableIndex: 0,
+		limit:          0,
+	}
+	err := dbIter.nextTable(ctx, r)
+	return dbIter, err
 }
 
 func (s *MySQLSources) Close() {
@@ -73,7 +104,7 @@ func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitte
 	table := s.tableDiffs[tableRange.GetTableIndex()]
 	chunk := tableRange.GetChunk()
 
-	matchSources := s.getMatchedSourcesForTable(table)
+	matchSources := getMatchedSourcesForTable(s.sourceTablesMap, table)
 	infoCh := make(chan *ChecksumInfo, len(s.sourceTablesMap))
 
 	for _, ms := range matchSources {
@@ -138,7 +169,7 @@ func (s *MySQLSources) GetRowsIterator(ctx context.Context, tableRange *splitter
 	sourceRows := make(map[int]*sql.Rows)
 
 	table := s.tableDiffs[tableRange.GetTableIndex()]
-	matchSources := s.getMatchedSourcesForTable(table)
+	matchSources := getMatchedSourcesForTable(s.sourceTablesMap, table)
 
 	var rowsQuery string
 	var orderKeyCols []*model.ColumnInfo
@@ -191,6 +222,22 @@ func (s *MySQLSources) GetDB() *sql.DB {
 	return nil
 }
 
+func (s *MySQLSources) GetSourceStructInfo(ctx context.Context, tableIndex int) ([]*model.TableInfo, error) {
+	tableDiff := s.GetTables()[tableIndex]
+	targetID := utils.UniqueID(tableDiff.Schema, tableDiff.Table)
+	tableSources := s.sourceTablesMap[targetID]
+	sourceTableInfos := make([]*model.TableInfo, len(tableSources))
+	for i, tableSource := range tableSources {
+		sourceSchema, sourceTable := tableSource.OriginSchema, tableSource.OriginTable
+		sourceTableInfo, err := dbutil.GetTableInfo(ctx, tableSource.DBConn, sourceSchema, sourceTable)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		sourceTableInfos[i] = sourceTableInfo
+	}
+	return sourceTableInfos, nil
+}
+
 type MultiSourceRowsIterator struct {
 	sourceRows     map[int]*sql.Rows
 	sourceRowDatas *common.RowDatas
@@ -236,7 +283,7 @@ func (ms *MultiSourceRowsIterator) Close() {
 	}
 }
 
-func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, tableRouter *router.Table, dbs []*sql.DB) (Source, error) {
+func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*config.DataSource, threadCount int) (Source, error) {
 	sourceTablesMap := make(map[string][]*common.TableShardSource)
 	// we should get the real table name
 	// and real table row query from sourceDB.
@@ -245,30 +292,33 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, tableR
 		uniqueMap[utils.UniqueID(tableDiff.Schema, tableDiff.Table)] = struct{}{}
 	}
 
-	for i, sourceDB := range dbs {
-		sourceSchemas, err := dbutil.GetSchemas(ctx, sourceDB)
+	for i, sourceDB := range ds {
+		sourceSchemas, err := dbutil.GetSchemas(ctx, sourceDB.Conn)
 		if err != nil {
 			return nil, errors.Annotatef(err, "get schemas from %d source", i)
 		}
 
+		// use this map to record max Connection for this source.
+		maxSourceRouteTableCount := make(map[string]int)
 		for _, schema := range sourceSchemas {
 			// Skip system schema.
 			if filter.IsSystemSchema(schema) {
 				continue
 			}
-			allTables, err := dbutil.GetTables(ctx, sourceDB, schema)
+			allTables, err := dbutil.GetTables(ctx, sourceDB.Conn, schema)
 			if err != nil {
 				return nil, errors.Annotatef(err, "get tables from %d source %s", i, schema)
 			}
 			for _, table := range allTables {
 				targetSchema, targetTable := schema, table
-				if tableRouter != nil {
-					targetSchema, targetTable, err = tableRouter.Route(schema, table)
+				if sourceDB.Router != nil {
+					targetSchema, targetTable, err = sourceDB.Router.Route(schema, table)
 					if err != nil {
 						return nil, errors.Errorf("get route result for %d source %s.%s failed, error %v", i, schema, table, err)
 					}
 				}
 				uniqueId := utils.UniqueID(targetSchema, targetTable)
+				maxSourceRouteTableCount[uniqueId]++
 				if _, ok := uniqueMap[uniqueId]; !ok {
 					sourceTablesMap[uniqueId] = make([]*common.TableShardSource, 0)
 				}
@@ -278,11 +328,23 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, tableR
 							OriginSchema: schema,
 							OriginTable:  table,
 						},
-						DBConn: sourceDB,
+						DBConn: sourceDB.Conn,
 					})
 				}
 			}
 		}
+		maxConn := 0
+		for _, c := range maxSourceRouteTableCount {
+			if c > maxConn {
+				maxConn = c
+			}
+		}
+		log.Info("will increase connection configurations for DB of instance",
+			zap.Int("connection limit", maxConn*threadCount))
+		// Set this conn to max
+		sourceDB.Conn.SetMaxOpenConns(maxConn * threadCount)
+		sourceDB.Conn.SetMaxIdleConns(maxConn * threadCount)
+
 	}
 
 	mss := &MySQLSources{
