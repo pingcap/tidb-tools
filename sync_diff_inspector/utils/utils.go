@@ -61,7 +61,7 @@ func NewWorkerPool(limit uint, name string) *WorkerPool {
 	}
 }
 
-// Returns either an ascii code, or (if input is an arrow) a Javascript key code.
+// GetChar Returns either an ascii code, or (if input is an arrow) a Javascript key code.
 func GetChar() (ascii int, keyCode int, err error) {
 	t, _ := term.Open("/dev/tty")
 	term.RawMode(t)
@@ -122,7 +122,7 @@ func (pool *WorkerPool) ApplyWithID(fn identifiedTaskFunc) {
 	}()
 }
 
-// ApplyOnErrorGroup executes a task in an errorgroup.
+// ApplyOnErrorGroup executes a task in an errgroup.
 func (pool *WorkerPool) ApplyOnErrorGroup(eg *errgroup.Group, fn func() error) {
 	worker := pool.apply()
 	eg.Go(func() error {
@@ -133,7 +133,7 @@ func (pool *WorkerPool) ApplyOnErrorGroup(eg *errgroup.Group, fn func() error) {
 	})
 }
 
-// ApplyWithIDInErrorGroup executes a task in an errorgroup and provides it with the worker ID.
+// ApplyWithIDInErrorGroup executes a task in an errgroup and provides it with the worker ID.
 func (pool *WorkerPool) ApplyWithIDInErrorGroup(eg *errgroup.Group, fn func(id uint64) error) {
 	worker := pool.apply()
 	eg.Go(func() error {
