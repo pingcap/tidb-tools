@@ -166,7 +166,7 @@ func (c *Range) ToMeta() string {
 		if bound.HasUpper {
 			upperCondition = append(upperCondition, bound.Upper)
 		} else {
-			upperCondition = append(upperCondition, bound.Upper)
+			upperCondition = append(upperCondition, "+inf")
 		}
 	}
 	return fmt.Sprintf("range in sequence: (%s) < (%s) <= (%s)", strings.Join(lowerCondition, ","), strings.Join(columnName, ","), strings.Join(upperCondition, ","))
