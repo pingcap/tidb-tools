@@ -82,12 +82,26 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 	}
 	defer d.Close()
 
-	err = d.Equal(ctx)
-	if err != nil {
-		log.Fatal("check data difference failed", zap.Error(err))
+	if !d.ignoreStructCheck {
+		err = d.StructEqual(ctx)
+		if err != nil {
+			log.Fatal("check structure difference failed", zap.Error(err))
+		}
 	}
-
+	if !d.ignoreDataCheck {
+		err = d.Equal(ctx)
+		if err != nil {
+			log.Fatal("check data difference failed", zap.Error(err))
+		}
+	}
+	d.report.EndTime = time.Now()
+	if err := d.report.CalculateTotalSize(ctx, d.downstream.GetDB()); err != nil {
+		log.Warn("fail to calculate the total size", zap.Error(err))
+	}
+	d.report.CommitSummary(&cfg.Task)
+	// TODO: do summary
 	//d.report.Print()
 	// TODO update report
-	return false
+	d.report.Print("sync_diff.log")
+	return d.report.Result == Pass
 }

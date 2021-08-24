@@ -63,8 +63,19 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, table *common.TableDif
 	var iargs []interface{}
 	if startRange != nil {
 		c := startRange.GetChunk()
+		flag := false
 		for _, bound := range c.Bounds {
+			flag = flag || bound.HasUpper
 			chunkRange.Update(bound.Column, bound.Upper, "", true, false)
+		}
+		if !flag {
+			return &RandomIterator{
+				table:     table,
+				chunkSize: 0,
+				chunks:    nil,
+				nextChunk: 0,
+				dbConn:    dbConn,
+			}, nil
 		}
 		conditions, args := chunkRange.ToString(table.Collation)
 		if len(where) > 0 {
