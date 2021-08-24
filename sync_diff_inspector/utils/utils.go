@@ -17,19 +17,25 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	pd "github.com/tikv/pd/client"
+	"go.etcd.io/etcd/clientv3"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pkg/term"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+)
+
+const (
+	defaultGCSafePointTTL = 5 * 60
 )
 
 // WorkerPool contains a pool of workers.
@@ -672,4 +678,126 @@ func GetSelectivity(ctx context.Context, db *sql.DB, schemaName, tableName, colu
 		return 0.0, nil
 	}
 	return selectivity.Float64, nil
+}
+
+// GetPDClientForGC is an initialization step.
+func GetPDClientForGC(ctx context.Context, db *sql.DB) (pd.Client, error) {
+	if ok, _ := dbutil.IsTiDB(ctx, db); ok {
+		pdAddrs, err := GetPDAddrs(ctx, db)
+		if err != nil {
+			return nil, err
+		}
+		if len(pdAddrs) > 0 {
+			pdClient, err := pd.NewClientWithContext(ctx, pdAddrs, pd.SecurityOption{})
+			if err != nil {
+				log.Info("create pd client to control GC failed", zap.Error(err), zap.Strings("pdAddrs", pdAddrs))
+			}
+			return pdClient, nil
+		}
+	}
+	return nil, nil
+}
+
+// GetPDAddrs gets PD address from TiDB
+func GetPDAddrs(ctx context.Context, db *sql.DB) ([]string, error) {
+	query := "SELECT * FROM information_schema.cluster_info where type = 'pd';"
+	rows, err := db.QueryContext(ctx, query)
+	if err != nil {
+		return []string{}, errors.Annotatef(err, "sql: %s", query)
+	}
+	return GetSpecifiedColumnValueAndClose(rows, "STATUS_ADDRESS")
+}
+
+// GetSpecifiedColumnValueAndClose get columns' values whose name is equal to columnName and close the given rows
+func GetSpecifiedColumnValueAndClose(rows *sql.Rows, columnName string) ([]string, error) {
+	if rows == nil {
+		return []string{}, nil
+	}
+	defer rows.Close()
+	columnName = strings.ToUpper(columnName)
+	var strs []string
+	columns, _ := rows.Columns()
+	addr := make([]interface{}, len(columns))
+	oneRow := make([]sql.NullString, len(columns))
+	fieldIndex := -1
+	for i, col := range columns {
+		if strings.ToUpper(col) == columnName {
+			fieldIndex = i
+		}
+		addr[i] = &oneRow[i]
+	}
+	if fieldIndex == -1 {
+		return strs, nil
+	}
+	for rows.Next() {
+		err := rows.Scan(addr...)
+		if err != nil {
+			return strs, errors.Trace(err)
+		}
+		if oneRow[fieldIndex].Valid {
+			strs = append(strs, oneRow[fieldIndex].String)
+		}
+	}
+	return strs, errors.Trace(rows.Err())
+}
+
+// StartGCSavepointUpdateService keeps GC safePoint stop moving forward.
+func StartGCSavepointUpdateService(ctx context.Context, pdCli pd.Client, db *sql.DB, snapshot string) error {
+	if pdCli != nil {
+		snapshotTS, err := parseSnapshotToTSO(db, snapshot)
+		if err != nil {
+			return err
+		}
+		go updateServiceSafePoint(ctx, pdCli, snapshotTS)
+	} else if ok, _ := dbutil.IsTiDB(ctx, db); ok {
+		log.Warn("should Update GC before starts diff")
+	}
+	return nil
+}
+
+func updateServiceSafePoint(ctx context.Context, pdClient pd.Client, snapshotTS uint64) {
+	updateInterval := time.Duration(defaultGCSafePointTTL/2) * time.Second
+	tick := time.NewTicker(updateInterval)
+	DiffServiceSafePointID := fmt.Sprintf("Sync_diff_%d", time.Now().UnixNano())
+	log.Info("generate dumpling gc safePoint id", zap.String("id", DiffServiceSafePointID))
+	for {
+		log.Debug("update PD safePoint limit with ttl",
+			zap.Uint64("safePoint", snapshotTS),
+			zap.Duration("updateInterval", updateInterval))
+		for retryCnt := 0; retryCnt <= 10; retryCnt++ {
+			_, err := pdClient.UpdateServiceGCSafePoint(ctx, DiffServiceSafePointID, defaultGCSafePointTTL, snapshotTS)
+			if err == nil {
+				break
+			}
+			log.Debug("update PD safePoint failed", zap.Error(err), zap.Int("retryTime", retryCnt))
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Second):
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+	}
+}
+
+func parseSnapshotToTSO(pool *sql.DB, snapshot string) (uint64, error) {
+	snapshotTS, err := strconv.ParseUint(snapshot, 10, 64)
+	if err == nil {
+		return snapshotTS, nil
+	}
+	var tso sql.NullInt64
+	query := "SELECT unix_timestamp(?)"
+	row := pool.QueryRow(query, snapshot)
+	err = row.Scan(&tso)
+	if err != nil {
+		return 0, errors.Annotatef(err, "sql: %s", strings.ReplaceAll(query, "?", fmt.Sprintf(`"%s"`, snapshot)))
+	}
+	if !tso.Valid {
+		return 0, errors.Errorf("snapshot %s format not supported. please use tso or '2006-01-02 15:04:05' format time", snapshot)
+	}
+	return (uint64(tso.Int64) << 18) * 1000, nil
 }
