@@ -16,8 +16,11 @@ package source
 import (
 	"context"
 	"database/sql"
+	"sort"
+
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
@@ -65,9 +68,14 @@ func (a *TiDBTableAnalyzer) AnalyzeSplitter(ctx context.Context, table *common.T
 
 func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, tableRouter *router.Table, dbConn *sql.DB) (Source, error) {
 	sourceMap, err := getSourceTableMap(ctx, tableDiffs, tableRouter, dbConn)
+	log.Info("tidb source map", zap.Reflect("source map", sourceMap))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+	sort.Slice(tableDiffs, func(i, j int) bool {
+		return dbutil.TableName(tableDiffs[i].Schema, tableDiffs[i].Table) < dbutil.TableName(tableDiffs[j].Schema, tableDiffs[j].Table)
+	})
+	log.Info("source map", zap.Reflect("source map", sourceMap))
 	ts := &TiDBSource{
 		BasicSource{
 			tableDiffs:     tableDiffs,

@@ -18,10 +18,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
+
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -185,6 +186,22 @@ func (s *MySQLSources) GetDB() *sql.DB {
 		}
 	}
 	return nil
+}
+
+func (s *MySQLSources) GetSourceStructInfo(ctx context.Context, tableIndex int) ([]*model.TableInfo, error) {
+	tableDiff := s.GetTables()[tableIndex]
+	targetID := utils.UniqueID(tableDiff.Schema, tableDiff.Table)
+	tableSources := s.sourceTablesMap[targetID]
+	sourceTableInfos := make([]*model.TableInfo, len(tableSources))
+	for i, tableSource := range tableSources {
+		sourceSchema, sourceTable := tableSource.OriginSchema, tableSource.OriginTable
+		sourceTableInfo, err := dbutil.GetTableInfo(ctx, tableSource.DBConn, sourceSchema, sourceTable)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		sourceTableInfos[i] = sourceTableInfo
+	}
+	return sourceTableInfos, nil
 }
 
 type MultiSourceRowsIterator struct {
