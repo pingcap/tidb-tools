@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,6 +26,7 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pkg/term"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
@@ -56,6 +58,45 @@ func NewWorkerPool(limit uint, name string) *WorkerPool {
 		workers: workers,
 		name:    name,
 	}
+}
+
+// Returns either an ascii code, or (if input is an arrow) a Javascript key code.
+func GetChar() (ascii int, keyCode int, err error) {
+	t, _ := term.Open("/dev/tty")
+	term.RawMode(t)
+	bytes := make([]byte, 3)
+
+	var numRead int
+	numRead, err = t.Read(bytes)
+	if err != nil {
+		return
+	}
+	if numRead == 3 && bytes[0] == 27 && bytes[1] == 91 {
+		// Three-character control sequence, beginning with "ESC-[".
+
+		// Since there are no ASCII codes for arrow keys, we use
+		// Javascript key codes.
+		if bytes[2] == 65 {
+			// Up
+			keyCode = 38
+		} else if bytes[2] == 66 {
+			// Down
+			keyCode = 40
+		} else if bytes[2] == 67 {
+			// Right
+			keyCode = 39
+		} else if bytes[2] == 68 {
+			// Left
+			keyCode = 37
+		}
+	} else if numRead == 1 {
+		ascii = int(bytes[0])
+	} else {
+		// Two characters read??
+	}
+	t.Restore()
+	t.Close()
+	return
 }
 
 // Apply executes a task.
@@ -426,6 +467,16 @@ func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table stri
 	return columnValues, nil
 }
 
+func GetTableSize(ctx context.Context, db *sql.DB, schemaName, tableName string) (int64, error) {
+	query := fmt.Sprintf("select sum(data_length) as data from `information_schema`.`tables` where table_schema='%s' and table_name='%s' GROUP BY data_length;", schemaName, tableName)
+	var dataSize sql.NullInt64
+	err := db.QueryRowContext(ctx, query).Scan(&dataSize)
+	if err != nil {
+		return int64(0), errors.Trace(err)
+	}
+	return dataSize.Int64, nil
+}
+
 // GetCountAndCRC32Checksum returns checksum code of some data by given condition
 func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, int64, error) {
 	/*
@@ -515,4 +566,40 @@ func IgnoreColumns(tableInfo *model.TableInfo, columns []string) *model.TableInf
 
 func UniqueID(schema string, table string) string {
 	return schema + ":" + table
+}
+
+func GetBetterIndex(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo, indices []*model.IndexInfo) error {
+	// SELECT COUNT(DISTINCT city)/COUNT(*) FROM `schema`.`table`;
+	sels := make([]float64, len(indices))
+	for _, index := range indices {
+		if index.Primary || index.Unique {
+			return nil
+		}
+		column := GetColumnsFromIndex(index, tableInfo)[0]
+		selectivity, err := GetSelectivity(ctx, db, schema, table, column.Name.O, tableInfo)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		log.Debug("index selectivity", zap.String("table", dbutil.TableName(schema, table)), zap.Float64("selectivity", selectivity))
+		sels = append(sels, selectivity)
+	}
+	sort.Slice(indices, func(i, j int) bool { return sels[i] > sels[j] })
+	return nil
+}
+
+func GetSelectivity(ctx context.Context, db *sql.DB, schemaName, tableName, columnName string, tbInfo *model.TableInfo) (float64, error) {
+	query := fmt.Sprintf("SELECT COUNT(DISTINCE %s)/COUNT(1) as SEL FROM %s;", columnName, dbutil.TableName(schemaName, tableName))
+	var selectivity sql.NullFloat64
+	args := []interface{}{}
+	err := db.QueryRowContext(ctx, query, args...).Scan(&selectivity)
+	if err != nil {
+		log.Warn("execute get selectivity query fail", zap.String("query", query))
+		return 0.0, errors.Trace(err)
+	}
+	if !selectivity.Valid {
+		// if don't have any data, the checksum will be `NULL`
+		log.Warn("get empty count or checksum", zap.String("sql", query))
+		return 0.0, nil
+	}
+	return selectivity.Float64, nil
 }

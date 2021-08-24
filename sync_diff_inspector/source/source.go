@@ -16,10 +16,12 @@ package source
 import (
 	"context"
 	"database/sql"
-	"github.com/pingcap/tidb-tools/pkg/filter"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/pingcap/parser/model"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -84,6 +86,9 @@ type Source interface {
 
 	// GetTables represents the tableDiffs.
 	GetTables() []*common.TableDiff
+
+	// GetSourceStructInfo get the source table info from a given target table
+	GetSourceStructInfo(context.Context, int) ([]*model.TableInfo, error)
 
 	// GetDB represents the db connection.
 	GetDB() *sql.DB
@@ -227,11 +232,13 @@ func initTables(ctx context.Context, cfg *config.Config, downStreamConn *sql.DB)
 			if err != nil {
 				return nil, errors.Errorf("get table %s.%s's information error %s", tables.OriginSchema, tables.OriginTable, errors.ErrorStack(err))
 			}
+			if _, ok := cfgTables[tables.OriginSchema]; !ok {
+				cfgTables[tables.OriginSchema] = make(map[string]*config.TableConfig)
+			}
 			if _, ok := cfgTables[tables.OriginSchema][tables.OriginTable]; ok {
 				log.Error("duplicate config for one table", zap.String("table", dbutil.TableName(tables.OriginSchema, tables.OriginTable)))
 				continue
 			}
-
 			cfgTables[tables.OriginSchema][tables.OriginTable] = &config.TableConfig{
 				Schema:          tables.OriginSchema,
 				Table:           tables.OriginTable,
