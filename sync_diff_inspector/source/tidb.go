@@ -17,13 +17,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"sort"
-
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
+	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
@@ -136,6 +134,22 @@ func (s *TiDBSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter.
 
 func (s *TiDBSource) GetTables() []*common.TableDiff {
 	return s.tableDiffs
+}
+
+func (s *TiDBSource) GetSourceStructInfo(ctx context.Context, tableIndex int) ([]*model.TableInfo, error) {
+	tableInfos := make([]*model.TableInfo, 1)
+	tableDiff := s.GetTables()[tableIndex]
+	sourceSchema, sourceTable := tableDiff.Schema, tableDiff.Table
+	targetID := utils.UniqueID(tableDiff.Schema, tableDiff.Table)
+	if s.sourceTableMap != nil {
+		sourceSchema, sourceTable = s.sourceTableMap[targetID].OriginSchema, s.sourceTableMap[targetID].OriginTable
+	}
+	var err error
+	tableInfos[0], err = dbutil.GetTableInfo(ctx, s.GetDB(), sourceSchema, sourceTable)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return tableInfos, nil
 }
 
 func (s *TiDBSource) GenerateFixSQL(t DMLType, data map[string]*dbutil.ColumnData, tableIndex int) string {
