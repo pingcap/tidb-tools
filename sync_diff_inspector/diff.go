@@ -545,7 +545,7 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 				// write chunk meta
 				chunkRange := dml.node.ChunkRange
 				tableDiff := df.workSource.GetTables()[dml.node.TableIndex]
-				fixSQLFile.WriteString(fmt.Sprintf("-- [table = %s.%s]\n-- [where = %s]\n", tableDiff.Schema, tableDiff.Table, fmt.Sprintf(strings.Replace(chunkRange.Where, "?", "%s", -1), utils.StringsToInterfaces(chunkRange.Args)...)))
+				fixSQLFile.WriteString(fmt.Sprintf("-- table: %s.%s\n-- %s\n", tableDiff.Schema, tableDiff.Table, chunkRange.ToMeta()))
 				for _, sql := range dml.sqls {
 					_, err = fixSQLFile.WriteString(fmt.Sprintf("%s\n", sql))
 					if err != nil {

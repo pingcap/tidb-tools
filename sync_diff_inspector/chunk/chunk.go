@@ -152,6 +152,26 @@ func (c *Range) ToString(collation string) (string, []string) {
 	return fmt.Sprintf("(%s) AND (%s)", strings.Join(lowerCondition, " OR "), strings.Join(upperCondition, " OR ")), append(lowerArgs, upperArgs...)
 }
 
+func (c *Range) ToMeta() string {
+	lowerCondition := make([]string, 0, 1)
+	upperCondition := make([]string, 0, 1)
+	columnName := make([]string, 0, 1)
+	for _, bound := range c.Bounds {
+		columnName = append(columnName, bound.Column)
+		if bound.HasLower {
+			lowerCondition = append(lowerCondition, bound.Lower)
+		} else {
+			lowerCondition = append(lowerCondition, "-inf")
+		}
+		if bound.HasUpper {
+			upperCondition = append(upperCondition, bound.Upper)
+		} else {
+			upperCondition = append(upperCondition, bound.Upper)
+		}
+	}
+	return fmt.Sprintf("range in sequence: (%s) < (%s) <= (%s)", strings.Join(lowerCondition, ","), strings.Join(columnName, ","), strings.Join(upperCondition, ","))
+}
+
 func (c *Range) addBound(bound *Bound) {
 	c.Bounds = append(c.Bounds, bound)
 	c.columnOffset[bound.Column] = len(c.Bounds) - 1
