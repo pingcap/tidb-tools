@@ -248,7 +248,7 @@ func (s *testSourceSuite) TestMysqlShardSources(c *C) {
 		cs[i].Conn = conn
 	}
 
-	shard, err := NewMySQLSources(ctx, tableDiffs, cs)
+	shard, err := NewMySQLSources(ctx, tableDiffs, cs, 4)
 	c.Assert(err, IsNil)
 
 	for n, tableCase := range tableCases {

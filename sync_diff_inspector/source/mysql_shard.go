@@ -22,7 +22,7 @@ import (
 
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	router "github.com/pingcap/tidb-tools/pkg/table-router"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
