@@ -87,7 +87,7 @@ type DataSource struct {
 	// SourceType string `toml:"source-type" json:"source-type"`
 }
 
-func (d *DataSource) HashCode() string{
+func (d *DataSource) HashCode() string {
 	b, err := json.Marshal(d)
 	if err != nil {
 		log.Fatal("invalid data source config")

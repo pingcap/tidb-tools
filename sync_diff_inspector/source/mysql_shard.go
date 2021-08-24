@@ -315,7 +315,7 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 					}
 				}
 				uniqueId := utils.UniqueID(targetSchema, targetTable)
-				maxSourceRouteTableCount[uniqueId] ++
+				maxSourceRouteTableCount[uniqueId]++
 				if _, ok := uniqueMap[uniqueId]; !ok {
 					sourceTablesMap[uniqueId] = make([]*common.TableShardSource, 0)
 				}
@@ -339,8 +339,8 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 		log.Info("will increase connection configurations for DB of instance",
 			zap.Int("connection limit", maxConn*threadCount))
 		// Set this conn to max
-		sourceDB.Conn.SetMaxOpenConns(maxConn*threadCount)
-		sourceDB.Conn.SetMaxIdleConns(maxConn*threadCount)
+		sourceDB.Conn.SetMaxOpenConns(maxConn * threadCount)
+		sourceDB.Conn.SetMaxIdleConns(maxConn * threadCount)
 
 	}
 
