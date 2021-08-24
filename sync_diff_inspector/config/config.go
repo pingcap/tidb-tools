@@ -15,6 +15,7 @@ package config
 
 import (
 	"crypto/md5"
+	"database/sql"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -80,7 +81,19 @@ type DataSource struct {
 	SqlMode  string `toml:"sql-mode" json:"sql-mode"`
 	Snapshot string `toml:"snapshot" json:"snapshot"`
 
+	RouteRules []string `toml:"route-rules" json:"route-rules"`
+	Router     *router.Table
+
+	Conn *sql.DB
 	// SourceType string `toml:"source-type" json:"source-type"`
+}
+
+func (d *DataSource) HashCode() string {
+	b, err := json.Marshal(d)
+	if err != nil {
+		log.Fatal("invalid data source config")
+	}
+	return fmt.Sprintf("%x", md5.Sum(b))
 }
 
 func (d *DataSource) ToDBConfig() *dbutil.DBConfig {
@@ -108,7 +121,6 @@ type TaskConfig struct {
 	OutputDir string `toml:"output-dir" json:"output-dir"`
 
 	SourceInstances    []*DataSource
-	SourceRoute        *router.Table
 	TargetInstance     *DataSource
 	TargetCheckTables  filter.Filter
 	TargetTableConfigs []*TableConfig
@@ -120,7 +132,6 @@ type TaskConfig struct {
 
 func (t *TaskConfig) Init(
 	dataSources map[string]*DataSource,
-	routes map[string]*router.TableRule,
 	tableConfigs map[string]*TableConfig,
 ) (err error) {
 	// Parse Source/Target
@@ -133,20 +144,6 @@ func (t *TaskConfig) Init(
 		dataSourceList = append(dataSourceList, ds)
 	}
 	t.SourceInstances = dataSourceList
-
-	if t.Routes != nil {
-		// if we had rules
-		routeRuleList := make([]*router.TableRule, 0, len(t.Routes))
-		for _, r := range t.Routes {
-			rr, ok := routes[r]
-			if !ok {
-				log.Fatal("not found source routes, please correct the config", zap.String("rule", r))
-			}
-			routeRuleList = append(routeRuleList, rr)
-		}
-		// t.SourceRoute can be nil, the caller should check it.
-		t.SourceRoute, err = router.NewTableRouter(false, routeRuleList)
-	}
 
 	if len(t.Target) != 1 {
 		log.Fatal("only support one target instance for now")
@@ -199,11 +196,11 @@ func (t *TaskConfig) Init(
 
 	target := t.Target[0]
 	t.FixDir = filepath.Join(t.OutputDir, hash, fmt.Sprintf("fix-on-%s", target))
-	if err := mkdirAll(t.FixDir); err != nil {
+	if err = mkdirAll(t.FixDir); err != nil {
 		return errors.Trace(err)
 	}
 	t.CheckpointDir = filepath.Join(t.OutputDir, hash, "checkpoint")
-	if err := mkdirAll(t.CheckpointDir); err != nil {
+	if err = mkdirAll(t.CheckpointDir); err != nil {
 		return errors.Trace(err)
 	}
 	return nil
@@ -348,6 +345,31 @@ func (c *Config) configFromFile(path string) error {
 	return nil
 }
 
+func (c *Config) Init() (err error) {
+	for _, d := range c.DataSources {
+		routeRuleList := make([]*router.TableRule, 0, len(c.Routes))
+		// if we had rules
+		for _, r := range d.RouteRules {
+			rr, ok := c.Routes[r]
+			if !ok {
+				return errors.Errorf("not found source routes for rule %s, please correct the config", r)
+			}
+			routeRuleList = append(routeRuleList, rr)
+		}
+		// t.SourceRoute can be nil, the caller should check it.
+		d.Router, err = router.NewTableRouter(false, routeRuleList)
+		if err != nil {
+			return errors.Annotate(err, "failed to build route config")
+		}
+	}
+
+	err = c.Task.Init(c.DataSources, c.TableConfigs)
+	if err != nil {
+		return errors.Annotate(err, "failed to init Task")
+	}
+	return nil
+}
+
 func (c *Config) CheckConfig() bool {
 	if c.Sample > percent100 || c.Sample < percent0 {
 		log.Error("sample must be greater than 0 and less than or equal to 100!")
@@ -356,12 +378,6 @@ func (c *Config) CheckConfig() bool {
 
 	if c.CheckThreadCount <= 0 {
 		log.Error("check-thread-count must greater than 0!")
-		return false
-	}
-
-	err := c.Task.Init(c.DataSources, c.Routes, c.TableConfigs)
-	if err != nil {
-		log.Error("Task init failed", zap.Error(err))
 		return false
 	}
 
