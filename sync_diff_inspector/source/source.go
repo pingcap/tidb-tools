@@ -81,7 +81,7 @@ type Source interface {
 	GetRowsIterator(context.Context, *splitter.RangeInfo) (RowDataIterator, error)
 
 	// GenerateFixSQL generates the fix sql with given type.
-	GenerateFixSQL(DMLType, map[string]*dbutil.ColumnData, int) string
+	GenerateFixSQL(DMLType, map[string]*dbutil.ColumnData, map[string]*dbutil.ColumnData, int) string
 
 	// GetTables represents the tableDiffs.
 	GetTables() []*common.TableDiff
