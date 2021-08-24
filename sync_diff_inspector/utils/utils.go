@@ -568,23 +568,40 @@ func UniqueID(schema string, table string) string {
 	return schema + ":" + table
 }
 
-func GetBetterIndex(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo, indices []*model.IndexInfo) error {
+func GetBetterIndex(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo) ([]*model.IndexInfo, error) {
 	// SELECT COUNT(DISTINCT city)/COUNT(*) FROM `schema`.`table`;
+	indices := make([]*model.IndexInfo, len(tableInfo.Indices))
+	copy(indices, tableInfo.Indices)
 	sels := make([]float64, len(indices))
 	for _, index := range indices {
 		if index.Primary || index.Unique {
-			return nil
+			return indices, nil
 		}
 		column := GetColumnsFromIndex(index, tableInfo)[0]
 		selectivity, err := GetSelectivity(ctx, db, schema, table, column.Name.O, tableInfo)
 		if err != nil {
-			return errors.Trace(err)
+			return indices, errors.Trace(err)
 		}
 		log.Debug("index selectivity", zap.String("table", dbutil.TableName(schema, table)), zap.Float64("selectivity", selectivity))
 		sels = append(sels, selectivity)
 	}
-	sort.Slice(indices, func(i, j int) bool { return sels[i] > sels[j] })
-	return nil
+	sort.Slice(indices, func(i, j int) bool {
+		a := indices[i]
+		b := indices[j]
+		switch {
+		case b.Primary:
+			return false
+		case a.Primary:
+			return true
+		case b.Unique:
+			return false
+		case a.Unique:
+			return true
+		default:
+			return sels[i] > sels[j]
+		}
+	})
+	return indices, nil
 }
 
 func GetSelectivity(ctx context.Context, db *sql.DB, schemaName, tableName, columnName string, tbInfo *model.TableInfo) (float64, error) {

@@ -109,8 +109,8 @@ type TaskConfig struct {
 	SourceInstances    []*DataSource
 	SourceRoute        *router.Table
 	TargetInstance     *DataSource
-	TargetCheckTables  filter.Filter
 	TargetTableConfigs []*TableConfig
+	TargetCheckTables  filter.Filter
 
 	FixDir        string
 	CheckpointDir string
