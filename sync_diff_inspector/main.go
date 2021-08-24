@@ -55,6 +55,9 @@ func main() {
 
 	utils.PrintInfo("sync_diff_inspector")
 
+	// Initial config
+	cfg.Init()
+
 	ok := cfg.CheckConfig()
 	if !ok {
 		log.Error("there is something wrong with your config, please check it!")

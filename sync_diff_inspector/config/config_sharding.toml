@@ -29,6 +29,8 @@ ignore-struct-check = false
     port = 3306
     user = "root"
     password = ""
+
+    routes-rules = ["rule1", "rule2"]
     # remove comment if use tidb's snapshot data
     # snapshot = "2016-10-08 16:45:26"
 
@@ -37,6 +39,8 @@ ignore-struct-check = false
     port = 3306
     user = "root"
     password = ""
+
+    routes-rules = ["rule1", "rule2"]
     # remove comment if use tidb's snapshot data
     # snapshot = "2016-10-08 16:45:26"
 
@@ -45,6 +49,8 @@ ignore-struct-check = false
     port = 3306
     user = "root"
     password = ""
+
+    routes-rules = ["rule1", "rule3"]
     # remove comment if use tidb's snapshot data
     # snapshot = "2016-10-08 16:45:26"
 
@@ -84,7 +90,6 @@ target-table = "t" # 目标表名
     output-dir = "./output"
 
     source-instances = ["mysql1", "mysql2", "mysql3"]
-    source-routes = ["rule1", "rule2"]
 
     target-instance = ["tidb"]
 
@@ -95,7 +100,7 @@ target-table = "t" # 目标表名
 	target-configs= ["config1"]
 
 [table-configs.config1]
-schema = "schama1"
+schema = "schema1"
 table = "table"
 range = "age > 10 AND age < 20"
 index-fields = ""
