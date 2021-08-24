@@ -212,7 +212,6 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 		}
 	}
 
-	matchedTableMaps = make(map[config.TableInstance][]config.TableInstance)
 	// fill the table information.
 	// will add default source information, don't worry, we will use table config's info replace this later.
 	// cfg.Tables.Schema => cfg.Tables.Tables => target/source Schema.Table

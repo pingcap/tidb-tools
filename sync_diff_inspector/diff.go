@@ -287,12 +287,6 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 					zap.String("state", node.GetState()))
 				df.cp.SetCurrentSavedID(node.GetID() + 1)
 			}
-			if err = df.loadReport(path + "_report"); err != nil {
-				return nil, errors.Annotate(err, "the report data load process failed")
-			}
-			if err = df.loadReport(path + "_report"); err != nil {
-				return nil, errors.Annotate(err, "the report data load process failed")
-			}
 			if node != nil {
 				// remove the sql file that ID bigger than node.
 				// cause we will generate these sql again.
