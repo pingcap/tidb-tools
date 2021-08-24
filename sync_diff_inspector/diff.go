@@ -229,7 +229,7 @@ func (df *Diff) Equal(ctx context.Context) error {
 
 func (df *Diff) StructEqual(ctx context.Context) error {
 	tables := df.downstream.GetTables()
-	for tableIndex, _ := range tables {
+	for tableIndex := range tables {
 		structEq, err := df.compareStruct(ctx, tableIndex)
 		if err != nil {
 			return errors.Trace(err)
