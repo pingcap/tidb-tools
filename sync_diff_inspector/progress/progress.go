@@ -106,6 +106,10 @@ func NewTableProgressPrinter(tableNums int) *TableProgressPrinter {
 	return tpp
 }
 
+func (tpp *TableProgressPrinter) SetOutput(output io.Writer) {
+	tpp.output = output
+}
+
 func (tpp *TableProgressPrinter) Inc(name string) {
 	tpp.optCh <- Operator{
 		optType: PROGRESS_OPT_INC,
