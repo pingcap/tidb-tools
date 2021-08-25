@@ -102,9 +102,6 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 		log.Warn("fail to calculate the total size", zap.Error(err))
 	}
 	d.report.CommitSummary(&cfg.Task)
-	// TODO: do summary
-	//d.report.Print()
-	// TODO update report
 	d.report.Print("sync_diff.log")
 	return d.report.Result == report.Pass
 }
