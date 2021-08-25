@@ -44,9 +44,8 @@ type ReportConfig struct {
 	Host     string `toml:"host"`
 	Port     int    `toml:"port"`
 	User     string `toml:"user"`
-	Snapshot string `toml:"snapshot"`
-	SqlMode  string `toml:"sql-mode"`
-	IsTiDB   bool   `toml:"is-tidb"`
+	Snapshot string `toml:"snapshot,omitempty"`
+	SqlMode  string `toml:"sql-mode,omitempty"`
 }
 
 // TableResult saves the check result for every table.
@@ -78,6 +77,7 @@ type Report struct {
 
 func (r *Report) LoadReport(reportInfo *Report) {
 	r.StartTime = time.Now()
+	r.Duration = reportInfo.Duration
 	for schema, tableMap := range reportInfo.TableResults {
 		for table, result := range tableMap {
 			r.TableResults[schema][table] = result

@@ -17,7 +17,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -102,8 +101,12 @@ func getMatchSource(sourceTableMap map[string]*common.TableSource, table *common
 }
 
 func (s *TiDBSource) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
+	id := 0
+	if r != nil {
+		id = r.ChunkRange.ID
+	}
 	dbIter := &ChunksIterator{
-		currentID:      0,
+		currentID:      id,
 		tableAnalyzer:  analyzer,
 		TableDiffs:     s.tableDiffs,
 		nextTableIndex: 0,
@@ -248,9 +251,6 @@ func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *conf
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	sort.Slice(tableDiffs, func(i, j int) bool {
-		return dbutil.TableName(tableDiffs[i].Schema, tableDiffs[i].Table) < dbutil.TableName(tableDiffs[j].Schema, tableDiffs[j].Table)
-	})
 	ts := &TiDBSource{
 		tableDiffs:     tableDiffs,
 		sourceTableMap: sourceTableMap,

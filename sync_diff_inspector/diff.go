@@ -108,7 +108,7 @@ func (df *Diff) Close() {
 		df.downstream.Close()
 	}
 	if err := os.Remove(filepath.Join(df.CheckpointDir, checkpointFile)); err != nil {
-		log.Fatal("fail to remove the report file")
+		log.Fatal("fail to remove the checkpoint file")
 	}
 }
 
@@ -152,7 +152,6 @@ func getConfigsForReport(cfg *config.Config) ([][]byte, []byte, error) {
 			User:     instance.User,
 			Snapshot: instance.Snapshot,
 			SqlMode:  instance.SqlMode,
-			IsTiDB:   true,
 		}
 	}
 	instance := cfg.Task.TargetInstance
@@ -285,7 +284,7 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 					zap.Int("id", node.GetID()),
 					zap.Reflect("chunk", node),
 					zap.String("state", node.GetState()))
-				df.cp.SetCurrentSavedID(node.GetID() + 1)
+				df.cp.SetCurrentSavedID(node.GetID())
 			}
 			if node != nil {
 				// remove the sql file that ID bigger than node.
