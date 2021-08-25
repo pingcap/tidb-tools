@@ -50,8 +50,8 @@ func NewLimitIterator(ctx context.Context, progressID string, table *common.Tabl
 }
 
 func NewLimitIteratorWithCheckpoint(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, chunkSize int, startRange *RangeInfo) (*LimitIterator, error) {
-	indices := dbutil.FindAllIndex(table.Info)
-	if err := utils.GetBetterIndex(ctx, dbConn, table.Schema, table.Table, table.Info, indices); err != nil {
+	indices, err := utils.GetBetterIndex(ctx, dbConn, table.Schema, table.Table, table.Info)
+	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	var indexColumns []*model.ColumnInfo
