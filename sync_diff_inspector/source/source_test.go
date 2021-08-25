@@ -18,9 +18,10 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"testing"
 	"time"
+
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"

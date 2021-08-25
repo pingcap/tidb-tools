@@ -17,6 +17,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
+
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
@@ -27,7 +29,6 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"go.uber.org/zap"
-	"time"
 )
 
 type TiDBTableAnalyzer struct {
@@ -100,8 +101,12 @@ func getMatchSource(sourceTableMap map[string]*common.TableSource, table *common
 }
 
 func (s *TiDBSource) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
+	id := 0
+	if r != nil {
+		id = r.ChunkRange.ID
+	}
 	dbIter := &ChunksIterator{
-		currentID:      0,
+		currentID:      id,
 		tableAnalyzer:  analyzer,
 		TableDiffs:     s.tableDiffs,
 		nextTableIndex: 0,
