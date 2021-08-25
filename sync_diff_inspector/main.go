@@ -25,6 +25,7 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/report"
 	"go.uber.org/zap"
 )
 
@@ -97,14 +98,10 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 			log.Fatal("check data difference failed", zap.Error(err))
 		}
 	}
-	d.report.EndTime = time.Now()
 	if err := d.report.CalculateTotalSize(ctx, d.downstream.GetDB()); err != nil {
 		log.Warn("fail to calculate the total size", zap.Error(err))
 	}
 	d.report.CommitSummary(&cfg.Task)
-	// TODO: do summary
-	//d.report.Print()
-	// TODO update report
 	d.report.Print("sync_diff.log")
-	return d.report.Result == Pass
+	return d.report.Result == report.Pass
 }
