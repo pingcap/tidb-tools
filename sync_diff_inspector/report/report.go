@@ -132,6 +132,7 @@ func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
+// CommitSummary commit summary info
 func (r *Report) CommitSummary(taskConfig *config.TaskConfig) error {
 	passNum, failedNum := int32(0), int32(0)
 	for _, tableMap := range r.TableResults {
@@ -188,7 +189,6 @@ func Print(msg string) {
 	fmt.Print(msg)
 }
 
-// CommitSummary commit summary info
 func (r *Report) Print(fileName string) error {
 	var summary strings.Builder
 	if r.Result == Pass {
@@ -266,15 +266,20 @@ func (r *Report) SetTableStructCheckResult(schema, table string, equal bool) {
 }
 
 // SetTableDataCheckResult sets the data check result for table.
-func (r *Report) SetTableDataCheckResult(schema, table string, equal bool, rowsAdd int, rowsDelete int) {
+func (r *Report) SetTableDataCheckResult(schema, table string, equal bool) {
 	r.Lock()
 	defer r.Unlock()
 	r.TableResults[schema][table].DataEqual = equal
-	r.TableResults[schema][table].RowsAdd += rowsAdd
-	r.TableResults[schema][table].RowsDelete += rowsDelete
 	if !equal && r.Result != Error {
 		r.Result = Fail
 	}
+}
+
+func (r *Report) SetTableDataCheckCount(schema, table string, rowsAdd int, rowsDelete int) {
+	r.Lock()
+	defer r.Unlock()
+	r.TableResults[schema][table].RowsAdd += rowsAdd
+	r.TableResults[schema][table].RowsDelete += rowsDelete
 }
 
 // SetTableMeetError sets meet error when check the table.
@@ -289,7 +294,7 @@ func (r *Report) SetTableMeetError(schema, table string, err error) {
 	r.Result = Error
 }
 
-func (r *Report) AddRowsCnt(schema, table string, cnt int64) {
+func (r *Report) SetRowsCnt(schema, table string, cnt int64) {
 	r.Lock()
 	defer r.Unlock()
 	r.TableResults[schema][table].RowsCnt += cnt
