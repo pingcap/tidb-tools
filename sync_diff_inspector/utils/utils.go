@@ -103,8 +103,8 @@ func GetChar() (ascii int, keyCode int, err error) {
 // Apply executes a task.
 func (pool *WorkerPool) Apply(fn taskFunc) {
 	worker := pool.apply()
+	pool.wg.Add(1)
 	go func() {
-		pool.wg.Add(1)
 		defer pool.wg.Done()
 		defer pool.recycle(worker)
 		fn()
@@ -114,8 +114,8 @@ func (pool *WorkerPool) Apply(fn taskFunc) {
 // ApplyWithID execute a task and provides it with the worker ID.
 func (pool *WorkerPool) ApplyWithID(fn identifiedTaskFunc) {
 	worker := pool.apply()
+	pool.wg.Add(1)
 	go func() {
-		pool.wg.Add(1)
 		defer pool.wg.Done()
 		defer pool.recycle(worker)
 		fn(worker.ID)
@@ -125,8 +125,8 @@ func (pool *WorkerPool) ApplyWithID(fn identifiedTaskFunc) {
 // ApplyOnErrorGroup executes a task in an errgroup.
 func (pool *WorkerPool) ApplyOnErrorGroup(eg *errgroup.Group, fn func() error) {
 	worker := pool.apply()
+	pool.wg.Add(1)
 	eg.Go(func() error {
-		pool.wg.Add(1)
 		defer pool.wg.Done()
 		defer pool.recycle(worker)
 		return fn()
@@ -136,8 +136,8 @@ func (pool *WorkerPool) ApplyOnErrorGroup(eg *errgroup.Group, fn func() error) {
 // ApplyWithIDInErrorGroup executes a task in an errgroup and provides it with the worker ID.
 func (pool *WorkerPool) ApplyWithIDInErrorGroup(eg *errgroup.Group, fn func(id uint64) error) {
 	worker := pool.apply()
+	pool.wg.Add(1)
 	eg.Go(func() error {
-		pool.wg.Add(1)
 		defer pool.wg.Done()
 		defer pool.recycle(worker)
 		return fn(worker.ID)

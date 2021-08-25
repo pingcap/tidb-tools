@@ -33,6 +33,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/progress"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
@@ -131,6 +132,7 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 		return errors.Trace(err)
 	}
 	df.report.Init(df.downstream.GetTables(), sourceConfigs, targetConfig)
+	progress.Init(len(df.workSource.GetTables()))
 	return nil
 }
 
@@ -220,7 +222,9 @@ func (df *Diff) Equal(ctx context.Context) error {
 			df.report.AddRowsCnt(schema, table, rowsCnt)
 			if !res {
 				df.report.SetTableDataCheckResult(schema, table, res, rowsAdd, rowsDelete)
+				progress.FailTable(c.ProgressID)
 			}
+			progress.Inc(c.ProgressID)
 		})
 	}
 
@@ -236,6 +240,9 @@ func (df *Diff) StructEqual(ctx context.Context) error {
 		}
 		if !structEq {
 			df.report.SetTableStructCheckResult(tables[tableIndex].Schema, tables[tableIndex].Table, structEq)
+			progress.RegisterTable(dbutil.TableName(tables[tableIndex].Schema, tables[tableIndex].Table), true, false)
+		} else {
+			progress.RegisterTable(dbutil.TableName(tables[tableIndex].Schema, tables[tableIndex].Table), false, false)
 		}
 	}
 	return nil

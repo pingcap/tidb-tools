@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/progress"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"go.uber.org/zap"
@@ -38,11 +39,11 @@ type RandomIterator struct {
 	dbConn *sql.DB
 }
 
-func NewRandomIterator(ctx context.Context, table *common.TableDiff, dbConn *sql.DB, chunkSize int) (*RandomIterator, error) {
-	return NewRandomIteratorWithCheckpoint(ctx, table, dbConn, chunkSize, nil)
+func NewRandomIterator(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, chunkSize int) (*RandomIterator, error) {
+	return NewRandomIteratorWithCheckpoint(ctx, progressID, table, dbConn, chunkSize, nil)
 }
 
-func NewRandomIteratorWithCheckpoint(ctx context.Context, table *common.TableDiff, dbConn *sql.DB, chunkSize int, startRange *RangeInfo) (*RandomIterator, error) {
+func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, chunkSize int, startRange *RangeInfo) (*RandomIterator, error) {
 	// get the chunk count by data count and chunk size
 	var splitFieldArr []string
 	if len(table.Fields) != 0 {
@@ -118,6 +119,7 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, table *common.TableDif
 	}
 	chunk.InitChunks(chunks, chunk.Random, chunk_id, 0, table.Collation, table.Range)
 
+	progress.StartTable(progressID, len(chunks), true)
 	return &RandomIterator{
 		table:     table,
 		chunkSize: chunkSize,

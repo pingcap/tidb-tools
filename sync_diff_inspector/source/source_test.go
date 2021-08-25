@@ -18,9 +18,10 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"testing"
 	"time"
+
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
@@ -79,7 +80,7 @@ func (m *MockChunkIterator) Close() {
 type MockAnalyzer struct {
 }
 
-func (m *MockAnalyzer) AnalyzeSplitter(ctx context.Context, tableDiff *common.TableDiff, rangeInfo *splitter.RangeInfo) (splitter.ChunkIterator, error) {
+func (m *MockAnalyzer) AnalyzeSplitter(ctx context.Context, progressID string, tableDiff *common.TableDiff, rangeInfo *splitter.RangeInfo) (splitter.ChunkIterator, error) {
 	i := 0
 	return &MockChunkIterator{
 		ctx,
