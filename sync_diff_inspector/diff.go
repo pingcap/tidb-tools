@@ -16,6 +16,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"fmt"
 	"io/fs"
 	"os"
@@ -254,20 +255,41 @@ func (df *Diff) compareStruct(ctx context.Context, tableIndex int) (structEq boo
 	return structEq, nil
 }
 
+func (df *Diff) startGCKeeperForTiDB(ctx context.Context, db *sql.DB) {
+	pdCli, _ := utils.GetPDClientForGC(ctx, db)
+	if pdCli != nil {
+		// Get latest snapshot
+		snap, err := utils.GetSnapshot(ctx, db)
+		if err != nil {
+			log.Info("failed to get snapshot, user should guarantee the GC stopped during diff progress.")
+			return
+		}
+		if len(snap) == 1 {
+			err = utils.StartGCSavepointUpdateService(ctx, pdCli, db, snap[0])
+			if err != nil {
+				log.Info("failed to keep snapshot, user should guarantee the GC stopped during diff progress.")
+			} else {
+				log.Info("start update service to keep GC stopped automatically")
+			}
+		}
+	}
+	return
+}
+
 // pickSource pick one proper source to do some work. e.g. generate chunks
 func (df *Diff) pickSource(ctx context.Context) source.Source {
+	workSource := df.downstream
 	if ok, _ := dbutil.IsTiDB(ctx, df.upstream.GetDB()); ok {
 		log.Info("The upstream is TiDB. pick it as work source")
-		return df.upstream
+		df.startGCKeeperForTiDB(ctx, df.upstream.GetDB())
+		workSource = df.upstream
 	}
 	if ok, _ := dbutil.IsTiDB(ctx, df.downstream.GetDB()); ok {
 		log.Info("The downstream is TiDB. pick it as work source")
-		return df.downstream
+		df.startGCKeeperForTiDB(ctx, df.downstream.GetDB())
+		workSource = df.downstream
 	}
-
-	// if the both sides are not TiDB, choose any one of them would be ok
-	log.Info("pick the downstream as work source")
-	return df.downstream
+	return workSource
 }
 
 func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterator, error) {
