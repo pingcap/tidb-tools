@@ -226,8 +226,7 @@ func (s *MySQLSources) GetDB() *sql.DB {
 
 func (s *MySQLSources) GetSourceStructInfo(ctx context.Context, tableIndex int) ([]*model.TableInfo, error) {
 	tableDiff := s.GetTables()[tableIndex]
-	targetID := utils.UniqueID(tableDiff.Schema, tableDiff.Table)
-	tableSources := s.sourceTablesMap[targetID]
+	tableSources := getMatchedSourcesForTable(s.sourceTablesMap, tableDiff)
 	sourceTableInfos := make([]*model.TableInfo, len(tableSources))
 	for i, tableSource := range tableSources {
 		sourceSchema, sourceTable := tableSource.OriginSchema, tableSource.OriginTable
