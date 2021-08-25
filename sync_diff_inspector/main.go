@@ -102,7 +102,7 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 		}
 	}
 	progress.Close()
-	progress.PrintSummary()
+	//progress.PrintSummary()
 	d.report.EndTime = time.Now()
 	if err := d.report.CalculateTotalSize(ctx, d.downstream.GetDB()); err != nil {
 		log.Warn("fail to calculate the total size", zap.Error(err))

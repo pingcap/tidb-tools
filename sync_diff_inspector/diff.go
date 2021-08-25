@@ -794,5 +794,5 @@ func setTiDBCfg() {
 	tidbCfg.MaxIndexLength = 3027 * 4
 	tidbconfig.StoreGlobalConfig(tidbCfg)
 
-	fmt.Println("set tidb cfg")
+	log.Info("set tidb cfg")
 }
