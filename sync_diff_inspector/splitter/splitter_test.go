@@ -223,7 +223,7 @@ func (s *testSplitterSuite) TestRandomSpliter(c *C) {
 
 		createFakeResultForRandomSplit(mock, testCase.count, testCase.randomValues)
 
-		iter, err := NewRandomIterator(ctx, tableDiff, db, 5)
+		iter, err := NewRandomIterator(ctx, "", tableDiff, db, 5)
 		c.Assert(err, IsNil)
 
 		j := 0
@@ -256,7 +256,7 @@ func (s *testSplitterSuite) TestRandomSpliter(c *C) {
 
 	createFakeResultForRandomSplit(mock, testCases[0].count, testCases[0].randomValues)
 
-	iter, err := NewRandomIterator(ctx, tableDiff, db, 5)
+	iter, err := NewRandomIterator(ctx, "", tableDiff, db, 5)
 	c.Assert(err, IsNil)
 
 	var chunk *chunk.Range
@@ -273,7 +273,7 @@ func (s *testSplitterSuite) TestRandomSpliter(c *C) {
 
 	createFakeResultForRandomSplit(mock, testCases[0].count, testCases[0].randomValues)
 
-	iter, err = NewRandomIteratorWithCheckpoint(ctx, tableDiff, db, 5, rangeInfo)
+	iter, err = NewRandomIteratorWithCheckpoint(ctx, "", tableDiff, db, 5, rangeInfo)
 	c.Assert(err, IsNil)
 
 	chunk, err = iter.Next()
@@ -296,8 +296,6 @@ func createFakeResultForRandomSplit(mock sqlmock.Sqlmock, count int, randomValue
 		}
 		mock.ExpectQuery("ORDER BY rand_value").WillReturnRows(randomRows)
 	}
-
-	return
 }
 
 func (s *testSplitterSuite) TestBucketSpliter(c *C) {
@@ -479,7 +477,7 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 	for i, testCase := range testCases {
 		createFakeResultForBucketSplit(mock, testCase.aRandomValues, testCase.bRandomValues)
 
-		iter, err := NewBucketIterator(ctx, tableDiff, db, testCase.chunkSize)
+		iter, err := NewBucketIterator(ctx, "", tableDiff, db, testCase.chunkSize)
 		c.Assert(err, IsNil)
 
 		j := 0
@@ -500,7 +498,7 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 	// Test Checkpoint
 	stopJ := 3
 	createFakeResultForBucketSplit(mock, testCases[0].aRandomValues[:stopJ], testCases[0].bRandomValues[:stopJ])
-	iter, err := NewBucketIterator(ctx, tableDiff, db, testCases[0].chunkSize)
+	iter, err := NewBucketIterator(ctx, "", tableDiff, db, testCases[0].chunkSize)
 	c.Assert(err, IsNil)
 	j := 0
 	var chunk *chunk.Range
@@ -519,7 +517,7 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 	createFakeResultForBucketSplit(mock, nil, nil)
 	createFakeResultForCount(mock, 64)
 	createFakeResultForRandom(mock, testCases[0].aRandomValues[stopJ:], testCases[0].bRandomValues[stopJ:])
-	iter, err = NewBucketIteratorWithCheckpoint(ctx, tableDiff, db, testCases[0].chunkSize, rangeInfo)
+	iter, err = NewBucketIteratorWithCheckpoint(ctx, "", tableDiff, db, testCases[0].chunkSize, rangeInfo)
 	c.Assert(err, IsNil)
 	chunk, err = iter.Next()
 	c.Assert(err, IsNil)
@@ -549,8 +547,6 @@ func createFakeResultForBucketSplit(mock sqlmock.Sqlmock, aRandomValues, bRandom
 	mock.ExpectQuery("SHOW STATS_BUCKETS").WillReturnRows(statsRows)
 
 	createFakeResultForRandom(mock, aRandomValues, bRandomValues)
-
-	return
 }
 
 func createFakeResultForCount(mock sqlmock.Sqlmock, count int) {
@@ -623,7 +619,7 @@ func (s *testSplitterSuite) TestLimitSpliter(c *C) {
 	for i, testCase := range testCases {
 		createFakeResultForLimitSplit(mock, testCase.limitAValues, testCase.limitBValues, true)
 
-		iter, err := NewLimitIterator(ctx, tableDiff, db, testCase.chunkSize)
+		iter, err := NewLimitIterator(ctx, "", tableDiff, db, testCase.chunkSize)
 		c.Assert(err, IsNil)
 
 		j := 0
@@ -644,7 +640,7 @@ func (s *testSplitterSuite) TestLimitSpliter(c *C) {
 	// Test Checkpoint
 	stopJ := 2
 	createFakeResultForLimitSplit(mock, testCases[0].limitAValues[:stopJ], testCases[0].limitBValues[:stopJ], false)
-	iter, err := NewLimitIterator(ctx, tableDiff, db, testCases[0].chunkSize)
+	iter, err := NewLimitIterator(ctx, "", tableDiff, db, testCases[0].chunkSize)
 	c.Assert(err, IsNil)
 	j := 0
 	var chunk *chunk.Range
@@ -660,7 +656,7 @@ func (s *testSplitterSuite) TestLimitSpliter(c *C) {
 	}
 
 	createFakeResultForLimitSplit(mock, testCases[0].limitAValues[stopJ:], testCases[0].limitBValues[stopJ:], true)
-	iter, err = NewLimitIteratorWithCheckpoint(ctx, tableDiff, db, testCases[0].chunkSize, rangeInfo)
+	iter, err = NewLimitIteratorWithCheckpoint(ctx, "", tableDiff, db, testCases[0].chunkSize, rangeInfo)
 	c.Assert(err, IsNil)
 	chunk, err = iter.Next()
 	c.Assert(err, IsNil)

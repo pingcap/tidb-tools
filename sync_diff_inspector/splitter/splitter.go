@@ -39,6 +39,8 @@ type RangeInfo struct {
 	TableIndex int          `json:"table-index"`
 	// for bucket checkpoint
 	IndexID int64 `json:"index-id"`
+
+	ProgressID string `json:"progress-id"`
 }
 
 func (r *RangeInfo) GetChunk() *chunk.Range {
