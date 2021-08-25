@@ -145,6 +145,7 @@ func (cp *Checkpoint) Init() {
 
 func (cp *Checkpoint) GetChunkSnapshot() *Node {
 	cp.hp.mu.Lock()
+	defer cp.hp.mu.Unlock()
 	var cur, next *Node
 	for {
 		nextId := cp.hp.CurrentSavedID + 1
@@ -165,7 +166,6 @@ func (cp *Checkpoint) GetChunkSnapshot() *Node {
 			break
 		}
 	}
-	cp.hp.mu.Unlock()
 	return cur
 }
 

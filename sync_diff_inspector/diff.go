@@ -400,6 +400,8 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 	} else {
 		// update chunk success state in summary
 		state = checkpoints.SuccessState
+	}
+	dml.node = rangeInfo.ToNode()
 	dml.node.State = state
 	df.sqlCh <- dml
 	return isEqual, rowsAdd, rowsDelete, count, nil
@@ -554,6 +556,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 			// don't have source data, so all the targetRows's data is redundant, should be deleted
 			for lastDownstreamData != nil {
 				sql := df.downstream.GenerateFixSQL(source.Delete, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
+				rowsDelete++
 				log.Info("[delete]", zap.String("sql", sql))
 
 				dml.sqls = append(dml.sqls, sql)
@@ -570,6 +573,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 			// target lack some data, should insert the last source datas
 			for lastUpstreamData != nil {
 				sql := df.downstream.GenerateFixSQL(source.Insert, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
+				rowsAdd++
 				log.Info("[insert]", zap.String("sql", sql))
 
 				dml.sqls = append(dml.sqls, sql)
