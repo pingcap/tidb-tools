@@ -257,20 +257,17 @@ func (c *Range) CopyAndUpdate(column, lower, upper string, updateLower, updateUp
 	return newChunk
 }
 
-func InitChunks(chunks []*Range, t ChunkType, chunkBeginID, bucketID int, collation, limits string) int {
+func InitChunks(chunks []*Range, t ChunkType, bucketID int, collation, limits string) {
 	if chunks == nil {
-		return chunkBeginID
+		return
 	}
 	for _, chunk := range chunks {
 		conditions, args := chunk.ToString(collation)
-		chunk.ID = chunkBeginID
-		chunkBeginID++
 		chunk.Where = fmt.Sprintf("((%s) AND %s)", conditions, limits)
 		chunk.Args = args
 		chunk.BucketID = bucketID
 		chunk.Type = t
 	}
-	return chunkBeginID
 }
 
 func InitChunk(chunk *Range, t ChunkType, bucketID int, collation, limits string) {
