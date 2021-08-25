@@ -36,7 +36,7 @@ type MySQLTableAnalyzer struct {
 	sourceTableMap map[string][]*common.TableShardSource
 }
 
-func (a *MySQLTableAnalyzer) AnalyzeSplitter(ctx context.Context, table *common.TableDiff, startRange *splitter.RangeInfo) (splitter.ChunkIterator, error) {
+func (a *MySQLTableAnalyzer) AnalyzeSplitter(ctx context.Context, progressID string, table *common.TableDiff, startRange *splitter.RangeInfo) (splitter.ChunkIterator, error) {
 	chunkSize := 1000
 	matchedSources := getMatchedSourcesForTable(a.sourceTableMap, table)
 
@@ -47,7 +47,7 @@ func (a *MySQLTableAnalyzer) AnalyzeSplitter(ctx context.Context, table *common.
 	table.Schema = matchedSources[0].OriginSchema
 	table.Table = matchedSources[0].OriginTable
 	// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
-	randIter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, table, matchedSources[0].DBConn, chunkSize, startRange)
+	randIter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, progressID, table, matchedSources[0].DBConn, chunkSize, startRange)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

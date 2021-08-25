@@ -26,7 +26,6 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
-	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
@@ -80,7 +79,7 @@ func (m *MockChunkIterator) Close() {
 type MockAnalyzer struct {
 }
 
-func (m *MockAnalyzer) AnalyzeSplitter(ctx context.Context, tableDiff *common.TableDiff, rangeInfo *splitter.RangeInfo) (splitter.ChunkIterator, error) {
+func (m *MockAnalyzer) AnalyzeSplitter(ctx context.Context, progressID string, tableDiff *common.TableDiff, rangeInfo *splitter.RangeInfo) (splitter.ChunkIterator, error) {
 	i := 0
 	return &MockChunkIterator{
 		ctx,
@@ -313,12 +312,6 @@ func prepareTiDBTables(c *C, tableCases []*tableCaseType) []*common.TableDiff {
 	for n, tableCase := range tableCases {
 		tableInfo, err := dbutil.GetTableInfoBySQL(tableCase.createTableSQL, parser.New())
 		c.Assert(err, IsNil)
-		orderKeyCols := make([]*model.ColumnInfo, 0, len(tableCase.rowColumns))
-		for _, column := range tableCase.rowColumns {
-			orderKeyCols = append(orderKeyCols, &model.ColumnInfo{
-				Name: model.CIStr{O: column},
-			})
-		}
 		tableDiffs = append(tableDiffs, &common.TableDiff{
 			Schema: "source_test",
 			Table:  fmt.Sprintf("test%d", n+1),
@@ -330,7 +323,7 @@ func prepareTiDBTables(c *C, tableCases []*tableCaseType) []*common.TableDiff {
 			chunkRange.Update(column, tableCase.rangeLeft[i], tableCase.rangeRight[i], true, true)
 		}
 
-		chunk.InitChunks([]*chunk.Range{chunkRange}, chunk.Others, 0, 0, "", "")
+		chunk.InitChunks([]*chunk.Range{chunkRange}, chunk.Others, 0, "", "")
 		rangeInfo := &splitter.RangeInfo{
 			ChunkRange: chunkRange,
 			TableIndex: n,

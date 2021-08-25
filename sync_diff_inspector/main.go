@@ -18,6 +18,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -25,6 +26,7 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/progress"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/report"
 	"go.uber.org/zap"
 )
@@ -46,12 +48,16 @@ func main() {
 		return
 	}
 
-	l := zap.NewAtomicLevel()
-	if err := l.UnmarshalText([]byte(cfg.LogLevel)); err != nil {
-		log.Error("invalid log level", zap.String("log level", cfg.LogLevel))
+	conf := new(log.Config)
+	conf.Level = cfg.LogLevel
+
+	conf.File.Filename = filepath.Join(cfg.Task.OutputDir, "sync_diff.log")
+	lg, p, e := log.InitLogger(conf)
+	if e != nil {
+		log.Error("Log init failed!", zap.String("error", e.Error()))
 		return
 	}
-	log.SetLevel(l.Level())
+	log.ReplaceGlobals(lg, p)
 
 	utils.PrintInfo("sync_diff_inspector")
 
@@ -98,6 +104,8 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 			log.Fatal("check data difference failed", zap.Error(err))
 		}
 	}
+	progress.Close()
+	//progress.PrintSummary()
 	if err := d.report.CalculateTotalSize(ctx, d.downstream.GetDB()); err != nil {
 		log.Warn("fail to calculate the total size", zap.Error(err))
 	}

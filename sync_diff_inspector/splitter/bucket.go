@@ -22,6 +22,7 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/progress"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"go.uber.org/zap"
@@ -40,25 +41,31 @@ type BucketIterator struct {
 	errCh        chan error
 	indexID      int64
 
+	progressID string
+
 	dbConn *sql.DB
 }
 
-func NewBucketIterator(ctx context.Context, table *common.TableDiff, dbConn *sql.DB, chunkSize int) (*BucketIterator, error) {
-	return NewBucketIteratorWithCheckpoint(ctx, table, dbConn, chunkSize, nil)
+func NewBucketIterator(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, chunkSize int) (*BucketIterator, error) {
+	return NewBucketIteratorWithCheckpoint(ctx, progressID, table, dbConn, chunkSize, nil)
 }
 
-func NewBucketIteratorWithCheckpoint(ctx context.Context, table *common.TableDiff, dbConn *sql.DB, chunkSize int, startRange *RangeInfo) (*BucketIterator, error) {
+func NewBucketIteratorWithCheckpoint(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, chunkSize int, startRange *RangeInfo) (*BucketIterator, error) {
 	bs := &BucketIterator{
 		table:     table,
 		chunkSize: int64(chunkSize),
 		chunksCh:  make(chan []*chunk.Range, DefaultChannelBuffer),
 		errCh:     make(chan error, 1),
 		dbConn:    dbConn,
+
+		progressID: progressID,
 	}
 
 	if err := bs.init(startRange); err != nil {
 		return nil, errors.Trace(err)
 	}
+
+	progress.StartTable(bs.progressID, 0, false)
 	go bs.produceChunks(ctx, startRange)
 
 	return bs, nil
@@ -145,7 +152,10 @@ func (s *BucketIterator) Close() {
 }
 
 func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInfo) {
-	defer close(s.chunksCh)
+	defer func() {
+		progress.UpdateTotal(s.progressID, 0, true)
+		close(s.chunksCh)
+	}()
 	var (
 		lowerValues, upperValues []string
 		latestCount              int64
@@ -156,7 +166,6 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 	table := s.table
 	buckets := s.buckets
 	indexColumns := s.indexColumns
-	chunkID := 0
 	beginBucket := 0
 	if startRange != nil {
 		chunkRange := chunk.NewChunkRange()
@@ -173,7 +182,6 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 		}
 
 		beginBucket = int(c.BucketID + 1)
-		chunkID = c.ID + 1
 		if c.BucketID < len(buckets) {
 			nextUpperValues, err := dbutil.AnalyzeValuesFromBuckets(buckets[c.BucketID].UpperBound, indexColumns)
 			if err != nil {
@@ -205,7 +213,8 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 				s.errCh <- errors.Trace(err)
 				return
 			}
-			chunkID = chunk.InitChunks(chunks, chunk.Bucket, chunkID, c.BucketID, table.Collation, table.Range)
+			chunk.InitChunks(chunks, chunk.Bucket, c.BucketID, table.Collation, table.Range)
+			progress.UpdateTotal(s.progressID, len(chunks), false)
 			s.chunksCh <- chunks
 
 		}
@@ -251,7 +260,8 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 		chunkRange = chunk.NewChunkRange()
 		latestCount = buckets[i].Count
 		lowerValues = upperValues
-		chunkID = chunk.InitChunks(chunks, chunk.Bucket, chunkID, i, table.Collation, table.Range)
+		chunk.InitChunks(chunks, chunk.Bucket, i, table.Collation, table.Range)
+		progress.UpdateTotal(s.progressID, len(chunks), false)
 		s.chunksCh <- chunks
 	}
 
@@ -261,7 +271,8 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 			chunkRange.Update(column.Name.O, lowerValues[j], "", true, false)
 		}
 		chunks := []*chunk.Range{chunkRange}
-		chunkID = chunk.InitChunks(chunks, chunk.Bucket, chunkID, len(buckets), table.Collation, table.Range)
+		chunk.InitChunks(chunks, chunk.Bucket, len(buckets), table.Collation, table.Range)
+		progress.UpdateTotal(s.progressID, len(chunks), false)
 		s.chunksCh <- chunks
 	}
 }
