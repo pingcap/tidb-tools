@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/progress"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"go.uber.org/zap"
@@ -40,13 +41,15 @@ type LimitIterator struct {
 	errCh    chan error
 	cancel   context.CancelFunc
 	dbConn   *sql.DB
+
+	progressID string
 }
 
-func NewLimitIterator(ctx context.Context, table *common.TableDiff, dbConn *sql.DB, chunkSize int) (*LimitIterator, error) {
-	return NewLimitIteratorWithCheckpoint(ctx, table, dbConn, chunkSize, nil)
+func NewLimitIterator(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, chunkSize int) (*LimitIterator, error) {
+	return NewLimitIteratorWithCheckpoint(ctx, progressID, table, dbConn, chunkSize, nil)
 }
 
-func NewLimitIteratorWithCheckpoint(ctx context.Context, table *common.TableDiff, dbConn *sql.DB, chunkSize int, startRange *RangeInfo) (*LimitIterator, error) {
+func NewLimitIteratorWithCheckpoint(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, chunkSize int, startRange *RangeInfo) (*LimitIterator, error) {
 	indices, err := utils.GetBetterIndex(ctx, dbConn, table.Schema, table.Table, table.Info)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -129,8 +132,11 @@ func NewLimitIteratorWithCheckpoint(ctx context.Context, table *common.TableDiff
 
 		cancel,
 		dbConn,
+
+		progressID,
 	}
 
+	progress.StartTable(progressID, 0, false)
 	go limitIterator.produceChunks(ctxx)
 
 	return limitIterator, nil
@@ -174,6 +180,7 @@ func (lmt *LimitIterator) produceChunks(ctx context.Context) {
 		if dataMap == nil {
 			// there is no row in result set
 			chunk.InitChunk(chunkRange, chunk.Limit, 0, lmt.table.Collation, lmt.table.Range)
+			progress.UpdateTotal(lmt.progressID, 1, true)
 			select {
 			case <-ctx.Done():
 			case lmt.chunksCh <- chunkRange:
@@ -189,6 +196,7 @@ func (lmt *LimitIterator) produceChunks(ctx context.Context) {
 		}
 
 		chunk.InitChunk(chunkRange, chunk.Limit, 0, lmt.table.Collation, lmt.table.Range)
+		progress.UpdateTotal(lmt.progressID, 1, false)
 		select {
 		case <-ctx.Done():
 			return
