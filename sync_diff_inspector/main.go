@@ -48,7 +48,7 @@ func main() {
 
 	l := zap.NewAtomicLevel()
 	if err := l.UnmarshalText([]byte(cfg.LogLevel)); err != nil {
-		log.Error("invalide log level", zap.String("log level", cfg.LogLevel))
+		log.Error("invalid log level", zap.String("log level", cfg.LogLevel))
 		return
 	}
 	log.SetLevel(l.Level())
@@ -101,7 +101,10 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 	if err := d.report.CalculateTotalSize(ctx, d.downstream.GetDB()); err != nil {
 		log.Warn("fail to calculate the total size", zap.Error(err))
 	}
-	d.report.CommitSummary(&cfg.Task)
+	err = d.report.CommitSummary(&cfg.Task)
+	if err != nil {
+		log.Fatal("check data report failed", zap.Error(err))
+	}
 	d.report.Print("sync_diff.log")
 	return d.report.Result == report.Pass
 }
