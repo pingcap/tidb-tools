@@ -102,10 +102,10 @@ func (s *BucketIterator) init(startRange *RangeInfo) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	// TODO: 1. ignore some columns
-	//		 2. how to choose index
-	indices := dbutil.FindAllIndex(s.table.Info)
-	utils.GetBetterIndex(context.Background(), s.dbConn, s.table.Schema, s.table.Table, s.table.Info, indices)
+	indices, err := utils.GetBetterIndex(context.Background(), s.dbConn, s.table.Schema, s.table.Table, s.table.Info)
+	if err != nil {
+		return errors.Trace(err)
+	}
 	for _, index := range indices {
 		if index == nil {
 			continue

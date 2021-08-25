@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package report
 
 import (
 	"context"
@@ -44,8 +44,8 @@ type ReportConfig struct {
 	Host     string `toml:"host"`
 	Port     int    `toml:"port"`
 	User     string `toml:"user"`
-	Snapshot string `toml:"snapshot"`
-	SqlMode  string `toml:"sql-mode"`
+	Snapshot string `toml:"snapshot,omitempty"`
+	SqlMode  string `toml:"sql-mode,omitempty"`
 }
 
 // TableResult saves the check result for every table.
@@ -64,15 +64,25 @@ type TableResult struct {
 type Report struct {
 	sync.RWMutex
 	// Result is pass or fail
-	Result       string                             `json:"result"`
-	PassNum      int32                              `json:"pass-num"`
-	FailedNum    int32                              `json:"failed-num"`
+	Result       string
+	PassNum      int32
+	FailedNum    int32
 	TableResults map[string]map[string]*TableResult `json:"table-results"`
 	StartTime    time.Time                          `json:"start-time"`
-	EndTime      time.Time                          `json:"end-time"`
-	TotalSize    int64                              `json:"total-sizes"`
-	SourceConfig [][]byte                           `json:"source-configs"`
-	TargetConfig []byte                             `json:"target-config"`
+	Duration     time.Duration                      `json:"time-duration"`
+	TotalSize    int64
+	SourceConfig [][]byte
+	TargetConfig []byte
+}
+
+func (r *Report) LoadReport(reportInfo *Report) {
+	r.StartTime = time.Now()
+	r.Duration = reportInfo.Duration
+	for schema, tableMap := range reportInfo.TableResults {
+		for table, result := range tableMap {
+			r.TableResults[schema][table] = result
+		}
+	}
 }
 
 func (r *Report) getSortedTables() []string {
@@ -122,6 +132,7 @@ func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
+// CommitSummary commit summary info
 func (r *Report) CommitSummary(taskConfig *config.TaskConfig) error {
 	passNum, failedNum := int32(0), int32(0)
 	for _, tableMap := range r.TableResults {
@@ -168,7 +179,7 @@ func (r *Report) CommitSummary(taskConfig *config.TaskConfig) error {
 		table.Render()
 		summaryFile.WriteString(tableString.String())
 	}
-	duration := r.EndTime.Sub(r.StartTime)
+	duration := r.Duration + time.Since(r.StartTime)
 	summaryFile.WriteString(fmt.Sprintf("Time Cost: %s\n", duration))
 	summaryFile.WriteString(fmt.Sprintf("Average Speed: %fMB/s\n", float64(r.TotalSize)/(1024.0*1024.0*duration.Seconds())))
 	return nil
@@ -178,7 +189,6 @@ func Print(msg string) {
 	fmt.Print(msg)
 }
 
-// CommitSummary commit summary info
 func (r *Report) Print(fileName string) error {
 	var summary strings.Builder
 	if r.Result == Pass {
@@ -256,15 +266,20 @@ func (r *Report) SetTableStructCheckResult(schema, table string, equal bool) {
 }
 
 // SetTableDataCheckResult sets the data check result for table.
-func (r *Report) SetTableDataCheckResult(schema, table string, equal bool, rowsAdd int, rowsDelete int) {
+func (r *Report) SetTableDataCheckResult(schema, table string, equal bool) {
 	r.Lock()
 	defer r.Unlock()
 	r.TableResults[schema][table].DataEqual = equal
-	r.TableResults[schema][table].RowsAdd += rowsAdd
-	r.TableResults[schema][table].RowsDelete += rowsDelete
 	if !equal && r.Result != Error {
 		r.Result = Fail
 	}
+}
+
+func (r *Report) SetTableDataCheckCount(schema, table string, rowsAdd int, rowsDelete int) {
+	r.Lock()
+	defer r.Unlock()
+	r.TableResults[schema][table].RowsAdd += rowsAdd
+	r.TableResults[schema][table].RowsDelete += rowsDelete
 }
 
 // SetTableMeetError sets meet error when check the table.
@@ -279,7 +294,7 @@ func (r *Report) SetTableMeetError(schema, table string, err error) {
 	r.Result = Error
 }
 
-func (r *Report) AddRowsCnt(schema, table string, cnt int64) {
+func (r *Report) SetRowsCnt(schema, table string, cnt int64) {
 	r.Lock()
 	defer r.Unlock()
 	r.TableResults[schema][table].RowsCnt += cnt

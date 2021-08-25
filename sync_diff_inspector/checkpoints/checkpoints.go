@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/report"
 
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/siddontang/go/ioutil2"
@@ -87,6 +88,11 @@ type Checkpoint struct {
 	hp *Heap
 }
 
+type SavedState struct {
+	Chunk  *Node          `json:"chunk-info"`
+	Report *report.Report `json:"report-info"`
+}
+
 // SetCurrentSavedID the method is unsynchronized, be cautious
 func (cp *Checkpoint) SetCurrentSavedID(id int) {
 	cp.hp.CurrentSavedID = id
@@ -137,9 +143,9 @@ func (cp *Checkpoint) Init() {
 	cp.hp = hp
 }
 
-// SaveChunk saves the chunk to file.
-func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string) (int, int, error) {
+func (cp *Checkpoint) GetChunkSnapshot() *Node {
 	cp.hp.mu.Lock()
+	defer cp.hp.mu.Unlock()
 	var cur, next *Node
 	for {
 		nextId := cp.hp.CurrentSavedID + 1
@@ -160,39 +166,46 @@ func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string) (int, int,
 			break
 		}
 	}
-	cp.hp.mu.Unlock()
+	return cur
+}
+
+// SaveChunk saves the chunk to file.
+func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string, cur *Node, reportInfo *report.Report) (int, error) {
 	if cur != nil {
 		log.Info("save checkpoint",
 			zap.Int("id", cur.GetID()),
 			zap.Reflect("chunk", cur),
 			zap.String("state", cur.GetState()))
-		tableIndex := cur.TableIndex
-		checkpointData, err := json.Marshal(cur)
+		savedState := &SavedState{
+			Chunk:  cur,
+			Report: reportInfo,
+		}
+		checkpointData, err := json.Marshal(savedState)
 		if err != nil {
 			log.Warn("fail to save the chunk to the file", zap.Int("id", cur.GetID()))
-			return 0, -1, errors.Trace(err)
+			return 0, errors.Trace(err)
 		}
 
 		if err = ioutil2.WriteFileAtomic(fileName, checkpointData, config.LocalFilePerm); err != nil {
-			return 0, -1, err
+			return 0, err
 		}
-		return cur.GetID(), tableIndex, nil
+		return cur.GetID(), nil
 	}
-	return 0, -1, nil
+	return 0, nil
 }
 
 // LoadChunk loads chunk info from file `chunk`
-func (cp *Checkpoint) LoadChunk(fileName string) (*Node, error) {
+func (cp *Checkpoint) LoadChunk(fileName string) (*Node, *report.Report, error) {
 	bytes, err := os.ReadFile(fileName)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
-	n := &Node{}
+	n := &SavedState{}
 	err = json.Unmarshal(bytes, n)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
-	return n, nil
+	return n.Chunk, n.Report, nil
 }
 
 type CheckConfig struct {
