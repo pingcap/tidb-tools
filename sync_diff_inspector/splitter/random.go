@@ -111,13 +111,7 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	var chunk_id int
-	if startRange != nil {
-		chunk_id = startRange.GetChunk().ID + 1
-	} else {
-		chunk_id = 0
-	}
-	chunk.InitChunks(chunks, chunk.Random, chunk_id, 0, table.Collation, table.Range)
+	chunk.InitChunks(chunks, chunk.Random, 0, table.Collation, table.Range)
 
 	progress.StartTable(progressID, len(chunks), true)
 	return &RandomIterator{

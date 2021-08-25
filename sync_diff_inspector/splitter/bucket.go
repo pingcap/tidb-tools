@@ -166,7 +166,6 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 	table := s.table
 	buckets := s.buckets
 	indexColumns := s.indexColumns
-	chunkID := 0
 	beginBucket := 0
 	if startRange != nil {
 		chunkRange := chunk.NewChunkRange()
@@ -183,7 +182,6 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 		}
 
 		beginBucket = int(c.BucketID + 1)
-		chunkID = c.ID + 1
 		if c.BucketID < len(buckets) {
 			nextUpperValues, err := dbutil.AnalyzeValuesFromBuckets(buckets[c.BucketID].UpperBound, indexColumns)
 			if err != nil {
@@ -215,7 +213,7 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 				s.errCh <- errors.Trace(err)
 				return
 			}
-			chunkID = chunk.InitChunks(chunks, chunk.Bucket, chunkID, c.BucketID, table.Collation, table.Range)
+			chunk.InitChunks(chunks, chunk.Bucket, c.BucketID, table.Collation, table.Range)
 			progress.UpdateTotal(s.progressID, len(chunks), false)
 			s.chunksCh <- chunks
 
@@ -262,7 +260,7 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 		chunkRange = chunk.NewChunkRange()
 		latestCount = buckets[i].Count
 		lowerValues = upperValues
-		chunkID = chunk.InitChunks(chunks, chunk.Bucket, chunkID, i, table.Collation, table.Range)
+		chunk.InitChunks(chunks, chunk.Bucket, i, table.Collation, table.Range)
 		progress.UpdateTotal(s.progressID, len(chunks), false)
 		s.chunksCh <- chunks
 	}
@@ -273,7 +271,7 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 			chunkRange.Update(column.Name.O, lowerValues[j], "", true, false)
 		}
 		chunks := []*chunk.Range{chunkRange}
-		chunkID = chunk.InitChunks(chunks, chunk.Bucket, chunkID, len(buckets), table.Collation, table.Range)
+		chunk.InitChunks(chunks, chunk.Bucket, len(buckets), table.Collation, table.Range)
 		progress.UpdateTotal(s.progressID, len(chunks), false)
 		s.chunksCh <- chunks
 	}
