@@ -18,13 +18,14 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/utils"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/config
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/progress"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/report"
 	"go.uber.org/zap"
@@ -49,7 +50,8 @@ func main() {
 
 	conf := new(log.Config)
 	conf.Level = cfg.LogLevel
-	conf.File.Filename = "./output/sync_diff.log"
+
+	conf.File.Filename = filepath.Join(cfg.Task.OutputDir, "sync_diff.log")
 	lg, p, e := log.InitLogger(conf)
 	if e != nil {
 		log.Error("Log init failed!", zap.String("error", e.Error()))
