@@ -142,15 +142,11 @@ func (s *TiDBSource) GetTables() []*common.TableDiff {
 }
 
 func (s *TiDBSource) GetSourceStructInfo(ctx context.Context, tableIndex int) ([]*model.TableInfo, error) {
+	var err error
 	tableInfos := make([]*model.TableInfo, 1)
 	tableDiff := s.GetTables()[tableIndex]
-	sourceSchema, sourceTable := tableDiff.Schema, tableDiff.Table
-	targetID := utils.UniqueID(tableDiff.Schema, tableDiff.Table)
-	if s.sourceTableMap != nil {
-		sourceSchema, sourceTable = s.sourceTableMap[targetID].OriginSchema, s.sourceTableMap[targetID].OriginTable
-	}
-	var err error
-	tableInfos[0], err = dbutil.GetTableInfo(ctx, s.GetDB(), sourceSchema, sourceTable)
+	source := getMatchSource(s.sourceTableMap, tableDiff)
+	tableInfos[0], err = dbutil.GetTableInfo(ctx, s.GetDB(), source.OriginSchema, source.OriginTable)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
