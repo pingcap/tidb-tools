@@ -42,7 +42,8 @@ type LimitIterator struct {
 	cancel   context.CancelFunc
 	dbConn   *sql.DB
 
-	progressID string
+	progressID   string
+	columnOffset map[string]int
 }
 
 func NewLimitIterator(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, chunkSize int) (*LimitIterator, error) {
@@ -55,9 +56,11 @@ func NewLimitIteratorWithCheckpoint(ctx context.Context, progressID string, tabl
 		return nil, errors.Trace(err)
 	}
 	var indexColumns []*model.ColumnInfo
-	tagChunk := chunk.NewChunkRange()
+	var tagChunk *chunk.Range
+	columnOffset := make(map[string]int)
 	chunksCh := make(chan *chunk.Range, DefaultChannelBuffer)
 	errCh := make(chan error)
+	undone := startRange == nil
 	var indexID int64
 	for _, index := range indices {
 		if index == nil {
@@ -78,21 +81,27 @@ func NewLimitIteratorWithCheckpoint(ctx context.Context, progressID string, tabl
 		}
 
 		indexID = index.ID
+		for i, indexColumn := range indexColumns {
+			columnOffset[indexColumn.Name.O] = i
+		}
+
 		if startRange != nil {
+			tagChunk = chunk.NewChunkRange()
 			bounds := startRange.ChunkRange.Bounds
 			if len(bounds) != len(indexColumns) {
 				log.Warn("checkpoint node columns are not equal to selected index columns, skip checkpoint.")
 				break
 			}
+
 			for _, bound := range bounds {
-				if !bound.HasUpper {
-					// TODO deal with this situation gracefully
-					log.Warn("checkpoint node has none-Upper bound, skip checkpoint.")
-					break
-				}
-				tagChunk.Update(bound.Column, bound.Upper, "", true, false)
+				undone = undone || bound.HasUpper
+				tagChunk.Update(bound.Column, bound.Upper, "", bound.HasUpper, false)
 			}
+
+		} else {
+			tagChunk = chunk.NewChunkRangeOffset(columnOffset)
 		}
+
 		break
 	}
 
@@ -134,10 +143,16 @@ func NewLimitIteratorWithCheckpoint(ctx context.Context, progressID string, tabl
 		dbConn,
 
 		progressID,
+		columnOffset,
 	}
 
 	progress.StartTable(progressID, 0, false)
-	go limitIterator.produceChunks(ctxx)
+	if !undone {
+		// this table is finished.
+		close(chunksCh)
+	} else {
+		go limitIterator.produceChunks(ctxx)
+	}
 
 	return limitIterator, nil
 }
@@ -189,7 +204,7 @@ func (lmt *LimitIterator) produceChunks(ctx context.Context) {
 			return
 		}
 
-		newTagChunk := chunk.NewChunkRange()
+		newTagChunk := chunk.NewChunkRangeOffset(lmt.columnOffset)
 		for column, data := range dataMap {
 			newTagChunk.Update(column, string(data.Data), "", !data.IsNull, false)
 			chunkRange.Update(column, "", string(data.Data), false, !data.IsNull)

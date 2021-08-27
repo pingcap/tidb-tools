@@ -677,3 +677,28 @@ func createFakeResultForLimitSplit(mock sqlmock.Sqlmock, aValues []string, bValu
 		mock.ExpectQuery("SELECT `a`,.*").WillReturnRows(sqlmock.NewRows([]string{"a", "b"}))
 	}
 }
+
+func (s *testSplitterSuite) TestRangeInfo(c *C) {
+	rangeInfo := &RangeInfo{
+		ChunkRange: chunk.NewChunkRange(),
+		TableIndex: 1,
+		IndexID:    2,
+		ProgressID: "324312",
+	}
+	rangeInfo.Update("a", "1", "2", true, true, "[23]", "[sdg]")
+
+	chunkRange := rangeInfo.GetChunk()
+	c.Assert(chunkRange.Where, Equals, "((((`a` COLLATE '[23]' > ?)) AND ((`a` COLLATE '[23]' <= ?))) AND [sdg])")
+	c.Assert(chunkRange.Args, DeepEquals, []string{"1", "2"})
+
+	c.Assert(rangeInfo.GetTableIndex(), Equals, 1)
+
+	rangeInfo2 := FromNode(rangeInfo.ToNode())
+
+	chunkRange = rangeInfo2.GetChunk()
+	c.Assert(chunkRange.Where, Equals, "((((`a` COLLATE '[23]' > ?)) AND ((`a` COLLATE '[23]' <= ?))) AND [sdg])")
+	c.Assert(chunkRange.Args, DeepEquals, []string{"1", "2"})
+
+	c.Assert(rangeInfo2.GetTableIndex(), Equals, 1)
+
+}
