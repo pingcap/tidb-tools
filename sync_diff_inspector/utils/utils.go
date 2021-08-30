@@ -29,7 +29,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pkg/term"
 	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 )
 
 // WorkerPool contains a pool of workers.
@@ -120,28 +119,6 @@ func (pool *WorkerPool) ApplyWithID(fn identifiedTaskFunc) {
 		defer pool.recycle(worker)
 		fn(worker.ID)
 	}()
-}
-
-// ApplyOnErrorGroup executes a task in an errgroup.
-func (pool *WorkerPool) ApplyOnErrorGroup(eg *errgroup.Group, fn func() error) {
-	worker := pool.apply()
-	pool.wg.Add(1)
-	eg.Go(func() error {
-		defer pool.wg.Done()
-		defer pool.recycle(worker)
-		return fn()
-	})
-}
-
-// ApplyWithIDInErrorGroup executes a task in an errgroup and provides it with the worker ID.
-func (pool *WorkerPool) ApplyWithIDInErrorGroup(eg *errgroup.Group, fn func(id uint64) error) {
-	worker := pool.apply()
-	pool.wg.Add(1)
-	eg.Go(func() error {
-		defer pool.wg.Done()
-		defer pool.recycle(worker)
-		return fn(worker.ID)
-	})
 }
 
 func (pool *WorkerPool) apply() *Worker {
@@ -248,6 +225,8 @@ func GenerateReplaceDML(data map[string]*dbutil.ColumnData, table *model.TableIn
 }
 
 func GenerateReplaceDMLWithAnnotation(source, target map[string]*dbutil.ColumnData, table *model.TableInfo, schema string) string {
+	sqlColNames := make([]string, 0, len(table.Columns))
+	sqlValues := make([]string, 0, len(table.Columns))
 	colNames := make([]string, 0, len(table.Columns))
 	values1 := make([]string, 0, len(table.Columns))
 	values2 := make([]string, 0, len(table.Columns))
@@ -257,22 +236,31 @@ func GenerateReplaceDMLWithAnnotation(source, target map[string]*dbutil.ColumnDa
 		}
 
 		var data1, data2 *dbutil.ColumnData
-
-		colNames = append(colNames, dbutil.ColumnName(col.Name.O))
-
+		var value1 string
 		data1 = source[col.Name.O]
+		data2 = target[col.Name.O]
+
 		if data1.IsNull {
-			values1 = append(values1, "NULL")
+			value1 = "NULL"
 		} else {
 			if needQuotes(col.FieldType.Tp) {
-				values1 = append(values1, fmt.Sprintf("'%s'", strings.Replace(string(data1.Data), "'", "\\'", -1)))
+				value1 = fmt.Sprintf("'%s'", strings.Replace(string(data1.Data), "'", "\\'", -1))
 			} else {
-				values1 = append(values1, string(data1.Data))
+				value1 = string(data1.Data)
 			}
 		}
+		colName := dbutil.ColumnName(col.Name.O)
+		sqlColNames = append(sqlColNames, colName)
+		sqlValues = append(sqlValues, value1)
 
-		data2 = target[col.Name.O]
-		if source[col.Name.O].IsNull {
+		if (string(data1.Data) == string(data2.Data)) && (data1.IsNull == data2.IsNull) {
+			continue
+		}
+
+		colNames = append(colNames, colName)
+		values1 = append(values1, value1)
+
+		if data2.IsNull {
 			values2 = append(values2, "NULL")
 		} else {
 			if needQuotes(col.FieldType.Tp) {
@@ -284,7 +272,7 @@ func GenerateReplaceDMLWithAnnotation(source, target map[string]*dbutil.ColumnDa
 
 	}
 
-	return fmt.Sprintf("-- original data: (%s) VALUES (%s) \nREPLACE INTO %s(%s) VALUES (%s);", strings.Join(colNames, ","), strings.Join(values2, ","), dbutil.TableName(schema, table.Name.O), strings.Join(colNames, ","), strings.Join(values1, ","))
+	return fmt.Sprintf("-- diff column\t|\t%s\n-- source data\t|\t%s\n-- target data\t|\t%s\nREPLACE INTO %s(%s) VALUES (%s);", strings.Join(colNames, "\t|\t"), strings.Join(values1, "\t|\t"), strings.Join(values2, "\t|\t"), dbutil.TableName(schema, table.Name.O), strings.Join(sqlColNames, ","), strings.Join(sqlValues, ","))
 }
 
 func GenerateDeleteDML(data map[string]*dbutil.ColumnData, table *model.TableInfo, schema string) string {
@@ -451,22 +439,6 @@ func SliceToMap(slice []string) map[string]interface{} {
 	return sMap
 }
 
-// GetApproximateMid get a mid point from index columns by doing multiple sample, and get mid point from sample points
-func GetApproximateMid(ctx context.Context, db *sql.DB, schema, table string, columns []*model.ColumnInfo, num int, limitRange string, limitArgs []interface{}, collation string) ([]string, error) {
-	if len(columns) == 0 {
-		return nil, errors.Annotate(errors.NotValidf("not valid columns"), "the columns is empty")
-	}
-	midValues := make([]string, len(columns))
-	for i, column := range columns {
-		randomValues, err := dbutil.GetRandomValues(ctx, db, schema, table, column.Name.O, num, limitRange, limitArgs, collation)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		midValues[i] = randomValues[len(randomValues)/2]
-	}
-	return midValues, nil
-}
-
 func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table string, tbInfo *model.TableInfo, limitRange string, args []interface{}, count int64) (map[string]string, error) {
 	/*
 		example
@@ -627,9 +599,6 @@ func GetBetterIndex(ctx context.Context, db *sql.DB, schema, table string, table
 	copy(indices, tableInfo.Indices)
 	sels := make([]float64, len(indices))
 	for _, index := range indices {
-		if index.Primary || index.Unique {
-			return indices, nil
-		}
 		column := GetColumnsFromIndex(index, tableInfo)[0]
 		selectivity, err := GetSelectivity(ctx, db, schema, table, column.Name.O, tableInfo)
 		if err != nil {

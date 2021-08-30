@@ -1,4 +1,4 @@
-// Copyright 2018 PingCAP, Inc.
+// Copyright 2021 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -26,12 +27,10 @@ import (
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/pingcap/errors"
-	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
-	"go.uber.org/zap"
 )
 
 const (
@@ -80,7 +79,11 @@ type Report struct {
 func (r *Report) LoadReport(reportInfo *Report) {
 	r.StartTime = time.Now()
 	r.Duration = reportInfo.Duration
+	r.TotalSize = reportInfo.TotalSize
 	for schema, tableMap := range reportInfo.TableResults {
+		if _, ok := r.TableResults[schema]; !ok {
+			r.TableResults[schema] = make(map[string]*TableResult)
+		}
 		for table, result := range tableMap {
 			r.TableResults[schema][table] = result
 		}
@@ -122,8 +125,6 @@ func (r *Report) getDiffRows() [][]string {
 }
 
 func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB) error {
-	r.Lock()
-	defer r.Unlock()
 	for schema, tableMap := range r.TableResults {
 		for table := range tableMap {
 			size, err := utils.GetTableSize(ctx, db, schema, table)
@@ -138,8 +139,6 @@ func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB) error {
 
 // CommitSummary commit summary info
 func (r *Report) CommitSummary(taskConfig *config.TaskConfig) error {
-	r.Lock()
-	defer r.Unlock()
 	passNum, failedNum := int32(0), int32(0)
 	for _, tableMap := range r.TableResults {
 		for _, result := range tableMap {
@@ -191,13 +190,7 @@ func (r *Report) CommitSummary(taskConfig *config.TaskConfig) error {
 	return nil
 }
 
-func Print(msg string) {
-	fmt.Print(msg)
-}
-
-func (r *Report) Print(fileName string) error {
-	r.Lock()
-	r.Unlock()
+func (r *Report) Print(fileName string, w io.Writer) error {
 	var summary strings.Builder
 	if r.Result == Pass {
 		summary.WriteString(fmt.Sprintf("A total of %d table have been compared and all are equal.\n", r.FailedNum+r.PassNum))
@@ -227,7 +220,7 @@ func (r *Report) Print(fileName string) error {
 		summary.WriteString(fmt.Sprintf("You can view the comparision details through './output_dir/%s'\n", fileName))
 	}
 	summary.WriteString("Press any key to exist.\n")
-	Print(summary.String())
+	fmt.Fprint(w, summary.String())
 	utils.GetChar()
 	return nil
 }
@@ -277,7 +270,6 @@ func (r *Report) SetTableStructCheckResult(schema, table string, equal bool) {
 func (r *Report) SetTableDataCheckResult(schema, table string, equal bool) {
 	r.Lock()
 	defer r.Unlock()
-	log.Info("set false", zap.String("table", dbutil.TableName(schema, table)), zap.Bool("equal", equal))
 	r.TableResults[schema][table].DataEqual = equal
 	if !equal && r.Result != Error {
 		r.Result = Fail
