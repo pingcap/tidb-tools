@@ -1,4 +1,4 @@
-// Copyright 2018 PingCAP, Inc.
+// Copyright 2021 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -78,7 +79,11 @@ type Report struct {
 func (r *Report) LoadReport(reportInfo *Report) {
 	r.StartTime = time.Now()
 	r.Duration = reportInfo.Duration
+	r.TotalSize = reportInfo.TotalSize
 	for schema, tableMap := range reportInfo.TableResults {
+		if _, ok := r.TableResults[schema]; !ok {
+			r.TableResults[schema] = make(map[string]*TableResult)
+		}
 		for table, result := range tableMap {
 			r.TableResults[schema][table] = result
 		}
@@ -185,11 +190,7 @@ func (r *Report) CommitSummary(taskConfig *config.TaskConfig) error {
 	return nil
 }
 
-func Print(msg string) {
-	fmt.Print(msg)
-}
-
-func (r *Report) Print(fileName string) error {
+func (r *Report) Print(fileName string, w io.Writer) error {
 	var summary strings.Builder
 	if r.Result == Pass {
 		summary.WriteString(fmt.Sprintf("A total of %d table have been compared and all are equal.\n", r.FailedNum+r.PassNum))
@@ -219,7 +220,7 @@ func (r *Report) Print(fileName string) error {
 		summary.WriteString(fmt.Sprintf("You can view the comparision details through './output_dir/%s'\n", fileName))
 	}
 	summary.WriteString("Press any key to exist.\n")
-	Print(summary.String())
+	fmt.Fprint(w, summary.String())
 	utils.GetChar()
 	return nil
 }
