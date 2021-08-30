@@ -30,7 +30,7 @@ ignore-struct-check = false
     user = "root"
     password = ""
 
-    routes-rules = ["rule1", "rule2"]
+    route-rules = ["rule1", "rule2"]
     # remove comment if use tidb's snapshot data
     # snapshot = "2016-10-08 16:45:26"
 
@@ -40,7 +40,7 @@ ignore-struct-check = false
     user = "root"
     password = ""
 
-    routes-rules = ["rule1", "rule2"]
+    route-rules = ["rule1", "rule2"]
     # remove comment if use tidb's snapshot data
     # snapshot = "2016-10-08 16:45:26"
 
@@ -50,7 +50,7 @@ ignore-struct-check = false
     user = "root"
     password = ""
 
-    routes-rules = ["rule1", "rule3"]
+    route-rules = ["rule1", "rule3"]
     # remove comment if use tidb's snapshot data
     # snapshot = "2016-10-08 16:45:26"
 
