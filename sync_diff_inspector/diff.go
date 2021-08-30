@@ -411,7 +411,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 		log.Debug("checksum failed", zap.Int("chunk id", rangeInfo.ChunkRange.ID), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTables()[rangeInfo.TableIndex].Table))
 		state = checkpoints.FailedState
 		// if the chunk's checksum differ, try to do binary check
-		if count > splitter.SplitThreshold {
+		if count > utils.SplitThreshold {
 			log.Debug("count greater than threshold, start do bingenerate", zap.Int("chunk id", rangeInfo.ChunkRange.ID), zap.Int64("chunk size", count))
 			rangeInfo, err = df.BinGenerate(ctx, df.workSource, rangeInfo, count)
 			log.Debug("bin generate finished", zap.Reflect("chunk", rangeInfo.ChunkRange), zap.Int("chunk id", rangeInfo.ChunkRange.ID))
@@ -434,7 +434,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 }
 
 func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tableRange *splitter.RangeInfo, count int64) (*splitter.RangeInfo, error) {
-	if count <= splitter.SplitThreshold {
+	if count <= utils.SplitThreshold {
 		return tableRange, nil
 	}
 	tableDiff := targetSource.GetTables()[tableRange.GetTableIndex()]
@@ -583,7 +583,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 			for lastDownstreamData != nil {
 				sql := df.downstream.GenerateFixSQL(source.Delete, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
 				rowsDelete++
-				log.Info("[delete]", zap.String("sql", sql))
+				log.Debug("[delete]", zap.String("sql", sql))
 
 				dml.sqls = append(dml.sqls, sql)
 				equal = false
@@ -600,7 +600,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 			for lastUpstreamData != nil {
 				sql := df.downstream.GenerateFixSQL(source.Insert, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
 				rowsAdd++
-				log.Info("[insert]", zap.String("sql", sql))
+				log.Debug("[insert]", zap.String("sql", sql))
 
 				dml.sqls = append(dml.sqls, sql)
 				equal = false

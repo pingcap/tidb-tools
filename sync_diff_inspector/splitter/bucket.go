@@ -175,7 +175,7 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 			return
 		}
 
-		beginBucket = int(c.BucketID + 1)
+		beginBucket = c.BucketID + 1
 		if c.BucketID < len(buckets) {
 			nextUpperValues, err := dbutil.AnalyzeValuesFromBuckets(buckets[c.BucketID].UpperBound, indexColumns)
 			if err != nil {

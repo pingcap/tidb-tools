@@ -37,7 +37,6 @@ type MySQLTableAnalyzer struct {
 }
 
 func (a *MySQLTableAnalyzer) AnalyzeSplitter(ctx context.Context, progressID string, table *common.TableDiff, startRange *splitter.RangeInfo) (splitter.ChunkIterator, error) {
-	chunkSize := 1000
 	matchedSources := getMatchedSourcesForTable(a.sourceTableMap, table)
 
 	// It's useful we are not able to pick shard merge source as workSource to generate ChunksIterator.
@@ -49,7 +48,7 @@ func (a *MySQLTableAnalyzer) AnalyzeSplitter(ctx context.Context, progressID str
 	originTable.Schema = matchedSources[0].OriginSchema
 	originTable.Table = matchedSources[0].OriginTable
 	// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
-	randIter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, progressID, &originTable, matchedSources[0].DBConn, chunkSize, startRange)
+	randIter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, progressID, &originTable, matchedSources[0].DBConn, startRange)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

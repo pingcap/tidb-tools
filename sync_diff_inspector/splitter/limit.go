@@ -46,11 +46,11 @@ type LimitIterator struct {
 	columnOffset map[string]int
 }
 
-func NewLimitIterator(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, chunkSize int) (*LimitIterator, error) {
-	return NewLimitIteratorWithCheckpoint(ctx, progressID, table, dbConn, chunkSize, nil)
+func NewLimitIterator(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB) (*LimitIterator, error) {
+	return NewLimitIteratorWithCheckpoint(ctx, progressID, table, dbConn, nil)
 }
 
-func NewLimitIteratorWithCheckpoint(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, chunkSize int, startRange *RangeInfo) (*LimitIterator, error) {
+func NewLimitIteratorWithCheckpoint(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, startRange *RangeInfo) (*LimitIterator, error) {
 	indices, err := utils.GetBetterIndex(ctx, dbConn, table.Schema, table.Table, table.Info)
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -109,24 +109,23 @@ func NewLimitIteratorWithCheckpoint(ctx context.Context, progressID string, tabl
 		return nil, errors.NotFoundf("not found index")
 	}
 
-	// There are only 10k chunks at most
+	chunkSize := table.ChunkSize
 	if chunkSize <= 0 {
 		cnt, err := dbutil.GetRowCount(ctx, dbConn, table.Schema, table.Table, "", nil)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		chunkSize = SplitThreshold
 		if len(table.Info.Indices) != 0 {
-			// use binary checksum
-			chunkSize = SplitThreshold * 2
-			chunkSize2 := int(cnt / 10000)
-			if chunkSize2 >= chunkSize {
-				chunkSize = chunkSize2
-			}
+			chunkSize = utils.CalculateChunkSize(cnt)
+		} else {
+			// no index
+			// will use table scan
+			// so we use one chunk
+			chunkSize = cnt
 		}
 	}
 
-	ctxx, cancel := context.WithCancel(ctx)
+	lctx, cancel := context.WithCancel(ctx)
 	queryTmpl := generateLimitQueryTemplate(indexColumns, table, chunkSize)
 
 	limitIterator := &LimitIterator{
@@ -151,7 +150,7 @@ func NewLimitIteratorWithCheckpoint(ctx context.Context, progressID string, tabl
 		// this table is finished.
 		close(chunksCh)
 	} else {
-		go limitIterator.produceChunks(ctxx)
+		go limitIterator.produceChunks(lctx)
 	}
 
 	return limitIterator, nil
@@ -240,7 +239,7 @@ func (lmt *LimitIterator) getLimitRow(ctx context.Context, query string, args []
 	return dataMap, nil
 }
 
-func generateLimitQueryTemplate(indexColumns []*model.ColumnInfo, table *common.TableDiff, chunkSize int) string {
+func generateLimitQueryTemplate(indexColumns []*model.ColumnInfo, table *common.TableDiff, chunkSize int64) string {
 	fields := make([]string, 0, len(indexColumns))
 	for _, columnInfo := range indexColumns {
 		fields = append(fields, dbutil.ColumnName(columnInfo.Name.O))
