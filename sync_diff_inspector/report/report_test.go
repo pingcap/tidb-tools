@@ -44,6 +44,7 @@ func (s *testReportSuite) TestReport(c *C) {
 	report := NewReport()
 	createTableSQL1 := "create table `test`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
 	tableInfo1, err := dbutil.GetTableInfoBySQL(createTableSQL1, parser.New())
+	c.Assert(err, IsNil)
 	createTableSQL2 := "create table `atest`.`atbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
 	tableInfo2, err := dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
 	c.Assert(err, IsNil)
