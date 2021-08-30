@@ -32,18 +32,18 @@ import (
 
 type RandomIterator struct {
 	table     *common.TableDiff
-	chunkSize int
+	chunkSize int64
 	chunks    []*chunk.Range
 	nextChunk uint
 
 	dbConn *sql.DB
 }
 
-func NewRandomIterator(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, chunkSize int) (*RandomIterator, error) {
-	return NewRandomIteratorWithCheckpoint(ctx, progressID, table, dbConn, chunkSize, nil)
+func NewRandomIterator(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB) (*RandomIterator, error) {
+	return NewRandomIteratorWithCheckpoint(ctx, progressID, table, dbConn, nil)
 }
 
-func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, chunkSize int, startRange *RangeInfo) (*RandomIterator, error) {
+func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, startRange *RangeInfo) (*RandomIterator, error) {
 	// get the chunk count by data count and chunk size
 	var splitFieldArr []string
 	if len(table.Fields) != 0 {
@@ -92,22 +92,21 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 		return nil, errors.Trace(err)
 	}
 
-	// There are only 10k chunks at most
+	chunkSize := table.ChunkSize
 	if chunkSize <= 0 {
-		chunkSize = SplitThreshold
 		if len(table.Info.Indices) != 0 {
-			// use binary checksum
-			chunkSize = SplitThreshold * 2
-			chunkSize2 := int(cnt / 10000)
-			if chunkSize2 >= chunkSize {
-				chunkSize = chunkSize2
-			}
+			chunkSize = utils.CalculateChunkSize(cnt)
+		} else {
+			// no index
+			// will use table scan
+			// so we use one chunk
+			chunkSize = cnt
 		}
 	}
-	chunkCnt := (int(cnt) + chunkSize - 1) / chunkSize
-	log.Info("split range by random", zap.Int64("row count", cnt), zap.Int("split chunk num", chunkCnt))
+	chunkCnt := (cnt + chunkSize - 1) / chunkSize
+	log.Info("split range by random", zap.Int64("row count", cnt), zap.Int64("split chunk num", chunkCnt))
 
-	chunks, err := splitRangeByRandom(dbConn, chunkRange, chunkCnt, table.Schema, table.Table, fields, table.Range, table.Collation)
+	chunks, err := splitRangeByRandom(dbConn, chunkRange, int(chunkCnt), table.Schema, table.Table, fields, table.Range, table.Collation)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

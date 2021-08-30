@@ -119,6 +119,7 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 				Fields:        tableConfig.Fields,
 				Range:         tableConfig.Range,
 				Collation:     tableConfig.Collation,
+				ChunkSize:     tableConfig.ChunkSize,
 			})
 		}
 	}

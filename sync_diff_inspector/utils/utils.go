@@ -31,6 +31,10 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	SplitThreshold = 1000
+)
+
 // WorkerPool contains a pool of workers.
 type WorkerPool struct {
 	limit   uint
@@ -641,4 +645,13 @@ func GetSelectivity(ctx context.Context, db *sql.DB, schemaName, tableName, colu
 		return 0.0, nil
 	}
 	return selectivity.Float64, nil
+}
+
+func CalculateChunkSize(rowCount int64) int64 {
+	// There are only 10k chunks by given row count.
+	chunkSize := rowCount / 10000
+	if chunkSize < SplitThreshold {
+		chunkSize = 2 * SplitThreshold
+	}
+	return chunkSize
 }
