@@ -44,10 +44,12 @@ func (a *MySQLTableAnalyzer) AnalyzeSplitter(ctx context.Context, progressID str
 	if len(matchedSources) > 1 {
 		log.Fatal("unreachable, shard merge table cannot generate splitter for now.")
 	}
-	table.Schema = matchedSources[0].OriginSchema
-	table.Table = matchedSources[0].OriginTable
+	// Shallow Copy
+	originTable := *table
+	originTable.Schema = matchedSources[0].OriginSchema
+	originTable.Table = matchedSources[0].OriginTable
 	// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
-	randIter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, progressID, table, matchedSources[0].DBConn, chunkSize, startRange)
+	randIter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, progressID, &originTable, matchedSources[0].DBConn, chunkSize, startRange)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

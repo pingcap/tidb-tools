@@ -1,4 +1,4 @@
-// Copyright 2018 PingCAP, Inc.
+// Copyright 2021 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -113,6 +113,6 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 	if err != nil {
 		log.Fatal("check data report failed", zap.Error(err))
 	}
-	d.report.Print("sync_diff.log")
+	d.report.Print("sync_diff.log", os.Stdout)
 	return d.report.Result == report.Pass
 }
