@@ -14,6 +14,7 @@
 package config
 
 import (
+	"os"
 	"testing"
 
 	. "github.com/pingcap/check"
@@ -52,6 +53,8 @@ func (s *testConfigSuite) TestParseConfig(c *C) {
 
 	c.Assert(cfg.TableConfigs["config1"].Valid(), Equals, true)
 	c.Assert(cfg.DataSources["mysql1"].HashCode(), Equals, "6679e7fccd4375f236259a3b57220a30")
+
+	c.Assert(os.RemoveAll(cfg.Task.OutputDir), IsNil)
 
 }
 
