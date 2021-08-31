@@ -103,6 +103,9 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 			chunkSize = cnt
 		}
 	}
+	log.Info("get chunk size for table", zap.Int64("chunk size", chunkSize),
+		zap.String("db", table.Schema), zap.String("table", table.Table))
+
 	chunkCnt := (cnt + chunkSize - 1) / chunkSize
 	log.Info("split range by random", zap.Int64("row count", cnt), zap.Int64("split chunk num", chunkCnt))
 

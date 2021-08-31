@@ -139,6 +139,9 @@ func (s *BucketIterator) init(startRange *RangeInfo) error {
 	if s.chunkSize <= 0 {
 		s.chunkSize = utils.CalculateChunkSize(cnt)
 	}
+
+	log.Info("get chunk size for table", zap.Int64("chunk size", s.chunkSize),
+		zap.String("db", s.table.Schema), zap.String("table", s.table.Table))
 	return nil
 }
 

@@ -124,6 +124,8 @@ func NewLimitIteratorWithCheckpoint(ctx context.Context, progressID string, tabl
 			chunkSize = cnt
 		}
 	}
+	log.Info("get chunk size for table", zap.Int64("chunk size", chunkSize),
+		zap.String("db", table.Schema), zap.String("table", table.Table))
 
 	lctx, cancel := context.WithCancel(ctx)
 	queryTmpl := generateLimitQueryTemplate(indexColumns, table, chunkSize)

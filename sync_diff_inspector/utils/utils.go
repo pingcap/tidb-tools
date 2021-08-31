@@ -648,10 +648,11 @@ func GetSelectivity(ctx context.Context, db *sql.DB, schemaName, tableName, colu
 }
 
 func CalculateChunkSize(rowCount int64) int64 {
-	// There are only 10k chunks by given row count.
-	chunkSize := rowCount / 10000
-	if chunkSize < SplitThreshold {
-		chunkSize = 2 * SplitThreshold
+	// we assume chunkSize is 50000 for any cluster.
+	chunkSize := int64(50000)
+	if rowCount > int64(chunkSize)*10000 {
+		// we assume we only need 10k chunks for any table.
+		chunkSize = rowCount / 10000
 	}
 	return chunkSize
 }

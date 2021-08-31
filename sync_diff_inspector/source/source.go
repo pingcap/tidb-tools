@@ -219,7 +219,7 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 	cfgTables = make(map[string]map[string]*config.TableConfig)
 	for _, tables := range TargetTablesList {
 		if cfg.Task.TargetCheckTables.MatchTable(tables.OriginSchema, tables.OriginTable) {
-			log.Info("table", zap.String("table", dbutil.TableName(tables.OriginSchema, tables.OriginTable)))
+			log.Debug("match target table", zap.String("table", dbutil.TableName(tables.OriginSchema, tables.OriginTable)))
 			tableInfo, err := dbutil.GetTableInfo(ctx, downStreamConn, tables.OriginSchema, tables.OriginTable)
 			if err != nil {
 				return nil, errors.Errorf("get table %s.%s's information error %s", tables.OriginSchema, tables.OriginTable, errors.ErrorStack(err))
