@@ -31,10 +31,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
-	SplitThreshold = 1000
-)
-
 // WorkerPool contains a pool of workers.
 type WorkerPool struct {
 	limit   uint
