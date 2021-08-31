@@ -164,7 +164,9 @@ func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, che
 }
 
 func initDBConn(ctx context.Context, cfg *config.Config) error {
-	targetConn, err := common.CreateDB(ctx, cfg.Task.TargetInstance.ToDBConfig(), nil, cfg.CheckThreadCount)
+	// we had one producer and `cfg.CheckThreadCount` consumer to use db connections.
+	// so the connection count need to be cfg.CheckThreadCount + 1.
+	targetConn, err := common.CreateDB(ctx, cfg.Task.TargetInstance.ToDBConfig(), nil, cfg.CheckThreadCount+1)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -180,7 +182,7 @@ func initDBConn(ctx context.Context, cfg *config.Config) error {
 
 	for _, source := range cfg.Task.SourceInstances {
 		// connect source db with target db time_zone
-		conn, err := common.CreateDB(ctx, source.ToDBConfig(), vars, cfg.CheckThreadCount)
+		conn, err := common.CreateDB(ctx, source.ToDBConfig(), vars, cfg.CheckThreadCount+1)
 		if err != nil {
 			return errors.Trace(err)
 		}

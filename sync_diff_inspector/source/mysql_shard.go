@@ -342,10 +342,10 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 			}
 		}
 		log.Info("will increase connection configurations for DB of instance",
-			zap.Int("connection limit", maxConn*threadCount))
+			zap.Int("connection limit", maxConn*threadCount+1))
 		// Set this conn to max
-		sourceDB.Conn.SetMaxOpenConns(maxConn * threadCount)
-		sourceDB.Conn.SetMaxIdleConns(maxConn * threadCount)
+		sourceDB.Conn.SetMaxOpenConns(maxConn*threadCount + 1)
+		sourceDB.Conn.SetMaxIdleConns(maxConn*threadCount + 1)
 
 	}
 
