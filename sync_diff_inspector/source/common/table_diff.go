@@ -69,4 +69,6 @@ type TableDiff struct {
 	IgnoreDataCheck bool `json:"-"`
 
 	Collation string `json:"collation"`
+
+	ChunkSize int64 `json:"chunk-size"`
 }
