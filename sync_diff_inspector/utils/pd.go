@@ -113,11 +113,11 @@ func GetPDClientForGC(ctx context.Context, db *sql.DB) (pd.Client, error) {
 		}
 		if len(pdAddrs) > 0 {
 			if same, err := checkSameCluster(ctx, db, pdAddrs); err != nil {
-				log.Warn("[autoSetGC failed]meet error while check whether fetched pd addr and TiDB belong to one cluster", zap.Strings("pdAddrs", pdAddrs))
+				log.Info("[automatically GC] check whether fetched pd addr and TiDB belong to one cluster failed", zap.Strings("pd address", pdAddrs), zap.Error(err))
 			} else if same {
 				pdClient, err := pd.NewClientWithContext(ctx, pdAddrs, pd.SecurityOption{})
 				if err != nil {
-					log.Info("[autoSetGC failed]create pd client to control GC failed", zap.Error(err), zap.Strings("pdAddrs", pdAddrs))
+					log.Info("[automatically GC] create pd client to control GC failed", zap.Strings("pd address", pdAddrs), zap.Error(err))
 					return nil, err
 				}
 				return pdClient, nil

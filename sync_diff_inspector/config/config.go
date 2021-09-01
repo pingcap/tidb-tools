@@ -60,6 +60,8 @@ type TableConfig struct {
 
 	// collation config in mysql/tidb
 	Collation string `toml:"collation"`
+
+	ChunkSize int64 `json:"chunk-size"`
 }
 
 // Valid returns true if table's config is valide.
