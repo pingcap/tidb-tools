@@ -25,6 +25,7 @@ mydumper --host 127.0.0.1 --port 4000 --user root --outputdir $BASE_DIR/dump_dif
 loader -h 127.0.0.1 -P 4001 -u root -d $BASE_DIR/dump_diff
 mysql -h ${MYSQL_HOST} -P ${MYSQL_PORT} -u root -e "create database if not exists tidb_loader"
 loader -h ${MYSQL_HOST} -P ${MYSQL_PORT} -u root -d $BASE_DIR/dump_diff
+mysql -h ${MYSQL_HOST} -P ${MYSQL_PORT} -u root -e "select * from diff_test.test limit 10;"
 
 echo "use sync_diff_inspector to compare data"
 # sync diff tidb-tidb
@@ -33,7 +34,7 @@ check_contains "check pass!!!" $OUT_DIR/sync_diff.log
 
 #echo "analyze table, and will use tidb's statistical information to split chunks"
 #check_contains "split range by random" $OUT_DIR/sync_diff.log
-rm -f $OUT_DIR/sync_diff.log
+#rm -f $OUT_DIR/sync_diff.log
 #mysql -uroot -h 127.0.0.1 -P 4000 -e "analyze table diff_test.test"
 #sync_diff_inspector --config=./config_base_tidb.toml > $OUT_DIR/diff.output
 #check_contains "check pass!!!" $OUT_DIR/sync_diff.log
