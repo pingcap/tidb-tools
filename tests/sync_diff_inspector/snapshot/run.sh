@@ -7,6 +7,7 @@ cd "$(dirname "$0")"
 
 OUT_DIR=/tmp/tidb_tools_test/sync_diff_inspector/output
 rm -rf $OUT_DIR
+mkdir -p $OUT_DIR
 
 mysql -uroot -h 127.0.0.1 -P 4000 -e "show master status" > $OUT_DIR/ts.output
 #cat $OUT_DIR/sync_diff.log

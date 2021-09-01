@@ -7,6 +7,7 @@ cd "$(dirname "$0")"
 
 OUT_DIR=/tmp/tidb_tools_test/sync_diff_inspector/output
 rm -rf $OUT_DIR
+mkdir -p $OUT_DIR
 
 echo "update data in column b (WHERE a >= 10 AND a <= 200), data should not be equal"
 mysql -uroot -h 127.0.0.1 -P 4000 -e "update diff_test.test set b = 'abc' where a >= 10 AND a <= 200"

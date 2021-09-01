@@ -5,6 +5,7 @@ set -e
 cd "$(dirname "$0")"
 OUT_DIR=/tmp/tidb_tools_test/sync_diff_inspector/output
 rm -rf $OUT_DIR
+mkdir -p $OUT_DIR
 
 mysql -uroot -h 127.0.0.1 -P 4000 -e "SET @@GLOBAL.SQL_MODE='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';"
 sleep 3

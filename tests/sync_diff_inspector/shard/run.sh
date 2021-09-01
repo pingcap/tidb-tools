@@ -6,6 +6,7 @@ cd "$(dirname "$0")"
 
 OUT_DIR=/tmp/tidb_tools_test/sync_diff_inspector/output
 rm -rf $OUT_DIR
+mkdir -p $OUT_DIR
 
 echo "generate data to sharding tables"
 mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table diff_test.shard_test1(\`table\` int, b varchar(10), c float, d datetime, primary key(\`table\`));"
