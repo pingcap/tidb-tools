@@ -11,7 +11,7 @@ BASE_DIR=/tmp/tidb_tools_test/sync_diff_inspector
 OUT_DIR=$BASE_DIR/output
 
 
-mkdir -p $BASE_DIR || true
+mkdir -p $OUT_DIR || true
 
 echo "use importer to generate test data"
 mysql -uroot -h 127.0.0.1 -P 4000 -e "create database if not exists diff_test"
