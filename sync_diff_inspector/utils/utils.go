@@ -587,7 +587,7 @@ func GetBetterIndex(ctx context.Context, db *sql.DB, schema, table string, table
 }
 
 func GetSelectivity(ctx context.Context, db *sql.DB, schemaName, tableName, columnName string, tbInfo *model.TableInfo) (float64, error) {
-	query := fmt.Sprintf("SELECT COUNT(DISTINCE %s)/COUNT(1) as SEL FROM %s;", columnName, dbutil.TableName(schemaName, tableName))
+	query := fmt.Sprintf("SELECT COUNT(DISTINCT %s)/COUNT(1) as SEL FROM %s;", columnName, dbutil.TableName(schemaName, tableName))
 	var selectivity sql.NullFloat64
 	args := []interface{}{}
 	err := db.QueryRowContext(ctx, query, args...).Scan(&selectivity)
