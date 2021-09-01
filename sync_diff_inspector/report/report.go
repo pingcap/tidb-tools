@@ -140,6 +140,13 @@ func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB) error {
 			if err != nil {
 				return errors.Trace(err)
 			}
+			if size == 0 {
+				utils.AnalyzeTable(ctx, db, dbutil.TableName(schema, table))
+				size, err = utils.GetTableSize(ctx, db, schema, table)
+				if err != nil {
+					return errors.Trace(err)
+				}
+			}
 			r.TotalSize += size
 		}
 	}
