@@ -333,16 +333,16 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 }
 
 func (df *Diff) getReportSnapshot(i int) (*report.Report, error) {
-	tableDiff := df.downstream.GetTables()[i]
-	targetID := utils.UniqueID(tableDiff.Schema, tableDiff.Table)
 	df.report.Lock()
 	defer df.report.Unlock()
+	tableDiff := df.downstream.GetTables()[i]
+	targetID := utils.UniqueID(tableDiff.Schema, tableDiff.Table)
 	reserveMap := make(map[string]map[string]*report.TableResult)
 	for schema, tableMap := range df.report.TableResults {
 		reserveMap[schema] = make(map[string]*report.TableResult)
 		for table, result := range tableMap {
 			reportID := utils.UniqueID(schema, table)
-			if reportID <= targetID {
+			if reportID >= targetID {
 				reserveMap[schema][table] = result
 			}
 		}
@@ -419,7 +419,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 				return false, nil, errors.Trace(err)
 			}
 		}
-		isEqual, err = df.compareRows(ctx, rangeInfo, dml)
+		_, err := df.compareRows(ctx, rangeInfo, dml)
 		if err != nil {
 			return false, nil, errors.Trace(err)
 		}
@@ -430,6 +430,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 	dml.node = rangeInfo.ToNode()
 	dml.node.State = state
 	dml.rowCount = count
+	df.sqlCh <- dml
 	return isEqual, dml, nil
 }
 
@@ -658,6 +659,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 
 // WriteSQLs write sqls to file
 func (df *Diff) writeSQLs(ctx context.Context) {
+	log.Debug("hello")
 	df.wg.Add(1)
 	log.Info("start writeSQLs goroutine")
 	defer func() {
@@ -697,6 +699,7 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 				}
 				fixSQLFile.Close()
 			}
+			log.Debug("insert node", zap.Int("chunk id", dml.node.GetID()))
 			df.cp.Insert(dml.node)
 		}
 	}

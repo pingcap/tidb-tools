@@ -154,6 +154,7 @@ func (cp *Checkpoint) GetChunkSnapshot() *Node {
 		}
 		if nextId == cp.hp.Nodes[0].GetID() {
 			cur = heap.Pop(cp.hp).(*Node)
+			log.Debug("cur", zap.Int("chunk id", cur.GetID()))
 			cp.hp.CurrentSavedID = cur.GetID()
 			if cp.hp.Len() == 0 {
 				break
