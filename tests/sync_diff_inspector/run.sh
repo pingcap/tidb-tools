@@ -40,7 +40,7 @@ rm -f ./output/sync_diff.log
 
 echo "test 'exclude-tables' config"
 mysql -uroot -h 127.0.0.1 -P 4000 -e "create table if not exists diff_test.should_not_compare (id int)"
-sync_diff_inspector --config=./config_base.toml > $OUT_DIR/diff.log
+sync_diff_inspector --config=./config_base_tidb.toml > $OUT_DIR/diff.log
 # doesn't contain the table's result in check report
 check_not_contains "[table=should_not_compare]" ./output/sync_diff.log
 rm -f ./output/sync_diff.log
