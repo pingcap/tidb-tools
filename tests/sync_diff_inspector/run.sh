@@ -7,7 +7,8 @@ cd "$(dirname "$0")"
 # check mysql status
 check_db_status "${MYSQL_HOST}" "${MYSQL_PORT}" mysql
 
-OUT_DIR=/tmp/tidb_tools_test/sync_diff_inspector
+OUT_DIR=/tmp/tidb_tools_test/sync_diff_inspector/output
+
 
 mkdir $OUT_DIR || true
 

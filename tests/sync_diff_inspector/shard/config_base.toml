@@ -25,8 +25,8 @@ ignore-struct-check = false
 
 ######################### Databases config #########################
 [data-sources.mysql1]
-    host = "127.0.0.1"
-    port = 3306
+    host = "127.0.0.1"#MYSQL_HOST
+    port = 3306#MYSQL_PORT
     user = "root"
     password = ""
 
@@ -54,7 +54,7 @@ target-table = "test" # 目标表名
     # 2 log: sync-diff.log
     # 3 summary: summary.txt
     # 4 checkpoint: a dir
-    output-dir = "./output"
+    output-dir = "/tmp/tidb_tools_test/sync_diff_inspector/output"
 
     source-instances = ["mysql1"]
 

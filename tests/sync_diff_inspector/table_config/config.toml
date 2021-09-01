@@ -54,7 +54,7 @@ ignore-columns = [""]#IGNORE
     # 2 log: sync-diff.log
     # 3 summary: summary.txt
     # 4 checkpoint: a dir
-    output-dir = "./output"
+    output-dir = "/tmp/tidb_tools_test/sync_diff_inspector/output"
 
     source-instances = ["tidb1"]
 
