@@ -25,9 +25,9 @@ ignore-struct-check = false
 
 ######################### Databases config #########################
 [data-sources]
-[data-sources.tidb1]
-    host = "127.0.0.1"
-    port = 4001
+[data-sources.mysql1]
+    host = "127.0.0.1"#MYSQL_HOST
+    port = 3306#MYSQL_PORT
     user = "root"
     password = ""
     # remove comment if use tidb's snapshot data
@@ -49,11 +49,10 @@ ignore-struct-check = false
     # 4 checkpoint: a dir
     output-dir = "./output"
 
-    source-instances = ["tidb1"]
+    source-instances = ["mysql1"]
 
     target-instance = ["tidb"]
 
     # tables need to check.
-	target-check-tables = ["tz_test.diff"]
-
+	target-check-tables = ["diff_test.test"]
 

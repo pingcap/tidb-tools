@@ -39,7 +39,7 @@ ignore-struct-check = false
     user = "root"
     password = ""
     # remove comment if use tidb's snapshot data
-    # snapshot = "2016-10-08 16:45:26"
+    #snapshot#
 
 ######################### Task config #########################
 [task]
@@ -54,6 +54,6 @@ ignore-struct-check = false
     target-instance = ["tidb"]
 
     # tables need to check.
-	target-check-tables = ["tz_test.diff"]
+	target-check-tables = ["diff_test.test"]
 
 

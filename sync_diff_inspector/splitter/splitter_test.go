@@ -148,12 +148,14 @@ func (s *testSplitterSuite) TestRandomSpliter(c *C) {
 	testCases := []struct {
 		createTableSQL string
 		count          int
+		fields         string
 		randomValues   [][]interface{}
 		expectResult   []chunkResult
 	}{
 		{
 			"create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))",
 			10,
+			"",
 			[][]interface{}{
 				{1, 2, 3, 4, 5},
 				{"a", "b", "c", "d", "e"},
@@ -182,7 +184,37 @@ func (s *testSplitterSuite) TestRandomSpliter(c *C) {
 		}, {
 			"create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`b`))",
 			10,
+			"",
 			[][]interface{}{
+				{"a", "b", "c", "d", "e"},
+			},
+			[]chunkResult{
+				{
+					"(`b` <= ?)",
+					[]string{"a"},
+				}, {
+					"((`b` > ?)) AND ((`b` <= ?))",
+					[]string{"a", "b"},
+				}, {
+					"((`b` > ?)) AND ((`b` <= ?))",
+					[]string{"b", "c"},
+				}, {
+					"((`b` > ?)) AND ((`b` <= ?))",
+					[]string{"c", "d"},
+				}, {
+					"((`b` > ?)) AND ((`b` <= ?))",
+					[]string{"d", "e"},
+				}, {
+					"(`b` > ?)",
+					[]string{"e"},
+				},
+			},
+		}, {
+			"create table `test`.`test`(`a` int, `b` varchar(10), `c` float)",
+			10,
+			"",
+			[][]interface{}{
+				{1, 2, 3, 4, 5},
 				{"a", "b", "c", "d", "e"},
 			},
 			[]chunkResult{

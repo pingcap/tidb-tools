@@ -1,70 +1,64 @@
-# diff Configuration.
+# Diff Configuration.
 
-log-level = "debug"
+######################### Global config #########################
 
-# for example, the whole data is [1...100]
-# we can split these data to [1...10], [11...20], ..., [91...100]
-# the [1...10] is a chunk, and it's chunk size is 10
-# size of the split chunk
-chunk-size = 1000
+log-level = "info"
 
 # how many goroutines are created to check data
-# before #412, sync-diff-inspector will SetMaxOpenConns to 1, so processing 2 shard tables in upstream will block
-check-thread-count = 1
+check-thread-count = 4
 
 # sampling check percent, for example 10 means only check 10% data
 sample-percent = 100
 
-# calculate the data's checksum, and compare data by checksum.
-use-checksum = true
+# set true if just want compare data by checksum, will skip select data when checksum is not equal.
+use-checksum = false
 
-# the name of the file which saves sqls used to fix different data
-fix-sql-file = "/tmp/tidb_tools_test/sync_diff_inspector/fix.sql"
+# set true will continue check from the latest checkpoint
+use-checkpoint = true
 
-# tables need to check.
-[[check-tables]]
-# schema name in target database.
-schema = "diff_test"
+# ignore check table's data
+ignore-data-check = false
 
-# table list which need check in target database. 
-# in sharding mode, you must set config for every table in table-config, otherwise will not check the table.
-tables = ["test"]
+# ignore check table's struct
+ignore-struct-check = false
 
 
-# schema and table in check-tables must be contained in check-tables.
-# a example for sharding tables.
-[[table-config]]
-# target schema name.
-schema = "diff_test"
+######################### Databases config #########################
+[data-sources.mysql1]
+    host = "127.0.0.1"
+    port = 3306
+    user = "root"
+    password = ""
 
-# target table name.
-table = "test"
+    route-rules = ["rule1"]
+    # remove comment if use tidb's snapshot data
+    # snapshot = "2016-10-08 16:45:26"
 
-# set true if comparing sharding tables with target table
-is-sharding = true
+[data-sources.tidb]
+    host = "127.0.0.1"
+    port = 4000
+    user = "root"
+    password = ""
+    # remove comment if use tidb's snapshot data
+    # snapshot = "2016-10-08 16:45:26"
 
-# source tables.
-[[table-config.source-tables]]
-instance-id = "source-1"
-schema = "diff_test"
-table  = "shard_test1"
+[routes.rule1]
+schema-pattern = "diff_test"      # 匹配数据源的库名，支持通配符 "*" 和 "?"
+table-pattern = "shard_test*"          # 匹配数据源的表名，支持通配符 "*" 和 "?"
+target-schema = "diff_test"         # 目标库名
+target-table = "test" # 目标表名
 
-[[table-config.source-tables]]
-instance-id = "source-1"
-schema = "diff_test"
-table  = "shard_test2"
+######################### Task config #########################
+[task]
+    # 1 fix sql: fix-target-TIDB1.sql
+    # 2 log: sync-diff.log
+    # 3 summary: summary.txt
+    # 4 checkpoint: a dir
+    output-dir = "./output"
 
+    source-instances = ["mysql1"]
 
-[[source-db]]
-host = "127.0.0.1"
-port = 4001
-user = "root"
-password = ""
-instance-id = "source-1"
+    target-instance = ["tidb"]
 
-[target-db]
-host = "127.0.0.1"
-port = 4000
-user = "root"
-password = ""
-instance-id = "target-1"
+    # tables need to check.
+	target-check-tables = ["diff_test.test"]

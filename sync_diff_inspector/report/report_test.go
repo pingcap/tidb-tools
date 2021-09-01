@@ -122,4 +122,13 @@ func (s *testReportSuite) TestReport(c *C) {
 	new_report.SetTableDataCheckCount("atest", "atbl", 111, 222)
 	c.Assert(new_report.getSortedTables(), DeepEquals, []string{"`test`.`tbl`"})
 	c.Assert(new_report.getDiffRows(), DeepEquals, [][]string{{"`atest`.`atbl`", "false", "+111/-222"}})
+
+	buf := new(bytes.Buffer)
+	new_report.Print("[123]", buf)
+	c.Assert(buf.String(), Equals, "The structure of `atest`.`atbl` is not equal\n"+
+		"The data of `atest`.`atbl` is not equal\n"+
+		"\n"+
+		"The rest of tables are all equal.\n"+
+		"The patch file has been generated to './output_dir/patch.sql'\n"+
+		"You can view the comparision details through './output_dir/[123]'\n")
 }

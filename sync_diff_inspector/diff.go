@@ -112,7 +112,8 @@ func (df *Diff) Close() {
 	if df.downstream != nil {
 		df.downstream.Close()
 	}
-	if err := os.Remove(filepath.Join(df.CheckpointDir, checkpointFile)); err != nil {
+
+	if err := os.Remove(filepath.Join(df.CheckpointDir, checkpointFile)); !os.IsNotExist(err) {
 		log.Fatal("fail to remove the checkpoint file")
 	}
 }
@@ -279,7 +280,6 @@ func (df *Diff) startGCKeeperForTiDB(ctx context.Context, db *sql.DB) {
 			}
 		}
 	}
-	return
 }
 
 // pickSource pick one proper source to do some work. e.g. generate chunks

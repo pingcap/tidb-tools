@@ -4,6 +4,14 @@ set -eu
 
 OUT_DIR=/tmp/tidb_tools_test
 
+# assign default value to mysql config
+if [[ -z "$MYSQL_HOST" ]]; then
+    MYSQL_HOST="127.0.0.1"
+fi
+if [[ -z "$MYSQL_PORT" ]]; then
+    MYSQL_HOST="3306"
+fi
+
 mkdir -p $OUT_DIR || true
 # to the dir of this script
 cd "$(dirname "$0")"
