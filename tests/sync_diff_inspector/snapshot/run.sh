@@ -25,7 +25,7 @@ mysql -uroot -h 127.0.0.1 -P 4000 -e "SET GLOBAL sql_mode = 'ANSI_QUOTES';"
 sleep 10
 mysql -uroot -h 127.0.0.1 -P 4000 -e "show variables like '%sql_mode%'"
 mysql -uroot -h 127.0.0.1 -P 4000 -e "show create table diff_test.test"
-sed 's/#snapshot#/snapshot = "$ts"/g' config_base.toml > config.toml
+sed "s/#snapshot#/snapshot = \"${ts}\"/g" config_base.toml > config.toml
 echo "use snapshot compare data, data should be equal"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/snapshot_diff.log
 check_contains "check pass!!!" $OUT_DIR/sync_diff.log

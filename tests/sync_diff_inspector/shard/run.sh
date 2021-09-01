@@ -15,7 +15,7 @@ mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table diff_test.shard_
 mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "insert into diff_test.shard_test1 (\`table\`, b, c, d) SELECT \`table\`, b, c, d FROM diff_test.test WHERE \`table\`%2=0"
 mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "insert into diff_test.shard_test2 (\`table\`, b, c, d) SELECT \`table\`, b, c, d FROM diff_test.test WHERE \`table\`%2=1"
 
-sed 's/"127.0.0.1"#MYSQL_HOST/${MYSQL_HOST}/g' ./config_base.toml | sed 's/3306#MYSQL_PORT/${MYSQL_PORT}/g' > ./config.toml
+sed "s/\"127.0.0.1\"#MYSQL_HOST/\"${MYSQL_HOST}\"/g" ./config_base.toml | sed "s/3306#MYSQL_PORT/${MYSQL_PORT}/g" > ./config.toml
 
 echo "compare sharding tables with one table in downstream, check result should be pass"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/shard_diff.output

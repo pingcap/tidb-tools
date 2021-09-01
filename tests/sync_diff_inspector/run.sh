@@ -48,7 +48,7 @@ check_not_contains "[table=should_not_compare]" $OUT_DIR/sync_diff.log
 rm -f $OUT_DIR/sync_diff.log
 
 # sync diff tidb-mysql
-sed 's/"127.0.0.1"#MYSQL_HOST/${MYSQL_HOST}/g' ./config_base_mysql.toml | sed 's/3306#MYSQL_PORT/${MYSQL_PORT}/g' > ./config_base_mysql_.toml
+sed "s/\"127.0.0.1\"#MYSQL_HOST/\"${MYSQL_HOST}\"/g" ./config_base_mysql.toml | sed "s/3306#MYSQL_PORT/${MYSQL_PORT}/g" > ./config_base_mysql_.toml
 sync_diff_inspector --config=./config_base_mysql_.toml > $OUT_DIR/diff.output
 check_contains "check pass!!!" $OUT_DIR/sync_diff.log
 rm -f $OUT_DIR/sync_diff.log
