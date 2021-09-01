@@ -17,7 +17,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -249,9 +248,6 @@ func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *conf
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	sort.Slice(tableDiffs, func(i, j int) bool {
-		return dbutil.TableName(tableDiffs[i].Schema, tableDiffs[i].Table) < dbutil.TableName(tableDiffs[j].Schema, tableDiffs[j].Table)
-	})
 	ts := &TiDBSource{
 		tableDiffs:     tableDiffs,
 		sourceTableMap: sourceTableMap,

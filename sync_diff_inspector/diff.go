@@ -214,7 +214,7 @@ func (df *Diff) Equal(ctx context.Context) error {
 			break
 		}
 		pool.Apply(func() {
-			isEqual, _ := df.consume(ctx, c)
+			isEqual := df.consume(ctx, c)
 			if !isEqual {
 				progress.FailTable(c.ProgressID)
 			}
@@ -408,7 +408,7 @@ func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
 	}
 }
 
-func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (bool, *ChunkDML) {
+func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool {
 	tableDiff := df.downstream.GetTables()[rangeInfo.TableIndex]
 	schema, table := tableDiff.Schema, tableDiff.Table
 	isEqual, count, err := df.compareChecksumAndGetCount(ctx, rangeInfo)
@@ -444,7 +444,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 	df.report.SetRowsCnt(schema, table, dml.rowCount, id)
 	df.report.SetTableDataCheckResult(schema, table, isEqual, dml.rowAdd, dml.rowDelete, id)
 	df.sqlCh <- dml
-	return isEqual, dml
+	return isEqual
 }
 
 func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tableRange *splitter.RangeInfo, count int64) (*splitter.RangeInfo, error) {
