@@ -37,7 +37,6 @@ type TiDBTableAnalyzer struct {
 }
 
 func (a *TiDBTableAnalyzer) AnalyzeSplitter(ctx context.Context, progressID string, table *common.TableDiff, startRange *splitter.RangeInfo) (splitter.ChunkIterator, error) {
-	chunkSize := 0
 	matchedSource := getMatchSource(a.sourceTableMap, table)
 	// Shallow Copy
 	originTable := *table
@@ -46,7 +45,7 @@ func (a *TiDBTableAnalyzer) AnalyzeSplitter(ctx context.Context, progressID stri
 	// if we decide to use bucket to split chunks
 	// we always use bucksIter even we load from checkpoint is not bucketNode
 	// TODO check whether we can use bucket for this table to split chunks.
-	bucketIter, err := splitter.NewBucketIteratorWithCheckpoint(ctx, progressID, &originTable, a.dbConn, chunkSize, startRange)
+	bucketIter, err := splitter.NewBucketIteratorWithCheckpoint(ctx, progressID, &originTable, a.dbConn, startRange)
 	if err == nil {
 		return bucketIter, nil
 	}
@@ -54,7 +53,7 @@ func (a *TiDBTableAnalyzer) AnalyzeSplitter(ctx context.Context, progressID stri
 	// fall back to random splitter
 
 	// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
-	randIter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, progressID, &originTable, a.dbConn, chunkSize, startRange)
+	randIter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, progressID, &originTable, a.dbConn, startRange)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
