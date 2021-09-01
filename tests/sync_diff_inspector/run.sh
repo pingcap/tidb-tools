@@ -7,10 +7,11 @@ cd "$(dirname "$0")"
 # check mysql status
 check_db_status "${MYSQL_HOST}" "${MYSQL_PORT}" mysql
 
-OUT_DIR=/tmp/tidb_tools_test/sync_diff_inspector/output
+BASE_DIR=/tmp/tidb_tools_test/sync_diff_inspector
+OUT_DIR=$BASE_DIR/output
 
 
-mkdir $OUT_DIR || true
+mkdir $BASE_DIR || true
 
 echo "use importer to generate test data"
 mysql -uroot -h 127.0.0.1 -P 4000 -e "create database if not exists diff_test"
@@ -20,10 +21,10 @@ importer -t "create table diff_test.test(a int, aa int, b varchar(10), c float, 
 mysql -uroot -h 127.0.0.1 -P 4000 -e "alter table diff_test.test change column a \`table\` int"
 
 echo "dump data and then load to tidb and mysql"
-mydumper --host 127.0.0.1 --port 4000 --user root --outputdir $OUT_DIR/dump_diff -B diff_test -T test
-loader -h 127.0.0.1 -P 4001 -u root -d $OUT_DIR/dump_diff
+mydumper --host 127.0.0.1 --port 4000 --user root --outputdir $BASE_DIR/dump_diff -B diff_test -T test
+loader -h 127.0.0.1 -P 4001 -u root -d $BASE_DIR/dump_diff
 mysql -h ${MYSQL_HOST} -P ${MYSQL_PORT} -u root -e "create database if not exists tidb_loader"
-loader -h ${MYSQL_HOST} -P ${MYSQL_PORT} -u root -d $OUT_DIR/dump_diff
+loader -h ${MYSQL_HOST} -P ${MYSQL_PORT} -u root -d $BASE_DIR/dump_diff
 
 echo "use sync_diff_inspector to compare data"
 # sync diff tidb-tidb
