@@ -59,6 +59,12 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 		return nil, errors.Trace(err)
 	}
 
+	fmt.Printf("fields: ")
+	for _, field := range fields {
+		fmt.Printf("%s ", field.Name.O)
+	}
+	fmt.Print("\n")
+
 	chunkRange := chunk.NewChunkRange()
 	where := table.Range
 	var iargs []interface{}
