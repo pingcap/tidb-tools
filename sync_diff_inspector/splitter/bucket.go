@@ -46,14 +46,14 @@ type BucketIterator struct {
 	dbConn *sql.DB
 }
 
-func NewBucketIterator(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, chunkSize int) (*BucketIterator, error) {
-	return NewBucketIteratorWithCheckpoint(ctx, progressID, table, dbConn, chunkSize, nil)
+func NewBucketIterator(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB) (*BucketIterator, error) {
+	return NewBucketIteratorWithCheckpoint(ctx, progressID, table, dbConn, nil)
 }
 
-func NewBucketIteratorWithCheckpoint(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, chunkSize int, startRange *RangeInfo) (*BucketIterator, error) {
+func NewBucketIteratorWithCheckpoint(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, startRange *RangeInfo) (*BucketIterator, error) {
 	bs := &BucketIterator{
 		table:     table,
-		chunkSize: int64(chunkSize),
+		chunkSize: table.ChunkSize,
 		chunksCh:  make(chan []*chunk.Range, DefaultChannelBuffer),
 		errCh:     make(chan error, 1),
 		dbConn:    dbConn,
@@ -135,16 +135,13 @@ func (s *BucketIterator) init(startRange *RangeInfo) error {
 		return errors.NotFoundf("no index to split buckets")
 	}
 
-	// There are only 10k chunks at most
+	cnt := s.buckets[len(s.buckets)-1].Count
 	if s.chunkSize <= 0 {
-		cnt := s.buckets[len(s.buckets)-1].Count
-		chunkSize := cnt / 10000
-		if chunkSize < SplitThreshold {
-			chunkSize = 2 * SplitThreshold
-		}
-		s.chunkSize = chunkSize
+		s.chunkSize = utils.CalculateChunkSize(cnt)
 	}
 
+	log.Info("get chunk size for table", zap.Int64("chunk size", s.chunkSize),
+		zap.String("db", s.table.Schema), zap.String("table", s.table.Table))
 	return nil
 }
 
@@ -181,7 +178,7 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 			return
 		}
 
-		beginBucket = int(c.BucketID + 1)
+		beginBucket = c.BucketID + 1
 		if c.BucketID < len(buckets) {
 			nextUpperValues, err := dbutil.AnalyzeValuesFromBuckets(buckets[c.BucketID].UpperBound, indexColumns)
 			if err != nil {
