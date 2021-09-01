@@ -228,7 +228,6 @@ func (r *Report) Print(fileName string, w io.Writer) error {
 		}
 		summary.WriteString(fmt.Sprintf("You can view the comparision details through './output_dir/%s'\n", fileName))
 	}
-	summary.WriteString("Press any key to exist.\n")
 	fmt.Fprint(w, summary.String())
 	return nil
 }

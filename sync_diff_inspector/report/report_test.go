@@ -96,10 +96,9 @@ func (s *testReportSuite) TestReport(c *C) {
 	c.Assert(err, IsNil)
 
 	report.SetTableStructCheckResult("test", "tbl", true)
-	report.SetTableDataCheckResult("test", "tbl", true)
-	report.SetTableDataCheckCount("test", "tbl", 100, 200)
+	report.SetTableDataCheckResult("test", "tbl", true, 100, 200, 100)
 	report.SetTableMeetError("test", "tbl", errors.New("eeee"))
-	report.SetRowsCnt("test", "tbl", 10000)
+	report.SetRowsCnt("test", "tbl", 10000, 100)
 
 	new_report := NewReport()
 	new_report.LoadReport(report)
@@ -110,16 +109,13 @@ func (s *testReportSuite) TestReport(c *C) {
 	c.Assert(result.MeetError.Error(), Equals, "eeee")
 	c.Assert(result.DataEqual, IsTrue)
 	c.Assert(result.StructEqual, IsTrue)
-	c.Assert(result.RowsAdd, Equals, 100)
-	c.Assert(result.RowsDelete, Equals, 200)
-	c.Assert(result.RowsCnt, Equals, int64(10000))
+	c.Assert(result.ChunkMap[100].RowsCnt, Equals, int64(10000))
 
 	c.Assert(new_report.getSortedTables(), DeepEquals, []string{"`atest`.`atbl`", "`test`.`tbl`"})
 	c.Assert(new_report.getDiffRows(), DeepEquals, [][]string{})
 
 	new_report.SetTableStructCheckResult("atest", "atbl", false)
-	new_report.SetTableDataCheckResult("atest", "atbl", false)
-	new_report.SetTableDataCheckCount("atest", "atbl", 111, 222)
+	new_report.SetTableDataCheckResult("atest", "atbl", false, 111, 222, 100)
 	c.Assert(new_report.getSortedTables(), DeepEquals, []string{"`test`.`tbl`"})
 	c.Assert(new_report.getDiffRows(), DeepEquals, [][]string{{"`atest`.`atbl`", "false", "+111/-222"}})
 }
