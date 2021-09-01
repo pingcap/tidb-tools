@@ -243,6 +243,7 @@ func (c *Range) Clone() *Range {
 	newChunk.ID = c.ID
 	newChunk.Type = c.Type
 	newChunk.Where = c.Where
+	newChunk.Args = make([]string, len(c.Args))
 	copy(newChunk.Args, c.Args)
 	for i, v := range c.columnOffset {
 		newChunk.columnOffset[i] = v
