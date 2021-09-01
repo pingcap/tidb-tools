@@ -1,4 +1,4 @@
-// Copyright 2018 PingCAP, Inc.
+// Copyright 2021 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,12 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package report
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -44,35 +45,53 @@ type ReportConfig struct {
 	Host     string `toml:"host"`
 	Port     int    `toml:"port"`
 	User     string `toml:"user"`
-	Snapshot string `toml:"snapshot"`
-	SqlMode  string `toml:"sql-mode"`
+	Snapshot string `toml:"snapshot,omitempty"`
+	SqlMode  string `toml:"sql-mode,omitempty"`
 }
 
 // TableResult saves the check result for every table.
 type TableResult struct {
-	Schema      string `json:"schma"`
-	Table       string `json:"table"`
-	StructEqual bool   `json:"struct-equal"`
-	DataEqual   bool   `json:"data-equal"`
-	MeetError   error  `json:"meet-error"`
-	RowsAdd     int    `json:"rows-add"`
-	RowsDelete  int    `json:"rows-delete"`
-	RowsCnt     int64  `json:"rows-count"`
+	Schema      string               `json:"schma"`
+	Table       string               `json:"table"`
+	StructEqual bool                 `json:"struct-equal"`
+	DataEqual   bool                 `json:"data-equal"`
+	MeetError   error                `json:"meet-error"`
+	ChunkMap    map[int]*ChunkResult `json:"chunk-result"`
+}
+
+type ChunkResult struct {
+	RowsAdd    int   `json:"rows-add"`
+	RowsDelete int   `json:"rows-delete"`
+	RowsCnt    int64 `json:"rows-count"`
 }
 
 // Report saves the check results.
 type Report struct {
 	sync.RWMutex
 	// Result is pass or fail
-	Result       string                             `json:"result"`
-	PassNum      int32                              `json:"pass-num"`
-	FailedNum    int32                              `json:"failed-num"`
+	Result       string
+	PassNum      int32
+	FailedNum    int32
 	TableResults map[string]map[string]*TableResult `json:"table-results"`
 	StartTime    time.Time                          `json:"start-time"`
-	EndTime      time.Time                          `json:"end-time"`
-	TotalSize    int64                              `json:"total-sizes"`
-	SourceConfig [][]byte                           `json:"source-configs"`
-	TargetConfig []byte                             `json:"target-config"`
+	Duration     time.Duration                      `json:"time-duration"`
+	TotalSize    int64
+	SourceConfig [][]byte
+	TargetConfig []byte
+}
+
+func (r *Report) LoadReport(reportInfo *Report) {
+	r.StartTime = time.Now()
+	r.Duration = reportInfo.Duration
+	r.TotalSize = reportInfo.TotalSize
+	for schema, tableMap := range reportInfo.TableResults {
+		if _, ok := r.TableResults[schema]; !ok {
+			r.TableResults[schema] = make(map[string]*TableResult)
+		}
+		for table, result := range tableMap {
+			r.TableResults[schema][table] = result
+		}
+	}
 }
 
 func (r *Report) getSortedTables() []string {
@@ -102,7 +121,12 @@ func (r *Report) getDiffRows() [][]string {
 			} else {
 				diffRow = append(diffRow, "true")
 			}
-			diffRow = append(diffRow, fmt.Sprintf("+%d/-%d", result.RowsAdd, result.RowsDelete))
+			rowAdd, rowDelete := 0, 0
+			for _, chunkResult := range result.ChunkMap {
+				rowAdd += chunkResult.RowsAdd
+				rowDelete += chunkResult.RowsDelete
+			}
+			diffRow = append(diffRow, fmt.Sprintf("+%d/-%d", rowAdd, rowDelete))
 			diffRows = append(diffRows, diffRow)
 		}
 	}
@@ -122,6 +146,7 @@ func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
+// CommitSummary commit summary info
 func (r *Report) CommitSummary(taskConfig *config.TaskConfig) error {
 	passNum, failedNum := int32(0), int32(0)
 	for _, tableMap := range r.TableResults {
@@ -168,18 +193,13 @@ func (r *Report) CommitSummary(taskConfig *config.TaskConfig) error {
 		table.Render()
 		summaryFile.WriteString(tableString.String())
 	}
-	duration := r.EndTime.Sub(r.StartTime)
+	duration := r.Duration + time.Since(r.StartTime)
 	summaryFile.WriteString(fmt.Sprintf("Time Cost: %s\n", duration))
 	summaryFile.WriteString(fmt.Sprintf("Average Speed: %fMB/s\n", float64(r.TotalSize)/(1024.0*1024.0*duration.Seconds())))
 	return nil
 }
 
-func Print(msg string) {
-	fmt.Print(msg)
-}
-
-// CommitSummary commit summary info
-func (r *Report) Print(fileName string) error {
+func (r *Report) Print(fileName string, w io.Writer) error {
 	var summary strings.Builder
 	if r.Result == Pass {
 		summary.WriteString(fmt.Sprintf("A total of %d table have been compared and all are equal.\n", r.FailedNum+r.PassNum))
@@ -209,8 +229,7 @@ func (r *Report) Print(fileName string) error {
 		summary.WriteString(fmt.Sprintf("You can view the comparision details through './output_dir/%s'\n", fileName))
 	}
 	summary.WriteString("Press any key to exist.\n")
-	Print(summary.String())
-	utils.GetChar()
+	fmt.Fprint(w, summary.String())
 	return nil
 }
 
@@ -237,9 +256,7 @@ func (r *Report) Init(tableDiffs []*common.TableDiff, sourceConfig [][]byte, tar
 			StructEqual: true,
 			DataEqual:   true,
 			MeetError:   nil,
-			RowsAdd:     0,
-			RowsDelete:  0,
-			RowsCnt:     0,
+			ChunkMap:    make(map[int]*ChunkResult),
 		}
 	}
 }
@@ -248,7 +265,6 @@ func (r *Report) Init(tableDiffs []*common.TableDiff, sourceConfig [][]byte, tar
 func (r *Report) SetTableStructCheckResult(schema, table string, equal bool) {
 	r.Lock()
 	defer r.Unlock()
-
 	r.TableResults[schema][table].StructEqual = equal
 	if !equal && r.Result != Error {
 		r.Result = Fail
@@ -256,12 +272,25 @@ func (r *Report) SetTableStructCheckResult(schema, table string, equal bool) {
 }
 
 // SetTableDataCheckResult sets the data check result for table.
-func (r *Report) SetTableDataCheckResult(schema, table string, equal bool, rowsAdd int, rowsDelete int) {
+func (r *Report) SetTableDataCheckResult(schema, table string, equal bool, rowsAdd, rowsDelete int, id int) {
 	r.Lock()
 	defer r.Unlock()
-	r.TableResults[schema][table].DataEqual = equal
-	r.TableResults[schema][table].RowsAdd += rowsAdd
-	r.TableResults[schema][table].RowsDelete += rowsDelete
+	if !equal {
+		result := r.TableResults[schema][table]
+		result.DataEqual = equal
+		if _, ok := result.ChunkMap[id]; !ok {
+			result.ChunkMap[id] = &ChunkResult{
+				RowsAdd:    0,
+				RowsDelete: 0,
+				RowsCnt:    0,
+			}
+		}
+		result.ChunkMap[id].RowsAdd += rowsAdd
+		result.ChunkMap[id].RowsDelete += rowsDelete
+		if r.Result != Error {
+			r.Result = Fail
+		}
+	}
 	if !equal && r.Result != Error {
 		r.Result = Fail
 	}
@@ -279,8 +308,16 @@ func (r *Report) SetTableMeetError(schema, table string, err error) {
 	r.Result = Error
 }
 
-func (r *Report) AddRowsCnt(schema, table string, cnt int64) {
+func (r *Report) SetRowsCnt(schema, table string, cnt int64, id int) {
 	r.Lock()
 	defer r.Unlock()
-	r.TableResults[schema][table].RowsCnt += cnt
+	result := r.TableResults[schema][table]
+	if _, ok := result.ChunkMap[id]; !ok {
+		result.ChunkMap[id] = &ChunkResult{
+			RowsAdd:    0,
+			RowsDelete: 0,
+			RowsCnt:    0,
+		}
+	}
+	result.ChunkMap[id].RowsCnt += cnt
 }

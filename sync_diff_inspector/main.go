@@ -1,4 +1,4 @@
-// Copyright 2018 PingCAP, Inc.
+// Copyright 2021 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -25,6 +26,7 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/progress"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/report"
 	"go.uber.org/zap"
 )
@@ -46,12 +48,16 @@ func main() {
 		return
 	}
 
-	l := zap.NewAtomicLevel()
-	if err := l.UnmarshalText([]byte(cfg.LogLevel)); err != nil {
-		log.Error("invalide log level", zap.String("log level", cfg.LogLevel))
+	conf := new(log.Config)
+	conf.Level = cfg.LogLevel
+
+	conf.File.Filename = filepath.Join(cfg.Task.OutputDir, "sync_diff.log")
+	lg, p, e := log.InitLogger(conf)
+	if e != nil {
+		log.Error("Log init failed!", zap.String("error", e.Error()))
 		return
 	}
-	log.SetLevel(l.Level())
+	log.ReplaceGlobals(lg, p)
 
 	utils.PrintInfo("sync_diff_inspector")
 
@@ -82,29 +88,31 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 
 	d, err := NewDiff(ctx, cfg)
 	if err != nil {
-		log.Fatal("fail to initialize diff process", zap.Error(err))
+		log.Fatal("failed to initialize diff process", zap.Error(err))
 	}
 	defer d.Close()
 
 	if !d.ignoreStructCheck {
 		err = d.StructEqual(ctx)
 		if err != nil {
-			log.Fatal("check structure difference failed", zap.Error(err))
+			log.Fatal("failed to check structure difference", zap.Error(err))
 		}
 	}
 	if !d.ignoreDataCheck {
 		err = d.Equal(ctx)
 		if err != nil {
-			log.Fatal("check data difference failed", zap.Error(err))
+			log.Fatal("failed to check data difference", zap.Error(err))
 		}
 	}
+	progress.Close()
+	//progress.PrintSummary()
 	if err := d.report.CalculateTotalSize(ctx, d.downstream.GetDB()); err != nil {
-		log.Warn("fail to calculate the total size", zap.Error(err))
+		log.Warn("failed to calculate the total size", zap.Error(err))
 	}
-	d.report.CommitSummary(&cfg.Task)
-	// TODO: do summary
-	//d.report.Print()
-	// TODO update report
-	d.report.Print("sync_diff.log")
+	err = d.report.CommitSummary(&cfg.Task)
+	if err != nil {
+		log.Fatal("failed to commit report", zap.Error(err))
+	}
+	d.report.Print("sync_diff.log", os.Stdout)
 	return d.report.Result == report.Pass
 }

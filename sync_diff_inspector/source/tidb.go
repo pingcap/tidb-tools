@@ -18,11 +18,11 @@ import (
 	"database/sql"
 	"fmt"
 	"sort"
-
 	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
+	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
@@ -37,15 +37,16 @@ type TiDBTableAnalyzer struct {
 	sourceTableMap map[string]*common.TableSource
 }
 
-func (a *TiDBTableAnalyzer) AnalyzeSplitter(ctx context.Context, table *common.TableDiff, startRange *splitter.RangeInfo) (splitter.ChunkIterator, error) {
-	chunkSize := 0
+func (a *TiDBTableAnalyzer) AnalyzeSplitter(ctx context.Context, progressID string, table *common.TableDiff, startRange *splitter.RangeInfo) (splitter.ChunkIterator, error) {
 	matchedSource := getMatchSource(a.sourceTableMap, table)
-	table.Schema = matchedSource.OriginSchema
-	table.Table = matchedSource.OriginTable
+	// Shallow Copy
+	originTable := *table
+	originTable.Schema = matchedSource.OriginSchema
+	originTable.Table = matchedSource.OriginTable
 	// if we decide to use bucket to split chunks
 	// we always use bucksIter even we load from checkpoint is not bucketNode
 	// TODO check whether we can use bucket for this table to split chunks.
-	bucketIter, err := splitter.NewBucketIteratorWithCheckpoint(ctx, table, a.dbConn, chunkSize, startRange)
+	bucketIter, err := splitter.NewBucketIteratorWithCheckpoint(ctx, progressID, &originTable, a.dbConn, startRange)
 	if err == nil {
 		return bucketIter, nil
 	}
@@ -53,7 +54,7 @@ func (a *TiDBTableAnalyzer) AnalyzeSplitter(ctx context.Context, table *common.T
 	// fall back to random splitter
 
 	// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
-	randIter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, table, a.dbConn, chunkSize, startRange)
+	randIter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, progressID, &originTable, a.dbConn, startRange)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -102,8 +103,12 @@ func getMatchSource(sourceTableMap map[string]*common.TableSource, table *common
 }
 
 func (s *TiDBSource) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
+	id := 0
+	if r != nil {
+		id = r.ChunkRange.ID
+	}
 	dbIter := &ChunksIterator{
-		currentID:      0,
+		currentID:      id,
 		tableAnalyzer:  analyzer,
 		TableDiffs:     s.tableDiffs,
 		nextTableIndex: 0,
@@ -138,12 +143,27 @@ func (s *TiDBSource) GetTables() []*common.TableDiff {
 	return s.tableDiffs
 }
 
-func (s *TiDBSource) GenerateFixSQL(t DMLType, data map[string]*dbutil.ColumnData, tableIndex int) string {
-	if t == Replace {
-		return utils.GenerateReplaceDML(data, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
+func (s *TiDBSource) GetSourceStructInfo(ctx context.Context, tableIndex int) ([]*model.TableInfo, error) {
+	var err error
+	tableInfos := make([]*model.TableInfo, 1)
+	tableDiff := s.GetTables()[tableIndex]
+	source := getMatchSource(s.sourceTableMap, tableDiff)
+	tableInfos[0], err = dbutil.GetTableInfo(ctx, s.GetDB(), source.OriginSchema, source.OriginTable)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return tableInfos, nil
+}
+
+func (s *TiDBSource) GenerateFixSQL(t DMLType, upstreamData, downstreamData map[string]*dbutil.ColumnData, tableIndex int) string {
+	if t == Insert {
+		return utils.GenerateReplaceDML(upstreamData, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
 	}
 	if t == Delete {
-		return utils.GenerateDeleteDML(data, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
+		return utils.GenerateDeleteDML(downstreamData, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
+	}
+	if t == Replace {
+		return utils.GenerateReplaceDMLWithAnnotation(upstreamData, downstreamData, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
 	}
 	log.Fatal("Don't support this type", zap.Any("dml type", t))
 	return ""
@@ -232,7 +252,6 @@ func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *conf
 	sort.Slice(tableDiffs, func(i, j int) bool {
 		return dbutil.TableName(tableDiffs[i].Schema, tableDiffs[i].Table) < dbutil.TableName(tableDiffs[j].Schema, tableDiffs[j].Table)
 	})
-	log.Info("source map", zap.Reflect("source map", sourceMap))
 	ts := &TiDBSource{
 		tableDiffs:     tableDiffs,
 		sourceTableMap: sourceTableMap,

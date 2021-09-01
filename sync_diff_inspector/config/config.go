@@ -1,4 +1,4 @@
-// Copyright 2018 PingCAP, Inc.
+// Copyright 2021 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,6 +59,8 @@ type TableConfig struct {
 
 	// collation config in mysql/tidb
 	Collation string `toml:"collation"`
+
+	ChunkSize int64 `json:"chunk-size"`
 }
 
 // Valid returns true if table's config is valide.

@@ -36,12 +36,13 @@ func (cp *testCommonSuite) TestRowData(c *C) {
 	c.Assert(err, IsNil)
 
 	_, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
-	ids := []string{"3", "2", "2", "4", "1", "NULL"}
-	names := []string{"d", "NULL", "c", "b", "a", "e"}
-	ages := []string{"1", "2", "3", "NULL", "5", "4"}
+	c.Assert(needQuotes(orderKeyCols[1].FieldType), Equals, true)
+	ids := []string{"3", "2", "2", "2", "4", "1", "NULL"}
+	names := []string{"d", "NULL", "c", "g", "b", "a", "e"}
+	ages := []string{"1", "2", "3", "3", "NULL", "5", "4"}
 
-	expectIDs := []string{"NULL", "1", "2", "2", "3", "4"}
-	expectNames := []string{"e", "a", "NULL", "c", "d", "b"}
+	expectIDs := []string{"NULL", "1", "2", "2", "2", "3", "4"}
+	expectNames := []string{"e", "a", "NULL", "c", "g", "d", "b"}
 
 	rowDatas := &RowDatas{
 		Rows:         make([]RowData, 0, len(ids)),

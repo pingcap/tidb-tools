@@ -87,7 +87,6 @@ type Heap struct {
 type Checkpoint struct {
 	hp *Heap
 }
-
 type SavedState struct {
 	Chunk  *Node          `json:"chunk-info"`
 	Report *report.Report `json:"report-info"`
@@ -96,6 +95,12 @@ type SavedState struct {
 // SetCurrentSavedID the method is unsynchronized, be cautious
 func (cp *Checkpoint) SetCurrentSavedID(id int) {
 	cp.hp.CurrentSavedID = id
+}
+
+func (cp *Checkpoint) GetCurrentSavedID() int {
+	cp.hp.mu.Lock()
+	defer cp.hp.mu.Unlock()
+	return cp.hp.CurrentSavedID
 }
 
 func (cp *Checkpoint) Insert(node *Node) {
@@ -145,6 +150,7 @@ func (cp *Checkpoint) Init() {
 
 func (cp *Checkpoint) GetChunkSnapshot() *Node {
 	cp.hp.mu.Lock()
+	defer cp.hp.mu.Unlock()
 	var cur, next *Node
 	for {
 		nextId := cp.hp.CurrentSavedID + 1
@@ -153,6 +159,7 @@ func (cp *Checkpoint) GetChunkSnapshot() *Node {
 		}
 		if nextId == cp.hp.Nodes[0].GetID() {
 			cur = heap.Pop(cp.hp).(*Node)
+			log.Debug("cur", zap.Int("chunk id", cur.GetID()))
 			cp.hp.CurrentSavedID = cur.GetID()
 			if cp.hp.Len() == 0 {
 				break
@@ -165,7 +172,6 @@ func (cp *Checkpoint) GetChunkSnapshot() *Node {
 			break
 		}
 	}
-	cp.hp.mu.Unlock()
 	return cur
 }
 

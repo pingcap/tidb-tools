@@ -20,13 +20,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/pingcap/parser/model"
-	"github.com/pingcap/tidb-tools/pkg/filter"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
-
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
+	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/pkg/filter"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
@@ -37,18 +36,19 @@ type MySQLTableAnalyzer struct {
 	sourceTableMap map[string][]*common.TableShardSource
 }
 
-func (a *MySQLTableAnalyzer) AnalyzeSplitter(ctx context.Context, table *common.TableDiff, startRange *splitter.RangeInfo) (splitter.ChunkIterator, error) {
-	chunkSize := 1000
+func (a *MySQLTableAnalyzer) AnalyzeSplitter(ctx context.Context, progressID string, table *common.TableDiff, startRange *splitter.RangeInfo) (splitter.ChunkIterator, error) {
 	matchedSources := getMatchedSourcesForTable(a.sourceTableMap, table)
 
 	// It's useful we are not able to pick shard merge source as workSource to generate ChunksIterator.
 	if len(matchedSources) > 1 {
 		log.Fatal("unreachable, shard merge table cannot generate splitter for now.")
 	}
-	table.Schema = matchedSources[0].OriginSchema
-	table.Table = matchedSources[0].OriginTable
+	// Shallow Copy
+	originTable := *table
+	originTable.Schema = matchedSources[0].OriginSchema
+	originTable.Table = matchedSources[0].OriginTable
 	// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
-	randIter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, table, matchedSources[0].DBConn, chunkSize, startRange)
+	randIter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, progressID, &originTable, matchedSources[0].DBConn, startRange)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -79,8 +79,12 @@ func (s *MySQLSources) GetTableAnalyzer() TableAnalyzer {
 }
 
 func (s *MySQLSources) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
+	id := 0
+	if r != nil {
+		id = r.ChunkRange.ID
+	}
 	dbIter := &ChunksIterator{
-		currentID:      0,
+		currentID:      id,
 		tableAnalyzer:  analyzer,
 		TableDiffs:     s.tableDiffs,
 		nextTableIndex: 0,
@@ -147,14 +151,17 @@ func (s *MySQLSources) GetTables() []*common.TableDiff {
 	return s.tableDiffs
 }
 
-func (s *MySQLSources) GenerateFixSQL(t DMLType, data map[string]*dbutil.ColumnData, tableIndex int) string {
-	if t == Replace {
-		return utils.GenerateReplaceDML(data, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
+func (s *MySQLSources) GenerateFixSQL(t DMLType, upstreamData, downstreamData map[string]*dbutil.ColumnData, tableIndex int) string {
+	switch t {
+	case Insert:
+		return utils.GenerateReplaceDML(upstreamData, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
+	case Delete:
+		return utils.GenerateDeleteDML(downstreamData, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
+	case Replace:
+		return utils.GenerateReplaceDMLWithAnnotation(upstreamData, downstreamData, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
+	default:
+		log.Fatal("Don't support this type", zap.Any("dml type", t))
 	}
-	if t == Delete {
-		return utils.GenerateDeleteDML(data, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
-	}
-	log.Fatal("Don't support this type", zap.Any("dml type", t))
 	return ""
 }
 
@@ -220,8 +227,7 @@ func (s *MySQLSources) GetDB() *sql.DB {
 
 func (s *MySQLSources) GetSourceStructInfo(ctx context.Context, tableIndex int) ([]*model.TableInfo, error) {
 	tableDiff := s.GetTables()[tableIndex]
-	targetID := utils.UniqueID(tableDiff.Schema, tableDiff.Table)
-	tableSources := s.sourceTablesMap[targetID]
+	tableSources := getMatchedSourcesForTable(s.sourceTablesMap, tableDiff)
 	sourceTableInfos := make([]*model.TableInfo, len(tableSources))
 	for i, tableSource := range tableSources {
 		sourceSchema, sourceTable := tableSource.OriginSchema, tableSource.OriginTable
@@ -336,10 +342,10 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 			}
 		}
 		log.Info("will increase connection configurations for DB of instance",
-			zap.Int("connection limit", maxConn*threadCount))
+			zap.Int("connection limit", maxConn*threadCount+1))
 		// Set this conn to max
-		sourceDB.Conn.SetMaxOpenConns(maxConn * threadCount)
-		sourceDB.Conn.SetMaxIdleConns(maxConn * threadCount)
+		sourceDB.Conn.SetMaxOpenConns(maxConn*threadCount + 1)
+		sourceDB.Conn.SetMaxIdleConns(maxConn*threadCount + 1)
 
 	}
 

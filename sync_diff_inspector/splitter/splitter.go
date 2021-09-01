@@ -21,8 +21,7 @@ import (
 )
 
 const (
-	SplitThreshold         = 1000
-	SplitBound     float64 = 3.
+	SplitThreshold = 1000
 )
 
 // ChunkIterator generate next chunk for only one table lazily.
@@ -39,6 +38,8 @@ type RangeInfo struct {
 	TableIndex int          `json:"table-index"`
 	// for bucket checkpoint
 	IndexID int64 `json:"index-id"`
+
+	ProgressID string `json:"progress-id"`
 }
 
 func (r *RangeInfo) GetChunk() *chunk.Range {
@@ -50,6 +51,7 @@ func (r *RangeInfo) Copy() *RangeInfo {
 		ChunkRange: r.ChunkRange.Clone(),
 		TableIndex: r.TableIndex,
 		IndexID:    r.IndexID,
+		ProgressID: r.ProgressID,
 	}
 }
 

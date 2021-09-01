@@ -4,8 +4,10 @@ require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/Shopify/sarama v1.24.1
+	github.com/coreos/go-semver v0.3.0
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/golang/protobuf v1.3.4
+	github.com/olekukonko/tablewriter v0.0.4
 	github.com/onsi/ginkgo v1.11.0 // indirect
 	github.com/onsi/gomega v1.8.1 // indirect
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
@@ -17,6 +19,7 @@ require (
 	github.com/pingcap/parser v0.0.0-20210105063241-09b74e077464
 	github.com/pingcap/tidb v1.1.0-beta.0.20201222032702-32d8cad845d6
 	github.com/pingcap/tipb v0.0.0-20201209065231-aa39b1b86217
+	github.com/pkg/term v0.0.0-20180730021639-bffc007b7fd5
 	github.com/shirou/gopsutil v3.21.4+incompatible // indirect
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
 	github.com/syndtr/goleveldb v1.0.1-0.20190625010220-02440ea7a285 // indirect
