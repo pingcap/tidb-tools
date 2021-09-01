@@ -314,15 +314,17 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 					zap.String("state", node.GetState()))
 				df.cp.SetCurrentSavedID(node.GetID())
 			}
+			checkpointId := 0
 			if node != nil {
-				// remove the sql file that ID bigger than node.
-				// cause we will generate these sql again.
-				err = df.removeSQLFiles(node.GetID())
-				if err != nil {
-					return nil, errors.Trace(err)
-				}
+				checkpointId = node.GetID()
 				startRange = splitter.FromNode(node)
 				df.report.LoadReport(reportInfo)
+			}
+			// remove the sql file that ID bigger than node.
+			// cause we will generate these sql again.
+			err = df.removeSQLFiles(checkpointId)
+			if err != nil {
+				return nil, errors.Trace(err)
 			}
 		} else {
 			log.Info("not found checkpoint file, start from beginning")
