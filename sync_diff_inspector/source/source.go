@@ -119,6 +119,7 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 				Fields:        tableConfig.Fields,
 				Range:         tableConfig.Range,
 				Collation:     tableConfig.Collation,
+				ChunkSize:     tableConfig.ChunkSize,
 			})
 		}
 	}
@@ -163,7 +164,9 @@ func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, che
 }
 
 func initDBConn(ctx context.Context, cfg *config.Config) error {
-	targetConn, err := common.CreateDB(ctx, cfg.Task.TargetInstance.ToDBConfig(), nil, cfg.CheckThreadCount)
+	// we had one producer and `cfg.CheckThreadCount` consumer to use db connections.
+	// so the connection count need to be cfg.CheckThreadCount + 1.
+	targetConn, err := common.CreateDB(ctx, cfg.Task.TargetInstance.ToDBConfig(), nil, cfg.CheckThreadCount+1)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -179,7 +182,7 @@ func initDBConn(ctx context.Context, cfg *config.Config) error {
 
 	for _, source := range cfg.Task.SourceInstances {
 		// connect source db with target db time_zone
-		conn, err := common.CreateDB(ctx, source.ToDBConfig(), vars, cfg.CheckThreadCount)
+		conn, err := common.CreateDB(ctx, source.ToDBConfig(), vars, cfg.CheckThreadCount+1)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -218,7 +221,7 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 	cfgTables = make(map[string]map[string]*config.TableConfig)
 	for _, tables := range TargetTablesList {
 		if cfg.Task.TargetCheckTables.MatchTable(tables.OriginSchema, tables.OriginTable) {
-			log.Info("table", zap.String("table", dbutil.TableName(tables.OriginSchema, tables.OriginTable)))
+			log.Debug("match target table", zap.String("table", dbutil.TableName(tables.OriginSchema, tables.OriginTable)))
 			tableInfo, err := dbutil.GetTableInfo(ctx, downStreamConn, tables.OriginSchema, tables.OriginTable)
 			if err != nil {
 				return nil, errors.Errorf("get table %s.%s's information error %s", tables.OriginSchema, tables.OriginTable, errors.ErrorStack(err))

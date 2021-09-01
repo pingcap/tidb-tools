@@ -1,4 +1,4 @@
-// Copyright 2018 PingCAP, Inc.
+// Copyright 2021 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -286,12 +286,12 @@ func (df *Diff) startGCKeeperForTiDB(ctx context.Context, db *sql.DB) {
 func (df *Diff) pickSource(ctx context.Context) source.Source {
 	workSource := df.downstream
 	if ok, _ := dbutil.IsTiDB(ctx, df.upstream.GetDB()); ok {
-		log.Info("The upstream is TiDB. pick it as work source")
+		log.Info("The upstream is TiDB. pick it as work source candidate")
 		df.startGCKeeperForTiDB(ctx, df.upstream.GetDB())
 		workSource = df.upstream
 	}
 	if ok, _ := dbutil.IsTiDB(ctx, df.downstream.GetDB()); ok {
-		log.Info("The downstream is TiDB. pick it as work source")
+		log.Info("The downstream is TiDB. pick it as work source first")
 		df.startGCKeeperForTiDB(ctx, df.downstream.GetDB())
 		workSource = df.downstream
 	}
@@ -365,19 +365,19 @@ func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
 	// a background goroutine which will insert the verified chunk,
 	// and periodically save checkpoint
 	df.wg.Add(1)
-	log.Debug("start handleCheckpoint goroutine")
+	log.Info("start handleCheckpoint goroutine")
 	defer func() {
-		log.Debug("close handleCheckpoint goroutine")
+		log.Info("close handleCheckpoint goroutine")
 		df.wg.Done()
 	}()
 	flush := func() {
 		chunk := df.cp.GetChunkSnapshot()
 		if chunk != nil {
-			report, err := df.getReportSnapshot(chunk.TableIndex)
+			r, err := df.getReportSnapshot(chunk.TableIndex)
 			if err != nil {
 				log.Warn("fail to save the report", zap.Error(err))
 			}
-			_, err = df.cp.SaveChunk(ctx, filepath.Join(df.CheckpointDir, checkpointFile), chunk, report)
+			_, err = df.cp.SaveChunk(ctx, filepath.Join(df.CheckpointDir, checkpointFile), chunk, r)
 			if err != nil {
 				log.Warn("fail to save the chunk", zap.Error(err))
 				// maybe we should panic, because SaveChunk method should not failed.
@@ -388,7 +388,7 @@ func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Info("Stop do checkpoint")
+			log.Info("Stop do checkpoint by context done")
 			return
 		case <-stopCh:
 			log.Info("Stop do checkpoint")
@@ -459,7 +459,7 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 		}
 	}
 	if index == nil {
-		log.Error("cannot found a index to split and disable the BinGenerate",
+		log.Warn("cannot found a index to split and disable the BinGenerate",
 			zap.String("table", dbutil.TableName(tableDiff.Schema, tableDiff.Table)))
 		return nil, nil
 	}
@@ -491,11 +491,10 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 		return nil, errors.Trace(err)
 	}
 	if count1+count2 != count {
-		log.Error("the count is not correct",
+		log.Fatal("the count is not correct",
 			zap.Int64("count1", count1),
 			zap.Int64("count2", count2),
 			zap.Int64("count", count))
-		panic("count is not correct")
 	}
 	log.Info("chunk split successfully",
 		zap.Int("chunk id", tableRange.ChunkRange.ID),
@@ -584,7 +583,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 			for lastDownstreamData != nil {
 				sql := df.downstream.GenerateFixSQL(source.Delete, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
 				rowsDelete++
-				log.Info("[delete]", zap.String("sql", sql))
+				log.Debug("[delete]", zap.String("sql", sql))
 
 				dml.sqls = append(dml.sqls, sql)
 				equal = false
@@ -601,7 +600,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 			for lastUpstreamData != nil {
 				sql := df.downstream.GenerateFixSQL(source.Insert, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
 				rowsAdd++
-				log.Info("[insert]", zap.String("sql", sql))
+				log.Debug("[insert]", zap.String("sql", sql))
 
 				dml.sqls = append(dml.sqls, sql)
 				equal = false
@@ -632,20 +631,20 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 			// delete
 			sql = df.downstream.GenerateFixSQL(source.Delete, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
 			rowsDelete++
-			log.Info("[delete]", zap.String("sql", sql))
+			log.Debug("[delete]", zap.String("sql", sql))
 			lastDownstreamData = nil
 		case -1:
 			// insert
 			sql = df.downstream.GenerateFixSQL(source.Insert, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
 			rowsAdd++
-			log.Info("[insert]", zap.String("sql", sql))
+			log.Debug("[insert]", zap.String("sql", sql))
 			lastUpstreamData = nil
 		case 0:
 			// update
 			sql = df.downstream.GenerateFixSQL(source.Replace, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
 			rowsAdd++
 			rowsDelete++
-			log.Info("[update]", zap.String("sql", sql))
+			log.Debug("[update]", zap.String("sql", sql))
 			lastUpstreamData = nil
 			lastDownstreamData = nil
 		}
@@ -684,7 +683,7 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 				}
 				fixSQLFile, err := os.Create(fixSQLPath)
 				if err != nil {
-					log.Error("write sql failed: cannot create file", zap.Strings("sql", dml.sqls), zap.Error(err))
+					log.Fatal("write sql failed: cannot create file", zap.Strings("sql", dml.sqls), zap.Error(err))
 					continue
 				}
 				// write chunk meta
@@ -694,7 +693,7 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 				for _, sql := range dml.sqls {
 					_, err = fixSQLFile.WriteString(fmt.Sprintf("%s\n", sql))
 					if err != nil {
-						log.Error("write sql failed", zap.String("sql", sql), zap.Error(err))
+						log.Fatal("write sql failed", zap.String("sql", sql), zap.Error(err))
 					}
 				}
 				fixSQLFile.Close()

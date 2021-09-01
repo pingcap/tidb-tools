@@ -24,14 +24,9 @@ import (
 )
 
 var (
-	equal = "="
-	lt    = "<"
-	lte   = "<="
-	gt    = ">"
-	gte   = ">="
-
-	bucketMode = "bucketMode"
-	normalMode = "normalMode"
+	lt  = "<"
+	lte = "<="
+	gt  = ">"
 )
 
 type ChunkType int
@@ -71,6 +66,22 @@ func NewChunkRange() *Range {
 	return &Range{
 		Bounds:       make([]*Bound, 0, 2),
 		columnOffset: make(map[string]int),
+	}
+}
+
+// NewChunkRange return a Range in sequence
+func NewChunkRangeOffset(columnOffset map[string]int) *Range {
+	bounds := make([]*Bound, len(columnOffset))
+	for column, offset := range columnOffset {
+		bounds[offset] = &Bound{
+			Column:   column,
+			HasLower: false,
+			HasUpper: false,
+		}
+	}
+	return &Range{
+		Bounds:       bounds,
+		columnOffset: columnOffset,
 	}
 }
 
@@ -182,13 +193,6 @@ func (c *Range) addBound(bound *Bound) {
 	c.columnOffset[bound.Column] = len(c.Bounds) - 1
 }
 
-func (c *Range) updateColumnOffset() {
-	c.columnOffset = make(map[string]int)
-	for i, bound := range c.Bounds {
-		c.columnOffset[bound.Column] = i
-	}
-}
-
 func (c *Range) Update(column, lower, upper string, updateLower, updateUpper bool) {
 	if offset, ok := c.columnOffset[column]; ok {
 		// update the bound
@@ -243,8 +247,7 @@ func (c *Range) Clone() *Range {
 	newChunk.ID = c.ID
 	newChunk.Type = c.Type
 	newChunk.Where = c.Where
-	newChunk.Args = make([]string, len(c.Args))
-	copy(newChunk.Args, c.Args)
+	newChunk.Args = c.Args
 	for i, v := range c.columnOffset {
 		newChunk.columnOffset[i] = v
 	}

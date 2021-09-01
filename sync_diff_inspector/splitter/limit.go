@@ -42,22 +42,25 @@ type LimitIterator struct {
 	cancel   context.CancelFunc
 	dbConn   *sql.DB
 
-	progressID string
+	progressID   string
+	columnOffset map[string]int
 }
 
-func NewLimitIterator(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, chunkSize int) (*LimitIterator, error) {
-	return NewLimitIteratorWithCheckpoint(ctx, progressID, table, dbConn, chunkSize, nil)
+func NewLimitIterator(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB) (*LimitIterator, error) {
+	return NewLimitIteratorWithCheckpoint(ctx, progressID, table, dbConn, nil)
 }
 
-func NewLimitIteratorWithCheckpoint(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, chunkSize int, startRange *RangeInfo) (*LimitIterator, error) {
+func NewLimitIteratorWithCheckpoint(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, startRange *RangeInfo) (*LimitIterator, error) {
 	indices, err := utils.GetBetterIndex(ctx, dbConn, table.Schema, table.Table, table.Info)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	var indexColumns []*model.ColumnInfo
-	tagChunk := chunk.NewChunkRange()
+	var tagChunk *chunk.Range
+	columnOffset := make(map[string]int)
 	chunksCh := make(chan *chunk.Range, DefaultChannelBuffer)
 	errCh := make(chan error)
+	undone := startRange == nil
 	var indexID int64
 	for _, index := range indices {
 		if index == nil {
@@ -78,21 +81,27 @@ func NewLimitIteratorWithCheckpoint(ctx context.Context, progressID string, tabl
 		}
 
 		indexID = index.ID
+		for i, indexColumn := range indexColumns {
+			columnOffset[indexColumn.Name.O] = i
+		}
+
 		if startRange != nil {
+			tagChunk = chunk.NewChunkRange()
 			bounds := startRange.ChunkRange.Bounds
 			if len(bounds) != len(indexColumns) {
 				log.Warn("checkpoint node columns are not equal to selected index columns, skip checkpoint.")
 				break
 			}
+
 			for _, bound := range bounds {
-				if !bound.HasUpper {
-					// TODO deal with this situation gracefully
-					log.Warn("checkpoint node has none-Upper bound, skip checkpoint.")
-					break
-				}
-				tagChunk.Update(bound.Column, bound.Upper, "", true, false)
+				undone = undone || bound.HasUpper
+				tagChunk.Update(bound.Column, bound.Upper, "", bound.HasUpper, false)
 			}
+
+		} else {
+			tagChunk = chunk.NewChunkRangeOffset(columnOffset)
 		}
+
 		break
 	}
 
@@ -100,24 +109,25 @@ func NewLimitIteratorWithCheckpoint(ctx context.Context, progressID string, tabl
 		return nil, errors.NotFoundf("not found index")
 	}
 
-	// There are only 10k chunks at most
+	chunkSize := table.ChunkSize
 	if chunkSize <= 0 {
 		cnt, err := dbutil.GetRowCount(ctx, dbConn, table.Schema, table.Table, "", nil)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		chunkSize = SplitThreshold
 		if len(table.Info.Indices) != 0 {
-			// use binary checksum
-			chunkSize = SplitThreshold * 2
-			chunkSize2 := int(cnt / 10000)
-			if chunkSize2 >= chunkSize {
-				chunkSize = chunkSize2
-			}
+			chunkSize = utils.CalculateChunkSize(cnt)
+		} else {
+			// no index
+			// will use table scan
+			// so we use one chunk
+			chunkSize = cnt
 		}
 	}
+	log.Info("get chunk size for table", zap.Int64("chunk size", chunkSize),
+		zap.String("db", table.Schema), zap.String("table", table.Table))
 
-	ctxx, cancel := context.WithCancel(ctx)
+	lctx, cancel := context.WithCancel(ctx)
 	queryTmpl := generateLimitQueryTemplate(indexColumns, table, chunkSize)
 
 	limitIterator := &LimitIterator{
@@ -134,10 +144,16 @@ func NewLimitIteratorWithCheckpoint(ctx context.Context, progressID string, tabl
 		dbConn,
 
 		progressID,
+		columnOffset,
 	}
 
 	progress.StartTable(progressID, 0, false)
-	go limitIterator.produceChunks(ctxx)
+	if !undone {
+		// this table is finished.
+		close(chunksCh)
+	} else {
+		go limitIterator.produceChunks(lctx)
+	}
 
 	return limitIterator, nil
 }
@@ -189,7 +205,7 @@ func (lmt *LimitIterator) produceChunks(ctx context.Context) {
 			return
 		}
 
-		newTagChunk := chunk.NewChunkRange()
+		newTagChunk := chunk.NewChunkRangeOffset(lmt.columnOffset)
 		for column, data := range dataMap {
 			newTagChunk.Update(column, string(data.Data), "", !data.IsNull, false)
 			chunkRange.Update(column, "", string(data.Data), false, !data.IsNull)
@@ -225,7 +241,7 @@ func (lmt *LimitIterator) getLimitRow(ctx context.Context, query string, args []
 	return dataMap, nil
 }
 
-func generateLimitQueryTemplate(indexColumns []*model.ColumnInfo, table *common.TableDiff, chunkSize int) string {
+func generateLimitQueryTemplate(indexColumns []*model.ColumnInfo, table *common.TableDiff, chunkSize int64) string {
 	fields := make([]string, 0, len(indexColumns))
 	for _, columnInfo := range indexColumns {
 		fields = append(fields, dbutil.ColumnName(columnInfo.Name.O))

@@ -219,11 +219,12 @@ func (s *testSplitterSuite) TestRandomSpliter(c *C) {
 			Info:   tableInfo,
 			//IgnoreColumns: []string{"c"},
 			//Fields:        "a,b",
+			ChunkSize: 5,
 		}
 
 		createFakeResultForRandomSplit(mock, testCase.count, testCase.randomValues)
 
-		iter, err := NewRandomIterator(ctx, "", tableDiff, db, 5)
+		iter, err := NewRandomIterator(ctx, "", tableDiff, db)
 		c.Assert(err, IsNil)
 
 		j := 0
@@ -252,11 +253,12 @@ func (s *testSplitterSuite) TestRandomSpliter(c *C) {
 		Info:   tableInfo,
 		//IgnoreColumns: []string{"c"},
 		//Fields:        "a,b",
+		ChunkSize: 5,
 	}
 
 	createFakeResultForRandomSplit(mock, testCases[0].count, testCases[0].randomValues)
 
-	iter, err := NewRandomIterator(ctx, "", tableDiff, db, 5)
+	iter, err := NewRandomIterator(ctx, "", tableDiff, db)
 	c.Assert(err, IsNil)
 
 	var chunk *chunk.Range
@@ -273,7 +275,7 @@ func (s *testSplitterSuite) TestRandomSpliter(c *C) {
 
 	createFakeResultForRandomSplit(mock, testCases[0].count, testCases[0].randomValues)
 
-	iter, err = NewRandomIteratorWithCheckpoint(ctx, "", tableDiff, db, 5, rangeInfo)
+	iter, err = NewRandomIteratorWithCheckpoint(ctx, "", tableDiff, db, rangeInfo)
 	c.Assert(err, IsNil)
 
 	chunk, err = iter.Next()
@@ -308,7 +310,7 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 	c.Assert(err, IsNil)
 
 	testCases := []struct {
-		chunkSize     int
+		chunkSize     int64
 		aRandomValues []interface{}
 		bRandomValues []interface{}
 		expectResult  []chunkResult
@@ -476,8 +478,8 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 
 	for i, testCase := range testCases {
 		createFakeResultForBucketSplit(mock, testCase.aRandomValues, testCase.bRandomValues)
-
-		iter, err := NewBucketIterator(ctx, "", tableDiff, db, testCase.chunkSize)
+		tableDiff.ChunkSize = testCase.chunkSize
+		iter, err := NewBucketIterator(ctx, "", tableDiff, db)
 		c.Assert(err, IsNil)
 
 		j := 0
@@ -498,7 +500,8 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 	// Test Checkpoint
 	stopJ := 3
 	createFakeResultForBucketSplit(mock, testCases[0].aRandomValues[:stopJ], testCases[0].bRandomValues[:stopJ])
-	iter, err := NewBucketIterator(ctx, "", tableDiff, db, testCases[0].chunkSize)
+	tableDiff.ChunkSize = testCases[0].chunkSize
+	iter, err := NewBucketIterator(ctx, "", tableDiff, db)
 	c.Assert(err, IsNil)
 	j := 0
 	var chunk *chunk.Range
@@ -517,7 +520,8 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 	createFakeResultForBucketSplit(mock, nil, nil)
 	createFakeResultForCount(mock, 64)
 	createFakeResultForRandom(mock, testCases[0].aRandomValues[stopJ:], testCases[0].bRandomValues[stopJ:])
-	iter, err = NewBucketIteratorWithCheckpoint(ctx, "", tableDiff, db, testCases[0].chunkSize, rangeInfo)
+	mock.ExpectQuery("SELECT COUNT\\(DISTINCE a.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("123"))
+	iter, err = NewBucketIteratorWithCheckpoint(ctx, "", tableDiff, db, rangeInfo)
 	c.Assert(err, IsNil)
 	chunk, err = iter.Next()
 	c.Assert(err, IsNil)
@@ -546,6 +550,7 @@ func createFakeResultForBucketSplit(mock sqlmock.Sqlmock, aRandomValues, bRandom
 	}
 	mock.ExpectQuery("SHOW STATS_BUCKETS").WillReturnRows(statsRows)
 
+	mock.ExpectQuery("SELECT COUNT\\(DISTINCE a.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("123"))
 	createFakeResultForRandom(mock, aRandomValues, bRandomValues)
 }
 
@@ -579,14 +584,11 @@ func (s *testSplitterSuite) TestLimitSpliter(c *C) {
 	c.Assert(err, IsNil)
 
 	testCases := []struct {
-		chunkSize    int
 		limitAValues []string
 		limitBValues []string
 		expectResult []chunkResult
 	}{
 		{
-			// chunk size less than the count of bucket 64, and the bucket's count 64 >= 32, so will split by random in every bucket
-			1000,
 			[]string{"1000", "2000", "3000", "4000"},
 			[]string{"a", "b", "c", "d"},
 			[]chunkResult{
@@ -614,12 +616,15 @@ func (s *testSplitterSuite) TestLimitSpliter(c *C) {
 		Schema: "test",
 		Table:  "test",
 		Info:   tableInfo,
+		// chunk size less than the count of bucket 64, and the bucket's count 64 >= 32, so will split by random in every bucket
+		ChunkSize: 1000,
 	}
 
 	for i, testCase := range testCases {
+		mock.ExpectQuery("SELECT COUNT\\(DISTINCE a.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("123"))
 		createFakeResultForLimitSplit(mock, testCase.limitAValues, testCase.limitBValues, true)
 
-		iter, err := NewLimitIterator(ctx, "", tableDiff, db, testCase.chunkSize)
+		iter, err := NewLimitIterator(ctx, "", tableDiff, db)
 		c.Assert(err, IsNil)
 
 		j := 0
@@ -639,8 +644,9 @@ func (s *testSplitterSuite) TestLimitSpliter(c *C) {
 
 	// Test Checkpoint
 	stopJ := 2
+	mock.ExpectQuery("SELECT COUNT\\(DISTINCE a.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("123"))
 	createFakeResultForLimitSplit(mock, testCases[0].limitAValues[:stopJ], testCases[0].limitBValues[:stopJ], false)
-	iter, err := NewLimitIterator(ctx, "", tableDiff, db, testCases[0].chunkSize)
+	iter, err := NewLimitIterator(ctx, "", tableDiff, db)
 	c.Assert(err, IsNil)
 	j := 0
 	var chunk *chunk.Range
@@ -655,8 +661,9 @@ func (s *testSplitterSuite) TestLimitSpliter(c *C) {
 		IndexID:    iter.GetIndexID(),
 	}
 
+	mock.ExpectQuery("SELECT COUNT\\(DISTINCE a.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("123"))
 	createFakeResultForLimitSplit(mock, testCases[0].limitAValues[stopJ:], testCases[0].limitBValues[stopJ:], true)
-	iter, err = NewLimitIteratorWithCheckpoint(ctx, "", tableDiff, db, testCases[0].chunkSize, rangeInfo)
+	iter, err = NewLimitIteratorWithCheckpoint(ctx, "", tableDiff, db, rangeInfo)
 	c.Assert(err, IsNil)
 	chunk, err = iter.Next()
 	c.Assert(err, IsNil)
@@ -676,4 +683,29 @@ func createFakeResultForLimitSplit(mock sqlmock.Sqlmock, aValues []string, bValu
 	if needEnd {
 		mock.ExpectQuery("SELECT `a`,.*").WillReturnRows(sqlmock.NewRows([]string{"a", "b"}))
 	}
+}
+
+func (s *testSplitterSuite) TestRangeInfo(c *C) {
+	rangeInfo := &RangeInfo{
+		ChunkRange: chunk.NewChunkRange(),
+		TableIndex: 1,
+		IndexID:    2,
+		ProgressID: "324312",
+	}
+	rangeInfo.Update("a", "1", "2", true, true, "[23]", "[sdg]")
+
+	chunkRange := rangeInfo.GetChunk()
+	c.Assert(chunkRange.Where, Equals, "((((`a` COLLATE '[23]' > ?)) AND ((`a` COLLATE '[23]' <= ?))) AND [sdg])")
+	c.Assert(chunkRange.Args, DeepEquals, []string{"1", "2"})
+
+	c.Assert(rangeInfo.GetTableIndex(), Equals, 1)
+
+	rangeInfo2 := FromNode(rangeInfo.ToNode())
+
+	chunkRange = rangeInfo2.GetChunk()
+	c.Assert(chunkRange.Where, Equals, "((((`a` COLLATE '[23]' > ?)) AND ((`a` COLLATE '[23]' <= ?))) AND [sdg])")
+	c.Assert(chunkRange.Args, DeepEquals, []string{"1", "2"})
+
+	c.Assert(rangeInfo2.GetTableIndex(), Equals, 1)
+
 }

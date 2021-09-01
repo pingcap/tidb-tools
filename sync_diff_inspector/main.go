@@ -1,4 +1,4 @@
-// Copyright 2018 PingCAP, Inc.
+// Copyright 2021 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -88,31 +88,31 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 
 	d, err := NewDiff(ctx, cfg)
 	if err != nil {
-		log.Fatal("fail to initialize diff process", zap.Error(err))
+		log.Fatal("failed to initialize diff process", zap.Error(err))
 	}
 	defer d.Close()
 
 	if !d.ignoreStructCheck {
 		err = d.StructEqual(ctx)
 		if err != nil {
-			log.Fatal("check structure difference failed", zap.Error(err))
+			log.Fatal("failed to check structure difference", zap.Error(err))
 		}
 	}
 	if !d.ignoreDataCheck {
 		err = d.Equal(ctx)
 		if err != nil {
-			log.Fatal("check data difference failed", zap.Error(err))
+			log.Fatal("failed to check data difference", zap.Error(err))
 		}
 	}
 	progress.Close()
 	//progress.PrintSummary()
 	if err := d.report.CalculateTotalSize(ctx, d.downstream.GetDB()); err != nil {
-		log.Warn("fail to calculate the total size", zap.Error(err))
+		log.Warn("failed to calculate the total size", zap.Error(err))
 	}
 	err = d.report.CommitSummary(&cfg.Task)
 	if err != nil {
-		log.Fatal("check data report failed", zap.Error(err))
+		log.Fatal("failed to commit report", zap.Error(err))
 	}
-	d.report.Print("sync_diff.log")
+	d.report.Print("sync_diff.log", os.Stdout)
 	return d.report.Result == report.Pass
 }
