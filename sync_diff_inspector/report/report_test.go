@@ -91,7 +91,7 @@ func (s *testReportSuite) TestReport(c *C) {
 	report.Init(tableDiffs, configsBytes[:2], configsBytes[2])
 
 	mock.ExpectQuery("select sum.*").WillReturnRows(sqlmock.NewRows([]string{"data"}).AddRow("123"))
-	mock.ExpectQuery("select sum.*where table_schema='atest'").WillReturnRows(sqlmock.NewRows([]string{"data"}).AddRow("456"))
+	mock.ExpectQuery("select sum.*where table_schema=.*").WillReturnRows(sqlmock.NewRows([]string{"data"}).AddRow("456"))
 	err = report.CalculateTotalSize(ctx, db)
 	c.Assert(err, IsNil)
 

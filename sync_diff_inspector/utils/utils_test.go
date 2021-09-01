@@ -416,8 +416,8 @@ func (s *testUtilsSuite) TestGetBetterIndex(c *C) {
 			c.Assert(err, IsNil)
 			c.Assert(sel, Equals, tableCase.sels[i])
 		}
-		mock.ExpectQuery("SELECT COUNT\\(DISTINCE b.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("2"))
-		mock.ExpectQuery("SELECT COUNT\\(DISTINCE a.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("5"))
+		mock.ExpectQuery("SELECT COUNT\\(DISTINCT b.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("2"))
+		mock.ExpectQuery("SELECT COUNT\\(DISTINCT a.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("5"))
 		indices, err = GetBetterIndex(ctx, conn, "single_index", "test1", tableInfo)
 		c.Assert(err, IsNil)
 		c.Assert(indices[0].Name.O, Equals, "PRIMARY")
