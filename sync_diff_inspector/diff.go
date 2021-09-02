@@ -214,18 +214,8 @@ func (df *Diff) Equal(ctx context.Context) error {
 			break
 		}
 		pool.Apply(func() {
-			tableDiff := df.downstream.GetTables()[c.TableIndex]
-			schema, table := tableDiff.Schema, tableDiff.Table
-			log.Debug("generate chunk", zap.Int("chunk id", c.ChunkRange.ID),
-				zap.String("table", dbutil.TableName(schema, table)))
-			isEqual, dml, err := df.consume(ctx, c)
-			if err != nil {
-				df.report.SetTableMeetError(schema, table, err)
-			}
-			df.report.SetRowsCnt(schema, table, dml.rowCount)
-			df.report.SetTableDataCheckResult(schema, table, isEqual)
+			isEqual := df.consume(ctx, c)
 			if !isEqual {
-				df.report.SetTableDataCheckCount(schema, table, dml.rowAdd, dml.rowDelete)
 				progress.FailTable(c.ProgressID)
 			}
 			progress.Inc(c.ProgressID)
@@ -326,39 +316,14 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 			}
 		} else {
 			log.Info("not found checkpoint file, start from beginning")
-		}
-	}
-
-	return df.workSource.GetRangeIterator(ctx, startRange, df.workSource.GetTableAnalyzer())
-}
-
-func (df *Diff) getReportSnapshot(i int) (*report.Report, error) {
-	df.report.Lock()
-	defer df.report.Unlock()
-	tableDiff := df.downstream.GetTables()[i]
-	targetID := utils.UniqueID(tableDiff.Schema, tableDiff.Table)
-	reserveMap := make(map[string]map[string]*report.TableResult)
-	for schema, tableMap := range df.report.TableResults {
-		reserveMap[schema] = make(map[string]*report.TableResult)
-		for table, result := range tableMap {
-			reportID := utils.UniqueID(schema, table)
-			if reportID >= targetID {
-				reserveMap[schema][table] = result
+			err := df.removeSQLFiles(0)
+			if err != nil {
+				return nil, errors.Trace(err)
 			}
 		}
 	}
 
-	result := df.report.Result
-	totalSize := df.report.TotalSize
-	duration := time.Since(df.report.StartTime)
-	return &report.Report{
-		PassNum:      0,
-		FailedNum:    0,
-		Result:       result,
-		TableResults: reserveMap,
-		Duration:     duration,
-		TotalSize:    totalSize,
-	}, nil
+	return df.workSource.GetRangeIterator(ctx, startRange, df.workSource.GetTableAnalyzer())
 }
 
 func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
@@ -373,7 +338,9 @@ func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
 	flush := func() {
 		chunk := df.cp.GetChunkSnapshot()
 		if chunk != nil {
-			r, err := df.getReportSnapshot(chunk.TableIndex)
+			tableDiff := df.downstream.GetTables()[chunk.IndexID]
+			schema, table := tableDiff.Schema, tableDiff.Table
+			r, err := df.report.GetSnapshot(chunk.GetID(), schema, table)
 			if err != nil {
 				log.Warn("fail to save the report", zap.Error(err))
 			}
@@ -399,11 +366,12 @@ func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
 	}
 }
 
-func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (bool, *ChunkDML, error) {
+func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool {
+	tableDiff := df.downstream.GetTables()[rangeInfo.TableIndex]
+	schema, table := tableDiff.Schema, tableDiff.Table
 	isEqual, count, err := df.compareChecksumAndGetCount(ctx, rangeInfo)
 	if err != nil {
-		log.Warn("compute checksum error", zap.Int("chunk id", rangeInfo.ChunkRange.ID))
-		return false, nil, errors.Trace(err)
+		df.report.SetTableMeetError(schema, table, err)
 	}
 	var state string
 	dml := &ChunkDML{}
@@ -416,12 +384,12 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 			rangeInfo, err = df.BinGenerate(ctx, df.workSource, rangeInfo, count)
 			log.Debug("bin generate finished", zap.Reflect("chunk", rangeInfo.ChunkRange), zap.Int("chunk id", rangeInfo.ChunkRange.ID))
 			if err != nil {
-				return false, nil, errors.Trace(err)
+				df.report.SetTableMeetError(schema, table, err)
 			}
 		}
 		_, err := df.compareRows(ctx, rangeInfo, dml)
 		if err != nil {
-			return false, nil, errors.Trace(err)
+			df.report.SetTableMeetError(schema, table, err)
 		}
 	} else {
 		// update chunk success state in summary
@@ -430,8 +398,11 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 	dml.node = rangeInfo.ToNode()
 	dml.node.State = state
 	dml.rowCount = count
+	id := rangeInfo.ChunkRange.ID
+	df.report.SetRowsCnt(schema, table, dml.rowCount, id)
+	df.report.SetTableDataCheckResult(schema, table, isEqual, dml.rowAdd, dml.rowDelete, id)
 	df.sqlCh <- dml
-	return isEqual, dml, nil
+	return isEqual
 }
 
 func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tableRange *splitter.RangeInfo, count int64) (*splitter.RangeInfo, error) {
