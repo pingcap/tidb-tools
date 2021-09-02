@@ -327,6 +327,8 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 }
 
 func (df *Diff) getReportSnapshot(node *checkpoints.Node) (*report.Report, error) {
+	df.report.RLock()
+	defer df.report.RUnlock()
 	tableDiff := df.downstream.GetTables()[node.TableIndex]
 	targetID := utils.UniqueID(tableDiff.Schema, tableDiff.Table)
 	reserveMap := make(map[string]map[string]*report.TableResult)
@@ -376,21 +378,17 @@ func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
 		df.wg.Done()
 	}()
 	flush := func() {
-		df.report.RLock()
 		chunk := df.cp.GetChunkSnapshot()
 		if chunk != nil {
 			r, err := df.getReportSnapshot(chunk)
 			if err != nil {
 				log.Warn("fail to save the report", zap.Error(err))
 			}
-			df.report.RUnlock()
 			_, err = df.cp.SaveChunk(ctx, filepath.Join(df.CheckpointDir, checkpointFile), chunk, r)
 			if err != nil {
 				log.Warn("fail to save the chunk", zap.Error(err))
 				// maybe we should panic, because SaveChunk method should not failed.
 			}
-		} else {
-			df.report.RUnlock()
 		}
 	}
 	defer flush()
