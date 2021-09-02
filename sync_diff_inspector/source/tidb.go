@@ -120,8 +120,7 @@ func (s *TiDBSource) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo
 func (s *TiDBSource) Close() {
 	s.dbConn.Close()
 }
-
-func (s *TiDBSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter.RangeInfo, checksumInfoCh chan *ChecksumInfo) {
+func (s *TiDBSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter.RangeInfo) *ChecksumInfo {
 	beginTime := time.Now()
 	table := s.tableDiffs[tableRange.GetTableIndex()]
 	chunk := tableRange.GetChunk()
@@ -130,7 +129,7 @@ func (s *TiDBSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter.
 	count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, s.dbConn, matchSource.OriginSchema, matchSource.OriginTable, table.Info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
 
 	cost := time.Since(beginTime)
-	checksumInfoCh <- &ChecksumInfo{
+	return &ChecksumInfo{
 		Checksum: checksum,
 		Count:    count,
 		Err:      err,
