@@ -133,24 +133,57 @@ func (r *Report) getDiffRows() [][]string {
 	return diffRows
 }
 
-func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB) error {
+func AnalyzeTableAndGetTableSize(ctx context.Context, wg *sync.WaitGroup, sizeCh chan int64, errCh chan error, db *sql.DB, schema, table string, nthreads int) {
+	defer wg.Done()
+	size, err := utils.GetTableSize(ctx, db, schema, table)
+	if err != nil {
+		errCh <- err
+	}
+	if size > 0 {
+		sizeCh <- size
+		return
+	}
+	err = utils.AnalyzeTable(ctx, db, dbutil.TableName(schema, table))
+	if err != nil {
+		errCh <- err
+		return
+	}
+	size, err = utils.GetTableSize(ctx, db, schema, table)
+	if err != nil {
+		errCh <- err
+		return
+	}
+	sizeCh <- size
+}
+
+func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB, tableCnt, nthreads int) {
+	wg := &sync.WaitGroup{}
+	analyzeWorkerCh := make(chan struct{ schema, table string }, tableCnt)
 	for schema, tableMap := range r.TableResults {
 		for table := range tableMap {
 			size, err := utils.GetTableSize(ctx, db, schema, table)
 			if err != nil {
-				return errors.Trace(err)
+				r.SetTableMeetError(schema, table, err)
 			}
 			if size == 0 {
-				utils.AnalyzeTable(ctx, db, dbutil.TableName(schema, table))
-				size, err = utils.GetTableSize(ctx, db, schema, table)
-				if err != nil {
-					return errors.Trace(err)
-				}
+				analyzeWorkerCh <- struct{ schema, table string }{schema, table}
 			}
-			r.TotalSize += size
 		}
 	}
-	return nil
+	close(analyzeWorkerCh)
+	for i := 0; i < nthreads; i++ {
+		wg.Add(1)
+		go func() {
+			for t := range analyzeWorkerCh {
+				err := utils.AnalyzeTable(ctx, db, dbutil.TableName(t.schema, t.table))
+				if err != nil {
+					r.SetTableMeetError(t.schema, t.table, err)
+				}
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }
 
 // CommitSummary commit summary info

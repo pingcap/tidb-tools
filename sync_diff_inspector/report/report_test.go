@@ -92,8 +92,7 @@ func (s *testReportSuite) TestReport(c *C) {
 
 	mock.ExpectQuery("select sum.*").WillReturnRows(sqlmock.NewRows([]string{"data"}).AddRow("123"))
 	mock.ExpectQuery("select sum.*where table_schema='atest'").WillReturnRows(sqlmock.NewRows([]string{"data"}).AddRow("456"))
-	err = report.CalculateTotalSize(ctx, db)
-	c.Assert(err, IsNil)
+	report.CalculateTotalSize(ctx, db, 2, 4)
 
 	report.SetTableStructCheckResult("test", "tbl", true)
 	report.SetTableDataCheckResult("test", "tbl", true, 100, 200, 100)
