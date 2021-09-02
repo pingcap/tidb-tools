@@ -336,6 +336,47 @@ func (r *Report) SetTableMeetError(schema, table string, err error) {
 	r.Result = Error
 }
 
+func (r *Report) GetSnapshot(chunkID int, schema, table string) (*Report, error) {
+	r.RLock()
+	defer r.RUnlock()
+	targetID := utils.UniqueID(schema, table)
+	reserveMap := make(map[string]map[string]*TableResult)
+	for schema, tableMap := range r.TableResults {
+		reserveMap[schema] = make(map[string]*TableResult)
+		for table, result := range tableMap {
+			reportID := utils.UniqueID(schema, table)
+			if reportID >= targetID {
+				chunkRes := make(map[int]*ChunkResult)
+				reserveMap[schema][table] = &TableResult{
+					Schema:      result.Schema,
+					Table:       result.Table,
+					StructEqual: result.StructEqual,
+					DataEqual:   result.DataEqual,
+					MeetError:   result.MeetError,
+				}
+				for id, chunkResult := range result.ChunkMap {
+					if id <= chunkID {
+						chunkRes[id] = chunkResult
+					}
+				}
+				reserveMap[schema][table].ChunkMap = chunkRes
+			}
+		}
+	}
+
+	result := r.Result
+	totalSize := r.TotalSize
+	duration := time.Since(r.StartTime)
+	return &Report{
+		PassNum:      0,
+		FailedNum:    0,
+		Result:       result,
+		TableResults: reserveMap,
+		Duration:     duration,
+		TotalSize:    totalSize,
+	}, nil
+}
+
 func (r *Report) SetRowsCnt(schema, table string, cnt int64, id int) {
 	r.Lock()
 	defer r.Unlock()

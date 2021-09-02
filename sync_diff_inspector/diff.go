@@ -380,7 +380,9 @@ func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
 	flush := func() {
 		chunk := df.cp.GetChunkSnapshot()
 		if chunk != nil {
-			r, err := df.getReportSnapshot(chunk)
+			tableDiff := df.workSource.GetTables()[chunk.IndexID]
+			schema, table := tableDiff.Schema, tableDiff.Table
+			r, err := df.report.GetSnapshot(chunk.GetID(), schema, table)
 			if err != nil {
 				log.Warn("fail to save the report", zap.Error(err))
 			}
