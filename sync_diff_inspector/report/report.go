@@ -133,29 +133,6 @@ func (r *Report) getDiffRows() [][]string {
 	return diffRows
 }
 
-func AnalyzeTableAndGetTableSize(ctx context.Context, wg *sync.WaitGroup, sizeCh chan int64, errCh chan error, db *sql.DB, schema, table string, nthreads int) {
-	defer wg.Done()
-	size, err := utils.GetTableSize(ctx, db, schema, table)
-	if err != nil {
-		errCh <- err
-	}
-	if size > 0 {
-		sizeCh <- size
-		return
-	}
-	err = utils.AnalyzeTable(ctx, db, dbutil.TableName(schema, table))
-	if err != nil {
-		errCh <- err
-		return
-	}
-	size, err = utils.GetTableSize(ctx, db, schema, table)
-	if err != nil {
-		errCh <- err
-		return
-	}
-	sizeCh <- size
-}
-
 func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB, tableCnt, nthreads int) {
 	wg := &sync.WaitGroup{}
 	analyzeWorkerCh := make(chan struct{ schema, table string }, tableCnt)
