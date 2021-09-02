@@ -495,9 +495,8 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *splitter.RangeInfo) (bool, int64, error) {
 	var wg sync.WaitGroup
 	var upstreamInfo, downstreamInfo *source.ChecksumInfo
-
+	wg.Add(1)
 	go func() {
-		wg.Add(1)
 		defer wg.Done()
 		upstreamInfo = df.upstream.GetCountAndCrc32(ctx, tableRange)
 	}()
@@ -644,7 +643,7 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case dml, ok := <-df.sqlCh:
-			if !ok {
+			if !ok && dml == nil {
 				log.Info("write sql channel closed")
 				return
 			}
