@@ -135,7 +135,8 @@ func (r *Report) getDiffRows() [][]string {
 
 func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB, tableCnt, nthreads int) {
 	wg := &sync.WaitGroup{}
-	analyzeWorkerCh := make(chan struct{ schema, table string }, tableCnt)
+	analyzeWorkerCh := make(chan *struct{ schema, table string }, tableCnt)
+	sizeCh := make(chan int64, tableCnt)
 	for schema, tableMap := range r.TableResults {
 		for table := range tableMap {
 			size, err := utils.GetTableSize(ctx, db, schema, table)
@@ -143,7 +144,9 @@ func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB, tableCnt, n
 				r.SetTableMeetError(schema, table, err)
 			}
 			if size == 0 {
-				analyzeWorkerCh <- struct{ schema, table string }{schema, table}
+				analyzeWorkerCh <- &struct{ schema, table string }{schema, table}
+			} else {
+				r.TotalSize += size
 			}
 		}
 	}
@@ -156,11 +159,20 @@ func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB, tableCnt, n
 				if err != nil {
 					r.SetTableMeetError(t.schema, t.table, err)
 				}
+				size, err := utils.GetTableSize(ctx, db, t.schema, t.table)
+				if err != nil {
+					r.SetTableMeetError(t.schema, t.table, err)
+				}
+				sizeCh <- size
 			}
 			wg.Done()
 		}()
 	}
 	wg.Wait()
+	close(sizeCh)
+	for size := range sizeCh {
+		r.TotalSize += size
+	}
 }
 
 // CommitSummary commit summary info
