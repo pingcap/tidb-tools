@@ -81,7 +81,7 @@ func (s *MySQLSources) GetTableAnalyzer() TableAnalyzer {
 func (s *MySQLSources) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
 	id := 0
 	if r != nil {
-		id = r.ChunkRange.ID + 1
+		id = r.ChunkRange.ID
 	}
 	dbIter := &ChunksIterator{
 		currentID:      id,

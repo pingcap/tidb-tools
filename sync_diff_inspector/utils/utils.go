@@ -27,7 +27,6 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pkg/term"
 	"go.uber.org/zap"
 )
 
@@ -58,45 +57,6 @@ func NewWorkerPool(limit uint, name string) *WorkerPool {
 		workers: workers,
 		name:    name,
 	}
-}
-
-// GetChar Returns either an ascii code, or (if input is an arrow) a Javascript key code.
-func GetChar() (ascii int, keyCode int, err error) {
-	t, _ := term.Open("/dev/tty")
-	term.RawMode(t)
-	bytes := make([]byte, 3)
-
-	var numRead int
-	numRead, err = t.Read(bytes)
-	if err != nil {
-		return
-	}
-	if numRead == 3 && bytes[0] == 27 && bytes[1] == 91 {
-		// Three-character control sequence, beginning with "ESC-[".
-
-		// Since there are no ASCII codes for arrow keys, we use
-		// Javascript key codes.
-		if bytes[2] == 65 {
-			// Up
-			keyCode = 38
-		} else if bytes[2] == 66 {
-			// Down
-			keyCode = 40
-		} else if bytes[2] == 67 {
-			// Right
-			keyCode = 39
-		} else if bytes[2] == 68 {
-			// Left
-			keyCode = 37
-		}
-	} else if numRead == 1 {
-		ascii = int(bytes[0])
-	} else {
-		// Two characters read??
-	}
-	t.Restore()
-	t.Close()
-	return
 }
 
 // Apply executes a task.
@@ -627,7 +587,7 @@ func GetBetterIndex(ctx context.Context, db *sql.DB, schema, table string, table
 }
 
 func GetSelectivity(ctx context.Context, db *sql.DB, schemaName, tableName, columnName string, tbInfo *model.TableInfo) (float64, error) {
-	query := fmt.Sprintf("SELECT COUNT(DISTINCE %s)/COUNT(1) as SEL FROM %s;", columnName, dbutil.TableName(schemaName, tableName))
+	query := fmt.Sprintf("SELECT COUNT(DISTINCT %s)/COUNT(1) as SEL FROM %s;", dbutil.ColumnName(columnName), dbutil.TableName(schemaName, tableName))
 	var selectivity sql.NullFloat64
 	args := []interface{}{}
 	err := db.QueryRowContext(ctx, query, args...).Scan(&selectivity)
@@ -651,4 +611,9 @@ func CalculateChunkSize(rowCount int64) int64 {
 		chunkSize = rowCount / 10000
 	}
 	return chunkSize
+}
+
+func AnalyzeTable(ctx context.Context, db *sql.DB, tableName string) error {
+	_, err := db.ExecContext(ctx, "ANALYZE TABLE "+tableName)
+	return err
 }

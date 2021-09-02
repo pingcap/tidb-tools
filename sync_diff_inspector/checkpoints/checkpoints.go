@@ -87,7 +87,6 @@ type Heap struct {
 type Checkpoint struct {
 	hp *Heap
 }
-
 type SavedState struct {
 	Chunk  *Node          `json:"chunk-info"`
 	Report *report.Report `json:"report-info"`
@@ -96,6 +95,12 @@ type SavedState struct {
 // SetCurrentSavedID the method is unsynchronized, be cautious
 func (cp *Checkpoint) SetCurrentSavedID(id int) {
 	cp.hp.CurrentSavedID = id
+}
+
+func (cp *Checkpoint) GetCurrentSavedID() int {
+	cp.hp.mu.Lock()
+	defer cp.hp.mu.Unlock()
+	return cp.hp.CurrentSavedID
 }
 
 func (cp *Checkpoint) Insert(node *Node) {
