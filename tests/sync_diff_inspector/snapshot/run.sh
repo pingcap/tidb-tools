@@ -9,9 +9,9 @@ OUT_DIR=/tmp/tidb_tools_test/sync_diff_inspector/output
 rm -rf $OUT_DIR
 mkdir -p $OUT_DIR
 
-mysql -uroot -h 127.0.0.1 -P 4000 -e "show master status" > $OUT_DIR/ts.output
+mysql -uroot -h 127.0.0.1 -P 4000 -e "show master status" > $OUT_DIR/ts.log
 #cat $OUT_DIR/sync_diff.log
-ts=`grep -oE "[0-9]+" $OUT_DIR/sync_diff.log`
+ts=`grep -oE "[0-9]+" $OUT_DIR/ts.log`
 echo "get ts $ts"
 
 echo "delete one data, diff should not passed"

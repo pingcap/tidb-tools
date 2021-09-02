@@ -43,9 +43,9 @@ ignore-struct-check = false
     # snapshot = "2016-10-08 16:45:26"
 
 [routes.rule1]
-schema-pattern = "diff_test"      # 匹配数据源的库名，支持通配符 "*" 和 "?"
-table-pattern = "shard_test*"          # 匹配数据源的表名，支持通配符 "*" 和 "?"
-target-schema = "diff_test"         # 目标库名
+schema-pattern = "shard_test"      # 匹配数据源的库名，支持通配符 "*" 和 "?"
+table-pattern = "test*"          # 匹配数据源的表名，支持通配符 "*" 和 "?"
+target-schema = "shard_test"         # 目标库名
 target-table = "test" # 目标表名
 
 ######################### Task config #########################
@@ -61,4 +61,4 @@ target-table = "test" # 目标表名
     target-instance = ["tidb"]
 
     # tables need to check.
-	target-check-tables = ["diff_test.test"]
+	target-check-tables = ["shard_test.test"]
