@@ -326,48 +326,6 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 	return df.workSource.GetRangeIterator(ctx, startRange, df.workSource.GetTableAnalyzer())
 }
 
-func (df *Diff) getReportSnapshot(node *checkpoints.Node) (*report.Report, error) {
-	df.report.RLock()
-	defer df.report.RUnlock()
-	tableDiff := df.downstream.GetTables()[node.TableIndex]
-	targetID := utils.UniqueID(tableDiff.Schema, tableDiff.Table)
-	reserveMap := make(map[string]map[string]*report.TableResult)
-	for schema, tableMap := range df.report.TableResults {
-		reserveMap[schema] = make(map[string]*report.TableResult)
-		for table, result := range tableMap {
-			reportID := utils.UniqueID(schema, table)
-			if reportID >= targetID {
-				chunkRes := make(map[int]*report.ChunkResult)
-				reserveMap[schema][table] = &report.TableResult{
-					Schema:      result.Schema,
-					Table:       result.Table,
-					StructEqual: result.StructEqual,
-					DataEqual:   result.DataEqual,
-					MeetError:   result.MeetError,
-				}
-				for id, chunkResult := range result.ChunkMap {
-					if id <= node.GetID() {
-						chunkRes[id] = chunkResult
-					}
-				}
-				reserveMap[schema][table].ChunkMap = chunkRes
-			}
-		}
-	}
-
-	result := df.report.Result
-	totalSize := df.report.TotalSize
-	duration := time.Since(df.report.StartTime)
-	return &report.Report{
-		PassNum:      0,
-		FailedNum:    0,
-		Result:       result,
-		TableResults: reserveMap,
-		Duration:     duration,
-		TotalSize:    totalSize,
-	}, nil
-}
-
 func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
 	// a background goroutine which will insert the verified chunk,
 	// and periodically save checkpoint
