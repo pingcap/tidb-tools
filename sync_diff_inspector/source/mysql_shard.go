@@ -81,7 +81,7 @@ func (s *MySQLSources) GetTableAnalyzer() TableAnalyzer {
 func (s *MySQLSources) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
 	id := 0
 	if r != nil {
-		id = r.ChunkRange.ID + 1
+		id = r.ChunkRange.ID
 	}
 	dbIter := &ChunksIterator{
 		currentID:      id,
@@ -102,7 +102,7 @@ func (s *MySQLSources) Close() {
 	}
 }
 
-func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitter.RangeInfo, checksumInfoCh chan *ChecksumInfo) {
+func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitter.RangeInfo) *ChecksumInfo {
 	beginTime := time.Now()
 	table := s.tableDiffs[tableRange.GetTableIndex()]
 	chunk := tableRange.GetChunk()
@@ -139,7 +139,7 @@ func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitte
 	}
 
 	cost := time.Since(beginTime)
-	checksumInfoCh <- &ChecksumInfo{
+	return &ChecksumInfo{
 		Checksum: totalChecksum,
 		Count:    totalCount,
 		Err:      err,

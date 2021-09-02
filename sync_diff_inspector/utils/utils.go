@@ -612,3 +612,8 @@ func CalculateChunkSize(rowCount int64) int64 {
 	}
 	return chunkSize
 }
+
+func AnalyzeTable(ctx context.Context, db *sql.DB, tableName string) error {
+	_, err := db.ExecContext(ctx, "ANALYZE TABLE "+tableName)
+	return err
+}

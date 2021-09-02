@@ -51,14 +51,18 @@ type ReportConfig struct {
 
 // TableResult saves the check result for every table.
 type TableResult struct {
-	Schema      string `json:"schma"`
-	Table       string `json:"table"`
-	StructEqual bool   `json:"struct-equal"`
-	DataEqual   bool   `json:"data-equal"`
-	MeetError   error  `json:"meet-error"`
-	RowsAdd     int    `json:"rows-add"`
-	RowsDelete  int    `json:"rows-delete"`
-	RowsCnt     int64  `json:"rows-count"`
+	Schema      string               `json:"schma"`
+	Table       string               `json:"table"`
+	StructEqual bool                 `json:"struct-equal"`
+	DataEqual   bool                 `json:"data-equal"`
+	MeetError   error                `json:"meet-error"`
+	ChunkMap    map[int]*ChunkResult `json:"chunk-result"`
+}
+
+type ChunkResult struct {
+	RowsAdd    int   `json:"rows-add"`
+	RowsDelete int   `json:"rows-delete"`
+	RowsCnt    int64 `json:"rows-count"`
 }
 
 // Report saves the check results.
@@ -117,24 +121,58 @@ func (r *Report) getDiffRows() [][]string {
 			} else {
 				diffRow = append(diffRow, "true")
 			}
-			diffRow = append(diffRow, fmt.Sprintf("+%d/-%d", result.RowsAdd, result.RowsDelete))
+			rowAdd, rowDelete := 0, 0
+			for _, chunkResult := range result.ChunkMap {
+				rowAdd += chunkResult.RowsAdd
+				rowDelete += chunkResult.RowsDelete
+			}
+			diffRow = append(diffRow, fmt.Sprintf("+%d/-%d", rowAdd, rowDelete))
 			diffRows = append(diffRows, diffRow)
 		}
 	}
 	return diffRows
 }
 
-func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB) error {
+func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB, tableCnt, nthreads int) {
+	wg := &sync.WaitGroup{}
+	analyzeWorkerCh := make(chan *struct{ schema, table string }, tableCnt)
+	sizeCh := make(chan int64, tableCnt)
 	for schema, tableMap := range r.TableResults {
 		for table := range tableMap {
 			size, err := utils.GetTableSize(ctx, db, schema, table)
 			if err != nil {
-				return errors.Trace(err)
+				r.SetTableMeetError(schema, table, err)
 			}
-			r.TotalSize += size
+			if size == 0 {
+				analyzeWorkerCh <- &struct{ schema, table string }{schema, table}
+			} else {
+				r.TotalSize += size
+			}
 		}
 	}
-	return nil
+	close(analyzeWorkerCh)
+	for i := 0; i < nthreads; i++ {
+		wg.Add(1)
+		go func() {
+			for t := range analyzeWorkerCh {
+				err := utils.AnalyzeTable(ctx, db, dbutil.TableName(t.schema, t.table))
+				if err != nil {
+					r.SetTableMeetError(t.schema, t.table, err)
+				}
+				size, err := utils.GetTableSize(ctx, db, t.schema, t.table)
+				if err != nil {
+					r.SetTableMeetError(t.schema, t.table, err)
+				}
+				sizeCh <- size
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	close(sizeCh)
+	for size := range sizeCh {
+		r.TotalSize += size
+	}
 }
 
 // CommitSummary commit summary info
@@ -247,9 +285,7 @@ func (r *Report) Init(tableDiffs []*common.TableDiff, sourceConfig [][]byte, tar
 			StructEqual: true,
 			DataEqual:   true,
 			MeetError:   nil,
-			RowsAdd:     0,
-			RowsDelete:  0,
-			RowsCnt:     0,
+			ChunkMap:    make(map[int]*ChunkResult),
 		}
 	}
 }
@@ -258,7 +294,6 @@ func (r *Report) Init(tableDiffs []*common.TableDiff, sourceConfig [][]byte, tar
 func (r *Report) SetTableStructCheckResult(schema, table string, equal bool) {
 	r.Lock()
 	defer r.Unlock()
-
 	r.TableResults[schema][table].StructEqual = equal
 	if !equal && r.Result != Error {
 		r.Result = Fail
@@ -266,20 +301,28 @@ func (r *Report) SetTableStructCheckResult(schema, table string, equal bool) {
 }
 
 // SetTableDataCheckResult sets the data check result for table.
-func (r *Report) SetTableDataCheckResult(schema, table string, equal bool) {
+func (r *Report) SetTableDataCheckResult(schema, table string, equal bool, rowsAdd, rowsDelete int, id int) {
 	r.Lock()
 	defer r.Unlock()
-	r.TableResults[schema][table].DataEqual = equal
+	if !equal {
+		result := r.TableResults[schema][table]
+		result.DataEqual = equal
+		if _, ok := result.ChunkMap[id]; !ok {
+			result.ChunkMap[id] = &ChunkResult{
+				RowsAdd:    0,
+				RowsDelete: 0,
+				RowsCnt:    0,
+			}
+		}
+		result.ChunkMap[id].RowsAdd += rowsAdd
+		result.ChunkMap[id].RowsDelete += rowsDelete
+		if r.Result != Error {
+			r.Result = Fail
+		}
+	}
 	if !equal && r.Result != Error {
 		r.Result = Fail
 	}
-}
-
-func (r *Report) SetTableDataCheckCount(schema, table string, rowsAdd int, rowsDelete int) {
-	r.Lock()
-	defer r.Unlock()
-	r.TableResults[schema][table].RowsAdd += rowsAdd
-	r.TableResults[schema][table].RowsDelete += rowsDelete
 }
 
 // SetTableMeetError sets meet error when check the table.
@@ -294,8 +337,57 @@ func (r *Report) SetTableMeetError(schema, table string, err error) {
 	r.Result = Error
 }
 
-func (r *Report) SetRowsCnt(schema, table string, cnt int64) {
+func (r *Report) GetSnapshot(chunkID int, schema, table string) (*Report, error) {
+	r.RLock()
+	defer r.RUnlock()
+	targetID := utils.UniqueID(schema, table)
+	reserveMap := make(map[string]map[string]*TableResult)
+	for schema, tableMap := range r.TableResults {
+		reserveMap[schema] = make(map[string]*TableResult)
+		for table, result := range tableMap {
+			reportID := utils.UniqueID(schema, table)
+			if reportID >= targetID {
+				chunkRes := make(map[int]*ChunkResult)
+				reserveMap[schema][table] = &TableResult{
+					Schema:      result.Schema,
+					Table:       result.Table,
+					StructEqual: result.StructEqual,
+					DataEqual:   result.DataEqual,
+					MeetError:   result.MeetError,
+				}
+				for id, chunkResult := range result.ChunkMap {
+					if id <= chunkID {
+						chunkRes[id] = chunkResult
+					}
+				}
+				reserveMap[schema][table].ChunkMap = chunkRes
+			}
+		}
+	}
+
+	result := r.Result
+	totalSize := r.TotalSize
+	duration := time.Since(r.StartTime)
+	return &Report{
+		PassNum:      0,
+		FailedNum:    0,
+		Result:       result,
+		TableResults: reserveMap,
+		Duration:     duration,
+		TotalSize:    totalSize,
+	}, nil
+}
+
+func (r *Report) SetRowsCnt(schema, table string, cnt int64, id int) {
 	r.Lock()
 	defer r.Unlock()
-	r.TableResults[schema][table].RowsCnt += cnt
+	result := r.TableResults[schema][table]
+	if _, ok := result.ChunkMap[id]; !ok {
+		result.ChunkMap[id] = &ChunkResult{
+			RowsAdd:    0,
+			RowsDelete: 0,
+			RowsCnt:    0,
+		}
+	}
+	result.ChunkMap[id].RowsCnt += cnt
 }

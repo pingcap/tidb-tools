@@ -51,6 +51,7 @@ func (r *RangeInfo) Copy() *RangeInfo {
 		ChunkRange: r.ChunkRange.Clone(),
 		TableIndex: r.TableIndex,
 		IndexID:    r.IndexID,
+		ProgressID: r.ProgressID,
 	}
 }
 
