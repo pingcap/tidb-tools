@@ -135,9 +135,7 @@ func (s *testSourceSuite) TestTiDBSource(c *C) {
 		c.Assert(n, Equals, tableCase.rangeInfo.TableIndex)
 		countRows := sqlmock.NewRows([]string{"CNT", "CHECKSUM"}).AddRow(123, 456)
 		mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
-		checksumInfo := make(chan *ChecksumInfo, 1)
-		go tidb.GetCountAndCrc32(ctx, tableCase.rangeInfo, checksumInfo)
-		checksum := <-checksumInfo
+		checksum := tidb.GetCountAndCrc32(ctx, tableCase.rangeInfo)
 		c.Assert(checksum.Err, IsNil)
 		c.Assert(checksum.Count, Equals, int64(123))
 		c.Assert(checksum.Checksum, Equals, int64(456))
@@ -287,9 +285,7 @@ func (s *testSourceSuite) TestMysqlShardSources(c *C) {
 			mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
 		}
 
-		checksumInfo := make(chan *ChecksumInfo, 1)
-		go shard.GetCountAndCrc32(ctx, tableCase.rangeInfo, checksumInfo)
-		checksum := <-checksumInfo
+		checksum := shard.GetCountAndCrc32(ctx, tableCase.rangeInfo)
 		c.Assert(checksum.Err, IsNil)
 		c.Assert(checksum.Count, Equals, int64(len(dbs)))
 		c.Assert(checksum.Checksum, Equals, resChecksum)
