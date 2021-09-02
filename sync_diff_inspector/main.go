@@ -106,9 +106,7 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 	}
 	progress.Close()
 	//progress.PrintSummary()
-	if err := d.report.CalculateTotalSize(ctx, d.downstream.GetDB()); err != nil {
-		log.Warn("failed to calculate the total size", zap.Error(err))
-	}
+	d.report.CalculateTotalSize(ctx, d.upstream.GetDB(), len(d.upstream.GetTables()), cfg.CheckThreadCount)
 	err = d.report.CommitSummary(&cfg.Task)
 	if err != nil {
 		log.Fatal("failed to commit report", zap.Error(err))
