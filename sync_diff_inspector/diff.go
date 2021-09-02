@@ -493,28 +493,31 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 }
 
 func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *splitter.RangeInfo) (bool, int64, error) {
-	checkSumCh := make(chan *source.ChecksumInfo, 2)
-	go df.upstream.GetCountAndCrc32(ctx, tableRange, checkSumCh)
-	go df.downstream.GetCountAndCrc32(ctx, tableRange, checkSumCh)
+	var wg sync.WaitGroup
+	var upstreamInfo, downstreamInfo *source.ChecksumInfo
 
-	crc1Info := <-checkSumCh
-	crc2Info := <-checkSumCh
-	close(checkSumCh)
+	go func() {
+		wg.Add(1)
+		defer wg.Done()
+		upstreamInfo = df.upstream.GetCountAndCrc32(ctx, tableRange)
+	}()
+	downstreamInfo = df.downstream.GetCountAndCrc32(ctx, tableRange)
+	wg.Wait()
 
-	if crc1Info.Err != nil {
-		log.Warn("checksum fail")
-		return false, -1, errors.Trace(crc1Info.Err)
+	if upstreamInfo.Err != nil {
+		log.Warn("failed to compare upstream checksum")
+		return false, -1, errors.Trace(upstreamInfo.Err)
 	}
-	if crc2Info.Err != nil {
-		log.Warn("checksum fail")
-		return false, -1, errors.Trace(crc2Info.Err)
+	if downstreamInfo.Err != nil {
+		log.Warn("failed to compare downstream checksum")
+		return false, -1, errors.Trace(downstreamInfo.Err)
 
 	}
 	// TODO two counts are not necessary equal
-	if crc1Info.Count == crc2Info.Count && crc1Info.Checksum == crc2Info.Checksum {
-		return true, crc1Info.Count, nil
+	if upstreamInfo.Count == downstreamInfo.Count && upstreamInfo.Checksum == downstreamInfo.Checksum {
+		return true, upstreamInfo.Count, nil
 	}
-	return false, crc1Info.Count, nil
+	return false, upstreamInfo.Count, nil
 }
 
 func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, dml *ChunkDML) (bool, error) {
