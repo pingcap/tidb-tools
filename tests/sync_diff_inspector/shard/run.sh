@@ -9,12 +9,12 @@ rm -rf $OUT_DIR
 mkdir -p $OUT_DIR
 
 echo "generate data to sharding tables"
-mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table diff_test.shard_test1(\`table\` int, b varchar(10), c float, d datetime, primary key(\`table\`));"
-mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table diff_test.shard_test2(\`table\` int, b varchar(10), c float, d datetime, primary key(\`table\`));"
+mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table diff_test.shard_test1(\`table\` int, aa int, b varchar(10), c float, d datetime, primary key(\`table\`));"
+mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table diff_test.shard_test2(\`table\` int, aa int, b varchar(10), c float, d datetime, primary key(\`table\`));"
 
 # each table only have part of data
-mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "insert into diff_test.shard_test1 (\`table\`, b, c, d) SELECT \`table\`, b, c, d FROM diff_test.test WHERE \`table\`%2=0"
-mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "insert into diff_test.shard_test2 (\`table\`, b, c, d) SELECT \`table\`, b, c, d FROM diff_test.test WHERE \`table\`%2=1"
+mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "insert into diff_test.shard_test1 (\`table\`, aa, b, c, d) SELECT \`table\`, aa, b, c, d FROM diff_test.test WHERE \`table\`%2=0"
+mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "insert into diff_test.shard_test2 (\`table\`, aa, b, c, d) SELECT \`table\`, aa, b, c, d FROM diff_test.test WHERE \`table\`%2=1"
 
 sed "s/\"127.0.0.1\"#MYSQL_HOST/\"${MYSQL_HOST}\"/g" ./config_base.toml | sed "s/3306#MYSQL_PORT/${MYSQL_PORT}/g" > ./config.toml
 

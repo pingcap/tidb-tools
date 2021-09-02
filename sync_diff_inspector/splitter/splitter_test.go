@@ -645,7 +645,7 @@ func createFakeResultForBucketSplit(mock sqlmock.Sqlmock, aRandomValues, bRandom
 	}
 	mock.ExpectQuery("SHOW STATS_BUCKETS").WillReturnRows(statsRows)
 
-	mock.ExpectQuery("SELECT COUNT\\(DISTINCT a.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("123"))
+	mock.ExpectQuery("SELECT COUNT\\(DISTINCT `a`.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("123"))
 	createFakeResultForRandom(mock, aRandomValues, bRandomValues)
 }
 
@@ -715,7 +715,7 @@ func (s *testSplitterSuite) TestLimitSpliter(c *C) {
 	}
 
 	for i, testCase := range testCases {
-		mock.ExpectQuery("SELECT COUNT\\(DISTINCT a.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("123"))
+		mock.ExpectQuery("SELECT COUNT\\(DISTINCT `a`.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("123"))
 		createFakeResultForLimitSplit(mock, testCase.limitAValues, testCase.limitBValues, true)
 
 		iter, err := NewLimitIterator(ctx, "", tableDiff, db)
