@@ -15,7 +15,6 @@ package source
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -31,8 +30,7 @@ type ChunksIterator struct {
 	TableDiffs     []*common.TableDiff
 	nextTableIndex int
 
-	limit  int
-	dbConn *sql.DB
+	limit int
 
 	tableIter  splitter.ChunkIterator
 	progressID string

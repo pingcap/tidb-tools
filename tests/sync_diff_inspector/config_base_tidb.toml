@@ -54,6 +54,6 @@ ignore-struct-check = false
     target-instance = ["tidb"]
 
     # tables need to check.
-	target-check-tables = ["tz_test.diff"]
+	target-check-tables = ["diff_test.test"]
 
 

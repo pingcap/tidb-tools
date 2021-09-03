@@ -22,6 +22,13 @@ ignore-data-check = false
 # ignore check table's struct
 ignore-struct-check = false
 
+[table-configs]
+[table-configs.config1]
+schema = "diff_test"
+table = "test"
+range = "TRUE"#RANGE"a < 10 OR a > 200"
+index-fields = ""
+ignore-columns = [""]#IGNORE
 
 ######################### Databases config #########################
 [data-sources]
@@ -54,6 +61,7 @@ ignore-struct-check = false
     target-instance = ["tidb"]
 
     # tables need to check.
-	target-check-tables = ["tz_test.diff"]
+	target-check-tables = ["diff_test.test"]
 
-
+    # extra table config
+	target-configs= ["config1"]
