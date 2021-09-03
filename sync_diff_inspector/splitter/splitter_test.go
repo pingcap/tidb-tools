@@ -410,7 +410,6 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 		chunkSize        int64
 		aRandomValues    []interface{}
 		bRandomValues    []interface{}
-		expectChunkCount int
 		expectResult     []chunkResult
 	}{
 		{
@@ -418,7 +417,6 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 			32,
 			[]interface{}{32, 32 * 3, 32 * 5, 32 * 7, 32 * 9},
 			[]interface{}{6, 6 * 3, 6 * 5, 6 * 7, 6 * 9},
-			11,
 			[]chunkResult{
 				{
 					"(`a` < ?) OR (`a` = ? AND `b` <= ?)",
@@ -460,7 +458,6 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 			50,
 			nil,
 			nil,
-			6,
 			[]chunkResult{
 				{
 					"(`a` < ?) OR (`a` = ? AND `b` <= ?)",
@@ -487,7 +484,6 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 			64,
 			nil,
 			nil,
-			6,
 			[]chunkResult{
 				{
 					"(`a` < ?) OR (`a` = ? AND `b` <= ?)",
@@ -514,7 +510,6 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 			127,
 			nil,
 			nil,
-			3,
 			[]chunkResult{
 				{
 					"(`a` < ?) OR (`a` = ? AND `b` <= ?)",
@@ -532,7 +527,6 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 			128,
 			nil,
 			nil,
-			3,
 			[]chunkResult{
 				{
 					"(`a` < ?) OR (`a` = ? AND `b` <= ?)",
@@ -550,7 +544,6 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 			129,
 			nil,
 			nil,
-			2,
 			[]chunkResult{
 				{
 					"(`a` < ?) OR (`a` = ? AND `b` <= ?)",
@@ -565,7 +558,6 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 			400,
 			nil,
 			nil,
-			1,
 			[]chunkResult{
 				{
 					"TRUE",
