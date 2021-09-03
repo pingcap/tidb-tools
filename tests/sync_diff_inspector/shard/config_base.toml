@@ -24,12 +24,13 @@ ignore-struct-check = false
 
 
 ######################### Databases config #########################
-[data-sources]
-[data-sources.tidb1]
-    host = "127.0.0.1"
-    port = 4001
+[data-sources.mysql1]
+    host = "127.0.0.1"#MYSQL_HOST
+    port = 3306#MYSQL_PORT
     user = "root"
     password = ""
+
+    route-rules = ["rule1"]
     # remove comment if use tidb's snapshot data
     # snapshot = "2016-10-08 16:45:26"
 
@@ -41,6 +42,12 @@ ignore-struct-check = false
     # remove comment if use tidb's snapshot data
     # snapshot = "2016-10-08 16:45:26"
 
+[routes.rule1]
+schema-pattern = "shard_test"      # 匹配数据源的库名，支持通配符 "*" 和 "?"
+table-pattern = "test*"          # 匹配数据源的表名，支持通配符 "*" 和 "?"
+target-schema = "shard_test"         # 目标库名
+target-table = "test" # 目标表名
+
 ######################### Task config #########################
 [task]
     # 1 fix sql: fix-target-TIDB1.sql
@@ -49,11 +56,9 @@ ignore-struct-check = false
     # 4 checkpoint: a dir
     output-dir = "/tmp/tidb_tools_test/sync_diff_inspector/output"
 
-    source-instances = ["tidb1"]
+    source-instances = ["mysql1"]
 
     target-instance = ["tidb"]
 
     # tables need to check.
-	target-check-tables = ["tz_test.diff"]
-
-
+	target-check-tables = ["shard_test.test"]

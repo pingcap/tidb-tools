@@ -150,6 +150,7 @@ func (s *TiDBSource) GetSourceStructInfo(ctx context.Context, tableIndex int) ([
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+	tableInfos[0] = utils.IgnoreColumns(tableInfos[0], tableDiff.IgnoreColumns)
 	return tableInfos, nil
 }
 

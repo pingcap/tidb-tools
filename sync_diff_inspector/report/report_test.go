@@ -91,7 +91,7 @@ func (s *testReportSuite) TestReport(c *C) {
 	report.Init(tableDiffs, configsBytes[:2], configsBytes[2])
 
 	mock.ExpectQuery("select sum.*").WillReturnRows(sqlmock.NewRows([]string{"data"}).AddRow("123"))
-	mock.ExpectQuery("select sum.*where table_schema='atest'").WillReturnRows(sqlmock.NewRows([]string{"data"}).AddRow("456"))
+	mock.ExpectQuery("select sum.*where table_schema=.*").WillReturnRows(sqlmock.NewRows([]string{"data"}).AddRow("456"))
 	report.CalculateTotalSize(ctx, db, 2, 4)
 
 	report.SetTableStructCheckResult("test", "tbl", true)
@@ -117,4 +117,13 @@ func (s *testReportSuite) TestReport(c *C) {
 	new_report.SetTableDataCheckResult("atest", "atbl", false, 111, 222, 100)
 	c.Assert(new_report.getSortedTables(), DeepEquals, []string{"`test`.`tbl`"})
 	c.Assert(new_report.getDiffRows(), DeepEquals, [][]string{{"`atest`.`atbl`", "false", "+111/-222"}})
+
+	buf := new(bytes.Buffer)
+	new_report.Print("[123]", buf)
+	c.Assert(buf.String(), Equals, "The structure of `atest`.`atbl` is not equal\n"+
+		"The data of `atest`.`atbl` is not equal\n"+
+		"\n"+
+		"The rest of tables are all equal.\n"+
+		"The patch file has been generated to './output_dir/patch.sql'\n"+
+		"You can view the comparision details through './output_dir/[123]'\n")
 }

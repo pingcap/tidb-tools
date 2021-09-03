@@ -48,6 +48,7 @@ table = "table"
 range = "age > 10 AND age < 20"
 index-fields = ""
 ignore-columns = ["",""]
+chunk-size = 0
 
 ######################### Task config #########################
 [task]

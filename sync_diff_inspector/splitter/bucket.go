@@ -215,6 +215,10 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 			s.chunksCh <- chunks
 
 		}
+		if len(lowerValues) == 0 {
+			// The node next the checkpoint is the last node
+			return
+		}
 	}
 	chunkRange := chunk.NewChunkRange()
 	// TODO chunksize when checkpoint
@@ -267,9 +271,9 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 		for j, column := range indexColumns {
 			chunkRange.Update(column.Name.O, lowerValues[j], "", true, false)
 		}
-		chunks := []*chunk.Range{chunkRange}
-		chunk.InitChunks(chunks, chunk.Bucket, len(buckets), table.Collation, table.Range)
-		progress.UpdateTotal(s.progressID, len(chunks), false)
-		s.chunksCh <- chunks
 	}
+	chunks := []*chunk.Range{chunkRange}
+	chunk.InitChunks(chunks, chunk.Bucket, len(buckets), table.Collation, table.Range)
+	progress.UpdateTotal(s.progressID, len(chunks), false)
+	s.chunksCh <- chunks
 }

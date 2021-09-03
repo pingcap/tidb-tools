@@ -157,6 +157,7 @@ func (r *Report) CommitSummary(taskConfig *config.TaskConfig) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+	defer summaryFile.Close()
 	summaryFile.WriteString("Summary\n\n\n\n")
 	summaryFile.WriteString("Source Database\n\n\n\n")
 	for i := 0; i < len(r.SourceConfig); i++ {
