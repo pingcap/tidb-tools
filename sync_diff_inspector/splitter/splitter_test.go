@@ -647,6 +647,9 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 		IndexID:    iter.GetIndexID(),
 	}
 
+	// drop the origin db since we cannot ensure order of mock string after we concurrent produce chunks.
+	db, mock, err = sqlmock.New()
+	c.Assert(err, IsNil)
 	createFakeResultForBucketSplit(mock, nil, nil)
 	createFakeResultForCount(mock, 64)
 	createFakeResultForRandom(mock, testCases[0].aRandomValues[stopJ:], testCases[0].bRandomValues[stopJ:])
