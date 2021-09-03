@@ -112,8 +112,9 @@ func (df *Diff) Close() {
 	if df.downstream != nil {
 		df.downstream.Close()
 	}
-	if err := os.Remove(filepath.Join(df.CheckpointDir, checkpointFile)); err != nil {
-		log.Fatal("fail to remove the checkpoint file")
+
+	if err := os.Remove(filepath.Join(df.CheckpointDir, checkpointFile)); err != nil && !os.IsNotExist(err) {
+		log.Fatal("fail to remove the checkpoint file", zap.String("error", err.Error()))
 	}
 }
 
@@ -269,7 +270,6 @@ func (df *Diff) startGCKeeperForTiDB(ctx context.Context, db *sql.DB) {
 			}
 		}
 	}
-	return
 }
 
 // pickSource pick one proper source to do some work. e.g. generate chunks
@@ -495,9 +495,8 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *splitter.RangeInfo) (bool, int64, error) {
 	var wg sync.WaitGroup
 	var upstreamInfo, downstreamInfo *source.ChecksumInfo
-
+	wg.Add(1)
 	go func() {
-		wg.Add(1)
 		defer wg.Done()
 		upstreamInfo = df.upstream.GetCountAndCrc32(ctx, tableRange)
 	}()
@@ -536,7 +535,8 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 	var lastUpstreamData, lastDownstreamData map[string]*dbutil.ColumnData
 	equal := true
 
-	_, orderKeyCols := dbutil.SelectUniqueOrderKey(df.workSource.GetTables()[rangeInfo.GetTableIndex()].Info)
+	tableInfo := df.workSource.GetTables()[rangeInfo.GetTableIndex()].Info
+	_, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
 	for {
 		if lastUpstreamData == nil {
 			lastUpstreamData, err = upstreamRowsIterator.Next()
@@ -587,7 +587,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 			break
 		}
 
-		eq, cmp, err := utils.CompareData(lastUpstreamData, lastDownstreamData, orderKeyCols)
+		eq, cmp, err := utils.CompareData(lastUpstreamData, lastDownstreamData, orderKeyCols, tableInfo.Columns)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
@@ -644,7 +644,7 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case dml, ok := <-df.sqlCh:
-			if !ok {
+			if !ok && dml == nil {
 				log.Info("write sql channel closed")
 				return
 			}
