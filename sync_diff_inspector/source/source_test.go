@@ -128,7 +128,7 @@ func (s *testSourceSuite) TestTiDBSource(c *C) {
 
 	tableDiffs := prepareTiDBTables(c, tableCases)
 
-	tidb, err := NewTiDBSource(ctx, tableDiffs, &config.DataSource{Conn: conn})
+	tidb, err := NewTiDBSource(ctx, tableDiffs, &config.DataSource{Conn: conn}, 1)
 	c.Assert(err, IsNil)
 
 	for n, tableCase := range tableCases {
@@ -484,7 +484,7 @@ func (s *testSourceSuite) TestTiDBRouter(c *C) {
 	mock.ExpectQuery("SHOW FULL TABLES IN.*").WillReturnRows(tablesRows)
 	tablesRows = sqlmock.NewRows([]string{"Tables_in_test", "Table_type"}).AddRow("test2", "BASE TABLE")
 	mock.ExpectQuery("SHOW FULL TABLES IN.*").WillReturnRows(tablesRows)
-	tidb, err := NewTiDBSource(ctx, tableDiffs, ds)
+	tidb, err := NewTiDBSource(ctx, tableDiffs, ds, 1)
 	c.Assert(err, IsNil)
 	infoRows := sqlmock.NewRows([]string{"Table", "Create Table"}).AddRow("test_t", "CREATE TABLE `source_test`.`test1` (`a` int, `b` varchar(24), `c` float, primary key(`a`, `b`))")
 	mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(infoRows)

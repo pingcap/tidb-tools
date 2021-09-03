@@ -302,7 +302,7 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 					zap.Int("id", node.GetID()),
 					zap.Reflect("chunk", node),
 					zap.String("state", node.GetState()))
-				df.cp.SetCurrentSavedID(node.GetID())
+				df.cp.SetCurrentSavedID(node)
 			}
 			if node != nil {
 				// remove the sql file that ID bigger than node.
@@ -632,7 +632,6 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 
 // WriteSQLs write sqls to file
 func (df *Diff) writeSQLs(ctx context.Context) {
-	log.Debug("hello")
 	df.wg.Add(1)
 	log.Info("start writeSQLs goroutine")
 	defer func() {
