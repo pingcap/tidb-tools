@@ -31,7 +31,7 @@ rm -f $OUT_DIR/sync_diff.log
 echo "execute fix.sql and use base config, and then compare data, data should be equal"
 cat $OUT_DIR/*/fix-on-tidb/*.sql | mysql -uroot -h127.0.0.1 -P 4000
 sync_diff_inspector --config=./config.toml > $OUT_DIR/ignore_column_diff.log || true
-check_contains "check pass!!!" $OUT_DIR/ignore_column_diff.log
+check_contains "check pass!!!" $OUT_DIR/sync_diff.log
 rm -f $OUT_DIR/sync_diff.log
 
 echo "table_config test passed"
