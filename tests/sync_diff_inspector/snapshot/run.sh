@@ -35,7 +35,7 @@ rm -f $OUT_DIR/sync_diff.log
 echo "execute fix.sql and use base config, and then compare data, data should be equal"
 cat $OUT_DIR/*/fix-on-tidb/*.sql | mysql -uroot -h127.0.0.1 -P 4000
 sync_diff_inspector --config=./config_base.toml > $OUT_DIR/snapshot_diff.log
-check_contains "check pass!!!" $OUT_DIR/snapshot_diff.log
+check_contains "check pass!!!" $OUT_DIR/sync_diff.log
 rm -f $OUT_DIR/sync_diff.log
 
 # reset sql mode

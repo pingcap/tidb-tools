@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -137,13 +138,7 @@ func GetTableRowsQueryFormat(schema, table string, tableInfo *model.TableInfo, c
 
 	columnNames := make([]string, 0, len(tableInfo.Columns))
 	for _, col := range tableInfo.Columns {
-		name := dbutil.ColumnName(col.Name.O)
-		if col.FieldType.Tp == mysql.TypeFloat {
-			name = fmt.Sprintf("round(%s, 5-floor(log10(%s))) as %s", name, name, name)
-		} else if col.FieldType.Tp == mysql.TypeDouble {
-			name = fmt.Sprintf("round(%s, 14-floor(log10(%s))) as %s", name, name, name)
-		}
-		columnNames = append(columnNames, name)
+		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
 	}
 	columns := strings.Join(columnNames, ", ")
 	if collation != "" {
@@ -267,9 +262,10 @@ func needQuotes(tp byte) bool {
 // 		1. cmp = 0: map1 and map2 have the same orderkeycolumns, but other columns are in difference.
 //		2. cmp = -1: map1 < map2
 // 		3. cmp = 1: map1 > map2
-func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model.ColumnInfo) (equal bool, cmp int32, err error) {
+func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns []*model.ColumnInfo) (equal bool, cmp int32, err error) {
 	var (
 		data1, data2 *dbutil.ColumnData
+		str1, str2   string
 		key          string
 		ok           bool
 	)
@@ -290,16 +286,38 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model
 		}
 	}()
 
-	for key, data1 = range map1 {
-		if data2, ok = map2[key]; !ok {
-			return false, 0, errors.Errorf("don't have key %s", key)
+	for _, column := range columns {
+		if data1, ok = map1[column.Name.O]; !ok {
+			return false, 0, errors.Errorf("upstream don't have key %s", key)
 		}
-		if (string(data1.Data) == string(data2.Data)) && (data1.IsNull == data2.IsNull) {
-			continue
+		if data2, ok = map2[column.Name.O]; !ok {
+			return false, 0, errors.Errorf("downstream don't have key %s", key)
 		}
-		equal = false
+		str1 = string(data1.Data)
+		str2 = string(data2.Data)
+		if column.FieldType.Tp == mysql.TypeFloat || column.FieldType.Tp == mysql.TypeDouble {
+			if data1.IsNull == data2.IsNull && data1.IsNull {
+				continue
+			}
 
+			num1, err1 := strconv.ParseFloat(str1, 64)
+			num2, err2 := strconv.ParseFloat(str2, 64)
+			if err1 != nil || err2 != nil {
+				err = errors.Errorf("convert %s, %s to float failed, err1: %v, err2: %v", str1, str2, err1, err2)
+				return
+			}
+			if math.Abs(num1-num2) <= 1e-6 {
+				continue
+			}
+		} else {
+			if (str1 == str2) && (data1.IsNull == data2.IsNull) {
+				continue
+			}
+		}
+
+		equal = false
 		break
+
 	}
 	if equal {
 		return
@@ -473,10 +491,12 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 	columnIsNull := make([]string, 0, len(tbInfo.Columns))
 	for _, col := range tbInfo.Columns {
 		name := dbutil.ColumnName(col.Name.O)
+		// When col value is 0, the result is NULL.
+		// But we can use ISNULL to distinguish between null and 0.
 		if col.FieldType.Tp == mysql.TypeFloat {
-			name = fmt.Sprintf("round(%s, 5-floor(log10(%s)))", name, name)
+			name = fmt.Sprintf("round(%s, 5-floor(log10(abs(%s))))", name, name)
 		} else if col.FieldType.Tp == mysql.TypeDouble {
-			name = fmt.Sprintf("round(%s, 14-floor(log10(%s)))", name, name)
+			name = fmt.Sprintf("round(%s, 14-floor(log10(abs(%s))))", name, name)
 		}
 		columnNames = append(columnNames, name)
 		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", dbutil.ColumnName(col.Name.O)))

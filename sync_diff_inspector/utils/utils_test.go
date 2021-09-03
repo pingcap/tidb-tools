@@ -100,7 +100,7 @@ func (*testUtilsSuite) TestBasicTableUtilOperation(c *C) {
 	c.Assert(err, IsNil)
 
 	query, orderKeyCols := GetTableRowsQueryFormat("test", "test", tableInfo, "123")
-	c.Assert(query, Equals, "SELECT /*!40001 SQL_NO_CACHE */ `a`, `b`, round(`c`, 5-floor(log10(`c`))) as `c`, `d` FROM `test`.`test` WHERE %s ORDER BY `a`,`b` COLLATE \"123\"")
+	c.Assert(query, Equals, "SELECT /*!40001 SQL_NO_CACHE */ `a`, `b`, `c`, `d` FROM `test`.`test` WHERE %s ORDER BY `a`,`b` COLLATE \"123\"")
 	expectName := []string{"a", "b"}
 	for i, col := range orderKeyCols {
 		c.Assert(col.Name.O, Equals, expectName[i])
@@ -150,6 +150,8 @@ func (*testUtilsSuite) TestBasicTableUtilOperation(c *C) {
 		"d": {Data: []byte("asdf"), IsNull: false},
 	}
 
+	columns := tableInfo.Columns
+
 	c.Assert(GenerateReplaceDML(data1, tableInfo, "schema"), Equals, "REPLACE INTO `schema`.`test`(`a`,`b`,`c`,`d`) VALUES (1,'a',1.22,'sdf');")
 	c.Assert(GenerateReplaceDMLWithAnnotation(data1, data2, tableInfo, "schema"), Equals, "-- diff column\t|\t`b`\t|\t`c`\n"+
 		"-- source data\t|\t'a'\t|\t1.22\n"+
@@ -158,64 +160,64 @@ func (*testUtilsSuite) TestBasicTableUtilOperation(c *C) {
 	c.Assert(GenerateDeleteDML(data1, tableInfo, "schema"), Equals, "DELETE FROM `schema`.`test` WHERE `a` = 1 AND `b` = 'a' AND `c` = 1.22 AND `d` = 'sdf';")
 
 	// same
-	equal, cmp, err := CompareData(data1, data1, orderKeyCols)
+	equal, cmp, err := CompareData(data1, data1, orderKeyCols, columns)
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, int32(0))
 	c.Assert(equal, IsTrue)
 
 	// orderkey same but other column different
-	equal, cmp, err = CompareData(data1, data3, orderKeyCols)
+	equal, cmp, err = CompareData(data1, data3, orderKeyCols, columns)
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, int32(-1))
 	c.Assert(equal, IsFalse)
 
-	equal, cmp, err = CompareData(data3, data1, orderKeyCols)
+	equal, cmp, err = CompareData(data3, data1, orderKeyCols, columns)
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, int32(1))
 	c.Assert(equal, IsFalse)
 
 	// orderKey different
-	equal, cmp, err = CompareData(data1, data2, orderKeyCols)
+	equal, cmp, err = CompareData(data1, data2, orderKeyCols, columns)
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, int32(-1))
 	c.Assert(equal, IsFalse)
 
-	equal, cmp, err = CompareData(data2, data1, orderKeyCols)
+	equal, cmp, err = CompareData(data2, data1, orderKeyCols, columns)
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, int32(1))
 	c.Assert(equal, IsFalse)
 
-	equal, cmp, err = CompareData(data4, data1, orderKeyCols)
+	equal, cmp, err = CompareData(data4, data1, orderKeyCols, columns)
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, int32(0))
 	c.Assert(equal, IsFalse)
 
-	equal, cmp, err = CompareData(data1, data4, orderKeyCols)
+	equal, cmp, err = CompareData(data1, data4, orderKeyCols, columns)
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, int32(0))
 	c.Assert(equal, IsFalse)
 
-	equal, cmp, err = CompareData(data5, data4, orderKeyCols)
+	equal, cmp, err = CompareData(data5, data4, orderKeyCols, columns)
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, int32(1))
 	c.Assert(equal, IsFalse)
 
-	equal, cmp, err = CompareData(data4, data5, orderKeyCols)
+	equal, cmp, err = CompareData(data4, data5, orderKeyCols, columns)
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, int32(-1))
 	c.Assert(equal, IsFalse)
 
-	equal, cmp, err = CompareData(data4, data6, orderKeyCols)
+	equal, cmp, err = CompareData(data4, data6, orderKeyCols, columns)
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, int32(1))
 	c.Assert(equal, IsFalse)
 
-	equal, cmp, err = CompareData(data6, data4, orderKeyCols)
+	equal, cmp, err = CompareData(data6, data4, orderKeyCols, columns)
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, int32(-1))
 	c.Assert(equal, IsFalse)
 
-	equal, cmp, err = CompareData(data6, data7, orderKeyCols)
+	equal, cmp, err = CompareData(data6, data7, orderKeyCols, columns)
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, int32(0))
 	c.Assert(equal, IsTrue)

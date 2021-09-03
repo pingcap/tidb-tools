@@ -113,8 +113,8 @@ func (df *Diff) Close() {
 		df.downstream.Close()
 	}
 
-	if err := os.Remove(filepath.Join(df.CheckpointDir, checkpointFile)); !os.IsNotExist(err) {
-		log.Fatal("fail to remove the checkpoint file")
+	if err := os.Remove(filepath.Join(df.CheckpointDir, checkpointFile)); err != nil && !os.IsNotExist(err) {
+		log.Fatal("fail to remove the checkpoint file", zap.String("error", err.Error()))
 	}
 }
 
@@ -535,7 +535,8 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 	var lastUpstreamData, lastDownstreamData map[string]*dbutil.ColumnData
 	equal := true
 
-	_, orderKeyCols := dbutil.SelectUniqueOrderKey(df.workSource.GetTables()[rangeInfo.GetTableIndex()].Info)
+	tableInfo := df.workSource.GetTables()[rangeInfo.GetTableIndex()].Info
+	_, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
 	for {
 		if lastUpstreamData == nil {
 			lastUpstreamData, err = upstreamRowsIterator.Next()
@@ -586,7 +587,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 			break
 		}
 
-		eq, cmp, err := utils.CompareData(lastUpstreamData, lastDownstreamData, orderKeyCols)
+		eq, cmp, err := utils.CompareData(lastUpstreamData, lastDownstreamData, orderKeyCols, tableInfo.Columns)
 		if err != nil {
 			return false, errors.Trace(err)
 		}
