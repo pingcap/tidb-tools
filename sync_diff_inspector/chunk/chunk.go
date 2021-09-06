@@ -50,9 +50,11 @@ type Bound struct {
 
 // Range represents chunk range
 type Range struct {
-	ID     int       `json:"id"`
-	Type   ChunkType `json:"type"`
-	Bounds []*Bound  `json:"bounds"`
+	ID      int       `json:"id"`
+	Type    ChunkType `json:"type"`
+	Bounds  []*Bound  `json:"bounds"`
+	IsFirst bool      `json:"is-first"`
+	IsLast  bool      `json:"is-last"`
 
 	Where string   `json:"where"`
 	Args  []string `json:"args"`
@@ -83,6 +85,30 @@ func NewChunkRangeOffset(columnOffset map[string]int) *Range {
 		Bounds:       bounds,
 		columnOffset: columnOffset,
 	}
+}
+
+func (c *Range) IsLastChunkForTable() bool {
+	if c.IsLast {
+		return true
+	}
+	// calculate from bounds
+	hasUpper := false
+	for _, b := range c.Bounds {
+		hasUpper = hasUpper || b.HasUpper
+	}
+	return !hasUpper
+}
+
+func (c *Range) IsFirstChunkForTable() bool {
+	if c.IsFirst {
+		return true
+	}
+	// calculate from bounds
+	hasLower := false
+	for _, b := range c.Bounds {
+		hasLower = hasLower || b.HasLower
+	}
+	return !hasLower
 }
 
 // String returns the string of Range, used for log.
