@@ -15,7 +15,6 @@ package checkpoints
 
 import (
 	"context"
-	"fmt"
 	"math/rand"
 	"os"
 	"strconv"
@@ -54,8 +53,8 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 					Bounds: []*chunk.Bound{
 						{
 							HasLower: i_ != 1,
-							Lower:    strconv.Itoa(i_),
-							Upper:    strconv.Itoa(i_ + 1),
+							Lower:    strconv.Itoa(i_ + 1000),
+							Upper:    strconv.Itoa(i_ + 1000 + 1),
 							HasUpper: i_ != rounds,
 						},
 					},
@@ -67,13 +66,13 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 			if rand.Intn(4) == 0 {
 				time.Sleep(time.Duration(rand.Intn(3)) * time.Second)
 			}
-			fmt.Printf("Insert %d\n", i_)
 			checker.Insert(node)
 			wg.Done()
 		}(i)
 	}
 	wg.Wait()
 	defer os.Remove("TestSaveChunk")
+
 	cur = checker.GetChunkSnapshot()
 	id, err = checker.SaveChunk(ctx, "TestSaveChunk", cur, nil)
 	c.Assert(err, IsNil)
@@ -95,8 +94,8 @@ func (cp *testCheckpointSuit) TestLoadChunk(c *C) {
 					Bounds: []*chunk.Bound{
 						{
 							HasLower: i != 1,
-							Lower:    strconv.Itoa(i),
-							Upper:    strconv.Itoa(i + 1),
+							Lower:    strconv.Itoa(i + 1000),
+							Upper:    strconv.Itoa(i + 1000 + 1),
 							HasUpper: i != rounds,
 						},
 					},
