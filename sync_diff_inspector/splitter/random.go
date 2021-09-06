@@ -64,12 +64,10 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 	var iargs []interface{}
 	if startRange != nil {
 		c := startRange.GetChunk()
-		flag := false
 		for _, bound := range c.Bounds {
-			flag = flag || bound.HasUpper
 			chunkRange.Update(bound.Column, bound.Upper, "", true, false)
 		}
-		if !flag {
+		if c.IsLastChunkForTable() {
 			return &RandomIterator{
 				table:     table,
 				chunkSize: 0,
