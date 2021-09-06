@@ -16,6 +16,8 @@ package splitter
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strconv"
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
@@ -538,7 +540,7 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 				},
 			},
 		}, {
-			// chunk size is greate than the double count of bucket 64, will combine three bucket into one chunk
+			// chunk size is greater than the double count of bucket 64, will combine three bucket into one chunk
 			129,
 			nil,
 			nil,
@@ -577,7 +579,7 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 		iter, err := NewBucketIterator(ctx, "", tableDiff, db)
 		c.Assert(err, IsNil)
 
-		j := 0
+		obtainChunks := make([]chunkResult, 0, len(testCase.expectResult))
 		for {
 			chunk, err := iter.Next()
 			c.Assert(err, IsNil)
@@ -585,10 +587,35 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 				break
 			}
 			chunkStr, args := chunk.ToString("")
-			c.Log(i, j, chunkStr, args)
-			c.Assert(chunkStr, Equals, testCase.expectResult[j].chunkStr)
-			c.Assert(args, DeepEquals, testCase.expectResult[j].args)
-			j = j + 1
+			c.Log(i, chunkStr, args, chunk.BucketID)
+			obtainChunks = append(obtainChunks, chunkResult{chunkStr, chunk.Args})
+
+		}
+		sort.Slice(obtainChunks, func(i, j int) bool {
+			totalIndex := len(obtainChunks[i].args)
+			if totalIndex > len(obtainChunks[j].args) {
+				totalIndex = len(obtainChunks[j].args)
+			}
+			for index := 0; index < totalIndex; index++ {
+				a1, _ := strconv.Atoi(obtainChunks[i].args[index])
+				a2, _ := strconv.Atoi(obtainChunks[j].args[index])
+				if a1 < a2 {
+					return true
+				} else if a1 > a2 {
+					return false
+				}
+			}
+			if len(obtainChunks[i].args) == len(obtainChunks[j].args) {
+				// hack way for test case 6
+				return len(obtainChunks[i].chunkStr) > len(obtainChunks[j].chunkStr)
+			}
+			return len(obtainChunks[i].args) < len(obtainChunks[j].args)
+		})
+		// we expect chunk count is same after we generate chunk concurrently
+		c.Assert(len(obtainChunks), Equals, len(testCase.expectResult))
+		for i, e := range testCase.expectResult {
+			c.Assert(obtainChunks[i].args, DeepEquals, e.args)
+			c.Assert(obtainChunks[i].chunkStr, Equals, e.chunkStr)
 		}
 	}
 
@@ -612,11 +639,14 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 		IndexID:    iter.GetIndexID(),
 	}
 
+	// drop the origin db since we cannot ensure order of mock string after we concurrent produce chunks.
+	db, mock, err = sqlmock.New()
+	c.Assert(err, IsNil)
 	createFakeResultForBucketSplit(mock, nil, nil)
 	createFakeResultForCount(mock, 64)
 	createFakeResultForRandom(mock, testCases[0].aRandomValues[stopJ:], testCases[0].bRandomValues[stopJ:])
-	mock.ExpectQuery("SELECT COUNT\\(DISTINCT a.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("123"))
-	iter, err = NewBucketIteratorWithCheckpoint(ctx, "", tableDiff, db, rangeInfo)
+	mock.ExpectQuery("SELECT COUNT\\(DISTINCT `a.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("123"))
+	iter, err = NewBucketIteratorWithCheckpoint(ctx, "", tableDiff, db, rangeInfo, 1)
 	c.Assert(err, IsNil)
 	chunk, err = iter.Next()
 	c.Assert(err, IsNil)
@@ -645,7 +675,7 @@ func createFakeResultForBucketSplit(mock sqlmock.Sqlmock, aRandomValues, bRandom
 	}
 	mock.ExpectQuery("SHOW STATS_BUCKETS").WillReturnRows(statsRows)
 
-	mock.ExpectQuery("SELECT COUNT\\(DISTINCT `a`.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("123"))
+	mock.ExpectQuery("SELECT COUNT\\(DISTINCT `a.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("123"))
 	createFakeResultForRandom(mock, aRandomValues, bRandomValues)
 }
 
@@ -715,7 +745,7 @@ func (s *testSplitterSuite) TestLimitSpliter(c *C) {
 	}
 
 	for i, testCase := range testCases {
-		mock.ExpectQuery("SELECT COUNT\\(DISTINCT `a`.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("123"))
+		mock.ExpectQuery("SELECT COUNT\\(DISTINCT `a.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("123"))
 		createFakeResultForLimitSplit(mock, testCase.limitAValues, testCase.limitBValues, true)
 
 		iter, err := NewLimitIterator(ctx, "", tableDiff, db)
@@ -738,8 +768,8 @@ func (s *testSplitterSuite) TestLimitSpliter(c *C) {
 
 	// Test Checkpoint
 	stopJ := 2
-	mock.ExpectQuery("SELECT COUNT\\(DISTINCT `a`.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("123"))
-	createFakeResultForLimitSplit(mock, testCases[0].limitAValues[:stopJ], testCases[0].limitBValues[:stopJ], true)
+	mock.ExpectQuery("SELECT COUNT\\(DISTINCT `a.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("123"))
+	createFakeResultForLimitSplit(mock, testCases[0].limitAValues[:stopJ], testCases[0].limitBValues[:stopJ], false)
 	iter, err := NewLimitIterator(ctx, "", tableDiff, db)
 	c.Assert(err, IsNil)
 	j := 0
@@ -755,7 +785,7 @@ func (s *testSplitterSuite) TestLimitSpliter(c *C) {
 		IndexID:    iter.GetIndexID(),
 	}
 
-	mock.ExpectQuery("SELECT COUNT\\(DISTINCT `a`.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("123"))
+	mock.ExpectQuery("SELECT COUNT\\(DISTINCT `a.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("123"))
 	createFakeResultForLimitSplit(mock, testCases[0].limitAValues[stopJ:], testCases[0].limitBValues[stopJ:], true)
 	iter, err = NewLimitIteratorWithCheckpoint(ctx, "", tableDiff, db, rangeInfo)
 	c.Assert(err, IsNil)

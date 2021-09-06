@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -50,7 +51,16 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 			node := &Node{
 				ChunkRange: &chunk.Range{
 					ID: i_,
+					Bounds: []*chunk.Bound{
+						{
+							HasLower: i != 1,
+							Lower:    strconv.Itoa(i),
+							Upper:    strconv.Itoa(i + 1),
+							HasUpper: i != rounds,
+						},
+					},
 				},
+
 				BucketID: i_,
 				State:    SuccessState,
 			}
@@ -82,6 +92,14 @@ func (cp *testCheckpointSuit) TestLoadChunk(c *C) {
 			node := &Node{
 				ChunkRange: &chunk.Range{
 					ID: i,
+					Bounds: []*chunk.Bound{
+						{
+							HasLower: i != 1,
+							Lower:    strconv.Itoa(i),
+							Upper:    strconv.Itoa(i + 1),
+							HasUpper: i != rounds,
+						},
+					},
 				},
 			}
 			checker.Insert(node)

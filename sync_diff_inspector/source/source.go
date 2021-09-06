@@ -155,7 +155,7 @@ func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, che
 
 	if ok {
 		if len(dbs) == 1 {
-			return NewTiDBSource(ctx, tableDiffs, dbs[0])
+			return NewTiDBSource(ctx, tableDiffs, dbs[0], checkThreadCount)
 		} else {
 			log.Fatal("Don't support check table in multiple tidb instance, please specify one tidb instance.")
 		}
