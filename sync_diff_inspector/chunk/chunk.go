@@ -69,7 +69,7 @@ func NewChunkRange() *Range {
 	}
 }
 
-// NewChunkRange return a Range in sequence
+// NewChunkRangeOffset return a Range in sequence
 func NewChunkRangeOffset(columnOffset map[string]int) *Range {
 	bounds := make([]*Bound, len(columnOffset))
 	for column, offset := range columnOffset {

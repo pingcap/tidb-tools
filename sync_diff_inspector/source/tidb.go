@@ -32,8 +32,9 @@ import (
 )
 
 type TiDBTableAnalyzer struct {
-	dbConn         *sql.DB
-	sourceTableMap map[string]*common.TableSource
+	dbConn           *sql.DB
+	checkThreadCount int
+	sourceTableMap   map[string]*common.TableSource
 }
 
 func (a *TiDBTableAnalyzer) AnalyzeSplitter(ctx context.Context, progressID string, table *common.TableDiff, startRange *splitter.RangeInfo) (splitter.ChunkIterator, error) {
@@ -45,11 +46,11 @@ func (a *TiDBTableAnalyzer) AnalyzeSplitter(ctx context.Context, progressID stri
 	// if we decide to use bucket to split chunks
 	// we always use bucksIter even we load from checkpoint is not bucketNode
 	// TODO check whether we can use bucket for this table to split chunks.
-	bucketIter, err := splitter.NewBucketIteratorWithCheckpoint(ctx, progressID, &originTable, a.dbConn, startRange)
+	bucketIter, err := splitter.NewBucketIteratorWithCheckpoint(ctx, progressID, &originTable, a.dbConn, startRange, a.checkThreadCount)
 	if err == nil {
 		return bucketIter, nil
 	}
-	log.Warn("build bucketIter failed", zap.Error(err))
+	log.Info("failed to build bucket iterator, fall back to use random iterator", zap.Error(err))
 	// fall back to random splitter
 
 	// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
@@ -79,12 +80,15 @@ func (s *TiDBRowsIterator) Next() (map[string]*dbutil.ColumnData, error) {
 type TiDBSource struct {
 	tableDiffs     []*common.TableDiff
 	sourceTableMap map[string]*common.TableSource
-	dbConn         *sql.DB
+	// checkThreadCount is the pool size of produce chunks
+	checkThreadCount int
+	dbConn           *sql.DB
 }
 
 func (s *TiDBSource) GetTableAnalyzer() TableAnalyzer {
 	return &TiDBTableAnalyzer{
 		s.dbConn,
+		s.checkThreadCount,
 		s.sourceTableMap,
 	}
 }
@@ -243,15 +247,16 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 	return sourceTableMap, nil
 }
 
-func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource) (Source, error) {
+func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource, checkThreadCount int) (Source, error) {
 	sourceTableMap, err := getSourceTableMap(ctx, tableDiffs, ds)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	ts := &TiDBSource{
-		tableDiffs:     tableDiffs,
-		sourceTableMap: sourceTableMap,
-		dbConn:         ds.Conn,
+		tableDiffs:       tableDiffs,
+		sourceTableMap:   sourceTableMap,
+		dbConn:           ds.Conn,
+		checkThreadCount: checkThreadCount,
 	}
 	return ts, nil
 }
