@@ -80,23 +80,16 @@ func (n *Node) GetState() string { return n.State }
 // GetCompareNode is not get real node, only expect node for compare.
 func (n *Node) GetCompareNode() *Node {
 	next := &Node{ChunkRange: chunk.NewChunkRange()}
-	hasUpper := false
-	for _, bound := range n.ChunkRange.Bounds {
-		hasUpper = hasUpper && bound.HasUpper
-	}
-	if hasUpper {
+	if n.ChunkRange.IsLastChunkForTable() {
+		// cur table has reach to end.
+		next.TableIndex = n.TableIndex + 1
+		next.ChunkRange.IsFirst = true
+	} else {
 		// same table
 		next.TableIndex = n.TableIndex
 		for i, bound := range n.ChunkRange.Bounds {
 			next.ChunkRange.Bounds[i].HasLower = true
 			next.ChunkRange.Bounds[i].Lower = bound.Upper
-		}
-
-	} else {
-		// cur table has reach to end.
-		next.TableIndex = n.TableIndex + 1
-		for i := range n.ChunkRange.Bounds {
-			next.ChunkRange.Bounds[i].HasLower = false
 		}
 	}
 	return next
@@ -105,15 +98,7 @@ func (n *Node) GetCompareNode() *Node {
 func (n *Node) IsExpect(next *Node) bool {
 	if n.TableIndex == next.TableIndex {
 		// same table
-		hasLower := false
-		for i, bound := range n.ChunkRange.Bounds {
-			hasLower = hasLower && bound.HasLower
-			if bound.HasLower != next.ChunkRange.Bounds[i].HasLower {
-				// haslower must be equal
-				return false
-			}
-		}
-		if hasLower {
+		if !n.ChunkRange.IsFirstChunkForTable() {
 			for i, bound := range n.ChunkRange.Bounds {
 				if bound.Lower != next.ChunkRange.Bounds[i].Lower {
 					// lower must be equal
@@ -134,15 +119,12 @@ func (n *Node) IsExpect(next *Node) bool {
 // we need keep this node save to checkpoint in global order.
 func (n *Node) IsAdjacent(next *Node) bool {
 	if n.TableIndex == next.TableIndex-1 {
-		hasUpper := false
-		for _, bound := range n.ChunkRange.Bounds {
-			hasUpper = hasUpper && bound.HasUpper
-		}
-		if !hasUpper {
+		if n.ChunkRange.IsLastChunkForTable() && next.ChunkRange.IsFirstChunkForTable() {
 			return true
 		}
 	}
 	if n.TableIndex == next.TableIndex {
+		// same table
 		for i, bound := range n.ChunkRange.Bounds {
 			if bound.Upper != next.ChunkRange.Bounds[i].Lower {
 				return false

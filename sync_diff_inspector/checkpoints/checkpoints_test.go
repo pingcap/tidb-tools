@@ -53,10 +53,10 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 					ID: i_,
 					Bounds: []*chunk.Bound{
 						{
-							HasLower: i != 1,
-							Lower:    strconv.Itoa(i),
-							Upper:    strconv.Itoa(i + 1),
-							HasUpper: i != rounds,
+							HasLower: i_ != 1,
+							Lower:    strconv.Itoa(i_),
+							Upper:    strconv.Itoa(i_ + 1),
+							HasUpper: i_ != rounds,
 						},
 					},
 				},
