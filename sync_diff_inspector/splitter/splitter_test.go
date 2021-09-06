@@ -407,10 +407,10 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 	c.Assert(err, IsNil)
 
 	testCases := []struct {
-		chunkSize        int64
-		aRandomValues    []interface{}
-		bRandomValues    []interface{}
-		expectResult     []chunkResult
+		chunkSize     int64
+		aRandomValues []interface{}
+		bRandomValues []interface{}
+		expectResult  []chunkResult
 	}{
 		{
 			// chunk size less than the count of bucket 64, and the bucket's count 64 >= 32, so will split by random in every bucket
