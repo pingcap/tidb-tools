@@ -130,7 +130,7 @@ func (cp *testChunkSuite) TestChunkToString(c *C) {
 		c.Assert(arg, Equals, expectArgs[i])
 	}
 
-	c.Assert(chunk.String(), DeepEquals, "{\"id\":0,\"type\":0,\"bounds\":[{\"column\":\"a\",\"lower\":\"1\",\"upper\":\"2\",\"has-lower\":true,\"has-upper\":true},{\"column\":\"b\",\"lower\":\"3\",\"upper\":\"4\",\"has-lower\":true,\"has-upper\":true},{\"column\":\"c\",\"lower\":\"5\",\"upper\":\"6\",\"has-lower\":true,\"has-upper\":true}],\"where\":\"\",\"args\":null,\"bucket-id\":0}")
+	c.Assert(chunk.String(), DeepEquals, "{\"id\":0,\"type\":0,\"bounds\":[{\"column\":\"a\",\"lower\":\"1\",\"upper\":\"2\",\"has-lower\":true,\"has-upper\":true},{\"column\":\"b\",\"lower\":\"3\",\"upper\":\"4\",\"has-lower\":true,\"has-upper\":true},{\"column\":\"c\",\"lower\":\"5\",\"upper\":\"6\",\"has-lower\":true,\"has-upper\":true}],\"is-first\":false,\"is-last\":false,\"where\":\"\",\"args\":null,\"bucket-id\":0}")
 	c.Assert(chunk.ToMeta(), DeepEquals, "range in sequence: (1,3,5) < (a,b,c) <= (2,4,6)")
 
 	// upper
@@ -165,7 +165,7 @@ func (cp *testChunkSuite) TestChunkToString(c *C) {
 		c.Assert(arg, Equals, expectArgs[i])
 	}
 
-	c.Assert(chunk.String(), DeepEquals, "{\"id\":0,\"type\":0,\"bounds\":[{\"column\":\"a\",\"lower\":\"1\",\"upper\":\"2\",\"has-lower\":false,\"has-upper\":true},{\"column\":\"b\",\"lower\":\"3\",\"upper\":\"4\",\"has-lower\":false,\"has-upper\":true},{\"column\":\"c\",\"lower\":\"5\",\"upper\":\"6\",\"has-lower\":false,\"has-upper\":true}],\"where\":\"\",\"args\":null,\"bucket-id\":0}")
+	c.Assert(chunk.String(), DeepEquals, "{\"id\":0,\"type\":0,\"bounds\":[{\"column\":\"a\",\"lower\":\"1\",\"upper\":\"2\",\"has-lower\":false,\"has-upper\":true},{\"column\":\"b\",\"lower\":\"3\",\"upper\":\"4\",\"has-lower\":false,\"has-upper\":true},{\"column\":\"c\",\"lower\":\"5\",\"upper\":\"6\",\"has-lower\":false,\"has-upper\":true}],\"is-first\":false,\"is-last\":false,\"where\":\"\",\"args\":null,\"bucket-id\":0}")
 	c.Assert(chunk.ToMeta(), DeepEquals, "range in sequence: (a,b,c) <= (2,4,6)")
 
 	// lower
@@ -207,7 +207,7 @@ func (cp *testChunkSuite) TestChunkToString(c *C) {
 		c.Assert(arg, Equals, expectArgs[i])
 	}
 
-	c.Assert(chunk.String(), DeepEquals, "{\"id\":0,\"type\":0,\"bounds\":[{\"column\":\"a\",\"lower\":\"1\",\"upper\":\"2\",\"has-lower\":true,\"has-upper\":false},{\"column\":\"b\",\"lower\":\"3\",\"upper\":\"4\",\"has-lower\":true,\"has-upper\":false},{\"column\":\"c\",\"lower\":\"5\",\"upper\":\"6\",\"has-lower\":true,\"has-upper\":false}],\"where\":\"\",\"args\":null,\"bucket-id\":0}")
+	c.Assert(chunk.String(), DeepEquals, "{\"id\":0,\"type\":0,\"bounds\":[{\"column\":\"a\",\"lower\":\"1\",\"upper\":\"2\",\"has-lower\":true,\"has-upper\":false},{\"column\":\"b\",\"lower\":\"3\",\"upper\":\"4\",\"has-lower\":true,\"has-upper\":false},{\"column\":\"c\",\"lower\":\"5\",\"upper\":\"6\",\"has-lower\":true,\"has-upper\":false}],\"is-first\":false,\"is-last\":false,\"where\":\"\",\"args\":null,\"bucket-id\":0}")
 	c.Assert(chunk.ToMeta(), DeepEquals, "range in sequence: (1,3,5) < (a,b,c)")
 
 	// none
@@ -241,7 +241,8 @@ func (cp *testChunkSuite) TestChunkToString(c *C) {
 		c.Assert(arg, Equals, expectArgs[i])
 	}
 
-	c.Assert(chunk.String(), DeepEquals, "{\"id\":0,\"type\":0,\"bounds\":[{\"column\":\"a\",\"lower\":\"1\",\"upper\":\"2\",\"has-lower\":false,\"has-upper\":false},{\"column\":\"b\",\"lower\":\"3\",\"upper\":\"4\",\"has-lower\":false,\"has-upper\":false},{\"column\":\"c\",\"lower\":\"5\",\"upper\":\"6\",\"has-lower\":false,\"has-upper\":false}],\"where\":\"\",\"args\":null,\"bucket-id\":0}")
+	c.Assert(chunk.String(), DeepEquals, "{\"id\":0,\"type\":0,\"bounds\":[{\"column\":\"a\",\"lower\":\"1\",\"upper\":\"2\",\"has-lower\":false,\"has-upper\":false},{\"column\":\"b\",\"lower\":\"3\",\"upper\":\"4\",\"has-lower\":false,\"has-upper\":false},{\"column\":\"c\",\"lower\":\"5\",\"upper\":\"6\",\"has-lower\":false,\"has-upper\":false}],\"is-first\":false,\"is-last\":false,\"where\":\"\",\"args\":null,\"bucket-id\":0}")
+
 	c.Assert(chunk.ToMeta(), DeepEquals, "range in sequence: Full")
 }
 
@@ -294,7 +295,7 @@ func (*testChunkSuite) TestChunkInit(c *C) {
 		},
 	}
 
-	InitChunks(chunks, Others, 1, "[123]", "[sdfds fsd fd gd]")
+	InitChunks(chunks, Others, 1, "[123]", "[sdfds fsd fd gd]", 1)
 	c.Assert(chunks[0].Where, Equals, "((((`a` COLLATE '[123]' > ?) OR (`a` = ? AND `b` COLLATE '[123]' > ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[123]' > ?)) AND ((`a` COLLATE '[123]' < ?) OR (`a` = ? AND `b` COLLATE '[123]' < ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[123]' <= ?))) AND [sdfds fsd fd gd])")
 	c.Assert(chunks[0].Args, DeepEquals, []string{"1", "1", "3", "1", "3", "5", "2", "2", "4", "2", "4", "6"})
 	c.Assert(chunks[0].BucketID, Equals, 1)

@@ -77,45 +77,50 @@ func (n *Node) GetID() int { return n.ChunkRange.ID }
 
 func (n *Node) GetState() string { return n.State }
 
+func (n *Node) IsFirstChunkForBucket() bool {
+	return n.ChunkRange.Index.ChunkIndex == 0
+}
+
+func (n *Node) IsLastChunkForBucket() bool {
+	return n.ChunkRange.Index.ChunkIndex == n.ChunkRange.Index.ChunkCnt-1
+}
+
 // IsAdjacent represents whether the next node is adjacent node.
 // it's the important logic for checkpoint update.
 // we need keep this node save to checkpoint in global order.
 func (n *Node) IsAdjacent(next *Node) bool {
-	if n.TableIndex == next.TableIndex-1 {
-		hasUpper := true
-		hasLower := true
-		for _, bound := range n.ChunkRange.Bounds {
-			hasUpper = hasUpper && bound.HasUpper
-		}
-		for _, bound := range n.ChunkRange.Bounds {
-			hasLower = hasLower && bound.HasLower
-		}
-		if !hasUpper && !hasLower {
+	if n.ChunkRange.Index.TableIndex == next.ChunkRange.Index.TableIndex-1 {
+		if n.ChunkRange.IsLastChunkForTable() && next.ChunkRange.IsFirstChunkForTable() {
 			return true
 		}
 	}
-	if n.TableIndex == next.TableIndex {
-		for i, bound := range n.ChunkRange.Bounds {
-			if bound.Upper != next.ChunkRange.Bounds[i].Lower {
-				return false
+	if n.ChunkRange.Index.TableIndex == next.ChunkRange.Index.TableIndex {
+		// same table
+		if n.ChunkRange.Index.BucketIndex == next.ChunkRange.Index.BucketIndex-1 {
+			if n.IsLastChunkForBucket() && next.IsFirstChunkForBucket() {
+				return true
 			}
+			return false
 		}
-		return true
+		if n.ChunkRange.Index.BucketIndex == next.ChunkRange.Index.BucketIndex {
+			return n.ChunkRange.Index.ChunkIndex == next.ChunkRange.Index.ChunkIndex-1
+		}
+		return false
 	}
 	return false
 }
 
 // IsLess represents whether the cur node is less than next node.
 func (n *Node) IsLess(next *Node) bool {
-	if n.TableIndex <= next.TableIndex-1 {
+	if n.ChunkRange.Index.TableIndex <= next.ChunkRange.Index.TableIndex-1 {
 		return true
 	}
-	if n.TableIndex == next.TableIndex {
-		for i, bound := range n.ChunkRange.Bounds {
-			// only compare lower bound for chunks
-			if bound.Upper <= next.ChunkRange.Bounds[i].Lower {
-				return true
-			}
+	if n.ChunkRange.Index.TableIndex == next.ChunkRange.Index.TableIndex {
+		if n.ChunkRange.Index.BucketIndex <= next.ChunkRange.Index.BucketIndex-1 {
+			return true
+		}
+		if n.ChunkRange.Index.BucketIndex == next.ChunkRange.Index.BucketIndex {
+			return n.ChunkRange.Index.ChunkIndex < next.ChunkRange.Index.ChunkIndex
 		}
 		return false
 	}
@@ -130,8 +135,10 @@ type Heap struct {
 }
 
 type Checkpoint struct {
-	hp *Heap
+	hp       *Heap
+	ChunkMap map[uint]map[uint]uint // ChunkMap records the maps of TableIndex => BucketIndex => ChunkIndex
 }
+
 type SavedState struct {
 	Chunk  *Node          `json:"chunk-info"`
 	Report *report.Report `json:"report-info"`
@@ -197,26 +204,22 @@ func (cp *Checkpoint) GetChunkSnapshot() *Node {
 	cp.hp.mu.Lock()
 	defer cp.hp.mu.Unlock()
 	var cur, next *Node
-	for {
-		if cp.hp.Len() == 0 {
-			break
-		}
+	for cp.hp.Len() != 0 {
 		if cp.hp.CurrentSavedNode != nil {
-			log.Debug("cur and next", zap.Any("cur", cp.hp.CurrentSavedNode), zap.Any("next", cp.hp.Nodes[0]))
 		}
-
 		if cp.hp.CurrentSavedNode == nil || cp.hp.CurrentSavedNode.IsAdjacent(cp.hp.Nodes[0]) {
 			cur = heap.Pop(cp.hp).(*Node)
-			log.Debug("get chunkSnapshot", zap.Any("cur", cur))
 			cp.hp.CurrentSavedNode = cur
 			if cp.hp.Len() == 0 {
 				break
 			}
 			next = cp.hp.Nodes[0]
 			if !cur.IsAdjacent(next) {
+				// wait for next 10s to check
 				break
 			}
 		} else {
+			// wait for next 10s to check
 			break
 		}
 	}

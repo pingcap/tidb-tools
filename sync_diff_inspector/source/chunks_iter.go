@@ -18,12 +18,14 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 )
 
 // ChunksIterator is used for single mysql/tidb source.
 type ChunksIterator struct {
+	ID            *chunk.ChunkID
 	currentID     int
 	tableAnalyzer TableAnalyzer
 
@@ -45,11 +47,11 @@ func (t *ChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, error) 
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-
 	if c != nil {
 		curIndex := t.getCurTableIndex()
 		t.currentID++
 		c.ID = t.currentID
+		c.Index.TableIndex = curIndex
 		return &splitter.RangeInfo{
 			ChunkRange: c,
 			TableIndex: curIndex,
@@ -71,6 +73,7 @@ func (t *ChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, error) 
 	curIndex := t.getCurTableIndex()
 	t.currentID++
 	c.ID = t.currentID
+	c.Index.TableIndex = curIndex
 	return &splitter.RangeInfo{
 		ChunkRange: c,
 		TableIndex: curIndex,

@@ -70,7 +70,8 @@ func (m *MockChunkIterator) Next() (*chunk.Range, error) {
 	}
 	m.i = m.i + 1
 	return &chunk.Range{
-		ID: m.i,
+		ID:    m.i,
+		Index: &chunk.ChunkID{},
 	}, nil
 }
 
@@ -143,7 +144,7 @@ func (s *testSourceSuite) TestTiDBSource(c *C) {
 	}
 
 	// Test ChunkIterator
-	iter, err := tidb.GetRangeIterator(ctx, tableCases[0].rangeInfo, &MockAnalyzer{})
+	iter, err := tidb.GetRangeIterator(ctx, nil, &MockAnalyzer{})
 	c.Assert(err, IsNil)
 	i := 0
 	for {
