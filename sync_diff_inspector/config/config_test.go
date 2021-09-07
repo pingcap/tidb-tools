@@ -66,4 +66,28 @@ func (s *testConfigSuite) TestError(c *C) {
 	c.Assert(tableConfig.Valid(), IsFalse)
 	tableConfig.Table = "234"
 	c.Assert(tableConfig.Valid(), IsTrue)
+
+	cfg := NewConfig()
+	// Parse
+	c.Assert(cfg.Parse([]string{"-config", "no_exist.toml"}), ErrorMatches, ".*no_exist.toml: no such file or directory.*")
+
+	// CheckConfig
+	cfg.Sample = 101
+	c.Assert(cfg.CheckConfig(), IsFalse)
+	cfg.Sample = -1
+	c.Assert(cfg.CheckConfig(), IsFalse)
+	cfg.Sample = 20
+	c.Assert(cfg.CheckConfig(), IsTrue)
+	cfg.CheckThreadCount = 0
+	c.Assert(cfg.CheckConfig(), IsFalse)
+	cfg.CheckThreadCount = 1
+	c.Assert(cfg.CheckConfig(), IsTrue)
+
+	// Init
+	cfg.DataSources = make(map[string]*DataSource)
+	cfg.DataSources["123"] = &DataSource{
+		RouteRules: []string{"111"},
+	}
+	err := cfg.Init()
+	c.Assert(err, ErrorMatches, "not found source routes for rule 111, please correct the config")
 }

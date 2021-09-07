@@ -47,10 +47,10 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 	rounds := 100
 	for i := 1; i < rounds; i++ {
 		wg.Add(1)
-		go func(i_ int) {
+		go func(i int) {
 			node := &Node{
 				ChunkRange: &chunk.Range{
-					ID: i_,
+					ID: i,
 					Bounds: []*chunk.Bound{
 						{
 							HasLower: i != 1,
@@ -61,13 +61,13 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 					},
 				},
 
-				BucketID: i_,
+				BucketID: i,
 				State:    SuccessState,
 			}
 			if rand.Intn(4) == 0 {
 				time.Sleep(time.Duration(rand.Intn(3)) * time.Second)
 			}
-			fmt.Printf("Insert %d\n", i_)
+			fmt.Printf("Insert %d\n", i)
 			checker.Insert(node)
 			wg.Done()
 		}(i)
