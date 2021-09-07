@@ -331,6 +331,10 @@ func (r *Report) SetTableMeetError(schema, table string, err error) {
 	defer r.Unlock()
 	if _, ok := r.TableResults[schema]; !ok {
 		r.TableResults[schema] = make(map[string]*TableResult)
+		r.TableResults[schema][table] = &TableResult{
+			MeetError: err,
+		}
+		return
 	}
 
 	r.TableResults[schema][table].MeetError = err

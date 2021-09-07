@@ -425,3 +425,8 @@ func (s *testUtilsSuite) TestGetBetterIndex(c *C) {
 		c.Assert(indices[0].Name.O, Equals, "PRIMARY")
 	}
 }
+
+func (s *testUtilsSuite) TestCalculateChunkSize(c *C) {
+	c.Assert(CalculateChunkSize(1000), Equals, int64(50000))
+	c.Assert(CalculateChunkSize(1000000000), Equals, int64(100000))
+}

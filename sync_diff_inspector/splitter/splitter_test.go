@@ -769,7 +769,7 @@ func (s *testSplitterSuite) TestLimitSpliter(c *C) {
 	// Test Checkpoint
 	stopJ := 2
 	mock.ExpectQuery("SELECT COUNT\\(DISTINCT `a.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("123"))
-	createFakeResultForLimitSplit(mock, testCases[0].limitAValues[:stopJ], testCases[0].limitBValues[:stopJ], false)
+	createFakeResultForLimitSplit(mock, testCases[0].limitAValues[:stopJ], testCases[0].limitBValues[:stopJ], true)
 	iter, err := NewLimitIterator(ctx, "", tableDiff, db)
 	c.Assert(err, IsNil)
 	j := 0
@@ -831,5 +831,76 @@ func (s *testSplitterSuite) TestRangeInfo(c *C) {
 	c.Assert(chunkRange.Args, DeepEquals, []string{"1", "2"})
 
 	c.Assert(rangeInfo2.GetTableIndex(), Equals, 1)
+
+}
+
+func (s *testSplitterSuite) TestChunkSize(c *C) {
+	ctx := context.Background()
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+
+	createTableSQL := "create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
+	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
+	c.Assert(err, IsNil)
+
+	tableDiff := &common.TableDiff{
+		Schema:    "test",
+		Table:     "test",
+		Info:      tableInfo,
+		ChunkSize: 0,
+	}
+
+	// test bucket splitter chunksize
+	statsRows := sqlmock.NewRows([]string{"Db_name", "Table_name", "Column_name", "Is_index", "Bucket_id", "Count", "Repeats", "Lower_Bound", "Upper_Bound"})
+	statsRows.AddRow("test", "test", "PRIMARY", 1, 0, 1000000000, 1, "(1, 2)", "(2, 3)")
+	mock.ExpectQuery("SHOW STATS_BUCKETS").WillReturnRows(statsRows)
+	mock.ExpectQuery("SELECT COUNT\\(DISTINCT `a.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("123"))
+
+	bucketIter, err := NewBucketIterator(ctx, "", tableDiff, db)
+	c.Assert(err, IsNil)
+	c.Assert(bucketIter.chunkSize, Equals, int64(100000))
+
+	createFakeResultForBucketSplit(mock, nil, nil)
+	bucketIter, err = NewBucketIterator(ctx, "", tableDiff, db)
+	c.Assert(err, IsNil)
+	c.Assert(bucketIter.chunkSize, Equals, int64(50000))
+
+	// test random splitter chunksize
+	// chunkNum is only 1, so don't need randomValues
+	createFakeResultForRandomSplit(mock, 1000, nil)
+	randomIter, err := NewRandomIterator(ctx, "", tableDiff, db)
+	c.Assert(err, IsNil)
+	c.Assert(randomIter.chunkSize, Equals, int64(50000))
+
+	createFakeResultForRandomSplit(mock, 1000000000, [][]interface{}{
+		{1, 2, 3, 4, 5},
+		{"a", "b", "c", "d", "e"},
+	})
+	randomIter, err = NewRandomIterator(ctx, "", tableDiff, db)
+	c.Assert(err, IsNil)
+	c.Assert(randomIter.chunkSize, Equals, int64(100000))
+
+	createTableSQL = "create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime)"
+	tableInfo, err = dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
+	c.Assert(err, IsNil)
+
+	tableDiff_noindex := &common.TableDiff{
+		Schema:    "test",
+		Table:     "test",
+		Info:      tableInfo,
+		ChunkSize: 0,
+	}
+	// no index
+	createFakeResultForRandomSplit(mock, 1000, nil)
+	randomIter, err = NewRandomIterator(ctx, "", tableDiff_noindex, db)
+	c.Assert(err, IsNil)
+	c.Assert(randomIter.chunkSize, Equals, int64(1000))
+
+	// test limit splitter chunksize
+	mock.ExpectQuery("SELECT COUNT\\(DISTINCT `a.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("123"))
+	createFakeResultForCount(mock, 1000)
+	mock.ExpectQuery("SELECT `a`,.*limit 50000.*").WillReturnRows(sqlmock.NewRows([]string{"a", "b"}))
+	_, err = NewLimitIterator(ctx, "", tableDiff, db)
+	c.Assert(err, IsNil)
 
 }
