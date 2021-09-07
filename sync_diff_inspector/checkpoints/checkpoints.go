@@ -77,62 +77,6 @@ func (n *Node) GetID() int { return n.ChunkRange.ID }
 
 func (n *Node) GetState() string { return n.State }
 
-// GetCompareNode is not get real node, only expect node for compare.
-func (n *Node) GetCompareNode(node *Node) *Node {
-	next := &Node{ChunkRange: chunk.NewChunkRange()}
-	hasUpper := false
-	for _, bound := range n.ChunkRange.Bounds {
-		hasUpper = hasUpper && bound.HasUpper
-	}
-	if hasUpper {
-		// same table
-		next.TableIndex = n.TableIndex
-		next.ChunkRange.Bounds = make([]*chunk.Bound, len(n.ChunkRange.Bounds))
-		for i, bound := range n.ChunkRange.Bounds {
-			next.ChunkRange.Bounds[i] = &chunk.Bound{}
-			next.ChunkRange.Bounds[i].HasLower = true
-			next.ChunkRange.Bounds[i].Lower = bound.Upper
-		}
-	} else {
-		// cur table has reach to end.
-		next.TableIndex = n.TableIndex + 1
-		next.ChunkRange.Bounds = make([]*chunk.Bound, len(node.ChunkRange.Bounds))
-		for i := range next.ChunkRange.Bounds {
-			next.ChunkRange.Bounds[i] = &chunk.Bound{}
-			next.ChunkRange.Bounds[i].HasLower = false
-		}
-	}
-	return next
-}
-
-func (cur *Node) IsExpect(next *Node) bool {
-	n := cur.GetCompareNode(next)
-	if n.TableIndex == next.TableIndex {
-		// same table
-		hasLower := false
-		for i, bound := range n.ChunkRange.Bounds {
-			hasLower = hasLower && bound.HasLower
-			if bound.HasLower != next.ChunkRange.Bounds[i].HasLower {
-				// haslower must be equal
-				return false
-			}
-		}
-		if hasLower {
-			for i, bound := range n.ChunkRange.Bounds {
-				if bound.Lower != next.ChunkRange.Bounds[i].Lower {
-					// lower must be equal
-					return false
-				}
-			}
-			return true
-		} else {
-			// the first chunk for table, has no lower values
-			return true
-		}
-	}
-	return false
-}
-
 // IsAdjacent represents whether the next node is adjacent node.
 // it's the important logic for checkpoint update.
 // we need keep this node save to checkpoint in global order.
@@ -169,7 +113,7 @@ func (n *Node) IsLess(next *Node) bool {
 	if n.TableIndex == next.TableIndex {
 		for i, bound := range n.ChunkRange.Bounds {
 			// only compare lower bound for chunks
-			if bound.Lower < next.ChunkRange.Bounds[i].Lower {
+			if bound.Upper <= next.ChunkRange.Bounds[i].Lower {
 				return true
 			}
 		}
