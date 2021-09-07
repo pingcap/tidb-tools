@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
@@ -77,72 +78,17 @@ func (n *Node) GetID() int { return n.ChunkRange.ID }
 
 func (n *Node) GetState() string { return n.State }
 
-// GetCompareNode is not get real node, only expect node for compare.
-func (n *Node) GetCompareNode() *Node {
-	next := &Node{ChunkRange: chunk.NewChunkRange()}
-	hasUpper := false
-	for _, bound := range n.ChunkRange.Bounds {
-		hasUpper = hasUpper && bound.HasUpper
-	}
-	if hasUpper {
-		// same table
-		next.TableIndex = n.TableIndex
-		for i, bound := range n.ChunkRange.Bounds {
-			next.ChunkRange.Bounds[i].HasLower = true
-			next.ChunkRange.Bounds[i].Lower = bound.Upper
-		}
-
-	} else {
-		// cur table has reach to end.
-		next.TableIndex = n.TableIndex + 1
-		for i := range n.ChunkRange.Bounds {
-			next.ChunkRange.Bounds[i].HasLower = false
-		}
-	}
-	return next
-}
-
-func (n *Node) IsExpect(next *Node) bool {
-	if n.TableIndex == next.TableIndex {
-		// same table
-		hasLower := false
-		for i, bound := range n.ChunkRange.Bounds {
-			hasLower = hasLower && bound.HasLower
-			if bound.HasLower != next.ChunkRange.Bounds[i].HasLower {
-				// haslower must be equal
-				return false
-			}
-		}
-		if hasLower {
-			for i, bound := range n.ChunkRange.Bounds {
-				if bound.Lower != next.ChunkRange.Bounds[i].Lower {
-					// lower must be equal
-					return false
-				}
-			}
-			return true
-		} else {
-			// the first chunk for table, has no lower values
-			return true
-		}
-	}
-	return false
-}
-
 // IsAdjacent represents whether the next node is adjacent node.
 // it's the important logic for checkpoint update.
 // we need keep this node save to checkpoint in global order.
 func (n *Node) IsAdjacent(next *Node) bool {
 	if n.TableIndex == next.TableIndex-1 {
-		hasUpper := false
-		for _, bound := range n.ChunkRange.Bounds {
-			hasUpper = hasUpper && bound.HasUpper
-		}
-		if !hasUpper {
+		if n.ChunkRange.IsLastChunkForTable() && next.ChunkRange.IsFirstChunkForTable() {
 			return true
 		}
 	}
 	if n.TableIndex == next.TableIndex {
+		// same table
 		for i, bound := range n.ChunkRange.Bounds {
 			if bound.Upper != next.ChunkRange.Bounds[i].Lower {
 				return false
@@ -161,13 +107,12 @@ func (n *Node) IsLess(next *Node) bool {
 	if n.TableIndex == next.TableIndex {
 		for i, bound := range n.ChunkRange.Bounds {
 			// only compare lower bound for chunks
-			if bound.Lower < next.ChunkRange.Bounds[i].Lower {
+			if strings.Compare(bound.Lower, next.ChunkRange.Bounds[i].Lower) < 0 {
 				return true
 			}
 		}
 		return false
 	}
-	log.Fatal("found two chunks with same lower bounds", zap.Any("cur", n), zap.Any("next", next))
 	return false
 }
 
@@ -181,6 +126,7 @@ type Heap struct {
 type Checkpoint struct {
 	hp *Heap
 }
+
 type SavedState struct {
 	Chunk  *Node          `json:"chunk-info"`
 	Report *report.Report `json:"report-info"`
@@ -246,31 +192,21 @@ func (cp *Checkpoint) GetChunkSnapshot() *Node {
 	cp.hp.mu.Lock()
 	defer cp.hp.mu.Unlock()
 	var cur, next *Node
-	for {
-		if cp.hp.Len() == 0 {
-			break
-		}
+	for cp.hp.Len() != 0 {
 
-		if cp.hp.CurrentSavedNode == nil {
-			// no saved snapshot, just pop
+		if cp.hp.CurrentSavedNode == nil || cp.hp.CurrentSavedNode.IsAdjacent(cp.hp.Nodes[0]) {
 			cur = heap.Pop(cp.hp).(*Node)
-			cp.hp.CurrentSavedNode = cur
-			break
-		}
-
-		nextCompare := cp.hp.CurrentSavedNode.GetCompareNode()
-		if nextCompare.IsExpect(cp.hp.Nodes[0]) {
-			cur = heap.Pop(cp.hp).(*Node)
-			log.Debug("get chunkSnapshot", zap.Any("cur", cur))
 			cp.hp.CurrentSavedNode = cur
 			if cp.hp.Len() == 0 {
 				break
 			}
 			next = cp.hp.Nodes[0]
-			if cur.IsAdjacent(next) {
+			if !cur.IsAdjacent(next) {
+				// wait for next 10s to check
 				break
 			}
 		} else {
+			// wait for next 10s to check
 			break
 		}
 	}

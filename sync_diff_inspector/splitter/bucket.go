@@ -189,12 +189,10 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 		chunkRange := chunk.NewChunkRange()
 		c := startRange.GetChunk()
 
-		flag := false
 		for _, bound := range c.Bounds {
-			flag = flag || bound.HasUpper
 			chunkRange.Update(bound.Column, bound.Upper, "", true, false)
 		}
-		if !flag {
+		if c.IsLastChunkForTable() {
 			// the last checkpoint range is the last chunk so return
 			return
 		}
