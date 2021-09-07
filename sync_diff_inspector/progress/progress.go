@@ -23,12 +23,11 @@ import (
 )
 
 type TableProgressPrinter struct {
-	tableList      *list.List
-	stateIsChanged bool
-	tableFailList  *list.List
-	tableMap       map[string]*list.Element
-	output         io.Writer
-	lines          int
+	tableList     *list.List
+	tableFailList *list.List
+	tableMap      map[string]*list.Element
+	output        io.Writer
+	lines         int
 
 	finishTableNums int
 	tableNums       int
@@ -87,7 +86,6 @@ type Operator struct {
 func NewTableProgressPrinter(tableNums int) *TableProgressPrinter {
 	tpp := &TableProgressPrinter{
 		tableList:       list.New(),
-		stateIsChanged:  false,
 		tableFailList:   list.New(),
 		tableMap:        make(map[string]*list.Element),
 		lines:           0,
@@ -224,11 +222,11 @@ func (tpp *TableProgressPrinter) serve() {
 	for {
 		select {
 		case <-tick.C:
-			tpp.flush()
+			tpp.flush(false)
 		case opt := <-tpp.optCh:
 			switch opt.optType {
 			case PROGRESS_OPT_CLOSE:
-				tpp.flush()
+				tpp.flush(false)
 				tpp.finishCh <- struct{}{}
 				return
 			case PROGRESS_OPT_ERROR:
@@ -243,8 +241,8 @@ func (tpp *TableProgressPrinter) serve() {
 						tp.state = (tp.state & TABLE_STATE_RESULT_MASK) | TABLE_STATE_FINISH
 						tpp.progress -= tp.progress
 						tpp.total -= tp.total
-						tpp.stateIsChanged = true
 						delete(tpp.tableMap, opt.name)
+						tpp.flush(true)
 					}
 				}
 			case PROGRESS_OPT_REGISTER:
@@ -281,8 +279,7 @@ func (tpp *TableProgressPrinter) serve() {
 				} else {
 					delete(tpp.tableMap, opt.name)
 				}
-				tpp.stateIsChanged = true
-				tpp.flush()
+				tpp.flush(true)
 			case PROGRESS_OPT_UPDATE:
 				if e, ok := tpp.tableMap[opt.name]; ok {
 					tp := e.Value.(*TableProgress)
@@ -293,10 +290,9 @@ func (tpp *TableProgressPrinter) serve() {
 			case PROGRESS_OPT_FAIL:
 				if e, ok := tpp.tableMap[opt.name]; ok {
 					tp := e.Value.(*TableProgress)
-					tp.state |= opt.state
-					//tpp.total -= tp.total
-					//tpp.progress -= tp.progress
-					//delete(tpp.tableMap, opt.name)
+					tp.state |= opt.state | TABLE_STATE_FINISH
+					tpp.flush(true)
+					// continue to increment chunk
 				}
 			}
 		}
@@ -304,7 +300,7 @@ func (tpp *TableProgressPrinter) serve() {
 }
 
 // flush flush info
-func (tpp *TableProgressPrinter) flush() {
+func (tpp *TableProgressPrinter) flush(stateIsChanged bool) {
 	/*
 	 * A total of 15 tables need to be compared
 	 *
@@ -317,7 +313,7 @@ func (tpp *TableProgressPrinter) flush() {
 	 *
 	 */
 
-	if tpp.stateIsChanged {
+	if stateIsChanged {
 		var cleanStr, fixStr, dynStr string
 		cleanStr = fmt.Sprintf("\x1b[%dA\x1b[J", tpp.lines)
 		tpp.lines = 2
@@ -355,7 +351,7 @@ func (tpp *TableProgressPrinter) flush() {
 					fixStr = fmt.Sprintf("%sComparing the table structure of `%s` ... pass\n", fixStr, tp.name)
 					dynStr = fmt.Sprintf("%sComparing the table data of `%s` ...\n", dynStr, tp.name)
 					tpp.lines++
-					tp.state = TABLE_STATE_PRESTART
+					tp.state ^= TABLE_STATE_COMPARING | TABLE_STATE_PRESTART
 				}
 			case TABLE_STATE_COMPARING:
 				dynStr = fmt.Sprintf("%sComparing the table data of `%s` ...\n", dynStr, tp.name)
@@ -379,7 +375,6 @@ func (tpp *TableProgressPrinter) flush() {
 
 		dynStr = fmt.Sprintf("%s_____________________________________________________________________________\n", dynStr)
 		fmt.Fprintf(tpp.output, "%s%s%s", cleanStr, fixStr, dynStr)
-		tpp.stateIsChanged = false
 	} else {
 		fmt.Fprint(tpp.output, "\x1b[1A\x1b[J")
 	}
@@ -443,5 +438,11 @@ func PrintSummary() {
 func Error(err error) {
 	if progress_ != nil {
 		progress_.Error(err)
+	}
+}
+
+func SetOutput(output io.Writer) {
+	if progress_ != nil {
+		progress_.SetOutput(output)
 	}
 }
