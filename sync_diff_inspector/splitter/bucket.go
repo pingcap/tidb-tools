@@ -16,12 +16,12 @@ package splitter
 import (
 	"context"
 	"database/sql"
-
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/progress"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"go.uber.org/zap"
@@ -30,35 +30,45 @@ import (
 const DefaultChannelBuffer = 1024
 
 type BucketIterator struct {
+	buckets      []dbutil.Bucket
 	table        *common.TableDiff
 	indexColumns []*model.ColumnInfo
-	buckets      []dbutil.Bucket
-	chunkSize    int64
-	chunks       []*chunk.Range
-	nextChunk    uint
-	chunksCh     chan []*chunk.Range
-	errCh        chan error
-	indexID      int64
+
+	chunkPool *utils.WorkerPool
+	chunkSize int64
+	chunks    []*chunk.Range
+	nextChunk uint
+
+	chunksCh   chan []*chunk.Range
+	errCh      chan error
+	indexID    int64
+	progressID string
 
 	dbConn *sql.DB
 }
 
-func NewBucketIterator(ctx context.Context, table *common.TableDiff, dbConn *sql.DB, chunkSize int) (*BucketIterator, error) {
-	return NewBucketIteratorWithCheckpoint(ctx, table, dbConn, chunkSize, nil)
+func NewBucketIterator(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB) (*BucketIterator, error) {
+	return NewBucketIteratorWithCheckpoint(ctx, progressID, table, dbConn, nil, 1)
 }
 
-func NewBucketIteratorWithCheckpoint(ctx context.Context, table *common.TableDiff, dbConn *sql.DB, chunkSize int, startRange *RangeInfo) (*BucketIterator, error) {
+func NewBucketIteratorWithCheckpoint(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, startRange *RangeInfo, checkThreadCount int) (*BucketIterator, error) {
 	bs := &BucketIterator{
 		table:     table,
-		chunkSize: int64(chunkSize),
+		chunkSize: table.ChunkSize,
 		chunksCh:  make(chan []*chunk.Range, DefaultChannelBuffer),
 		errCh:     make(chan error, 1),
 		dbConn:    dbConn,
+
+		progressID: progressID,
 	}
+
+	bs.chunkPool = utils.NewWorkerPool(uint(checkThreadCount), "bucketIter")
 
 	if err := bs.init(startRange); err != nil {
 		return nil, errors.Trace(err)
 	}
+
+	progress.StartTable(bs.progressID, 0, false)
 	go bs.produceChunks(ctx, startRange)
 
 	return bs, nil
@@ -69,16 +79,15 @@ func (s *BucketIterator) GetIndexID() int64 {
 }
 
 func (s *BucketIterator) Next() (*chunk.Range, error) {
+	var ok bool
 	if uint(len(s.chunks)) <= s.nextChunk {
 		select {
 		case err := <-s.errCh:
-			close(s.chunksCh)
 			return nil, errors.Trace(err)
-		case s.chunks = <-s.chunksCh:
-			if s.chunks == nil {
+		case s.chunks, ok = <-s.chunksCh:
+			if !ok && s.chunks == nil {
 				log.Info("close chunks channel for table",
 					zap.String("schema", s.table.Schema), zap.String("table", s.table.Table))
-				close(s.chunksCh)
 				return nil, nil
 			}
 		}
@@ -129,34 +138,52 @@ func (s *BucketIterator) init(startRange *RangeInfo) error {
 		return errors.NotFoundf("no index to split buckets")
 	}
 
-	// There are only 10k chunks at most
+	cnt := s.buckets[len(s.buckets)-1].Count
 	if s.chunkSize <= 0 {
-		cnt := s.buckets[len(s.buckets)-1].Count
-		chunkSize := cnt / 10000
-		if chunkSize < SplitThreshold {
-			chunkSize = 2 * SplitThreshold
-		}
-		s.chunkSize = chunkSize
+		s.chunkSize = utils.CalculateChunkSize(cnt)
 	}
 
+	log.Info("get chunk size for table", zap.Int64("chunk size", s.chunkSize),
+		zap.String("db", s.table.Schema), zap.String("table", s.table.Table))
 	return nil
 }
 
 func (s *BucketIterator) Close() {
 }
 
+func (s *BucketIterator) splitChunkForBucket(bucketID int, count int64, chunkRange *chunk.Range) {
+	// That count = 0 and then chunkCnt = 0 is OK.
+	// `splitRangeByRandom` will skip when chunkCnt <= 1
+	//            count                     chunkCnt
+	// 0 ... 0.5x ... x ... 1.5x   ------->   1
+	//       1.5x ... 2x ... 2.5x  ------->   2
+
+	s.chunkPool.Apply(func() {
+		halfChunkSize := s.chunkSize / 2
+		chunkCnt := int((count + halfChunkSize) / s.chunkSize)
+		chunks, err := splitRangeByRandom(s.dbConn, chunkRange, chunkCnt, s.table.Schema, s.table.Table, s.indexColumns, s.table.Range, s.table.Collation)
+		if err != nil {
+			s.errCh <- errors.Trace(err)
+			return
+		}
+		chunk.InitChunks(chunks, chunk.Bucket, bucketID, s.table.Collation, s.table.Range)
+		progress.UpdateTotal(s.progressID, len(chunks), false)
+
+		s.chunksCh <- chunks
+	})
+}
+
 func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInfo) {
+	defer func() {
+		progress.UpdateTotal(s.progressID, 0, true)
+		close(s.chunksCh)
+	}()
 	var (
 		lowerValues, upperValues []string
 		latestCount              int64
 		err                      error
 	)
-	chunkSize := s.chunkSize
-	halfChunkSize := chunkSize / 2
-	table := s.table
-	buckets := s.buckets
-	indexColumns := s.indexColumns
-	chunkID := 0
+
 	beginBucket := 0
 	if startRange != nil {
 		chunkRange := chunk.NewChunkRange()
@@ -169,64 +196,57 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 		}
 		if !flag {
 			// the last checkpoint range is the last chunk so return
-			s.chunksCh <- nil
 			return
 		}
 
-		beginBucket = int(c.BucketID + 1)
-		chunkID = c.ID + 1
-		if c.BucketID < len(buckets) {
-			nextUpperValues, err := dbutil.AnalyzeValuesFromBuckets(buckets[c.BucketID].UpperBound, indexColumns)
+		beginBucket = c.BucketID + 1
+		if c.BucketID < len(s.buckets) {
+			nextUpperValues, err := dbutil.AnalyzeValuesFromBuckets(s.buckets[c.BucketID].UpperBound, s.indexColumns)
 			if err != nil {
 				s.errCh <- errors.Trace(err)
 				return
 			}
-			for i, column := range indexColumns {
+			for i, column := range s.indexColumns {
 				chunkRange.Update(column.Name.O, "", nextUpperValues[i], false, true)
 			}
-			latestCount = buckets[c.BucketID].Count
-			lowerValues, err = dbutil.AnalyzeValuesFromBuckets(buckets[beginBucket].LowerBound, indexColumns)
+			latestCount = s.buckets[c.BucketID].Count
+			lowerValues, err = dbutil.AnalyzeValuesFromBuckets(s.buckets[beginBucket].LowerBound, s.indexColumns)
 			if err != nil {
 				s.errCh <- errors.Trace(err)
 				return
 			}
 		}
 
-		where, args := chunkRange.ToString(table.Collation)
+		where, args := chunkRange.ToString(s.table.Collation)
 
-		count, err := dbutil.GetRowCount(ctx, s.dbConn, table.Schema, table.Table, where, utils.StringsToInterfaces(args))
+		count, err := dbutil.GetRowCount(ctx, s.dbConn, s.table.Schema, s.table.Table, where, utils.StringsToInterfaces(args))
 		if err != nil {
 			s.errCh <- errors.Trace(err)
 			return
 		}
 		if count > 0 {
-			chunkCnt := int((count + halfChunkSize) / chunkSize)
-			chunks, err := splitRangeByRandom(s.dbConn, chunkRange, chunkCnt, table.Schema, table.Table, indexColumns, table.Range, table.Collation)
-			if err != nil {
-				s.errCh <- errors.Trace(err)
-				return
-			}
-			chunkID = chunk.InitChunks(chunks, chunk.Bucket, chunkID, c.BucketID, table.Collation, table.Range)
-			s.chunksCh <- chunks
-
+			s.splitChunkForBucket(c.BucketID, count, chunkRange)
+		}
+		if len(lowerValues) == 0 {
+			// The node next the checkpoint is the last node
+			return
 		}
 	}
-	chunkRange := chunk.NewChunkRange()
-	// TODO chunksize when checkpoint
-	for i := beginBucket; i < len(buckets); i++ {
-		count := buckets[i].Count - latestCount
-		if count < chunkSize {
+	for i := beginBucket; i < len(s.buckets); i++ {
+		count := s.buckets[i].Count - latestCount
+		if count < s.chunkSize {
 			// merge more buckets into one chunk
 			continue
 		}
 
-		upperValues, err = dbutil.AnalyzeValuesFromBuckets(buckets[i].UpperBound, indexColumns)
+		upperValues, err = dbutil.AnalyzeValuesFromBuckets(s.buckets[i].UpperBound, s.indexColumns)
 		if err != nil {
 			s.errCh <- errors.Trace(err)
 			return
 		}
 
-		for j, column := range indexColumns {
+		chunkRange := chunk.NewChunkRange()
+		for j, column := range s.indexColumns {
 			var lowerValue, upperValue string
 			if len(lowerValues) > 0 {
 				lowerValue = lowerValues[j]
@@ -237,35 +257,21 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 			chunkRange.Update(column.Name.O, lowerValue, upperValue, len(lowerValues) > 0, len(upperValues) > 0)
 		}
 
-		// That count = 0 and then chunkCnt = 0 is OK.
-		// `splitRangeByRandom` will skip when chunkCnt <= 1
-		//            count                     chunkCnt
-		// 0 ... 0.5x ... x ... 1.5x   ------->   1
-		//       1.5x ... 2x ... 2.5x  ------->   2
-		chunkCnt := int((count + halfChunkSize) / chunkSize)
-		chunks, err := splitRangeByRandom(s.dbConn, chunkRange, chunkCnt, table.Schema, table.Table, indexColumns, table.Range, table.Collation)
-		if err != nil {
-			s.errCh <- errors.Trace(err)
-			return
-		}
-
-		chunkRange = chunk.NewChunkRange()
-		latestCount = buckets[i].Count
+		s.splitChunkForBucket(i, count, chunkRange)
+		latestCount = s.buckets[i].Count
 		lowerValues = upperValues
-		chunkID = chunk.InitChunks(chunks, chunk.Bucket, chunkID, i, table.Collation, table.Range)
-		s.chunksCh <- chunks
 	}
 
 	// merge the rest keys into one chunk
+	chunkRange := chunk.NewChunkRange()
 	if len(lowerValues) > 0 {
-		for j, column := range indexColumns {
+		for j, column := range s.indexColumns {
 			chunkRange.Update(column.Name.O, lowerValues[j], "", true, false)
 		}
-		chunks := []*chunk.Range{chunkRange}
-		chunkID = chunk.InitChunks(chunks, chunk.Bucket, chunkID, len(buckets), table.Collation, table.Range)
-		s.chunksCh <- chunks
 	}
-
-	// send `nil` to notify consumer that none of chunk is left.
-	s.chunksCh <- nil
+	chunks := []*chunk.Range{chunkRange}
+	chunk.InitChunks(chunks, chunk.Bucket, len(s.buckets), s.table.Collation, s.table.Range)
+	progress.UpdateTotal(s.progressID, len(chunks), false)
+	s.chunksCh <- chunks
+	s.chunkPool.WaitFinished()
 }

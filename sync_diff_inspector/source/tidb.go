@@ -17,12 +17,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"sort"
-
 	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
+	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
@@ -33,27 +32,29 @@ import (
 )
 
 type TiDBTableAnalyzer struct {
-	dbConn         *sql.DB
-	sourceTableMap map[string]*common.TableSource
+	dbConn           *sql.DB
+	checkThreadCount int
+	sourceTableMap   map[string]*common.TableSource
 }
 
-func (a *TiDBTableAnalyzer) AnalyzeSplitter(ctx context.Context, table *common.TableDiff, startRange *splitter.RangeInfo) (splitter.ChunkIterator, error) {
-	chunkSize := 0
+func (a *TiDBTableAnalyzer) AnalyzeSplitter(ctx context.Context, progressID string, table *common.TableDiff, startRange *splitter.RangeInfo) (splitter.ChunkIterator, error) {
 	matchedSource := getMatchSource(a.sourceTableMap, table)
-	table.Schema = matchedSource.OriginSchema
-	table.Table = matchedSource.OriginTable
+	// Shallow Copy
+	originTable := *table
+	originTable.Schema = matchedSource.OriginSchema
+	originTable.Table = matchedSource.OriginTable
 	// if we decide to use bucket to split chunks
 	// we always use bucksIter even we load from checkpoint is not bucketNode
 	// TODO check whether we can use bucket for this table to split chunks.
-	bucketIter, err := splitter.NewBucketIteratorWithCheckpoint(ctx, table, a.dbConn, chunkSize, startRange)
+	bucketIter, err := splitter.NewBucketIteratorWithCheckpoint(ctx, progressID, &originTable, a.dbConn, startRange, a.checkThreadCount)
 	if err == nil {
 		return bucketIter, nil
 	}
-	log.Warn("build bucketIter failed", zap.Error(err))
+	log.Info("failed to build bucket iterator, fall back to use random iterator", zap.Error(err))
 	// fall back to random splitter
 
 	// use random splitter if we cannot use bucket splitter, then we can simply choose target table to generate chunks.
-	randIter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, table, a.dbConn, chunkSize, startRange)
+	randIter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, progressID, &originTable, a.dbConn, startRange)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -79,12 +80,15 @@ func (s *TiDBRowsIterator) Next() (map[string]*dbutil.ColumnData, error) {
 type TiDBSource struct {
 	tableDiffs     []*common.TableDiff
 	sourceTableMap map[string]*common.TableSource
-	dbConn         *sql.DB
+	// checkThreadCount is the pool size of produce chunks
+	checkThreadCount int
+	dbConn           *sql.DB
 }
 
 func (s *TiDBSource) GetTableAnalyzer() TableAnalyzer {
 	return &TiDBTableAnalyzer{
 		s.dbConn,
+		s.checkThreadCount,
 		s.sourceTableMap,
 	}
 }
@@ -102,8 +106,12 @@ func getMatchSource(sourceTableMap map[string]*common.TableSource, table *common
 }
 
 func (s *TiDBSource) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
+	id := 0
+	if r != nil {
+		id = r.ChunkRange.ID
+	}
 	dbIter := &ChunksIterator{
-		currentID:      0,
+		currentID:      id,
 		tableAnalyzer:  analyzer,
 		TableDiffs:     s.tableDiffs,
 		nextTableIndex: 0,
@@ -116,8 +124,7 @@ func (s *TiDBSource) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo
 func (s *TiDBSource) Close() {
 	s.dbConn.Close()
 }
-
-func (s *TiDBSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter.RangeInfo, checksumInfoCh chan *ChecksumInfo) {
+func (s *TiDBSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter.RangeInfo) *ChecksumInfo {
 	beginTime := time.Now()
 	table := s.tableDiffs[tableRange.GetTableIndex()]
 	chunk := tableRange.GetChunk()
@@ -126,7 +133,7 @@ func (s *TiDBSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter.
 	count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, s.dbConn, matchSource.OriginSchema, matchSource.OriginTable, table.Info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
 
 	cost := time.Since(beginTime)
-	checksumInfoCh <- &ChecksumInfo{
+	return &ChecksumInfo{
 		Checksum: checksum,
 		Count:    count,
 		Err:      err,
@@ -138,12 +145,28 @@ func (s *TiDBSource) GetTables() []*common.TableDiff {
 	return s.tableDiffs
 }
 
-func (s *TiDBSource) GenerateFixSQL(t DMLType, data map[string]*dbutil.ColumnData, tableIndex int) string {
-	if t == Replace {
-		return utils.GenerateReplaceDML(data, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
+func (s *TiDBSource) GetSourceStructInfo(ctx context.Context, tableIndex int) ([]*model.TableInfo, error) {
+	var err error
+	tableInfos := make([]*model.TableInfo, 1)
+	tableDiff := s.GetTables()[tableIndex]
+	source := getMatchSource(s.sourceTableMap, tableDiff)
+	tableInfos[0], err = dbutil.GetTableInfo(ctx, s.GetDB(), source.OriginSchema, source.OriginTable)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	tableInfos[0] = utils.IgnoreColumns(tableInfos[0], tableDiff.IgnoreColumns)
+	return tableInfos, nil
+}
+
+func (s *TiDBSource) GenerateFixSQL(t DMLType, upstreamData, downstreamData map[string]*dbutil.ColumnData, tableIndex int) string {
+	if t == Insert {
+		return utils.GenerateReplaceDML(upstreamData, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
 	}
 	if t == Delete {
-		return utils.GenerateDeleteDML(data, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
+		return utils.GenerateDeleteDML(downstreamData, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
+	}
+	if t == Replace {
+		return utils.GenerateReplaceDMLWithAnnotation(upstreamData, downstreamData, s.tableDiffs[tableIndex].Info, s.tableDiffs[tableIndex].Schema)
 	}
 	log.Fatal("Don't support this type", zap.Any("dml type", t))
 	return ""
@@ -224,19 +247,16 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 	return sourceTableMap, nil
 }
 
-func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource) (Source, error) {
+func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource, checkThreadCount int) (Source, error) {
 	sourceTableMap, err := getSourceTableMap(ctx, tableDiffs, ds)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	sort.Slice(tableDiffs, func(i, j int) bool {
-		return dbutil.TableName(tableDiffs[i].Schema, tableDiffs[i].Table) < dbutil.TableName(tableDiffs[j].Schema, tableDiffs[j].Table)
-	})
-	log.Info("source map", zap.Reflect("source map", sourceMap))
 	ts := &TiDBSource{
-		tableDiffs:     tableDiffs,
-		sourceTableMap: sourceTableMap,
-		dbConn:         ds.Conn,
+		tableDiffs:       tableDiffs,
+		sourceTableMap:   sourceTableMap,
+		dbConn:           ds.Conn,
+		checkThreadCount: checkThreadCount,
 	}
 	return ts, nil
 }

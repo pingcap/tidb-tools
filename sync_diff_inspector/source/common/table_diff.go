@@ -15,6 +15,7 @@ package common
 
 import (
 	"database/sql"
+
 	"github.com/pingcap/parser/model"
 )
 
@@ -68,4 +69,6 @@ type TableDiff struct {
 	IgnoreDataCheck bool `json:"-"`
 
 	Collation string `json:"collation"`
+
+	ChunkSize int64 `json:"chunk-size"`
 }

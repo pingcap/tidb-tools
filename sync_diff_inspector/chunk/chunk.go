@@ -24,14 +24,9 @@ import (
 )
 
 var (
-	equal = "="
-	lt    = "<"
-	lte   = "<="
-	gt    = ">"
-	gte   = ">="
-
-	bucketMode = "bucketMode"
-	normalMode = "normalMode"
+	lt  = "<"
+	lte = "<="
+	gt  = ">"
 )
 
 type ChunkType int
@@ -71,6 +66,22 @@ func NewChunkRange() *Range {
 	return &Range{
 		Bounds:       make([]*Bound, 0, 2),
 		columnOffset: make(map[string]int),
+	}
+}
+
+// NewChunkRangeOffset return a Range in sequence
+func NewChunkRangeOffset(columnOffset map[string]int) *Range {
+	bounds := make([]*Bound, len(columnOffset))
+	for column, offset := range columnOffset {
+		bounds[offset] = &Bound{
+			Column:   column,
+			HasLower: false,
+			HasUpper: false,
+		}
+	}
+	return &Range{
+		Bounds:       bounds,
+		columnOffset: columnOffset,
 	}
 }
 
@@ -152,16 +163,34 @@ func (c *Range) ToString(collation string) (string, []string) {
 	return fmt.Sprintf("(%s) AND (%s)", strings.Join(lowerCondition, " OR "), strings.Join(upperCondition, " OR ")), append(lowerArgs, upperArgs...)
 }
 
+func (c *Range) ToMeta() string {
+	lowerCondition := make([]string, 0, 1)
+	upperCondition := make([]string, 0, 1)
+	columnName := make([]string, 0, 1)
+	for _, bound := range c.Bounds {
+		columnName = append(columnName, bound.Column)
+		if bound.HasLower {
+			lowerCondition = append(lowerCondition, bound.Lower)
+		}
+		if bound.HasUpper {
+			upperCondition = append(upperCondition, bound.Upper)
+		}
+	}
+	if len(upperCondition) == 0 && len(lowerCondition) == 0 {
+		return "range in sequence: Full"
+	}
+	if len(upperCondition) == 0 {
+		return fmt.Sprintf("range in sequence: (%s) < (%s)", strings.Join(lowerCondition, ","), strings.Join(columnName, ","))
+	}
+	if len(lowerCondition) == 0 {
+		return fmt.Sprintf("range in sequence: (%s) <= (%s)", strings.Join(columnName, ","), strings.Join(upperCondition, ","))
+	}
+	return fmt.Sprintf("range in sequence: (%s) < (%s) <= (%s)", strings.Join(lowerCondition, ","), strings.Join(columnName, ","), strings.Join(upperCondition, ","))
+}
+
 func (c *Range) addBound(bound *Bound) {
 	c.Bounds = append(c.Bounds, bound)
 	c.columnOffset[bound.Column] = len(c.Bounds) - 1
-}
-
-func (c *Range) updateColumnOffset() {
-	c.columnOffset = make(map[string]int)
-	for i, bound := range c.Bounds {
-		c.columnOffset[bound.Column] = i
-	}
 }
 
 func (c *Range) Update(column, lower, upper string, updateLower, updateUpper bool) {
@@ -218,7 +247,7 @@ func (c *Range) Clone() *Range {
 	newChunk.ID = c.ID
 	newChunk.Type = c.Type
 	newChunk.Where = c.Where
-	copy(newChunk.Args, c.Args)
+	newChunk.Args = c.Args
 	for i, v := range c.columnOffset {
 		newChunk.columnOffset[i] = v
 	}
@@ -232,20 +261,17 @@ func (c *Range) CopyAndUpdate(column, lower, upper string, updateLower, updateUp
 	return newChunk
 }
 
-func InitChunks(chunks []*Range, t ChunkType, chunkBeginID, bucketID int, collation, limits string) int {
+func InitChunks(chunks []*Range, t ChunkType, bucketID int, collation, limits string) {
 	if chunks == nil {
-		return chunkBeginID
+		return
 	}
 	for _, chunk := range chunks {
 		conditions, args := chunk.ToString(collation)
-		chunk.ID = chunkBeginID
-		chunkBeginID++
 		chunk.Where = fmt.Sprintf("((%s) AND %s)", conditions, limits)
 		chunk.Args = args
 		chunk.BucketID = bucketID
 		chunk.Type = t
 	}
-	return chunkBeginID
 }
 
 func InitChunk(chunk *Range, t ChunkType, bucketID int, collation, limits string) {

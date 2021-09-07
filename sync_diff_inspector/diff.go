@@ -1,4 +1,4 @@
-// Copyright 2018 PingCAP, Inc.
+// Copyright 2021 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"fmt"
 	"io/fs"
 	"os"
@@ -32,6 +33,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/progress"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/report"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
@@ -48,8 +50,11 @@ const (
 
 // ChunkDML SQL struct for each chunk
 type ChunkDML struct {
-	node *checkpoints.Node
-	sqls []string
+	node      *checkpoints.Node
+	sqls      []string
+	rowAdd    int
+	rowDelete int
+	rowCount  int64
 }
 
 // Diff contains two sql DB, used for comparing.
@@ -107,8 +112,9 @@ func (df *Diff) Close() {
 	if df.downstream != nil {
 		df.downstream.Close()
 	}
-	if err := os.Remove(filepath.Join(df.CheckpointDir, checkpointFile)); err != nil {
-		log.Fatal("fail to remove the report file")
+
+	if err := os.Remove(filepath.Join(df.CheckpointDir, checkpointFile)); err != nil && !os.IsNotExist(err) {
+		log.Fatal("fail to remove the checkpoint file", zap.String("error", err.Error()))
 	}
 }
 
@@ -130,6 +136,7 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 		return errors.Trace(err)
 	}
 	df.report.Init(df.downstream.GetTables(), sourceConfigs, targetConfig)
+	progress.Init(len(df.workSource.GetTables()))
 	return nil
 }
 
@@ -152,7 +159,6 @@ func getConfigsForReport(cfg *config.Config) ([][]byte, []byte, error) {
 			User:     instance.User,
 			Snapshot: instance.Snapshot,
 			SqlMode:  instance.SqlMode,
-			IsTiDB:   true,
 		}
 	}
 	instance := cfg.Task.TargetInstance
@@ -185,8 +191,7 @@ func (df *Diff) Equal(ctx context.Context) error {
 		return errors.Trace(err)
 	}
 	defer chunksIter.Close()
-	// TODO use a meaningfull count
-	pool := utils.NewWorkerPool(64, "consumer")
+	pool := utils.NewWorkerPool(uint(df.checkThreadCount), "consumer")
 	stopCh := make(chan struct{})
 
 	go df.handleCheckpoints(ctx, stopCh)
@@ -209,19 +214,12 @@ func (df *Diff) Equal(ctx context.Context) error {
 			// finish read the tables
 			break
 		}
-		tableDiff := df.downstream.GetTables()[c.TableIndex]
-		log.Debug("generate chunk", zap.Int("chunk id", c.ChunkRange.ID), zap.String("table", dbutil.TableName(tableDiff.Schema, tableDiff.Table)))
 		pool.Apply(func() {
-			tableDiff := df.downstream.GetTables()[c.TableIndex]
-			schema, table := tableDiff.Schema, tableDiff.Table
-			res, rowsAdd, rowsDelete, rowsCnt, err := df.consume(ctx, c)
-			if err != nil {
-				df.report.SetTableMeetError(schema, table, err)
+			isEqual := df.consume(ctx, c)
+			if !isEqual {
+				progress.FailTable(c.ProgressID)
 			}
-			df.report.AddRowsCnt(schema, table, rowsCnt)
-			if !res {
-				df.report.SetTableDataCheckResult(schema, table, res, rowsAdd, rowsDelete)
-			}
+			progress.Inc(c.ProgressID)
 		})
 	}
 
@@ -235,9 +233,8 @@ func (df *Diff) StructEqual(ctx context.Context) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		if !structEq {
-			df.report.SetTableStructCheckResult(tables[tableIndex].Schema, tables[tableIndex].Table, structEq)
-		}
+		progress.RegisterTable(dbutil.TableName(tables[tableIndex].Schema, tables[tableIndex].Table), !structEq, false)
+		df.report.SetTableStructCheckResult(tables[tableIndex].Schema, tables[tableIndex].Table, structEq)
 	}
 	return nil
 }
@@ -255,20 +252,40 @@ func (df *Diff) compareStruct(ctx context.Context, tableIndex int) (structEq boo
 	return structEq, nil
 }
 
+func (df *Diff) startGCKeeperForTiDB(ctx context.Context, db *sql.DB) {
+	pdCli, _ := utils.GetPDClientForGC(ctx, db)
+	if pdCli != nil {
+		// Get latest snapshot
+		snap, err := utils.GetSnapshot(ctx, db)
+		if err != nil {
+			log.Info("failed to get snapshot, user should guarantee the GC stopped during diff progress.")
+			return
+		}
+		if len(snap) == 1 {
+			err = utils.StartGCSavepointUpdateService(ctx, pdCli, db, snap[0])
+			if err != nil {
+				log.Info("failed to keep snapshot, user should guarantee the GC stopped during diff progress.")
+			} else {
+				log.Info("start update service to keep GC stopped automatically")
+			}
+		}
+	}
+}
+
 // pickSource pick one proper source to do some work. e.g. generate chunks
 func (df *Diff) pickSource(ctx context.Context) source.Source {
+	workSource := df.downstream
 	if ok, _ := dbutil.IsTiDB(ctx, df.upstream.GetDB()); ok {
-		log.Info("The upstream is TiDB. pick it as work source")
-		return df.upstream
+		log.Info("The upstream is TiDB. pick it as work source candidate")
+		df.startGCKeeperForTiDB(ctx, df.upstream.GetDB())
+		workSource = df.upstream
 	}
 	if ok, _ := dbutil.IsTiDB(ctx, df.downstream.GetDB()); ok {
-		log.Info("The downstream is TiDB. pick it as work source")
-		return df.downstream
+		log.Info("The downstream is TiDB. pick it as work source first")
+		df.startGCKeeperForTiDB(ctx, df.downstream.GetDB())
+		workSource = df.downstream
 	}
-
-	// if the both sides are not TiDB, choose any one of them would be ok
-	log.Info("pick the downstream as work source")
-	return df.downstream
+	return workSource
 }
 
 func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterator, error) {
@@ -285,7 +302,7 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 					zap.Int("id", node.GetID()),
 					zap.Reflect("chunk", node),
 					zap.String("state", node.GetState()))
-				df.cp.SetCurrentSavedID(node.GetID() + 1)
+				df.cp.SetCurrentSavedID(node)
 			}
 			if node != nil {
 				// remove the sql file that ID bigger than node.
@@ -299,58 +316,35 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 			}
 		} else {
 			log.Info("not found checkpoint file, start from beginning")
+			err := df.removeSQLFiles(0)
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
 		}
 	}
 
 	return df.workSource.GetRangeIterator(ctx, startRange, df.workSource.GetTableAnalyzer())
 }
 
-func (df *Diff) getReportSnapshot(i int) (*report.Report, error) {
-	tableDiff := df.downstream.GetTables()[i]
-	targetID := utils.UniqueID(tableDiff.Schema, tableDiff.Table)
-	df.report.Lock()
-	defer df.report.Unlock()
-	reserveMap := make(map[string]map[string]*report.TableResult)
-	for schema, tableMap := range df.report.TableResults {
-		reserveMap[schema] = make(map[string]*report.TableResult)
-		for table, result := range tableMap {
-			reportID := utils.UniqueID(schema, table)
-			if reportID <= targetID {
-				reserveMap[schema][table] = result
-			}
-		}
-	}
-
-	result := df.report.Result
-	totalSize := df.report.TotalSize
-	duration := time.Since(df.report.StartTime)
-	return &report.Report{
-		PassNum:      0,
-		FailedNum:    0,
-		Result:       result,
-		TableResults: reserveMap,
-		Duration:     duration,
-		TotalSize:    totalSize,
-	}, nil
-}
-
 func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
 	// a background goroutine which will insert the verified chunk,
 	// and periodically save checkpoint
 	df.wg.Add(1)
-	log.Debug("start handleCheckpoint goroutine")
+	log.Info("start handleCheckpoint goroutine")
 	defer func() {
-		log.Debug("close handleCheckpoint goroutine")
+		log.Info("close handleCheckpoint goroutine")
 		df.wg.Done()
 	}()
 	flush := func() {
 		chunk := df.cp.GetChunkSnapshot()
 		if chunk != nil {
-			report, err := df.getReportSnapshot(chunk.TableIndex)
+			tableDiff := df.downstream.GetTables()[chunk.IndexID]
+			schema, table := tableDiff.Schema, tableDiff.Table
+			r, err := df.report.GetSnapshot(chunk.GetID(), schema, table)
 			if err != nil {
 				log.Warn("fail to save the report", zap.Error(err))
 			}
-			_, err = df.cp.SaveChunk(ctx, filepath.Join(df.CheckpointDir, checkpointFile), chunk, report)
+			_, err = df.cp.SaveChunk(ctx, filepath.Join(df.CheckpointDir, checkpointFile), chunk, r)
 			if err != nil {
 				log.Warn("fail to save the chunk", zap.Error(err))
 				// maybe we should panic, because SaveChunk method should not failed.
@@ -361,7 +355,7 @@ func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Info("Stop do checkpoint")
+			log.Info("Stop do checkpoint by context done")
 			return
 		case <-stopCh:
 			log.Info("Stop do checkpoint")
@@ -372,18 +366,15 @@ func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
 	}
 }
 
-func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (bool, int, int, int64, error) {
+func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool {
+	tableDiff := df.downstream.GetTables()[rangeInfo.TableIndex]
+	schema, table := tableDiff.Schema, tableDiff.Table
 	isEqual, count, err := df.compareChecksumAndGetCount(ctx, rangeInfo)
 	if err != nil {
-		log.Warn("compute checksum error", zap.Int("chunk id", rangeInfo.ChunkRange.ID))
-		return false, 0, 0, 0, errors.Trace(err)
+		df.report.SetTableMeetError(schema, table, err)
 	}
-	log.Info("count size",
-		zap.Int("chunk id", rangeInfo.ChunkRange.ID),
-		zap.Int64("chunk size", count))
 	var state string
 	dml := &ChunkDML{}
-	rowsAdd, rowsDelete := 0, 0
 	if !isEqual {
 		log.Debug("checksum failed", zap.Int("chunk id", rangeInfo.ChunkRange.ID), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTables()[rangeInfo.TableIndex].Table))
 		state = checkpoints.FailedState
@@ -393,24 +384,25 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) (boo
 			rangeInfo, err = df.BinGenerate(ctx, df.workSource, rangeInfo, count)
 			log.Debug("bin generate finished", zap.Reflect("chunk", rangeInfo.ChunkRange), zap.Int("chunk id", rangeInfo.ChunkRange.ID))
 			if err != nil {
-				return false, 0, 0, 0, errors.Trace(err)
+				df.report.SetTableMeetError(schema, table, err)
 			}
 		}
-		dml.sqls = make([]string, 0, 4)
-		isEqual, rowsAdd, rowsDelete, err = df.compareRows(ctx, rangeInfo, dml)
+		_, err := df.compareRows(ctx, rangeInfo, dml)
 		if err != nil {
-			return false, 0, 0, 0, errors.Trace(err)
+			df.report.SetTableMeetError(schema, table, err)
 		}
 	} else {
 		// update chunk success state in summary
-		log.Debug("checksum success", zap.Int("chunk id", rangeInfo.ChunkRange.ID), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTables()[rangeInfo.TableIndex].Table))
 		state = checkpoints.SuccessState
 	}
-
 	dml.node = rangeInfo.ToNode()
 	dml.node.State = state
+	dml.rowCount = count
+	id := rangeInfo.ChunkRange.ID
+	df.report.SetRowsCnt(schema, table, dml.rowCount, id)
+	df.report.SetTableDataCheckResult(schema, table, isEqual, dml.rowAdd, dml.rowDelete, id)
 	df.sqlCh <- dml
-	return isEqual, rowsAdd, rowsDelete, count, nil
+	return isEqual
 }
 
 func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tableRange *splitter.RangeInfo, count int64) (*splitter.RangeInfo, error) {
@@ -438,7 +430,7 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 		}
 	}
 	if index == nil {
-		log.Error("cannot found a index to split and disable the BinGenerate",
+		log.Warn("cannot found a index to split and disable the BinGenerate",
 			zap.String("table", dbutil.TableName(tableDiff.Schema, tableDiff.Table)))
 		return nil, nil
 	}
@@ -470,11 +462,10 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 		return nil, errors.Trace(err)
 	}
 	if count1+count2 != count {
-		log.Error("the count is not correct",
+		log.Fatal("the count is not correct",
 			zap.Int64("count1", count1),
 			zap.Int64("count2", count2),
 			zap.Int64("count", count))
-		panic("count is not correct")
 	}
 	log.Info("chunk split successfully",
 		zap.Int("chunk id", tableRange.ChunkRange.ID),
@@ -502,73 +493,77 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 }
 
 func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *splitter.RangeInfo) (bool, int64, error) {
-	checkSumCh := make(chan *source.ChecksumInfo, 2)
-	go df.upstream.GetCountAndCrc32(ctx, tableRange, checkSumCh)
-	go df.downstream.GetCountAndCrc32(ctx, tableRange, checkSumCh)
+	var wg sync.WaitGroup
+	var upstreamInfo, downstreamInfo *source.ChecksumInfo
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		upstreamInfo = df.upstream.GetCountAndCrc32(ctx, tableRange)
+	}()
+	downstreamInfo = df.downstream.GetCountAndCrc32(ctx, tableRange)
+	wg.Wait()
 
-	crc1Info := <-checkSumCh
-	crc2Info := <-checkSumCh
-	close(checkSumCh)
-
-	if crc1Info.Err != nil {
-		log.Warn("checksum fail")
-		return false, -1, errors.Trace(crc1Info.Err)
+	if upstreamInfo.Err != nil {
+		log.Warn("failed to compare upstream checksum")
+		return false, -1, errors.Trace(upstreamInfo.Err)
 	}
-	if crc2Info.Err != nil {
-		log.Warn("checksum fail")
-		return false, -1, errors.Trace(crc2Info.Err)
+	if downstreamInfo.Err != nil {
+		log.Warn("failed to compare downstream checksum")
+		return false, -1, errors.Trace(downstreamInfo.Err)
 
 	}
 	// TODO two counts are not necessary equal
-	if crc1Info.Count == crc2Info.Count && crc1Info.Checksum == crc2Info.Checksum {
-		return true, crc1Info.Count, nil
+	if upstreamInfo.Count == downstreamInfo.Count && upstreamInfo.Checksum == downstreamInfo.Checksum {
+		return true, upstreamInfo.Count, nil
 	}
-	return false, crc1Info.Count, nil
+	return false, upstreamInfo.Count, nil
 }
 
-func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, dml *ChunkDML) (bool, int, int, error) {
+func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, dml *ChunkDML) (bool, error) {
 	rowsAdd, rowsDelete := 0, 0
 	upstreamRowsIterator, err := df.upstream.GetRowsIterator(ctx, rangeInfo)
 	if err != nil {
-		return false, 0, 0, errors.Trace(err)
+		return false, errors.Trace(err)
 	}
 	defer upstreamRowsIterator.Close()
 	downstreamRowsIterator, err := df.downstream.GetRowsIterator(ctx, rangeInfo)
 	if err != nil {
-		return false, 0, 0, errors.Trace(err)
+		return false, errors.Trace(err)
 	}
 	defer downstreamRowsIterator.Close()
 
 	var lastUpstreamData, lastDownstreamData map[string]*dbutil.ColumnData
 	equal := true
 
+	tableInfo := df.workSource.GetTables()[rangeInfo.GetTableIndex()].Info
+	_, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
 	for {
 		if lastUpstreamData == nil {
 			lastUpstreamData, err = upstreamRowsIterator.Next()
 			if err != nil {
-				return false, 0, 0, err
+				return false, err
 			}
 		}
 
 		if lastDownstreamData == nil {
 			lastDownstreamData, err = downstreamRowsIterator.Next()
 			if err != nil {
-				return false, 0, 0, err
+				return false, err
 			}
 		}
 
 		if lastUpstreamData == nil {
 			// don't have source data, so all the targetRows's data is redundant, should be deleted
 			for lastDownstreamData != nil {
-				sql := df.downstream.GenerateFixSQL(source.Delete, lastDownstreamData, rangeInfo.GetTableIndex())
+				sql := df.downstream.GenerateFixSQL(source.Delete, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
 				rowsDelete++
-				log.Info("[delete]", zap.String("sql", sql))
+				log.Debug("[delete]", zap.String("sql", sql))
 
 				dml.sqls = append(dml.sqls, sql)
 				equal = false
 				lastDownstreamData, err = downstreamRowsIterator.Next()
 				if err != nil {
-					return false, 0, 0, err
+					return false, err
 				}
 			}
 			break
@@ -577,24 +572,24 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 		if lastDownstreamData == nil {
 			// target lack some data, should insert the last source datas
 			for lastUpstreamData != nil {
-				sql := df.downstream.GenerateFixSQL(source.Replace, lastUpstreamData, rangeInfo.GetTableIndex())
+				sql := df.downstream.GenerateFixSQL(source.Insert, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
 				rowsAdd++
-				log.Info("[insert]", zap.String("sql", sql))
+				log.Debug("[insert]", zap.String("sql", sql))
 
 				dml.sqls = append(dml.sqls, sql)
 				equal = false
 
 				lastUpstreamData, err = upstreamRowsIterator.Next()
 				if err != nil {
-					return false, 0, 0, err
+					return false, err
 				}
 			}
 			break
 		}
-		_, orderKeyCols := dbutil.SelectUniqueOrderKey(df.workSource.GetTables()[rangeInfo.GetTableIndex()].Info)
-		eq, cmp, err := utils.CompareData(lastUpstreamData, lastDownstreamData, orderKeyCols)
+
+		eq, cmp, err := utils.CompareData(lastUpstreamData, lastDownstreamData, orderKeyCols, tableInfo.Columns)
 		if err != nil {
-			return false, 0, 0, errors.Trace(err)
+			return false, errors.Trace(err)
 		}
 		if eq {
 			lastDownstreamData = nil
@@ -608,36 +603,31 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 		switch cmp {
 		case 1:
 			// delete
-			sql = df.downstream.GenerateFixSQL(source.Delete, lastDownstreamData, rangeInfo.GetTableIndex())
+			sql = df.downstream.GenerateFixSQL(source.Delete, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
 			rowsDelete++
-			log.Info("[delete]", zap.String("sql", sql))
+			log.Debug("[delete]", zap.String("sql", sql))
 			lastDownstreamData = nil
 		case -1:
 			// insert
-			sql = df.downstream.GenerateFixSQL(source.Replace, lastUpstreamData, rangeInfo.GetTableIndex())
+			sql = df.downstream.GenerateFixSQL(source.Insert, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
 			rowsAdd++
-			log.Info("[insert]", zap.String("sql", sql))
+			log.Debug("[insert]", zap.String("sql", sql))
 			lastUpstreamData = nil
 		case 0:
 			// update
-			sql = df.downstream.GenerateFixSQL(source.Replace, lastUpstreamData, rangeInfo.GetTableIndex())
+			sql = df.downstream.GenerateFixSQL(source.Replace, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
 			rowsAdd++
 			rowsDelete++
-			log.Info("[update]", zap.String("sql", sql))
+			log.Debug("[update]", zap.String("sql", sql))
 			lastUpstreamData = nil
 			lastDownstreamData = nil
 		}
 
 		dml.sqls = append(dml.sqls, sql)
 	}
-
-	if equal {
-		// Log
-	} else {
-		// log
-	}
-
-	return equal, rowsAdd, rowsDelete, nil
+	dml.rowAdd = rowsAdd
+	dml.rowDelete = rowsDelete
+	return equal, nil
 }
 
 // WriteSQLs write sqls to file
@@ -653,12 +643,11 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case dml, ok := <-df.sqlCh:
-			if !ok {
+			if !ok && dml == nil {
 				log.Info("write sql channel closed")
 				return
 			}
 			if len(dml.sqls) > 0 {
-				// TODO refine this name
 				fileName := fmt.Sprintf("%d.sql", dml.node.GetID())
 				fixSQLPath := filepath.Join(df.FixSQLDir, fileName)
 				if ok := ioutil2.FileExists(fixSQLPath); ok {
@@ -667,17 +656,22 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 				}
 				fixSQLFile, err := os.Create(fixSQLPath)
 				if err != nil {
-					log.Error("write sql failed: cannot create file", zap.Strings("sql", dml.sqls), zap.Error(err))
+					log.Fatal("write sql failed: cannot create file", zap.Strings("sql", dml.sqls), zap.Error(err))
 					continue
 				}
+				// write chunk meta
+				chunkRange := dml.node.ChunkRange
+				tableDiff := df.workSource.GetTables()[dml.node.TableIndex]
+				fixSQLFile.WriteString(fmt.Sprintf("-- table: %s.%s\n-- %s\n", tableDiff.Schema, tableDiff.Table, chunkRange.ToMeta()))
 				for _, sql := range dml.sqls {
 					_, err = fixSQLFile.WriteString(fmt.Sprintf("%s\n", sql))
 					if err != nil {
-						log.Error("write sql failed", zap.String("sql", sql), zap.Error(err))
+						log.Fatal("write sql failed", zap.String("sql", sql), zap.Error(err))
 					}
 				}
 				fixSQLFile.Close()
 			}
+			log.Debug("insert node", zap.Int("chunk id", dml.node.GetID()))
 			df.cp.Insert(dml.node)
 		}
 	}
@@ -744,5 +738,5 @@ func setTiDBCfg() {
 	tidbCfg.MaxIndexLength = 3027 * 4
 	tidbconfig.StoreGlobalConfig(tidbCfg)
 
-	fmt.Println("set tidb cfg")
+	log.Info("set tidb cfg")
 }

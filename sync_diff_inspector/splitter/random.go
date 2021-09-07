@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/progress"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"go.uber.org/zap"
@@ -31,18 +32,18 @@ import (
 
 type RandomIterator struct {
 	table     *common.TableDiff
-	chunkSize int
+	chunkSize int64
 	chunks    []*chunk.Range
 	nextChunk uint
 
 	dbConn *sql.DB
 }
 
-func NewRandomIterator(ctx context.Context, table *common.TableDiff, dbConn *sql.DB, chunkSize int) (*RandomIterator, error) {
-	return NewRandomIteratorWithCheckpoint(ctx, table, dbConn, chunkSize, nil)
+func NewRandomIterator(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB) (*RandomIterator, error) {
+	return NewRandomIteratorWithCheckpoint(ctx, progressID, table, dbConn, nil)
 }
 
-func NewRandomIteratorWithCheckpoint(ctx context.Context, table *common.TableDiff, dbConn *sql.DB, chunkSize int, startRange *RangeInfo) (*RandomIterator, error) {
+func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, startRange *RangeInfo) (*RandomIterator, error) {
 	// get the chunk count by data count and chunk size
 	var splitFieldArr []string
 	if len(table.Fields) != 0 {
@@ -91,33 +92,30 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, table *common.TableDif
 		return nil, errors.Trace(err)
 	}
 
-	// There are only 10k chunks at most
+	chunkSize := table.ChunkSize
 	if chunkSize <= 0 {
-		chunkSize = SplitThreshold
 		if len(table.Info.Indices) != 0 {
-			// use binary checksum
-			chunkSize = SplitThreshold * 2
-			chunkSize2 := int(cnt / 10000)
-			if chunkSize2 >= chunkSize {
-				chunkSize = chunkSize2
-			}
+			chunkSize = utils.CalculateChunkSize(cnt)
+		} else {
+			// no index
+			// will use table scan
+			// so we use one chunk
+			chunkSize = cnt
 		}
 	}
-	chunkCnt := (int(cnt) + chunkSize - 1) / chunkSize
-	log.Info("split range by random", zap.Int64("row count", cnt), zap.Int("split chunk num", chunkCnt))
+	log.Info("get chunk size for table", zap.Int64("chunk size", chunkSize),
+		zap.String("db", table.Schema), zap.String("table", table.Table))
 
-	chunks, err := splitRangeByRandom(dbConn, chunkRange, chunkCnt, table.Schema, table.Table, fields, table.Range, table.Collation)
+	chunkCnt := (cnt + chunkSize - 1) / chunkSize
+	log.Info("split range by random", zap.Int64("row count", cnt), zap.Int64("split chunk num", chunkCnt))
+
+	chunks, err := splitRangeByRandom(dbConn, chunkRange, int(chunkCnt), table.Schema, table.Table, fields, table.Range, table.Collation)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	var chunk_id int
-	if startRange != nil {
-		chunk_id = startRange.GetChunk().ID + 1
-	} else {
-		chunk_id = 0
-	}
-	chunk.InitChunks(chunks, chunk.Random, chunk_id, 0, table.Collation, table.Range)
+	chunk.InitChunks(chunks, chunk.Random, 0, table.Collation, table.Range)
 
+	progress.StartTable(progressID, len(chunks), true)
 	return &RandomIterator{
 		table:     table,
 		chunkSize: chunkSize,

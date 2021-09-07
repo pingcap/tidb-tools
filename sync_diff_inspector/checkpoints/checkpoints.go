@@ -77,25 +77,131 @@ func (n *Node) GetID() int { return n.ChunkRange.ID }
 
 func (n *Node) GetState() string { return n.State }
 
+// GetCompareNode is not get real node, only expect node for compare.
+func (n *Node) GetCompareNode(node *Node) *Node {
+	next := &Node{ChunkRange: chunk.NewChunkRange()}
+	hasUpper := false
+	for _, bound := range n.ChunkRange.Bounds {
+		hasUpper = hasUpper && bound.HasUpper
+	}
+	if hasUpper {
+		// same table
+		next.TableIndex = n.TableIndex
+		next.ChunkRange.Bounds = make([]*chunk.Bound, len(n.ChunkRange.Bounds))
+		for i, bound := range n.ChunkRange.Bounds {
+			next.ChunkRange.Bounds[i] = &chunk.Bound{}
+			next.ChunkRange.Bounds[i].HasLower = true
+			next.ChunkRange.Bounds[i].Lower = bound.Upper
+		}
+	} else {
+		// cur table has reach to end.
+		next.TableIndex = n.TableIndex + 1
+		next.ChunkRange.Bounds = make([]*chunk.Bound, len(node.ChunkRange.Bounds))
+		for i := range next.ChunkRange.Bounds {
+			next.ChunkRange.Bounds[i] = &chunk.Bound{}
+			next.ChunkRange.Bounds[i].HasLower = false
+		}
+	}
+	return next
+}
+
+func (cur *Node) IsExpect(next *Node) bool {
+	n := cur.GetCompareNode(next)
+	if n.TableIndex == next.TableIndex {
+		// same table
+		hasLower := false
+		for i, bound := range n.ChunkRange.Bounds {
+			hasLower = hasLower && bound.HasLower
+			if bound.HasLower != next.ChunkRange.Bounds[i].HasLower {
+				// haslower must be equal
+				return false
+			}
+		}
+		if hasLower {
+			for i, bound := range n.ChunkRange.Bounds {
+				if bound.Lower != next.ChunkRange.Bounds[i].Lower {
+					// lower must be equal
+					return false
+				}
+			}
+			return true
+		} else {
+			// the first chunk for table, has no lower values
+			return true
+		}
+	}
+	return false
+}
+
+// IsAdjacent represents whether the next node is adjacent node.
+// it's the important logic for checkpoint update.
+// we need keep this node save to checkpoint in global order.
+func (n *Node) IsAdjacent(next *Node) bool {
+	if n.TableIndex == next.TableIndex-1 {
+		hasUpper := true
+		hasLower := true
+		for _, bound := range n.ChunkRange.Bounds {
+			hasUpper = hasUpper && bound.HasUpper
+		}
+		for _, bound := range n.ChunkRange.Bounds {
+			hasLower = hasLower && bound.HasLower
+		}
+		if !hasUpper && !hasLower {
+			return true
+		}
+	}
+	if n.TableIndex == next.TableIndex {
+		for i, bound := range n.ChunkRange.Bounds {
+			if bound.Upper != next.ChunkRange.Bounds[i].Lower {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+// IsLess represents whether the cur node is less than next node.
+func (n *Node) IsLess(next *Node) bool {
+	if n.TableIndex <= next.TableIndex-1 {
+		return true
+	}
+	if n.TableIndex == next.TableIndex {
+		for i, bound := range n.ChunkRange.Bounds {
+			// only compare lower bound for chunks
+			if bound.Lower < next.ChunkRange.Bounds[i].Lower {
+				return true
+			}
+		}
+		return false
+	}
+	return false
+}
+
 // Heap maintain a Min Heap, which can be accessed by multiple threads and protected by mutex.
 type Heap struct {
-	Nodes          []*Node
-	CurrentSavedID int         // CurrentSavedID save the lastest save chunk id, initially was 0, updated by saveChunk method
-	mu             *sync.Mutex // protect critical section
+	Nodes            []*Node
+	CurrentSavedNode *Node       // CurrentSavedID save the lastest save chunk, initially was 0, updated by saveChunk method
+	mu               *sync.Mutex // protect critical section
 }
 
 type Checkpoint struct {
 	hp *Heap
 }
-
 type SavedState struct {
 	Chunk  *Node          `json:"chunk-info"`
 	Report *report.Report `json:"report-info"`
 }
 
 // SetCurrentSavedID the method is unsynchronized, be cautious
-func (cp *Checkpoint) SetCurrentSavedID(id int) {
-	cp.hp.CurrentSavedID = id
+func (cp *Checkpoint) SetCurrentSavedID(n *Node) {
+	cp.hp.CurrentSavedNode = n
+}
+
+func (cp *Checkpoint) GetCurrentSavedID() *Node {
+	cp.hp.mu.Lock()
+	defer cp.hp.mu.Unlock()
+	return cp.hp.CurrentSavedNode
 }
 
 func (cp *Checkpoint) Insert(node *Node) {
@@ -109,7 +215,7 @@ func (hp Heap) Len() int { return len(hp.Nodes) }
 
 // Less - determine which is more priority than another
 func (hp Heap) Less(i, j int) bool {
-	return hp.Nodes[i].GetID() < hp.Nodes[j].GetID()
+	return hp.Nodes[i].IsLess(hp.Nodes[j])
 }
 
 // Swap - implementation of swap for the heap interface
@@ -138,34 +244,38 @@ func (cp *Checkpoint) Init() {
 	hp := new(Heap)
 	hp.mu = &sync.Mutex{}
 	hp.Nodes = make([]*Node, 0)
-	hp.CurrentSavedID = 0
+	hp.CurrentSavedNode = nil
 	heap.Init(hp)
 	cp.hp = hp
 }
 
 func (cp *Checkpoint) GetChunkSnapshot() *Node {
 	cp.hp.mu.Lock()
+	defer cp.hp.mu.Unlock()
 	var cur, next *Node
 	for {
-		nextId := cp.hp.CurrentSavedID + 1
 		if cp.hp.Len() == 0 {
 			break
 		}
-		if nextId == cp.hp.Nodes[0].GetID() {
+		if cp.hp.CurrentSavedNode != nil {
+			log.Debug("cur and next", zap.Any("cur", cp.hp.CurrentSavedNode), zap.Any("next", cp.hp.Nodes[0]))
+		}
+
+		if cp.hp.CurrentSavedNode == nil || cp.hp.CurrentSavedNode.IsAdjacent(cp.hp.Nodes[0]) {
 			cur = heap.Pop(cp.hp).(*Node)
-			cp.hp.CurrentSavedID = cur.GetID()
+			log.Debug("get chunkSnapshot", zap.Any("cur", cur))
+			cp.hp.CurrentSavedNode = cur
 			if cp.hp.Len() == 0 {
 				break
 			}
 			next = cp.hp.Nodes[0]
-			if cur.GetID()+1 != next.GetID() {
+			if !cur.IsAdjacent(next) {
 				break
 			}
 		} else {
 			break
 		}
 	}
-	cp.hp.mu.Unlock()
 	return cur
 }
 
@@ -173,8 +283,7 @@ func (cp *Checkpoint) GetChunkSnapshot() *Node {
 func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string, cur *Node, reportInfo *report.Report) (int, error) {
 	if cur != nil {
 		log.Info("save checkpoint",
-			zap.Int("id", cur.GetID()),
-			zap.Reflect("chunk", cur),
+			zap.Any("chunk", cur),
 			zap.String("state", cur.GetState()))
 		savedState := &SavedState{
 			Chunk:  cur,

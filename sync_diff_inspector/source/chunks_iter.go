@@ -15,8 +15,9 @@ package source
 
 import (
 	"context"
-	"database/sql"
+
 	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 )
@@ -29,10 +30,10 @@ type ChunksIterator struct {
 	TableDiffs     []*common.TableDiff
 	nextTableIndex int
 
-	limit  int
-	dbConn *sql.DB
+	limit int
 
-	tableIter splitter.ChunkIterator
+	tableIter  splitter.ChunkIterator
+	progressID string
 }
 
 func (t *ChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, error) {
@@ -53,6 +54,7 @@ func (t *ChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, error) 
 			ChunkRange: c,
 			TableIndex: curIndex,
 			IndexID:    t.getCurTableIndexID(),
+			ProgressID: t.progressID,
 		}, nil
 	}
 	err = t.nextTable(ctx, nil)
@@ -73,6 +75,7 @@ func (t *ChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, error) 
 		ChunkRange: c,
 		TableIndex: curIndex,
 		IndexID:    t.getCurTableIndexID(),
+		ProgressID: t.progressID,
 	}, nil
 }
 
@@ -102,15 +105,17 @@ func (t *ChunksIterator) nextTable(ctx context.Context, startRange *splitter.Ran
 	}
 	curTable := t.TableDiffs[t.nextTableIndex]
 	t.nextTableIndex++
+	t.progressID = dbutil.TableName(curTable.Schema, curTable.Table)
 
 	// reads table index from checkpoint at the beginning
 	if startRange != nil {
 		curIndex := startRange.GetTableIndex()
 		curTable = t.TableDiffs[curIndex]
 		t.nextTableIndex = curIndex + 1
+		t.progressID = startRange.ProgressID
 	}
 
-	chunkIter, err := t.tableAnalyzer.AnalyzeSplitter(ctx, curTable, startRange)
+	chunkIter, err := t.tableAnalyzer.AnalyzeSplitter(ctx, t.progressID, curTable, startRange)
 	if err != nil {
 		return errors.Trace(err)
 	}

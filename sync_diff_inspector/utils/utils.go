@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -25,10 +26,9 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
+	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pkg/term"
 	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 )
 
 // WorkerPool contains a pool of workers.
@@ -60,50 +60,11 @@ func NewWorkerPool(limit uint, name string) *WorkerPool {
 	}
 }
 
-// Returns either an ascii code, or (if input is an arrow) a Javascript key code.
-func GetChar() (ascii int, keyCode int, err error) {
-	t, _ := term.Open("/dev/tty")
-	term.RawMode(t)
-	bytes := make([]byte, 3)
-
-	var numRead int
-	numRead, err = t.Read(bytes)
-	if err != nil {
-		return
-	}
-	if numRead == 3 && bytes[0] == 27 && bytes[1] == 91 {
-		// Three-character control sequence, beginning with "ESC-[".
-
-		// Since there are no ASCII codes for arrow keys, we use
-		// Javascript key codes.
-		if bytes[2] == 65 {
-			// Up
-			keyCode = 38
-		} else if bytes[2] == 66 {
-			// Down
-			keyCode = 40
-		} else if bytes[2] == 67 {
-			// Right
-			keyCode = 39
-		} else if bytes[2] == 68 {
-			// Left
-			keyCode = 37
-		}
-	} else if numRead == 1 {
-		ascii = int(bytes[0])
-	} else {
-		// Two characters read??
-	}
-	t.Restore()
-	t.Close()
-	return
-}
-
 // Apply executes a task.
 func (pool *WorkerPool) Apply(fn taskFunc) {
 	worker := pool.apply()
+	pool.wg.Add(1)
 	go func() {
-		pool.wg.Add(1)
 		defer pool.wg.Done()
 		defer pool.recycle(worker)
 		fn()
@@ -113,34 +74,12 @@ func (pool *WorkerPool) Apply(fn taskFunc) {
 // ApplyWithID execute a task and provides it with the worker ID.
 func (pool *WorkerPool) ApplyWithID(fn identifiedTaskFunc) {
 	worker := pool.apply()
+	pool.wg.Add(1)
 	go func() {
-		pool.wg.Add(1)
 		defer pool.wg.Done()
 		defer pool.recycle(worker)
 		fn(worker.ID)
 	}()
-}
-
-// ApplyOnErrorGroup executes a task in an errorgroup.
-func (pool *WorkerPool) ApplyOnErrorGroup(eg *errgroup.Group, fn func() error) {
-	worker := pool.apply()
-	eg.Go(func() error {
-		pool.wg.Add(1)
-		defer pool.wg.Done()
-		defer pool.recycle(worker)
-		return fn()
-	})
-}
-
-// ApplyWithIDInErrorGroup executes a task in an errorgroup and provides it with the worker ID.
-func (pool *WorkerPool) ApplyWithIDInErrorGroup(eg *errgroup.Group, fn func(id uint64) error) {
-	worker := pool.apply()
-	eg.Go(func() error {
-		pool.wg.Add(1)
-		defer pool.wg.Done()
-		defer pool.recycle(worker)
-		return fn(worker.ID)
-	})
 }
 
 func (pool *WorkerPool) apply() *Worker {
@@ -240,6 +179,57 @@ func GenerateReplaceDML(data map[string]*dbutil.ColumnData, table *model.TableIn
 	return fmt.Sprintf("REPLACE INTO %s(%s) VALUES (%s);", dbutil.TableName(schema, table.Name.O), strings.Join(colNames, ","), strings.Join(values, ","))
 }
 
+func GenerateReplaceDMLWithAnnotation(source, target map[string]*dbutil.ColumnData, table *model.TableInfo, schema string) string {
+	sqlColNames := make([]string, 0, len(table.Columns))
+	sqlValues := make([]string, 0, len(table.Columns))
+	colNames := make([]string, 0, len(table.Columns))
+	values1 := make([]string, 0, len(table.Columns))
+	values2 := make([]string, 0, len(table.Columns))
+	for _, col := range table.Columns {
+		if col.IsGenerated() {
+			continue
+		}
+
+		var data1, data2 *dbutil.ColumnData
+		var value1 string
+		data1 = source[col.Name.O]
+		data2 = target[col.Name.O]
+
+		if data1.IsNull {
+			value1 = "NULL"
+		} else {
+			if needQuotes(col.FieldType.Tp) {
+				value1 = fmt.Sprintf("'%s'", strings.Replace(string(data1.Data), "'", "\\'", -1))
+			} else {
+				value1 = string(data1.Data)
+			}
+		}
+		colName := dbutil.ColumnName(col.Name.O)
+		sqlColNames = append(sqlColNames, colName)
+		sqlValues = append(sqlValues, value1)
+
+		if (string(data1.Data) == string(data2.Data)) && (data1.IsNull == data2.IsNull) {
+			continue
+		}
+
+		colNames = append(colNames, colName)
+		values1 = append(values1, value1)
+
+		if data2.IsNull {
+			values2 = append(values2, "NULL")
+		} else {
+			if needQuotes(col.FieldType.Tp) {
+				values2 = append(values2, fmt.Sprintf("'%s'", strings.Replace(string(data2.Data), "'", "\\'", -1)))
+			} else {
+				values2 = append(values2, string(data2.Data))
+			}
+		}
+
+	}
+
+	return fmt.Sprintf("-- diff column\t|\t%s\n-- source data\t|\t%s\n-- target data\t|\t%s\nREPLACE INTO %s(%s) VALUES (%s);", strings.Join(colNames, "\t|\t"), strings.Join(values1, "\t|\t"), strings.Join(values2, "\t|\t"), dbutil.TableName(schema, table.Name.O), strings.Join(sqlColNames, ","), strings.Join(sqlValues, ","))
+}
+
 func GenerateDeleteDML(data map[string]*dbutil.ColumnData, table *model.TableInfo, schema string) string {
 	kvs := make([]string, 0, len(table.Columns))
 	for _, col := range table.Columns {
@@ -272,9 +262,10 @@ func needQuotes(tp byte) bool {
 // 		1. cmp = 0: map1 and map2 have the same orderkeycolumns, but other columns are in difference.
 //		2. cmp = -1: map1 < map2
 // 		3. cmp = 1: map1 > map2
-func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model.ColumnInfo) (equal bool, cmp int32, err error) {
+func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns []*model.ColumnInfo) (equal bool, cmp int32, err error) {
 	var (
 		data1, data2 *dbutil.ColumnData
+		str1, str2   string
 		key          string
 		ok           bool
 	)
@@ -295,16 +286,38 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model
 		}
 	}()
 
-	for key, data1 = range map1 {
-		if data2, ok = map2[key]; !ok {
-			return false, 0, errors.Errorf("don't have key %s", key)
+	for _, column := range columns {
+		if data1, ok = map1[column.Name.O]; !ok {
+			return false, 0, errors.Errorf("upstream don't have key %s", key)
 		}
-		if (string(data1.Data) == string(data2.Data)) && (data1.IsNull == data2.IsNull) {
-			continue
+		if data2, ok = map2[column.Name.O]; !ok {
+			return false, 0, errors.Errorf("downstream don't have key %s", key)
 		}
-		equal = false
+		str1 = string(data1.Data)
+		str2 = string(data2.Data)
+		if column.FieldType.Tp == mysql.TypeFloat || column.FieldType.Tp == mysql.TypeDouble {
+			if data1.IsNull == data2.IsNull && data1.IsNull {
+				continue
+			}
 
+			num1, err1 := strconv.ParseFloat(str1, 64)
+			num2, err2 := strconv.ParseFloat(str2, 64)
+			if err1 != nil || err2 != nil {
+				err = errors.Errorf("convert %s, %s to float failed, err1: %v, err2: %v", str1, str2, err1, err2)
+				return
+			}
+			if math.Abs(num1-num2) <= 1e-6 {
+				continue
+			}
+		} else {
+			if (str1 == str2) && (data1.IsNull == data2.IsNull) {
+				continue
+			}
+		}
+
+		equal = false
 		break
+
 	}
 	if equal {
 		return
@@ -404,22 +417,6 @@ func SliceToMap(slice []string) map[string]interface{} {
 	return sMap
 }
 
-// GetApproximateMid get a mid point from index columns by doing multiple sample, and get mid point from sample points
-func GetApproximateMid(ctx context.Context, db *sql.DB, schema, table string, columns []*model.ColumnInfo, num int, limitRange string, limitArgs []interface{}, collation string) ([]string, error) {
-	if len(columns) == 0 {
-		return nil, errors.Annotate(errors.NotValidf("not valid columns"), "the columns is empty")
-	}
-	midValues := make([]string, len(columns))
-	for i, column := range columns {
-		randomValues, err := dbutil.GetRandomValues(ctx, db, schema, table, column.Name.O, num, limitRange, limitArgs, collation)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		midValues[i] = randomValues[len(randomValues)/2]
-	}
-	return midValues, nil
-}
-
 func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table string, tbInfo *model.TableInfo, limitRange string, args []interface{}, count int64) (map[string]string, error) {
 	/*
 		example
@@ -493,7 +490,15 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 	columnNames := make([]string, 0, len(tbInfo.Columns))
 	columnIsNull := make([]string, 0, len(tbInfo.Columns))
 	for _, col := range tbInfo.Columns {
-		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
+		name := dbutil.ColumnName(col.Name.O)
+		// When col value is 0, the result is NULL.
+		// But we can use ISNULL to distinguish between null and 0.
+		if col.FieldType.Tp == mysql.TypeFloat {
+			name = fmt.Sprintf("round(%s, 5-floor(log10(abs(%s))))", name, name)
+		} else if col.FieldType.Tp == mysql.TypeDouble {
+			name = fmt.Sprintf("round(%s, 14-floor(log10(abs(%s))))", name, name)
+		}
+		columnNames = append(columnNames, name)
 		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", dbutil.ColumnName(col.Name.O)))
 	}
 
@@ -574,9 +579,6 @@ func GetBetterIndex(ctx context.Context, db *sql.DB, schema, table string, table
 	copy(indices, tableInfo.Indices)
 	sels := make([]float64, len(indices))
 	for _, index := range indices {
-		if index.Primary || index.Unique {
-			return indices, nil
-		}
 		column := GetColumnsFromIndex(index, tableInfo)[0]
 		selectivity, err := GetSelectivity(ctx, db, schema, table, column.Name.O, tableInfo)
 		if err != nil {
@@ -605,7 +607,7 @@ func GetBetterIndex(ctx context.Context, db *sql.DB, schema, table string, table
 }
 
 func GetSelectivity(ctx context.Context, db *sql.DB, schemaName, tableName, columnName string, tbInfo *model.TableInfo) (float64, error) {
-	query := fmt.Sprintf("SELECT COUNT(DISTINCE %s)/COUNT(1) as SEL FROM %s;", columnName, dbutil.TableName(schemaName, tableName))
+	query := fmt.Sprintf("SELECT COUNT(DISTINCT %s)/COUNT(1) as SEL FROM %s;", dbutil.ColumnName(columnName), dbutil.TableName(schemaName, tableName))
 	var selectivity sql.NullFloat64
 	args := []interface{}{}
 	err := db.QueryRowContext(ctx, query, args...).Scan(&selectivity)
@@ -619,4 +621,19 @@ func GetSelectivity(ctx context.Context, db *sql.DB, schemaName, tableName, colu
 		return 0.0, nil
 	}
 	return selectivity.Float64, nil
+}
+
+func CalculateChunkSize(rowCount int64) int64 {
+	// we assume chunkSize is 50000 for any cluster.
+	chunkSize := int64(50000)
+	if rowCount > int64(chunkSize)*10000 {
+		// we assume we only need 10k chunks for any table.
+		chunkSize = rowCount / 10000
+	}
+	return chunkSize
+}
+
+func AnalyzeTable(ctx context.Context, db *sql.DB, tableName string) error {
+	_, err := db.ExecContext(ctx, "ANALYZE TABLE "+tableName)
+	return err
 }
