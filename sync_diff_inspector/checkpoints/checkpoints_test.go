@@ -46,21 +46,21 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 	rounds := 100
 	for i := 1; i < rounds; i++ {
 		wg.Add(1)
-		go func(i_ int) {
+		go func(i int) {
 			node := &Node{
 				ChunkRange: &chunk.Range{
-					ID: i_,
+					ID: i,
 					Bounds: []*chunk.Bound{
 						{
-							HasLower: i_ != 1,
-							Lower:    strconv.Itoa(i_ + 1000),
-							Upper:    strconv.Itoa(i_ + 1000 + 1),
-							HasUpper: i_ != rounds,
+							HasLower: i != 1,
+							Lower:    strconv.Itoa(i + 1000),
+							Upper:    strconv.Itoa(i + 1000 + 1),
+							HasUpper: i != rounds,
 						},
 					},
 				},
 
-				BucketID: i_,
+				BucketID: i,
 				State:    SuccessState,
 			}
 			if rand.Intn(4) == 0 {

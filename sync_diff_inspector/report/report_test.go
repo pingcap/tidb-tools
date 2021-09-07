@@ -17,6 +17,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
+	"path"
+	"strings"
 	"testing"
 
 	"github.com/BurntSushi/toml"
@@ -24,6 +27,7 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 )
 
@@ -90,10 +94,12 @@ func (s *testReportSuite) TestReport(c *C) {
 	}
 	report.Init(tableDiffs, configsBytes[:2], configsBytes[2])
 
+	// Test CalculateTotal
 	mock.ExpectQuery("select sum.*").WillReturnRows(sqlmock.NewRows([]string{"data"}).AddRow("123"))
 	mock.ExpectQuery("select sum.*where table_schema=.*").WillReturnRows(sqlmock.NewRows([]string{"data"}).AddRow("456"))
 	report.CalculateTotalSize(ctx, db, 2, 4)
 
+	// Test Table Report
 	report.SetTableStructCheckResult("test", "tbl", true)
 	report.SetTableDataCheckResult("test", "tbl", true, 100, 200, 100)
 	report.SetTableMeetError("test", "tbl", errors.New("eeee"))
@@ -113,8 +119,12 @@ func (s *testReportSuite) TestReport(c *C) {
 	c.Assert(new_report.getSortedTables(), DeepEquals, []string{"`atest`.`atbl`", "`test`.`tbl`"})
 	c.Assert(new_report.getDiffRows(), DeepEquals, [][]string{})
 
-	new_report.SetTableStructCheckResult("atest", "atbl", false)
+	new_report.SetTableStructCheckResult("atest", "atbl", true)
 	new_report.SetTableDataCheckResult("atest", "atbl", false, 111, 222, 100)
+	c.Assert(new_report.getSortedTables(), DeepEquals, []string{"`test`.`tbl`"})
+	c.Assert(new_report.getDiffRows(), DeepEquals, [][]string{{"`atest`.`atbl`", "true", "+111/-222"}})
+
+	new_report.SetTableStructCheckResult("atest", "atbl", false)
 	c.Assert(new_report.getSortedTables(), DeepEquals, []string{"`test`.`tbl`"})
 	c.Assert(new_report.getDiffRows(), DeepEquals, [][]string{{"`atest`.`atbl`", "false", "+111/-222"}})
 
@@ -126,4 +136,353 @@ func (s *testReportSuite) TestReport(c *C) {
 		"The rest of tables are all equal.\n"+
 		"The patch file has been generated to './output_dir/patch.sql'\n"+
 		"You can view the comparision details through './output_dir/[123]'\n")
+}
+
+func (s *testReportSuite) TestCalculateTotal(c *C) {
+	ctx := context.Background()
+
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+
+	report := NewReport()
+	createTableSQL := "create table `test`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
+	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
+	c.Assert(err, IsNil)
+
+	tableDiffs := []*common.TableDiff{
+		{
+			Schema:    "test",
+			Table:     "tbl",
+			Info:      tableInfo,
+			Collation: "[123]",
+		},
+	}
+	configs := []*ReportConfig{
+		{
+			Host: "127.0.0.1",
+			Port: 3306,
+			User: "root",
+		},
+		{
+			Host: "127.0.0.1",
+			Port: 3307,
+			User: "root",
+		},
+		{
+			Host: "127.0.0.1",
+			Port: 4000,
+			User: "root",
+		},
+	}
+
+	configsBytes := make([][]byte, 3)
+	for i := 0; i < 3; i++ {
+		buf := new(bytes.Buffer)
+		err := toml.NewEncoder(buf).Encode(configs[i])
+		c.Assert(err, IsNil)
+		configsBytes[i] = buf.Bytes()
+	}
+	report.Init(tableDiffs, configsBytes[:2], configsBytes[2])
+
+	// Normal
+	mock.ExpectQuery("select sum.*").WillReturnRows(sqlmock.NewRows([]string{"data"}).AddRow("123"))
+	report.CalculateTotalSize(ctx, db, 2, 4)
+	c.Assert(report.TotalSize, Equals, int64(123))
+
+	// Fail (and ...
+	// fail to analyze
+	mock.ExpectQuery("select sum.*").WillReturnRows(sqlmock.NewRows([]string{"data"}).AddRow("0"))
+	mock.ExpectQuery("select sum.*").WillReturnRows(sqlmock.NewRows([]string{"data"}).AddRow("1"))
+	report.CalculateTotalSize(ctx, db, 2, 4)
+	c.Assert(strings.Contains(report.TableResults["test"]["tbl"].MeetError.Error(), "ANALYZE TABLE"), IsTrue)
+	c.Assert(report.TotalSize, Equals, int64(124))
+
+	// fail to getSize
+	mock.ExpectQuery("select sum.*").WillReturnRows(sqlmock.NewRows([]string{"data"}).AddRow("0"))
+	mock.ExpectQuery("ANALYZE TABLE `test`.`tbl`.*")
+	report.CalculateTotalSize(ctx, db, 2, 4)
+	c.Assert(report.TableResults["test"]["tbl"].MeetError, ErrorMatches, "*select sum.*")
+	c.Assert(report.TotalSize, Equals, int64(124))
+}
+
+func (s *testReportSuite) TestPrint(c *C) {
+	report := NewReport()
+	createTableSQL := "create table `test`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
+	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
+	c.Assert(err, IsNil)
+
+	tableDiffs := []*common.TableDiff{
+		{
+			Schema:    "test",
+			Table:     "tbl",
+			Info:      tableInfo,
+			Collation: "[123]",
+		},
+	}
+	configs := []*ReportConfig{
+		{
+			Host: "127.0.0.1",
+			Port: 3306,
+			User: "root",
+		},
+		{
+			Host: "127.0.0.1",
+			Port: 3307,
+			User: "root",
+		},
+		{
+			Host: "127.0.0.1",
+			Port: 4000,
+			User: "root",
+		},
+	}
+
+	configsBytes := make([][]byte, 3)
+	for i := 0; i < 3; i++ {
+		buf := new(bytes.Buffer)
+		err := toml.NewEncoder(buf).Encode(configs[i])
+		c.Assert(err, IsNil)
+		configsBytes[i] = buf.Bytes()
+	}
+	report.Init(tableDiffs, configsBytes[:2], configsBytes[2])
+
+	var buf *bytes.Buffer
+	// All Pass
+	report.SetTableStructCheckResult("test", "tbl", true)
+	report.SetTableDataCheckResult("test", "tbl", true, 0, 0, 0)
+	buf = new(bytes.Buffer)
+	report.Print("[123]", buf)
+	c.Assert(buf.String(), Equals, "A total of 0 table have been compared and all are equal.\n"+
+		"You can view the comparision details through './output_dir/[123]'\n")
+
+	// Error
+	report.SetTableMeetError("test", "tbl", errors.New("123"))
+	report.SetTableStructCheckResult("test", "tbl", false)
+	buf = new(bytes.Buffer)
+	report.Print("[123]", buf)
+	c.Assert(buf.String(), Equals, "Error in comparison process:\n"+
+		"123 error occured in `test`.`tbl`\n"+
+		"You can view the comparision details through './output_dir/[123]'\n")
+}
+
+func (s *testReportSuite) TestGetSnapshot(c *C) {
+	report := NewReport()
+	createTableSQL1 := "create table `test`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
+	tableInfo1, err := dbutil.GetTableInfoBySQL(createTableSQL1, parser.New())
+	c.Assert(err, IsNil)
+	createTableSQL2 := "create table `atest`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
+	tableInfo2, err := dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
+	c.Assert(err, IsNil)
+	createTableSQL3 := "create table `xtest`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
+	tableInfo3, err := dbutil.GetTableInfoBySQL(createTableSQL3, parser.New())
+	c.Assert(err, IsNil)
+
+	tableDiffs := []*common.TableDiff{
+		{
+			Schema:    "test",
+			Table:     "tbl",
+			Info:      tableInfo1,
+			Collation: "[123]",
+		}, {
+			Schema:    "atest",
+			Table:     "tbl",
+			Info:      tableInfo2,
+			Collation: "[123]",
+		}, {
+			Schema:    "xtest",
+			Table:     "tbl",
+			Info:      tableInfo3,
+			Collation: "[123]",
+		},
+	}
+	configs := []*ReportConfig{
+		{
+			Host: "127.0.0.1",
+			Port: 3306,
+			User: "root",
+		},
+		{
+			Host: "127.0.0.1",
+			Port: 3307,
+			User: "root",
+		},
+		{
+			Host: "127.0.0.1",
+			Port: 4000,
+			User: "root",
+		},
+	}
+
+	configsBytes := make([][]byte, 3)
+	for i := 0; i < 3; i++ {
+		buf := new(bytes.Buffer)
+		err := toml.NewEncoder(buf).Encode(configs[i])
+		c.Assert(err, IsNil)
+		configsBytes[i] = buf.Bytes()
+	}
+	report.Init(tableDiffs, configsBytes[:2], configsBytes[2])
+
+	report.SetTableStructCheckResult("test", "tbl", true)
+	report.SetTableDataCheckResult("test", "tbl", false, 100, 100, 0)
+	report.SetTableDataCheckResult("test", "tbl", true, 0, 0, 1)
+	report.SetTableDataCheckResult("test", "tbl", false, 200, 200, 3)
+
+	report.SetTableStructCheckResult("atest", "tbl", true)
+	report.SetTableDataCheckResult("atest", "tbl", false, 100, 100, 0)
+	report.SetTableDataCheckResult("atest", "tbl", true, 0, 0, 1)
+	report.SetTableDataCheckResult("atest", "tbl", false, 200, 200, 3)
+
+	report.SetTableStructCheckResult("xtest", "tbl", true)
+	report.SetTableDataCheckResult("xtest", "tbl", false, 100, 100, 0)
+	report.SetTableDataCheckResult("xtest", "tbl", true, 0, 0, 1)
+	report.SetTableDataCheckResult("xtest", "tbl", false, 200, 200, 3)
+
+	report_snap, err := report.GetSnapshot(1, "test", "tbl")
+	c.Assert(err, IsNil)
+	c.Assert(report_snap.TotalSize, Equals, report.TotalSize)
+	c.Assert(report_snap.Result, Equals, report.Result)
+	for key, value := range report.TableResults {
+		if _, ok := report_snap.TableResults[key]; !ok {
+			v, ok := value["tbl"]
+			c.Assert(ok, IsTrue)
+			c.Assert(v.Schema, Equals, "atest")
+			continue
+		}
+
+		if _, ok := report_snap.TableResults[key]["tbl"]; !ok {
+			c.Assert(key, Equals, "atest")
+			continue
+		}
+
+		v1 := value["tbl"]
+		v2 := report_snap.TableResults[key]["tbl"]
+		c.Assert(v1.Schema, Equals, v2.Schema)
+		c.Assert(v1.Table, Equals, v2.Table)
+		c.Assert(v1.StructEqual, Equals, v2.StructEqual)
+		c.Assert(v1.DataEqual, Equals, v2.DataEqual)
+		c.Assert(v1.MeetError, Equals, v2.MeetError)
+
+		chunkMap1 := v1.ChunkMap
+		chunkMap2 := v2.ChunkMap
+		for id, r1 := range chunkMap1 {
+			if _, ok := chunkMap2[id]; !ok {
+				c.Assert(id, Equals, 3)
+				continue
+			}
+			c.Assert(id, LessEqual, 1)
+			r2 := chunkMap2[id]
+			c.Assert(r1.RowsAdd, Equals, r2.RowsAdd)
+			c.Assert(r1.RowsCnt, Equals, r2.RowsCnt)
+			c.Assert(r1.RowsDelete, Equals, r2.RowsDelete)
+		}
+
+	}
+}
+
+func (s *testReportSuite) TestCommitSummary(c *C) {
+	report := NewReport()
+	createTableSQL1 := "create table `test`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
+	tableInfo1, err := dbutil.GetTableInfoBySQL(createTableSQL1, parser.New())
+	c.Assert(err, IsNil)
+	createTableSQL2 := "create table `atest`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
+	tableInfo2, err := dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
+	c.Assert(err, IsNil)
+	createTableSQL3 := "create table `xtest`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
+	tableInfo3, err := dbutil.GetTableInfoBySQL(createTableSQL3, parser.New())
+	c.Assert(err, IsNil)
+
+	tableDiffs := []*common.TableDiff{
+		{
+			Schema:    "test",
+			Table:     "tbl",
+			Info:      tableInfo1,
+			Collation: "[123]",
+		}, {
+			Schema:    "atest",
+			Table:     "tbl",
+			Info:      tableInfo2,
+			Collation: "[123]",
+		}, {
+			Schema:    "xtest",
+			Table:     "tbl",
+			Info:      tableInfo3,
+			Collation: "[123]",
+		},
+	}
+	configs := []*ReportConfig{
+		{
+			Host: "127.0.0.1",
+			Port: 3306,
+			User: "root",
+		},
+		{
+			Host: "127.0.0.1",
+			Port: 3307,
+			User: "root",
+		},
+		{
+			Host: "127.0.0.1",
+			Port: 4000,
+			User: "root",
+		},
+	}
+
+	configsBytes := make([][]byte, 3)
+	for i := 0; i < 3; i++ {
+		buf := new(bytes.Buffer)
+		err := toml.NewEncoder(buf).Encode(configs[i])
+		c.Assert(err, IsNil)
+		configsBytes[i] = buf.Bytes()
+	}
+	report.Init(tableDiffs, configsBytes[:2], configsBytes[2])
+
+	report.SetTableStructCheckResult("test", "tbl", true)
+	report.SetTableDataCheckResult("test", "tbl", true, 100, 200, 1)
+	report.SetRowsCnt("test", "tbl", 10000, 1)
+
+	report.SetTableStructCheckResult("atest", "tbl", true)
+	report.SetTableDataCheckResult("atest", "tbl", false, 100, 200, 2)
+	report.SetRowsCnt("atest", "tbl", 10000, 2)
+
+	report.SetTableStructCheckResult("xtest", "tbl", false)
+	report.SetTableDataCheckResult("xtest", "tbl", false, 100, 200, 3)
+	report.SetRowsCnt("xtest", "tbl", 10000, 3)
+
+	outputDir := "./"
+	err = report.CommitSummary(&config.TaskConfig{OutputDir: outputDir})
+	c.Assert(err, IsNil)
+	filename := path.Join(outputDir, "summary.txt")
+	file, err := os.Open(filename)
+	c.Assert(err, IsNil)
+
+	p := make([]byte, 1024)
+	file.Read(p)
+
+	c.Assert(string(p), Matches, "Summary\n\n\n\n"+
+		"Source Database\n\n\n\n"+
+		"host = \"127.0.0.1\"\n"+
+		"port = 3306\n"+
+		"user = \"root\"\n\n"+
+		"host = \"127.0.0.1\"\n"+
+		"port = 3307\n"+
+		"user = \"root\"\n\n"+
+		"Target Databases\n\n\n\n"+
+		"host = \"127.0.0.1\"\n"+
+		"port = 4000\n"+
+		"user = \"root\"\n\n"+
+		"Comparison Result\n\n\n\n"+
+		"The table structure and data in following tables are equivalent\n\n"+
+		"`test`.`tbl`\n\n"+
+		"The following tables contains inconsistent data\n\n"+
+		"+---------------+--------------------+----------------+\n"+
+		"|     TABLE     | STRUCTURE EQUALITY | DATA DIFF ROWS |\n"+
+		"+---------------+--------------------+----------------+\n"+
+		"| `atest`.`tbl` | true               | +100/-200      |\n"+
+		"| `xtest`.`tbl` | false              | +100/-200      |\n"+
+		"+---------------+--------------------+----------------+\n"+
+		"Time Cost:.*")
+
+	file.Close()
+	err = os.Remove(filename)
+	c.Assert(err, IsNil)
 }
