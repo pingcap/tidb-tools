@@ -16,6 +16,7 @@ package splitter
 import (
 	"context"
 	"database/sql"
+
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
@@ -95,6 +96,7 @@ func (s *BucketIterator) Next() (*chunk.Range, error) {
 	}
 
 	c := s.chunks[s.nextChunk]
+	c.Index.ChunkIndex = int(s.nextChunk)
 	s.nextChunk = s.nextChunk + 1
 	return c, nil
 }
@@ -157,7 +159,6 @@ func (s *BucketIterator) splitChunkForBucket(bucketID int, count int64, chunkRan
 	//            count                     chunkCnt
 	// 0 ... 0.5x ... x ... 1.5x   ------->   1
 	//       1.5x ... 2x ... 2.5x  ------->   2
-
 	s.chunkPool.Apply(func() {
 		halfChunkSize := s.chunkSize / 2
 		chunkCnt := int((count + halfChunkSize) / s.chunkSize)
@@ -166,9 +167,8 @@ func (s *BucketIterator) splitChunkForBucket(bucketID int, count int64, chunkRan
 			s.errCh <- errors.Trace(err)
 			return
 		}
-		chunk.InitChunks(chunks, chunk.Bucket, bucketID, s.table.Collation, s.table.Range)
+		chunk.InitChunks(chunks, chunk.Bucket, bucketID, s.table.Collation, s.table.Range, chunkCnt)
 		progress.UpdateTotal(s.progressID, len(chunks), false)
-
 		s.chunksCh <- chunks
 	})
 }
@@ -183,7 +183,6 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 		latestCount              int64
 		err                      error
 	)
-
 	beginBucket := 0
 	if startRange != nil {
 		chunkRange := chunk.NewChunkRange()
@@ -268,7 +267,7 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 		}
 	}
 	chunks := []*chunk.Range{chunkRange}
-	chunk.InitChunks(chunks, chunk.Bucket, len(s.buckets), s.table.Collation, s.table.Range)
+	chunk.InitChunks(chunks, chunk.Bucket, len(s.buckets), s.table.Collation, s.table.Range, 1)
 	progress.UpdateTotal(s.progressID, len(chunks), false)
 	s.chunksCh <- chunks
 	s.chunkPool.WaitFinished()
