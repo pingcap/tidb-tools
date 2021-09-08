@@ -295,7 +295,7 @@ func (*testChunkSuite) TestChunkInit(c *C) {
 		},
 	}
 
-	InitChunks(chunks, Others, 1, "[123]", "[sdfds fsd fd gd]")
+	InitChunks(chunks, Others, 1, "[123]", "[sdfds fsd fd gd]", 1)
 	c.Assert(chunks[0].Where, Equals, "((((`a` COLLATE '[123]' > ?) OR (`a` = ? AND `b` COLLATE '[123]' > ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[123]' > ?)) AND ((`a` COLLATE '[123]' < ?) OR (`a` = ? AND `b` COLLATE '[123]' < ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[123]' <= ?))) AND [sdfds fsd fd gd])")
 	c.Assert(chunks[0].Args, DeepEquals, []string{"1", "1", "3", "1", "3", "5", "2", "2", "4", "2", "4", "6"})
 	c.Assert(chunks[0].BucketID, Equals, 1)
