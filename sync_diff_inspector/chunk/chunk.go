@@ -48,9 +48,26 @@ type Bound struct {
 	HasUpper bool `json:"has-upper"`
 }
 
+type ChunkID struct {
+	TableIndex  int `json:"table-index"`
+	BucketIndex int `json:"bucket-index"`
+	ChunkIndex  int `json:"chunk-index"`
+	ChunkCnt    int `json:"chunk-count"`
+}
+
+func (c *ChunkID) Copy() *ChunkID {
+	return &ChunkID{
+		TableIndex:  c.TableIndex,
+		BucketIndex: c.BucketIndex,
+		ChunkIndex:  c.ChunkIndex,
+		ChunkCnt:    c.ChunkCnt,
+	}
+}
+
 // Range represents chunk range
 type Range struct {
 	ID      int       `json:"id"`
+	Index   *ChunkID  `json:"index"`
 	Type    ChunkType `json:"type"`
 	Bounds  []*Bound  `json:"bounds"`
 	IsFirst bool      `json:"is-first"`
@@ -68,6 +85,7 @@ func NewChunkRange() *Range {
 	return &Range{
 		Bounds:       make([]*Bound, 0, 2),
 		columnOffset: make(map[string]int),
+		Index:        &ChunkID{},
 	}
 }
 
@@ -277,6 +295,7 @@ func (c *Range) Clone() *Range {
 	for i, v := range c.columnOffset {
 		newChunk.columnOffset[i] = v
 	}
+	newChunk.Index = c.Index.Copy()
 	newChunk.BucketID = c.BucketID
 	return newChunk
 }
@@ -287,7 +306,7 @@ func (c *Range) CopyAndUpdate(column, lower, upper string, updateLower, updateUp
 	return newChunk
 }
 
-func InitChunks(chunks []*Range, t ChunkType, bucketID int, collation, limits string) {
+func InitChunks(chunks []*Range, t ChunkType, bucketID int, collation, limits string, chunkCnt int) {
 	if chunks == nil {
 		return
 	}
@@ -296,6 +315,10 @@ func InitChunks(chunks []*Range, t ChunkType, bucketID int, collation, limits st
 		chunk.Where = fmt.Sprintf("((%s) AND %s)", conditions, limits)
 		chunk.Args = args
 		chunk.BucketID = bucketID
+		chunk.Index = &ChunkID{
+			BucketIndex: bucketID / 2,
+			ChunkCnt:    chunkCnt,
+		}
 		chunk.Type = t
 	}
 }
@@ -305,5 +328,8 @@ func InitChunk(chunk *Range, t ChunkType, bucketID int, collation, limits string
 	chunk.Where = fmt.Sprintf("((%s) AND %s)", conditions, limits)
 	chunk.Args = args
 	chunk.BucketID = bucketID
+	chunk.Index = &ChunkID{
+		BucketIndex: bucketID,
+	}
 	chunk.Type = t
 }
