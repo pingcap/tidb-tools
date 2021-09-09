@@ -44,12 +44,18 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 	c.Assert(id, Equals, 0)
 	wg := &sync.WaitGroup{}
 	rounds := 100
-	for i := 1; i < rounds; i++ {
+	for i := 0; i < rounds; i++ {
 		wg.Add(1)
 		go func(i int) {
 			node := &Node{
 				ChunkRange: &chunk.Range{
 					ID: i,
+					Index: &chunk.ChunkID{
+						TableIndex:  0,
+						BucketIndex: i / 10,
+						ChunkIndex:  i % 10,
+						ChunkCnt:    10,
+					},
 					Bounds: []*chunk.Bound{
 						{
 							HasLower: i != 1,
@@ -85,7 +91,7 @@ func (cp *testCheckpointSuit) TestLoadChunk(c *C) {
 	ctx := context.Background()
 	rounds := 100
 	wg := &sync.WaitGroup{}
-	for i := 1; i < rounds; i++ {
+	for i := 0; i < rounds; i++ {
 		wg.Add(1)
 		go func(i int) {
 			node := &Node{
@@ -98,6 +104,12 @@ func (cp *testCheckpointSuit) TestLoadChunk(c *C) {
 							Upper:    strconv.Itoa(i + 1000 + 1),
 							HasUpper: i != rounds,
 						},
+					},
+					Index: &chunk.ChunkID{
+						TableIndex:  0,
+						BucketIndex: i / 10,
+						ChunkIndex:  i % 10,
+						ChunkCnt:    10,
 					},
 				},
 			}
