@@ -28,6 +28,7 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"go.uber.org/zap"
 )
 
@@ -636,4 +637,25 @@ func CalculateChunkSize(rowCount int64) int64 {
 func AnalyzeTable(ctx context.Context, db *sql.DB, tableName string) error {
 	_, err := db.ExecContext(ctx, "ANALYZE TABLE "+tableName)
 	return err
+}
+
+func GetSQLFileName(index *chunk.ChunkID) string {
+	return fmt.Sprintf("%d:%d:%d", index.TableIndex, index.BucketIndex, index.ChunkIndex)
+}
+
+func GetChunkIDFromSQLFileName(fileIDStr string) (int, int, int, error) {
+	ids := strings.Split(fileIDStr, ":")
+	tableIndex, err := strconv.Atoi(ids[0])
+	if err != nil {
+		return 0, 0, 0, errors.Trace(err)
+	}
+	bucketIndex, err := strconv.Atoi(ids[1])
+	if err != nil {
+		return 0, 0, 0, errors.Trace(err)
+	}
+	chunkIndex, err := strconv.Atoi(ids[2])
+	if err != nil {
+		return 0, 0, 0, errors.Trace(err)
+	}
+	return tableIndex, bucketIndex, chunkIndex, nil
 }

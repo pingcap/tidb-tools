@@ -24,6 +24,7 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 )
 
 func TestClient(t *testing.T) {
@@ -429,4 +430,22 @@ func (s *testUtilsSuite) TestGetBetterIndex(c *C) {
 func (s *testUtilsSuite) TestCalculateChunkSize(c *C) {
 	c.Assert(CalculateChunkSize(1000), Equals, int64(50000))
 	c.Assert(CalculateChunkSize(1000000000), Equals, int64(100000))
+}
+
+func (s *testUtilsSuite) TestGetSQLFileName(c *C) {
+	index := &chunk.ChunkID{
+		TableIndex:  0,
+		BucketIndex: 0,
+		ChunkIndex:  0,
+		ChunkCnt:    10,
+	}
+	c.Assert(GetSQLFileName(index), Equals, "0:0:0")
+}
+
+func (s *testUtilsSuite) TestGetChunkIDFromSQLFileName(c *C) {
+	tableIndex, bucketIndex, chunkIndex, err := GetChunkIDFromSQLFileName("11:12:13")
+	c.Assert(err, IsNil)
+	c.Assert(tableIndex, Equals, 11)
+	c.Assert(bucketIndex, Equals, 12)
+	c.Assert(chunkIndex, Equals, 13)
 }

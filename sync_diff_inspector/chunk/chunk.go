@@ -16,8 +16,10 @@ package chunk
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
+	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"go.uber.org/zap"
@@ -50,13 +52,37 @@ type Bound struct {
 
 // ChunkID is to identify the sequence of chunks
 type ChunkID struct {
-	TableIndex  int `json:"table-index"`
+	TableIndex int `json:"table-index"`
+	// we especially treat random split has only one bucket
+	// which is the whole table
 	BucketIndex int `json:"bucket-index"`
 	ChunkIndex  int `json:"chunk-index"`
 	//  `ChunkCnt` is the number of chunks in this bucket
 	//  We can compare `ChunkIndex` and `ChunkCnt` to know
 	// whether this chunk is the last one
 	ChunkCnt int `json:"chunk-count"`
+}
+
+func (c *ChunkID) Compare(o *ChunkID) int {
+	if c.TableIndex < o.TableIndex {
+		return -1
+	}
+	if c.TableIndex == o.TableIndex {
+		if c.BucketIndex < o.BucketIndex {
+			return -1
+		}
+		if c.BucketIndex == o.BucketIndex {
+			if c.ChunkIndex < o.ChunkIndex {
+				return -1
+			}
+			if c.ChunkIndex == o.ChunkIndex {
+				return 0
+			}
+			return 1
+		}
+		return 1
+	}
+	return 1
 }
 
 func (c *ChunkID) Copy() *ChunkID {
@@ -68,9 +94,34 @@ func (c *ChunkID) Copy() *ChunkID {
 	}
 }
 
+func (c *ChunkID) ToString() string {
+	return fmt.Sprintf("%d:%d:%d:%d", c.TableIndex, c.BucketIndex, c.ChunkIndex, c.ChunkCnt)
+}
+
+func (c *ChunkID) FromString(s string) error {
+	ids := strings.Split(s, ":")
+	tableIndex, err := strconv.Atoi(ids[0])
+	if err != nil {
+		return errors.Trace(err)
+	}
+	bucketIndex, err := strconv.Atoi(ids[1])
+	if err != nil {
+		return errors.Trace(err)
+	}
+	chunkIndex, err := strconv.Atoi(ids[2])
+	if err != nil {
+		return errors.Trace(err)
+	}
+	chunkCnt, err := strconv.Atoi(ids[3])
+	if err != nil {
+		return errors.Trace(err)
+	}
+	c.TableIndex, c.BucketIndex, c.ChunkIndex, c.ChunkCnt = tableIndex, bucketIndex, chunkIndex, chunkCnt
+	return nil
+}
+
 // Range represents chunk range
 type Range struct {
-	ID      int       `json:"id"`
 	Index   *ChunkID  `json:"index"`
 	Type    ChunkType `json:"type"`
 	Bounds  []*Bound  `json:"bounds"`
@@ -82,6 +133,14 @@ type Range struct {
 
 	columnOffset map[string]int
 	BucketID     int `json:"bucket-id"`
+}
+
+func (r *Range) IsFirstChunkForBucket() bool {
+	return r.Index.ChunkIndex == 0
+}
+
+func (r *Range) IsLastChunkForBucket() bool {
+	return r.Index.ChunkIndex == r.Index.ChunkCnt-1
 }
 
 // NewChunkRange return a Range.
@@ -292,7 +351,6 @@ func (c *Range) Clone() *Range {
 			HasUpper: bound.HasUpper,
 		})
 	}
-	newChunk.ID = c.ID
 	newChunk.Type = c.Type
 	newChunk.Where = c.Where
 	newChunk.Args = c.Args
@@ -301,6 +359,8 @@ func (c *Range) Clone() *Range {
 	}
 	newChunk.Index = c.Index.Copy()
 	newChunk.BucketID = c.BucketID
+	newChunk.IsFirst = c.IsFirst
+	newChunk.IsLast = c.IsLast
 	return newChunk
 }
 
