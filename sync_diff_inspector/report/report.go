@@ -27,10 +27,13 @@ import (
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
+	"go.uber.org/zap"
 )
 
 const (
@@ -41,6 +44,7 @@ const (
 	Error = "error"
 )
 
+// ReportConfig stores the config information for the user
 type ReportConfig struct {
 	Host     string `toml:"host"`
 	Port     int    `toml:"port"`
@@ -51,35 +55,36 @@ type ReportConfig struct {
 
 // TableResult saves the check result for every table.
 type TableResult struct {
-	Schema      string               `json:"schma"`
-	Table       string               `json:"table"`
-	StructEqual bool                 `json:"struct-equal"`
-	DataEqual   bool                 `json:"data-equal"`
-	MeetError   error                `json:"meet-error"`
-	ChunkMap    map[int]*ChunkResult `json:"chunk-result"`
+	Schema      string                  `json:"schma"`
+	Table       string                  `json:"table"`
+	StructEqual bool                    `json:"struct-equal"`
+	DataEqual   bool                    `json:"data-equal"`
+	MeetError   error                   `json:"meet-error"`
+	ChunkMap    map[string]*ChunkResult `json:"chunk-result"` // `ChunkMap` stores the `ChunkResult` of each chunk of the table
 }
 
+// ChunkResult save the necessarily information to provide summary information
 type ChunkResult struct {
-	RowsAdd    int   `json:"rows-add"`
-	RowsDelete int   `json:"rows-delete"`
-	RowsCnt    int64 `json:"rows-count"`
+	RowsAdd    int   `json:"rows-add"`    // `RowAdd` is the number of rows needed to add
+	RowsDelete int   `json:"rows-delete"` // `RowDelete` is the number of rows needed to delete
+	RowsCnt    int64 `json:"rows-count"`  // `RowsCnt` is the number of rows of the chunk
 }
 
 // Report saves the check results.
 type Report struct {
 	sync.RWMutex
-	// Result is pass or fail
-	Result       string
-	PassNum      int32
-	FailedNum    int32
-	TableResults map[string]map[string]*TableResult `json:"table-results"`
+	Result       string                             // Result is pass or fail
+	PassNum      int32                              // The pass number of tables
+	FailedNum    int32                              // The failed number of tables
+	TableResults map[string]map[string]*TableResult `json:"table-results"` // TableResult saved the map of  `schema` => `table` => `tableResult`
 	StartTime    time.Time                          `json:"start-time"`
 	Duration     time.Duration                      `json:"time-duration"`
-	TotalSize    int64
+	TotalSize    int64                              // Total size of the checked tables
 	SourceConfig [][]byte
 	TargetConfig []byte
 }
 
+// LoadReport loads the report from the checkpoint
 func (r *Report) LoadReport(reportInfo *Report) {
 	r.StartTime = time.Now()
 	r.Duration = reportInfo.Duration
@@ -133,10 +138,9 @@ func (r *Report) getDiffRows() [][]string {
 	return diffRows
 }
 
-func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB, tableCnt, nthreads int) {
-	wg := &sync.WaitGroup{}
-	analyzeWorkerCh := make(chan *struct{ schema, table string }, tableCnt)
-	sizeCh := make(chan int64, tableCnt)
+// CalculateTotalSize calculate the total size of all the checked tables
+// Notice, user should run the analyze table first, when some of tables' size are zero.
+func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB) {
 	for schema, tableMap := range r.TableResults {
 		for table := range tableMap {
 			size, err := utils.GetTableSize(ctx, db, schema, table)
@@ -144,34 +148,11 @@ func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB, tableCnt, n
 				r.SetTableMeetError(schema, table, err)
 			}
 			if size == 0 {
-				analyzeWorkerCh <- &struct{ schema, table string }{schema, table}
+				log.Warn("fail to get the correct size of table, if you want to get the correct size, please analyze the corresponding tables", zap.String("table", dbutil.TableName(schema, table)))
 			} else {
 				r.TotalSize += size
 			}
 		}
-	}
-	close(analyzeWorkerCh)
-	for i := 0; i < nthreads; i++ {
-		wg.Add(1)
-		go func() {
-			for t := range analyzeWorkerCh {
-				err := utils.AnalyzeTable(ctx, db, dbutil.TableName(t.schema, t.table))
-				if err != nil {
-					r.SetTableMeetError(t.schema, t.table, err)
-				}
-				size, err := utils.GetTableSize(ctx, db, t.schema, t.table)
-				if err != nil {
-					r.SetTableMeetError(t.schema, t.table, err)
-				}
-				sizeCh <- size
-			}
-			wg.Done()
-		}()
-	}
-	wg.Wait()
-	close(sizeCh)
-	for size := range sizeCh {
-		r.TotalSize += size
 	}
 }
 
@@ -285,7 +266,7 @@ func (r *Report) Init(tableDiffs []*common.TableDiff, sourceConfig [][]byte, tar
 			StructEqual: true,
 			DataEqual:   true,
 			MeetError:   nil,
-			ChunkMap:    make(map[int]*ChunkResult),
+			ChunkMap:    make(map[string]*ChunkResult),
 		}
 	}
 }
@@ -301,21 +282,21 @@ func (r *Report) SetTableStructCheckResult(schema, table string, equal bool) {
 }
 
 // SetTableDataCheckResult sets the data check result for table.
-func (r *Report) SetTableDataCheckResult(schema, table string, equal bool, rowsAdd, rowsDelete int, id int) {
+func (r *Report) SetTableDataCheckResult(schema, table string, equal bool, rowsAdd, rowsDelete int, id *chunk.ChunkID) {
 	r.Lock()
 	defer r.Unlock()
 	if !equal {
 		result := r.TableResults[schema][table]
 		result.DataEqual = equal
-		if _, ok := result.ChunkMap[id]; !ok {
-			result.ChunkMap[id] = &ChunkResult{
+		if _, ok := result.ChunkMap[id.ToString()]; !ok {
+			result.ChunkMap[id.ToString()] = &ChunkResult{
 				RowsAdd:    0,
 				RowsDelete: 0,
 				RowsCnt:    0,
 			}
 		}
-		result.ChunkMap[id].RowsAdd += rowsAdd
-		result.ChunkMap[id].RowsDelete += rowsDelete
+		result.ChunkMap[id.ToString()].RowsAdd += rowsAdd
+		result.ChunkMap[id.ToString()].RowsDelete += rowsDelete
 		if r.Result != Error {
 			r.Result = Fail
 		}
@@ -341,7 +322,9 @@ func (r *Report) SetTableMeetError(schema, table string, err error) {
 	r.Result = Error
 }
 
-func (r *Report) GetSnapshot(chunkID int, schema, table string) (*Report, error) {
+// GetSnapshot get the snapshot of the current state of the report, then we can restart the
+// sync-diff and get the correct report state.
+func (r *Report) GetSnapshot(chunkID *chunk.ChunkID, schema, table string) (*Report, error) {
 	r.RLock()
 	defer r.RUnlock()
 	targetID := utils.UniqueID(schema, table)
@@ -351,7 +334,7 @@ func (r *Report) GetSnapshot(chunkID int, schema, table string) (*Report, error)
 		for table, result := range tableMap {
 			reportID := utils.UniqueID(schema, table)
 			if reportID >= targetID {
-				chunkRes := make(map[int]*ChunkResult)
+				chunkRes := make(map[string]*ChunkResult)
 				reserveMap[schema][table] = &TableResult{
 					Schema:      result.Schema,
 					Table:       result.Table,
@@ -360,7 +343,12 @@ func (r *Report) GetSnapshot(chunkID int, schema, table string) (*Report, error)
 					MeetError:   result.MeetError,
 				}
 				for id, chunkResult := range result.ChunkMap {
-					if id <= chunkID {
+					sid := new(chunk.ChunkID)
+					err := sid.FromString(id)
+					if err != nil {
+						return nil, errors.Trace(err)
+					}
+					if sid.Compare(chunkID) <= 0 {
 						chunkRes[id] = chunkResult
 					}
 				}
@@ -382,16 +370,17 @@ func (r *Report) GetSnapshot(chunkID int, schema, table string) (*Report, error)
 	}, nil
 }
 
-func (r *Report) SetRowsCnt(schema, table string, cnt int64, id int) {
+// SetRowCnt set the `RowCnt` of the `schema`.`table`
+func (r *Report) SetRowsCnt(schema, table string, cnt int64, id *chunk.ChunkID) {
 	r.Lock()
 	defer r.Unlock()
 	result := r.TableResults[schema][table]
-	if _, ok := result.ChunkMap[id]; !ok {
-		result.ChunkMap[id] = &ChunkResult{
+	if _, ok := result.ChunkMap[id.ToString()]; !ok {
+		result.ChunkMap[id.ToString()] = &ChunkResult{
 			RowsAdd:    0,
 			RowsDelete: 0,
 			RowsCnt:    0,
 		}
 	}
-	result.ChunkMap[id].RowsCnt += cnt
+	result.ChunkMap[id.ToString()].RowsCnt += cnt
 }
