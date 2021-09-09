@@ -67,43 +67,40 @@ type Node struct {
 	State string `json:"state"` // indicate the state ("success" or "failed") of the chunk
 
 	ChunkRange *chunk.Range `json:"chunk-range"`
-	TableIndex int          `json:"table-index"`
 	// for bucket checkpoint
 	BucketID int   `json:"bucket-id"`
 	IndexID  int64 `json:"index-id"`
 }
 
-func (n *Node) GetID() int { return n.ChunkRange.ID }
+func (n *Node) GetID() *chunk.ChunkID { return n.ChunkRange.Index }
 
 func (n *Node) GetState() string { return n.State }
 
-func (n *Node) IsFirstChunkForBucket() bool {
-	return n.ChunkRange.Index.ChunkIndex == 0
-}
+func (n *Node) GetTableIndex() int { return n.ChunkRange.Index.TableIndex }
 
-func (n *Node) IsLastChunkForBucket() bool {
-	return n.ChunkRange.Index.ChunkIndex == n.ChunkRange.Index.ChunkCnt-1
-}
+func (n *Node) GetBucketIndex() int { return n.ChunkRange.Index.BucketIndex }
+
+func (n *Node) GetChunkIndex() int { return n.ChunkRange.Index.ChunkIndex }
 
 // IsAdjacent represents whether the next node is adjacent node.
 // it's the important logic for checkpoint update.
 // we need keep this node save to checkpoint in global order.
 func (n *Node) IsAdjacent(next *Node) bool {
-	if n.ChunkRange.Index.TableIndex == next.ChunkRange.Index.TableIndex-1 {
+	if n.GetTableIndex() == next.GetTableIndex()-1 {
 		if n.ChunkRange.IsLastChunkForTable() && next.ChunkRange.IsFirstChunkForTable() {
 			return true
 		}
 	}
-	if n.ChunkRange.Index.TableIndex == next.ChunkRange.Index.TableIndex {
+	if n.GetTableIndex() == next.GetTableIndex() {
 		// same table
-		if n.ChunkRange.Index.BucketIndex == next.ChunkRange.Index.BucketIndex-1 {
-			if n.IsLastChunkForBucket() && next.IsFirstChunkForBucket() {
+		if n.GetBucketIndex() == next.GetBucketIndex()-1 {
+			if n.ChunkRange.IsLastChunkForBucket() && next.ChunkRange.IsFirstChunkForBucket() {
 				return true
 			}
 			return false
 		}
-		if n.ChunkRange.Index.BucketIndex == next.ChunkRange.Index.BucketIndex {
-			return n.ChunkRange.Index.ChunkIndex == next.ChunkRange.Index.ChunkIndex-1
+		if n.GetBucketIndex() == next.GetBucketIndex() {
+			return n.GetChunkIndex() == next.GetChunkIndex()-1
 		}
 		return false
 	}
@@ -112,15 +109,15 @@ func (n *Node) IsAdjacent(next *Node) bool {
 
 // IsLess represents whether the cur node is less than next node.
 func (n *Node) IsLess(next *Node) bool {
-	if n.ChunkRange.Index.TableIndex <= next.ChunkRange.Index.TableIndex-1 {
+	if n.GetTableIndex() <= next.GetTableIndex()-1 {
 		return true
 	}
-	if n.ChunkRange.Index.TableIndex == next.ChunkRange.Index.TableIndex {
-		if n.ChunkRange.Index.BucketIndex <= next.ChunkRange.Index.BucketIndex-1 {
+	if n.GetTableIndex() == next.GetTableIndex() {
+		if n.GetBucketIndex() <= next.GetBucketIndex()-1 {
 			return true
 		}
-		if n.ChunkRange.Index.BucketIndex == next.ChunkRange.Index.BucketIndex {
-			return n.ChunkRange.Index.ChunkIndex < next.ChunkRange.Index.ChunkIndex
+		if n.GetBucketIndex() == next.GetBucketIndex() {
+			return n.GetChunkIndex() < next.GetChunkIndex()
 		}
 		return false
 	}
@@ -130,15 +127,18 @@ func (n *Node) IsLess(next *Node) bool {
 // Heap maintain a Min Heap, which can be accessed by multiple threads and protected by mutex.
 type Heap struct {
 	Nodes            []*Node
-	CurrentSavedNode *Node       // CurrentSavedID save the lastest save chunk, initially was 0, updated by saveChunk method
+	CurrentSavedNode *Node       // CurrentSavedNode save the minimum checker chunk, updated by `GetChunkSnapshot` method
 	mu               *sync.Mutex // protect critical section
 }
 
+// Checkpoint provide the ability to restart the sync-diff process from the
+// latest previous exit point (due to error or intention).
 type Checkpoint struct {
-	hp       *Heap
-	ChunkMap map[uint]map[uint]uint // ChunkMap records the maps of TableIndex => BucketIndex => ChunkIndex
+	hp *Heap
 }
 
+// SaveState contains the information of the latest checked chunk and state of `report`
+// When sync-diff start from the checkpoint, it will load this information and continue running
 type SavedState struct {
 	Chunk  *Node          `json:"chunk-info"`
 	Report *report.Report `json:"report-info"`
@@ -200,6 +200,7 @@ func (cp *Checkpoint) Init() {
 	cp.hp = hp
 }
 
+// GetChunkSnapshot get the snapshot of the minimum continuous checked chunk
 func (cp *Checkpoint) GetChunkSnapshot() *Node {
 	cp.hp.mu.Lock()
 	defer cp.hp.mu.Unlock()
@@ -227,27 +228,27 @@ func (cp *Checkpoint) GetChunkSnapshot() *Node {
 }
 
 // SaveChunk saves the chunk to file.
-func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string, cur *Node, reportInfo *report.Report) (int, error) {
+func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string, cur *Node, reportInfo *report.Report) (*chunk.ChunkID, error) {
 	if cur != nil {
-		log.Info("save checkpoint",
-			zap.Any("chunk", cur),
-			zap.String("state", cur.GetState()))
 		savedState := &SavedState{
 			Chunk:  cur,
 			Report: reportInfo,
 		}
 		checkpointData, err := json.Marshal(savedState)
 		if err != nil {
-			log.Warn("fail to save the chunk to the file", zap.Int("id", cur.GetID()))
-			return 0, errors.Trace(err)
+			log.Warn("fail to save the chunk to the file", zap.Any("chunk index", cur.GetID()), zap.Error(err))
+			return nil, errors.Trace(err)
 		}
 
 		if err = ioutil2.WriteFileAtomic(fileName, checkpointData, config.LocalFilePerm); err != nil {
-			return 0, err
+			return nil, err
 		}
+		log.Info("save checkpoint",
+			zap.Any("chunk", cur),
+			zap.String("state", cur.GetState()))
 		return cur.GetID(), nil
 	}
-	return 0, nil
+	return nil, nil
 }
 
 // LoadChunk loads chunk info from file `chunk`
@@ -264,6 +265,8 @@ func (cp *Checkpoint) LoadChunk(fileName string) (*Node, *report.Report, error) 
 	return n.Chunk, n.Report, nil
 }
 
+// CheckConfig stores the information about the config of the current run.
+// If we restart a sync-diff from a different config, the checkpoint is disable.
 type CheckConfig struct {
 	Table     string `json:"tables"`
 	Fields    string `json:"fields"`
