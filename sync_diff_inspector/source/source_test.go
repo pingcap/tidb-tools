@@ -66,31 +66,20 @@ type MockChunkIterator struct {
 	index     *chunk.ChunkID
 }
 
-var MAXCHUNKS *chunk.ChunkID = &chunk.ChunkID{
-	TableIndex:  5,
-	BucketIndex: 0,
-	ChunkIndex:  5,
-	ChunkCnt:    CHUNKS,
-}
-
+const CHUNKS = 5
 const BUCKETS = 1
-const CHUNKS = 6
 
 func equal(a, b *chunk.ChunkID) bool {
-	return a.TableIndex == b.TableIndex && a.BucketIndex == b.BucketIndex && a.ChunkIndex == b.ChunkIndex && a.ChunkCnt == b.ChunkCnt
+	return a.TableIndex == b.TableIndex && a.BucketIndex == b.BucketIndex && a.ChunkIndex == b.ChunkIndex
 }
 
-func next(a *chunk.ChunkID) *chunk.ChunkID {
-	b := new(chunk.ChunkID)
-	b.TableIndex = a.TableIndex
-	b.ChunkIndex = 0
+func next(a *chunk.ChunkID) {
 	if a.ChunkIndex == a.ChunkCnt-1 {
-		b.TableIndex++
-		b.ChunkIndex = 0
+		a.TableIndex++
+		a.ChunkIndex = 0
 	} else {
-		b.ChunkIndex = a.ChunkIndex + 1
+		a.ChunkIndex = a.ChunkIndex + 1
 	}
-	return b
 }
 
 func newIndex() *chunk.ChunkID {
@@ -103,10 +92,10 @@ func newIndex() *chunk.ChunkID {
 }
 
 func (m *MockChunkIterator) Next() (*chunk.Range, error) {
-	if m.index == MAXCHUNKS {
+	if m.index.ChunkIndex == m.index.ChunkCnt-1 {
 		return nil, nil
 	}
-	m.index = next(m.index)
+	m.index.ChunkIndex = m.index.ChunkIndex + 1
 	return &chunk.Range{
 		Index: m.index,
 	}, nil
@@ -123,8 +112,8 @@ func (m *MockAnalyzer) AnalyzeSplitter(ctx context.Context, progressID string, t
 	i := &chunk.ChunkID{
 		TableIndex:  0,
 		BucketIndex: 0,
-		ChunkIndex:  0,
-		ChunkCnt:    6,
+		ChunkIndex:  -1,
+		ChunkCnt:    CHUNKS,
 	}
 	return &MockChunkIterator{
 		ctx,
@@ -186,18 +175,18 @@ func (s *testSourceSuite) TestTiDBSource(c *C) {
 	}
 
 	// Test ChunkIterator
-	iter, err := tidb.GetRangeIterator(ctx, nil, &MockAnalyzer{})
+	iter, err := tidb.GetRangeIterator(ctx, tableCases[0].rangeInfo, &MockAnalyzer{})
 	c.Assert(err, IsNil)
 	i := newIndex()
 	for {
-		chunk, err := iter.Next(ctx)
+		ch, err := iter.Next(ctx)
 		c.Assert(err, IsNil)
-		if chunk == nil {
-			c.Assert(i, Equals, 5*len(tableCases))
+		if ch == nil {
+			c.Assert(equal(i, &chunk.ChunkID{TableIndex: len(tableCases), BucketIndex: 0, ChunkIndex: 0, ChunkCnt: CHUNKS}), IsTrue)
 			break
 		}
-		c.Assert(equal(chunk.ChunkRange.Index, i), Equals, true)
-		i = next(i)
+		c.Assert(equal(ch.ChunkRange.Index, i), IsTrue)
+		next(i)
 	}
 	iter.Close()
 
@@ -217,7 +206,7 @@ func (s *testSourceSuite) TestTiDBSource(c *C) {
 		columns, err := rowIter.Next()
 		c.Assert(err, IsNil)
 		if columns == nil {
-			c.Assert(i, Equals, len(tableCase.rows))
+			c.Assert(row, Equals, len(tableCase.rows))
 			break
 		}
 		for j, value := range tableCase.rows[row] {
@@ -229,7 +218,7 @@ func (s *testSourceSuite) TestTiDBSource(c *C) {
 		} else if row == 1 {
 			secondRow = columns
 		}
-		i = next(i)
+		row++
 	}
 	c.Assert(tidb.GenerateFixSQL(Insert, firstRow, secondRow, 0), Equals, "REPLACE INTO `source_test`.`test1`(`a`,`b`,`c`) VALUES (1,'a',1.2);")
 	c.Assert(tidb.GenerateFixSQL(Delete, firstRow, secondRow, 0), Equals, "DELETE FROM `source_test`.`test1` WHERE `a` = 2 AND `b` = 'b' AND `c` = 3.4;")
