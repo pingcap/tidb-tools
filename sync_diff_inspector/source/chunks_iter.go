@@ -18,14 +18,12 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 )
 
 // ChunksIterator is used for single mysql/tidb source.
 type ChunksIterator struct {
-	ID            *chunk.ChunkID
 	currentID     int
 	tableAnalyzer TableAnalyzer
 
