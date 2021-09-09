@@ -52,7 +52,9 @@ type Bound struct {
 
 // ChunkID is to identify the sequence of chunks
 type ChunkID struct {
-	TableIndex  int `json:"table-index"`
+	TableIndex int `json:"table-index"`
+	// we especially treat random split has only one bucket
+	// which is the whole table
 	BucketIndex int `json:"bucket-index"`
 	ChunkIndex  int `json:"chunk-index"`
 	//  `ChunkCnt` is the number of chunks in this bucket

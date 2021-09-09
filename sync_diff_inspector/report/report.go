@@ -144,7 +144,7 @@ func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB) {
 				r.SetTableMeetError(schema, table, err)
 			}
 			if size == 0 {
-				log.Warn("fail to get the correct size of table", zap.String("table", dbutil.TableName(schema, table)))
+				log.Warn("fail to get the correct size of table, if you want to get the correct size, please analyze the corresponding tables", zap.String("table", dbutil.TableName(schema, table)))
 			} else {
 				r.TotalSize += size
 			}
