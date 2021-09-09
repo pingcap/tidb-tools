@@ -230,7 +230,6 @@ func (cp *Checkpoint) GetChunkSnapshot() *Node {
 // SaveChunk saves the chunk to file.
 func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string, cur *Node, reportInfo *report.Report) (*chunk.ChunkID, error) {
 	if cur != nil {
-
 		savedState := &SavedState{
 			Chunk:  cur,
 			Report: reportInfo,

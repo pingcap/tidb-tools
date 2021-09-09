@@ -359,6 +359,8 @@ func (c *Range) Clone() *Range {
 	}
 	newChunk.Index = c.Index.Copy()
 	newChunk.BucketID = c.BucketID
+	newChunk.IsFirst = c.IsFirst
+	newChunk.IsLast = c.IsLast
 	return newChunk
 }
 

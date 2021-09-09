@@ -215,6 +215,7 @@ func (df *Diff) Equal(ctx context.Context) error {
 			// finish read the tables
 			break
 		}
+		log.Info("chunk index", zap.Any("chunk index", c.ChunkRange.Index), zap.Any("chunk bound", c.ChunkRange.Bounds))
 		pool.Apply(func() {
 			isEqual := df.consume(ctx, c)
 			if !isEqual {
