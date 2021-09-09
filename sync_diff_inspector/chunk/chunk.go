@@ -48,11 +48,15 @@ type Bound struct {
 	HasUpper bool `json:"has-upper"`
 }
 
+// ChunkID is to identify the sequence of chunks
 type ChunkID struct {
 	TableIndex  int `json:"table-index"`
 	BucketIndex int `json:"bucket-index"`
 	ChunkIndex  int `json:"chunk-index"`
-	ChunkCnt    int `json:"chunk-count"`
+	//  `ChunkCnt` is the number of chunks in this bucket
+	//  We can compare `ChunkIndex` and `ChunkCnt` to know
+	// whether this chunk is the last one
+	ChunkCnt int `json:"chunk-count"`
 }
 
 func (c *ChunkID) Copy() *ChunkID {
@@ -310,13 +314,14 @@ func InitChunks(chunks []*Range, t ChunkType, bucketID int, collation, limits st
 	if chunks == nil {
 		return
 	}
-	for _, chunk := range chunks {
+	for i, chunk := range chunks {
 		conditions, args := chunk.ToString(collation)
 		chunk.Where = fmt.Sprintf("((%s) AND %s)", conditions, limits)
 		chunk.Args = args
 		chunk.BucketID = bucketID
 		chunk.Index = &ChunkID{
 			BucketIndex: bucketID / 2,
+			ChunkIndex:  i,
 			ChunkCnt:    chunkCnt,
 		}
 		chunk.Type = t
@@ -330,6 +335,8 @@ func InitChunk(chunk *Range, t ChunkType, bucketID int, collation, limits string
 	chunk.BucketID = bucketID
 	chunk.Index = &ChunkID{
 		BucketIndex: bucketID,
+		ChunkIndex:  0,
+		ChunkCnt:    1,
 	}
 	chunk.Type = t
 }

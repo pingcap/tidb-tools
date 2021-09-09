@@ -64,9 +64,6 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 	var iargs []interface{}
 	if startRange != nil {
 		c := startRange.GetChunk()
-		for _, bound := range c.Bounds {
-			chunkRange.Update(bound.Column, bound.Upper, "", true, false)
-		}
 		if c.IsLastChunkForTable() {
 			return &RandomIterator{
 				table:     table,
@@ -76,6 +73,10 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 				dbConn:    dbConn,
 			}, nil
 		}
+		for _, bound := range c.Bounds {
+			chunkRange.Update(bound.Column, bound.Upper, "", true, false)
+		}
+
 		conditions, args := chunkRange.ToString(table.Collation)
 		if len(where) > 0 {
 			where = fmt.Sprintf("((%s) AND %s)", conditions, where)
@@ -129,8 +130,6 @@ func (s *RandomIterator) Next() (*chunk.Range, error) {
 		return nil, nil
 	}
 	c := s.chunks[s.nextChunk]
-	c.Index.BucketIndex = 0
-	c.Index.ChunkIndex = int(s.nextChunk)
 	s.nextChunk = s.nextChunk + 1
 	return c, nil
 }
