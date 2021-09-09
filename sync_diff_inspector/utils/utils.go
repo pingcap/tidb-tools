@@ -642,3 +642,20 @@ func AnalyzeTable(ctx context.Context, db *sql.DB, tableName string) error {
 func GetSQLFileName(index *chunk.ChunkID) string {
 	return fmt.Sprintf("%d:%d:%d", index.TableIndex, index.BucketIndex, index.ChunkIndex)
 }
+
+func GetChunkIDFromSQLFileName(fileIDStr string) (int, int, int, error) {
+	ids := strings.Split(fileIDStr, ":")
+	tableIndex, err := strconv.Atoi(ids[0])
+	if err != nil {
+		return 0, 0, 0, errors.Trace(err)
+	}
+	bucketIndex, err := strconv.Atoi(ids[1])
+	if err != nil {
+		return 0, 0, 0, errors.Trace(err)
+	}
+	chunkIndex, err := strconv.Atoi(ids[2])
+	if err != nil {
+		return 0, 0, 0, errors.Trace(err)
+	}
+	return tableIndex, bucketIndex, chunkIndex, nil
+}

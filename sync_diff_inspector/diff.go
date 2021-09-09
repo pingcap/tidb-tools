@@ -21,7 +21,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -714,16 +713,7 @@ func (df *Diff) removeSQLFiles(checkPointId *chunk.ChunkID) error {
 
 		if strings.HasSuffix(name, ".sql") {
 			fileIDStr := strings.TrimRight(name, ".sql")
-			ids := strings.Split(fileIDStr, ":")
-			tableIndex, err := strconv.Atoi(ids[0])
-			if err != nil {
-				return errors.Trace(err)
-			}
-			bucketIndex, err := strconv.Atoi(ids[1])
-			if err != nil {
-				return errors.Trace(err)
-			}
-			chunkIndex, err := strconv.Atoi(ids[2])
+			tableIndex, bucketIndex, chunkIndex, err := utils.GetChunkIDFromSQLFileName(fileIDStr)
 			if err != nil {
 				return errors.Trace(err)
 			}
