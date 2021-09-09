@@ -130,7 +130,6 @@ func (s *RandomIterator) Next() (*chunk.Range, error) {
 	}
 	c := s.chunks[s.nextChunk]
 	c.Index.BucketIndex = 0
-	c.Index.ChunkIndex = int(s.nextChunk)
 	s.nextChunk = s.nextChunk + 1
 	return c, nil
 }

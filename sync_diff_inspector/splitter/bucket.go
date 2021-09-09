@@ -96,7 +96,6 @@ func (s *BucketIterator) Next() (*chunk.Range, error) {
 	}
 
 	c := s.chunks[s.nextChunk]
-	c.Index.ChunkIndex = int(s.nextChunk)
 	s.nextChunk = s.nextChunk + 1
 	return c, nil
 }

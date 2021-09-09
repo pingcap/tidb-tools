@@ -66,7 +66,6 @@ func (c *ChunkID) Copy() *ChunkID {
 
 // Range represents chunk range
 type Range struct {
-	ID      int       `json:"id"`
 	Index   *ChunkID  `json:"index"`
 	Type    ChunkType `json:"type"`
 	Bounds  []*Bound  `json:"bounds"`
@@ -288,7 +287,6 @@ func (c *Range) Clone() *Range {
 			HasUpper: bound.HasUpper,
 		})
 	}
-	newChunk.ID = c.ID
 	newChunk.Type = c.Type
 	newChunk.Where = c.Where
 	newChunk.Args = c.Args
@@ -310,12 +308,13 @@ func InitChunks(chunks []*Range, t ChunkType, bucketID int, collation, limits st
 	if chunks == nil {
 		return
 	}
-	for _, chunk := range chunks {
+	for i, chunk := range chunks {
 		conditions, args := chunk.ToString(collation)
 		chunk.Where = fmt.Sprintf("((%s) AND %s)", conditions, limits)
 		chunk.Args = args
 		chunk.BucketID = bucketID
 		chunk.Index = &ChunkID{
+			ChunkIndex:  i,
 			BucketIndex: bucketID / 2,
 			ChunkCnt:    chunkCnt,
 		}
