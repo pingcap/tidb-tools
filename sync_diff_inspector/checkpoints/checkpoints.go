@@ -221,9 +221,7 @@ func (cp *Checkpoint) GetChunkSnapshot() *Node {
 // SaveChunk saves the chunk to file.
 func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string, cur *Node, reportInfo *report.Report) (*chunk.ChunkID, error) {
 	if cur != nil {
-		log.Info("save checkpoint",
-			zap.Any("chunk", cur),
-			zap.String("state", cur.GetState()))
+
 		savedState := &SavedState{
 			Chunk:  cur,
 			Report: reportInfo,
@@ -237,6 +235,9 @@ func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string, cur *Node,
 		if err = ioutil2.WriteFileAtomic(fileName, checkpointData, config.LocalFilePerm); err != nil {
 			return nil, err
 		}
+		log.Info("save checkpoint",
+			zap.Any("chunk", cur),
+			zap.String("state", cur.GetState()))
 		return cur.GetID(), nil
 	}
 	return nil, nil
