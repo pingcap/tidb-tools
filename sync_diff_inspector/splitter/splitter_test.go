@@ -635,7 +635,6 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 
 	rangeInfo := &RangeInfo{
 		ChunkRange: chunk,
-		TableIndex: 0,
 		IndexID:    iter.GetIndexID(),
 	}
 
@@ -812,12 +811,11 @@ func createFakeResultForLimitSplit(mock sqlmock.Sqlmock, aValues []string, bValu
 func (s *testSplitterSuite) TestRangeInfo(c *C) {
 	rangeInfo := &RangeInfo{
 		ChunkRange: chunk.NewChunkRange(),
-		TableIndex: 1,
 		IndexID:    2,
 		ProgressID: "324312",
 	}
 	rangeInfo.Update("a", "1", "2", true, true, "[23]", "[sdg]")
-
+	rangeInfo.ChunkRange.Index.TableIndex = 1
 	chunkRange := rangeInfo.GetChunk()
 	c.Assert(chunkRange.Where, Equals, "((((`a` COLLATE '[23]' > ?)) AND ((`a` COLLATE '[23]' <= ?))) AND [sdg])")
 	c.Assert(chunkRange.Args, DeepEquals, []string{"1", "2"})
