@@ -44,6 +44,7 @@ const (
 	Error = "error"
 )
 
+// ReportConfig stores the config information for the user
 type ReportConfig struct {
 	Host     string `toml:"host"`
 	Port     int    `toml:"port"`
@@ -59,30 +60,31 @@ type TableResult struct {
 	StructEqual bool                    `json:"struct-equal"`
 	DataEqual   bool                    `json:"data-equal"`
 	MeetError   error                   `json:"meet-error"`
-	ChunkMap    map[string]*ChunkResult `json:"chunk-result"`
+	ChunkMap    map[string]*ChunkResult `json:"chunk-result"` // `ChunkMap` stores the `ChunkResult` of each chunk of the table
 }
 
+// ChunkResult save the necessarily information to provide summary information
 type ChunkResult struct {
-	RowsAdd    int   `json:"rows-add"`
-	RowsDelete int   `json:"rows-delete"`
-	RowsCnt    int64 `json:"rows-count"`
+	RowsAdd    int   `json:"rows-add"`    // `RowAdd` is the number of rows needed to add
+	RowsDelete int   `json:"rows-delete"` // `RowDelete` is the number of rows needed to delete
+	RowsCnt    int64 `json:"rows-count"`  // `RowsCnt` is the number of rows of the chunk
 }
 
 // Report saves the check results.
 type Report struct {
 	sync.RWMutex
-	// Result is pass or fail
-	Result       string
-	PassNum      int32
-	FailedNum    int32
-	TableResults map[string]map[string]*TableResult `json:"table-results"`
+	Result       string                             // Result is pass or fail
+	PassNum      int32                              // The pass number of tables
+	FailedNum    int32                              // The failed number of tables
+	TableResults map[string]map[string]*TableResult `json:"table-results"` // TableResult saved the map of  `schema` => `table` => `tableResult`
 	StartTime    time.Time                          `json:"start-time"`
 	Duration     time.Duration                      `json:"time-duration"`
-	TotalSize    int64
+	TotalSize    int64                              // Total size of the checked tables
 	SourceConfig [][]byte
 	TargetConfig []byte
 }
 
+// LoadReport loads the report from the checkpoint
 func (r *Report) LoadReport(reportInfo *Report) {
 	r.StartTime = time.Now()
 	r.Duration = reportInfo.Duration
@@ -136,6 +138,8 @@ func (r *Report) getDiffRows() [][]string {
 	return diffRows
 }
 
+// CalculateTotalSize calculate the total size of all the checked tables
+// Notice, user should run the analyze table first, when some of tables' size are zero.
 func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB) {
 	for schema, tableMap := range r.TableResults {
 		for table := range tableMap {
@@ -318,6 +322,8 @@ func (r *Report) SetTableMeetError(schema, table string, err error) {
 	r.Result = Error
 }
 
+// GetSnapshot get the snapshot of the current state of the report, then we can restart the
+// sync-diff and get the correct report state.
 func (r *Report) GetSnapshot(chunkID *chunk.ChunkID, schema, table string) (*Report, error) {
 	r.RLock()
 	defer r.RUnlock()
@@ -364,6 +370,7 @@ func (r *Report) GetSnapshot(chunkID *chunk.ChunkID, schema, table string) (*Rep
 	}, nil
 }
 
+// SetRowCnt set the `RowCnt` of the `schema`.`table`
 func (r *Report) SetRowsCnt(schema, table string, cnt int64, id *chunk.ChunkID) {
 	r.Lock()
 	defer r.Unlock()

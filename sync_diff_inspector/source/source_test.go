@@ -164,7 +164,7 @@ func (s *testSourceSuite) TestTiDBSource(c *C) {
 	c.Assert(err, IsNil)
 
 	for n, tableCase := range tableCases {
-		c.Assert(n, Equals, tableCase.rangeInfo.TableIndex)
+		c.Assert(n, Equals, tableCase.rangeInfo.GetTableIndex())
 		countRows := sqlmock.NewRows([]string{"CNT", "CHECKSUM"}).AddRow(123, 456)
 		mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
 		checksum := tidb.GetCountAndCrc32(ctx, tableCase.rangeInfo)
@@ -309,7 +309,7 @@ func (s *testSourceSuite) TestMysqlShardSources(c *C) {
 	c.Assert(info[0].Name.O, Equals, "test1")
 
 	for n, tableCase := range tableCases {
-		c.Assert(n, Equals, tableCase.rangeInfo.TableIndex)
+		c.Assert(n, Equals, tableCase.rangeInfo.GetTableIndex())
 		var resChecksum int64 = 0
 		for i := 0; i < len(dbs); i++ {
 			resChecksum = resChecksum + 1<<i
@@ -544,9 +544,9 @@ func prepareTiDBTables(c *C, tableCases []*tableCaseType) []*common.TableDiff {
 		}
 
 		chunk.InitChunk(chunkRange, chunk.Bucket, 0, "", "")
+		chunkRange.Index.TableIndex = n
 		rangeInfo := &splitter.RangeInfo{
 			ChunkRange: chunkRange,
-			TableIndex: n,
 		}
 		tableCase.rangeInfo = rangeInfo
 	}

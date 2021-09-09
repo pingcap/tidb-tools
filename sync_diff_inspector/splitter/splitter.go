@@ -35,12 +35,21 @@ type ChunkIterator interface {
 // It's the only entrance of checkpoint.
 type RangeInfo struct {
 	ChunkRange *chunk.Range `json:"chunk-range"`
-	TableIndex int          `json:"table-index"`
 	// for bucket checkpoint
 	IndexID int64 `json:"index-id"`
 
 	ProgressID string `json:"progress-id"`
 }
+
+// GetTableIndex return the index of table diffs.
+// IMPORTANT!!!
+// We need to keep the tables order during checkpoint.
+// So we should have to save the config info to checkpoint file too
+func (r *RangeInfo) GetTableIndex() int { return r.ChunkRange.Index.TableIndex }
+
+func (r *RangeInfo) GetBucketIndex() int { return r.ChunkRange.Index.BucketIndex }
+
+func (r *RangeInfo) GetChunkIndex() int { return r.ChunkRange.Index.ChunkIndex }
 
 func (r *RangeInfo) GetChunk() *chunk.Range {
 	return r.ChunkRange
@@ -49,7 +58,6 @@ func (r *RangeInfo) GetChunk() *chunk.Range {
 func (r *RangeInfo) Copy() *RangeInfo {
 	return &RangeInfo{
 		ChunkRange: r.ChunkRange.Clone(),
-		TableIndex: r.TableIndex,
 		IndexID:    r.IndexID,
 		ProgressID: r.ProgressID,
 	}
@@ -62,18 +70,9 @@ func (r *RangeInfo) Update(column, lower, upper string, updateLower, updateUpper
 	r.ChunkRange.Args = args
 }
 
-// GetTableIndex return the index of table diffs.
-// IMPORTANT!!!
-// TODO We need to keep the tables order during checkpoint.
-// TODO So we should have to save the config info to checkpoint file too.
-func (r *RangeInfo) GetTableIndex() int {
-	return r.TableIndex
-}
-
 func (r *RangeInfo) ToNode() *checkpoints.Node {
 	return &checkpoints.Node{
 		ChunkRange: r.ChunkRange,
-		TableIndex: r.TableIndex,
 		BucketID:   r.ChunkRange.BucketID,
 		IndexID:    r.IndexID,
 	}
@@ -82,7 +81,6 @@ func (r *RangeInfo) ToNode() *checkpoints.Node {
 func FromNode(n *checkpoints.Node) *RangeInfo {
 	return &RangeInfo{
 		ChunkRange: n.ChunkRange,
-		TableIndex: n.TableIndex,
 		IndexID:    n.IndexID,
 	}
 }

@@ -51,7 +51,6 @@ func (t *ChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, error) 
 		c.Index.TableIndex = curIndex
 		return &splitter.RangeInfo{
 			ChunkRange: c,
-			TableIndex: curIndex,
 			IndexID:    t.getCurTableIndexID(),
 			ProgressID: t.progressID,
 		}, nil
@@ -71,7 +70,6 @@ func (t *ChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, error) 
 	c.Index.TableIndex = curIndex
 	return &splitter.RangeInfo{
 		ChunkRange: c,
-		TableIndex: curIndex,
 		IndexID:    t.getCurTableIndexID(),
 		ProgressID: t.progressID,
 	}, nil

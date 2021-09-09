@@ -369,7 +369,7 @@ func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
 }
 
 func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool {
-	tableDiff := df.downstream.GetTables()[rangeInfo.TableIndex]
+	tableDiff := df.downstream.GetTables()[rangeInfo.GetTableIndex()]
 	schema, table := tableDiff.Schema, tableDiff.Table
 	isEqual, count, err := df.compareChecksumAndGetCount(ctx, rangeInfo)
 	if err != nil {
@@ -378,7 +378,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 	var state string
 	dml := &ChunkDML{}
 	if !isEqual {
-		log.Debug("checksum failed", zap.Any("chunk id", rangeInfo.ChunkRange.Index), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTables()[rangeInfo.TableIndex].Table))
+		log.Debug("checksum failed", zap.Any("chunk id", rangeInfo.ChunkRange.Index), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTables()[rangeInfo.GetTableIndex()].Table))
 		state = checkpoints.FailedState
 		// if the chunk's checksum differ, try to do binary check
 		if count > splitter.SplitThreshold {
@@ -663,7 +663,7 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 				}
 				// write chunk meta
 				chunkRange := dml.node.ChunkRange
-				tableDiff := df.workSource.GetTables()[dml.node.TableIndex]
+				tableDiff := df.workSource.GetTables()[dml.node.GetTableIndex()]
 				fixSQLFile.WriteString(fmt.Sprintf("-- table: %s.%s\n-- %s\n", tableDiff.Schema, tableDiff.Table, chunkRange.ToMeta()))
 				for _, sql := range dml.sqls {
 					_, err = fixSQLFile.WriteString(fmt.Sprintf("%s\n", sql))

@@ -19,7 +19,6 @@ import (
 	"errors"
 	"os"
 	"path"
-	"strings"
 	"testing"
 
 	"github.com/BurntSushi/toml"
@@ -189,21 +188,6 @@ func (s *testReportSuite) TestCalculateTotal(c *C) {
 	mock.ExpectQuery("select sum.*").WillReturnRows(sqlmock.NewRows([]string{"data"}).AddRow("123"))
 	report.CalculateTotalSize(ctx, db)
 	c.Assert(report.TotalSize, Equals, int64(123))
-
-	// Fail (and ...
-	// fail to analyze
-	mock.ExpectQuery("select sum.*").WillReturnRows(sqlmock.NewRows([]string{"data"}).AddRow("0"))
-	mock.ExpectQuery("select sum.*").WillReturnRows(sqlmock.NewRows([]string{"data"}).AddRow("1"))
-	report.CalculateTotalSize(ctx, db)
-	c.Assert(strings.Contains(report.TableResults["test"]["tbl"].MeetError.Error(), "ANALYZE TABLE"), IsTrue)
-	c.Assert(report.TotalSize, Equals, int64(124))
-
-	// fail to getSize
-	mock.ExpectQuery("select sum.*").WillReturnRows(sqlmock.NewRows([]string{"data"}).AddRow("0"))
-	mock.ExpectQuery("ANALYZE TABLE `test`.`tbl`.*")
-	report.CalculateTotalSize(ctx, db)
-	c.Assert(report.TableResults["test"]["tbl"].MeetError, ErrorMatches, "*select sum.*")
-	c.Assert(report.TotalSize, Equals, int64(124))
 }
 
 func (s *testReportSuite) TestPrint(c *C) {
