@@ -32,6 +32,7 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/progress"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/report"
@@ -199,6 +200,7 @@ func (df *Diff) Equal(ctx context.Context) error {
 
 	defer func() {
 		pool.WaitFinished()
+		log.Debug("all comsume tasks finished")
 		// close the sql channel
 		close(df.sqlCh)
 		stopCh <- struct{}{}
@@ -299,7 +301,7 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 			} else {
 				// this need not be synchronized, because at the moment, the is only one thread access the section
 				log.Info("load checkpoint",
-					zap.Int("id", node.GetID()),
+					zap.Any("chunk index", node.GetID()),
 					zap.Reflect("chunk", node),
 					zap.String("state", node.GetState()))
 				df.cp.SetCurrentSavedID(node)
@@ -316,7 +318,8 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 			}
 		} else {
 			log.Info("not found checkpoint file, start from beginning")
-			err := df.removeSQLFiles(0)
+			id := &chunk.ChunkID{TableIndex: 0, BucketIndex: 0, ChunkIndex: 0, ChunkCnt: 0}
+			err := df.removeSQLFiles(id)
 			if err != nil {
 				return nil, errors.Trace(err)
 			}
@@ -376,13 +379,13 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 	var state string
 	dml := &ChunkDML{}
 	if !isEqual {
-		log.Debug("checksum failed", zap.Int("chunk id", rangeInfo.ChunkRange.ID), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTables()[rangeInfo.TableIndex].Table))
+		log.Debug("checksum failed", zap.Any("chunk id", rangeInfo.ChunkRange.Index), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTables()[rangeInfo.TableIndex].Table))
 		state = checkpoints.FailedState
 		// if the chunk's checksum differ, try to do binary check
 		if count > splitter.SplitThreshold {
-			log.Debug("count greater than threshold, start do bingenerate", zap.Int("chunk id", rangeInfo.ChunkRange.ID), zap.Int64("chunk size", count))
+			log.Debug("count greater than threshold, start do bingenerate", zap.Any("chunk id", rangeInfo.ChunkRange.Index), zap.Int64("chunk size", count))
 			rangeInfo, err = df.BinGenerate(ctx, df.workSource, rangeInfo, count)
-			log.Debug("bin generate finished", zap.Reflect("chunk", rangeInfo.ChunkRange), zap.Int("chunk id", rangeInfo.ChunkRange.ID))
+			log.Debug("bin generate finished", zap.Reflect("chunk", rangeInfo.ChunkRange), zap.Any("chunk id", rangeInfo.ChunkRange.Index))
 			if err != nil {
 				df.report.SetTableMeetError(schema, table, err)
 			}
@@ -398,7 +401,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 	dml.node = rangeInfo.ToNode()
 	dml.node.State = state
 	dml.rowCount = count
-	id := rangeInfo.ChunkRange.ID
+	id := rangeInfo.ChunkRange.Index
 	df.report.SetRowsCnt(schema, table, dml.rowCount, id)
 	df.report.SetTableDataCheckResult(schema, table, isEqual, dml.rowAdd, dml.rowDelete, id)
 	df.sqlCh <- dml
@@ -468,7 +471,7 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 			zap.Int64("count", count))
 	}
 	log.Info("chunk split successfully",
-		zap.Int("chunk id", tableRange.ChunkRange.ID),
+		zap.Any("chunk id", tableRange.ChunkRange.Index),
 		zap.Int64("count1", count1),
 		zap.Int64("count2", count2))
 
@@ -648,7 +651,7 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 				return
 			}
 			if len(dml.sqls) > 0 {
-				fileName := fmt.Sprintf("%d.sql", dml.node.GetID())
+				fileName := fmt.Sprintf("%s.sql", utils.GetSQLFileName(dml.node.GetID()))
 				fixSQLPath := filepath.Join(df.FixSQLDir, fileName)
 				if ok := ioutil2.FileExists(fixSQLPath); ok {
 					// unreachable
@@ -671,13 +674,13 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 				}
 				fixSQLFile.Close()
 			}
-			log.Debug("insert node", zap.Int("chunk id", dml.node.GetID()))
+			log.Debug("insert node", zap.Any("chunk index", dml.node.GetID()))
 			df.cp.Insert(dml.node)
 		}
 	}
 }
 
-func (df *Diff) removeSQLFiles(checkPointId int) error {
+func (df *Diff) removeSQLFiles(checkPointId *chunk.ChunkID) error {
 	ts := time.Now().Format("2006-01-02T15:04:05Z07:00")
 	dirName := fmt.Sprintf(".trash-%s", ts)
 	folderPath := filepath.Join(df.FixSQLDir, dirName)
@@ -711,11 +714,26 @@ func (df *Diff) removeSQLFiles(checkPointId int) error {
 
 		if strings.HasSuffix(name, ".sql") {
 			fileIDStr := strings.TrimRight(name, ".sql")
-			fileID, err := strconv.Atoi(fileIDStr)
+			ids := strings.Split(fileIDStr, ":")
+			tableIndex, err := strconv.Atoi(ids[0])
 			if err != nil {
 				return errors.Trace(err)
 			}
-			if fileID > checkPointId {
+			bucketIndex, err := strconv.Atoi(ids[1])
+			if err != nil {
+				return errors.Trace(err)
+			}
+			chunkIndex, err := strconv.Atoi(ids[2])
+			if err != nil {
+				return errors.Trace(err)
+			}
+			fileID := &chunk.ChunkID{
+				TableIndex: tableIndex, BucketIndex: bucketIndex, ChunkIndex: chunkIndex, ChunkCnt: 0,
+			}
+			if err != nil {
+				return errors.Trace(err)
+			}
+			if fileID.Compare(checkPointId) > 0 {
 				// move to trash
 				err = os.Rename(oldPath, newPath)
 				if err != nil {

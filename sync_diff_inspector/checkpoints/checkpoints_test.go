@@ -41,26 +41,31 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 	cur := checker.GetChunkSnapshot()
 	id, err := checker.SaveChunk(ctx, "TestSaveChunk", cur, nil)
 	c.Assert(err, IsNil)
-	c.Assert(id, Equals, 0)
+	c.Assert(id, IsNil)
 	wg := &sync.WaitGroup{}
 	rounds := 100
-	for i := 1; i < rounds; i++ {
+	for i := 0; i < rounds; i++ {
 		wg.Add(1)
-		go func(i_ int) {
+		go func(i int) {
 			node := &Node{
 				ChunkRange: &chunk.Range{
-					ID: i_,
+					Index: &chunk.ChunkID{
+						TableIndex:  0,
+						BucketIndex: i / 10,
+						ChunkIndex:  i % 10,
+						ChunkCnt:    10,
+					},
 					Bounds: []*chunk.Bound{
 						{
-							HasLower: i_ != 1,
-							Lower:    strconv.Itoa(i_ + 1000),
-							Upper:    strconv.Itoa(i_ + 1000 + 1),
-							HasUpper: i_ != rounds,
+							HasLower: i != 1,
+							Lower:    strconv.Itoa(i + 1000),
+							Upper:    strconv.Itoa(i + 1000 + 1),
+							HasUpper: i != rounds,
 						},
 					},
 				},
 
-				BucketID: i_,
+				BucketID: i,
 				State:    SuccessState,
 			}
 			if rand.Intn(4) == 0 {
@@ -76,7 +81,7 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 	cur = checker.GetChunkSnapshot()
 	id, err = checker.SaveChunk(ctx, "TestSaveChunk", cur, nil)
 	c.Assert(err, IsNil)
-	c.Assert(id, Equals, 99)
+	c.Assert(id.Compare(&chunk.ChunkID{TableIndex: 0, BucketIndex: 9, ChunkIndex: 9}), Equals, 0)
 }
 
 func (cp *testCheckpointSuit) TestLoadChunk(c *C) {
@@ -85,12 +90,11 @@ func (cp *testCheckpointSuit) TestLoadChunk(c *C) {
 	ctx := context.Background()
 	rounds := 100
 	wg := &sync.WaitGroup{}
-	for i := 1; i < rounds; i++ {
+	for i := 0; i < rounds; i++ {
 		wg.Add(1)
 		go func(i int) {
 			node := &Node{
 				ChunkRange: &chunk.Range{
-					ID: i,
 					Bounds: []*chunk.Bound{
 						{
 							HasLower: i != 1,
@@ -98,6 +102,12 @@ func (cp *testCheckpointSuit) TestLoadChunk(c *C) {
 							Upper:    strconv.Itoa(i + 1000 + 1),
 							HasUpper: i != rounds,
 						},
+					},
+					Index: &chunk.ChunkID{
+						TableIndex:  0,
+						BucketIndex: i / 10,
+						ChunkIndex:  i % 10,
+						ChunkCnt:    10,
 					},
 				},
 			}
@@ -112,5 +122,5 @@ func (cp *testCheckpointSuit) TestLoadChunk(c *C) {
 	c.Assert(err, IsNil)
 	node, _, err := checker.LoadChunk("TestLoadChunk")
 	c.Assert(err, IsNil)
-	c.Assert(node.GetID(), Equals, id)
+	c.Assert(node.GetID().Compare(id), Equals, 0)
 }

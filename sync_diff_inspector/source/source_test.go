@@ -18,6 +18,8 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"fmt"
+	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -32,6 +34,8 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 func TestClient(t *testing.T) {
@@ -59,19 +63,52 @@ type MockChunkIterator struct {
 	ctx       context.Context
 	tableDiff *common.TableDiff
 	rangeInfo *splitter.RangeInfo
-	i         int
+	index     *chunk.ChunkID
 }
 
-const MAXCHUNKS = 5
+var MAXCHUNKS *chunk.ChunkID = &chunk.ChunkID{
+	TableIndex:  5,
+	BucketIndex: 0,
+	ChunkIndex:  5,
+	ChunkCnt:    CHUNKS,
+}
+
+const BUCKETS = 1
+const CHUNKS = 6
+
+func equal(a, b *chunk.ChunkID) bool {
+	return a.TableIndex == b.TableIndex && a.BucketIndex == b.BucketIndex && a.ChunkIndex == b.ChunkIndex && a.ChunkCnt == b.ChunkCnt
+}
+
+func next(a *chunk.ChunkID) *chunk.ChunkID {
+	b := new(chunk.ChunkID)
+	b.TableIndex = a.TableIndex
+	b.ChunkIndex = 0
+	if a.ChunkIndex == a.ChunkCnt-1 {
+		b.TableIndex++
+		b.ChunkIndex = 0
+	} else {
+		b.ChunkIndex = a.ChunkIndex + 1
+	}
+	return b
+}
+
+func newIndex() *chunk.ChunkID {
+	return &chunk.ChunkID{
+		TableIndex:  0,
+		BucketIndex: 0,
+		ChunkIndex:  0,
+		ChunkCnt:    CHUNKS,
+	}
+}
 
 func (m *MockChunkIterator) Next() (*chunk.Range, error) {
-	if m.i == MAXCHUNKS {
+	if m.index == MAXCHUNKS {
 		return nil, nil
 	}
-	m.i = m.i + 1
+	m.index = next(m.index)
 	return &chunk.Range{
-		ID:    m.i,
-		Index: &chunk.ChunkID{},
+		Index: m.index,
 	}, nil
 }
 
@@ -83,7 +120,12 @@ type MockAnalyzer struct {
 }
 
 func (m *MockAnalyzer) AnalyzeSplitter(ctx context.Context, progressID string, tableDiff *common.TableDiff, rangeInfo *splitter.RangeInfo) (splitter.ChunkIterator, error) {
-	i := 0
+	i := &chunk.ChunkID{
+		TableIndex:  0,
+		BucketIndex: 0,
+		ChunkIndex:  0,
+		ChunkCnt:    6,
+	}
 	return &MockChunkIterator{
 		ctx,
 		tableDiff,
@@ -146,7 +188,7 @@ func (s *testSourceSuite) TestTiDBSource(c *C) {
 	// Test ChunkIterator
 	iter, err := tidb.GetRangeIterator(ctx, nil, &MockAnalyzer{})
 	c.Assert(err, IsNil)
-	i := 0
+	i := newIndex()
 	for {
 		chunk, err := iter.Next(ctx)
 		c.Assert(err, IsNil)
@@ -154,8 +196,8 @@ func (s *testSourceSuite) TestTiDBSource(c *C) {
 			c.Assert(i, Equals, 5*len(tableCases))
 			break
 		}
-		c.Assert(chunk.ChunkRange.ID, Equals, i+1)
-		i++
+		c.Assert(equal(chunk.ChunkRange.Index, i), Equals, true)
+		i = next(i)
 	}
 	iter.Close()
 
@@ -169,7 +211,7 @@ func (s *testSourceSuite) TestTiDBSource(c *C) {
 	rowIter, err := tidb.GetRowsIterator(ctx, tableCase.rangeInfo)
 	c.Assert(err, IsNil)
 
-	i = 0
+	row := 0
 	var firstRow, secondRow map[string]*dbutil.ColumnData
 	for {
 		columns, err := rowIter.Next()
@@ -178,16 +220,16 @@ func (s *testSourceSuite) TestTiDBSource(c *C) {
 			c.Assert(i, Equals, len(tableCase.rows))
 			break
 		}
-		for j, value := range tableCase.rows[i] {
+		for j, value := range tableCase.rows[row] {
 			c.Assert(columns[tableCase.rowColumns[j]].IsNull, Equals, false)
 			c.Assert(columns[tableCase.rowColumns[j]].Data, DeepEquals, []byte(value.(string)))
 		}
-		if i == 0 {
+		if row == 0 {
 			firstRow = columns
-		} else if i == 1 {
+		} else if row == 1 {
 			secondRow = columns
 		}
-		i++
+		i = next(i)
 	}
 	c.Assert(tidb.GenerateFixSQL(Insert, firstRow, secondRow, 0), Equals, "REPLACE INTO `source_test`.`test1`(`a`,`b`,`c`) VALUES (1,'a',1.2);")
 	c.Assert(tidb.GenerateFixSQL(Delete, firstRow, secondRow, 0), Equals, "DELETE FROM `source_test`.`test1` WHERE `a` = 2 AND `b` = 'b' AND `c` = 3.4;")
@@ -524,15 +566,23 @@ func prepareTiDBTables(c *C, tableCases []*tableCaseType) []*common.TableDiff {
 }
 
 func (s *testSourceSuite) TestSource(c *C) {
+	host, isExist := os.LookupEnv("MYSQL_HOST")
+	if host == "" || !isExist {
+		return
+	}
+	portstr, isExist := os.LookupEnv("MYSQL_PORT")
+	if portstr == "" || !isExist {
+		return
+	}
+
+	port, err := strconv.Atoi(portstr)
+	c.Assert(err, IsNil)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	conn, _, err := sqlmock.New()
-	c.Assert(err, IsNil)
-	defer conn.Close()
-
 	cfg := &config.Config{
-		LogLevel:          "info",
+		LogLevel:          "debug",
 		Sample:            100,
 		CheckThreadCount:  4,
 		UseChecksum:       false,
@@ -542,20 +592,24 @@ func (s *testSourceSuite) TestSource(c *C) {
 		UseCheckpoint:     true,
 		DataSources: map[string]*config.DataSource{
 			"mysql1": {
-				Conn: conn,
+				Host: host,
+				Port: port,
+				User: "root",
 			},
 			"tidb": {
-				Conn: conn,
+				Host: host,
+				Port: port,
+				User: "root",
 			},
 		},
 		Routes: nil,
 		TableConfigs: map[string]*config.TableConfig{
 			"config1": {
 				Schema:          "schama1",
-				Table:           "table",
+				Table:           "tbl",
 				IgnoreColumns:   []string{"", ""},
 				Fields:          "",
-				Range:           "age > 10 AND age < 20",
+				Range:           "a > 10 AND a < 20",
 				IsSharding:      false,
 				TargetTableInfo: nil,
 				Collation:       "",
@@ -565,40 +619,28 @@ func (s *testSourceSuite) TestSource(c *C) {
 			Source:       []string{"mysql1"},
 			Routes:       nil,
 			Target:       []string{"tidb"},
-			CheckTables:  []string{"schema*.table*", "!c.*", "test2.t2"},
+			CheckTables:  []string{"schema*.tbl"},
 			TableConfigs: []string{"config1"},
 			OutputDir:    "./output",
 			SourceInstances: []*config.DataSource{
 				{
-					Host:       "127.0.0.1",
-					Port:       4567,
-					User:       "root",
-					Password:   "",
-					SqlMode:    "",
-					Snapshot:   "",
-					RouteRules: nil,
-					Router:     nil,
-					Conn:       nil,
+					Host: host,
+					Port: port,
+					User: "root",
 				},
 			},
 			TargetInstance: &config.DataSource{
-				Host:       "127.0.0.1",
-				Port:       4567,
-				User:       "root",
-				Password:   "",
-				SqlMode:    "",
-				Snapshot:   "",
-				RouteRules: nil,
-				Router:     nil,
-				Conn:       nil,
+				Host: host,
+				Port: port,
+				User: "root",
 			},
 			TargetTableConfigs: []*config.TableConfig{
 				{
-					Schema:          "schama1",
-					Table:           "table",
+					Schema:          "schema1",
+					Table:           "tbl",
 					IgnoreColumns:   []string{"", ""},
 					Fields:          "",
-					Range:           "age > 10 AND age < 20",
+					Range:           "a > 10 AND a < 20",
 					IsSharding:      false,
 					TargetTableInfo: nil,
 					Collation:       "",
@@ -612,10 +654,17 @@ func (s *testSourceSuite) TestSource(c *C) {
 		ConfigFile:   "config.toml",
 		PrintVersion: false,
 	}
-	cfg.Task.TargetCheckTables, err = filter.Parse([]string{"schema*.table*", "!c.*", "test2.t2"})
+	cfg.Task.TargetCheckTables, err = filter.Parse([]string{"schema*.tbl"})
 	c.Assert(err, IsNil)
+
+	// create table
+	conn, err := sql.Open("mysql", fmt.Sprintf("root:@tcp(%s:%d)/?charset=utf8mb4", host, port))
+	c.Assert(err, IsNil)
+
+	conn.Exec("CREATE DATABASE IF NOT EXISTS schema1")
+	conn.Exec("CREATE TABLE IF NOT EXISTS `schema1`.`tbl` (`a` int, `b` varchar(24), `c` float, `d` datetime, primary key(`a`, `b`))")
 	// create db connections refused.
 	// TODO unit_test covers source.go
 	_, _, err = NewSources(ctx, cfg)
-	c.Assert(err, NotNil)
+	c.Assert(err, IsNil)
 }

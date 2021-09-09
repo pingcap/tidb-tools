@@ -16,8 +16,10 @@ package chunk
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
+	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"go.uber.org/zap"
@@ -48,11 +50,37 @@ type Bound struct {
 	HasUpper bool `json:"has-upper"`
 }
 
+// ChunkID is to identify the sequence of chunks
 type ChunkID struct {
 	TableIndex  int `json:"table-index"`
 	BucketIndex int `json:"bucket-index"`
 	ChunkIndex  int `json:"chunk-index"`
-	ChunkCnt    int `json:"chunk-count"`
+	//  `ChunkCnt` is the number of chunks in this bucket
+	//  We can compare `ChunkIndex` and `ChunkCnt` to know
+	// whether this chunk is the last one
+	ChunkCnt int `json:"chunk-count"`
+}
+
+func (c *ChunkID) Compare(o *ChunkID) int {
+	if c.TableIndex < o.TableIndex {
+		return -1
+	}
+	if c.TableIndex == o.TableIndex {
+		if c.BucketIndex < o.BucketIndex {
+			return -1
+		}
+		if c.BucketIndex == o.BucketIndex {
+			if c.ChunkIndex < o.ChunkIndex {
+				return -1
+			}
+			if c.ChunkIndex == o.ChunkIndex {
+				return 0
+			}
+			return 1
+		}
+		return 1
+	}
+	return 1
 }
 
 func (c *ChunkID) Copy() *ChunkID {
@@ -62,6 +90,32 @@ func (c *ChunkID) Copy() *ChunkID {
 		ChunkIndex:  c.ChunkIndex,
 		ChunkCnt:    c.ChunkCnt,
 	}
+}
+
+func (c *ChunkID) ToString() string {
+	return fmt.Sprintf("%d:%d:%d:%d", c.TableIndex, c.BucketIndex, c.ChunkIndex, c.ChunkCnt)
+}
+
+func (c *ChunkID) FromString(s string) error {
+	ids := strings.Split(s, ":")
+	tableIndex, err := strconv.Atoi(ids[0])
+	if err != nil {
+		return errors.Trace(err)
+	}
+	bucketIndex, err := strconv.Atoi(ids[1])
+	if err != nil {
+		return errors.Trace(err)
+	}
+	chunkIndex, err := strconv.Atoi(ids[2])
+	if err != nil {
+		return errors.Trace(err)
+	}
+	chunkCnt, err := strconv.Atoi(ids[3])
+	if err != nil {
+		return errors.Trace(err)
+	}
+	c.TableIndex, c.BucketIndex, c.ChunkIndex, c.ChunkCnt = tableIndex, bucketIndex, chunkIndex, chunkCnt
+	return nil
 }
 
 // Range represents chunk range
@@ -77,6 +131,14 @@ type Range struct {
 
 	columnOffset map[string]int
 	BucketID     int `json:"bucket-id"`
+}
+
+func (r *Range) IsFirstChunkForBucket() bool {
+	return r.Index.ChunkIndex == 0
+}
+
+func (r *Range) IsLastChunkForBucket() bool {
+	return r.Index.ChunkIndex == r.Index.ChunkCnt-1
 }
 
 // NewChunkRange return a Range.
@@ -314,8 +376,8 @@ func InitChunks(chunks []*Range, t ChunkType, bucketID int, collation, limits st
 		chunk.Args = args
 		chunk.BucketID = bucketID
 		chunk.Index = &ChunkID{
-			ChunkIndex:  i,
 			BucketIndex: bucketID / 2,
+			ChunkIndex:  i,
 			ChunkCnt:    chunkCnt,
 		}
 		chunk.Type = t
@@ -329,6 +391,8 @@ func InitChunk(chunk *Range, t ChunkType, bucketID int, collation, limits string
 	chunk.BucketID = bucketID
 	chunk.Index = &ChunkID{
 		BucketIndex: bucketID,
+		ChunkIndex:  0,
+		ChunkCnt:    1,
 	}
 	chunk.Type = t
 }

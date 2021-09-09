@@ -26,7 +26,6 @@ import (
 // ChunksIterator is used for single mysql/tidb source.
 type ChunksIterator struct {
 	ID            *chunk.ChunkID
-	currentID     int
 	tableAnalyzer TableAnalyzer
 
 	TableDiffs     []*common.TableDiff
@@ -49,8 +48,6 @@ func (t *ChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, error) 
 	}
 	if c != nil {
 		curIndex := t.getCurTableIndex()
-		t.currentID++
-		c.ID = t.currentID
 		c.Index.TableIndex = curIndex
 		return &splitter.RangeInfo{
 			ChunkRange: c,
@@ -71,8 +68,6 @@ func (t *ChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, error) 
 		return nil, errors.Trace(err)
 	}
 	curIndex := t.getCurTableIndex()
-	t.currentID++
-	c.ID = t.currentID
 	c.Index.TableIndex = curIndex
 	return &splitter.RangeInfo{
 		ChunkRange: c,

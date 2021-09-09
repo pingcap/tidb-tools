@@ -28,6 +28,7 @@ import (
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"go.uber.org/zap"
 )
 
@@ -636,4 +637,8 @@ func CalculateChunkSize(rowCount int64) int64 {
 func AnalyzeTable(ctx context.Context, db *sql.DB, tableName string) error {
 	_, err := db.ExecContext(ctx, "ANALYZE TABLE "+tableName)
 	return err
+}
+
+func GetSQLFileName(index *chunk.ChunkID) string {
+	return fmt.Sprintf("%d:%d:%d", index.TableIndex, index.BucketIndex, index.ChunkIndex)
 }

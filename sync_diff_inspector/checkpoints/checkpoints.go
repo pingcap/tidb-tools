@@ -73,17 +73,9 @@ type Node struct {
 	IndexID  int64 `json:"index-id"`
 }
 
-func (n *Node) GetID() int { return n.ChunkRange.ID }
+func (n *Node) GetID() *chunk.ChunkID { return n.ChunkRange.Index }
 
 func (n *Node) GetState() string { return n.State }
-
-func (n *Node) IsFirstChunkForBucket() bool {
-	return n.ChunkRange.Index.ChunkIndex == 0
-}
-
-func (n *Node) IsLastChunkForBucket() bool {
-	return n.ChunkRange.Index.ChunkIndex == n.ChunkRange.Index.ChunkCnt-1
-}
 
 // IsAdjacent represents whether the next node is adjacent node.
 // it's the important logic for checkpoint update.
@@ -97,7 +89,7 @@ func (n *Node) IsAdjacent(next *Node) bool {
 	if n.ChunkRange.Index.TableIndex == next.ChunkRange.Index.TableIndex {
 		// same table
 		if n.ChunkRange.Index.BucketIndex == next.ChunkRange.Index.BucketIndex-1 {
-			if n.IsLastChunkForBucket() && next.IsFirstChunkForBucket() {
+			if n.ChunkRange.IsLastChunkForBucket() && next.ChunkRange.IsFirstChunkForBucket() {
 				return true
 			}
 			return false
@@ -227,7 +219,7 @@ func (cp *Checkpoint) GetChunkSnapshot() *Node {
 }
 
 // SaveChunk saves the chunk to file.
-func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string, cur *Node, reportInfo *report.Report) (int, error) {
+func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string, cur *Node, reportInfo *report.Report) (*chunk.ChunkID, error) {
 	if cur != nil {
 		log.Info("save checkpoint",
 			zap.Any("chunk", cur),
@@ -238,16 +230,16 @@ func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string, cur *Node,
 		}
 		checkpointData, err := json.Marshal(savedState)
 		if err != nil {
-			log.Warn("fail to save the chunk to the file", zap.Int("id", cur.GetID()))
-			return 0, errors.Trace(err)
+			log.Warn("fail to save the chunk to the file", zap.Any("chunk index", cur.GetID()), zap.Error(err))
+			return nil, errors.Trace(err)
 		}
 
 		if err = ioutil2.WriteFileAtomic(fileName, checkpointData, config.LocalFilePerm); err != nil {
-			return 0, err
+			return nil, err
 		}
 		return cur.GetID(), nil
 	}
-	return 0, nil
+	return nil, nil
 }
 
 // LoadChunk loads chunk info from file `chunk`
