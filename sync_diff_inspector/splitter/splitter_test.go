@@ -388,8 +388,9 @@ func createFakeResultForRandomSplit(mock sqlmock.Sqlmock, count int, randomValue
 	createFakeResultForCount(mock, count)
 
 	// generate fake result for get random value for column a
-	for _, randomVs := range randomValues {
-		randomRows := sqlmock.NewRows([]string{"a"})
+	columns := []string{"a", "b", "c", "d", "e", "f"}
+	for i, randomVs := range randomValues {
+		randomRows := sqlmock.NewRows([]string{columns[i]})
 		for _, value := range randomVs {
 			randomRows.AddRow(value)
 		}

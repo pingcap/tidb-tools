@@ -101,9 +101,9 @@ func (s *testReportSuite) TestReport(c *C) {
 
 	// Test Table Report
 	report.SetTableStructCheckResult("test", "tbl", true)
-	report.SetTableDataCheckResult("test", "tbl", true, 100, 200, &chunk.ChunkID{1, 1, 1, 2})
+	report.SetTableDataCheckResult("test", "tbl", true, 100, 200, &chunk.ChunkID{1, 1, 1, 1, 2})
 	report.SetTableMeetError("test", "tbl", errors.New("eeee"))
-	report.SetRowsCnt("test", "tbl", 10000, &chunk.ChunkID{1, 1, 1, 2})
+	report.SetRowsCnt("test", "tbl", 10000, &chunk.ChunkID{1, 1, 2, 1, 2})
 
 	new_report := NewReport()
 	new_report.LoadReport(report)
@@ -114,13 +114,13 @@ func (s *testReportSuite) TestReport(c *C) {
 	c.Assert(result.MeetError.Error(), Equals, "eeee")
 	c.Assert(result.DataEqual, IsTrue)
 	c.Assert(result.StructEqual, IsTrue)
-	c.Assert(result.ChunkMap["1:1:1:2"].RowsCnt, Equals, int64(10000))
+	c.Assert(result.ChunkMap["1:1-2:1:2"].RowsCnt, Equals, int64(10000))
 
 	c.Assert(new_report.getSortedTables(), DeepEquals, []string{"`atest`.`atbl`", "`test`.`tbl`"})
 	c.Assert(new_report.getDiffRows(), DeepEquals, [][]string{})
 
 	new_report.SetTableStructCheckResult("atest", "atbl", true)
-	new_report.SetTableDataCheckResult("atest", "atbl", false, 111, 222, &chunk.ChunkID{1, 1, 1, 2})
+	new_report.SetTableDataCheckResult("atest", "atbl", false, 111, 222, &chunk.ChunkID{1, 1, 1, 1, 2})
 	c.Assert(new_report.getSortedTables(), DeepEquals, []string{"`test`.`tbl`"})
 	c.Assert(new_report.getDiffRows(), DeepEquals, [][]string{{"`atest`.`atbl`", "true", "+111/-222"}})
 
@@ -234,7 +234,7 @@ func (s *testReportSuite) TestPrint(c *C) {
 	var buf *bytes.Buffer
 	// All Pass
 	report.SetTableStructCheckResult("test", "tbl", true)
-	report.SetTableDataCheckResult("test", "tbl", true, 0, 0, &chunk.ChunkID{0, 0, 0, 1})
+	report.SetTableDataCheckResult("test", "tbl", true, 0, 0, &chunk.ChunkID{0, 0, 0, 0, 1})
 	buf = new(bytes.Buffer)
 	report.Print("[123]", buf)
 	c.Assert(buf.String(), Equals, "A total of 0 table have been compared and all are equal.\n"+
@@ -308,21 +308,21 @@ func (s *testReportSuite) TestGetSnapshot(c *C) {
 	report.Init(tableDiffs, configsBytes[:2], configsBytes[2])
 
 	report.SetTableStructCheckResult("test", "tbl", true)
-	report.SetTableDataCheckResult("test", "tbl", false, 100, 100, &chunk.ChunkID{0, 0, 1, 10})
-	report.SetTableDataCheckResult("test", "tbl", true, 0, 0, &chunk.ChunkID{0, 0, 3, 10})
-	report.SetTableDataCheckResult("test", "tbl", false, 200, 200, &chunk.ChunkID{0, 0, 3, 10})
+	report.SetTableDataCheckResult("test", "tbl", false, 100, 100, &chunk.ChunkID{0, 0, 0, 1, 10})
+	report.SetTableDataCheckResult("test", "tbl", true, 0, 0, &chunk.ChunkID{0, 0, 0, 3, 10})
+	report.SetTableDataCheckResult("test", "tbl", false, 200, 200, &chunk.ChunkID{0, 0, 0, 3, 10})
 
 	report.SetTableStructCheckResult("atest", "tbl", true)
-	report.SetTableDataCheckResult("atest", "tbl", false, 100, 100, &chunk.ChunkID{0, 0, 0, 10})
-	report.SetTableDataCheckResult("atest", "tbl", true, 0, 0, &chunk.ChunkID{0, 0, 3, 10})
-	report.SetTableDataCheckResult("atest", "tbl", false, 200, 200, &chunk.ChunkID{0, 0, 3, 10})
+	report.SetTableDataCheckResult("atest", "tbl", false, 100, 100, &chunk.ChunkID{0, 0, 0, 0, 10})
+	report.SetTableDataCheckResult("atest", "tbl", true, 0, 0, &chunk.ChunkID{0, 0, 0, 3, 10})
+	report.SetTableDataCheckResult("atest", "tbl", false, 200, 200, &chunk.ChunkID{0, 0, 0, 3, 10})
 
 	report.SetTableStructCheckResult("xtest", "tbl", true)
-	report.SetTableDataCheckResult("xtest", "tbl", false, 100, 100, &chunk.ChunkID{0, 0, 0, 10})
-	report.SetTableDataCheckResult("xtest", "tbl", true, 0, 0, &chunk.ChunkID{0, 0, 1, 10})
-	report.SetTableDataCheckResult("xtest", "tbl", false, 200, 200, &chunk.ChunkID{0, 0, 3, 10})
+	report.SetTableDataCheckResult("xtest", "tbl", false, 100, 100, &chunk.ChunkID{0, 0, 0, 0, 10})
+	report.SetTableDataCheckResult("xtest", "tbl", true, 0, 0, &chunk.ChunkID{0, 0, 0, 1, 10})
+	report.SetTableDataCheckResult("xtest", "tbl", false, 200, 200, &chunk.ChunkID{0, 0, 0, 3, 10})
 
-	report_snap, err := report.GetSnapshot(&chunk.ChunkID{0, 0, 1, 10}, "test", "tbl")
+	report_snap, err := report.GetSnapshot(&chunk.ChunkID{0, 0, 0, 1, 10}, "test", "tbl")
 	c.Assert(err, IsNil)
 	c.Assert(report_snap.TotalSize, Equals, report.TotalSize)
 	c.Assert(report_snap.Result, Equals, report.Result)
@@ -353,11 +353,11 @@ func (s *testReportSuite) TestGetSnapshot(c *C) {
 			sid := new(chunk.ChunkID)
 			if _, ok := chunkMap2[id]; !ok {
 				c.Assert(sid.FromString(id), IsNil)
-				c.Assert(sid.Compare(&chunk.ChunkID{0, 0, 3, 10}), Equals, 0)
+				c.Assert(sid.Compare(&chunk.ChunkID{0, 0, 0, 3, 10}), Equals, 0)
 				continue
 			}
 			c.Assert(sid.FromString(id), IsNil)
-			c.Assert(sid.Compare(&chunk.ChunkID{0, 0, 1, 10}), LessEqual, 0)
+			c.Assert(sid.Compare(&chunk.ChunkID{0, 0, 0, 1, 10}), LessEqual, 0)
 			r2 := chunkMap2[id]
 			c.Assert(r1.RowsAdd, Equals, r2.RowsAdd)
 			c.Assert(r1.RowsCnt, Equals, r2.RowsCnt)
@@ -425,16 +425,16 @@ func (s *testReportSuite) TestCommitSummary(c *C) {
 	report.Init(tableDiffs, configsBytes[:2], configsBytes[2])
 
 	report.SetTableStructCheckResult("test", "tbl", true)
-	report.SetTableDataCheckResult("test", "tbl", true, 100, 200, &chunk.ChunkID{0, 0, 1, 10})
-	report.SetRowsCnt("test", "tbl", 10000, &chunk.ChunkID{0, 0, 1, 10})
+	report.SetTableDataCheckResult("test", "tbl", true, 100, 200, &chunk.ChunkID{0, 0, 0, 1, 10})
+	report.SetRowsCnt("test", "tbl", 10000, &chunk.ChunkID{0, 0, 0, 1, 10})
 
 	report.SetTableStructCheckResult("atest", "tbl", true)
-	report.SetTableDataCheckResult("atest", "tbl", false, 100, 200, &chunk.ChunkID{0, 0, 2, 10})
-	report.SetRowsCnt("atest", "tbl", 10000, &chunk.ChunkID{0, 0, 2, 10})
+	report.SetTableDataCheckResult("atest", "tbl", false, 100, 200, &chunk.ChunkID{0, 0, 0, 2, 10})
+	report.SetRowsCnt("atest", "tbl", 10000, &chunk.ChunkID{0, 0, 0, 2, 10})
 
 	report.SetTableStructCheckResult("xtest", "tbl", false)
-	report.SetTableDataCheckResult("xtest", "tbl", false, 100, 200, &chunk.ChunkID{0, 0, 3, 10})
-	report.SetRowsCnt("xtest", "tbl", 10000, &chunk.ChunkID{0, 0, 3, 10})
+	report.SetTableDataCheckResult("xtest", "tbl", false, 100, 200, &chunk.ChunkID{0, 0, 0, 3, 10})
+	report.SetRowsCnt("xtest", "tbl", 10000, &chunk.ChunkID{0, 0, 0, 3, 10})
 
 	outputDir := "./"
 	err = report.CommitSummary(&config.TaskConfig{OutputDir: outputDir})
