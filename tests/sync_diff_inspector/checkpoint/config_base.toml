@@ -35,7 +35,7 @@ ignore-struct-check = false
 
 [data-sources.tidb]
     host = "127.0.0.1"
-    port = 23770
+    port = 4000
     user = "root"
     password = ""
     # remove comment if use tidb's snapshot data
