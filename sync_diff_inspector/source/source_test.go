@@ -63,19 +63,41 @@ type MockChunkIterator struct {
 	ctx       context.Context
 	tableDiff *common.TableDiff
 	rangeInfo *splitter.RangeInfo
-	i         int
+	index     *chunk.ChunkID
 }
 
-const MAXCHUNKS = 5
+const CHUNKS = 5
+const BUCKETS = 1
+
+func equal(a, b *chunk.ChunkID) bool {
+	return a.TableIndex == b.TableIndex && a.BucketIndex == b.BucketIndex && a.ChunkIndex == b.ChunkIndex
+}
+
+func next(a *chunk.ChunkID) {
+	if a.ChunkIndex == a.ChunkCnt-1 {
+		a.TableIndex++
+		a.ChunkIndex = 0
+	} else {
+		a.ChunkIndex = a.ChunkIndex + 1
+	}
+}
+
+func newIndex() *chunk.ChunkID {
+	return &chunk.ChunkID{
+		TableIndex:  0,
+		BucketIndex: 0,
+		ChunkIndex:  0,
+		ChunkCnt:    CHUNKS,
+	}
+}
 
 func (m *MockChunkIterator) Next() (*chunk.Range, error) {
-	if m.i == MAXCHUNKS {
+	if m.index.ChunkIndex == m.index.ChunkCnt-1 {
 		return nil, nil
 	}
-	m.i = m.i + 1
+	m.index.ChunkIndex = m.index.ChunkIndex + 1
 	return &chunk.Range{
-		ID:    m.i,
-		Index: &chunk.ChunkID{},
+		Index: m.index,
 	}, nil
 }
 
@@ -87,7 +109,12 @@ type MockAnalyzer struct {
 }
 
 func (m *MockAnalyzer) AnalyzeSplitter(ctx context.Context, progressID string, tableDiff *common.TableDiff, rangeInfo *splitter.RangeInfo) (splitter.ChunkIterator, error) {
-	i := 0
+	i := &chunk.ChunkID{
+		TableIndex:  0,
+		BucketIndex: 0,
+		ChunkIndex:  -1,
+		ChunkCnt:    CHUNKS,
+	}
 	return &MockChunkIterator{
 		ctx,
 		tableDiff,
@@ -137,7 +164,7 @@ func (s *testSourceSuite) TestTiDBSource(c *C) {
 	c.Assert(err, IsNil)
 
 	for n, tableCase := range tableCases {
-		c.Assert(n, Equals, tableCase.rangeInfo.TableIndex)
+		c.Assert(n, Equals, tableCase.rangeInfo.GetTableIndex())
 		countRows := sqlmock.NewRows([]string{"CNT", "CHECKSUM"}).AddRow(123, 456)
 		mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
 		checksum := tidb.GetCountAndCrc32(ctx, tableCase.rangeInfo)
@@ -148,18 +175,18 @@ func (s *testSourceSuite) TestTiDBSource(c *C) {
 	}
 
 	// Test ChunkIterator
-	iter, err := tidb.GetRangeIterator(ctx, nil, &MockAnalyzer{})
+	iter, err := tidb.GetRangeIterator(ctx, tableCases[0].rangeInfo, &MockAnalyzer{})
 	c.Assert(err, IsNil)
-	i := 0
+	i := newIndex()
 	for {
-		chunk, err := iter.Next(ctx)
+		ch, err := iter.Next(ctx)
 		c.Assert(err, IsNil)
-		if chunk == nil {
-			c.Assert(i, Equals, 5*len(tableCases))
+		if ch == nil {
+			c.Assert(equal(i, &chunk.ChunkID{TableIndex: len(tableCases), BucketIndex: 0, ChunkIndex: 0, ChunkCnt: CHUNKS}), IsTrue)
 			break
 		}
-		c.Assert(chunk.ChunkRange.ID, Equals, i+1)
-		i++
+		c.Assert(equal(ch.ChunkRange.Index, i), IsTrue)
+		next(i)
 	}
 	iter.Close()
 
@@ -173,25 +200,25 @@ func (s *testSourceSuite) TestTiDBSource(c *C) {
 	rowIter, err := tidb.GetRowsIterator(ctx, tableCase.rangeInfo)
 	c.Assert(err, IsNil)
 
-	i = 0
+	row := 0
 	var firstRow, secondRow map[string]*dbutil.ColumnData
 	for {
 		columns, err := rowIter.Next()
 		c.Assert(err, IsNil)
 		if columns == nil {
-			c.Assert(i, Equals, len(tableCase.rows))
+			c.Assert(row, Equals, len(tableCase.rows))
 			break
 		}
-		for j, value := range tableCase.rows[i] {
+		for j, value := range tableCase.rows[row] {
 			c.Assert(columns[tableCase.rowColumns[j]].IsNull, Equals, false)
 			c.Assert(columns[tableCase.rowColumns[j]].Data, DeepEquals, []byte(value.(string)))
 		}
-		if i == 0 {
+		if row == 0 {
 			firstRow = columns
-		} else if i == 1 {
+		} else if row == 1 {
 			secondRow = columns
 		}
-		i++
+		row++
 	}
 	c.Assert(tidb.GenerateFixSQL(Insert, firstRow, secondRow, 0), Equals, "REPLACE INTO `source_test`.`test1`(`a`,`b`,`c`) VALUES (1,'a',1.2);")
 	c.Assert(tidb.GenerateFixSQL(Delete, firstRow, secondRow, 0), Equals, "DELETE FROM `source_test`.`test1` WHERE `a` = 2 AND `b` = 'b' AND `c` = 3.4;")
@@ -282,7 +309,7 @@ func (s *testSourceSuite) TestMysqlShardSources(c *C) {
 	c.Assert(info[0].Name.O, Equals, "test1")
 
 	for n, tableCase := range tableCases {
-		c.Assert(n, Equals, tableCase.rangeInfo.TableIndex)
+		c.Assert(n, Equals, tableCase.rangeInfo.GetTableIndex())
 		var resChecksum int64 = 0
 		for i := 0; i < len(dbs); i++ {
 			resChecksum = resChecksum + 1<<i
@@ -517,9 +544,9 @@ func prepareTiDBTables(c *C, tableCases []*tableCaseType) []*common.TableDiff {
 		}
 
 		chunk.InitChunk(chunkRange, chunk.Bucket, 0, "", "")
+		chunkRange.Index.TableIndex = n
 		rangeInfo := &splitter.RangeInfo{
 			ChunkRange: chunkRange,
-			TableIndex: n,
 		}
 		tableCase.rangeInfo = rangeInfo
 	}
