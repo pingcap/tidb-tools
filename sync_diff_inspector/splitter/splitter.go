@@ -47,7 +47,9 @@ type RangeInfo struct {
 // So we should have to save the config info to checkpoint file too
 func (r *RangeInfo) GetTableIndex() int { return r.ChunkRange.Index.TableIndex }
 
-func (r *RangeInfo) GetBucketIndex() int { return r.ChunkRange.Index.BucketIndex }
+func (r *RangeInfo) GetBucketIndexLeft() int { return r.ChunkRange.Index.BucketIndexLeft }
+
+func (r *RangeInfo) GetBucketIndexRight() int { return r.ChunkRange.Index.BucketIndexRight }
 
 func (r *RangeInfo) GetChunkIndex() int { return r.ChunkRange.Index.ChunkIndex }
 
