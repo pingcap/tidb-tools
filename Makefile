@@ -70,7 +70,7 @@ ddl_checker:
 test: version
 	$(call run_unit_test,$(PACKAGES))
 
-integration_test: build
+integration_test: prepare failpoint-enable importer sync_diff_inspector ddl_checker failpoint-disable finish
 	@which bin/tidb-server
 	@which bin/tikv-server
 	@which bin/pd-server
