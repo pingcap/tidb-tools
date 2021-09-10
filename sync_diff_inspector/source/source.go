@@ -256,6 +256,7 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 		cfgTables[table.Schema][table.Table].IgnoreColumns = table.IgnoreColumns
 		cfgTables[table.Schema][table.Table].Fields = table.Fields
 		cfgTables[table.Schema][table.Table].Collation = table.Collation
+		cfgTables[table.Schema][table.Table].ChunkSize = table.ChunkSize
 	}
 	return cfgTables, nil
 }

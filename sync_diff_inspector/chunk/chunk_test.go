@@ -295,12 +295,12 @@ func (*testChunkSuite) TestChunkInit(c *C) {
 		},
 	}
 
-	InitChunks(chunks, Others, 1, "[123]", "[sdfds fsd fd gd]", 1)
+	InitChunks(chunks, Others, 1, 1, 0, "[123]", "[sdfds fsd fd gd]", 1)
 	c.Assert(chunks[0].Where, Equals, "((((`a` COLLATE '[123]' > ?) OR (`a` = ? AND `b` COLLATE '[123]' > ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[123]' > ?)) AND ((`a` COLLATE '[123]' < ?) OR (`a` = ? AND `b` COLLATE '[123]' < ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[123]' <= ?))) AND [sdfds fsd fd gd])")
 	c.Assert(chunks[0].Args, DeepEquals, []string{"1", "1", "3", "1", "3", "5", "2", "2", "4", "2", "4", "6"})
 	c.Assert(chunks[0].BucketID, Equals, 1)
 	c.Assert(chunks[0].Type, Equals, Others)
-	InitChunk(chunks[1], Others, 2, "[456]", "[dsfsdf]")
+	InitChunk(chunks[1], Others, 2, 2, "[456]", "[dsfsdf]")
 	c.Assert(chunks[1].Where, Equals, "((((`a` COLLATE '[456]' > ?) OR (`a` = ? AND `b` COLLATE '[456]' > ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[456]' > ?)) AND ((`a` COLLATE '[456]' < ?) OR (`a` = ? AND `b` COLLATE '[456]' < ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[456]' <= ?))) AND [dsfsdf])")
 	c.Assert(chunks[1].Args, DeepEquals, []string{"2", "2", "4", "2", "4", "6", "3", "3", "5", "3", "5", "7"})
 	c.Assert(chunks[1].BucketID, Equals, 2)
@@ -329,7 +329,7 @@ func (*testChunkSuite) TestChunkCopyAndUpdate(c *C) {
 	// `Copy` use the same []string
 	c.Assert(args, DeepEquals, []string{"2", "2", "4", "2", "4", "10", "3", "3", "9", "3", "9", "7"})
 
-	InitChunk(chunk, Others, 2, "[324]", "[543]")
+	InitChunk(chunk, Others, 2, 2, "[324]", "[543]")
 	chunk3 := chunk.Clone()
 	chunk3.Update("a", "2", "3", true, true)
 	c.Assert(chunk3.Where, Equals, "((((`a` COLLATE '[324]' > ?) OR (`a` = ? AND `b` COLLATE '[324]' > ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[324]' > ?)) AND ((`a` COLLATE '[324]' < ?) OR (`a` = ? AND `b` COLLATE '[324]' < ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[324]' <= ?))) AND [543])")

@@ -61,6 +61,7 @@ func NewLimitIteratorWithCheckpoint(ctx context.Context, progressID string, tabl
 	chunksCh := make(chan *chunk.Range, DefaultChannelBuffer)
 	errCh := make(chan error)
 	undone := startRange == nil
+	beginBucketID := 0
 	var indexID int64
 	for _, index := range indices {
 		if index == nil {
@@ -97,6 +98,8 @@ func NewLimitIteratorWithCheckpoint(ctx context.Context, progressID string, tabl
 				undone = undone || bound.HasUpper
 				tagChunk.Update(bound.Column, bound.Upper, "", bound.HasUpper, false)
 			}
+
+			beginBucketID = startRange.ChunkRange.Index.BucketIndexRight + 1
 
 		} else {
 			tagChunk = chunk.NewChunkRangeOffset(columnOffset)
@@ -152,7 +155,7 @@ func NewLimitIteratorWithCheckpoint(ctx context.Context, progressID string, tabl
 		// this table is finished.
 		close(chunksCh)
 	} else {
-		go limitIterator.produceChunks(lctx)
+		go limitIterator.produceChunks(lctx, beginBucketID)
 	}
 
 	return limitIterator, nil
@@ -178,8 +181,7 @@ func (lmt *LimitIterator) GetIndexID() int64 {
 	return lmt.indexID
 }
 
-func (lmt *LimitIterator) produceChunks(ctx context.Context) {
-	bucketID := 0
+func (lmt *LimitIterator) produceChunks(ctx context.Context, bucketID int) {
 	for {
 		where, args := lmt.tagChunk.ToString(lmt.table.Collation)
 		query := fmt.Sprintf(lmt.queryTmpl, where)
@@ -196,7 +198,7 @@ func (lmt *LimitIterator) produceChunks(ctx context.Context) {
 		lmt.tagChunk = nil
 		if dataMap == nil {
 			// there is no row in result set
-			chunk.InitChunk(chunkRange, chunk.Limit, bucketID, lmt.table.Collation, lmt.table.Range)
+			chunk.InitChunk(chunkRange, chunk.Limit, bucketID, bucketID, lmt.table.Collation, lmt.table.Range)
 			bucketID++
 			progress.UpdateTotal(lmt.progressID, 1, true)
 			select {
@@ -213,7 +215,7 @@ func (lmt *LimitIterator) produceChunks(ctx context.Context) {
 			chunkRange.Update(column, "", string(data.Data), false, !data.IsNull)
 		}
 
-		chunk.InitChunk(chunkRange, chunk.Limit, bucketID, lmt.table.Collation, lmt.table.Range)
+		chunk.InitChunk(chunkRange, chunk.Limit, bucketID, bucketID, lmt.table.Collation, lmt.table.Range)
 		bucketID++
 		progress.UpdateTotal(lmt.progressID, 1, false)
 		select {
