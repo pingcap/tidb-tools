@@ -28,6 +28,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -112,6 +113,11 @@ func (df *Diff) Close() {
 	if df.downstream != nil {
 		df.downstream.Close()
 	}
+
+	failpoint.Inject("wait-for-checkpoint", func() {
+		log.Info("failpoint wait-for-checkpoint injected, skip delete checkpoint file.")
+		failpoint.Return()
+	})
 
 	if err := os.Remove(filepath.Join(df.CheckpointDir, checkpointFile)); err != nil && !os.IsNotExist(err) {
 		log.Fatal("fail to remove the checkpoint file", zap.String("error", err.Error()))

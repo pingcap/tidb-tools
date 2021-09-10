@@ -18,6 +18,7 @@ import (
 	"database/sql"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -93,10 +94,26 @@ func (s *BucketIterator) Next() (*chunk.Range, error) {
 			}
 		}
 		s.nextChunk = 0
+		failpoint.Inject("ignore-last-chunk-in-one-bucket", func() {
+			log.Info("failpoint ignore-last-chunk-in-one-bucket injected")
+			if len(s.chunks) <= 1 {
+				failpoint.Return(nil, nil)
+			}
+			s.chunks = s.chunks[:len(s.chunks)]
+		})
 	}
 
 	c := s.chunks[s.nextChunk]
 	s.nextChunk = s.nextChunk + 1
+	failpoint.Inject("print-chunk-info", func() {
+		lowerBounds := make([]string, len(c.Bounds))
+		upperBounds := make([]string, len(c.Bounds))
+		for i, bound := range c.Bounds {
+			lowerBounds[i] = bound.Lower
+			upperBounds[i] = bound.Upper
+		}
+		log.Info("failpoint print-chunk-info injected", zap.Strings("lowerBounds", lowerBounds), zap.Strings("upperBounds", upperBounds))
+	})
 	return c, nil
 }
 
@@ -167,6 +184,7 @@ func (s *BucketIterator) splitChunkForBucket(bucketID int, chunkCnt int, chunkRa
 
 func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInfo) {
 	defer func() {
+		s.chunkPool.WaitFinished()
 		progress.UpdateTotal(s.progressID, 0, true)
 		close(s.chunksCh)
 	}()
@@ -249,6 +267,11 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 		s.splitChunkForBucket(i, chunkCnt, chunkRange)
 		latestCount = s.buckets[i].Count
 		lowerValues = upperValues
+
+		failpoint.Inject("check-one-bucket", func() {
+			log.Info("failpoint check-one-bucket injected, stop producing new chunks.")
+			failpoint.Return()
+		})
 	}
 
 	// merge the rest keys into one chunk
@@ -264,5 +287,4 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 	chunk.InitChunks(chunks, chunk.Bucket, len(s.buckets), s.table.Collation, s.table.Range, 1)
 	progress.UpdateTotal(s.progressID, len(chunks), false)
 	s.chunksCh <- chunks
-	s.chunkPool.WaitFinished()
 }
