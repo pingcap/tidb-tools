@@ -70,7 +70,7 @@ const CHUNKS = 5
 const BUCKETS = 1
 
 func equal(a, b *chunk.ChunkID) bool {
-	return a.TableIndex == b.TableIndex && a.BucketIndex == b.BucketIndex && a.ChunkIndex == b.ChunkIndex
+	return a.TableIndex == b.TableIndex && a.BucketIndexLeft == b.BucketIndexLeft && a.ChunkIndex == b.ChunkIndex
 }
 
 func next(a *chunk.ChunkID) {
@@ -84,10 +84,11 @@ func next(a *chunk.ChunkID) {
 
 func newIndex() *chunk.ChunkID {
 	return &chunk.ChunkID{
-		TableIndex:  0,
-		BucketIndex: 0,
-		ChunkIndex:  0,
-		ChunkCnt:    CHUNKS,
+		TableIndex:       0,
+		BucketIndexLeft:  0,
+		BucketIndexRight: 0,
+		ChunkIndex:       0,
+		ChunkCnt:         CHUNKS,
 	}
 }
 
@@ -110,10 +111,11 @@ type MockAnalyzer struct {
 
 func (m *MockAnalyzer) AnalyzeSplitter(ctx context.Context, progressID string, tableDiff *common.TableDiff, rangeInfo *splitter.RangeInfo) (splitter.ChunkIterator, error) {
 	i := &chunk.ChunkID{
-		TableIndex:  0,
-		BucketIndex: 0,
-		ChunkIndex:  -1,
-		ChunkCnt:    CHUNKS,
+		TableIndex:       0,
+		BucketIndexLeft:  0,
+		BucketIndexRight: 0,
+		ChunkIndex:       -1,
+		ChunkCnt:         CHUNKS,
 	}
 	return &MockChunkIterator{
 		ctx,
@@ -182,7 +184,7 @@ func (s *testSourceSuite) TestTiDBSource(c *C) {
 		ch, err := iter.Next(ctx)
 		c.Assert(err, IsNil)
 		if ch == nil {
-			c.Assert(equal(i, &chunk.ChunkID{TableIndex: len(tableCases), BucketIndex: 0, ChunkIndex: 0, ChunkCnt: CHUNKS}), IsTrue)
+			c.Assert(equal(i, &chunk.ChunkID{TableIndex: len(tableCases), BucketIndexLeft: 0, BucketIndexRight: 0, ChunkIndex: 0, ChunkCnt: CHUNKS}), IsTrue)
 			break
 		}
 		c.Assert(equal(ch.ChunkRange.Index, i), IsTrue)
@@ -427,7 +429,11 @@ func (s *testSourceSuite) TestMysqlRouter(c *C) {
 	// random splitter
 	countRows := sqlmock.NewRows([]string{"Cnt"}).AddRow(0)
 	mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
-	rangeIter, err := mysql.GetRangeIterator(ctx, tableCases[0].rangeInfo, mysql.GetTableAnalyzer())
+	rangeIter, err := mysql.GetRangeIterator(ctx, nil, mysql.GetTableAnalyzer())
+	c.Assert(err, IsNil)
+	rangeIter.Close()
+
+	rangeIter, err = mysql.GetRangeIterator(ctx, tableCases[0].rangeInfo, mysql.GetTableAnalyzer())
 	c.Assert(err, IsNil)
 	rangeIter.Close()
 
@@ -543,7 +549,7 @@ func prepareTiDBTables(c *C, tableCases []*tableCaseType) []*common.TableDiff {
 			chunkRange.Update(column, tableCase.rangeLeft[i], tableCase.rangeRight[i], true, true)
 		}
 
-		chunk.InitChunk(chunkRange, chunk.Bucket, 0, "", "")
+		chunk.InitChunk(chunkRange, chunk.Bucket, 0, 0, "", "")
 		chunkRange.Index.TableIndex = n
 		rangeInfo := &splitter.RangeInfo{
 			ChunkRange: chunkRange,

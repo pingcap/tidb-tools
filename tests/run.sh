@@ -5,13 +5,13 @@ set -eu
 OUT_DIR=/tmp/tidb_tools_test
 
 # assign default value to mysql config
-if [[ -z "$MYSQL_HOST" ]]; then
+if [[ -z ${MYSQL_HOST+x} ]]; then
     echo "set MYSQL_HOST as default value \"127.0.0.1\""
-    MYSQL_HOST="127.0.0.1"
+    export MYSQL_HOST="127.0.0.1"
 fi
-if [[ -z "$MYSQL_PORT" ]]; then
+if [[ -z ${MYSQL_PORT+x} ]]; then
     echo "set MYSQL_PORT as default value 3306"
-    MYSQL_PORT=3306
+    export MYSQL_PORT=3306
 fi
 
 mkdir -p $OUT_DIR || true

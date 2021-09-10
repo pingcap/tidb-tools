@@ -78,7 +78,9 @@ func (n *Node) GetState() string { return n.State }
 
 func (n *Node) GetTableIndex() int { return n.ChunkRange.Index.TableIndex }
 
-func (n *Node) GetBucketIndex() int { return n.ChunkRange.Index.BucketIndex }
+func (n *Node) GetBucketIndexLeft() int { return n.ChunkRange.Index.BucketIndexLeft }
+
+func (n *Node) GetBucketIndexRight() int { return n.ChunkRange.Index.BucketIndexRight }
 
 func (n *Node) GetChunkIndex() int { return n.ChunkRange.Index.ChunkIndex }
 
@@ -93,13 +95,13 @@ func (n *Node) IsAdjacent(next *Node) bool {
 	}
 	if n.GetTableIndex() == next.GetTableIndex() {
 		// same table
-		if n.GetBucketIndex() == next.GetBucketIndex()-1 {
+		if n.GetBucketIndexRight() == next.GetBucketIndexLeft()-1 {
 			if n.ChunkRange.IsLastChunkForBucket() && next.ChunkRange.IsFirstChunkForBucket() {
 				return true
 			}
 			return false
 		}
-		if n.GetBucketIndex() == next.GetBucketIndex() {
+		if n.GetBucketIndexLeft() == next.GetBucketIndexLeft() {
 			return n.GetChunkIndex() == next.GetChunkIndex()-1
 		}
 		return false
@@ -113,10 +115,10 @@ func (n *Node) IsLess(next *Node) bool {
 		return true
 	}
 	if n.GetTableIndex() == next.GetTableIndex() {
-		if n.GetBucketIndex() <= next.GetBucketIndex()-1 {
+		if n.GetBucketIndexLeft() <= next.GetBucketIndexLeft()-1 {
 			return true
 		}
-		if n.GetBucketIndex() == next.GetBucketIndex() {
+		if n.GetBucketIndexLeft() == next.GetBucketIndexLeft() {
 			return n.GetChunkIndex() < next.GetChunkIndex()
 		}
 		return false
