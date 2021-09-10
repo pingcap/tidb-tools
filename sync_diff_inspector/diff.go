@@ -350,7 +350,7 @@ func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
 	flush := func() {
 		chunk := df.cp.GetChunkSnapshot()
 		if chunk != nil {
-			tableDiff := df.downstream.GetTables()[chunk.IndexID]
+			tableDiff := df.downstream.GetTables()[chunk.GetTableIndex()]
 			schema, table := tableDiff.Schema, tableDiff.Table
 			r, err := df.report.GetSnapshot(chunk.GetID(), schema, table)
 			if err != nil {
