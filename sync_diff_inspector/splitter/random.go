@@ -34,9 +34,12 @@ type RandomIterator struct {
 	table     *common.TableDiff
 	chunkSize int64
 	chunks    []*chunk.Range
+	chunksCh  chan []*chunk.Range
 	nextChunk uint
+	errCh     chan error
 
-	dbConn *sql.DB
+	dbConn     *sql.DB
+	progressID string
 }
 
 func NewRandomIterator(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB) (*RandomIterator, error) {
@@ -44,40 +47,53 @@ func NewRandomIterator(ctx context.Context, progressID string, table *common.Tab
 }
 
 func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, startRange *RangeInfo) (*RandomIterator, error) {
+	rs := &RandomIterator{
+		table:      table,
+		chunkSize:  table.ChunkSize,
+		chunksCh:   make(chan []*chunk.Range, DefaultChannelBuffer),
+		dbConn:     dbConn,
+		progressID: progressID,
+		errCh:      make(chan error, 1),
+	}
+	progress.StartTable(rs.progressID, 0, false)
+	go rs.produceChunks(ctx, startRange)
+	return rs, nil
+
+}
+
+func (s *RandomIterator) produceChunks(ctx context.Context, startRange *RangeInfo) {
+	defer func() {
+		progress.UpdateTotal(s.progressID, 0, true)
+		close(s.chunksCh)
+	}()
 	// get the chunk count by data count and chunk size
 	var splitFieldArr []string
-	if len(table.Fields) != 0 {
-		splitFieldArr = strings.Split(table.Fields, ",")
+	if len(s.table.Fields) != 0 {
+		splitFieldArr = strings.Split(s.table.Fields, ",")
 	}
 
 	for i := range splitFieldArr {
 		splitFieldArr[i] = strings.TrimSpace(splitFieldArr[i])
 	}
 
-	fields, err := GetSplitFields(table.Info, splitFieldArr)
+	fields, err := GetSplitFields(s.table.Info, splitFieldArr)
 	if err != nil {
-		return nil, errors.Trace(err)
+		s.errCh <- err
+		return
 	}
-
 	chunkRange := chunk.NewChunkRange()
-	where := table.Range
+	where := s.table.Range
 	var iargs []interface{}
 	if startRange != nil {
 		c := startRange.GetChunk()
 		if c.IsLastChunkForTable() {
-			return &RandomIterator{
-				table:     table,
-				chunkSize: 0,
-				chunks:    nil,
-				nextChunk: 0,
-				dbConn:    dbConn,
-			}, nil
+			return
 		}
 		for _, bound := range c.Bounds {
 			chunkRange.Update(bound.Column, bound.Upper, "", true, false)
 		}
 
-		conditions, args := chunkRange.ToString(table.Collation)
+		conditions, args := chunkRange.ToString(s.table.Collation)
 		if len(where) > 0 {
 			where = fmt.Sprintf("((%s) AND %s)", conditions, where)
 		} else {
@@ -86,14 +102,15 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 		iargs = utils.StringsToInterfaces(args)
 	}
 
-	cnt, err := dbutil.GetRowCount(ctx, dbConn, table.Schema, table.Table, where, iargs)
+	cnt, err := dbutil.GetRowCount(ctx, s.dbConn, s.table.Schema, s.table.Table, where, iargs)
 	if err != nil {
-		return nil, errors.Trace(err)
+		s.errCh <- err
+		return
 	}
 
-	chunkSize := table.ChunkSize
+	chunkSize := s.table.ChunkSize
 	if chunkSize <= 0 {
-		if len(table.Info.Indices) != 0 {
+		if len(s.table.Info.Indices) != 0 {
 			chunkSize = utils.CalculateChunkSize(cnt)
 		} else {
 			// no index
@@ -103,31 +120,37 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 		}
 	}
 	log.Info("get chunk size for table", zap.Int64("chunk size", chunkSize),
-		zap.String("db", table.Schema), zap.String("table", table.Table))
+		zap.String("db", s.table.Schema), zap.String("table", s.table.Table))
 
 	chunkCnt := (cnt + chunkSize - 1) / chunkSize
 	log.Info("split range by random", zap.Int64("row count", cnt), zap.Int64("split chunk num", chunkCnt))
 
-	chunks, err := splitRangeByRandom(dbConn, chunkRange, int(chunkCnt), table.Schema, table.Table, fields, table.Range, table.Collation)
+	chunks, err := splitRangeByRandom(s.dbConn, chunkRange, int(chunkCnt), s.table.Schema, s.table.Table, fields, s.table.Range, s.table.Collation)
 	if err != nil {
-		return nil, errors.Trace(err)
+		s.errCh <- err
+		return
 	}
-	chunk.InitChunks(chunks, chunk.Random, 0, table.Collation, table.Range, len(chunks))
+	chunk.InitChunks(chunks, chunk.Random, 0, s.table.Collation, s.table.Range, len(chunks))
 
-	progress.StartTable(progressID, len(chunks), true)
-	return &RandomIterator{
-		table:     table,
-		chunkSize: chunkSize,
-		chunks:    chunks,
-		nextChunk: 0,
-		dbConn:    dbConn,
-	}, nil
-
+	progress.UpdateTotal(s.progressID, len(chunks), false)
+	s.chunksCh <- chunks
+	return
 }
 
 func (s *RandomIterator) Next() (*chunk.Range, error) {
+	var ok bool
 	if uint(len(s.chunks)) <= s.nextChunk {
-		return nil, nil
+		select {
+		case err := <-s.errCh:
+			return nil, errors.Trace(err)
+		case s.chunks, ok = <-s.chunksCh:
+			if !ok && s.chunks == nil {
+				log.Info("close chunks channel for table",
+					zap.String("schema", s.table.Schema), zap.String("table", s.table.Table))
+				return nil, nil
+			}
+		}
+		s.nextChunk = 0
 	}
 	c := s.chunks[s.nextChunk]
 	s.nextChunk = s.nextChunk + 1

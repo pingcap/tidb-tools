@@ -37,12 +37,13 @@ type TiDBTableAnalyzer struct {
 	sourceTableMap   map[string]*common.TableSource
 }
 
-func (a *TiDBTableAnalyzer) AnalyzeSplitter(ctx context.Context, progressID string, table *common.TableDiff, startRange *splitter.RangeInfo) (splitter.ChunkIterator, error) {
+func (a *TiDBTableAnalyzer) AnalyzeSplitter(ctx context.Context, table *common.TableDiff, startRange *splitter.RangeInfo) (splitter.ChunkIterator, error) {
 	matchedSource := getMatchSource(a.sourceTableMap, table)
 	// Shallow Copy
 	originTable := *table
 	originTable.Schema = matchedSource.OriginSchema
 	originTable.Table = matchedSource.OriginTable
+	progressID := dbutil.TableName(table.Schema, table.Table)
 	// if we decide to use bucket to split chunks
 	// we always use bucksIter even we load from checkpoint is not bucketNode
 	// TODO check whether we can use bucket for this table to split chunks.
@@ -110,9 +111,12 @@ func (s *TiDBSource) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo
 		tableAnalyzer:  analyzer,
 		TableDiffs:     s.tableDiffs,
 		nextTableIndex: 0,
+		chunkIterCh:    make(chan *splitter.ChunkIterator, 1),
+		errCh:          make(chan error, 1),
 		limit:          0,
+		start:          false,
 	}
-	err := dbIter.nextTable(ctx, r)
+	err := dbIter.initTable(ctx, r)
 	return dbIter, err
 }
 
