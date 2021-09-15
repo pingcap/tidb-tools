@@ -107,6 +107,7 @@ func (c *ChunkID) FromString(s string) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+
 	bucketIndex := strings.Split(ids[1], "-")
 	bucketIndexLeft, err := strconv.Atoi(bucketIndex[0])
 	if err != nil {
