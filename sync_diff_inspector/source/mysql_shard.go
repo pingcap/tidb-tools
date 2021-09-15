@@ -85,7 +85,7 @@ func (s *MySQLSources) GetRangeIterator(ctx context.Context, r *splitter.RangeIn
 		TableDiffs:     s.tableDiffs,
 		nextTableIndex: 0,
 		limit:          0,
-		chunkIterCh:    make(chan *splitter.ChunkIterator, 3),
+		chunkIterCh:    make(chan *splitter.ChunkIterator, 1),
 		errCh:          make(chan error, 1),
 	}
 	err := dbIter.initTable(ctx, r)

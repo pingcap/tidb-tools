@@ -111,7 +111,7 @@ func (s *TiDBSource) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo
 		tableAnalyzer:  analyzer,
 		TableDiffs:     s.tableDiffs,
 		nextTableIndex: 0,
-		chunkIterCh:    make(chan *splitter.ChunkIterator, 3),
+		chunkIterCh:    make(chan *splitter.ChunkIterator, 1),
 		errCh:          make(chan error, 1),
 		limit:          0,
 	}
