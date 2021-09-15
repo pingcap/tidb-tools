@@ -57,7 +57,7 @@ func NewBucketIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 	bs := &BucketIterator{
 		table:     table,
 		chunkSize: table.ChunkSize,
-		chunksCh:  make(chan []*chunk.Range, 200),
+		chunksCh:  make(chan []*chunk.Range, DefaultChannelBuffer),
 		errCh:     make(chan error, 1),
 		dbConn:    dbConn,
 
