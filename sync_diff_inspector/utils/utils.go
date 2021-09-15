@@ -579,7 +579,7 @@ func GetBetterIndex(ctx context.Context, db *sql.DB, schema, table string, table
 	indices := dbutil.FindAllIndex(tableInfo)
 	for _, index := range indices {
 		if index.Primary || index.Unique {
-			return indices, nil
+			return []*model.IndexInfo{index}, nil
 		}
 	}
 	sels := make([]float64, len(indices))
