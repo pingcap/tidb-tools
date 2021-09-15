@@ -111,10 +111,9 @@ func (s *TiDBSource) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo
 		tableAnalyzer:  analyzer,
 		TableDiffs:     s.tableDiffs,
 		nextTableIndex: 0,
-		chunkIterCh:    make(chan *splitter.ChunkIterator, 1),
+		chunkIterCh:    make(chan *splitter.ChunkIterator, 3),
 		errCh:          make(chan error, 1),
 		limit:          0,
-		start:          false,
 	}
 	err := dbIter.initTable(ctx, r)
 	return dbIter, err

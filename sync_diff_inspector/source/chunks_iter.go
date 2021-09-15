@@ -36,10 +36,23 @@ type ChunksIterator struct {
 	chunkIterCh    chan *splitter.ChunkIterator
 	errCh          chan error
 	limit          int
-	start          bool
 
 	tableIter  splitter.ChunkIterator
 	progressID string
+}
+
+func (t *ChunksIterator) produceChunkIter(ctx context.Context, startRange *splitter.RangeInfo) {
+	for i := startRange.GetTableIndex() + 1; i < len(t.TableDiffs); i++ {
+		table := t.TableDiffs[i]
+		startTime := time.Now()
+		chunkIter, err := t.tableAnalyzer.AnalyzeSplitter(ctx, table, nil)
+		if err != nil {
+			t.errCh <- err
+			return
+		}
+		log.Debug("initialize table", zap.Duration("time cost", time.Since(startTime)))
+		t.chunkIterCh <- &chunkIter
+	}
 }
 
 func (t *ChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, error) {
@@ -48,27 +61,6 @@ func (t *ChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, error) 
 		return nil, nil
 	}
 	c, err := t.tableIter.Next()
-	if !t.start {
-		t.start = true
-		go func(t *ChunksIterator) {
-			if t.nextTableIndex >= len(t.TableDiffs) {
-				close(t.chunkIterCh)
-				close(t.errCh)
-				return
-			}
-			startTime := time.Now()
-			defer func() {
-				log.Debug("initialize table", zap.Duration("time cost", time.Since(startTime)))
-			}()
-			curTable := t.TableDiffs[t.nextTableIndex]
-			chunkIter, err := t.tableAnalyzer.AnalyzeSplitter(ctx, curTable, nil)
-			if err != nil {
-				t.errCh <- err
-				return
-			}
-			t.chunkIterCh <- &chunkIter
-		}(t)
-	}
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -142,6 +134,7 @@ func (t *ChunksIterator) initTable(ctx context.Context, startRange *splitter.Ran
 		t.tableIter.Close()
 	}
 	t.tableIter = chunkIter
+	go t.produceChunkIter(ctx, startRange)
 	return nil
 }
 
@@ -150,9 +143,10 @@ func (t *ChunksIterator) initTable(ctx context.Context, startRange *splitter.Ran
 func (t *ChunksIterator) nextTable(ctx context.Context, startRange *splitter.RangeInfo) error {
 	if t.nextTableIndex >= len(t.TableDiffs) {
 		t.tableIter = nil
+		close(t.chunkIterCh)
+		close(t.errCh)
 		return nil
 	}
-	t.start = false
 	curTable := t.TableDiffs[t.nextTableIndex]
 	t.nextTableIndex++
 	t.progressID = dbutil.TableName(curTable.Schema, curTable.Table)

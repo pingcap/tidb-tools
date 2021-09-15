@@ -50,10 +50,11 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 			node := &Node{
 				ChunkRange: &chunk.Range{
 					Index: &chunk.ChunkID{
-						TableIndex:  0,
-						BucketIndex: i / 10,
-						ChunkIndex:  i % 10,
-						ChunkCnt:    10,
+						TableIndex:       0,
+						BucketIndexLeft:  i / 10,
+						BucketIndexRight: i / 10,
+						ChunkIndex:       i % 10,
+						ChunkCnt:         10,
 					},
 					Bounds: []*chunk.Bound{
 						{
@@ -81,7 +82,7 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 	cur = checker.GetChunkSnapshot()
 	id, err = checker.SaveChunk(ctx, "TestSaveChunk", cur, nil)
 	c.Assert(err, IsNil)
-	c.Assert(id.Compare(&chunk.ChunkID{TableIndex: 0, BucketIndex: 9, ChunkIndex: 9}), Equals, 0)
+	c.Assert(id.Compare(&chunk.ChunkID{TableIndex: 0, BucketIndexLeft: 9, BucketIndexRight: 9, ChunkIndex: 9}), Equals, 0)
 }
 
 func (cp *testCheckpointSuit) TestLoadChunk(c *C) {
@@ -104,10 +105,11 @@ func (cp *testCheckpointSuit) TestLoadChunk(c *C) {
 						},
 					},
 					Index: &chunk.ChunkID{
-						TableIndex:  0,
-						BucketIndex: i / 10,
-						ChunkIndex:  i % 10,
-						ChunkCnt:    10,
+						TableIndex:       0,
+						BucketIndexLeft:  i / 10,
+						BucketIndexRight: i / 10,
+						ChunkIndex:       i % 10,
+						ChunkCnt:         10,
 					},
 				},
 			}

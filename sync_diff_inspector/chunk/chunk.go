@@ -55,8 +55,10 @@ type ChunkID struct {
 	TableIndex int `json:"table-index"`
 	// we especially treat random split has only one bucket
 	// which is the whole table
-	BucketIndex int `json:"bucket-index"`
-	ChunkIndex  int `json:"chunk-index"`
+	// range is [left, right]
+	BucketIndexLeft  int `json:"bucket-index-left"`
+	BucketIndexRight int `json:"bucket-index-right"`
+	ChunkIndex       int `json:"chunk-index"`
 	//  `ChunkCnt` is the number of chunks in this bucket
 	//  We can compare `ChunkIndex` and `ChunkCnt` to know
 	// whether this chunk is the last one
@@ -68,10 +70,10 @@ func (c *ChunkID) Compare(o *ChunkID) int {
 		return -1
 	}
 	if c.TableIndex == o.TableIndex {
-		if c.BucketIndex < o.BucketIndex {
+		if c.BucketIndexLeft < o.BucketIndexLeft {
 			return -1
 		}
-		if c.BucketIndex == o.BucketIndex {
+		if c.BucketIndexLeft == o.BucketIndexLeft {
 			if c.ChunkIndex < o.ChunkIndex {
 				return -1
 			}
@@ -87,15 +89,16 @@ func (c *ChunkID) Compare(o *ChunkID) int {
 
 func (c *ChunkID) Copy() *ChunkID {
 	return &ChunkID{
-		TableIndex:  c.TableIndex,
-		BucketIndex: c.BucketIndex,
-		ChunkIndex:  c.ChunkIndex,
-		ChunkCnt:    c.ChunkCnt,
+		TableIndex:       c.TableIndex,
+		BucketIndexLeft:  c.BucketIndexLeft,
+		BucketIndexRight: c.BucketIndexRight,
+		ChunkIndex:       c.ChunkIndex,
+		ChunkCnt:         c.ChunkCnt,
 	}
 }
 
 func (c *ChunkID) ToString() string {
-	return fmt.Sprintf("%d:%d:%d:%d", c.TableIndex, c.BucketIndex, c.ChunkIndex, c.ChunkCnt)
+	return fmt.Sprintf("%d:%d-%d:%d:%d", c.TableIndex, c.BucketIndexLeft, c.BucketIndexRight, c.ChunkIndex, c.ChunkCnt)
 }
 
 func (c *ChunkID) FromString(s string) error {
@@ -104,10 +107,17 @@ func (c *ChunkID) FromString(s string) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	bucketIndex, err := strconv.Atoi(ids[1])
+
+	bucketIndex := strings.Split(ids[1], "-")
+	bucketIndexLeft, err := strconv.Atoi(bucketIndex[0])
 	if err != nil {
 		return errors.Trace(err)
 	}
+	bucketIndexRight, err := strconv.Atoi(bucketIndex[1])
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	chunkIndex, err := strconv.Atoi(ids[2])
 	if err != nil {
 		return errors.Trace(err)
@@ -116,7 +126,7 @@ func (c *ChunkID) FromString(s string) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	c.TableIndex, c.BucketIndex, c.ChunkIndex, c.ChunkCnt = tableIndex, bucketIndex, chunkIndex, chunkCnt
+	c.TableIndex, c.BucketIndexLeft, c.BucketIndexRight, c.ChunkIndex, c.ChunkCnt = tableIndex, bucketIndexLeft, bucketIndexRight, chunkIndex, chunkCnt
 	return nil
 }
 
@@ -370,33 +380,38 @@ func (c *Range) CopyAndUpdate(column, lower, upper string, updateLower, updateUp
 	return newChunk
 }
 
-func InitChunks(chunks []*Range, t ChunkType, bucketID int, collation, limits string, chunkCnt int) {
+// Notice: chunk may contain not only one bucket, which can be expressed as a range [3, 5],
+// 		And `lastBucketID` means the `5` and `firstBucketID` means the `3`.
+func InitChunks(chunks []*Range, t ChunkType, firstBucketID, lastBucketID int, index int, collation, limits string, chunkCnt int) {
 	if chunks == nil {
 		return
 	}
-	for i, chunk := range chunks {
+	for _, chunk := range chunks {
 		conditions, args := chunk.ToString(collation)
 		chunk.Where = fmt.Sprintf("((%s) AND %s)", conditions, limits)
 		chunk.Args = args
-		chunk.BucketID = bucketID
+		chunk.BucketID = lastBucketID
 		chunk.Index = &ChunkID{
-			BucketIndex: bucketID / 2,
-			ChunkIndex:  i,
-			ChunkCnt:    chunkCnt,
+			BucketIndexLeft:  firstBucketID,
+			BucketIndexRight: lastBucketID,
+			ChunkIndex:       index,
+			ChunkCnt:         chunkCnt,
 		}
 		chunk.Type = t
+		index++
 	}
 }
 
-func InitChunk(chunk *Range, t ChunkType, bucketID int, collation, limits string) {
+func InitChunk(chunk *Range, t ChunkType, firstBucketID, lastBucketID int, collation, limits string) {
 	conditions, args := chunk.ToString(collation)
 	chunk.Where = fmt.Sprintf("((%s) AND %s)", conditions, limits)
 	chunk.Args = args
-	chunk.BucketID = bucketID
+	chunk.BucketID = lastBucketID
 	chunk.Index = &ChunkID{
-		BucketIndex: bucketID,
-		ChunkIndex:  0,
-		ChunkCnt:    1,
+		BucketIndexLeft:  firstBucketID,
+		BucketIndexRight: lastBucketID,
+		ChunkIndex:       0,
+		ChunkCnt:         1,
 	}
 	chunk.Type = t
 }

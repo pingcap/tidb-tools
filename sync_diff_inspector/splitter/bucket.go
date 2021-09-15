@@ -18,6 +18,7 @@ import (
 	"database/sql"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -56,7 +57,7 @@ func NewBucketIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 	bs := &BucketIterator{
 		table:     table,
 		chunkSize: table.ChunkSize,
-		chunksCh:  make(chan []*chunk.Range, DefaultChannelBuffer),
+		chunksCh:  make(chan []*chunk.Range, 200),
 		errCh:     make(chan error, 1),
 		dbConn:    dbConn,
 
@@ -93,10 +94,26 @@ func (s *BucketIterator) Next() (*chunk.Range, error) {
 			}
 		}
 		s.nextChunk = 0
+		failpoint.Inject("ignore-last-chunk-in-n-bucket", func(v failpoint.Value) {
+			log.Info("failpoint ignore-last-chunk-in-n-bucket injected", zap.Int("n", v.(int)))
+			if len(s.chunks) <= 1+v.(int) {
+				failpoint.Return(nil, nil)
+			}
+			s.chunks = s.chunks[:(len(s.chunks) - v.(int))]
+		})
 	}
 
 	c := s.chunks[s.nextChunk]
 	s.nextChunk = s.nextChunk + 1
+	failpoint.Inject("print-chunk-info", func() {
+		lowerBounds := make([]string, len(c.Bounds))
+		upperBounds := make([]string, len(c.Bounds))
+		for i, bound := range c.Bounds {
+			lowerBounds[i] = bound.Lower
+			upperBounds[i] = bound.Upper
+		}
+		log.Info("failpoint print-chunk-info injected", zap.Strings("lowerBounds", lowerBounds), zap.Strings("upperBounds", upperBounds))
+	})
 	return c, nil
 }
 
@@ -152,14 +169,14 @@ func (s *BucketIterator) init(startRange *RangeInfo) error {
 func (s *BucketIterator) Close() {
 }
 
-func (s *BucketIterator) splitChunkForBucket(bucketID int, chunkCnt int, chunkRange *chunk.Range) {
+func (s *BucketIterator) splitChunkForBucket(firstBucketID, lastBucketID int, beginIndex int, bucketChunkCnt int, chunkCnt int, chunkRange *chunk.Range) {
 	s.chunkPool.Apply(func() {
 		chunks, err := splitRangeByRandom(s.dbConn, chunkRange, chunkCnt, s.table.Schema, s.table.Table, s.indexColumns, s.table.Range, s.table.Collation)
 		if err != nil {
 			s.errCh <- errors.Trace(err)
 			return
 		}
-		chunk.InitChunks(chunks, chunk.Bucket, bucketID, s.table.Collation, s.table.Range, chunkCnt)
+		chunk.InitChunks(chunks, chunk.Bucket, firstBucketID, lastBucketID, beginIndex, s.table.Collation, s.table.Range, bucketChunkCnt)
 		progress.UpdateTotal(s.progressID, len(chunks), false)
 		s.chunksCh <- chunks
 	})
@@ -167,6 +184,7 @@ func (s *BucketIterator) splitChunkForBucket(bucketID int, chunkCnt int, chunkRa
 
 func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInfo) {
 	defer func() {
+		s.chunkPool.WaitFinished()
 		progress.UpdateTotal(s.progressID, 0, true)
 		close(s.chunksCh)
 	}()
@@ -211,10 +229,11 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 				chunkRange.Update(bound.Column, bound.Upper, "", true, false)
 			}
 
-			s.splitChunkForBucket(c.BucketID, leftCnt, chunkRange)
+			s.splitChunkForBucket(c.Index.BucketIndexLeft, c.Index.BucketIndexRight, c.Index.ChunkIndex, c.Index.ChunkCnt, leftCnt, chunkRange)
 		}
 	}
 	halfChunkSize := s.chunkSize / 2
+	firstBucket := beginBucket
 	for i := beginBucket; i < len(s.buckets); i++ {
 		count := s.buckets[i].Count - latestCount
 		if count < s.chunkSize {
@@ -246,9 +265,15 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 		// 0 ... 0.5x ... x ... 1.5x   ------->   1
 		//       1.5x ... 2x ... 2.5x  ------->   2
 		chunkCnt := int((count + halfChunkSize) / s.chunkSize)
-		s.splitChunkForBucket(i, chunkCnt, chunkRange)
+		s.splitChunkForBucket(firstBucket, i, 0, chunkCnt, chunkCnt, chunkRange)
 		latestCount = s.buckets[i].Count
 		lowerValues = upperValues
+		firstBucket = i + 1
+
+		failpoint.Inject("check-one-bucket", func() {
+			log.Info("failpoint check-one-bucket injected, stop producing new chunks.")
+			failpoint.Return()
+		})
 	}
 
 	// merge the rest keys into one chunk
@@ -261,8 +286,7 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 	// When the table is much less than chunkSize,
 	// it will return a chunk include the whole table.
 	chunks := []*chunk.Range{chunkRange}
-	chunk.InitChunks(chunks, chunk.Bucket, len(s.buckets), s.table.Collation, s.table.Range, 1)
+	chunk.InitChunks(chunks, chunk.Bucket, firstBucket, len(s.buckets), 0, s.table.Collation, s.table.Range, 1)
 	progress.UpdateTotal(s.progressID, len(chunks), false)
 	s.chunksCh <- chunks
-	s.chunkPool.WaitFinished()
 }

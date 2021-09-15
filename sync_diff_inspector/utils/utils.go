@@ -576,8 +576,12 @@ func UniqueID(schema string, table string) string {
 
 func GetBetterIndex(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo) ([]*model.IndexInfo, error) {
 	// SELECT COUNT(DISTINCT city)/COUNT(*) FROM `schema`.`table`;
-	indices := make([]*model.IndexInfo, len(tableInfo.Indices))
-	copy(indices, tableInfo.Indices)
+	indices := dbutil.FindAllIndex(tableInfo)
+	for _, index := range indices {
+		if index.Primary || index.Unique {
+			return indices, nil
+		}
+	}
 	sels := make([]float64, len(indices))
 	for _, index := range indices {
 		column := GetColumnsFromIndex(index, tableInfo)[0]
@@ -589,20 +593,7 @@ func GetBetterIndex(ctx context.Context, db *sql.DB, schema, table string, table
 		sels = append(sels, selectivity)
 	}
 	sort.Slice(indices, func(i, j int) bool {
-		a := indices[i]
-		b := indices[j]
-		switch {
-		case b.Primary:
-			return false
-		case a.Primary:
-			return true
-		case b.Unique:
-			return false
-		case a.Unique:
-			return true
-		default:
-			return sels[i] > sels[j]
-		}
+		return sels[i] > sels[j]
 	})
 	return indices, nil
 }
@@ -640,22 +631,27 @@ func AnalyzeTable(ctx context.Context, db *sql.DB, tableName string) error {
 }
 
 func GetSQLFileName(index *chunk.ChunkID) string {
-	return fmt.Sprintf("%d:%d:%d", index.TableIndex, index.BucketIndex, index.ChunkIndex)
+	return fmt.Sprintf("%d:%d-%d:%d", index.TableIndex, index.BucketIndexLeft, index.BucketIndexRight, index.ChunkIndex)
 }
 
-func GetChunkIDFromSQLFileName(fileIDStr string) (int, int, int, error) {
+func GetChunkIDFromSQLFileName(fileIDStr string) (int, int, int, int, error) {
 	ids := strings.Split(fileIDStr, ":")
 	tableIndex, err := strconv.Atoi(ids[0])
 	if err != nil {
-		return 0, 0, 0, errors.Trace(err)
+		return 0, 0, 0, 0, errors.Trace(err)
 	}
-	bucketIndex, err := strconv.Atoi(ids[1])
+	bucketIndex := strings.Split(ids[1], "-")
+	bucketIndexLeft, err := strconv.Atoi(bucketIndex[0])
 	if err != nil {
-		return 0, 0, 0, errors.Trace(err)
+		return 0, 0, 0, 0, errors.Trace(err)
+	}
+	bucketIndexRight, err := strconv.Atoi(bucketIndex[1])
+	if err != nil {
+		return 0, 0, 0, 0, errors.Trace(err)
 	}
 	chunkIndex, err := strconv.Atoi(ids[2])
 	if err != nil {
-		return 0, 0, 0, errors.Trace(err)
+		return 0, 0, 0, 0, errors.Trace(err)
 	}
-	return tableIndex, bucketIndex, chunkIndex, nil
+	return tableIndex, bucketIndexLeft, bucketIndexRight, chunkIndex, nil
 }

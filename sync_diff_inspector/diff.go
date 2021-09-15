@@ -27,6 +27,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -73,7 +74,8 @@ type Diff struct {
 	ignoreDataCheck   bool
 	ignoreStructCheck bool
 	ignoreStats       bool
-	wg                sync.WaitGroup
+	sqlWg             sync.WaitGroup
+	checkpointWg      sync.WaitGroup
 
 	FixSQLDir     string
 	CheckpointDir string
@@ -112,6 +114,11 @@ func (df *Diff) Close() {
 	if df.downstream != nil {
 		df.downstream.Close()
 	}
+
+	failpoint.Inject("wait-for-checkpoint", func() {
+		log.Info("failpoint wait-for-checkpoint injected, skip delete checkpoint file.")
+		failpoint.Return()
+	})
 
 	if err := os.Remove(filepath.Join(df.CheckpointDir, checkpointFile)); err != nil && !os.IsNotExist(err) {
 		log.Fatal("fail to remove the checkpoint file", zap.String("error", err.Error()))
@@ -194,7 +201,9 @@ func (df *Diff) Equal(ctx context.Context) error {
 	pool := utils.NewWorkerPool(uint(df.checkThreadCount), "consumer")
 	stopCh := make(chan struct{})
 
+	df.checkpointWg.Add(1)
 	go df.handleCheckpoints(ctx, stopCh)
+	df.sqlWg.Add(1)
 	go df.writeSQLs(ctx)
 
 	defer func() {
@@ -202,8 +211,9 @@ func (df *Diff) Equal(ctx context.Context) error {
 		log.Debug("all comsume tasks finished")
 		// close the sql channel
 		close(df.sqlCh)
+		df.sqlWg.Wait()
 		stopCh <- struct{}{}
-		df.wg.Wait()
+		df.checkpointWg.Wait()
 	}()
 
 	for {
@@ -318,7 +328,7 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 			}
 		} else {
 			log.Info("not found checkpoint file, start from beginning")
-			id := &chunk.ChunkID{TableIndex: 0, BucketIndex: 0, ChunkIndex: 0, ChunkCnt: 0}
+			id := &chunk.ChunkID{TableIndex: 0, BucketIndexLeft: 0, BucketIndexRight: 0, ChunkIndex: 0, ChunkCnt: 0}
 			err := df.removeSQLFiles(id)
 			if err != nil {
 				return nil, errors.Trace(err)
@@ -332,11 +342,10 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
 	// a background goroutine which will insert the verified chunk,
 	// and periodically save checkpoint
-	df.wg.Add(1)
 	log.Info("start handleCheckpoint goroutine")
 	defer func() {
 		log.Info("close handleCheckpoint goroutine")
-		df.wg.Done()
+		df.checkpointWg.Done()
 	}()
 	flush := func() {
 		chunk := df.cp.GetChunkSnapshot()
@@ -635,11 +644,10 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 
 // WriteSQLs write sqls to file
 func (df *Diff) writeSQLs(ctx context.Context) {
-	df.wg.Add(1)
 	log.Info("start writeSQLs goroutine")
 	defer func() {
 		log.Info("close writeSQLs goroutine")
-		df.wg.Done()
+		df.sqlWg.Done()
 	}()
 	for {
 		select {
@@ -714,12 +722,12 @@ func (df *Diff) removeSQLFiles(checkPointId *chunk.ChunkID) error {
 
 		if strings.HasSuffix(name, ".sql") {
 			fileIDStr := strings.TrimRight(name, ".sql")
-			tableIndex, bucketIndex, chunkIndex, err := utils.GetChunkIDFromSQLFileName(fileIDStr)
+			tableIndex, bucketIndexLeft, bucketIndexRight, chunkIndex, err := utils.GetChunkIDFromSQLFileName(fileIDStr)
 			if err != nil {
 				return errors.Trace(err)
 			}
 			fileID := &chunk.ChunkID{
-				TableIndex: tableIndex, BucketIndex: bucketIndex, ChunkIndex: chunkIndex, ChunkCnt: 0,
+				TableIndex: tableIndex, BucketIndexLeft: bucketIndexLeft, BucketIndexRight: bucketIndexRight, ChunkIndex: chunkIndex, ChunkCnt: 0,
 			}
 			if err != nil {
 				return errors.Trace(err)
