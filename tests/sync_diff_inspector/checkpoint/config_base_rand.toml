@@ -44,7 +44,7 @@ ignore-struct-check = false
 [table-configs]
 [table-configs.config1]
 schema = "diff_test"
-table = "test_rand"
+table = "test"
 chunk-size = 500
 ######################### Task config #########################
 [task]
@@ -59,7 +59,7 @@ chunk-size = 500
     target-instance = ["mysql"]
 
     # tables need to check.
-	target-check-tables = ["diff_test.test_rand"]
+	target-check-tables = ["diff_test.test"]
 
     # extra table config
 	target-configs= ["config1"]
