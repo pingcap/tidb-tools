@@ -15,12 +15,15 @@ package source
 
 import (
 	"context"
+	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
+	"go.uber.org/zap"
 )
 
 // ChunksIterator is used for single mysql/tidb source.
@@ -30,11 +33,30 @@ type ChunksIterator struct {
 
 	TableDiffs     []*common.TableDiff
 	nextTableIndex int
-
-	limit int
+	chunkIterCh    chan *splitter.ChunkIterator
+	errCh          chan error
+	limit          int
 
 	tableIter  splitter.ChunkIterator
 	progressID string
+}
+
+func (t *ChunksIterator) produceChunkIter(ctx context.Context) {
+	defer func() {
+		close(t.chunkIterCh)
+		close(t.errCh)
+	}()
+	for i := t.nextTableIndex; i < len(t.TableDiffs); i++ {
+		table := t.TableDiffs[i]
+		startTime := time.Now()
+		chunkIter, err := t.tableAnalyzer.AnalyzeSplitter(ctx, table, nil)
+		if err != nil {
+			t.errCh <- err
+			return
+		}
+		log.Debug("initialize table", zap.Duration("time cost", time.Since(startTime)))
+		t.chunkIterCh <- &chunkIter
+	}
 }
 
 func (t *ChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, error) {
@@ -55,7 +77,7 @@ func (t *ChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, error) 
 			ProgressID: t.progressID,
 		}, nil
 	}
-	err = t.nextTable(ctx, nil)
+	err = t.nextTable(ctx)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -92,9 +114,7 @@ func (t *ChunksIterator) getCurTableIndexID() int64 {
 	return 0
 }
 
-// if error is nil and t.iter is not nil,
-// then nextTable is done successfully.
-func (t *ChunksIterator) nextTable(ctx context.Context, startRange *splitter.RangeInfo) error {
+func (t *ChunksIterator) initTable(ctx context.Context, startRange *splitter.RangeInfo) error {
 	if t.nextTableIndex >= len(t.TableDiffs) {
 		t.tableIter = nil
 		return nil
@@ -110,8 +130,7 @@ func (t *ChunksIterator) nextTable(ctx context.Context, startRange *splitter.Ran
 		t.nextTableIndex = curIndex + 1
 		t.progressID = startRange.ProgressID
 	}
-
-	chunkIter, err := t.tableAnalyzer.AnalyzeSplitter(ctx, t.progressID, curTable, startRange)
+	chunkIter, err := t.tableAnalyzer.AnalyzeSplitter(ctx, curTable, startRange)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -119,5 +138,35 @@ func (t *ChunksIterator) nextTable(ctx context.Context, startRange *splitter.Ran
 		t.tableIter.Close()
 	}
 	t.tableIter = chunkIter
+	go t.produceChunkIter(ctx)
 	return nil
+}
+
+// if error is nil and t.iter is not nil,
+// then nextTable is done successfully.
+func (t *ChunksIterator) nextTable(ctx context.Context) error {
+	if t.nextTableIndex >= len(t.TableDiffs) {
+		t.tableIter = nil
+		return nil
+	}
+	curTable := t.TableDiffs[t.nextTableIndex]
+	t.nextTableIndex++
+	t.progressID = dbutil.TableName(curTable.Schema, curTable.Table)
+	if t.tableIter != nil {
+		t.tableIter.Close()
+	}
+	select {
+	case <-ctx.Done():
+		log.Info("Stop do produce chunkIter by context done")
+		return nil
+	case c, ok := <-t.chunkIterCh:
+		if !ok {
+			t.tableIter = nil
+			return nil
+		}
+		t.tableIter = *c
+		return nil
+	case err := <-t.errCh:
+		return errors.Trace(err)
+	}
 }

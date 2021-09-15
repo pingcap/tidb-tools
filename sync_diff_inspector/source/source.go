@@ -60,7 +60,7 @@ type RowDataIterator interface {
 // each source has its own analyze function.
 type TableAnalyzer interface {
 	// AnalyzeSplitter picks the proper splitter.ChunkIterator according to table and source.
-	AnalyzeSplitter(context.Context, string, *common.TableDiff, *splitter.RangeInfo) (splitter.ChunkIterator, error)
+	AnalyzeSplitter(context.Context, *common.TableDiff, *splitter.RangeInfo) (splitter.ChunkIterator, error)
 }
 
 type Source interface {
