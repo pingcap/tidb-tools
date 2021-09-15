@@ -155,17 +155,18 @@ func (t *ChunksIterator) nextTable(ctx context.Context) error {
 	if t.tableIter != nil {
 		t.tableIter.Close()
 	}
-	for {
-		select {
-		case c, ok := <-t.chunkIterCh:
-			if !ok {
-				t.tableIter = nil
-				return nil
-			}
-			t.tableIter = *c
+	select {
+	case <-ctx.Done():
+		log.Info("Stop do produce chunkIter by context done")
+		return nil
+	case c, ok := <-t.chunkIterCh:
+		if !ok {
+			t.tableIter = nil
 			return nil
-		case err := <-t.errCh:
-			return errors.Trace(err)
 		}
+		t.tableIter = *c
+		return nil
+	case err := <-t.errCh:
+		return errors.Trace(err)
 	}
 }
