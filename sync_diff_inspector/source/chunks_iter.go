@@ -42,7 +42,13 @@ type ChunksIterator struct {
 }
 
 func (t *ChunksIterator) produceChunkIter(ctx context.Context, startRange *splitter.RangeInfo) {
-	for i := startRange.GetTableIndex() + 1; i < len(t.TableDiffs); i++ {
+	var i int
+	if startRange == nil {
+		i = 1
+	} else {
+		i = startRange.GetTableIndex() + 1
+	}
+	for ; i < len(t.TableDiffs); i++ {
 		table := t.TableDiffs[i]
 		startTime := time.Now()
 		chunkIter, err := t.tableAnalyzer.AnalyzeSplitter(ctx, table, nil)
