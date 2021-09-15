@@ -365,6 +365,7 @@ func (s *testSplitterSuite) TestRandomSpliter(c *C) {
 	}
 
 	bounds1 := chunk.Bounds
+	chunkID1 := chunk.Index
 
 	rangeInfo := &RangeInfo{
 		ChunkRange: chunk,
@@ -381,6 +382,9 @@ func (s *testSplitterSuite) TestRandomSpliter(c *C) {
 	for i, bound := range chunk.Bounds {
 		c.Assert(bounds1[i].Upper, DeepEquals, bound.Lower)
 	}
+
+	c.Assert(chunk.Index.ChunkCnt, Equals, chunkID1.ChunkCnt)
+	c.Assert(chunk.Index.ChunkIndex, Equals, chunkID1.ChunkIndex+1)
 
 }
 

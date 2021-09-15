@@ -27,6 +27,17 @@ mysql -h ${MYSQL_HOST} -P ${MYSQL_PORT} -u root -e "create database if not exist
 loader -h ${MYSQL_HOST} -P ${MYSQL_PORT} -u root -d $BASE_DIR/dump_diff
 mysql -h ${MYSQL_HOST} -P ${MYSQL_PORT} -u root -e "select * from diff_test.test limit 10;"
 
+echo "copy to another table for random splitter"
+echo "generate data to sharding tables"
+mysql -uroot -h 127.0.0.1 -P 4000 -e "create table diff_test.test_rand(a int, aa int, b varchar(10), c float, d datetime, primary key(a));"
+mysql -uroot -h 127.0.0.1 -P 4001 -e "create table diff_test.test_rand(a int, aa int, b varchar(10), c float, d datetime, primary key(a));"
+
+# each table only have part of data
+mysql -uroot -h 127.0.0.1 -P 4000 -e "insert into diff_test.test_rand (a, aa, b, c, d) SELECT \`table\` as a, aa, b, c, d FROM diff_test.test"
+mysql -uroot -h 127.0.0.1 -P 4001 -e "insert into diff_test.test_rand (a, aa, b, c, d) SELECT \`table\` as a, aa, b, c, d FROM diff_test.test"
+mysql -uroot -h 127.0.0.1 -P 4000 -e "alter table diff_test.test_rand change column a \`table\` int"
+mysql -uroot -h 127.0.0.1 -P 4001 -e "alter table diff_test.test_rand change column a \`table\` int"
+
 echo "use sync_diff_inspector to compare data"
 # sync diff tidb-tidb
 sync_diff_inspector --config=./config_base_tidb.toml > $OUT_DIR/diff.output

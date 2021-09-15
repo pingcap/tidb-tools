@@ -64,12 +64,16 @@ func NewBucketIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 		progressID: progressID,
 	}
 
+	// If `bucket size` is much larger than `chunk size`,
+	// we need to split the bucket into some chunks, which wastes much time.
+	// So we use WorkPool to split buckets in parallel.
 	bs.chunkPool = utils.NewWorkerPool(uint(checkThreadCount), "bucketIter")
 
 	if err := bs.init(startRange); err != nil {
 		return nil, errors.Trace(err)
 	}
 
+	// Let the progress bar begins to record the table.
 	progress.StartTable(bs.progressID, 0, false)
 	go bs.produceChunks(ctx, startRange)
 
@@ -94,8 +98,8 @@ func (s *BucketIterator) Next() (*chunk.Range, error) {
 			}
 		}
 		s.nextChunk = 0
-		failpoint.Inject("ignore-last-chunk-in-n-bucket", func(v failpoint.Value) {
-			log.Info("failpoint ignore-last-chunk-in-n-bucket injected", zap.Int("n", v.(int)))
+		failpoint.Inject("ignore-last-n-chunk-in-bucket", func(v failpoint.Value) {
+			log.Info("failpoint ignore-last-n-chunk-in-bucket injected (bucket splitter)", zap.Int("n", v.(int)))
 			if len(s.chunks) <= 1+v.(int) {
 				failpoint.Return(nil, nil)
 			}
@@ -112,7 +116,7 @@ func (s *BucketIterator) Next() (*chunk.Range, error) {
 			lowerBounds[i] = bound.Lower
 			upperBounds[i] = bound.Upper
 		}
-		log.Info("failpoint print-chunk-info injected", zap.Strings("lowerBounds", lowerBounds), zap.Strings("upperBounds", upperBounds), zap.String("indexCode", c.Index.ToString()))
+		log.Info("failpoint print-chunk-info injected (bucket splitter)", zap.Strings("lowerBounds", lowerBounds), zap.Strings("upperBounds", upperBounds), zap.String("indexCode", c.Index.ToString()))
 	})
 	return c, nil
 }
@@ -156,7 +160,10 @@ func (s *BucketIterator) init(startRange *RangeInfo) error {
 		return errors.NotFoundf("no index to split buckets")
 	}
 
+	// Notice: `cnt` is only an estimated value
 	cnt := s.buckets[len(s.buckets)-1].Count
+	// We can use config file to fix chunkSize,
+	// otherwise chunkSize is 0.
 	if s.chunkSize <= 0 {
 		s.chunkSize = utils.CalculateChunkSize(cnt)
 	}

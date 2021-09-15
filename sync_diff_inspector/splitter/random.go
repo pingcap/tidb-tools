@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -60,8 +61,6 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 	}
 
 	chunkRange := chunk.NewChunkRange()
-	where := table.Range
-	var iargs []interface{}
 	beginIndex := 0
 	bucketChunkCnt := 0
 	chunkCnt := 0
@@ -77,27 +76,25 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 				dbConn:    dbConn,
 			}, nil
 		}
+		// The sequences in `chunk.Range.Bounds` should be equivalent.
 		for _, bound := range c.Bounds {
 			chunkRange.Update(bound.Column, bound.Upper, "", true, false)
 		}
 
-		conditions, args := chunkRange.ToString(table.Collation)
-		if len(where) > 0 {
-			where = fmt.Sprintf("((%s) AND %s)", conditions, where)
-		} else {
-			where = fmt.Sprintf("(%s)", conditions)
-		}
-		iargs = utils.StringsToInterfaces(args)
+		// Recover the chunkIndex. Let it be next to the checkpoint node.
 		beginIndex = c.Index.ChunkIndex + 1
 		bucketChunkCnt = c.Index.ChunkCnt
+		// For chunk splitted by random splitter, the checkpoint chunk records the tableCnt.
 		chunkCnt = bucketChunkCnt - beginIndex
 	} else {
-		cnt, err := dbutil.GetRowCount(ctx, dbConn, table.Schema, table.Table, where, iargs)
+		cnt, err := dbutil.GetRowCount(ctx, dbConn, table.Schema, table.Table, table.Range, nil)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 
 		chunkSize = table.ChunkSize
+		// We can use config file to fix chunkSize,
+		// otherwise chunkSize is 0.
 		if chunkSize <= 0 {
 			if len(table.Info.Indices) != 0 {
 				chunkSize = utils.CalculateChunkSize(cnt)
@@ -111,8 +108,11 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 		log.Info("get chunk size for table", zap.Int64("chunk size", chunkSize),
 			zap.String("db", table.Schema), zap.String("table", table.Table))
 
+		// When cnt is 0, chunkCnt should be also 0.
+		// When cnt is in [1, chunkSize], chunkCnt should be 1.
 		chunkCnt = int((cnt + chunkSize - 1) / chunkSize)
 		log.Info("split range by random", zap.Int64("row count", cnt), zap.Int("split chunk num", chunkCnt))
+		bucketChunkCnt = chunkCnt
 	}
 
 	chunks, err := splitRangeByRandom(dbConn, chunkRange, chunkCnt, table.Schema, table.Table, fields, table.Range, table.Collation)
@@ -120,6 +120,14 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 		return nil, errors.Trace(err)
 	}
 	chunk.InitChunks(chunks, chunk.Random, 0, 0, beginIndex, table.Collation, table.Range, bucketChunkCnt)
+
+	failpoint.Inject("ignore-last-n-chunk-in-bucket", func(v failpoint.Value) {
+		log.Info("failpoint ignore-last-n-chunk-in-bucket injected (random splitter)", zap.Int("n", v.(int)))
+		if len(chunks) <= 1+v.(int) {
+			failpoint.Return(nil, nil)
+		}
+		chunks = chunks[:(len(chunks) - v.(int))]
+	})
 
 	progress.StartTable(progressID, len(chunks), true)
 	return &RandomIterator{
@@ -138,6 +146,15 @@ func (s *RandomIterator) Next() (*chunk.Range, error) {
 	}
 	c := s.chunks[s.nextChunk]
 	s.nextChunk = s.nextChunk + 1
+	failpoint.Inject("print-chunk-info", func() {
+		lowerBounds := make([]string, len(c.Bounds))
+		upperBounds := make([]string, len(c.Bounds))
+		for i, bound := range c.Bounds {
+			lowerBounds[i] = bound.Lower
+			upperBounds[i] = bound.Upper
+		}
+		log.Info("failpoint print-chunk-info injected (random splitter)", zap.Strings("lowerBounds", lowerBounds), zap.Strings("upperBounds", upperBounds), zap.String("indexCode", c.Index.ToString()))
+	})
 	return c, nil
 }
 
@@ -179,6 +196,12 @@ func GetSplitFields(table *model.TableInfo, splitFields []string) ([]*model.Colu
 }
 
 // splitRangeByRandom splits a chunk to multiple chunks by random
+// Notice: If the `count <= 1`, it will skip splitting and return `chunk` as a slice directly.
+// TODO: This function will get random row for each cols individually.
+//		For example, for a table' schema which is `create table tbl(a int, b int, primary key(a, b));`,
+//		there are 3 rows(`[a: 2, b: 2]`, `[a: 3, b: 5]`, `[a: 4, b: 4]`) in the table.
+//		and finally this function might generate `[a:2,b:2]` and `[a:3,b:4]` (from `a` get random value 2,4, `b` get random value 2,4) as split points, which means
+//		chunk whose range is (`a:2,b:2`, `a:3,b:4`], so we get a empty chunk.
 func splitRangeByRandom(db *sql.DB, chunk *chunk.Range, count int, schema string, table string, columns []*model.ColumnInfo, limits, collation string) (chunks []*chunk.Range, err error) {
 	if count <= 1 {
 		chunks = append(chunks, chunk)
