@@ -41,14 +41,8 @@ type ChunksIterator struct {
 	progressID string
 }
 
-func (t *ChunksIterator) produceChunkIter(ctx context.Context, startRange *splitter.RangeInfo) {
-	var i int
-	if startRange == nil {
-		i = 1
-	} else {
-		i = startRange.GetTableIndex() + 1
-	}
-	for ; i < len(t.TableDiffs); i++ {
+func (t *ChunksIterator) produceChunkIter(ctx context.Context) {
+	for i := t.nextTableIndex; i < len(t.TableDiffs); i++ {
 		table := t.TableDiffs[i]
 		startTime := time.Now()
 		chunkIter, err := t.tableAnalyzer.AnalyzeSplitter(ctx, table, nil)
