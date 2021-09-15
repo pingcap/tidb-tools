@@ -156,14 +156,6 @@ func (t *ChunksIterator) nextTable(ctx context.Context, startRange *splitter.Ran
 	curTable := t.TableDiffs[t.nextTableIndex]
 	t.nextTableIndex++
 	t.progressID = dbutil.TableName(curTable.Schema, curTable.Table)
-
-	// reads table index from checkpoint at the beginning
-	if startRange != nil {
-		curIndex := startRange.GetTableIndex()
-		curTable = t.TableDiffs[curIndex]
-		t.nextTableIndex = curIndex + 1
-		t.progressID = startRange.ProgressID
-	}
 	if t.tableIter != nil {
 		t.tableIter.Close()
 	}
