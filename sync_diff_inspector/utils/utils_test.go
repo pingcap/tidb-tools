@@ -43,6 +43,7 @@ type tableCaseType struct {
 	rows           [][]driver.Value
 	indices        []string
 	sels           []float64
+	selected       string
 }
 
 func (*testUtilsSuite) TestWorkerPool(c *C) {
@@ -400,31 +401,73 @@ func (s *testUtilsSuite) TestGetBetterIndex(c *C) {
 				{"B", "f"},
 				{"C", "f"},
 			},
-			indices: []string{"PRIMARY", "b"},
-			sels:    []float64{1.0, 0.5},
+			indices:  []string{"PRIMARY", "b"},
+			sels:     []float64{1.0, 0.5},
+			selected: "PRIMARY",
+		}, {
+			schema:         "single_index",
+			table:          "test1",
+			createTableSQL: "CREATE TABLE `single_index`.`test1` (`a` int, `b` char, index(a), index(b))",
+			rowColumns:     []string{"a", "b"},
+			rows: [][]driver.Value{
+				{"1", "a"},
+				{"2", "a"},
+				{"3", "b"},
+				{"4", "b"},
+				{"5", "c"},
+				{"6", "c"},
+				{"7", "d"},
+				{"8", "d"},
+				{"9", "e"},
+				{"A", "e"},
+				{"B", "f"},
+				{"C", "f"},
+			},
+			indices:  []string{"a", "b"},
+			sels:     []float64{1.0, 0.5},
+			selected: "a",
 		},
 	}
-	for _, tableCase := range tableCases {
-		tableInfo, err := dbutil.GetTableInfoBySQL(tableCase.createTableSQL, parser.New())
-		c.Assert(err, IsNil)
-		indices := dbutil.FindAllIndex(tableInfo)
-		for i, index := range indices {
-			c.Assert(index.Name.O, Equals, tableCase.indices[i])
-		}
-		for i, col := range tableCase.rowColumns {
-			retRows := sqlmock.NewRows([]string{"SEL"})
-			retRows.AddRow(tableCase.sels[i])
-			mock.ExpectQuery("SELECT").WillReturnRows(retRows)
-			sel, err := GetSelectivity(ctx, conn, tableCase.schema, tableCase.table, col, tableInfo)
-			c.Assert(err, IsNil)
-			c.Assert(sel, Equals, tableCase.sels[i])
-		}
-		mock.ExpectQuery("SELECT COUNT\\(DISTINCT `b.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("2"))
-		mock.ExpectQuery("SELECT COUNT\\(DISTINCT `a.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("5"))
-		indices, err = GetBetterIndex(ctx, conn, "single_index", "test1", tableInfo)
-		c.Assert(err, IsNil)
-		c.Assert(indices[0].Name.O, Equals, "PRIMARY")
+	tableCase := tableCases[0]
+	tableInfo, err := dbutil.GetTableInfoBySQL(tableCase.createTableSQL, parser.New())
+	c.Assert(err, IsNil)
+	indices := dbutil.FindAllIndex(tableInfo)
+	for i, index := range indices {
+		c.Assert(index.Name.O, Equals, tableCase.indices[i])
 	}
+	for i, col := range tableCase.rowColumns {
+		retRows := sqlmock.NewRows([]string{"SEL"})
+		retRows.AddRow(tableCase.sels[i])
+		mock.ExpectQuery("SELECT").WillReturnRows(retRows)
+		sel, err := GetSelectivity(ctx, conn, tableCase.schema, tableCase.table, col, tableInfo)
+		c.Assert(err, IsNil)
+		c.Assert(sel, Equals, tableCase.sels[i])
+	}
+	indices, err = GetBetterIndex(ctx, conn, "single_index", "test1", tableInfo)
+	c.Assert(err, IsNil)
+	c.Assert(indices[0].Name.O, Equals, tableCase.selected)
+
+	tableCase = tableCases[1]
+	tableInfo, err = dbutil.GetTableInfoBySQL(tableCase.createTableSQL, parser.New())
+	c.Assert(err, IsNil)
+	indices = dbutil.FindAllIndex(tableInfo)
+	for i, index := range indices {
+		c.Assert(index.Name.O, Equals, tableCase.indices[i])
+	}
+	for i, col := range tableCase.rowColumns {
+		retRows := sqlmock.NewRows([]string{"SEL"})
+		retRows.AddRow(tableCase.sels[i])
+		mock.ExpectQuery("SELECT").WillReturnRows(retRows)
+		sel, err := GetSelectivity(ctx, conn, tableCase.schema, tableCase.table, col, tableInfo)
+		c.Assert(err, IsNil)
+		c.Assert(sel, Equals, tableCase.sels[i])
+	}
+	mock.ExpectQuery("SELECT COUNT\\(DISTINCT `a.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("2"))
+	mock.ExpectQuery("SELECT COUNT\\(DISTINCT `b.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("5"))
+	indices, err = GetBetterIndex(ctx, conn, "single_index", "test1", tableInfo)
+	c.Assert(err, IsNil)
+	c.Assert(indices[0].Name.O, Equals, tableCase.selected)
+
 }
 
 func (s *testUtilsSuite) TestCalculateChunkSize(c *C) {
