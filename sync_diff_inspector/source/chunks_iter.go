@@ -42,6 +42,10 @@ type ChunksIterator struct {
 }
 
 func (t *ChunksIterator) produceChunkIter(ctx context.Context) {
+	defer func() {
+		close(t.chunkIterCh)
+		close(t.errCh)
+	}()
 	for i := t.nextTableIndex; i < len(t.TableDiffs); i++ {
 		table := t.TableDiffs[i]
 		startTime := time.Now()
@@ -143,8 +147,6 @@ func (t *ChunksIterator) initTable(ctx context.Context, startRange *splitter.Ran
 func (t *ChunksIterator) nextTable(ctx context.Context) error {
 	if t.nextTableIndex >= len(t.TableDiffs) {
 		t.tableIter = nil
-		close(t.chunkIterCh)
-		close(t.errCh)
 		return nil
 	}
 	curTable := t.TableDiffs[t.nextTableIndex]
