@@ -134,7 +134,7 @@ func (t *ChunksIterator) initTable(ctx context.Context, startRange *splitter.Ran
 		t.tableIter.Close()
 	}
 	t.tableIter = chunkIter
-	go t.produceChunkIter(ctx, startRange)
+	go t.produceChunkIter(ctx)
 	return nil
 }
 
