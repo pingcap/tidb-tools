@@ -79,7 +79,7 @@ func (t *ChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, error) 
 			ProgressID: t.progressID,
 		}, nil
 	}
-	err = t.nextTable(ctx, nil)
+	err = t.nextTable(ctx)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -146,7 +146,7 @@ func (t *ChunksIterator) initTable(ctx context.Context, startRange *splitter.Ran
 
 // if error is nil and t.iter is not nil,
 // then nextTable is done successfully.
-func (t *ChunksIterator) nextTable(ctx context.Context, startRange *splitter.RangeInfo) error {
+func (t *ChunksIterator) nextTable(ctx context.Context) error {
 	if t.nextTableIndex >= len(t.TableDiffs) {
 		t.tableIter = nil
 		close(t.chunkIterCh)
