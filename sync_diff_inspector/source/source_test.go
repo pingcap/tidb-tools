@@ -109,7 +109,7 @@ func (m *MockChunkIterator) Close() {
 type MockAnalyzer struct {
 }
 
-func (m *MockAnalyzer) AnalyzeSplitter(ctx context.Context, progressID string, tableDiff *common.TableDiff, rangeInfo *splitter.RangeInfo) (splitter.ChunkIterator, error) {
+func (m *MockAnalyzer) AnalyzeSplitter(ctx context.Context, tableDiff *common.TableDiff, rangeInfo *splitter.RangeInfo) (splitter.ChunkIterator, error) {
 	i := &chunk.ChunkID{
 		TableIndex:       0,
 		BucketIndexLeft:  0,
@@ -234,7 +234,7 @@ func (s *testSourceSuite) TestTiDBSource(c *C) {
 	analyze := tidb.GetTableAnalyzer()
 	countRows := sqlmock.NewRows([]string{"Cnt"}).AddRow(0)
 	mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
-	chunkIter, err := analyze.AnalyzeSplitter(ctx, "", tableDiffs[0], tableCase.rangeInfo)
+	chunkIter, err := analyze.AnalyzeSplitter(ctx, tableDiffs[0], tableCase.rangeInfo)
 	c.Assert(err, IsNil)
 	chunkIter.Close()
 	tidb.Close()
