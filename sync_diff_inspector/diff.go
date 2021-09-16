@@ -107,6 +107,18 @@ func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 	return diff, nil
 }
 
+func (df *Diff) PrintSummary(ctx context.Context, taskCfg *config.TaskConfig) bool {
+	// Stop updating progress bar so that summary won't be flushed.
+	progress.Close()
+	df.report.CalculateTotalSize(ctx, df.downstream.GetDB())
+	err := df.report.CommitSummary(taskCfg)
+	if err != nil {
+		log.Fatal("failed to commit report", zap.Error(err))
+	}
+	df.report.Print("sync_diff.log", os.Stdout)
+	return df.report.Result == report.Pass
+}
+
 func (df *Diff) Close() {
 	if df.upstream != nil {
 		df.upstream.Close()
