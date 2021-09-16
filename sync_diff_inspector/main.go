@@ -26,8 +26,6 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/progress"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/report"
 	"go.uber.org/zap"
 )
 
@@ -104,13 +102,5 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 			log.Fatal("failed to check data difference", zap.Error(err))
 		}
 	}
-	progress.Close()
-	//progress.PrintSummary()
-	d.report.CalculateTotalSize(ctx, d.downstream.GetDB())
-	err = d.report.CommitSummary(&cfg.Task)
-	if err != nil {
-		log.Fatal("failed to commit report", zap.Error(err))
-	}
-	d.report.Print("sync_diff.log", os.Stdout)
-	return d.report.Result == report.Pass
+	return d.PrintSummary(ctx, &cfg.Task)
 }
