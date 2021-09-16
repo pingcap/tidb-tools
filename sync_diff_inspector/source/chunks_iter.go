@@ -56,11 +56,12 @@ func (t *ChunksIterator) produceChunks(ctx context.Context, startRange *splitter
 	defer close(t.chunksCh)
 	pool := utils.NewWorkerPool(3, "chunks producer")
 	t.nextTableIndex = 0
+
 	if startRange != nil {
+		curIndex := startRange.GetTableIndex()
+		curTable := t.TableDiffs[curIndex]
+		t.nextTableIndex = curIndex + 1
 		pool.Apply(func() {
-			curIndex := startRange.GetTableIndex()
-			curTable := t.TableDiffs[curIndex]
-			t.nextTableIndex = curIndex + 1
 			chunkIter, err := t.tableAnalyzer.AnalyzeSplitter(ctx, curTable, startRange)
 			if err != nil {
 				t.errCh <- errors.Trace(err)
