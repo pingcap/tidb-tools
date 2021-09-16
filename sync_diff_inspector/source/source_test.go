@@ -97,7 +97,6 @@ func (m *MockChunkIterator) Next() (*chunk.Range, error) {
 		return nil, nil
 	}
 	m.index.ChunkIndex = m.index.ChunkIndex + 1
-	fmt.Printf("m.index.ChunkIndex: %v\n", m.index)
 	return &chunk.Range{
 		Index: &chunk.ChunkID{
 			TableIndex:       m.index.TableIndex,
@@ -194,7 +193,6 @@ func (s *testSourceSuite) TestTiDBSource(c *C) {
 			c.Assert(equal(i, &chunk.ChunkID{TableIndex: len(tableCases), BucketIndexLeft: 0, BucketIndexRight: 0, ChunkIndex: 0, ChunkCnt: CHUNKS}), IsTrue)
 			break
 		}
-		c.Log(i, ch.ChunkRange.Index)
 		c.Assert(equal(ch.ChunkRange.Index, i), IsTrue)
 		next(i)
 	}
