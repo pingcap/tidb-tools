@@ -45,7 +45,7 @@ func NewChunksIterator(ctx context.Context, analyzer TableAnalyzer, tableDiffs [
 		tableAnalyzer: analyzer,
 		TableDiffs:    tableDiffs,
 		chunksCh:      make(chan *splitter.RangeInfo, 64),
-		errCh:         make(chan error, 1),
+		errCh:         make(chan error, len(tableDiffs)),
 		cancel:        cancel,
 	}
 	go iter.produceChunks(ctxx, startRange)
