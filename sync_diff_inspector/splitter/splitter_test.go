@@ -365,6 +365,7 @@ func (s *testSplitterSuite) TestRandomSpliter(c *C) {
 	}
 
 	bounds1 := chunk.Bounds
+	chunkID1 := chunk.Index
 
 	rangeInfo := &RangeInfo{
 		ChunkRange: chunk,
@@ -381,6 +382,9 @@ func (s *testSplitterSuite) TestRandomSpliter(c *C) {
 	for i, bound := range chunk.Bounds {
 		c.Assert(bounds1[i].Upper, DeepEquals, bound.Lower)
 	}
+
+	c.Assert(chunk.Index.ChunkCnt, Equals, chunkID1.ChunkCnt)
+	c.Assert(chunk.Index.ChunkIndex, Equals, chunkID1.ChunkIndex+1)
 
 }
 
@@ -581,6 +585,7 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 		c.Assert(err, IsNil)
 
 		obtainChunks := make([]chunkResult, 0, len(testCase.expectResult))
+		nextBeginBucket := 0
 		for {
 			chunk, err := iter.Next()
 			c.Assert(err, IsNil)
@@ -588,7 +593,15 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 				break
 			}
 			chunkStr, args := chunk.ToString("")
-			c.Log(i, chunkStr, args, chunk.BucketID)
+			c.Log(i, chunkStr, args, chunk.Index.BucketIndexLeft, chunk.Index.BucketIndexRight, chunk.Index.ChunkIndex, chunk.Index.ChunkCnt)
+			if nextBeginBucket == 0 {
+				c.Assert(chunk.Index.BucketIndexLeft, Equals, 0)
+			} else {
+				c.Assert(chunk.Index.BucketIndexLeft, Equals, nextBeginBucket)
+			}
+			if chunk.Index.ChunkIndex+1 == chunk.Index.ChunkCnt {
+				nextBeginBucket = chunk.Index.BucketIndexRight + 1
+			}
 			obtainChunks = append(obtainChunks, chunkResult{chunkStr, chunk.Args})
 
 		}
