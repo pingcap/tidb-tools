@@ -64,12 +64,16 @@ func NewBucketIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 		progressID: progressID,
 	}
 
+	// If `bucket size` is much larger than `chunk size`,
+	// we need to split the bucket into some chunks, which wastes much time.
+	// So we use WorkPool to split buckets in parallel.
 	bs.chunkPool = utils.NewWorkerPool(uint(checkThreadCount), "bucketIter")
 
 	if err := bs.init(startRange); err != nil {
 		return nil, errors.Trace(err)
 	}
 
+	// Let the progress bar begins to record the table.
 	progress.StartTable(bs.progressID, 0, false)
 	go bs.produceChunks(ctx, startRange)
 
@@ -94,8 +98,8 @@ func (s *BucketIterator) Next() (*chunk.Range, error) {
 			}
 		}
 		s.nextChunk = 0
-		failpoint.Inject("ignore-last-chunk-in-n-bucket", func(v failpoint.Value) {
-			log.Info("failpoint ignore-last-chunk-in-n-bucket injected", zap.Int("n", v.(int)))
+		failpoint.Inject("ignore-last-n-chunk-in-bucket", func(v failpoint.Value) {
+			log.Info("failpoint ignore-last-n-chunk-in-bucket injected (bucket splitter)", zap.Int("n", v.(int)))
 			if len(s.chunks) <= 1+v.(int) {
 				failpoint.Return(nil, nil)
 			}
@@ -112,7 +116,7 @@ func (s *BucketIterator) Next() (*chunk.Range, error) {
 			lowerBounds[i] = bound.Lower
 			upperBounds[i] = bound.Upper
 		}
-		log.Info("failpoint print-chunk-info injected", zap.Strings("lowerBounds", lowerBounds), zap.Strings("upperBounds", upperBounds))
+		log.Info("failpoint print-chunk-info injected (bucket splitter)", zap.Strings("lowerBounds", lowerBounds), zap.Strings("upperBounds", upperBounds), zap.String("indexCode", c.Index.ToString()))
 	})
 	return c, nil
 }
@@ -156,7 +160,10 @@ func (s *BucketIterator) init(startRange *RangeInfo) error {
 		return errors.NotFoundf("no index to split buckets")
 	}
 
+	// Notice: `cnt` is only an estimated value
 	cnt := s.buckets[len(s.buckets)-1].Count
+	// We can use config file to fix chunkSize,
+	// otherwise chunkSize is 0.
 	if s.chunkSize <= 0 {
 		s.chunkSize = utils.CalculateChunkSize(cnt)
 	}
@@ -169,9 +176,9 @@ func (s *BucketIterator) init(startRange *RangeInfo) error {
 func (s *BucketIterator) Close() {
 }
 
-func (s *BucketIterator) splitChunkForBucket(firstBucketID, lastBucketID int, beginIndex int, bucketChunkCnt int, chunkCnt int, chunkRange *chunk.Range) {
+func (s *BucketIterator) splitChunkForBucket(firstBucketID, lastBucketID int, beginIndex int, bucketChunkCnt int, splitChunkCnt int, chunkRange *chunk.Range) {
 	s.chunkPool.Apply(func() {
-		chunks, err := splitRangeByRandom(s.dbConn, chunkRange, chunkCnt, s.table.Schema, s.table.Table, s.indexColumns, s.table.Range, s.table.Collation)
+		chunks, err := splitRangeByRandom(s.dbConn, chunkRange, splitChunkCnt, s.table.Schema, s.table.Table, s.indexColumns, s.table.Range, s.table.Collation)
 		if err != nil {
 			s.errCh <- errors.Trace(err)
 			return
@@ -193,7 +200,7 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 		latestCount              int64
 		err                      error
 	)
-	beginBucket := 0
+	firstBucket := 0
 	if startRange != nil {
 		c := startRange.GetChunk()
 		if c.IsLastChunkForTable() {
@@ -201,7 +208,7 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 			return
 		}
 		// init values for the next bucket
-		beginBucket = c.BucketID + 1
+		firstBucket = c.BucketID + 1
 		// Note: Since this chunk is not the last one,
 		//       its bucketID is less than len(s.buckets)
 		if c.BucketID >= len(s.buckets) {
@@ -229,12 +236,11 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 				chunkRange.Update(bound.Column, bound.Upper, "", true, false)
 			}
 
-			s.splitChunkForBucket(c.Index.BucketIndexLeft, c.Index.BucketIndexRight, c.Index.ChunkIndex, c.Index.ChunkCnt, leftCnt, chunkRange)
+			s.splitChunkForBucket(c.Index.BucketIndexLeft, c.Index.BucketIndexRight, c.Index.ChunkIndex+1, c.Index.ChunkCnt, leftCnt, chunkRange)
 		}
 	}
 	halfChunkSize := s.chunkSize / 2
-	firstBucket := beginBucket
-	for i := beginBucket; i < len(s.buckets); i++ {
+	for i := firstBucket; i < len(s.buckets); i++ {
 		count := s.buckets[i].Count - latestCount
 		if count < s.chunkSize {
 			// merge more buckets into one chunk
@@ -285,8 +291,5 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 	}
 	// When the table is much less than chunkSize,
 	// it will return a chunk include the whole table.
-	chunks := []*chunk.Range{chunkRange}
-	chunk.InitChunks(chunks, chunk.Bucket, firstBucket, len(s.buckets), 0, s.table.Collation, s.table.Range, 1)
-	progress.UpdateTotal(s.progressID, len(chunks), false)
-	s.chunksCh <- chunks
+	s.splitChunkForBucket(firstBucket, len(s.buckets), 0, 1, 1, chunkRange)
 }
