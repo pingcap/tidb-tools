@@ -150,7 +150,9 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 	df.workSource = df.pickSource(ctx)
 	df.FixSQLDir = cfg.Task.FixDir
 	df.CheckpointDir = cfg.Task.CheckpointDir
-	df.initCheckpoint()
+	if err := df.initCheckpoint(); err != nil {
+		return errors.Trace(err)
+	}
 	sourceConfigs, targetConfig, err := getConfigsForReport(cfg)
 	if err != nil {
 		return errors.Trace(err)
