@@ -17,10 +17,7 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/signal"
 	"sync"
-	"syscall"
-
 	// #nosec
 	// register HTTP handler for /debug/pprof
 	"net/http"
@@ -30,8 +27,6 @@ import (
 	"github.com/pingcap/log"
 	"go.uber.org/zap"
 )
-
-const startPProfSignal = syscall.SIGUSR1
 
 var (
 	startedPProf = ""
@@ -73,21 +68,4 @@ func StartPProfListener(statusAddr string) error {
 		}
 	}()
 	return nil
-}
-
-// StartDynamicPProfListener starts the listener that will enable pprof when received `startPProfSignal`.
-func StartDynamicPProfListener() {
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, startPProfSignal)
-	go func() {
-		for sig := range signalChan {
-			if sig == startPProfSignal {
-				log.Info("signal received, starting pprof...", zap.Stringer("signal", sig))
-				if err := StartPProfListener("0.0.0.0:0"); err != nil {
-					log.Warn("failed to start pprof", zap.Error(err))
-					return
-				}
-			}
-		}
-	}()
 }
