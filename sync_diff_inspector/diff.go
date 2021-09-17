@@ -155,7 +155,6 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 		return errors.Trace(err)
 	}
 	df.report.Init(df.downstream.GetTables(), sourceConfigs, targetConfig)
-	progress.Init(len(df.workSource.GetTables()))
 	return nil
 }
 
@@ -314,6 +313,7 @@ func (df *Diff) pickSource(ctx context.Context) source.Source {
 
 func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterator, error) {
 	var startRange *splitter.RangeInfo
+	finishTableNums := 0
 	if df.useCheckpoint {
 		path := filepath.Join(df.CheckpointDir, checkpointFile)
 		if ioutil2.FileExists(path) {
@@ -337,6 +337,7 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 				}
 				startRange = splitter.FromNode(node)
 				df.report.LoadReport(reportInfo)
+				finishTableNums = startRange.GetTableIndex()
 			}
 		} else {
 			log.Info("not found checkpoint file, start from beginning")
@@ -348,6 +349,7 @@ func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterato
 		}
 	}
 
+	progress.Init(len(df.workSource.GetTables()), finishTableNums)
 	return df.workSource.GetRangeIterator(ctx, startRange, df.workSource.GetTableAnalyzer())
 }
 
