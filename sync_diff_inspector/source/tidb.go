@@ -107,16 +107,7 @@ func getMatchSource(sourceTableMap map[string]*common.TableSource, table *common
 }
 
 func (s *TiDBSource) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
-	dbIter := &ChunksIterator{
-		tableAnalyzer:  analyzer,
-		TableDiffs:     s.tableDiffs,
-		nextTableIndex: 0,
-		chunkIterCh:    make(chan *splitter.ChunkIterator, 1),
-		errCh:          make(chan error, 1),
-		limit:          0,
-	}
-	err := dbIter.initTable(ctx, r)
-	return dbIter, err
+	return NewChunksIterator(ctx, analyzer, s.tableDiffs, r)
 }
 
 func (s *TiDBSource) Close() {
