@@ -338,3 +338,139 @@ func (*testChunkSuite) TestChunkCopyAndUpdate(c *C) {
 	c.Assert(chunk3.BucketID, Equals, 2)
 	c.Assert(chunk3.Type, Equals, Others)
 }
+
+func (*testChunkSuite) TestChunkID(c *C) {
+	chunkIDBase := &ChunkID{
+		TableIndex:       2,
+		BucketIndexLeft:  2,
+		BucketIndexRight: 2,
+		ChunkIndex:       2,
+		ChunkCnt:         4,
+	}
+
+	str := chunkIDBase.ToString()
+	c.Assert(str, Equals, "2:2-2:2:4")
+	chunkIDtmp := &ChunkID{}
+	chunkIDtmp.FromString(str)
+	c.Assert(chunkIDBase.Compare(chunkIDtmp), Equals, 0)
+
+	chunkIDSmalls := []*ChunkID{
+		{
+			TableIndex:       1,
+			BucketIndexLeft:  3,
+			BucketIndexRight: 3,
+			ChunkIndex:       4,
+			ChunkCnt:         5,
+		}, {
+			TableIndex:       2,
+			BucketIndexLeft:  1,
+			BucketIndexRight: 1,
+			ChunkIndex:       3,
+			ChunkCnt:         5,
+		}, {
+			TableIndex:       2,
+			BucketIndexLeft:  2,
+			BucketIndexRight: 2,
+			ChunkIndex:       1,
+			ChunkCnt:         4,
+		},
+	}
+
+	stringRes := []string{
+		"1:3-3:4:5",
+		"2:1-1:3:5",
+		"2:2-2:1:4",
+	}
+
+	for i, chunkIDSmall := range chunkIDSmalls {
+		c.Assert(chunkIDBase.Compare(chunkIDSmall), Equals, 1)
+		str = chunkIDSmall.ToString()
+		c.Assert(str, Equals, stringRes[i])
+		chunkIDtmp = &ChunkID{}
+		chunkIDtmp.FromString(str)
+		c.Assert(chunkIDSmall.Compare(chunkIDtmp), Equals, 0)
+	}
+
+	chunkIDLarges := []*ChunkID{
+		{
+			TableIndex:       3,
+			BucketIndexLeft:  1,
+			BucketIndexRight: 1,
+			ChunkIndex:       2,
+			ChunkCnt:         3,
+		}, {
+			TableIndex:       2,
+			BucketIndexLeft:  3,
+			BucketIndexRight: 3,
+			ChunkIndex:       1,
+			ChunkCnt:         3,
+		}, {
+			TableIndex:       2,
+			BucketIndexLeft:  2,
+			BucketIndexRight: 2,
+			ChunkIndex:       3,
+			ChunkCnt:         4,
+		},
+	}
+
+	stringRes = []string{
+		"3:1-1:2:3",
+		"2:3-3:1:3",
+		"2:2-2:3:4",
+	}
+
+	for i, chunkIDLarge := range chunkIDLarges {
+		c.Assert(chunkIDBase.Compare(chunkIDLarge), Equals, -1)
+		str = chunkIDLarge.ToString()
+		c.Assert(str, Equals, stringRes[i])
+		chunkIDtmp = &ChunkID{}
+		chunkIDtmp.FromString(str)
+		c.Assert(chunkIDLarge.Compare(chunkIDtmp), Equals, 0)
+	}
+
+}
+
+func (*testChunkSuite) TestChunkIndex(c *C) {
+	chunkRange := NewChunkRange()
+	chunkRange.Index.ChunkIndex = 0
+	chunkRange.Index.ChunkCnt = 3
+	c.Assert(chunkRange.IsFirstChunkForBucket(), Equals, true)
+	c.Assert(chunkRange.IsLastChunkForBucket(), Equals, false)
+	chunkRange.Index.ChunkIndex = 2
+	c.Assert(chunkRange.IsFirstChunkForBucket(), Equals, false)
+	c.Assert(chunkRange.IsLastChunkForBucket(), Equals, true)
+
+	chunkRange.Bounds = []*Bound{
+		{
+			Lower:    "1",
+			HasLower: true,
+		}, {
+			Lower:    "2",
+			HasLower: true,
+		},
+	}
+	c.Assert(chunkRange.IsLastChunkForTable(), Equals, true)
+	c.Assert(chunkRange.IsFirstChunkForTable(), Equals, false)
+	chunkRange.Bounds = []*Bound{
+		{
+			Upper:    "1",
+			HasUpper: true,
+		}, {
+			Upper:    "2",
+			HasUpper: true,
+		},
+	}
+	c.Assert(chunkRange.IsLastChunkForTable(), Equals, false)
+	c.Assert(chunkRange.IsFirstChunkForTable(), Equals, true)
+	chunkRange.Bounds = []*Bound{
+		{
+			Upper:    "1",
+			HasUpper: true,
+		}, {
+			Lower:    "2",
+			HasLower: true,
+		},
+	}
+	c.Assert(chunkRange.IsLastChunkForTable(), Equals, false)
+	c.Assert(chunkRange.IsFirstChunkForTable(), Equals, false)
+}
