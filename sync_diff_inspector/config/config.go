@@ -275,6 +275,9 @@ type Config struct {
 
 	// print version if set true
 	PrintVersion bool
+
+	// StatusAddr used for debug
+	StatusAddr string `toml:"status-addr" json:"status-addr"`
 }
 
 // NewConfig creates a new config.
@@ -293,6 +296,7 @@ func NewConfig() *Config {
 	fs.BoolVar(&cfg.IgnoreStructCheck, "ignore-struct-check", false, "ignore check table's struct")
 	fs.BoolVar(&cfg.IgnoreStats, "ignore-stats", false, "don't use tidb stats to split chunks")
 	fs.BoolVar(&cfg.UseCheckpoint, "use-checkpoint", true, "set true will continue check from the latest checkpoint")
+	fs.StringVar(&cfg.StatusAddr, "status-addr", "", "used for debug")
 
 	return cfg
 }
