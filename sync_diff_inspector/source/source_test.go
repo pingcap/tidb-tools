@@ -98,7 +98,13 @@ func (m *MockChunkIterator) Next() (*chunk.Range, error) {
 	}
 	m.index.ChunkIndex = m.index.ChunkIndex + 1
 	return &chunk.Range{
-		Index: m.index,
+		Index: &chunk.ChunkID{
+			TableIndex:       m.index.TableIndex,
+			BucketIndexLeft:  m.index.BucketIndexLeft,
+			BucketIndexRight: m.index.BucketIndexRight,
+			ChunkIndex:       m.index.ChunkIndex,
+			ChunkCnt:         m.index.ChunkCnt,
+		},
 	}, nil
 }
 
@@ -179,18 +185,26 @@ func (s *testSourceSuite) TestTiDBSource(c *C) {
 	// Test ChunkIterator
 	iter, err := tidb.GetRangeIterator(ctx, tableCases[0].rangeInfo, &MockAnalyzer{})
 	c.Assert(err, IsNil)
-	i := newIndex()
+	resRecords := [][]bool{
+		{false, false, false, false, false},
+		{false, false, false, false, false},
+	}
 	for {
 		ch, err := iter.Next(ctx)
 		c.Assert(err, IsNil)
 		if ch == nil {
-			c.Assert(equal(i, &chunk.ChunkID{TableIndex: len(tableCases), BucketIndexLeft: 0, BucketIndexRight: 0, ChunkIndex: 0, ChunkCnt: CHUNKS}), IsTrue)
 			break
 		}
-		c.Assert(equal(ch.ChunkRange.Index, i), IsTrue)
-		next(i)
+		c.Log(ch.ChunkRange.Index)
+		c.Assert(ch.ChunkRange.Index.ChunkCnt, Equals, 5)
+		c.Assert(resRecords[ch.ChunkRange.Index.TableIndex][ch.ChunkRange.Index.ChunkIndex], Equals, false)
+		resRecords[ch.ChunkRange.Index.TableIndex][ch.ChunkRange.Index.ChunkIndex] = true
 	}
 	iter.Close()
+	c.Assert(resRecords, DeepEquals, [][]bool{
+		{true, true, true, true, true},
+		{true, true, true, true, true},
+	})
 
 	// Test RowIterator
 	tableCase := tableCases[0]
@@ -430,6 +444,7 @@ func (s *testSourceSuite) TestMysqlRouter(c *C) {
 	countRows := sqlmock.NewRows([]string{"Cnt"}).AddRow(0)
 	mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
 	rangeIter, err := mysql.GetRangeIterator(ctx, nil, mysql.GetTableAnalyzer())
+	rangeIter.Next(ctx)
 	c.Assert(err, IsNil)
 	rangeIter.Close()
 

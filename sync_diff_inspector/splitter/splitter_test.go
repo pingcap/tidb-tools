@@ -658,7 +658,6 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 	createFakeResultForBucketSplit(mock, nil, nil)
 	createFakeResultForCount(mock, 64)
 	createFakeResultForRandom(mock, testCases[0].aRandomValues[stopJ:], testCases[0].bRandomValues[stopJ:])
-	mock.ExpectQuery("SELECT COUNT\\(DISTINCT `a.*").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("123"))
 	iter, err = NewBucketIteratorWithCheckpoint(ctx, "", tableDiff, db, rangeInfo, 1)
 	c.Assert(err, IsNil)
 	chunk, err = iter.Next()
