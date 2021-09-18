@@ -213,7 +213,7 @@ func splitRangeByRandom(db *sql.DB, chunk *chunk.Range, count int, schema string
 
 	randomValues := make([][]string, len(columns))
 	for i, column := range columns {
-		randomValues[i], err = dbutil.GetRandomValues(context.Background(), db, schema, table, column.Name.O, count-1, limitRange, utils.StringsToInterfaces(args), collation)
+		randomValues[i], err = dbutil.GetRandomValues(context.Background(), db, schema, table, column.Name.O, count-1, limitRange, args, collation)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
