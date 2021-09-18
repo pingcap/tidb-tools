@@ -61,17 +61,6 @@ func (*testUtilsSuite) TestWorkerPool(c *C) {
 	})
 	<-doneCh
 	c.Assert(v, Equals, uint64(2))
-
-	pool.ApplyWithID(func(id uint64) {
-		infoCh <- id
-	})
-	pool.ApplyWithID(func(id uint64) {
-		id2 := <-infoCh
-		v = id + id2
-		doneCh <- struct{}{}
-	})
-	<-doneCh
-	c.Assert(v, Equals, uint64(3))
 	c.Assert(pool.HasWorker(), IsTrue)
 	pool.WaitFinished()
 }

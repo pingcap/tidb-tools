@@ -119,7 +119,7 @@ func (s *TiDBSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter.
 	chunk := tableRange.GetChunk()
 
 	matchSource := getMatchSource(s.sourceTableMap, table)
-	count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, s.dbConn, matchSource.OriginSchema, matchSource.OriginTable, table.Info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
+	count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, s.dbConn, matchSource.OriginSchema, matchSource.OriginTable, table.Info, chunk.Where, chunk.Args)
 
 	cost := time.Since(beginTime)
 	return &ChecksumInfo{
@@ -163,15 +163,14 @@ func (s *TiDBSource) GenerateFixSQL(t DMLType, upstreamData, downstreamData map[
 
 func (s *TiDBSource) GetRowsIterator(ctx context.Context, tableRange *splitter.RangeInfo) (RowDataIterator, error) {
 	chunk := tableRange.GetChunk()
-	args := utils.StringsToInterfaces(chunk.Args)
 
 	table := s.tableDiffs[tableRange.GetTableIndex()]
 	matchedSource := getMatchSource(s.sourceTableMap, table)
 	rowsQuery, _ := utils.GetTableRowsQueryFormat(matchedSource.OriginSchema, matchedSource.OriginTable, table.Info, table.Collation)
 	query := fmt.Sprintf(rowsQuery, chunk.Where)
 
-	log.Debug("select data", zap.String("sql", query), zap.Reflect("args", args))
-	rows, err := s.dbConn.QueryContext(ctx, query, args...)
+	log.Debug("select data", zap.String("sql", query), zap.Reflect("args", chunk.Args))
+	rows, err := s.dbConn.QueryContext(ctx, query, chunk.Args...)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

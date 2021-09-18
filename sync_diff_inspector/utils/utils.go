@@ -33,6 +33,9 @@ import (
 )
 
 // WorkerPool contains a pool of workers.
+// The number of workers in the channel represents how many goruntines
+// can be created to execute the task.
+// After the task is done, worker will be sent back to the channel.
 type WorkerPool struct {
 	limit   uint
 	workers chan *Worker
@@ -46,9 +49,8 @@ type Worker struct {
 }
 
 type taskFunc func()
-type identifiedTaskFunc func(uint64)
 
-// NewWorkerPool returns a WorkPool.
+// NewWorkerPool returns a WorkerPool with `limit` workers in the channel.
 func NewWorkerPool(limit uint, name string) *WorkerPool {
 	workers := make(chan *Worker, limit)
 	for i := uint(0); i < limit; i++ {
@@ -61,7 +63,8 @@ func NewWorkerPool(limit uint, name string) *WorkerPool {
 	}
 }
 
-// Apply executes a task.
+// Apply wait for an idle worker to run `taskFunc`.
+// Notice: function `Apply` and `WaitFinished` cannot be called in parallel
 func (pool *WorkerPool) Apply(fn taskFunc) {
 	worker := pool.apply()
 	pool.wg.Add(1)
@@ -72,17 +75,7 @@ func (pool *WorkerPool) Apply(fn taskFunc) {
 	}()
 }
 
-// ApplyWithID execute a task and provides it with the worker ID.
-func (pool *WorkerPool) ApplyWithID(fn identifiedTaskFunc) {
-	worker := pool.apply()
-	pool.wg.Add(1)
-	go func() {
-		defer pool.wg.Done()
-		defer pool.recycle(worker)
-		fn(worker.ID)
-	}()
-}
-
+// apply waits for an idle worker from the channel and return it
 func (pool *WorkerPool) apply() *Worker {
 	var worker *Worker
 	select {
@@ -94,6 +87,7 @@ func (pool *WorkerPool) apply() *Worker {
 	return worker
 }
 
+// recycle sends an idle worker back to the channel
 func (pool *WorkerPool) recycle(worker *Worker) {
 	if worker == nil {
 		panic("invalid restore worker")
@@ -111,14 +105,11 @@ func (pool *WorkerPool) WaitFinished() {
 	pool.wg.Wait()
 }
 
+// GetColumnsFromIndex returns `ColumnInfo`s of the specified index.
 func GetColumnsFromIndex(index *model.IndexInfo, tableInfo *model.TableInfo) []*model.ColumnInfo {
 	indexColumns := make([]*model.ColumnInfo, 0, len(index.Columns))
 	for _, indexColumn := range index.Columns {
-		for _, column := range tableInfo.Columns {
-			if column.Name.O == indexColumn.Name.O {
-				indexColumns = append(indexColumns, column)
-			}
-		}
+		indexColumns = append(indexColumns, tableInfo.Columns[indexColumn.Offset])
 	}
 
 	return indexColumns
@@ -409,7 +400,7 @@ func MinLenInSlices(slices [][]string) int {
 	return min
 }
 
-// SliceToMap converts slice to map
+// SliceToMap converts Slice to Set
 func SliceToMap(slice []string) map[string]interface{} {
 	sMap := make(map[string]interface{})
 	for _, str := range slice {
@@ -523,11 +514,15 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 	return count.Int64, checksum.Int64, nil
 }
 
+// IgnoreColumns removes index from `tableInfo.Indices`, whose columns appear in `columns`.
+// And removes column from `tableInfo.Columns`, which appears in `columns`.
+// And initializes the offset of the column of each index to new `tableInfo.Columns`.
 func IgnoreColumns(tableInfo *model.TableInfo, columns []string) *model.TableInfo {
 	if len(columns) == 0 {
 		return tableInfo
 	}
 
+	// Remove all index from `tableInfo.Indices`, whose columns are involved of any column in `columns`.
 	removeColMap := SliceToMap(columns)
 	for i := 0; i < len(tableInfo.Indices); i++ {
 		index := tableInfo.Indices[i]
@@ -541,6 +536,7 @@ func IgnoreColumns(tableInfo *model.TableInfo, columns []string) *model.TableInf
 		}
 	}
 
+	// Remove column from `tableInfo.Columns`, which appears in `columns`.
 	for j := 0; j < len(tableInfo.Columns); j++ {
 		col := tableInfo.Columns[j]
 		if _, ok := removeColMap[col.Name.O]; ok {
@@ -556,6 +552,7 @@ func IgnoreColumns(tableInfo *model.TableInfo, columns []string) *model.TableInf
 		colMap[col.Name.O] = i
 	}
 
+	// Initialize the offset of the column of each index to new `tableInfo.Columns`.
 	for _, index := range tableInfo.Indices {
 		for _, col := range index.Columns {
 			offset, ok := colMap[col.Name.O]

@@ -101,7 +101,7 @@ func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitte
 
 	for _, ms := range matchSources {
 		go func(ms *common.TableShardSource) {
-			count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info, chunk.Where, utils.StringsToInterfaces(chunk.Args))
+			count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info, chunk.Where, chunk.Args)
 			infoCh <- &ChecksumInfo{
 				Checksum: checksum,
 				Count:    count,
@@ -156,7 +156,6 @@ func (s *MySQLSources) GenerateFixSQL(t DMLType, upstreamData, downstreamData ma
 
 func (s *MySQLSources) GetRowsIterator(ctx context.Context, tableRange *splitter.RangeInfo) (RowDataIterator, error) {
 	chunk := tableRange.GetChunk()
-	args := utils.StringsToInterfaces(chunk.Args)
 
 	sourceRows := make(map[int]*sql.Rows)
 
@@ -168,7 +167,7 @@ func (s *MySQLSources) GetRowsIterator(ctx context.Context, tableRange *splitter
 	for i, ms := range matchSources {
 		rowsQuery, orderKeyCols = utils.GetTableRowsQueryFormat(ms.OriginSchema, ms.OriginTable, table.Info, table.Collation)
 		query := fmt.Sprintf(rowsQuery, chunk.Where)
-		rows, err := ms.DBConn.QueryContext(ctx, query, args...)
+		rows, err := ms.DBConn.QueryContext(ctx, query, chunk.Args...)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
