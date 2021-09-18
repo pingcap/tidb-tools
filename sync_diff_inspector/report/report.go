@@ -352,6 +352,7 @@ func (r *Report) GetSnapshot(chunkID *chunk.ChunkID, schema, table string) (*Rep
 						chunkRes[id] = chunkResult
 					}
 				}
+				log.Debug("get snapshot", zap.String("table", dbutil.TableName(schema, table)), zap.Any("result", chunkRes))
 				reserveMap[schema][table].ChunkMap = chunkRes
 			}
 		}

@@ -179,6 +179,7 @@ func (df *Diff) initCheckpoint() error {
 					zap.String("state", node.GetState()))
 				df.cp.SetCurrentSavedID(node)
 			}
+
 			if node != nil {
 				// remove the sql file that ID bigger than node.
 				// cause we will generate these sql again.
@@ -188,11 +189,21 @@ func (df *Diff) initCheckpoint() error {
 				}
 				df.startRange = splitter.FromNode(node)
 				df.report.LoadReport(reportInfo)
+				for schema, tableMap := range df.report.TableResults {
+					for table, result := range tableMap {
+						add, delete := 0, 0
+						for _, r := range result.ChunkMap {
+							add += r.RowsAdd
+							delete += r.RowsDelete
+						}
+						log.Info("load report test", zap.String("table", dbutil.TableName(schema, table)), zap.Int("add", add), zap.Int("delete", delete))
+					}
+				}
 				finishTableNums = df.startRange.GetTableIndex()
 			}
 		} else {
 			log.Info("not found checkpoint file, start from beginning")
-			id := &chunk.ChunkID{TableIndex: 0, BucketIndexLeft: 0, BucketIndexRight: 0, ChunkIndex: 0, ChunkCnt: 0}
+			id := &chunk.ChunkID{TableIndex: -1, BucketIndexLeft: -1, BucketIndexRight: -1, ChunkIndex: -1, ChunkCnt: 0}
 			err := df.removeSQLFiles(id)
 			if err != nil {
 				return errors.Trace(err)
@@ -741,6 +752,9 @@ func (df *Diff) removeSQLFiles(checkPointId *chunk.ChunkID) error {
 		relPath, _ := filepath.Rel(df.FixSQLDir, path)
 		oldPath := filepath.Join(df.FixSQLDir, relPath)
 		newPath := filepath.Join(folderPath, relPath)
+		if strings.HasPrefix(oldPath, ".trash") {
+			return nil
+		}
 
 		if strings.HasSuffix(name, ".sql") {
 			fileIDStr := strings.TrimRight(name, ".sql")
