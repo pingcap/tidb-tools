@@ -293,7 +293,7 @@ func (tpp *TableProgressPrinter) serve() {
 			case PROGRESS_OPT_FAIL:
 				if e, ok := tpp.tableMap[opt.name]; ok {
 					tp := e.Value.(*TableProgress)
-					tp.state |= opt.state | TABLE_STATE_FINISH
+					tp.state |= opt.state
 					tpp.flush(true)
 					// continue to increment chunk
 				}

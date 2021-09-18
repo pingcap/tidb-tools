@@ -39,7 +39,7 @@ type testSplitterSuite struct{}
 
 type chunkResult struct {
 	chunkStr string
-	args     []string
+	args     []interface{}
 }
 
 func (s *testSplitterSuite) TestSplitRangeByRandom(c *C) {
@@ -64,13 +64,13 @@ func (s *testSplitterSuite) TestSplitRangeByRandom(c *C) {
 			[]chunkResult{
 				{
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"0", "0", "a", "5", "5", "g"},
+					[]interface{}{"0", "0", "a", "5", "5", "g"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"5", "5", "g", "7", "7", "n"},
+					[]interface{}{"5", "5", "g", "7", "7", "n"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"7", "7", "n", "10", "10", "z"},
+					[]interface{}{"7", "7", "n", "10", "10", "z"},
 				},
 			},
 		}, {
@@ -83,13 +83,13 @@ func (s *testSplitterSuite) TestSplitRangeByRandom(c *C) {
 			[]chunkResult{
 				{
 					"((`b` > ?)) AND ((`b` <= ?))",
-					[]string{"a", "g"},
+					[]interface{}{"a", "g"},
 				}, {
 					"((`b` > ?)) AND ((`b` <= ?))",
-					[]string{"g", "n"},
+					[]interface{}{"g", "n"},
 				}, {
 					"((`b` > ?)) AND ((`b` <= ?))",
-					[]string{"n", "z"},
+					[]interface{}{"n", "z"},
 				},
 			},
 		}, {
@@ -102,10 +102,10 @@ func (s *testSplitterSuite) TestSplitRangeByRandom(c *C) {
 			[]chunkResult{
 				{
 					"((`b` > ?)) AND ((`b` <= ?))",
-					[]string{"a", "g"},
+					[]interface{}{"a", "g"},
 				}, {
 					"((`b` > ?)) AND ((`b` <= ?))",
-					[]string{"g", "z"},
+					[]interface{}{"g", "z"},
 				},
 			},
 		}, {
@@ -118,7 +118,7 @@ func (s *testSplitterSuite) TestSplitRangeByRandom(c *C) {
 			[]chunkResult{
 				{
 					"((`b` > ?)) AND ((`b` <= ?))",
-					[]string{"a", "z"},
+					[]interface{}{"a", "z"},
 				},
 			},
 		},
@@ -168,22 +168,22 @@ func (s *testSplitterSuite) TestRandomSpliter(c *C) {
 			[]chunkResult{
 				{
 					"(`a` < ?) OR (`a` = ? AND `b` <= ?)",
-					[]string{"1", "1", "a"},
+					[]interface{}{"1", "1", "a"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"1", "1", "a", "2", "2", "b"},
+					[]interface{}{"1", "1", "a", "2", "2", "b"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"2", "2", "b", "3", "3", "c"},
+					[]interface{}{"2", "2", "b", "3", "3", "c"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"3", "3", "c", "4", "4", "d"},
+					[]interface{}{"3", "3", "c", "4", "4", "d"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"4", "4", "d", "5", "5", "e"},
+					[]interface{}{"4", "4", "d", "5", "5", "e"},
 				}, {
 					"(`a` > ?) OR (`a` = ? AND `b` > ?)",
-					[]string{"5", "5", "e"},
+					[]interface{}{"5", "5", "e"},
 				},
 			},
 		}, {
@@ -197,22 +197,22 @@ func (s *testSplitterSuite) TestRandomSpliter(c *C) {
 			[]chunkResult{
 				{
 					"(`b` <= ?)",
-					[]string{"a"},
+					[]interface{}{"a"},
 				}, {
 					"((`b` > ?)) AND ((`b` <= ?))",
-					[]string{"a", "b"},
+					[]interface{}{"a", "b"},
 				}, {
 					"((`b` > ?)) AND ((`b` <= ?))",
-					[]string{"b", "c"},
+					[]interface{}{"b", "c"},
 				}, {
 					"((`b` > ?)) AND ((`b` <= ?))",
-					[]string{"c", "d"},
+					[]interface{}{"c", "d"},
 				}, {
 					"((`b` > ?)) AND ((`b` <= ?))",
-					[]string{"d", "e"},
+					[]interface{}{"d", "e"},
 				}, {
 					"(`b` > ?)",
-					[]string{"e"},
+					[]interface{}{"e"},
 				},
 			},
 		}, {
@@ -227,22 +227,22 @@ func (s *testSplitterSuite) TestRandomSpliter(c *C) {
 			[]chunkResult{
 				{
 					"(`b` < ?) OR (`b` = ? AND `c` <= ?)",
-					[]string{"a", "a", "1.1"},
+					[]interface{}{"a", "a", "1.1"},
 				}, {
 					"((`b` > ?) OR (`b` = ? AND `c` > ?)) AND ((`b` < ?) OR (`b` = ? AND `c` <= ?))",
-					[]string{"a", "a", "1.1", "b", "b", "2.2"},
+					[]interface{}{"a", "a", "1.1", "b", "b", "2.2"},
 				}, {
 					"((`b` > ?) OR (`b` = ? AND `c` > ?)) AND ((`b` < ?) OR (`b` = ? AND `c` <= ?))",
-					[]string{"b", "b", "2.2", "c", "c", "3.3"},
+					[]interface{}{"b", "b", "2.2", "c", "c", "3.3"},
 				}, {
 					"((`b` > ?) OR (`b` = ? AND `c` > ?)) AND ((`b` < ?) OR (`b` = ? AND `c` <= ?))",
-					[]string{"c", "c", "3.3", "d", "d", "4.4"},
+					[]interface{}{"c", "c", "3.3", "d", "d", "4.4"},
 				}, {
 					"((`b` > ?) OR (`b` = ? AND `c` > ?)) AND ((`b` < ?) OR (`b` = ? AND `c` <= ?))",
-					[]string{"d", "d", "4.4", "e", "e", "5.5"},
+					[]interface{}{"d", "d", "4.4", "e", "e", "5.5"},
 				}, {
 					"(`b` > ?) OR (`b` = ? AND `c` > ?)",
-					[]string{"e", "e", "5.5"},
+					[]interface{}{"e", "e", "5.5"},
 				},
 			},
 		}, {
@@ -256,22 +256,22 @@ func (s *testSplitterSuite) TestRandomSpliter(c *C) {
 			[]chunkResult{
 				{
 					"(`b` <= ?)",
-					[]string{"a"},
+					[]interface{}{"a"},
 				}, {
 					"((`b` > ?)) AND ((`b` <= ?))",
-					[]string{"a", "b"},
+					[]interface{}{"a", "b"},
 				}, {
 					"((`b` > ?)) AND ((`b` <= ?))",
-					[]string{"b", "c"},
+					[]interface{}{"b", "c"},
 				}, {
 					"((`b` > ?)) AND ((`b` <= ?))",
-					[]string{"c", "d"},
+					[]interface{}{"c", "d"},
 				}, {
 					"((`b` > ?)) AND ((`b` <= ?))",
-					[]string{"d", "e"},
+					[]interface{}{"d", "e"},
 				}, {
 					"(`b` > ?)",
-					[]string{"e"},
+					[]interface{}{"e"},
 				},
 			},
 		}, {
@@ -285,22 +285,22 @@ func (s *testSplitterSuite) TestRandomSpliter(c *C) {
 			[]chunkResult{
 				{
 					"(`a` <= ?)",
-					[]string{"1"},
+					[]interface{}{"1"},
 				}, {
 					"((`a` > ?)) AND ((`a` <= ?))",
-					[]string{"1", "2"},
+					[]interface{}{"1", "2"},
 				}, {
 					"((`a` > ?)) AND ((`a` <= ?))",
-					[]string{"2", "3"},
+					[]interface{}{"2", "3"},
 				}, {
 					"((`a` > ?)) AND ((`a` <= ?))",
-					[]string{"3", "4"},
+					[]interface{}{"3", "4"},
 				}, {
 					"((`a` > ?)) AND ((`a` <= ?))",
-					[]string{"4", "5"},
+					[]interface{}{"4", "5"},
 				}, {
 					"(`a` > ?)",
-					[]string{"5"},
+					[]interface{}{"5"},
 				},
 			},
 		},
@@ -425,37 +425,37 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 			[]chunkResult{
 				{
 					"(`a` < ?) OR (`a` = ? AND `b` <= ?)",
-					[]string{"32", "32", "6"},
+					[]interface{}{"32", "32", "6"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"32", "32", "6", "63", "63", "11"},
+					[]interface{}{"32", "32", "6", "63", "63", "11"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"63", "63", "11", "96", "96", "18"},
+					[]interface{}{"63", "63", "11", "96", "96", "18"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"96", "96", "18", "127", "127", "23"},
+					[]interface{}{"96", "96", "18", "127", "127", "23"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"127", "127", "23", "160", "160", "30"},
+					[]interface{}{"127", "127", "23", "160", "160", "30"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"160", "160", "30", "191", "191", "35"},
+					[]interface{}{"160", "160", "30", "191", "191", "35"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"191", "191", "35", "224", "224", "42"},
+					[]interface{}{"191", "191", "35", "224", "224", "42"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"224", "224", "42", "255", "255", "47"},
+					[]interface{}{"224", "224", "42", "255", "255", "47"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"255", "255", "47", "288", "288", "54"},
+					[]interface{}{"255", "255", "47", "288", "288", "54"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"288", "288", "54", "319", "319", "59"},
+					[]interface{}{"288", "288", "54", "319", "319", "59"},
 				}, {
 					"(`a` > ?) OR (`a` = ? AND `b` > ?)",
-					[]string{"319", "319", "59"},
+					[]interface{}{"319", "319", "59"},
 				},
 			},
 		}, {
@@ -466,22 +466,22 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 			[]chunkResult{
 				{
 					"(`a` < ?) OR (`a` = ? AND `b` <= ?)",
-					[]string{"63", "63", "11"},
+					[]interface{}{"63", "63", "11"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"63", "63", "11", "127", "127", "23"},
+					[]interface{}{"63", "63", "11", "127", "127", "23"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"127", "127", "23", "191", "191", "35"},
+					[]interface{}{"127", "127", "23", "191", "191", "35"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"191", "191", "35", "255", "255", "47"},
+					[]interface{}{"191", "191", "35", "255", "255", "47"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"255", "255", "47", "319", "319", "59"},
+					[]interface{}{"255", "255", "47", "319", "319", "59"},
 				}, {
 					"(`a` > ?) OR (`a` = ? AND `b` > ?)",
-					[]string{"319", "319", "59"},
+					[]interface{}{"319", "319", "59"},
 				},
 			},
 		}, {
@@ -492,22 +492,22 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 			[]chunkResult{
 				{
 					"(`a` < ?) OR (`a` = ? AND `b` <= ?)",
-					[]string{"63", "63", "11"},
+					[]interface{}{"63", "63", "11"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"63", "63", "11", "127", "127", "23"},
+					[]interface{}{"63", "63", "11", "127", "127", "23"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"127", "127", "23", "191", "191", "35"},
+					[]interface{}{"127", "127", "23", "191", "191", "35"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"191", "191", "35", "255", "255", "47"},
+					[]interface{}{"191", "191", "35", "255", "255", "47"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"255", "255", "47", "319", "319", "59"},
+					[]interface{}{"255", "255", "47", "319", "319", "59"},
 				}, {
 					"(`a` > ?) OR (`a` = ? AND `b` > ?)",
-					[]string{"319", "319", "59"},
+					[]interface{}{"319", "319", "59"},
 				},
 			},
 		}, {
@@ -518,13 +518,13 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 			[]chunkResult{
 				{
 					"(`a` < ?) OR (`a` = ? AND `b` <= ?)",
-					[]string{"127", "127", "23"},
+					[]interface{}{"127", "127", "23"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"127", "127", "23", "255", "255", "47"},
+					[]interface{}{"127", "127", "23", "255", "255", "47"},
 				}, {
 					"(`a` > ?) OR (`a` = ? AND `b` > ?)",
-					[]string{"255", "255", "47"},
+					[]interface{}{"255", "255", "47"},
 				},
 			},
 		}, {
@@ -535,13 +535,13 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 			[]chunkResult{
 				{
 					"(`a` < ?) OR (`a` = ? AND `b` <= ?)",
-					[]string{"127", "127", "23"},
+					[]interface{}{"127", "127", "23"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"127", "127", "23", "255", "255", "47"},
+					[]interface{}{"127", "127", "23", "255", "255", "47"},
 				}, {
 					"(`a` > ?) OR (`a` = ? AND `b` > ?)",
-					[]string{"255", "255", "47"},
+					[]interface{}{"255", "255", "47"},
 				},
 			},
 		}, {
@@ -552,10 +552,10 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 			[]chunkResult{
 				{
 					"(`a` < ?) OR (`a` = ? AND `b` <= ?)",
-					[]string{"191", "191", "35"},
+					[]interface{}{"191", "191", "35"},
 				}, {
 					"(`a` > ?) OR (`a` = ? AND `b` > ?)",
-					[]string{"191", "191", "35"},
+					[]interface{}{"191", "191", "35"},
 				},
 			},
 		}, {
@@ -611,8 +611,8 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 				totalIndex = len(obtainChunks[j].args)
 			}
 			for index := 0; index < totalIndex; index++ {
-				a1, _ := strconv.Atoi(obtainChunks[i].args[index])
-				a2, _ := strconv.Atoi(obtainChunks[j].args[index])
+				a1, _ := strconv.Atoi(obtainChunks[i].args[index].(string))
+				a2, _ := strconv.Atoi(obtainChunks[j].args[index].(string))
 				if a1 < a2 {
 					return true
 				} else if a1 > a2 {
@@ -730,19 +730,19 @@ func (s *testSplitterSuite) TestLimitSpliter(c *C) {
 			[]chunkResult{
 				{
 					"(`a` < ?) OR (`a` = ? AND `b` <= ?)",
-					[]string{"1000", "1000", "a"},
+					[]interface{}{"1000", "1000", "a"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"1000", "1000", "a", "2000", "2000", "b"},
+					[]interface{}{"1000", "1000", "a", "2000", "2000", "b"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"2000", "2000", "b", "3000", "3000", "c"},
+					[]interface{}{"2000", "2000", "b", "3000", "3000", "c"},
 				}, {
 					"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-					[]string{"3000", "3000", "c", "4000", "4000", "d"},
+					[]interface{}{"3000", "3000", "c", "4000", "4000", "d"},
 				}, {
 					"(`a` > ?) OR (`a` = ? AND `b` > ?)",
-					[]string{"4000", "4000", "d"},
+					[]interface{}{"4000", "4000", "d"},
 				},
 			},
 		},
@@ -827,7 +827,7 @@ func (s *testSplitterSuite) TestRangeInfo(c *C) {
 	rangeInfo.ChunkRange.Index.TableIndex = 1
 	chunkRange := rangeInfo.GetChunk()
 	c.Assert(chunkRange.Where, Equals, "((((`a` COLLATE '[23]' > ?)) AND ((`a` COLLATE '[23]' <= ?))) AND [sdg])")
-	c.Assert(chunkRange.Args, DeepEquals, []string{"1", "2"})
+	c.Assert(chunkRange.Args, DeepEquals, []interface{}{"1", "2"})
 
 	c.Assert(rangeInfo.GetTableIndex(), Equals, 1)
 
@@ -835,7 +835,7 @@ func (s *testSplitterSuite) TestRangeInfo(c *C) {
 
 	chunkRange = rangeInfo2.GetChunk()
 	c.Assert(chunkRange.Where, Equals, "((((`a` COLLATE '[23]' > ?)) AND ((`a` COLLATE '[23]' <= ?))) AND [sdg])")
-	c.Assert(chunkRange.Args, DeepEquals, []string{"1", "2"})
+	c.Assert(chunkRange.Args, DeepEquals, []interface{}{"1", "2"})
 
 	c.Assert(rangeInfo2.GetTableIndex(), Equals, 1)
 

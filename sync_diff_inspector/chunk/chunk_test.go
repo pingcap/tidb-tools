@@ -49,20 +49,20 @@ func (cp *testChunkSuite) TestChunkUpdate(c *C) {
 	testCases := []struct {
 		boundArgs  []string
 		expectStr  string
-		expectArgs []string
+		expectArgs []interface{}
 	}{
 		{
 			[]string{"a", "5", "6"},
 			"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-			[]string{"5", "5", "3", "6", "6", "4"},
+			[]interface{}{"5", "5", "3", "6", "6", "4"},
 		}, {
 			[]string{"b", "5", "6"},
 			"((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))",
-			[]string{"1", "1", "5", "2", "2", "6"},
+			[]interface{}{"1", "1", "5", "2", "2", "6"},
 		}, {
 			[]string{"c", "7", "8"},
 			"((`a` > ?) OR (`a` = ? AND `b` > ?) OR (`a` = ? AND `b` = ? AND `c` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` < ?) OR (`a` = ? AND `b` = ? AND `c` <= ?))",
-			[]string{"1", "1", "3", "1", "3", "7", "2", "2", "4", "2", "4", "8"},
+			[]interface{}{"1", "1", "3", "1", "3", "7", "2", "2", "4", "2", "4", "8"},
 		},
 	}
 
@@ -76,7 +76,7 @@ func (cp *testChunkSuite) TestChunkUpdate(c *C) {
 	// the origin chunk is not changed
 	conditions, args := chunk.ToString("")
 	c.Assert(conditions, Equals, "((`a` > ?) OR (`a` = ? AND `b` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` <= ?))")
-	expectArgs := []string{"1", "1", "3", "2", "2", "4"}
+	expectArgs := []interface{}{"1", "1", "3", "2", "2", "4"}
 	c.Assert(args, DeepEquals, expectArgs)
 
 	// test chunk update build by offset
@@ -297,12 +297,12 @@ func (*testChunkSuite) TestChunkInit(c *C) {
 
 	InitChunks(chunks, Others, 1, 1, 0, "[123]", "[sdfds fsd fd gd]", 1)
 	c.Assert(chunks[0].Where, Equals, "((((`a` COLLATE '[123]' > ?) OR (`a` = ? AND `b` COLLATE '[123]' > ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[123]' > ?)) AND ((`a` COLLATE '[123]' < ?) OR (`a` = ? AND `b` COLLATE '[123]' < ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[123]' <= ?))) AND [sdfds fsd fd gd])")
-	c.Assert(chunks[0].Args, DeepEquals, []string{"1", "1", "3", "1", "3", "5", "2", "2", "4", "2", "4", "6"})
+	c.Assert(chunks[0].Args, DeepEquals, []interface{}{"1", "1", "3", "1", "3", "5", "2", "2", "4", "2", "4", "6"})
 	c.Assert(chunks[0].BucketID, Equals, 1)
 	c.Assert(chunks[0].Type, Equals, Others)
 	InitChunk(chunks[1], Others, 2, 2, "[456]", "[dsfsdf]")
 	c.Assert(chunks[1].Where, Equals, "((((`a` COLLATE '[456]' > ?) OR (`a` = ? AND `b` COLLATE '[456]' > ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[456]' > ?)) AND ((`a` COLLATE '[456]' < ?) OR (`a` = ? AND `b` COLLATE '[456]' < ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[456]' <= ?))) AND [dsfsdf])")
-	c.Assert(chunks[1].Args, DeepEquals, []string{"2", "2", "4", "2", "4", "6", "3", "3", "5", "3", "5", "7"})
+	c.Assert(chunks[1].Args, DeepEquals, []interface{}{"2", "2", "4", "2", "4", "6", "3", "3", "5", "3", "5", "7"})
 	c.Assert(chunks[1].BucketID, Equals, 2)
 	c.Assert(chunks[1].Type, Equals, Others)
 }
@@ -319,22 +319,22 @@ func (*testChunkSuite) TestChunkCopyAndUpdate(c *C) {
 
 	conditions, args := chunk.ToString("")
 	c.Assert(conditions, Equals, "((`a` > ?) OR (`a` = ? AND `b` > ?) OR (`a` = ? AND `b` = ? AND `c` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` < ?) OR (`a` = ? AND `b` = ? AND `c` <= ?))")
-	c.Assert(args, DeepEquals, []string{"2", "2", "4", "2", "4", "10", "3", "3", "9", "3", "9", "7"})
+	c.Assert(args, DeepEquals, []interface{}{"2", "2", "4", "2", "4", "10", "3", "3", "9", "3", "9", "7"})
 
 	chunk2 := chunk.CopyAndUpdate("a", "4", "6", true, true)
 	conditions, args = chunk2.ToString("")
 	c.Assert(conditions, Equals, "((`a` > ?) OR (`a` = ? AND `b` > ?) OR (`a` = ? AND `b` = ? AND `c` > ?)) AND ((`a` < ?) OR (`a` = ? AND `b` < ?) OR (`a` = ? AND `b` = ? AND `c` <= ?))")
-	c.Assert(args, DeepEquals, []string{"4", "4", "4", "4", "4", "10", "6", "6", "9", "6", "9", "7"})
+	c.Assert(args, DeepEquals, []interface{}{"4", "4", "4", "4", "4", "10", "6", "6", "9", "6", "9", "7"})
 	_, args = chunk.ToString("")
 	// `Copy` use the same []string
-	c.Assert(args, DeepEquals, []string{"2", "2", "4", "2", "4", "10", "3", "3", "9", "3", "9", "7"})
+	c.Assert(args, DeepEquals, []interface{}{"2", "2", "4", "2", "4", "10", "3", "3", "9", "3", "9", "7"})
 
 	InitChunk(chunk, Others, 2, 2, "[324]", "[543]")
 	chunk3 := chunk.Clone()
 	chunk3.Update("a", "2", "3", true, true)
 	c.Assert(chunk3.Where, Equals, "((((`a` COLLATE '[324]' > ?) OR (`a` = ? AND `b` COLLATE '[324]' > ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[324]' > ?)) AND ((`a` COLLATE '[324]' < ?) OR (`a` = ? AND `b` COLLATE '[324]' < ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[324]' <= ?))) AND [543])")
 	c.Log(chunk3.Args)
-	c.Assert(chunk3.Args, DeepEquals, []string{"2", "2", "4", "2", "4", "10", "3", "3", "9", "3", "9", "7"})
+	c.Assert(chunk3.Args, DeepEquals, []interface{}{"2", "2", "4", "2", "4", "10", "3", "3", "9", "3", "9", "7"})
 	c.Assert(chunk3.BucketID, Equals, 2)
 	c.Assert(chunk3.Type, Equals, Others)
 }

@@ -59,8 +59,8 @@ type Range struct {
 	Type   ChunkType `json:"type"`
 	Bounds []*Bound  `json:"bounds"`
 
-	Where string   `json:"where"`
-	Args  []string `json:"args"`
+	Where string        `json:"where"`
+	Args  []interface{} `json:"args"`
 
 	columnOffset map[string]int
 	BucketID     int `json:"bucket-id"`
@@ -85,7 +85,7 @@ func (c *Range) String() string {
 	return string(chunkBytes)
 }
 
-func (c *Range) ToString(collation string) (string, []string) {
+func (c *Range) ToString(collation string) (string, []interface{}) {
 	if collation != "" {
 		collation = fmt.Sprintf(" COLLATE '%s'", collation)
 	}
@@ -97,13 +97,13 @@ func (c *Range) ToString(collation string) (string, []string) {
 
 	lowerCondition := make([]string, 0, 1)
 	upperCondition := make([]string, 0, 1)
-	lowerArgs := make([]string, 0, 1)
-	upperArgs := make([]string, 0, 1)
+	lowerArgs := make([]interface{}, 0, 1)
+	upperArgs := make([]interface{}, 0, 1)
 
 	preConditionForLower := make([]string, 0, 1)
 	preConditionForUpper := make([]string, 0, 1)
-	preConditionArgsForLower := make([]string, 0, 1)
-	preConditionArgsForUpper := make([]string, 0, 1)
+	preConditionArgsForLower := make([]interface{}, 0, 1)
+	preConditionArgsForUpper := make([]interface{}, 0, 1)
 
 	for i, bound := range c.Bounds {
 		lowerSymbol := gt
