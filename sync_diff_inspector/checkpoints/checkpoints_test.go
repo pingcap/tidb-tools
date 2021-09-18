@@ -58,7 +58,7 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 					},
 					Bounds: []*chunk.Bound{
 						{
-							HasLower: i != 1,
+							HasLower: i != 0,
 							Lower:    strconv.Itoa(i + 1000),
 							Upper:    strconv.Itoa(i + 1000 + 1),
 							HasUpper: i != rounds,
@@ -80,6 +80,7 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 	defer os.Remove("TestSaveChunk")
 
 	cur = checker.GetChunkSnapshot()
+	c.Assert(cur, NotNil)
 	id, err = checker.SaveChunk(ctx, "TestSaveChunk", cur, nil)
 	c.Assert(err, IsNil)
 	c.Assert(id.Compare(&chunk.ChunkID{TableIndex: 0, BucketIndexLeft: 9, BucketIndexRight: 9, ChunkIndex: 9}), Equals, 0)
@@ -98,7 +99,7 @@ func (cp *testCheckpointSuit) TestLoadChunk(c *C) {
 				ChunkRange: &chunk.Range{
 					Bounds: []*chunk.Bound{
 						{
-							HasLower: i != 1,
+							HasLower: i != 0,
 							Lower:    strconv.Itoa(i + 1000),
 							Upper:    strconv.Itoa(i + 1000 + 1),
 							HasUpper: i != rounds,
