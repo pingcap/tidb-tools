@@ -61,23 +61,12 @@ func (*testUtilsSuite) TestWorkerPool(c *C) {
 	})
 	<-doneCh
 	c.Assert(v, Equals, uint64(2))
-
-	pool.ApplyWithID(func(id uint64) {
-		infoCh <- id
-	})
-	pool.ApplyWithID(func(id uint64) {
-		id2 := <-infoCh
-		v = id + id2
-		doneCh <- struct{}{}
-	})
-	<-doneCh
-	c.Assert(v, Equals, uint64(3))
 	c.Assert(pool.HasWorker(), IsTrue)
 	pool.WaitFinished()
 }
 
 func (*testUtilsSuite) TestStringsToInterface(c *C) {
-	res := StringsToInterfaces([]string{"1", "2", "3"})
+	res := []interface{}{"1", "2", "3"}
 	c.Assert(res[0], Equals, "1")
 	c.Assert(res[1], Equals, "2")
 	c.Assert(res[2], Equals, "3")
@@ -254,7 +243,7 @@ func (*testUtilsSuite) TestGetCountAndCRC32Checksum(c *C) {
 
 	mock.ExpectQuery("SELECT COUNT.*FROM `test_schema`\\.`test_table` WHERE \\[23 45\\].*").WithArgs("123", "234").WillReturnRows(sqlmock.NewRows([]string{"CNT", "CHECKSUM"}).AddRow(123, 456))
 
-	count, checksum, err := GetCountAndCRC32Checksum(ctx, conn, "test_schema", "test_table", tableInfo, "[23 45]", StringsToInterfaces([]string{"123", "234"}))
+	count, checksum, err := GetCountAndCRC32Checksum(ctx, conn, "test_schema", "test_table", tableInfo, "[23 45]", []interface{}{"123", "234"})
 	c.Assert(err, IsNil)
 	c.Assert(count, Equals, int64(123))
 	c.Assert(checksum, Equals, int64(456))
@@ -275,7 +264,7 @@ func (*testUtilsSuite) TestGetApproximateMid(c *C) {
 	rows := sqlmock.NewRows([]string{"a", "b"}).AddRow("5", "10")
 	mock.ExpectQuery("SELECT `a`, `b` FROM `test`\\.`test_utils` WHERE 2222.* LIMIT 10,1*").WithArgs("aaaa").WillReturnRows(rows)
 
-	data, err := GetApproximateMidBySize(ctx, conn, "test", "test_utils", tableInfo, "2222", StringsToInterfaces([]string{"aaaa"}), 20)
+	data, err := GetApproximateMidBySize(ctx, conn, "test", "test_utils", tableInfo, "2222", []interface{}{"aaaa"}, 20)
 	c.Assert(err, IsNil)
 	c.Assert(data["a"], Equals, "5")
 	c.Assert(data["b"], Equals, "10")
