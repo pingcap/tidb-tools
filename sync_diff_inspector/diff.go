@@ -150,14 +150,15 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 	df.workSource = df.pickSource(ctx)
 	df.FixSQLDir = cfg.Task.FixDir
 	df.CheckpointDir = cfg.Task.CheckpointDir
-	if err := df.initCheckpoint(); err != nil {
-		return errors.Trace(err)
-	}
+
 	sourceConfigs, targetConfig, err := getConfigsForReport(cfg)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	df.report.Init(df.downstream.GetTables(), sourceConfigs, targetConfig)
+	if err := df.initCheckpoint(); err != nil {
+		return errors.Trace(err)
+	}
 	return nil
 }
 
@@ -179,6 +180,7 @@ func (df *Diff) initCheckpoint() error {
 					zap.String("state", node.GetState()))
 				df.cp.SetCurrentSavedID(node)
 			}
+
 			if node != nil {
 				// remove the sql file that ID bigger than node.
 				// cause we will generate these sql again.
@@ -192,7 +194,7 @@ func (df *Diff) initCheckpoint() error {
 			}
 		} else {
 			log.Info("not found checkpoint file, start from beginning")
-			id := &chunk.ChunkID{TableIndex: 0, BucketIndexLeft: 0, BucketIndexRight: 0, ChunkIndex: 0, ChunkCnt: 0}
+			id := &chunk.ChunkID{TableIndex: -1, BucketIndexLeft: -1, BucketIndexRight: -1, ChunkIndex: -1, ChunkCnt: 0}
 			err := df.removeSQLFiles(id)
 			if err != nil {
 				return errors.Trace(err)
@@ -741,7 +743,7 @@ func (df *Diff) removeSQLFiles(checkPointId *chunk.ChunkID) error {
 		relPath, _ := filepath.Rel(df.FixSQLDir, path)
 		oldPath := filepath.Join(df.FixSQLDir, relPath)
 		newPath := filepath.Join(folderPath, relPath)
-		if strings.HasPrefix(oldPath, ".trash") {
+		if strings.Contains(oldPath, ".trash") {
 			return nil
 		}
 
