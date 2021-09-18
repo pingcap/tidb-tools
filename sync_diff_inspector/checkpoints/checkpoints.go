@@ -268,7 +268,6 @@ func (cp *Checkpoint) LoadChunk(fileName string) (*Node, *report.Report, error) 
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
-	log.Debug("chunk and report", zap.Any("chunk", n.Chunk), zap.Any("report", n.Report))
 	return n.Chunk, n.Report, nil
 }
 

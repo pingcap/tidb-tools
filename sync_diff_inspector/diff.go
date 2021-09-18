@@ -152,11 +152,11 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 	df.CheckpointDir = cfg.Task.CheckpointDir
 
 	sourceConfigs, targetConfig, err := getConfigsForReport(cfg)
-	df.report.Init(df.downstream.GetTables(), sourceConfigs, targetConfig)
-
 	if err := df.initCheckpoint(); err != nil {
 		return errors.Trace(err)
 	}
+	df.report.Init(df.downstream.GetTables(), sourceConfigs, targetConfig)
+
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -191,16 +191,6 @@ func (df *Diff) initCheckpoint() error {
 				}
 				df.startRange = splitter.FromNode(node)
 				df.report.LoadReport(reportInfo)
-				for schema, tableMap := range df.report.TableResults {
-					for table, result := range tableMap {
-						add, delete := 0, 0
-						for _, r := range result.ChunkMap {
-							add += r.RowsAdd
-							delete += r.RowsDelete
-						}
-						log.Info("load report test", zap.String("table", dbutil.TableName(schema, table)), zap.Int("add", add), zap.Int("delete", delete))
-					}
-				}
 				finishTableNums = df.startRange.GetTableIndex()
 			}
 		} else {
