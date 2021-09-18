@@ -152,12 +152,11 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 	df.CheckpointDir = cfg.Task.CheckpointDir
 
 	sourceConfigs, targetConfig, err := getConfigsForReport(cfg)
-	if err := df.initCheckpoint(); err != nil {
+	if err != nil {
 		return errors.Trace(err)
 	}
 	df.report.Init(df.downstream.GetTables(), sourceConfigs, targetConfig)
-
-	if err != nil {
+	if err := df.initCheckpoint(); err != nil {
 		return errors.Trace(err)
 	}
 	return nil
