@@ -197,7 +197,13 @@ func (cp *Checkpoint) Init() {
 	hp := new(Heap)
 	hp.mu = &sync.Mutex{}
 	hp.Nodes = make([]*Node, 0)
-	hp.CurrentSavedNode = nil
+	hp.CurrentSavedNode = &Node{
+		ChunkRange: &chunk.Range{
+			Index:   chunk.GetInitChunkID(),
+			IsFirst: true,
+			IsLast:  true,
+		},
+	}
 	heap.Init(hp)
 	cp.hp = hp
 }
@@ -208,9 +214,7 @@ func (cp *Checkpoint) GetChunkSnapshot() *Node {
 	defer cp.hp.mu.Unlock()
 	var cur, next *Node
 	for cp.hp.Len() != 0 {
-		if cp.hp.CurrentSavedNode != nil {
-		}
-		if cp.hp.CurrentSavedNode == nil || cp.hp.CurrentSavedNode.IsAdjacent(cp.hp.Nodes[0]) {
+		if cp.hp.CurrentSavedNode.IsAdjacent(cp.hp.Nodes[0]) {
 			cur = heap.Pop(cp.hp).(*Node)
 			cp.hp.CurrentSavedNode = cur
 			if cp.hp.Len() == 0 {
