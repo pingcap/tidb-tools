@@ -29,8 +29,9 @@ type TableProgressPrinter struct {
 	output        io.Writer
 	lines         int
 
-	finishTableNums int
-	tableNums       int
+	progressTableNums int
+	finishTableNums   int
+	tableNums         int
 
 	progress int
 	total    int
@@ -83,14 +84,16 @@ type Operator struct {
 	totalStopUpdate bool
 }
 
-func NewTableProgressPrinter(tableNums int) *TableProgressPrinter {
+func NewTableProgressPrinter(tableNums int, finishTableNums int) *TableProgressPrinter {
 	tpp := &TableProgressPrinter{
-		tableList:       list.New(),
-		tableFailList:   list.New(),
-		tableMap:        make(map[string]*list.Element),
-		lines:           0,
-		finishTableNums: 0,
-		tableNums:       tableNums,
+		tableList:     list.New(),
+		tableFailList: list.New(),
+		tableMap:      make(map[string]*list.Element),
+		lines:         0,
+
+		progressTableNums: 0,
+		finishTableNums:   finishTableNums,
+		tableNums:         tableNums,
 
 		progress: 0,
 		total:    0,
@@ -333,6 +336,7 @@ func (tpp *TableProgressPrinter) flush(stateIsChanged bool) {
 					fixStr = fmt.Sprintf("%sComparing the table structure of `%s` ... equivalent\n", fixStr, tp.name)
 					dynStr = fmt.Sprintf("%sComparing the table data of `%s` ...\n", dynStr, tp.name)
 					tpp.lines++
+					tpp.progressTableNums++
 					tp.state = TABLE_STATE_COMPARING
 				case TABLE_STATE_RESULT_FAIL_STRUCTURE_DONE:
 					fixStr = fmt.Sprintf("%sComparing the table structure of `%s` ... failure\n", fixStr, tp.name)
@@ -346,11 +350,13 @@ func (tpp *TableProgressPrinter) flush(stateIsChanged bool) {
 					fixStr = fmt.Sprintf("%sComparing the table structure of `%s` ... failure\n", fixStr, tp.name)
 					dynStr = fmt.Sprintf("%sComparing the table data of `%s` ...\n", dynStr, tp.name)
 					tpp.lines++
+					tpp.progressTableNums++
 					tp.state ^= TABLE_STATE_COMPARING | TABLE_STATE_PRESTART
 				case TABLE_STATE_RESULT_FAIL_STRUCTURE_PASS:
 					fixStr = fmt.Sprintf("%sComparing the table structure of `%s` ... pass\n", fixStr, tp.name)
 					dynStr = fmt.Sprintf("%sComparing the table data of `%s` ...\n", dynStr, tp.name)
 					tpp.lines++
+					tpp.progressTableNums++
 					tp.state ^= TABLE_STATE_COMPARING | TABLE_STATE_PRESTART
 				}
 			case TABLE_STATE_COMPARING:
@@ -369,6 +375,7 @@ func (tpp *TableProgressPrinter) flush(stateIsChanged bool) {
 				preNode := p.Prev()
 				tpp.tableList.Remove(p)
 				p = preNode
+				tpp.progressTableNums--
 				tpp.finishTableNums++
 			}
 		}
@@ -380,8 +387,7 @@ func (tpp *TableProgressPrinter) flush(stateIsChanged bool) {
 	}
 	// show bar
 	// 60 '='+'-'
-	leftTableNums := 1000 * (tpp.tableNums - tpp.finishTableNums)
-	coe := float32(leftTableNums*tpp.progress)/float32(tpp.tableNums*(leftTableNums+1)*(tpp.total+1)) + float32(tpp.finishTableNums)/float32(tpp.tableNums)
+	coe := float32(tpp.progressTableNums*tpp.progress)/float32(tpp.tableNums*(tpp.total+1)) + float32(tpp.finishTableNums)/float32(tpp.tableNums)
 	numLeft := int(60 * coe)
 	percent := int(100 * coe)
 	fmt.Fprintf(tpp.output, "Progress [%s>%s] %d%% %d/%d\n", strings.Repeat("=", numLeft), strings.Repeat("-", 60-numLeft), percent, tpp.progress, tpp.total)
@@ -389,8 +395,8 @@ func (tpp *TableProgressPrinter) flush(stateIsChanged bool) {
 
 var progress_ *TableProgressPrinter = nil
 
-func Init(tableNums int) {
-	progress_ = NewTableProgressPrinter(tableNums)
+func Init(tableNums, finishTableNums int) {
+	progress_ = NewTableProgressPrinter(tableNums, finishTableNums)
 }
 
 func Inc(name string) {
