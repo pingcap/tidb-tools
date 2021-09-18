@@ -80,9 +80,10 @@ type Diff struct {
 	FixSQLDir     string
 	CheckpointDir string
 
-	sqlCh  chan *ChunkDML
-	cp     *checkpoints.Checkpoint
-	report *report.Report
+	sqlCh      chan *ChunkDML
+	cp         *checkpoints.Checkpoint
+	startRange *splitter.RangeInfo
+	report     *report.Report
 }
 
 // NewDiff returns a Diff instance.
@@ -149,13 +150,56 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 	df.workSource = df.pickSource(ctx)
 	df.FixSQLDir = cfg.Task.FixDir
 	df.CheckpointDir = cfg.Task.CheckpointDir
-	df.cp.Init()
+	if err := df.initCheckpoint(); err != nil {
+		return errors.Trace(err)
+	}
 	sourceConfigs, targetConfig, err := getConfigsForReport(cfg)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	df.report.Init(df.downstream.GetTables(), sourceConfigs, targetConfig)
-	progress.Init(len(df.workSource.GetTables()))
+	return nil
+}
+
+func (df *Diff) initCheckpoint() error {
+	df.cp.Init()
+
+	finishTableNums := 0
+	if df.useCheckpoint {
+		path := filepath.Join(df.CheckpointDir, checkpointFile)
+		if ioutil2.FileExists(path) {
+			node, reportInfo, err := df.cp.LoadChunk(path)
+			if err != nil {
+				return errors.Annotate(err, "the checkpoint load process failed")
+			} else {
+				// this need not be synchronized, because at the moment, the is only one thread access the section
+				log.Info("load checkpoint",
+					zap.Any("chunk index", node.GetID()),
+					zap.Reflect("chunk", node),
+					zap.String("state", node.GetState()))
+				df.cp.SetCurrentSavedID(node)
+			}
+			if node != nil {
+				// remove the sql file that ID bigger than node.
+				// cause we will generate these sql again.
+				err = df.removeSQLFiles(node.GetID())
+				if err != nil {
+					return errors.Trace(err)
+				}
+				df.startRange = splitter.FromNode(node)
+				df.report.LoadReport(reportInfo)
+				finishTableNums = df.startRange.GetTableIndex()
+			}
+		} else {
+			log.Info("not found checkpoint file, start from beginning")
+			id := &chunk.ChunkID{TableIndex: 0, BucketIndexLeft: 0, BucketIndexRight: 0, ChunkIndex: 0, ChunkCnt: 0}
+			err := df.removeSQLFiles(id)
+			if err != nil {
+				return errors.Trace(err)
+			}
+		}
+	}
+	progress.Init(len(df.workSource.GetTables()), finishTableNums)
 	return nil
 }
 
@@ -313,42 +357,7 @@ func (df *Diff) pickSource(ctx context.Context) source.Source {
 }
 
 func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterator, error) {
-	var startRange *splitter.RangeInfo
-	if df.useCheckpoint {
-		path := filepath.Join(df.CheckpointDir, checkpointFile)
-		if ioutil2.FileExists(path) {
-			node, reportInfo, err := df.cp.LoadChunk(path)
-			if err != nil {
-				return nil, errors.Annotate(err, "the checkpoint load process failed")
-			} else {
-				// this need not be synchronized, because at the moment, the is only one thread access the section
-				log.Info("load checkpoint",
-					zap.Any("chunk index", node.GetID()),
-					zap.Reflect("chunk", node),
-					zap.String("state", node.GetState()))
-				df.cp.SetCurrentSavedID(node)
-			}
-			if node != nil {
-				// remove the sql file that ID bigger than node.
-				// cause we will generate these sql again.
-				err = df.removeSQLFiles(node.GetID())
-				if err != nil {
-					return nil, errors.Trace(err)
-				}
-				startRange = splitter.FromNode(node)
-				df.report.LoadReport(reportInfo)
-			}
-		} else {
-			log.Info("not found checkpoint file, start from beginning")
-			id := &chunk.ChunkID{TableIndex: 0, BucketIndexLeft: 0, BucketIndexRight: 0, ChunkIndex: 0, ChunkCnt: 0}
-			err := df.removeSQLFiles(id)
-			if err != nil {
-				return nil, errors.Trace(err)
-			}
-		}
-	}
-
-	return df.workSource.GetRangeIterator(ctx, startRange, df.workSource.GetTableAnalyzer())
+	return df.workSource.GetRangeIterator(ctx, df.startRange, df.workSource.GetTableAnalyzer())
 }
 
 func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
@@ -403,15 +412,16 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 		log.Debug("checksum failed", zap.Any("chunk id", rangeInfo.ChunkRange.Index), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTables()[rangeInfo.GetTableIndex()].Table))
 		state = checkpoints.FailedState
 		// if the chunk's checksum differ, try to do binary check
+		info := rangeInfo
 		if count > splitter.SplitThreshold {
 			log.Debug("count greater than threshold, start do bingenerate", zap.Any("chunk id", rangeInfo.ChunkRange.Index), zap.Int64("chunk size", count))
-			rangeInfo, err = df.BinGenerate(ctx, df.workSource, rangeInfo, count)
-			log.Debug("bin generate finished", zap.Reflect("chunk", rangeInfo.ChunkRange), zap.Any("chunk id", rangeInfo.ChunkRange.Index))
+			info, err = df.BinGenerate(ctx, df.workSource, rangeInfo, count)
+			log.Debug("bin generate finished", zap.Reflect("chunk", info.ChunkRange), zap.Any("chunk id", info.ChunkRange.Index))
 			if err != nil {
 				df.report.SetTableMeetError(schema, table, err)
 			}
 		}
-		_, err := df.compareRows(ctx, rangeInfo, dml)
+		_, err := df.compareRows(ctx, info, dml)
 		if err != nil {
 			df.report.SetTableMeetError(schema, table, err)
 		}

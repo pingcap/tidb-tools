@@ -65,6 +65,16 @@ type ChunkID struct {
 	ChunkCnt int `json:"chunk-count"`
 }
 
+func GetInitChunkID() *ChunkID {
+	return &ChunkID{
+		TableIndex:       -1,
+		BucketIndexLeft:  -1,
+		BucketIndexRight: -1,
+		ChunkIndex:       -1,
+		ChunkCnt:         0,
+	}
+}
+
 func (c *ChunkID) Compare(o *ChunkID) int {
 	if c.TableIndex < o.TableIndex {
 		return -1

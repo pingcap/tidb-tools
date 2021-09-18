@@ -31,7 +31,7 @@ var _ = Suite(&testProgressSuite{})
 type testProgressSuite struct{}
 
 func (s *testProgressSuite) TestProgress(c *C) {
-	p := NewTableProgressPrinter(4)
+	p := NewTableProgressPrinter(4, 0)
 	p.RegisterTable("1", true, true)
 	p.StartTable("1", 50, true)
 	p.RegisterTable("2", true, false)
@@ -62,7 +62,7 @@ func (s *testProgressSuite) TestProgress(c *C) {
 }
 
 func (s *testProgressSuite) TestTableError(c *C) {
-	p := NewTableProgressPrinter(4)
+	p := NewTableProgressPrinter(4, 0)
 	p.RegisterTable("1", true, true)
 	p.StartTable("1", 50, true)
 	p.RegisterTable("2", true, true)
@@ -87,7 +87,7 @@ func (s *testProgressSuite) TestTableError(c *C) {
 }
 
 func (s *testProgressSuite) TestAllSuccess(c *C) {
-	Init(2)
+	Init(2, 0)
 	RegisterTable("1", false, false)
 	StartTable("1", 1, true)
 	RegisterTable("2", false, false)
