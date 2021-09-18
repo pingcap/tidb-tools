@@ -84,7 +84,7 @@ func (t *ChunksIterator) produceChunks(ctx context.Context, startRange *splitter
 				case t.chunksCh <- &splitter.RangeInfo{
 					ChunkRange: c,
 					IndexID:    getCurTableIndexID(chunkIter),
-					ProgressID: startRange.ProgressID,
+					ProgressID: dbutil.TableName(curTable.Schema, curTable.Table),
 				}:
 				}
 			}
