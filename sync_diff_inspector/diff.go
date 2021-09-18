@@ -741,6 +741,9 @@ func (df *Diff) removeSQLFiles(checkPointId *chunk.ChunkID) error {
 		relPath, _ := filepath.Rel(df.FixSQLDir, path)
 		oldPath := filepath.Join(df.FixSQLDir, relPath)
 		newPath := filepath.Join(folderPath, relPath)
+		if strings.HasPrefix(oldPath, ".trash") {
+			return nil
+		}
 
 		if strings.HasSuffix(name, ".sql") {
 			fileIDStr := strings.TrimRight(name, ".sql")
