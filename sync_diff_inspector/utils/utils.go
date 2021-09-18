@@ -33,6 +33,9 @@ import (
 )
 
 // WorkerPool contains a pool of workers.
+// The number of workers in the channel represents how many goruntines
+// can be created to execute the task.
+// After the task is done, worker will be sent back to the channel.
 type WorkerPool struct {
 	limit   uint
 	workers chan *Worker
@@ -46,9 +49,8 @@ type Worker struct {
 }
 
 type taskFunc func()
-type identifiedTaskFunc func(uint64)
 
-// NewWorkerPool returns a WorkPool.
+// NewWorkerPool returns a WorkerPool with `limit` workers in the channel.
 func NewWorkerPool(limit uint, name string) *WorkerPool {
 	workers := make(chan *Worker, limit)
 	for i := uint(0); i < limit; i++ {
@@ -61,7 +63,8 @@ func NewWorkerPool(limit uint, name string) *WorkerPool {
 	}
 }
 
-// Apply executes a task.
+// Apply wait for an idle worker to run `taskFunc`.
+// Notice: function `Apply` and `WaitFinished` cannot be called in parallel
 func (pool *WorkerPool) Apply(fn taskFunc) {
 	worker := pool.apply()
 	pool.wg.Add(1)
@@ -72,17 +75,7 @@ func (pool *WorkerPool) Apply(fn taskFunc) {
 	}()
 }
 
-// ApplyWithID execute a task and provides it with the worker ID.
-func (pool *WorkerPool) ApplyWithID(fn identifiedTaskFunc) {
-	worker := pool.apply()
-	pool.wg.Add(1)
-	go func() {
-		defer pool.wg.Done()
-		defer pool.recycle(worker)
-		fn(worker.ID)
-	}()
-}
-
+// apply waits for an idle worker from the channel and return it
 func (pool *WorkerPool) apply() *Worker {
 	var worker *Worker
 	select {
@@ -94,6 +87,7 @@ func (pool *WorkerPool) apply() *Worker {
 	return worker
 }
 
+// recycle sends an idle worker back to the channel
 func (pool *WorkerPool) recycle(worker *Worker) {
 	if worker == nil {
 		panic("invalid restore worker")
@@ -111,29 +105,18 @@ func (pool *WorkerPool) WaitFinished() {
 	pool.wg.Wait()
 }
 
+// GetColumnsFromIndex returns `ColumnInfo`s of the specified index.
 func GetColumnsFromIndex(index *model.IndexInfo, tableInfo *model.TableInfo) []*model.ColumnInfo {
 	indexColumns := make([]*model.ColumnInfo, 0, len(index.Columns))
 	for _, indexColumn := range index.Columns {
-		for _, column := range tableInfo.Columns {
-			if column.Name.O == indexColumn.Name.O {
-				indexColumns = append(indexColumns, column)
-			}
-		}
+		indexColumns = append(indexColumns, tableInfo.Columns[indexColumn.Offset])
 	}
 
 	return indexColumns
 }
 
-// StringsToInterfaces converts string slice to interface slice
-func StringsToInterfaces(strs []string) []interface{} {
-	is := make([]interface{}, 0, len(strs))
-	for _, str := range strs {
-		is = append(is, str)
-	}
-
-	return is
-}
-
+// GetTableRowsQueryFormat returns a rowsQuerySQL template for the specific table.
+//  e.g. SELECT /*!40001 SQL_NO_CACHE */ `a`, `b` FROM `schema`.`table` WHERE %s ORDER BY `a`.
 func GetTableRowsQueryFormat(schema, table string, tableInfo *model.TableInfo, collation string) (string, []*model.ColumnInfo) {
 	orderKeys, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
 
@@ -156,6 +139,7 @@ func GetTableRowsQueryFormat(schema, table string, tableInfo *model.TableInfo, c
 	return query, orderKeyCols
 }
 
+// GenerateReplaceDML returns the insert SQL for the specific row values.
 func GenerateReplaceDML(data map[string]*dbutil.ColumnData, table *model.TableInfo, schema string) string {
 	colNames := make([]string, 0, len(table.Columns))
 	values := make([]string, 0, len(table.Columns))
@@ -180,6 +164,8 @@ func GenerateReplaceDML(data map[string]*dbutil.ColumnData, table *model.TableIn
 	return fmt.Sprintf("REPLACE INTO %s(%s) VALUES (%s);", dbutil.TableName(schema, table.Name.O), strings.Join(colNames, ","), strings.Join(values, ","))
 }
 
+// GerateReplaceDMLWithAnnotation returns the replace SQL for the specific 2 rows.
+// And add Annotations to show the different columns.
 func GenerateReplaceDMLWithAnnotation(source, target map[string]*dbutil.ColumnData, table *model.TableInfo, schema string) string {
 	sqlColNames := make([]string, 0, len(table.Columns))
 	sqlValues := make([]string, 0, len(table.Columns))
@@ -209,6 +195,7 @@ func GenerateReplaceDMLWithAnnotation(source, target map[string]*dbutil.ColumnDa
 		sqlColNames = append(sqlColNames, colName)
 		sqlValues = append(sqlValues, value1)
 
+		// Only show different columns in annotations.
 		if (string(data1.Data) == string(data2.Data)) && (data1.IsNull == data2.IsNull) {
 			continue
 		}
@@ -231,6 +218,7 @@ func GenerateReplaceDMLWithAnnotation(source, target map[string]*dbutil.ColumnDa
 	return fmt.Sprintf("-- diff column\t|\t%s\n-- source data\t|\t%s\n-- target data\t|\t%s\nREPLACE INTO %s(%s) VALUES (%s);", strings.Join(colNames, "\t|\t"), strings.Join(values1, "\t|\t"), strings.Join(values2, "\t|\t"), dbutil.TableName(schema, table.Name.O), strings.Join(sqlColNames, ","), strings.Join(sqlValues, ","))
 }
 
+// GerateReplaceDMLWithAnnotation returns the delete SQL for the specific row.
 func GenerateDeleteDML(data map[string]*dbutil.ColumnData, table *model.TableInfo, schema string) string {
 	kvs := make([]string, 0, len(table.Columns))
 	for _, col := range table.Columns {
@@ -253,6 +241,7 @@ func GenerateDeleteDML(data map[string]*dbutil.ColumnData, table *model.TableInf
 
 }
 
+// needQuotes determines whether an escape character is required for `'`.
 func needQuotes(tp byte) bool {
 	return !(dbutil.IsNumberType(tp) || dbutil.IsFloatType(tp))
 }
@@ -261,7 +250,7 @@ func needQuotes(tp byte) bool {
 // equal = true: map1 = map2
 // equal = false:
 // 		1. cmp = 0: map1 and map2 have the same orderkeycolumns, but other columns are in difference.
-//		2. cmp = -1: map1 < map2
+//		2. cmp = -1: map1 < map2 (by comparing the orderkeycolumns)
 // 		3. cmp = 1: map1 > map2
 func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns []*model.ColumnInfo) (equal bool, cmp int32, err error) {
 	var (
@@ -324,6 +313,7 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 		return
 	}
 
+	// Not Equal. Compare orderkeycolumns.
 	for _, col := range orderKeyCols {
 		if data1, ok = map1[col.Name.O]; !ok {
 			err = errors.Errorf("don't have key %s", col.Name.O)
@@ -383,6 +373,7 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 	return
 }
 
+// rowtoString covert rowData to String
 func rowToString(row map[string]*dbutil.ColumnData) string {
 	var s strings.Builder
 	s.WriteString("{ ")
@@ -398,6 +389,7 @@ func rowToString(row map[string]*dbutil.ColumnData) string {
 	return s.String()
 }
 
+// MinLenInSlices returns the smallest length among slices.
 func MinLenInSlices(slices [][]string) int {
 	min := 0
 	for i, slice := range slices {
@@ -409,7 +401,7 @@ func MinLenInSlices(slices [][]string) int {
 	return min
 }
 
-// SliceToMap converts slice to map
+// SliceToMap converts Slice to Set
 func SliceToMap(slice []string) map[string]interface{} {
 	sMap := make(map[string]interface{})
 	for _, str := range slice {
@@ -418,6 +410,7 @@ func SliceToMap(slice []string) map[string]interface{} {
 	return sMap
 }
 
+// GetApproximateMidBySize return the `count`th row in rows that meet the `limitRange`.
 func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table string, tbInfo *model.TableInfo, limitRange string, args []interface{}, count int64) (map[string]string, error) {
 	/*
 		example
@@ -465,6 +458,7 @@ func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table stri
 	return columnValues, nil
 }
 
+// GetTableSize loads the TableSize from `information_schema`.`tables`.
 func GetTableSize(ctx context.Context, db *sql.DB, schemaName, tableName string) (int64, error) {
 	query := fmt.Sprintf("select sum(data_length) as data from `information_schema`.`tables` where table_schema='%s' and table_name='%s' GROUP BY data_length;", schemaName, tableName)
 	var dataSize sql.NullInt64
@@ -475,7 +469,7 @@ func GetTableSize(ctx context.Context, db *sql.DB, schemaName, tableName string)
 	return dataSize.Int64, nil
 }
 
-// GetCountAndCRC32Checksum returns checksum code of some data by given condition
+// GetCountAndCRC32Checksum returns checksum code and count of some data by given condition
 func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, int64, error) {
 	/*
 		calculate CRC32 checksum and count example:
@@ -523,11 +517,15 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 	return count.Int64, checksum.Int64, nil
 }
 
+// IgnoreColumns removes index from `tableInfo.Indices`, whose columns appear in `columns`.
+// And removes column from `tableInfo.Columns`, which appears in `columns`.
+// And initializes the offset of the column of each index to new `tableInfo.Columns`.
 func IgnoreColumns(tableInfo *model.TableInfo, columns []string) *model.TableInfo {
 	if len(columns) == 0 {
 		return tableInfo
 	}
 
+	// Remove all index from `tableInfo.Indices`, whose columns are involved of any column in `columns`.
 	removeColMap := SliceToMap(columns)
 	for i := 0; i < len(tableInfo.Indices); i++ {
 		index := tableInfo.Indices[i]
@@ -541,6 +539,7 @@ func IgnoreColumns(tableInfo *model.TableInfo, columns []string) *model.TableInf
 		}
 	}
 
+	// Remove column from `tableInfo.Columns`, which appears in `columns`.
 	for j := 0; j < len(tableInfo.Columns); j++ {
 		col := tableInfo.Columns[j]
 		if _, ok := removeColMap[col.Name.O]; ok {
@@ -556,6 +555,7 @@ func IgnoreColumns(tableInfo *model.TableInfo, columns []string) *model.TableInf
 		colMap[col.Name.O] = i
 	}
 
+	// Initialize the offset of the column of each index to new `tableInfo.Columns`.
 	for _, index := range tableInfo.Indices {
 		for _, col := range index.Columns {
 			offset, ok := colMap[col.Name.O]
@@ -570,10 +570,14 @@ func IgnoreColumns(tableInfo *model.TableInfo, columns []string) *model.TableInf
 	return tableInfo
 }
 
+// UniqueID returns `schema:table`
 func UniqueID(schema string, table string) string {
 	return schema + ":" + table
 }
 
+// GetBetterIndex returns the index more dinstict.
+// If the index is primary key or unique, it can be return directly.
+// Otherwise select the index which has higher value of `COUNT(DISTINCT a)/COUNT(*)`.
 func GetBetterIndex(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo) ([]*model.IndexInfo, error) {
 	// SELECT COUNT(DISTINCT city)/COUNT(*) FROM `schema`.`table`;
 	indices := dbutil.FindAllIndex(tableInfo)
@@ -598,6 +602,7 @@ func GetBetterIndex(ctx context.Context, db *sql.DB, schema, table string, table
 	return indices, nil
 }
 
+// GetSelectivity returns the value of `COUNT(DISTINCT col)/COUNT(1)` SQL.
 func GetSelectivity(ctx context.Context, db *sql.DB, schemaName, tableName, columnName string, tbInfo *model.TableInfo) (float64, error) {
 	query := fmt.Sprintf("SELECT COUNT(DISTINCT %s)/COUNT(1) as SEL FROM %s;", dbutil.ColumnName(columnName), dbutil.TableName(schemaName, tableName))
 	var selectivity sql.NullFloat64
@@ -615,6 +620,7 @@ func GetSelectivity(ctx context.Context, db *sql.DB, schemaName, tableName, colu
 	return selectivity.Float64, nil
 }
 
+// CalculateChunkSize returns chunkSize according to table rows count.
 func CalculateChunkSize(rowCount int64) int64 {
 	// we assume chunkSize is 50000 for any cluster.
 	chunkSize := int64(50000)
@@ -625,15 +631,18 @@ func CalculateChunkSize(rowCount int64) int64 {
 	return chunkSize
 }
 
+// AnalyzeTable do 'ANALYZE TABLE `table`' SQL.
 func AnalyzeTable(ctx context.Context, db *sql.DB, tableName string) error {
 	_, err := db.ExecContext(ctx, "ANALYZE TABLE "+tableName)
 	return err
 }
 
+// GetSQLFileName returns filename of fix-SQL identified by chunk's `Index`.
 func GetSQLFileName(index *chunk.ChunkID) string {
 	return fmt.Sprintf("%d:%d-%d:%d", index.TableIndex, index.BucketIndexLeft, index.BucketIndexRight, index.ChunkIndex)
 }
 
+// GetChunkIDFromSQLFileName convert the filename to chunk's `Index`.
 func GetChunkIDFromSQLFileName(fileIDStr string) (int, int, int, int, error) {
 	ids := strings.Split(fileIDStr, ":")
 	tableIndex, err := strconv.Atoi(ids[0])

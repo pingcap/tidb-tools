@@ -227,8 +227,8 @@ func (lmt *LimitIterator) produceChunks(ctx context.Context, bucketID int) {
 	}
 }
 
-func (lmt *LimitIterator) getLimitRow(ctx context.Context, query string, args []string) (map[string]*dbutil.ColumnData, error) {
-	rows, err := lmt.dbConn.QueryContext(ctx, query, utils.StringsToInterfaces(args)...)
+func (lmt *LimitIterator) getLimitRow(ctx context.Context, query string, args []interface{}) (map[string]*dbutil.ColumnData, error) {
+	rows, err := lmt.dbConn.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
