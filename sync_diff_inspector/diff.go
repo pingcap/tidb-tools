@@ -150,14 +150,16 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 	df.workSource = df.pickSource(ctx)
 	df.FixSQLDir = cfg.Task.FixDir
 	df.CheckpointDir = cfg.Task.CheckpointDir
+
+	sourceConfigs, targetConfig, err := getConfigsForReport(cfg)
+	df.report.Init(df.downstream.GetTables(), sourceConfigs, targetConfig)
+
 	if err := df.initCheckpoint(); err != nil {
 		return errors.Trace(err)
 	}
-	sourceConfigs, targetConfig, err := getConfigsForReport(cfg)
 	if err != nil {
 		return errors.Trace(err)
 	}
-	df.report.Init(df.downstream.GetTables(), sourceConfigs, targetConfig)
 	return nil
 }
 
@@ -752,7 +754,7 @@ func (df *Diff) removeSQLFiles(checkPointId *chunk.ChunkID) error {
 		relPath, _ := filepath.Rel(df.FixSQLDir, path)
 		oldPath := filepath.Join(df.FixSQLDir, relPath)
 		newPath := filepath.Join(folderPath, relPath)
-		if strings.HasPrefix(oldPath, ".trash") {
+		if strings.Contains(oldPath, ".trash") {
 			return nil
 		}
 
