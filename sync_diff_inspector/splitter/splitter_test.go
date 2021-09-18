@@ -827,7 +827,7 @@ func (s *testSplitterSuite) TestRangeInfo(c *C) {
 	rangeInfo.ChunkRange.Index.TableIndex = 1
 	chunkRange := rangeInfo.GetChunk()
 	c.Assert(chunkRange.Where, Equals, "((((`a` COLLATE '[23]' > ?)) AND ((`a` COLLATE '[23]' <= ?))) AND [sdg])")
-	c.Assert(chunkRange.Args, DeepEquals, []string{"1", "2"})
+	c.Assert(chunkRange.Args, DeepEquals, []interface{}{"1", "2"})
 
 	c.Assert(rangeInfo.GetTableIndex(), Equals, 1)
 
@@ -835,7 +835,7 @@ func (s *testSplitterSuite) TestRangeInfo(c *C) {
 
 	chunkRange = rangeInfo2.GetChunk()
 	c.Assert(chunkRange.Where, Equals, "((((`a` COLLATE '[23]' > ?)) AND ((`a` COLLATE '[23]' <= ?))) AND [sdg])")
-	c.Assert(chunkRange.Args, DeepEquals, []string{"1", "2"})
+	c.Assert(chunkRange.Args, DeepEquals, []interface{}{"1", "2"})
 
 	c.Assert(rangeInfo2.GetTableIndex(), Equals, 1)
 
