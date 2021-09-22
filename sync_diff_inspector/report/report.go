@@ -59,7 +59,7 @@ type TableResult struct {
 	Table       string                  `json:"table"`
 	StructEqual bool                    `json:"struct-equal"`
 	DataEqual   bool                    `json:"data-equal"`
-	MeetError   error                   `json:"meet-error"`
+	MeetError   error                   `json:"-"`
 	ChunkMap    map[string]*ChunkResult `json:"chunk-result"` // `ChunkMap` stores the `ChunkResult` of each chunk of the table
 }
 
