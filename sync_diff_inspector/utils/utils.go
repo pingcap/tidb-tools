@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/olekukonko/tablewriter"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/parser/model"
@@ -169,9 +170,11 @@ func GenerateReplaceDML(data map[string]*dbutil.ColumnData, table *model.TableIn
 func GenerateReplaceDMLWithAnnotation(source, target map[string]*dbutil.ColumnData, table *model.TableInfo, schema string) string {
 	sqlColNames := make([]string, 0, len(table.Columns))
 	sqlValues := make([]string, 0, len(table.Columns))
-	colNames := make([]string, 0, len(table.Columns))
-	values1 := make([]string, 0, len(table.Columns))
-	values2 := make([]string, 0, len(table.Columns))
+	colNames := append(make([]string, 0, len(table.Columns)+1), "diff columns")
+	values1 := append(make([]string, 0, len(table.Columns)+1), "source data")
+	values2 := append(make([]string, 0, len(table.Columns)+1), "target data")
+	tableString := &strings.Builder{}
+	diffTable := tablewriter.NewWriter(tableString)
 	for _, col := range table.Columns {
 		if col.IsGenerated() {
 			continue
@@ -215,7 +218,18 @@ func GenerateReplaceDMLWithAnnotation(source, target map[string]*dbutil.ColumnDa
 
 	}
 
-	return fmt.Sprintf("-- diff column\t|\t%s\n-- source data\t|\t%s\n-- target data\t|\t%s\nREPLACE INTO %s(%s) VALUES (%s);", strings.Join(colNames, "\t|\t"), strings.Join(values1, "\t|\t"), strings.Join(values2, "\t|\t"), dbutil.TableName(schema, table.Name.O), strings.Join(sqlColNames, ","), strings.Join(sqlValues, ","))
+	diffTable.SetRowLine(true)
+	diffTable.SetHeader(colNames)
+	diffTable.Append(values1)
+	diffTable.Append(values2)
+	diffTable.SetCenterSeparator("╋")
+	diffTable.SetColumnSeparator("╏")
+	diffTable.SetRowSeparator("╍")
+	diffTable.SetAlignment(tablewriter.ALIGN_LEFT)
+	diffTable.SetBorder(false)
+	diffTable.Render()
+
+	return fmt.Sprintf("/*\n%s*/\nREPLACE INTO %s(%s) VALUES (%s);", tableString.String(), dbutil.TableName(schema, table.Name.O), strings.Join(sqlColNames, ","), strings.Join(sqlValues, ","))
 }
 
 // GerateReplaceDMLWithAnnotation returns the delete SQL for the specific row.

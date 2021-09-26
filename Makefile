@@ -1,4 +1,4 @@
-.PHONY: build importer dump_region sync_diff_inspector ddl_checker test check deps version
+.PHONY: build importer dump_region sync_diff_inspector ddl_checker test check deps version tools
 
 # Ensure GOPATH is set before running build process.
 ifeq "$(GOPATH)" ""
@@ -104,5 +104,3 @@ clean: prepare tidy finish
 finish:
 	cp go.mod go.mod1
 	cp go.sum go.sum1
-
-.PHONY: tools

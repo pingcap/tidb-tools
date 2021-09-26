@@ -144,10 +144,16 @@ func (*testUtilsSuite) TestBasicTableUtilOperation(c *C) {
 	columns := tableInfo.Columns
 
 	c.Assert(GenerateReplaceDML(data1, tableInfo, "schema"), Equals, "REPLACE INTO `schema`.`test`(`a`,`b`,`c`,`d`) VALUES (1,'a',1.22,'sdf');")
-	c.Assert(GenerateReplaceDMLWithAnnotation(data1, data2, tableInfo, "schema"), Equals, "-- diff column\t|\t`b`\t|\t`c`\n"+
-		"-- source data\t|\t'a'\t|\t1.22\n"+
-		"-- target data\t|\t'b'\t|\t2.22\n"+
-		"REPLACE INTO `schema`.`test`(`a`,`b`,`c`,`d`) VALUES (1,'a',1.22,'sdf');")
+	c.Assert(GenerateReplaceDMLWithAnnotation(data1, data2, tableInfo, "schema"), Equals,
+		"/*\n"+
+			"  DIFF COLUMNS ╏ `B` ╏ `C`   \n"+
+			"╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╍╍\n"+
+			"  source data  ╏ 'a' ╏ 1.22  \n"+
+			"╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╍╍\n"+
+			"  target data  ╏ 'b' ╏ 2.22  \n"+
+			"╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╍╍\n"+
+			"*/\n"+
+			"REPLACE INTO `schema`.`test`(`a`,`b`,`c`,`d`) VALUES (1,'a',1.22,'sdf');")
 	c.Assert(GenerateDeleteDML(data1, tableInfo, "schema"), Equals, "DELETE FROM `schema`.`test` WHERE `a` = 1 AND `b` = 'a' AND `c` = 1.22 AND `d` = 'sdf';")
 
 	// same
