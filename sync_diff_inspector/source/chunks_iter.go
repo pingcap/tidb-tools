@@ -67,6 +67,7 @@ func (t *ChunksIterator) produceChunks(ctx context.Context, startRange *splitter
 				t.errCh <- errors.Trace(err)
 				return
 			}
+			defer chunkIter.Close()
 			for {
 				c, err := chunkIter.Next()
 				if err != nil {
@@ -100,6 +101,7 @@ func (t *ChunksIterator) produceChunks(ctx context.Context, startRange *splitter
 				t.errCh <- errors.Trace(err)
 				return
 			}
+			defer chunkIter.Close()
 			for {
 				c, err := chunkIter.Next()
 				if err != nil {
