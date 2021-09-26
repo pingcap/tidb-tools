@@ -93,7 +93,7 @@ target-table = "t" # 目标表名
 
     target-instance = ["tidb"]
 
-    # tables need to check.
+    # tables need to check. *Include `schema` and `table`. Use `.` to split*
 	target-check-tables = ["schema*.table*", "!c.*", "test2.t2"]
 
 	# extra table config
