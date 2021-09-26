@@ -435,7 +435,6 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 	dml.node.State = state
 	dml.rowCount = count
 	id := rangeInfo.ChunkRange.Index
-	df.report.SetRowsCnt(schema, table, dml.rowCount, id)
 	df.report.SetTableDataCheckResult(schema, table, isEqual, dml.rowAdd, dml.rowDelete, id)
 	df.sqlCh <- dml
 	return isEqual
