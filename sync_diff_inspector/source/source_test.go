@@ -238,10 +238,16 @@ func (s *testSourceSuite) TestTiDBSource(c *C) {
 	}
 	c.Assert(tidb.GenerateFixSQL(Insert, firstRow, secondRow, 0), Equals, "REPLACE INTO `source_test`.`test1`(`a`,`b`,`c`) VALUES (1,'a',1.2);")
 	c.Assert(tidb.GenerateFixSQL(Delete, firstRow, secondRow, 0), Equals, "DELETE FROM `source_test`.`test1` WHERE `a` = 2 AND `b` = 'b' AND `c` = 3.4;")
-	c.Assert(tidb.GenerateFixSQL(Replace, firstRow, secondRow, 0), Equals, "-- diff column\t|\t`a`\t|\t`b`\t|\t`c`\n"+
-		"-- source data\t|\t1\t|\t'a'\t|\t1.2\n"+
-		"-- target data\t|\t2\t|\t'b'\t|\t3.4\n"+
-		"REPLACE INTO `source_test`.`test1`(`a`,`b`,`c`) VALUES (1,'a',1.2);")
+	c.Assert(tidb.GenerateFixSQL(Replace, firstRow, secondRow, 0), Equals,
+		"/*\n"+
+			"  DIFF COLUMNS ╏ `A` ╏ `B` ╏ `C`  \n"+
+			"╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╍\n"+
+			"  source data  ╏ 1   ╏ 'a' ╏ 1.2  \n"+
+			"╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╍\n"+
+			"  target data  ╏ 2   ╏ 'b' ╏ 3.4  \n"+
+			"╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╍\n"+
+			"*/\n"+
+			"REPLACE INTO `source_test`.`test1`(`a`,`b`,`c`) VALUES (1,'a',1.2);")
 
 	rowIter.Close()
 
@@ -470,10 +476,16 @@ func (s *testSourceSuite) TestMysqlRouter(c *C) {
 	c.Assert(secondRow, NotNil)
 	c.Assert(mysql.GenerateFixSQL(Insert, firstRow, secondRow, 0), Equals, "REPLACE INTO `source_test`.`test1`(`a`,`b`,`c`) VALUES (1,'a',1.2);")
 	c.Assert(mysql.GenerateFixSQL(Delete, firstRow, secondRow, 0), Equals, "DELETE FROM `source_test`.`test1` WHERE `a` = 2 AND `b` = 'b' AND `c` = 3.4;")
-	c.Assert(mysql.GenerateFixSQL(Replace, firstRow, secondRow, 0), Equals, "-- diff column\t|\t`a`\t|\t`b`\t|\t`c`\n"+
-		"-- source data\t|\t1\t|\t'a'\t|\t1.2\n"+
-		"-- target data\t|\t2\t|\t'b'\t|\t3.4\n"+
-		"REPLACE INTO `source_test`.`test1`(`a`,`b`,`c`) VALUES (1,'a',1.2);")
+	c.Assert(mysql.GenerateFixSQL(Replace, firstRow, secondRow, 0), Equals,
+		"/*\n"+
+			"  DIFF COLUMNS ╏ `A` ╏ `B` ╏ `C`  \n"+
+			"╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╍\n"+
+			"  source data  ╏ 1   ╏ 'a' ╏ 1.2  \n"+
+			"╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╍\n"+
+			"  target data  ╏ 2   ╏ 'b' ╏ 3.4  \n"+
+			"╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╍\n"+
+			"*/\n"+
+			"REPLACE INTO `source_test`.`test1`(`a`,`b`,`c`) VALUES (1,'a',1.2);")
 	rowIter.Close()
 
 	mysql.Close()

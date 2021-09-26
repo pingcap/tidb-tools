@@ -164,9 +164,9 @@ func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, che
 }
 
 func initDBConn(ctx context.Context, cfg *config.Config) error {
-	// we had one producer and `cfg.CheckThreadCount` consumer to use db connections.
-	// so the connection count need to be cfg.CheckThreadCount + 1.
-	targetConn, err := common.CreateDB(ctx, cfg.Task.TargetInstance.ToDBConfig(), nil, cfg.CheckThreadCount+1)
+	// we had 3 producers and `cfg.CheckThreadCount` consumer to use db connections.
+	// so the connection count need to be cfg.CheckThreadCount + 3.
+	targetConn, err := common.CreateDB(ctx, cfg.Task.TargetInstance.ToDBConfig(), nil, cfg.CheckThreadCount+3)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -233,6 +233,7 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 				log.Error("duplicate config for one table", zap.String("table", dbutil.TableName(tables.OriginSchema, tables.OriginTable)))
 				continue
 			}
+			// Initialize all the tables that matches the `target-check-tables`[config.toml] and appears in downstream.
 			cfgTables[tables.OriginSchema][tables.OriginTable] = &config.TableConfig{
 				Schema:          tables.OriginSchema,
 				Table:           tables.OriginTable,
@@ -242,12 +243,14 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 		}
 	}
 
+	// Reset fields of some tables of `cfgTables` according to `table-configs`[config.toml].
+	// The table in `table-configs`[config.toml] should exist in both `target-check-tables`[config.toml] and tables from downstream.
 	for _, table := range cfg.Task.TargetTableConfigs {
 		if _, ok := cfgTables[table.Schema]; !ok {
-			return nil, errors.NotFoundf("schema %s in check tables", table.Schema)
+			return nil, errors.NotFoundf("schema `%s` in check tables", table.Schema)
 		}
 		if _, ok := cfgTables[table.Schema][table.Table]; !ok {
-			return nil, errors.NotFoundf("table %s.%s in check tables", table.Schema, table.Table)
+			return nil, errors.NotFoundf("table `%s.%s` in check tables", table.Schema, table.Table)
 		}
 
 		if table.Range != "" {
