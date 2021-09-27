@@ -97,7 +97,7 @@ func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 		ignoreStats:       cfg.IgnoreStats,
 		sqlCh:             make(chan *ChunkDML, splitter.DefaultChannelBuffer),
 		cp:                new(checkpoints.Checkpoint),
-		report:            report.NewReport(),
+		report:            report.NewReport(&cfg.Task),
 	}
 	if err = diff.init(ctx, cfg); err != nil {
 		diff.Close()
@@ -107,15 +107,15 @@ func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 	return diff, nil
 }
 
-func (df *Diff) PrintSummary(ctx context.Context, taskCfg *config.TaskConfig) bool {
+func (df *Diff) PrintSummary(ctx context.Context) bool {
 	// Stop updating progress bar so that summary won't be flushed.
 	progress.Close()
 	df.report.CalculateTotalSize(ctx, df.downstream.GetDB())
-	err := df.report.CommitSummary(taskCfg)
+	err := df.report.CommitSummary()
 	if err != nil {
 		log.Fatal("failed to commit report", zap.Error(err))
 	}
-	df.report.Print("sync_diff.log", os.Stdout)
+	df.report.Print(os.Stdout)
 	return df.report.Result == report.Pass
 }
 
@@ -406,6 +406,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 	isEqual, count, err := df.compareChecksumAndGetCount(ctx, rangeInfo)
 	if err != nil {
 		df.report.SetTableMeetError(schema, table, err)
+		log.Info("checksumErr", zap.Error(err))
 	}
 	var state string
 	dml := &ChunkDML{}
