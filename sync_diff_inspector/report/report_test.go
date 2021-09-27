@@ -103,7 +103,6 @@ func (s *testReportSuite) TestReport(c *C) {
 	report.SetTableStructCheckResult("test", "tbl", true)
 	report.SetTableDataCheckResult("test", "tbl", true, 100, 200, &chunk.ChunkID{1, 1, 1, 1, 2})
 	report.SetTableMeetError("test", "tbl", errors.New("eeee"))
-	report.SetRowsCnt("test", "tbl", 10000, &chunk.ChunkID{1, 1, 2, 1, 2})
 
 	new_report := NewReport()
 	new_report.LoadReport(report)
@@ -114,7 +113,6 @@ func (s *testReportSuite) TestReport(c *C) {
 	c.Assert(result.MeetError.Error(), Equals, "eeee")
 	c.Assert(result.DataEqual, IsTrue)
 	c.Assert(result.StructEqual, IsTrue)
-	c.Assert(result.ChunkMap["1:1-2:1:2"].RowsCnt, Equals, int64(10000))
 
 	c.Assert(new_report.getSortedTables(), DeepEquals, []string{"`atest`.`atbl`", "`test`.`tbl`"})
 	c.Assert(new_report.getDiffRows(), DeepEquals, [][]string{})
@@ -360,7 +358,6 @@ func (s *testReportSuite) TestGetSnapshot(c *C) {
 			c.Assert(sid.Compare(&chunk.ChunkID{0, 0, 0, 1, 10}), LessEqual, 0)
 			r2 := chunkMap2[id]
 			c.Assert(r1.RowsAdd, Equals, r2.RowsAdd)
-			c.Assert(r1.RowsCnt, Equals, r2.RowsCnt)
 			c.Assert(r1.RowsDelete, Equals, r2.RowsDelete)
 		}
 
@@ -426,15 +423,12 @@ func (s *testReportSuite) TestCommitSummary(c *C) {
 
 	report.SetTableStructCheckResult("test", "tbl", true)
 	report.SetTableDataCheckResult("test", "tbl", true, 100, 200, &chunk.ChunkID{0, 0, 0, 1, 10})
-	report.SetRowsCnt("test", "tbl", 10000, &chunk.ChunkID{0, 0, 0, 1, 10})
 
 	report.SetTableStructCheckResult("atest", "tbl", true)
 	report.SetTableDataCheckResult("atest", "tbl", false, 100, 200, &chunk.ChunkID{0, 0, 0, 2, 10})
-	report.SetRowsCnt("atest", "tbl", 10000, &chunk.ChunkID{0, 0, 0, 2, 10})
 
 	report.SetTableStructCheckResult("xtest", "tbl", false)
 	report.SetTableDataCheckResult("xtest", "tbl", false, 100, 200, &chunk.ChunkID{0, 0, 0, 3, 10})
-	report.SetRowsCnt("xtest", "tbl", 10000, &chunk.ChunkID{0, 0, 0, 3, 10})
 
 	outputDir := "./"
 	err = report.CommitSummary(&config.TaskConfig{OutputDir: outputDir})

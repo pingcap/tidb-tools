@@ -65,9 +65,8 @@ type TableResult struct {
 
 // ChunkResult save the necessarily information to provide summary information
 type ChunkResult struct {
-	RowsAdd    int   `json:"rows-add"`    // `RowAdd` is the number of rows needed to add
-	RowsDelete int   `json:"rows-delete"` // `RowDelete` is the number of rows needed to delete
-	RowsCnt    int64 `json:"rows-count"`  // `RowsCnt` is the number of rows of the chunk
+	RowsAdd    int `json:"rows-add"`    // `RowAdd` is the number of rows needed to add
+	RowsDelete int `json:"rows-delete"` // `RowDelete` is the number of rows needed to delete
 }
 
 // Report saves the check results.
@@ -292,7 +291,6 @@ func (r *Report) SetTableDataCheckResult(schema, table string, equal bool, rowsA
 			result.ChunkMap[id.ToString()] = &ChunkResult{
 				RowsAdd:    0,
 				RowsDelete: 0,
-				RowsCnt:    0,
 			}
 		}
 		result.ChunkMap[id.ToString()].RowsAdd += rowsAdd
@@ -368,19 +366,4 @@ func (r *Report) GetSnapshot(chunkID *chunk.ChunkID, schema, table string) (*Rep
 		Duration:     duration,
 		TotalSize:    totalSize,
 	}, nil
-}
-
-// SetRowCnt set the `RowCnt` of the `schema`.`table`
-func (r *Report) SetRowsCnt(schema, table string, cnt int64, id *chunk.ChunkID) {
-	r.Lock()
-	defer r.Unlock()
-	result := r.TableResults[schema][table]
-	if _, ok := result.ChunkMap[id.ToString()]; !ok {
-		result.ChunkMap[id.ToString()] = &ChunkResult{
-			RowsAdd:    0,
-			RowsDelete: 0,
-			RowsCnt:    0,
-		}
-	}
-	result.ChunkMap[id.ToString()].RowsCnt += cnt
 }
