@@ -26,6 +26,7 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
+	sync_utils "github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"go.uber.org/zap"
 )
 
@@ -58,6 +59,7 @@ func main() {
 	log.ReplaceGlobals(lg, p)
 
 	utils.PrintInfo("sync_diff_inspector")
+	err = startPProf(cfg)
 
 	// Initial config
 	cfg.Init()
@@ -103,4 +105,13 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 		}
 	}
 	return d.PrintSummary(ctx, &cfg.Task)
+}
+
+func startPProf(cfg *config.Config) error {
+	// Initialize the pprof server.
+	if cfg.StatusAddr != "" {
+		return sync_utils.StartPProfListener(cfg.StatusAddr)
+	}
+	sync_utils.StartDynamicPProfListener()
+	return nil
 }
