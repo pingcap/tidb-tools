@@ -215,18 +215,18 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 			return
 		}
 		// init values for the next bucket
-		firstBucket = c.BucketID + 1
+		firstBucket = c.Index.BucketIndexRight + 1
 		// Note: Since this chunk is not the last one,
 		//       its bucketID is less than len(s.buckets)
-		if c.BucketID >= len(s.buckets) {
+		if c.Index.BucketIndexRight >= len(s.buckets) {
 			select {
 			case <-ctx.Done():
 			case s.errCh <- errors.New("Wrong Bucket: Bucket index of the checkpoint node is larger than buckets' size"):
 			}
 			return
 		}
-		latestCount = s.buckets[c.BucketID].Count
-		nextUpperValues, err := dbutil.AnalyzeValuesFromBuckets(s.buckets[c.BucketID].UpperBound, s.indexColumns)
+		latestCount = s.buckets[c.Index.BucketIndexRight].Count
+		nextUpperValues, err := dbutil.AnalyzeValuesFromBuckets(s.buckets[c.Index.BucketIndexRight].UpperBound, s.indexColumns)
 		if err != nil {
 			select {
 			case <-ctx.Done():

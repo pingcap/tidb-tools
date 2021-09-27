@@ -152,7 +152,6 @@ type Range struct {
 	Args  []interface{} `json:"args"`
 
 	columnOffset map[string]int
-	BucketID     int `json:"bucket-id"`
 }
 
 func (r *Range) IsFirstChunkForBucket() bool {
@@ -378,7 +377,6 @@ func (c *Range) Clone() *Range {
 		newChunk.columnOffset[i] = v
 	}
 	newChunk.Index = c.Index.Copy()
-	newChunk.BucketID = c.BucketID
 	newChunk.IsFirst = c.IsFirst
 	newChunk.IsLast = c.IsLast
 	return newChunk
@@ -400,7 +398,6 @@ func InitChunks(chunks []*Range, t ChunkType, firstBucketID, lastBucketID int, i
 		conditions, args := chunk.ToString(collation)
 		chunk.Where = fmt.Sprintf("((%s) AND %s)", conditions, limits)
 		chunk.Args = args
-		chunk.BucketID = lastBucketID
 		chunk.Index = &ChunkID{
 			BucketIndexLeft:  firstBucketID,
 			BucketIndexRight: lastBucketID,
@@ -416,7 +413,6 @@ func InitChunk(chunk *Range, t ChunkType, firstBucketID, lastBucketID int, colla
 	conditions, args := chunk.ToString(collation)
 	chunk.Where = fmt.Sprintf("((%s) AND %s)", conditions, limits)
 	chunk.Args = args
-	chunk.BucketID = lastBucketID
 	chunk.Index = &ChunkID{
 		BucketIndexLeft:  firstBucketID,
 		BucketIndexRight: lastBucketID,
