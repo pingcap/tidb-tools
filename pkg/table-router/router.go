@@ -14,6 +14,7 @@
 package router
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/pingcap/errors"
@@ -23,10 +24,17 @@ import (
 // TableRule is a rule to route schema/table to target schema/table
 // pattern format refers 'pkg/table-rule-selector'
 type TableRule struct {
-	SchemaPattern string `json:"schema-pattern" toml:"schema-pattern" yaml:"schema-pattern"`
-	TablePattern  string `json:"table-pattern" toml:"table-pattern" yaml:"table-pattern"`
-	TargetSchema  string `json:"target-schema" toml:"target-schema" yaml:"target-schema"`
-	TargetTable   string `json:"target-table" toml:"target-table" yaml:"target-table"`
+	SchemaPattern       string               `json:"schema-pattern" toml:"schema-pattern" yaml:"schema-pattern"`
+	TablePattern        string               `json:"table-pattern" toml:"table-pattern" yaml:"table-pattern"`
+	TargetSchema        string               `json:"target-schema" toml:"target-schema" yaml:"target-schema"`
+	TargetTable         string               `json:"target-table" toml:"target-table" yaml:"target-table"`
+	TableTransferColumn *TableTransferColumn `json:"table-transfer-column" toml:"table-transfer-column" yaml:"table-transfer-column"`
+}
+
+// TableTransferColumn is a rule that converts table names to column values
+type TableTransferColumn struct {
+	TargetColumn string `json:"target-column" toml:"target-column" yaml:"target-column"`
+	TableRegular string `json:"table-regular" toml:"table-regular" yaml:"table-regular"`
 }
 
 // Valid checks validity of rule
@@ -39,6 +47,14 @@ func (t *TableRule) Valid() error {
 		return errors.New("target schema of table route rule should not be empty")
 	}
 
+	if t.TableTransferColumn != nil {
+		if _, err := regexp.Compile(t.TableTransferColumn.TableRegular); err != nil {
+			return errors.New("table transfer column regular illegal")
+		}
+		if len(t.TableTransferColumn.TargetColumn) == 0 {
+			return errors.New("the column name of the table transfer column cannot be empty")
+		}
+	}
 	return nil
 }
 

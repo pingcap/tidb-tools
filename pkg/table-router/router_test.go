@@ -30,11 +30,11 @@ type testRouterSuite struct{}
 
 func (t *testRouterSuite) TestRoute(c *C) {
 	rules := []*TableRule{
-		{"Test_1_*", "abc*", "t1", "abc"},
-		{"test_1_*", "test*", "t2", "test"},
-		{"test_1_*", "", "test", ""},
-		{"test_2_*", "abc*", "t1", "abc"},
-		{"test_2_*", "test*", "t2", "test"},
+		{SchemaPattern: "Test_1_*", TablePattern: "abc*", TargetSchema: "t1", TargetTable: "abc"},
+		{SchemaPattern: "test_1_*", TablePattern: "test*", TargetSchema: "t2", TargetTable: "test"},
+		{SchemaPattern: "test_1_*", TablePattern: "", TargetSchema: "test", TargetTable: ""},
+		{SchemaPattern: "test_2_*", TablePattern: "abc*", TargetSchema: "t1", TargetTable: "abc"},
+		{SchemaPattern: "test_2_*", TablePattern: "test*", TargetSchema: "t2", TargetTable: "test"},
 	}
 
 	cases := [][]string{
@@ -92,12 +92,12 @@ func (t *testRouterSuite) TestRoute(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(schema, Equals, "test_3_a")
 	// test multiple schema level rules
-	err = router.AddRule(&TableRule{"test_*", "", "error", ""})
+	err = router.AddRule(&TableRule{SchemaPattern: "test_*", TablePattern: "", TargetSchema: "error", TargetTable: ""})
 	c.Assert(err, IsNil)
 	_, _, err = router.Route("test_1_a", "")
 	c.Assert(err, NotNil)
 	// test multiple table level rules
-	err = router.AddRule(&TableRule{"test_1_*", "tes*", "error", "error"})
+	err = router.AddRule(&TableRule{SchemaPattern: "test_1_*", TablePattern: "tes*", TargetSchema: "error", TargetTable: "error"})
 	c.Assert(err, IsNil)
 	_, _, err = router.Route("test_1_a", "test")
 	c.Assert(err, NotNil)
@@ -121,11 +121,11 @@ func (t *testRouterSuite) TestRoute(c *C) {
 func (t *testRouterSuite) TestCaseSensitive(c *C) {
 	// we test case insensitive in TestRoute
 	rules := []*TableRule{
-		{"Test_1_*", "abc*", "t1", "abc"},
-		{"test_1_*", "test*", "t2", "test"},
-		{"test_1_*", "", "test", ""},
-		{"test_2_*", "abc*", "t1", "abc"},
-		{"test_2_*", "test*", "t2", "test"},
+		{SchemaPattern: "Test_1_*", TablePattern: "abc*", TargetSchema: "t1", TargetTable: "abc"},
+		{SchemaPattern: "test_1_*", TablePattern: "test*", TargetSchema: "t2", TargetTable: "test"},
+		{SchemaPattern: "test_1_*", TablePattern: "", TargetSchema: "test", TargetTable: ""},
+		{SchemaPattern: "test_2_*", TablePattern: "abc*", TargetSchema: "t1", TargetTable: "abc"},
+		{SchemaPattern: "test_2_*", TablePattern: "test*", TargetSchema: "t2", TargetTable: "test"},
 	}
 
 	cases := [][]string{
