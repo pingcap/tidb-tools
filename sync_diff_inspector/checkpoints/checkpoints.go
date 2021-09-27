@@ -67,9 +67,7 @@ type Node struct {
 	State string `json:"state"` // indicate the state ("success" or "failed") of the chunk
 
 	ChunkRange *chunk.Range `json:"chunk-range"`
-	// for bucket checkpoint
-	BucketID int   `json:"bucket-id"`
-	IndexID  int64 `json:"index-id"`
+	IndexID    int64        `json:"index-id"`
 }
 
 func (n *Node) GetID() *chunk.ChunkID { return n.ChunkRange.Index }
