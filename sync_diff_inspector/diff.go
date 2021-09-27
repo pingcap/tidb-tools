@@ -406,11 +406,11 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 	isEqual, count, err := df.compareChecksumAndGetCount(ctx, rangeInfo)
 	if err != nil {
 		df.report.SetTableMeetError(schema, table, err)
-		log.Info("checksumErr", zap.Error(err))
 	}
-	var state string
+	var state string = checkpoints.SuccessState
 	dml := &ChunkDML{}
-	if !isEqual {
+	// If an error occurs during the checksum phase, skip the data compare phase.
+	if !isEqual && err == nil {
 		log.Debug("checksum failed", zap.Any("chunk id", rangeInfo.ChunkRange.Index), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTables()[rangeInfo.GetTableIndex()].Table))
 		state = checkpoints.FailedState
 		// if the chunk's checksum differ, try to do binary check
@@ -427,9 +427,8 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 		if err != nil {
 			df.report.SetTableMeetError(schema, table, err)
 		}
-	} else {
-		// update chunk success state in summary
-		state = checkpoints.SuccessState
+	} else if err != nil {
+		state = checkpoints.FailedState
 	}
 	dml.node = rangeInfo.ToNode()
 	dml.node.State = state
