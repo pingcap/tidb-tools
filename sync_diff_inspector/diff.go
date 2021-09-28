@@ -327,7 +327,10 @@ func (df *Diff) AdjustTableConfig(cfg *Config) (err error) {
 
 			//exclude those in "exclude-tables"
 			for _, excludeTable := range schemaTables.ExcludeTables {
-				matchedTables = df.RemoveMatchTable(excludeTable, matchedTables)
+				matchedTables, err = df.RemoveMatchTable(excludeTable, matchedTables)
+				if err != nil {
+					return errors.Trace(err)
+				}
 			}
 			for table := range matchedTables {
 				tables = append(tables, table)
@@ -518,7 +521,10 @@ func (df *Diff) GetMatchTable(db DBConfig, schema, table string, allTables map[s
 	tableNames := make(map[string]struct{}, 1)
 
 	if table[0] == '~' {
-		tableRegex := regexp.MustCompile(fmt.Sprintf("(?i)%s", table[1:]))
+		tableRegex, err := regexp.Compile(fmt.Sprintf("(?i)%s", table[1:]))
+		if err != nil {
+			return nil, errors.Annotatef(err, "config %s of check-tables.tables invalid, please update your configuration file", table)
+		}
 		for tableName := range allTables {
 			if tableRegex.MatchString(tableName) {
 				tableNames[tableName] = struct{}{}
@@ -536,11 +542,14 @@ func (df *Diff) GetMatchTable(db DBConfig, schema, table string, allTables map[s
 }
 
 // RemoveMatchTable removes all the matched table.
-func (df *Diff) RemoveMatchTable(table string, allTables map[string]struct{}) map[string]struct{} {
+func (df *Diff) RemoveMatchTable(table string, allTables map[string]struct{}) (map[string]struct{}, error) {
 	tableNames := allTables
 
 	if table[0] == '~' {
-		tableRegex := regexp.MustCompile(fmt.Sprintf("(?i)%s", table[1:]))
+		tableRegex, err := regexp.Compile(fmt.Sprintf("(?i)%s", table[1:]))
+		if err != nil {
+			return nil, errors.Annotatef(err, "config %s of check-tables.exclude-tables invalid, please update your configuration file", table)
+		}
 		for tableName := range tableNames {
 			if tableRegex.MatchString(tableName) {
 				delete(tableNames, tableName)
@@ -550,7 +559,7 @@ func (df *Diff) RemoveMatchTable(table string, allTables map[string]struct{}) ma
 		delete(tableNames, table)
 	}
 
-	return tableNames
+	return tableNames, nil
 }
 
 // Close closes file and database connection.
