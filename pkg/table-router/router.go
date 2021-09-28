@@ -24,17 +24,59 @@ import (
 // TableRule is a rule to route schema/table to target schema/table
 // pattern format refers 'pkg/table-rule-selector'
 type TableRule struct {
-	SchemaPattern       string               `json:"schema-pattern" toml:"schema-pattern" yaml:"schema-pattern"`
-	TablePattern        string               `json:"table-pattern" toml:"table-pattern" yaml:"table-pattern"`
-	TargetSchema        string               `json:"target-schema" toml:"target-schema" yaml:"target-schema"`
-	TargetTable         string               `json:"target-table" toml:"target-table" yaml:"target-table"`
-	TableTransferColumn *TableTransferColumn `json:"table-transfer-column" toml:"table-transfer-column" yaml:"table-transfer-column"`
+	SchemaPattern string     `json:"schema-pattern" toml:"schema-pattern" yaml:"schema-pattern"`
+	TablePattern  string     `json:"table-pattern" toml:"table-pattern" yaml:"table-pattern"`
+	TargetSchema  string     `json:"target-schema" toml:"target-schema" yaml:"target-schema"`
+	TargetTable   string     `json:"target-table" toml:"target-table" yaml:"target-table"`
+	Extractors    Extractors `json:",inline" toml:",inline" yaml:",inline"`
 }
 
-// TableTransferColumn is a rule that converts table names to column values
-type TableTransferColumn struct {
+// Extractors is a rule that extracts certain values into a column
+type Extractors struct {
+	TableExtractor  *TableExtractor  `json:"extract-table" toml:"extract-table" yaml:"extract-table"`
+	SchemaExtractor *SchemaExtractor `json:"extract-schema" toml:"extract-schema" yaml:"extract-schema"`
+	SourceExtractor *SourceExtractor `json:"extract-source" toml:"extract-source" yaml:"extract-source"`
+}
+
+// TableExtractor extracts table name to column
+type TableExtractor struct {
 	TargetColumn string `json:"target-column" toml:"target-column" yaml:"target-column"`
-	TableRegular string `json:"table-regular" toml:"table-regular" yaml:"table-regular"`
+	TableRegexp  string `json:"table-regexp" toml:"table-regexp" yaml:"table-regexp"`
+	Regexp       *regexp.Regexp
+}
+
+// SchemaExtractor extracts schema name to column
+type SchemaExtractor struct {
+	TargetColumn string `json:"target-column" toml:"target-column" yaml:"target-column"`
+	SchemaRegexp string `json:"schema-regexp" toml:"schema-regexp" yaml:"schema-regexp"`
+	Regexp       *regexp.Regexp
+}
+
+// SourceExtractor extracts source name to column
+type SourceExtractor struct {
+	TargetColumn string `json:"target-column" toml:"target-column" yaml:"target-column"`
+	SourceRegexp string `json:"source-regexp" toml:"source-regexp" yaml:"source-regexp"`
+	Regexp       *regexp.Regexp
+}
+
+// MatchVal match value via regexp
+func (t *Extractors) MatchVal(s string, ext interface{}) string {
+	var params []string
+	switch ext.(type) {
+	case *TableExtractor:
+		params = ext.(*TableExtractor).Regexp.FindStringSubmatch(s)
+	case *SchemaExtractor:
+		params = ext.(*SchemaExtractor).Regexp.FindStringSubmatch(s)
+	case *SourceExtractor:
+		params = ext.(*SourceExtractor).Regexp.FindStringSubmatch(s)
+	}
+	var transferVal string
+	for idx, param := range params {
+		if idx > 0 {
+			transferVal += param
+		}
+	}
+	return transferVal
 }
 
 // Valid checks validity of rule
@@ -47,13 +89,35 @@ func (t *TableRule) Valid() error {
 		return errors.New("target schema of table route rule should not be empty")
 	}
 
-	if t.TableTransferColumn != nil {
-		if _, err := regexp.Compile(t.TableTransferColumn.TableRegular); err != nil {
-			return errors.New("table transfer column regular illegal")
+	if t.Extractors.TableExtractor != nil {
+		re, err := regexp.Compile(t.Extractors.TableExtractor.TableRegexp)
+		if err != nil {
+			return errors.New("table extractor table regexp illegal")
 		}
-		if len(t.TableTransferColumn.TargetColumn) == 0 {
-			return errors.New("the column name of the table transfer column cannot be empty")
+		if len(t.Extractors.TableExtractor.TargetColumn) == 0 {
+			return errors.New("table extractor target column cannot be empty")
 		}
+		t.Extractors.TableExtractor.Regexp = re
+	}
+	if t.Extractors.SchemaExtractor != nil {
+		re, err := regexp.Compile(t.Extractors.SchemaExtractor.SchemaRegexp)
+		if err != nil {
+			return errors.New("schema extractor schema regexp illegal")
+		}
+		if len(t.Extractors.SchemaExtractor.TargetColumn) == 0 {
+			return errors.New("schema extractor target column cannot be empty")
+		}
+		t.Extractors.SchemaExtractor.Regexp = re
+	}
+	if t.Extractors.SourceExtractor != nil {
+		re, err := regexp.Compile(t.Extractors.SourceExtractor.SourceRegexp)
+		if err != nil {
+			return errors.New("source extractor source regexp illegal")
+		}
+		if len(t.Extractors.SourceExtractor.TargetColumn) == 0 {
+			return errors.New("source extractor target column cannot be empty")
+		}
+		t.Extractors.SourceExtractor.Regexp = re
 	}
 	return nil
 }
