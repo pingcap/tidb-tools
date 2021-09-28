@@ -118,6 +118,10 @@ func (t *testRetrySuite) TestIsRetryableError(c *C) {
 			err:       newMysqlErr(errno.ErrInfoSchemaChanged, "Information schema is changed"),
 			retryable: true,
 		},
+		{
+			err:       newMysqlErr(errno.ErrTxnRetryable, "KV error safe to retry Txn(Mvcc(TxnLockNotFound { start_ts: TimeStamp(425904341916582174), commit_ts: TimeStamp(425904342991372376)"),
+			retryable: true,
+		},
 	}
 
 	for _, cs := range cases {

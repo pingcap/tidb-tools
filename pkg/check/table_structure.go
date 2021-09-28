@@ -107,7 +107,7 @@ func (c *TablesChecker) Check(ctx context.Context) *Result {
 				return r
 			}
 
-			opts := c.checkCreateSQL(statement)
+			opts := c.checkCreateSQL(ctx, statement)
 			if len(opts) > 0 {
 				options[tableName] = opts
 				statements[tableName] = statement
@@ -148,8 +148,8 @@ func (c *TablesChecker) Name() string {
 	return "table structure compatibility check"
 }
 
-func (c *TablesChecker) checkCreateSQL(statement string) []*incompatibilityOption {
-	parser2, err := dbutil.GetParserForDB(c.db)
+func (c *TablesChecker) checkCreateSQL(ctx context.Context, statement string) []*incompatibilityOption {
+	parser2, err := dbutil.GetParserForDB(ctx, c.db)
 	if err != nil {
 		return []*incompatibilityOption{
 			{
@@ -310,7 +310,7 @@ func (c *ShardingTablesChecker) Check(ctx context.Context) *Result {
 			return r
 		}
 
-		parser2, err := dbutil.GetParserForDB(db)
+		parser2, err := dbutil.GetParserForDB(ctx, db)
 		if err != nil {
 			markCheckError(r, err)
 			r.Extra = fmt.Sprintf("fail to get parser for instance %s on sharding %s", instance, c.name)

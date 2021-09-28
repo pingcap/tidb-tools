@@ -143,7 +143,7 @@ func CloseDB(db *sql.DB) error {
 }
 
 // GetCreateTableSQL returns the create table statement.
-func GetCreateTableSQL(ctx context.Context, db *sql.DB, schemaName string, tableName string) (string, error) {
+func GetCreateTableSQL(ctx context.Context, db QueryExecutor, schemaName string, tableName string) (string, error) {
 	/*
 		show create table example result:
 		mysql> SHOW CREATE TABLE `test`.`itest`;
@@ -172,7 +172,7 @@ func GetCreateTableSQL(ctx context.Context, db *sql.DB, schemaName string, table
 
 // GetRowCount returns row count of the table.
 // if not specify where condition, return total row count of the table.
-func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName string, where string, args []interface{}) (int64, error) {
+func GetRowCount(ctx context.Context, db QueryExecutor, schemaName string, tableName string, where string, args []interface{}) (int64, error) {
 	/*
 		select count example result:
 		mysql> SELECT count(1) cnt from `test`.`itest` where id > 0;
@@ -202,7 +202,7 @@ func GetRowCount(ctx context.Context, db *sql.DB, schemaName string, tableName s
 }
 
 // GetRandomValues returns some random value. Tips: limitArgs is the value in limitRange.
-func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column string, num int, limitRange string, limitArgs []interface{}, collation string) ([]string, error) {
+func GetRandomValues(ctx context.Context, db QueryExecutor, schemaName, table, column string, num int, limitRange string, limitArgs []interface{}, collation string) ([]string, error) {
 	/*
 		example:
 		mysql> SELECT `id` FROM (SELECT `id`, rand() rand_value FROM `test`.`test`  WHERE `id` COLLATE "latin1_bin" > 0 AND `id` COLLATE "latin1_bin" < 100 ORDER BY rand_value LIMIT 5) rand_tmp ORDER BY `id` COLLATE "latin1_bin";
@@ -249,7 +249,7 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schemaName, table, column 
 }
 
 // GetMinMaxValue return min and max value of given column by specified limitRange condition.
-func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column string, limitRange string, limitArgs []interface{}, collation string) (string, string, error) {
+func GetMinMaxValue(ctx context.Context, db QueryExecutor, schema, table, column string, limitRange string, limitArgs []interface{}, collation string) (string, string, error) {
 	/*
 		example:
 		mysql> SELECT MIN(`id`) as MIN, MAX(`id`) as MAX FROM `test`.`testa` WHERE id > 0 AND id < 10;
@@ -294,7 +294,7 @@ func GetMinMaxValue(ctx context.Context, db *sql.DB, schema, table, column strin
 	return min.String, max.String, errors.Trace(rows.Err())
 }
 
-func GetTimeZoneOffset(ctx context.Context, db *sql.DB) (time.Duration, error) {
+func GetTimeZoneOffset(ctx context.Context, db QueryExecutor) (time.Duration, error) {
 	var timeStr string
 	err := db.QueryRowContext(ctx, "SELECT cast(TIMEDIFF(NOW(6), UTC_TIMESTAMP(6)) as time);").Scan(&timeStr)
 	if err != nil {
@@ -335,7 +335,7 @@ func FormatTimeZoneOffset(offset time.Duration) string {
 
 }
 
-func queryTables(ctx context.Context, db *sql.DB, q string) (tables []string, err error) {
+func queryTables(ctx context.Context, db QueryExecutor, q string) (tables []string, err error) {
 	log.Debug("query tables", zap.String("query", q))
 	rows, err := db.QueryContext(ctx, q)
 	if err != nil {
@@ -362,7 +362,7 @@ func queryTables(ctx context.Context, db *sql.DB, q string) (tables []string, er
 }
 
 // GetTables returns name of all tables in the specified schema
-func GetTables(ctx context.Context, db *sql.DB, schemaName string) (tables []string, err error) {
+func GetTables(ctx context.Context, db QueryExecutor, schemaName string) (tables []string, err error) {
 	/*
 		show tables without view: https://dev.mysql.com/doc/refman/5.7/en/show-tables.html
 
@@ -379,13 +379,13 @@ func GetTables(ctx context.Context, db *sql.DB, schemaName string) (tables []str
 }
 
 // GetViews returns names of all views in the specified schema
-func GetViews(ctx context.Context, db *sql.DB, schemaName string) (tables []string, err error) {
+func GetViews(ctx context.Context, db QueryExecutor, schemaName string) (tables []string, err error) {
 	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type = 'VIEW';", escapeName(schemaName))
 	return queryTables(ctx, db, query)
 }
 
 // GetSchemas returns name of all schemas
-func GetSchemas(ctx context.Context, db *sql.DB) ([]string, error) {
+func GetSchemas(ctx context.Context, db QueryExecutor) ([]string, error) {
 	query := "SHOW DATABASES"
 	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
@@ -419,7 +419,7 @@ func GetSchemas(ctx context.Context, db *sql.DB) ([]string, error) {
 }
 
 // GetCRC32Checksum returns checksum code of some data by given condition
-func GetCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, error) {
+func GetCRC32Checksum(ctx context.Context, db QueryExecutor, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, error) {
 	/*
 		calculate CRC32 checksum example:
 		mysql> SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',', id, name, age, CONCAT(ISNULL(id), ISNULL(name), ISNULL(age))))AS UNSIGNED)) AS checksum FROM test.test WHERE id > 0 AND id < 10;
@@ -462,7 +462,7 @@ type Bucket struct {
 }
 
 // GetBucketsInfo SHOW STATS_BUCKETS in TiDB.
-func GetBucketsInfo(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo) (map[string][]Bucket, error) {
+func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string, tableInfo *model.TableInfo) (map[string][]Bucket, error) {
 	/*
 		example in tidb:
 		mysql> SHOW STATS_BUCKETS WHERE db_name= "test" AND table_name="testa";
@@ -589,7 +589,7 @@ func DecodeTimeInBucket(packedStr string) (string, error) {
 }
 
 // GetTidbLatestTSO returns tidb's current TSO.
-func GetTidbLatestTSO(ctx context.Context, db *sql.DB) (int64, error) {
+func GetTidbLatestTSO(ctx context.Context, db QueryExecutor) (int64, error) {
 	/*
 		example in tidb:
 		mysql> SHOW MASTER STATUS;
@@ -621,7 +621,7 @@ func GetTidbLatestTSO(ctx context.Context, db *sql.DB) (int64, error) {
 }
 
 // GetDBVersion returns the database's version
-func GetDBVersion(ctx context.Context, db *sql.DB) (string, error) {
+func GetDBVersion(ctx context.Context, db QueryExecutor) (string, error) {
 	/*
 		example in TiDB:
 		mysql> select version();
@@ -662,11 +662,11 @@ func GetDBVersion(ctx context.Context, db *sql.DB) (string, error) {
 	return "", ErrVersionNotFound
 }
 
-// GetSessionVariable gets server's session variable, although argument is *sql.DB, (session) system variables may be
+// GetSessionVariable gets server's session variable, although argument is QueryExecutor, (session) system variables may be
 // set through DSN
-func GetSessionVariable(db *sql.DB, variable string) (value string, err error) {
+func GetSessionVariable(ctx context.Context, db QueryExecutor, variable string) (value string, err error) {
 	query := fmt.Sprintf("SHOW VARIABLES LIKE '%s'", variable)
-	rows, err := db.Query(query)
+	rows, err := db.QueryContext(ctx, query)
 
 	if err != nil {
 		return "", errors.Trace(err)
@@ -698,8 +698,8 @@ func GetSessionVariable(db *sql.DB, variable string) (value string, err error) {
 }
 
 // GetSQLMode returns sql_mode.
-func GetSQLMode(db *sql.DB) (tmysql.SQLMode, error) {
-	sqlMode, err := GetSessionVariable(db, "sql_mode")
+func GetSQLMode(ctx context.Context, db QueryExecutor) (tmysql.SQLMode, error) {
+	sqlMode, err := GetSessionVariable(ctx, db, "sql_mode")
 	if err != nil {
 		return tmysql.ModeNone, err
 	}
@@ -709,7 +709,7 @@ func GetSQLMode(db *sql.DB) (tmysql.SQLMode, error) {
 }
 
 // IsTiDB returns true if this database is tidb
-func IsTiDB(ctx context.Context, db *sql.DB) (bool, error) {
+func IsTiDB(ctx context.Context, db QueryExecutor) (bool, error) {
 	version, err := GetDBVersion(ctx, db)
 	if err != nil {
 		log.Error("get database's version failed", zap.Error(err))
@@ -746,7 +746,7 @@ func ReplacePlaceholder(str string, args []string) string {
 }
 
 // ExecSQLWithRetry executes sql with retry
-func ExecSQLWithRetry(ctx context.Context, db *sql.DB, sql string, args ...interface{}) (err error) {
+func ExecSQLWithRetry(ctx context.Context, db DBExecutor, sql string, args ...interface{}) (err error) {
 	for i := 0; i < DefaultRetryTime; i++ {
 		startTime := time.Now()
 		_, err = db.ExecContext(ctx, sql, args...)
@@ -784,8 +784,8 @@ func ExecSQLWithRetry(ctx context.Context, db *sql.DB, sql string, args ...inter
 }
 
 // ExecuteSQLs executes some sqls in one transaction
-func ExecuteSQLs(ctx context.Context, db *sql.DB, sqls []string, args [][]interface{}) error {
-	txn, err := db.Begin()
+func ExecuteSQLs(ctx context.Context, db DBExecutor, sqls []string, args [][]interface{}) error {
+	txn, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		log.Error("exec sqls begin", zap.Error(err))
 		return errors.Trace(err)
@@ -849,7 +849,7 @@ func ignoreDDLError(err error) bool {
 }
 
 // DeleteRows delete rows in several times. Only can delete less than 300,000 one time in TiDB.
-func DeleteRows(ctx context.Context, db *sql.DB, schemaName string, tableName string, where string, args []interface{}) error {
+func DeleteRows(ctx context.Context, db DBExecutor, schemaName string, tableName string, where string, args []interface{}) error {
 	deleteSQL := fmt.Sprintf("DELETE FROM %s WHERE %s limit %d;", TableName(schemaName, tableName), where, DefaultDeleteRowsNum)
 	result, err := db.ExecContext(ctx, deleteSQL, args...)
 	if err != nil {
@@ -884,8 +884,8 @@ func getParser(sqlModeStr string) (*parser.Parser, error) {
 }
 
 // GetParserForDB discovers ANSI_QUOTES in db's session variables and returns a proper parser
-func GetParserForDB(db *sql.DB) (*parser.Parser, error) {
-	mode, err := GetSQLMode(db)
+func GetParserForDB(ctx context.Context, db QueryExecutor) (*parser.Parser, error) {
+	mode, err := GetSQLMode(ctx, db)
 	if err != nil {
 		return nil, err
 	}

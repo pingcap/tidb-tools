@@ -2,7 +2,6 @@ package dbutil
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strconv"
 	"strings"
@@ -14,27 +13,27 @@ import (
 )
 
 // ShowVersion queries variable 'version' and returns its value.
-func ShowVersion(ctx context.Context, db *sql.DB) (value string, err error) {
+func ShowVersion(ctx context.Context, db QueryExecutor) (value string, err error) {
 	return ShowMySQLVariable(ctx, db, "version")
 }
 
 // ShowLogBin queries variable 'log_bin' and returns its value.
-func ShowLogBin(ctx context.Context, db *sql.DB) (value string, err error) {
+func ShowLogBin(ctx context.Context, db QueryExecutor) (value string, err error) {
 	return ShowMySQLVariable(ctx, db, "log_bin")
 }
 
 // ShowBinlogFormat queries variable 'binlog_format' and returns its value.
-func ShowBinlogFormat(ctx context.Context, db *sql.DB) (value string, err error) {
+func ShowBinlogFormat(ctx context.Context, db QueryExecutor) (value string, err error) {
 	return ShowMySQLVariable(ctx, db, "binlog_format")
 }
 
 // ShowBinlogRowImage queries variable 'binlog_row_image' and returns its values.
-func ShowBinlogRowImage(ctx context.Context, db *sql.DB) (value string, err error) {
+func ShowBinlogRowImage(ctx context.Context, db QueryExecutor) (value string, err error) {
 	return ShowMySQLVariable(ctx, db, "binlog_row_image")
 }
 
 // ShowServerID queries variable 'server_id' and returns its value.
-func ShowServerID(ctx context.Context, db *sql.DB) (serverID uint64, err error) {
+func ShowServerID(ctx context.Context, db QueryExecutor) (serverID uint64, err error) {
 	value, err := ShowMySQLVariable(ctx, db, "server_id")
 	if err != nil {
 		return 0, errors.Trace(err)
@@ -45,7 +44,7 @@ func ShowServerID(ctx context.Context, db *sql.DB) (serverID uint64, err error) 
 }
 
 // ShowMySQLVariable queries MySQL variable and returns its value.
-func ShowMySQLVariable(ctx context.Context, db *sql.DB, variable string) (value string, err error) {
+func ShowMySQLVariable(ctx context.Context, db QueryExecutor, variable string) (value string, err error) {
 	query := fmt.Sprintf("SHOW GLOBAL VARIABLES LIKE '%s';", variable)
 	err = db.QueryRowContext(ctx, query).Scan(&variable, &value)
 	if err != nil {
@@ -56,7 +55,7 @@ func ShowMySQLVariable(ctx context.Context, db *sql.DB, variable string) (value 
 
 // ShowGrants queries privileges for a mysql user.
 // For mysql 8.0, if user has granted roles, ShowGrants also extract privilege from roles.
-func ShowGrants(ctx context.Context, db *sql.DB, user, host string) ([]string, error) {
+func ShowGrants(ctx context.Context, db QueryExecutor, user, host string) ([]string, error) {
 	if host == "" {
 		host = "%"
 	}
