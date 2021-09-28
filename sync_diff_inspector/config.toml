@@ -61,6 +61,10 @@ fix-sql-file = "fix.sql"
     # tables that should be exclude when checked
     exclude-tables = ["a_table", "should_not_compare"]
 
+    # support regular expression, must start with '~'.
+    # for example, this config will check tables with prefix 'test'.
+    # tables = ["~^should_not_compare.*"]
+
 # schema and table in table-config must be contained in check-tables.
 # a example for comparing table with same schema and table name.
 [[table-config]]
