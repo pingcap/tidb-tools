@@ -255,6 +255,159 @@ func GenerateDeleteDML(data map[string]*dbutil.ColumnData, table *model.TableInf
 
 }
 
+// isCompatible checks whether 2 column types are compatible.
+// e.g. char and vachar.
+func isCompatible(tp1, tp2 byte) bool {
+	if tp1 == tp2 {
+		return true
+	}
+
+	log.Warn("column type different, check compatibility.")
+	var t1, t2 int
+	switch tp1 {
+	case mysql.TypeTiny, mysql.TypeShort, mysql.TypeLong, mysql.TypeLonglong, mysql.TypeInt24:
+		t1 = 1
+	case mysql.TypeTinyBlob, mysql.TypeMediumBlob, mysql.TypeLongBlob, mysql.TypeBlob:
+		t1 = 2
+	case mysql.TypeVarString, mysql.TypeString, mysql.TypeVarchar:
+		t1 = 3
+	default:
+		t1 = 111
+	}
+
+	switch tp2 {
+	case mysql.TypeTiny, mysql.TypeShort, mysql.TypeLong, mysql.TypeLonglong, mysql.TypeInt24:
+		t2 = 1
+	case mysql.TypeTinyBlob, mysql.TypeMediumBlob, mysql.TypeLongBlob, mysql.TypeBlob:
+		t2 = 2
+	case mysql.TypeVarString, mysql.TypeString, mysql.TypeVarchar:
+		t2 = 3
+	default:
+		t2 = 222
+	}
+
+	return t1 == t2
+}
+
+// CompareStruct compare tables' columns and indices from upstream and downstream.
+// There are 2 return values:
+// 	isEqual	: result of comparing tables' columns and indices
+// 	isPanic	: the differences of tables' struct can not be ignored. Need to skip data comparing.
+func CompareStruct(upstreamTableInfos []*model.TableInfo, downstreamTableInfo *model.TableInfo) (isEqual bool, isPanic bool) {
+	// compare columns
+	for _, upstreamTableInfo := range upstreamTableInfos {
+		if len(upstreamTableInfo.Columns) != len(downstreamTableInfo.Columns) {
+			// the numbers of each columns are different, don't compare data
+			log.Error("column num not equal", zap.String("upstream table", upstreamTableInfo.Name.O), zap.Int("column num", len(upstreamTableInfo.Columns)), zap.String("downstream table", downstreamTableInfo.Name.O), zap.Int("column num", len(upstreamTableInfo.Columns)))
+			return false, true
+		}
+
+		for i, column := range upstreamTableInfo.Columns {
+			if column.Name.O != downstreamTableInfo.Columns[i].Name.O {
+				// names are different, panic!
+				log.Error("column name not equal", zap.String("upstream table", upstreamTableInfo.Name.O), zap.String("column name", column.Name.O), zap.String("downstream table", downstreamTableInfo.Name.O), zap.String("column name", downstreamTableInfo.Columns[i].Name.O))
+				return false, true
+			}
+
+			if !isCompatible(column.Tp, downstreamTableInfo.Columns[i].Tp) {
+				// column types are different, panic!
+				log.Error("column type not compatible", zap.String("upstream table", upstreamTableInfo.Name.O), zap.String("column name", column.Name.O), zap.Uint8("column type", column.Tp), zap.String("downstream table", downstreamTableInfo.Name.O), zap.String("column name", downstreamTableInfo.Columns[i].Name.O), zap.Uint8("column type", downstreamTableInfo.Columns[i].Tp))
+				return false, true
+			}
+		}
+	}
+
+	// compare indices
+	deleteIndicesSet := make(map[string]struct{})
+	unilateralIndicesSet := make(map[string]struct{})
+	downstreamIndicesMap := make(map[string]*struct {
+		index *model.IndexInfo
+		cnt   int
+	})
+	for _, index := range downstreamTableInfo.Indices {
+		downstreamIndicesMap[index.Name.O] = &struct {
+			index *model.IndexInfo
+			cnt   int
+		}{index, 0}
+	}
+	for _, upstreamTableInfo := range upstreamTableInfos {
+
+	NextIndex:
+		for _, upstreamIndex := range upstreamTableInfo.Indices {
+			if _, ok := deleteIndicesSet[upstreamIndex.Name.O]; ok {
+				continue NextIndex
+			}
+
+			indexU, ok := downstreamIndicesMap[upstreamIndex.Name.O]
+			if ok {
+				if len(indexU.index.Columns) != len(upstreamIndex.Columns) {
+					// different index, should be removed
+					deleteIndicesSet[upstreamIndex.Name.O] = struct{}{}
+					continue NextIndex
+				}
+
+				for i, indexColumn := range upstreamIndex.Columns {
+					if indexColumn.Offset != indexU.index.Columns[i].Offset || indexColumn.Name.O != indexU.index.Columns[i].Name.O {
+						// different index, should be removed
+						deleteIndicesSet[upstreamIndex.Name.O] = struct{}{}
+						continue NextIndex
+					}
+				}
+				indexU.cnt = indexU.cnt + 1
+			} else {
+				unilateralIndicesSet[upstreamIndex.Name.O] = struct{}{}
+			}
+		}
+	}
+
+	existBilateralIndex := false
+	for _, indexU := range downstreamIndicesMap {
+		if _, ok := deleteIndicesSet[indexU.index.Name.O]; ok {
+			continue
+		}
+		if indexU.cnt < len(upstreamTableInfos) {
+			// Some upstreamInfos don't have this index.
+			unilateralIndicesSet[indexU.index.Name.O] = struct{}{}
+		} else {
+			// there is an index the whole tables have,
+			// so unilateral indices can be deleted.
+			existBilateralIndex = true
+		}
+	}
+
+	// delete indices
+	// If there exist bilateral index, unilateral indices can be deleted.
+	if existBilateralIndex {
+		for indexName := range unilateralIndicesSet {
+			deleteIndicesSet[indexName] = struct{}{}
+		}
+	} else {
+		log.Warn("no index exists in both upstream and downstream", zap.String("table", downstreamTableInfo.Name.O))
+	}
+	if len(deleteIndicesSet) > 0 {
+		newDownstreamIndices := make([]*model.IndexInfo, 0, len(downstreamTableInfo.Indices))
+		for _, index := range downstreamTableInfo.Indices {
+			if _, ok := deleteIndicesSet[index.Name.O]; !ok {
+				newDownstreamIndices = append(newDownstreamIndices, index)
+			}
+		}
+		downstreamTableInfo.Indices = newDownstreamIndices
+
+		for _, upstreamTableInfo := range upstreamTableInfos {
+			newUpstreamIndices := make([]*model.IndexInfo, 0, len(upstreamTableInfo.Indices))
+			for _, index := range upstreamTableInfo.Indices {
+				if _, ok := deleteIndicesSet[index.Name.O]; !ok {
+					newUpstreamIndices = append(newUpstreamIndices, index)
+				}
+			}
+			upstreamTableInfo.Indices = newUpstreamIndices
+		}
+
+	}
+
+	return len(deleteIndicesSet) == 0, false
+}
+
 // needQuotes determines whether an escape character is required for `'`.
 func needQuotes(tp byte) bool {
 	return !(dbutil.IsNumberType(tp) || dbutil.IsFloatType(tp))

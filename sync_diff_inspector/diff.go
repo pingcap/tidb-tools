@@ -298,27 +298,23 @@ func (df *Diff) Equal(ctx context.Context) error {
 func (df *Diff) StructEqual(ctx context.Context) error {
 	tables := df.downstream.GetTables()
 	for tableIndex := range tables {
-		structEq, err := df.compareStruct(ctx, tableIndex)
+		isEqual, isSkip, err := df.compareStruct(ctx, tableIndex)
 		if err != nil {
 			return errors.Trace(err)
 		}
-		progress.RegisterTable(dbutil.TableName(tables[tableIndex].Schema, tables[tableIndex].Table), !structEq, false)
-		df.report.SetTableStructCheckResult(tables[tableIndex].Schema, tables[tableIndex].Table, structEq)
+		progress.RegisterTable(dbutil.TableName(tables[tableIndex].Schema, tables[tableIndex].Table), !isEqual, isSkip)
+		df.report.SetTableStructCheckResult(tables[tableIndex].Schema, tables[tableIndex].Table, isEqual)
 	}
 	return nil
 }
 
-func (df *Diff) compareStruct(ctx context.Context, tableIndex int) (structEq bool, err error) {
+func (df *Diff) compareStruct(ctx context.Context, tableIndex int) (isEqual bool, isSkip bool, err error) {
 	sourceTableInfos, err := df.upstream.GetSourceStructInfo(ctx, tableIndex)
 	if err != nil {
-		return false, errors.Trace(err)
+		return false, true, errors.Trace(err)
 	}
-	structEq = true
-	for _, tableInfo := range sourceTableInfos {
-		eq, _ := dbutil.EqualTableInfo(tableInfo, df.downstream.GetTables()[tableIndex].Info)
-		structEq = structEq && eq
-	}
-	return structEq, nil
+	isEqual, isSkip = utils.CompareStruct(sourceTableInfos, df.downstream.GetTables()[tableIndex].Info)
+	return isEqual, isSkip, nil
 }
 
 func (df *Diff) startGCKeeperForTiDB(ctx context.Context, db *sql.DB) {
