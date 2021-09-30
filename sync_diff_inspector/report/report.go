@@ -81,6 +81,8 @@ type Report struct {
 	TotalSize    int64                              // Total size of the checked tables
 	SourceConfig [][]byte
 	TargetConfig []byte
+
+	task *config.TaskConfig `json:"-"`
 }
 
 // LoadReport loads the report from the checkpoint
@@ -156,7 +158,7 @@ func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB) {
 }
 
 // CommitSummary commit summary info
-func (r *Report) CommitSummary(taskConfig *config.TaskConfig) error {
+func (r *Report) CommitSummary() error {
 	passNum, failedNum := int32(0), int32(0)
 	for _, tableMap := range r.TableResults {
 		for _, result := range tableMap {
@@ -169,7 +171,7 @@ func (r *Report) CommitSummary(taskConfig *config.TaskConfig) error {
 	}
 	r.PassNum = passNum
 	r.FailedNum = failedNum
-	summaryPath := filepath.Join(taskConfig.OutputDir, "summary.txt")
+	summaryPath := filepath.Join(r.task.OutputDir, "summary.txt")
 	summaryFile, err := os.Create(summaryPath)
 	if err != nil {
 		return errors.Trace(err)
@@ -209,11 +211,11 @@ func (r *Report) CommitSummary(taskConfig *config.TaskConfig) error {
 	return nil
 }
 
-func (r *Report) Print(fileName string, w io.Writer) error {
+func (r *Report) Print(w io.Writer) error {
 	var summary strings.Builder
 	if r.Result == Pass {
 		summary.WriteString(fmt.Sprintf("A total of %d table have been compared and all are equal.\n", r.FailedNum+r.PassNum))
-		summary.WriteString(fmt.Sprintf("You can view the comparision details through './output_dir/%s'\n", fileName))
+		summary.WriteString(fmt.Sprintf("You can view the comparision details through '%s/%s'\n", r.task.OutputDir, config.LogFileName))
 	} else if r.Result == Fail {
 		for schema, tableMap := range r.TableResults {
 			for table, result := range tableMap {
@@ -227,8 +229,8 @@ func (r *Report) Print(fileName string, w io.Writer) error {
 		}
 		summary.WriteString("\n")
 		summary.WriteString("The rest of tables are all equal.\n")
-		summary.WriteString("The patch file has been generated to './output_dir/patch.sql'\n")
-		summary.WriteString(fmt.Sprintf("You can view the comparision details through './output_dir/%s'\n", fileName))
+		summary.WriteString(fmt.Sprintf("The patch file has been generated in \n\t'%s/'\n", r.task.FixDir))
+		summary.WriteString(fmt.Sprintf("You can view the comparision details through '%s/%s'\n", r.task.OutputDir, config.LogFileName))
 	} else {
 		summary.WriteString("Error in comparison process:\n")
 		for schema, tableMap := range r.TableResults {
@@ -236,17 +238,18 @@ func (r *Report) Print(fileName string, w io.Writer) error {
 				summary.WriteString(fmt.Sprintf("%s error occured in %s\n", result.MeetError.Error(), dbutil.TableName(schema, table)))
 			}
 		}
-		summary.WriteString(fmt.Sprintf("You can view the comparision details through './output_dir/%s'\n", fileName))
+		summary.WriteString(fmt.Sprintf("You can view the comparision details through '%s/%s'\n", r.task.OutputDir, config.LogFileName))
 	}
 	fmt.Fprint(w, summary.String())
 	return nil
 }
 
 // NewReport returns a new Report.
-func NewReport() *Report {
+func NewReport(task *config.TaskConfig) *Report {
 	return &Report{
 		TableResults: make(map[string]map[string]*TableResult),
 		Result:       Pass,
+		task:         task,
 	}
 }
 
@@ -358,6 +361,7 @@ func (r *Report) GetSnapshot(chunkID *chunk.ChunkID, schema, table string) (*Rep
 	result := r.Result
 	totalSize := r.TotalSize
 	duration := time.Since(r.StartTime)
+	task := r.task
 	return &Report{
 		PassNum:      0,
 		FailedNum:    0,
@@ -365,5 +369,7 @@ func (r *Report) GetSnapshot(chunkID *chunk.ChunkID, schema, table string) (*Rep
 		TableResults: reserveMap,
 		Duration:     duration,
 		TotalSize:    totalSize,
+
+		task: task,
 	}, nil
 }
