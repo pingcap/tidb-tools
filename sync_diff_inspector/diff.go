@@ -97,7 +97,7 @@ func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 		ignoreStats:       cfg.IgnoreStats,
 		sqlCh:             make(chan *ChunkDML, splitter.DefaultChannelBuffer),
 		cp:                new(checkpoints.Checkpoint),
-		report:            report.NewReport(),
+		report:            report.NewReport(&cfg.Task),
 	}
 	if err = diff.init(ctx, cfg); err != nil {
 		diff.Close()
@@ -107,15 +107,15 @@ func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 	return diff, nil
 }
 
-func (df *Diff) PrintSummary(ctx context.Context, taskCfg *config.TaskConfig) bool {
+func (df *Diff) PrintSummary(ctx context.Context) bool {
 	// Stop updating progress bar so that summary won't be flushed.
 	progress.Close()
 	df.report.CalculateTotalSize(ctx, df.downstream.GetDB())
-	err := df.report.CommitSummary(taskCfg)
+	err := df.report.CommitSummary()
 	if err != nil {
 		log.Fatal("failed to commit report", zap.Error(err))
 	}
-	df.report.Print("sync_diff.log", os.Stdout)
+	df.report.Print(os.Stdout)
 	return df.report.Result == report.Pass
 }
 
@@ -417,8 +417,10 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 	if err != nil {
 		df.report.SetTableMeetError(schema, table, err)
 	}
-	var state string
-	if !isEqual {
+
+	var state string = checkpoints.SuccessState
+	// If an error occurs during the checksum phase, skip the data compare phase.
+	if !isEqual && err == nil {
 		log.Debug("checksum failed", zap.Any("chunk id", rangeInfo.ChunkRange.Index), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTables()[rangeInfo.GetTableIndex()].Table))
 		state = checkpoints.FailedState
 		// if the chunk's checksum differ, try to do binary check
@@ -435,9 +437,8 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 		if err != nil {
 			df.report.SetTableMeetError(schema, table, err)
 		}
-	} else {
-		// update chunk success state in summary
-		state = checkpoints.SuccessState
+	} else if err != nil {
+		state = checkpoints.FailedState
 	}
 	dml.node.State = state
 	id := rangeInfo.ChunkRange.Index
