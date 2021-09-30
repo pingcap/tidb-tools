@@ -75,7 +75,6 @@ func (r *RangeInfo) Update(column, lower, upper string, updateLower, updateUpper
 func (r *RangeInfo) ToNode() *checkpoints.Node {
 	return &checkpoints.Node{
 		ChunkRange: r.ChunkRange,
-		BucketID:   r.ChunkRange.BucketID,
 		IndexID:    r.IndexID,
 	}
 }
