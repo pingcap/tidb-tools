@@ -49,7 +49,7 @@ func main() {
 	conf := new(log.Config)
 	conf.Level = cfg.LogLevel
 
-	conf.File.Filename = filepath.Join(cfg.Task.OutputDir, "sync_diff.log")
+	conf.File.Filename = filepath.Join(cfg.Task.OutputDir, config.LogFileName)
 	lg, p, e := log.InitLogger(conf)
 	if e != nil {
 		log.Error("Log init failed!", zap.String("error", e.Error()))
@@ -102,5 +102,5 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 			log.Fatal("failed to check data difference", zap.Error(err))
 		}
 	}
-	return d.PrintSummary(ctx, &cfg.Task)
+	return d.PrintSummary(ctx)
 }
