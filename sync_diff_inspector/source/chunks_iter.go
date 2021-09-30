@@ -20,6 +20,7 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/progress"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
@@ -100,21 +101,27 @@ func (t *ChunksIterator) produceChunks(ctx context.Context, startRange *splitter
 		curTableIndex := t.nextTableIndex
 		// skip data-check, but still need to send a empty chunk to make checkpoint continuous
 		if t.TableDiffs[curTableIndex].IgnoreDataCheck {
-			select {
-			case <-ctx.Done():
-				log.Info("Stop do produce chunks by context done")
-				return
-			case t.chunksCh <- &splitter.RangeInfo{
-				ChunkRange: &chunk.Range{
-					Index: &chunk.ChunkID{
-						TableIndex: curTableIndex,
+			pool.Apply(func() {
+				table := t.TableDiffs[curTableIndex]
+				progressID := dbutil.TableName(table.Schema, table.Table)
+				progress.StartTable(progressID, 1, true)
+				select {
+				case <-ctx.Done():
+					log.Info("Stop do produce chunks by context done")
+					return
+				case t.chunksCh <- &splitter.RangeInfo{
+					ChunkRange: &chunk.Range{
+						Index: &chunk.ChunkID{
+							TableIndex: curTableIndex,
+						},
+						Type:    chunk.Empty,
+						IsFirst: true,
+						IsLast:  true,
 					},
-					Type:    chunk.Empty,
-					IsFirst: true,
-					IsLast:  true,
-				},
-			}:
-			}
+					ProgressID: progressID,
+				}:
+				}
+			})
 			continue
 		}
 
