@@ -57,39 +57,43 @@ func (t *ChunksIterator) produceChunks(ctx context.Context, startRange *splitter
 	pool := utils.NewWorkerPool(3, "chunks producer")
 	t.nextTableIndex = 0
 
+	// If chunkRange
 	if startRange != nil {
 		curIndex := startRange.GetTableIndex()
 		curTable := t.TableDiffs[curIndex]
 		t.nextTableIndex = curIndex + 1
-		pool.Apply(func() {
-			chunkIter, err := t.tableAnalyzer.AnalyzeSplitter(ctx, curTable, startRange)
-			if err != nil {
-				t.errCh <- errors.Trace(err)
-				return
-			}
-			defer chunkIter.Close()
-			for {
-				c, err := chunkIter.Next()
+		// if this chunk is empty, data-check for this table should be skipped
+		if startRange.ChunkRange.Type != chunk.Empty {
+			pool.Apply(func() {
+				chunkIter, err := t.tableAnalyzer.AnalyzeSplitter(ctx, curTable, startRange)
 				if err != nil {
 					t.errCh <- errors.Trace(err)
 					return
 				}
-				if c == nil {
-					break
+				defer chunkIter.Close()
+				for {
+					c, err := chunkIter.Next()
+					if err != nil {
+						t.errCh <- errors.Trace(err)
+						return
+					}
+					if c == nil {
+						break
+					}
+					c.Index.TableIndex = curIndex
+					select {
+					case <-ctx.Done():
+						log.Info("Stop do produce chunks by context done")
+						return
+					case t.chunksCh <- &splitter.RangeInfo{
+						ChunkRange: c,
+						IndexID:    getCurTableIndexID(chunkIter),
+						ProgressID: dbutil.TableName(curTable.Schema, curTable.Table),
+					}:
+					}
 				}
-				c.Index.TableIndex = curIndex
-				select {
-				case <-ctx.Done():
-					log.Info("Stop do produce chunks by context done")
-					return
-				case t.chunksCh <- &splitter.RangeInfo{
-					ChunkRange: c,
-					IndexID:    getCurTableIndexID(chunkIter),
-					ProgressID: dbutil.TableName(curTable.Schema, curTable.Table),
-				}:
-				}
-			}
-		})
+			})
+		}
 	}
 
 	for ; t.nextTableIndex < len(t.TableDiffs); t.nextTableIndex++ {
@@ -105,7 +109,9 @@ func (t *ChunksIterator) produceChunks(ctx context.Context, startRange *splitter
 					Index: &chunk.ChunkID{
 						TableIndex: curTableIndex,
 					},
-					Type: chunk.Empty,
+					Type:    chunk.Empty,
+					IsFirst: true,
+					IsLast:  true,
 				},
 			}:
 			}

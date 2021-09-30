@@ -389,6 +389,8 @@ func CompareStruct(upstreamTableInfos []*model.TableInfo, downstreamTableInfo *m
 		for _, index := range downstreamTableInfo.Indices {
 			if _, ok := deleteIndicesSet[index.Name.O]; !ok {
 				newDownstreamIndices = append(newDownstreamIndices, index)
+			} else {
+				log.Debug("delete downstream index", zap.String("name", downstreamTableInfo.Name.O), zap.String("index", index.Name.O))
 			}
 		}
 		downstreamTableInfo.Indices = newDownstreamIndices
@@ -398,6 +400,8 @@ func CompareStruct(upstreamTableInfos []*model.TableInfo, downstreamTableInfo *m
 			for _, index := range upstreamTableInfo.Indices {
 				if _, ok := deleteIndicesSet[index.Name.O]; !ok {
 					newUpstreamIndices = append(newUpstreamIndices, index)
+				} else {
+					log.Debug("delete upstream index", zap.String("name", upstreamTableInfo.Name.O), zap.String("index", index.Name.O))
 				}
 			}
 			upstreamTableInfo.Indices = newUpstreamIndices
