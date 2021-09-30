@@ -311,7 +311,7 @@ func (df *Diff) StructEqual(ctx context.Context) error {
 			return errors.Trace(err)
 		}
 		progress.RegisterTable(dbutil.TableName(tables[tableIndex].Schema, tables[tableIndex].Table), !isEqual, isSkip)
-		df.report.SetTableStructCheckResult(tables[tableIndex].Schema, tables[tableIndex].Table, isEqual)
+		df.report.SetTableStructCheckResult(tables[tableIndex].Schema, tables[tableIndex].Table, isEqual, isSkip)
 	}
 	return nil
 }
