@@ -412,7 +412,6 @@ func (c *Config) Init() (err error) {
 			return errors.Trace(err)
 		}
 		err = c.Task.Init(c.DataSources, c.TableConfigs)
-		log.Info("config", zap.Any("task", c.Task))
 		if err != nil {
 			return errors.Trace(err)
 		}

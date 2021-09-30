@@ -131,12 +131,10 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 		tj := utils.UniqueID(tableDiffs[j].Schema, tableDiffs[j].Table)
 		return strings.Compare(ti, tj) > 0
 	})
-	log.Info("source instance", zap.Any("data source", cfg.Task.SourceInstances))
 	upstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.CheckThreadCount, cfg.Task.SourceInstances...)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
-	log.Info("target instance", zap.Any("data source", cfg.Task.TargetInstance))
 	downstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.CheckThreadCount, cfg.Task.TargetInstance)
 	if err != nil {
 		return nil, nil, errors.Trace(err)
