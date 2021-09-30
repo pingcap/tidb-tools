@@ -58,9 +58,9 @@ var (
 	// for table: don't have this state
 	checkingState = "checking"
 
-	// for chunk: this chunk is ignored. if sample is not 100%, will ignore some chunk
+	// for chunk: this chunk is ignored. if sample is not 100% or it is Empty chunk, will ignore some chunk
 	// for table: don't have this state
-	ignoreState = "ignore"
+	IgnoreState = "ignore"
 )
 
 type Node struct {

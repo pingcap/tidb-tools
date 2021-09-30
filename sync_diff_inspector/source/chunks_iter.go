@@ -94,6 +94,24 @@ func (t *ChunksIterator) produceChunks(ctx context.Context, startRange *splitter
 
 	for ; t.nextTableIndex < len(t.TableDiffs); t.nextTableIndex++ {
 		curTableIndex := t.nextTableIndex
+		// skip data-check, but still need to send a empty chunk to make checkpoint continuous
+		if t.TableDiffs[curTableIndex].IgnoreDataCheck {
+			select {
+			case <-ctx.Done():
+				log.Info("Stop do produce chunks by context done")
+				return
+			case t.chunksCh <- &splitter.RangeInfo{
+				ChunkRange: &chunk.Range{
+					Index: &chunk.ChunkID{
+						TableIndex: curTableIndex,
+					},
+					Type: chunk.Empty,
+				},
+			}:
+			}
+			continue
+		}
+
 		pool.Apply(func() {
 			table := t.TableDiffs[curTableIndex]
 			chunkIter, err := t.tableAnalyzer.AnalyzeSplitter(ctx, table, nil)

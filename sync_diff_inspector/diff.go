@@ -297,7 +297,11 @@ func (df *Diff) Equal(ctx context.Context) error {
 
 func (df *Diff) StructEqual(ctx context.Context) error {
 	tables := df.downstream.GetTables()
-	for tableIndex := range tables {
+	tableIndex := 0
+	if df.startRange != nil {
+		tableIndex = df.startRange.ChunkRange.Index.TableIndex
+	}
+	for ; tableIndex < len(tables); tableIndex++ {
 		isEqual, isSkip, err := df.compareStruct(ctx, tableIndex)
 		if err != nil {
 			return errors.Trace(err)
@@ -313,7 +317,9 @@ func (df *Diff) compareStruct(ctx context.Context, tableIndex int) (isEqual bool
 	if err != nil {
 		return false, true, errors.Trace(err)
 	}
-	isEqual, isSkip = utils.CompareStruct(sourceTableInfos, df.downstream.GetTables()[tableIndex].Info)
+	table := df.downstream.GetTables()[tableIndex]
+	isEqual, isSkip = utils.CompareStruct(sourceTableInfos, table.Info)
+	table.IgnoreDataCheck = isSkip
 	return isEqual, isSkip, nil
 }
 
@@ -397,6 +403,14 @@ func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
 }
 
 func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool {
+	dml := &ChunkDML{
+		node: rangeInfo.ToNode(),
+	}
+	defer func() { df.sqlCh <- dml }()
+	if rangeInfo.ChunkRange.Type == chunk.Empty {
+		dml.node.State = checkpoints.IgnoreState
+		return true
+	}
 	tableDiff := df.downstream.GetTables()[rangeInfo.GetTableIndex()]
 	schema, table := tableDiff.Schema, tableDiff.Table
 	isEqual, count, err := df.compareChecksumAndGetCount(ctx, rangeInfo)
@@ -404,7 +418,6 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 		df.report.SetTableMeetError(schema, table, err)
 	}
 	var state string
-	dml := &ChunkDML{}
 	if !isEqual {
 		log.Debug("checksum failed", zap.Any("chunk id", rangeInfo.ChunkRange.Index), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTables()[rangeInfo.GetTableIndex()].Table))
 		state = checkpoints.FailedState
@@ -426,11 +439,9 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 		// update chunk success state in summary
 		state = checkpoints.SuccessState
 	}
-	dml.node = rangeInfo.ToNode()
 	dml.node.State = state
 	id := rangeInfo.ChunkRange.Index
 	df.report.SetTableDataCheckResult(schema, table, isEqual, dml.rowAdd, dml.rowDelete, id)
-	df.sqlCh <- dml
 	return isEqual
 }
 
