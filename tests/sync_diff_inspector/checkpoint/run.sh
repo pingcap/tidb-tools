@@ -140,3 +140,16 @@ cat $OUT_DIR/first_chunk_index
 check_contains "${last_chunk_bound}" $OUT_DIR/first_chunk_bound
 check_contains_regex ".:0-0:$((${last_chunk_index_array[2]} + 1)):${last_chunk_index_array[3]}" $OUT_DIR/first_chunk_index
 
+
+sed "s/\"127.0.0.1\"#MYSQL_HOST/\"${MYSQL_HOST}\"/g" ./config_base_continous.toml | sed "s/3306#MYSQL_PORT/${MYSQL_PORT}/g" > ./config.toml
+echo "================test checkpoint continous================="
+# add a table have different table-structs of upstream and downstream
+# so data-check will be skipped
+mysql -uroot -h 127.0.0.1 -P 4000 -e "create table IF NOT EXISTS diff_test.ttt(a int, aa int, primary key(a), key(aa));"
+mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table IF NOT EXISTS diff_test.ttt(a int, b int, primary key(a), key(b));"
+export GO_FAILPOINTS="main/wait-for-checkpoint=return()"
+sync_diff_inspector --config=./config.toml > $OUT_DIR/checkpoint_diff.output
+grep 'save checkpoint' $OUT_DIR/sync_diff.log | awk 'END {print}' > $OUT_DIR/checkpoint_info
+check_not_contains 'has-upper\":true' $OUT_DIR/checkpoint_info
+
+export GO_FAILPOINTS=""
