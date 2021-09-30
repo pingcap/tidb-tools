@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -30,6 +31,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	filter "github.com/pingcap/tidb-tools/pkg/table-filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/config/dm"
 	"go.uber.org/zap"
 )
 
@@ -263,6 +265,11 @@ type Config struct {
 	// set true will continue check from the latest checkpoint
 	UseCheckpoint bool `toml:"use-checkpoint" json:"use-checkpoint"`
 
+	// DMAddr is dm-master's address, the fromat should like "http://127.0.0.1:8261"
+	DMAddr string `toml:"dm-addr" json:"dm-addr"`
+	// DMTask string `toml:"dm-task" json:"dm-task"`
+	DMTask string `toml:"dm-task" json:"dm-task"`
+
 	DataSources map[string]*DataSource `toml:"data-sources" json:"data-sources"`
 
 	Routes map[string]*router.TableRule `toml:"routes" json:"routes"`
@@ -289,6 +296,8 @@ func NewConfig() *Config {
 	fs.IntVar(&cfg.CheckThreadCount, "check-thread-count", 1, "how many goroutines are created to check data")
 	fs.BoolVar(&cfg.UseChecksum, "use-checksum", true, "set false if want to comapre the data directly")
 	fs.BoolVar(&cfg.PrintVersion, "V", false, "print version of sync_diff_inspector")
+	fs.StringVar(&cfg.DMAddr, "A", "", "the address of DM")
+	fs.StringVar(&cfg.DMTask, "T", "", "identifier of dm task")
 	fs.BoolVar(&cfg.IgnoreDataCheck, "ignore-data-check", false, "ignore check table's data")
 	fs.BoolVar(&cfg.IgnoreStructCheck, "ignore-struct-check", false, "ignore check table's struct")
 	fs.BoolVar(&cfg.IgnoreStats, "ignore-stats", false, "don't use tidb stats to split chunks")
@@ -346,7 +355,69 @@ func (c *Config) configFromFile(path string) error {
 	return nil
 }
 
+func (c *Config) adjustConfigByDMSubTasks() (err error) {
+	// DM's subtask config
+	subTaskCfgs, err := dm.GetDMTaskCfg(c.DMAddr, c.DMTask)
+	if err != nil {
+		log.Warn("failed to get config from DM tasks")
+		return errors.Trace(err)
+	}
+	sqlMode := ""
+	if subTaskCfgs[0].EnableANSIQuotes {
+		sqlMode = "ANSI_QUOTES"
+	}
+	dataSources := make(map[string]*DataSource, 0)
+	dataSources["target"] = &DataSource{
+		Host:     subTaskCfgs[0].To.Host,
+		Port:     subTaskCfgs[0].To.Port,
+		User:     subTaskCfgs[0].To.User,
+		Password: subTaskCfgs[0].To.Password,
+		SqlMode:  sqlMode,
+	}
+	for _, subTaskCfg := range subTaskCfgs {
+		tableRouter, err := router.NewTableRouter(subTaskCfg.CaseSensitive, []*router.TableRule{})
+		if err != nil {
+			return errors.Trace(err)
+		}
+		for _, rule := range subTaskCfg.RouteRules {
+			err := tableRouter.AddRule(rule)
+			if err != nil {
+				return errors.Trace(err)
+			}
+		}
+		dataSources[subTaskCfg.SourceID] = &DataSource{
+			Host:     subTaskCfg.From.Host,
+			Port:     subTaskCfg.From.Port,
+			User:     subTaskCfg.From.User,
+			Password: subTaskCfg.From.Password,
+			SqlMode:  sqlMode,
+			Router:   tableRouter,
+		}
+	}
+	c.DataSources = dataSources
+	c.Task.Target = []string{"target"}
+	for id := range dataSources {
+		if id == "target" {
+			continue
+		}
+		c.Task.Source = append(c.Task.Source, id)
+	}
+	return nil
+}
+
 func (c *Config) Init() (err error) {
+	if len(c.DMAddr) > 0 {
+		err := c.adjustConfigByDMSubTasks()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		err = c.Task.Init(c.DataSources, c.TableConfigs)
+		log.Info("config", zap.Any("task", c.Task))
+		if err != nil {
+			return errors.Trace(err)
+		}
+		return nil
+	}
 	for _, d := range c.DataSources {
 		routeRuleList := make([]*router.TableRule, 0, len(c.Routes))
 		// if we had rules
@@ -381,7 +452,18 @@ func (c *Config) CheckConfig() bool {
 		log.Error("check-thread-count must greater than 0!")
 		return false
 	}
+	if len(c.DMAddr) != 0 {
+		u, err := url.Parse(c.DMAddr)
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			log.Error("dm-addr's format should like 'http://127.0.0.1:8261'")
+			return false
+		}
 
+		if len(c.DMTask) == 0 {
+			log.Error("must set the `dm-task` if set `dm-addr`")
+			return false
+		}
+	}
 	return true
 }
 

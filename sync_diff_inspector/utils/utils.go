@@ -519,7 +519,7 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 	var checksum sql.NullInt64
 	err := db.QueryRowContext(ctx, query, args...).Scan(&count, &checksum)
 	if err != nil {
-		log.Warn("execute checksum query fail", zap.String("query", query), zap.Reflect("args", args))
+		log.Warn("execute checksum query fail", zap.String("query", query), zap.Reflect("args", args), zap.Error(err))
 		return -1, -1, errors.Trace(err)
 	}
 	if !count.Valid || !checksum.Valid {
