@@ -49,6 +49,7 @@ range = "age > 10 AND age < 20"
 index-fields = ""
 ignore-columns = ["",""]
 chunk-size = 0
+collation = ""
 
 ######################### Task config #########################
 [task]

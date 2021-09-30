@@ -40,6 +40,8 @@ const (
 
 	LocalDirPerm  os.FileMode = 0o755
 	LocalFilePerm os.FileMode = 0o644
+
+	LogFileName = "sync_diff.log"
 )
 
 // TableConfig is the config of table.
@@ -53,14 +55,13 @@ type TableConfig struct {
 	Fields string `toml:"index-fields"`
 	// select range, for example: "age > 10 AND age < 20"
 	Range string `toml:"range"`
-	// set true if comparing sharding tables with target table, should have more than one source tables.
-	IsSharding bool `toml:"is-sharding"`
 
 	TargetTableInfo *model.TableInfo
 
 	// collation config in mysql/tidb
 	Collation string `toml:"collation"`
 
+	// specify the chunksize for the table
 	ChunkSize int64 `toml:"chunk-size" json:"chunk-size"`
 }
 

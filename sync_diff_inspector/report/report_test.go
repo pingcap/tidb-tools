@@ -31,6 +31,12 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 )
 
+var task *config.TaskConfig = &config.TaskConfig{
+	OutputDir:     "output_dir",
+	FixDir:        "output_dir/123456/fix-on-tidb1",
+	CheckpointDir: "output_dir/123456/checkpoint",
+}
+
 func TestClient(t *testing.T) {
 	TestingT(t)
 }
@@ -45,7 +51,7 @@ func (s *testReportSuite) TestReport(c *C) {
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
 
-	report := NewReport()
+	report := NewReport(task)
 	createTableSQL1 := "create table `test`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
 	tableInfo1, err := dbutil.GetTableInfoBySQL(createTableSQL1, parser.New())
 	c.Assert(err, IsNil)
@@ -104,7 +110,7 @@ func (s *testReportSuite) TestReport(c *C) {
 	report.SetTableDataCheckResult("test", "tbl", true, 100, 200, &chunk.ChunkID{1, 1, 1, 1, 2})
 	report.SetTableMeetError("test", "tbl", errors.New("eeee"))
 
-	new_report := NewReport()
+	new_report := NewReport(task)
 	new_report.LoadReport(report)
 
 	c.Assert(new_report.TotalSize, Equals, int64(579))
@@ -127,13 +133,13 @@ func (s *testReportSuite) TestReport(c *C) {
 	c.Assert(new_report.getDiffRows(), DeepEquals, [][]string{{"`atest`.`atbl`", "false", "+111/-222"}})
 
 	buf := new(bytes.Buffer)
-	new_report.Print("[123]", buf)
+	new_report.Print(buf)
 	c.Assert(buf.String(), Equals, "The structure of `atest`.`atbl` is not equal\n"+
 		"The data of `atest`.`atbl` is not equal\n"+
 		"\n"+
 		"The rest of tables are all equal.\n"+
-		"The patch file has been generated to './output_dir/patch.sql'\n"+
-		"You can view the comparision details through './output_dir/[123]'\n")
+		"The patch file has been generated in \n\t'output_dir/123456/fix-on-tidb1/'\n"+
+		"You can view the comparision details through 'output_dir/sync_diff.log'\n")
 }
 
 func (s *testReportSuite) TestCalculateTotal(c *C) {
@@ -142,7 +148,7 @@ func (s *testReportSuite) TestCalculateTotal(c *C) {
 	db, mock, err := sqlmock.New()
 	c.Assert(err, IsNil)
 
-	report := NewReport()
+	report := NewReport(task)
 	createTableSQL := "create table `test`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
 	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
 	c.Assert(err, IsNil)
@@ -189,7 +195,7 @@ func (s *testReportSuite) TestCalculateTotal(c *C) {
 }
 
 func (s *testReportSuite) TestPrint(c *C) {
-	report := NewReport()
+	report := NewReport(task)
 	createTableSQL := "create table `test`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
 	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
 	c.Assert(err, IsNil)
@@ -234,22 +240,22 @@ func (s *testReportSuite) TestPrint(c *C) {
 	report.SetTableStructCheckResult("test", "tbl", true)
 	report.SetTableDataCheckResult("test", "tbl", true, 0, 0, &chunk.ChunkID{0, 0, 0, 0, 1})
 	buf = new(bytes.Buffer)
-	report.Print("[123]", buf)
+	report.Print(buf)
 	c.Assert(buf.String(), Equals, "A total of 0 table have been compared and all are equal.\n"+
-		"You can view the comparision details through './output_dir/[123]'\n")
+		"You can view the comparision details through 'output_dir/sync_diff.log'\n")
 
 	// Error
 	report.SetTableMeetError("test", "tbl", errors.New("123"))
 	report.SetTableStructCheckResult("test", "tbl", false)
 	buf = new(bytes.Buffer)
-	report.Print("[123]", buf)
+	report.Print(buf)
 	c.Assert(buf.String(), Equals, "Error in comparison process:\n"+
 		"123 error occured in `test`.`tbl`\n"+
-		"You can view the comparision details through './output_dir/[123]'\n")
+		"You can view the comparision details through 'output_dir/sync_diff.log'\n")
 }
 
 func (s *testReportSuite) TestGetSnapshot(c *C) {
-	report := NewReport()
+	report := NewReport(task)
 	createTableSQL1 := "create table `test`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
 	tableInfo1, err := dbutil.GetTableInfoBySQL(createTableSQL1, parser.New())
 	c.Assert(err, IsNil)
@@ -365,7 +371,8 @@ func (s *testReportSuite) TestGetSnapshot(c *C) {
 }
 
 func (s *testReportSuite) TestCommitSummary(c *C) {
-	report := NewReport()
+	outputDir := "./"
+	report := NewReport(&config.TaskConfig{OutputDir: outputDir, FixDir: task.FixDir})
 	createTableSQL1 := "create table `test`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
 	tableInfo1, err := dbutil.GetTableInfoBySQL(createTableSQL1, parser.New())
 	c.Assert(err, IsNil)
@@ -430,8 +437,7 @@ func (s *testReportSuite) TestCommitSummary(c *C) {
 	report.SetTableStructCheckResult("xtest", "tbl", false)
 	report.SetTableDataCheckResult("xtest", "tbl", false, 100, 200, &chunk.ChunkID{0, 0, 0, 3, 10})
 
-	outputDir := "./"
-	err = report.CommitSummary(&config.TaskConfig{OutputDir: outputDir})
+	err = report.CommitSummary()
 	c.Assert(err, IsNil)
 	filename := path.Join(outputDir, "summary.txt")
 	file, err := os.Open(filename)
