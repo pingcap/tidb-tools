@@ -294,7 +294,6 @@ func (tpp *TableProgressPrinter) serve() {
 				if e, ok := tpp.tableMap[opt.name]; ok {
 					tp := e.Value.(*TableProgress)
 					tp.state |= opt.state
-					tpp.flush(true)
 					// continue to increment chunk
 				}
 			}
