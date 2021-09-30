@@ -31,7 +31,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	filter "github.com/pingcap/tidb-tools/pkg/table-filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/config/dm"
 	"go.uber.org/zap"
 )
 
@@ -357,7 +356,7 @@ func (c *Config) configFromFile(path string) error {
 
 func (c *Config) adjustConfigByDMSubTasks() (err error) {
 	// DM's subtask config
-	subTaskCfgs, err := dm.GetDMTaskCfg(c.DMAddr, c.DMTask)
+	subTaskCfgs, err := getDMTaskCfg(c.DMAddr, c.DMTask)
 	if err != nil {
 		log.Warn("failed to get config from DM tasks")
 		return errors.Trace(err)
@@ -366,7 +365,7 @@ func (c *Config) adjustConfigByDMSubTasks() (err error) {
 	if subTaskCfgs[0].EnableANSIQuotes {
 		sqlMode = "ANSI_QUOTES"
 	}
-	dataSources := make(map[string]*DataSource, 0)
+	dataSources := make(map[string]*DataSource)
 	dataSources["target"] = &DataSource{
 		Host:     subTaskCfgs[0].To.Host,
 		Port:     subTaskCfgs[0].To.Port,
