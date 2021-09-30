@@ -190,6 +190,10 @@ func (df *Diff) initCheckpoint() error {
 				df.startRange = splitter.FromNode(node)
 				df.report.LoadReport(reportInfo)
 				finishTableNums = df.startRange.GetTableIndex()
+				if df.startRange.ChunkRange.Type == chunk.Empty {
+					// chunk_iter will skip this table directly
+					finishTableNums++
+				}
 			}
 		} else {
 			log.Info("not found checkpoint file, start from beginning")
