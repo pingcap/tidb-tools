@@ -859,7 +859,8 @@ func (s *testSplitterSuite) TestChunkSize(c *C) {
 
 	// test bucket splitter chunksize
 	statsRows := sqlmock.NewRows([]string{"Db_name", "Table_name", "Column_name", "Is_index", "Bucket_id", "Count", "Repeats", "Lower_Bound", "Upper_Bound"})
-	statsRows.AddRow("test", "test", "PRIMARY", 1, 0, 1000000000, 1, "(1, 2)", "(2, 3)")
+	// Notice, use wrong Bound to kill bucket producer
+	statsRows.AddRow("test", "test", "PRIMARY", 1, 0, 1000000000, 1, "(1, 2, wrong!)", "(2, 3, wrong!)")
 	mock.ExpectQuery("SHOW STATS_BUCKETS").WillReturnRows(statsRows)
 
 	bucketIter, err := NewBucketIterator(ctx, "", tableDiff, db)

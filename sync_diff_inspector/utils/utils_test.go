@@ -23,6 +23,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/parser"
+	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 )
@@ -488,4 +489,89 @@ func (s *testUtilsSuite) TestGetChunkIDFromSQLFileName(c *C) {
 	c.Assert(bucketIndexLeft, Equals, 12)
 	c.Assert(bucketIndexRight, Equals, 13)
 	c.Assert(chunkIndex, Equals, 14)
+}
+
+func (s *testUtilsSuite) TestCompareStruct(c *C) {
+	createTableSQL := "create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`), index(`c`))"
+	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
+	c.Assert(err, IsNil)
+
+	var isEqual bool
+	var isPanic bool
+	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo}, tableInfo)
+	c.Assert(isEqual, IsTrue)
+	c.Assert(isPanic, IsFalse)
+
+	// column length different
+	createTableSQL2 := "create table `test`(`a` int, `b` varchar(10), `c` float, primary key(`a`, `b`), index(`c`))"
+	tableInfo2, err := dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
+	c.Assert(err, IsNil)
+
+	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo)
+	c.Assert(isEqual, IsFalse)
+	c.Assert(isPanic, IsTrue)
+
+	// column name differernt
+	createTableSQL2 = "create table `test`(`aa` int, `b` varchar(10), `c` float, `d` datetime, primary key(`aa`, `b`), index(`c`))"
+	tableInfo2, err = dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
+	c.Assert(err, IsNil)
+
+	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo)
+	c.Assert(isEqual, IsFalse)
+	c.Assert(isPanic, IsTrue)
+
+	// column type compatible
+	createTableSQL2 = "create table `test`(`a` int, `b` char(10), `c` float, `d` datetime, primary key(`a`, `b`), index(`c`))"
+	tableInfo2, err = dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
+	c.Assert(err, IsNil)
+
+	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo)
+	c.Assert(isEqual, IsTrue)
+	c.Assert(isPanic, IsFalse)
+
+	createTableSQL2 = "create table `test`(`a` int(11), `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`), index(`c`))"
+	tableInfo2, err = dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
+	c.Assert(err, IsNil)
+
+	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo)
+	c.Assert(isEqual, IsTrue)
+	c.Assert(isPanic, IsFalse)
+
+	// column type not compatible
+	createTableSQL2 = "create table `test`(`a` int, `b` varchar(10), `c` int, `d` datetime, primary key(`a`, `b`), index(`c`))"
+	tableInfo2, err = dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
+	c.Assert(err, IsNil)
+
+	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo)
+	c.Assert(isEqual, IsFalse)
+	c.Assert(isPanic, IsTrue)
+
+	// index check
+
+	// index different
+	createTableSQL2 = "create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
+	tableInfo2, err = dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
+	c.Assert(err, IsNil)
+
+	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo)
+	c.Assert(isEqual, IsFalse)
+	c.Assert(isPanic, IsFalse)
+	c.Assert(len(tableInfo.Indices), Equals, 1)
+	c.Assert(tableInfo.Indices[0].Name.O, Equals, "PRIMARY")
+
+	// index column different
+	createTableSQL = "create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`), index(`c`))"
+	tableInfo, err = dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
+	c.Assert(err, IsNil)
+
+	createTableSQL2 = "create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `c`), index(`c`))"
+	tableInfo2, err = dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
+	c.Assert(err, IsNil)
+
+	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo)
+	c.Assert(isEqual, IsFalse)
+	c.Assert(isPanic, IsFalse)
+	c.Assert(len(tableInfo.Indices), Equals, 1)
+	c.Assert(tableInfo.Indices[0].Name.O, Equals, "c")
+
 }

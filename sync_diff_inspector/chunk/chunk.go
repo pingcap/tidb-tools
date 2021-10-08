@@ -38,6 +38,7 @@ const (
 	Random
 	Limit
 	Others
+	Empty
 )
 
 // Bound represents a bound for a column
