@@ -72,6 +72,12 @@ func (s *testReportSuite) TestReport(c *C) {
 			Info:      tableInfo2,
 			Collation: "[123]",
 		},
+		{
+			Schema:    "ctest",
+			Table:     "atbl",
+			Info:      tableInfo2,
+			Collation: "[123]",
+		},
 	}
 	configs := []*ReportConfig{
 		{
@@ -106,7 +112,7 @@ func (s *testReportSuite) TestReport(c *C) {
 	report.CalculateTotalSize(ctx, db)
 
 	// Test Table Report
-	report.SetTableStructCheckResult("test", "tbl", true)
+	report.SetTableStructCheckResult("test", "tbl", true, false)
 	report.SetTableDataCheckResult("test", "tbl", true, 100, 200, &chunk.ChunkID{1, 1, 1, 1, 2})
 	report.SetTableMeetError("test", "tbl", errors.New("eeee"))
 
@@ -120,22 +126,25 @@ func (s *testReportSuite) TestReport(c *C) {
 	c.Assert(result.DataEqual, IsTrue)
 	c.Assert(result.StructEqual, IsTrue)
 
-	c.Assert(new_report.getSortedTables(), DeepEquals, []string{"`atest`.`atbl`", "`test`.`tbl`"})
+	c.Assert(new_report.getSortedTables(), DeepEquals, []string{"`atest`.`atbl`", "`ctest`.`atbl`", "`test`.`tbl`"})
 	c.Assert(new_report.getDiffRows(), DeepEquals, [][]string{})
 
-	new_report.SetTableStructCheckResult("atest", "atbl", true)
+	new_report.SetTableStructCheckResult("atest", "atbl", true, false)
 	new_report.SetTableDataCheckResult("atest", "atbl", false, 111, 222, &chunk.ChunkID{1, 1, 1, 1, 2})
-	c.Assert(new_report.getSortedTables(), DeepEquals, []string{"`test`.`tbl`"})
+	c.Assert(new_report.getSortedTables(), DeepEquals, []string{"`ctest`.`atbl`", "`test`.`tbl`"})
 	c.Assert(new_report.getDiffRows(), DeepEquals, [][]string{{"`atest`.`atbl`", "true", "+111/-222"}})
 
-	new_report.SetTableStructCheckResult("atest", "atbl", false)
-	c.Assert(new_report.getSortedTables(), DeepEquals, []string{"`test`.`tbl`"})
+	new_report.SetTableStructCheckResult("atest", "atbl", false, false)
+	c.Assert(new_report.getSortedTables(), DeepEquals, []string{"`ctest`.`atbl`", "`test`.`tbl`"})
 	c.Assert(new_report.getDiffRows(), DeepEquals, [][]string{{"`atest`.`atbl`", "false", "+111/-222"}})
+
+	new_report.SetTableStructCheckResult("ctest", "atbl", false, true)
 
 	buf := new(bytes.Buffer)
 	new_report.Print(buf)
 	c.Assert(buf.String(), Equals, "The structure of `atest`.`atbl` is not equal\n"+
 		"The data of `atest`.`atbl` is not equal\n"+
+		"The structure of `ctest`.`atbl` is not equal, and data-check is skipped\n"+
 		"\n"+
 		"The rest of tables are all equal.\n"+
 		"The patch file has been generated in \n\t'output_dir/123456/fix-on-tidb1/'\n"+
@@ -237,7 +246,7 @@ func (s *testReportSuite) TestPrint(c *C) {
 
 	var buf *bytes.Buffer
 	// All Pass
-	report.SetTableStructCheckResult("test", "tbl", true)
+	report.SetTableStructCheckResult("test", "tbl", true, false)
 	report.SetTableDataCheckResult("test", "tbl", true, 0, 0, &chunk.ChunkID{0, 0, 0, 0, 1})
 	buf = new(bytes.Buffer)
 	report.Print(buf)
@@ -246,7 +255,7 @@ func (s *testReportSuite) TestPrint(c *C) {
 
 	// Error
 	report.SetTableMeetError("test", "tbl", errors.New("123"))
-	report.SetTableStructCheckResult("test", "tbl", false)
+	report.SetTableStructCheckResult("test", "tbl", false, false)
 	buf = new(bytes.Buffer)
 	report.Print(buf)
 	c.Assert(buf.String(), Equals, "Error in comparison process:\n"+
@@ -311,17 +320,17 @@ func (s *testReportSuite) TestGetSnapshot(c *C) {
 	}
 	report.Init(tableDiffs, configsBytes[:2], configsBytes[2])
 
-	report.SetTableStructCheckResult("test", "tbl", true)
+	report.SetTableStructCheckResult("test", "tbl", true, false)
 	report.SetTableDataCheckResult("test", "tbl", false, 100, 100, &chunk.ChunkID{0, 0, 0, 1, 10})
 	report.SetTableDataCheckResult("test", "tbl", true, 0, 0, &chunk.ChunkID{0, 0, 0, 3, 10})
 	report.SetTableDataCheckResult("test", "tbl", false, 200, 200, &chunk.ChunkID{0, 0, 0, 3, 10})
 
-	report.SetTableStructCheckResult("atest", "tbl", true)
+	report.SetTableStructCheckResult("atest", "tbl", true, false)
 	report.SetTableDataCheckResult("atest", "tbl", false, 100, 100, &chunk.ChunkID{0, 0, 0, 0, 10})
 	report.SetTableDataCheckResult("atest", "tbl", true, 0, 0, &chunk.ChunkID{0, 0, 0, 3, 10})
 	report.SetTableDataCheckResult("atest", "tbl", false, 200, 200, &chunk.ChunkID{0, 0, 0, 3, 10})
 
-	report.SetTableStructCheckResult("xtest", "tbl", true)
+	report.SetTableStructCheckResult("xtest", "tbl", true, false)
 	report.SetTableDataCheckResult("xtest", "tbl", false, 100, 100, &chunk.ChunkID{0, 0, 0, 0, 10})
 	report.SetTableDataCheckResult("xtest", "tbl", true, 0, 0, &chunk.ChunkID{0, 0, 0, 1, 10})
 	report.SetTableDataCheckResult("xtest", "tbl", false, 200, 200, &chunk.ChunkID{0, 0, 0, 3, 10})
@@ -399,6 +408,11 @@ func (s *testReportSuite) TestCommitSummary(c *C) {
 			Table:     "tbl",
 			Info:      tableInfo3,
 			Collation: "[123]",
+		}, {
+			Schema:    "ytest",
+			Table:     "tbl",
+			Info:      tableInfo3,
+			Collation: "[123]",
 		},
 	}
 	configs := []*ReportConfig{
@@ -428,13 +442,13 @@ func (s *testReportSuite) TestCommitSummary(c *C) {
 	}
 	report.Init(tableDiffs, configsBytes[:2], configsBytes[2])
 
-	report.SetTableStructCheckResult("test", "tbl", true)
+	report.SetTableStructCheckResult("test", "tbl", true, false)
 	report.SetTableDataCheckResult("test", "tbl", true, 100, 200, &chunk.ChunkID{0, 0, 0, 1, 10})
 
-	report.SetTableStructCheckResult("atest", "tbl", true)
+	report.SetTableStructCheckResult("atest", "tbl", true, false)
 	report.SetTableDataCheckResult("atest", "tbl", false, 100, 200, &chunk.ChunkID{0, 0, 0, 2, 10})
 
-	report.SetTableStructCheckResult("xtest", "tbl", false)
+	report.SetTableStructCheckResult("xtest", "tbl", false, false)
 	report.SetTableDataCheckResult("xtest", "tbl", false, 100, 200, &chunk.ChunkID{0, 0, 0, 3, 10})
 
 	err = report.CommitSummary()
