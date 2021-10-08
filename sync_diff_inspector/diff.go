@@ -66,15 +66,16 @@ type Diff struct {
 	// workSource is one of upstream/downstream by some policy in #pickSource.
 	workSource source.Source
 
-	sample            int
-	checkThreadCount  int
-	useChecksum       bool
-	useCheckpoint     bool
-	ignoreDataCheck   bool
-	ignoreStructCheck bool
-	ignoreStats       bool
-	sqlWg             sync.WaitGroup
-	checkpointWg      sync.WaitGroup
+	sample              int
+	checkThreadCount    int
+	compareChecksumOnly bool
+	useChecksum         bool
+	useCheckpoint       bool
+	ignoreDataCheck     bool
+	ignoreStructCheck   bool
+	ignoreStats         bool
+	sqlWg               sync.WaitGroup
+	checkpointWg        sync.WaitGroup
 
 	FixSQLDir     string
 	CheckpointDir string
@@ -88,16 +89,17 @@ type Diff struct {
 // NewDiff returns a Diff instance.
 func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 	diff = &Diff{
-		sample:            cfg.Sample,
-		checkThreadCount:  cfg.CheckThreadCount,
-		useChecksum:       cfg.UseChecksum,
-		useCheckpoint:     cfg.UseCheckpoint,
-		ignoreDataCheck:   cfg.IgnoreDataCheck,
-		ignoreStructCheck: cfg.IgnoreStructCheck,
-		ignoreStats:       cfg.IgnoreStats,
-		sqlCh:             make(chan *ChunkDML, splitter.DefaultChannelBuffer),
-		cp:                new(checkpoints.Checkpoint),
-		report:            report.NewReport(&cfg.Task),
+		sample:              cfg.Sample,
+		checkThreadCount:    cfg.CheckThreadCount,
+		compareChecksumOnly: cfg.CompareChecksumOnly,
+		useChecksum:         cfg.UseChecksum,
+		useCheckpoint:       cfg.UseCheckpoint,
+		ignoreDataCheck:     cfg.IgnoreDataCheck,
+		ignoreStructCheck:   cfg.IgnoreStructCheck,
+		ignoreStats:         cfg.IgnoreStats,
+		sqlCh:               make(chan *ChunkDML, splitter.DefaultChannelBuffer),
+		cp:                  new(checkpoints.Checkpoint),
+		report:              report.NewReport(&cfg.Task),
 	}
 	if err = diff.init(ctx, cfg); err != nil {
 		diff.Close()
@@ -417,17 +419,33 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 	}
 	tableDiff := df.downstream.GetTables()[rangeInfo.GetTableIndex()]
 	schema, table := tableDiff.Schema, tableDiff.Table
-	isEqual, count, err := df.compareChecksumAndGetCount(ctx, rangeInfo)
-	if err != nil {
-		df.report.SetTableMeetError(schema, table, err)
+	var (
+		count         int64  = 0
+		isEqual       bool   = true
+		needDataCheck bool   = true
+		err           error  = nil
+		state         string = checkpoints.SuccessState
+	)
+	if !df.compareChecksumOnly {
+		isEqual, count, err = df.compareChecksumAndGetCount(ctx, rangeInfo)
+		if err != nil {
+			// If an error occurs during the checksum phase, skip the data compare phase.
+			needDataCheck = false
+			df.report.SetTableMeetError(schema, table, err)
+			log.Debug("checksum failed", zap.Any("chunk id", rangeInfo.ChunkRange.Index), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTables()[rangeInfo.GetTableIndex()].Table))
+			state = checkpoints.FailedState
+		} else if isEqual {
+			needDataCheck = false
+		} else {
+			log.Debug("checksum failed", zap.Any("chunk id", rangeInfo.ChunkRange.Index), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTables()[rangeInfo.GetTableIndex()].Table))
+			state = checkpoints.FailedState
+		}
 	}
 
-	var state string = checkpoints.SuccessState
-	// If an error occurs during the checksum phase, skip the data compare phase.
-	if !isEqual && err == nil {
-		log.Debug("checksum failed", zap.Any("chunk id", rangeInfo.ChunkRange.Index), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTables()[rangeInfo.GetTableIndex()].Table))
-		state = checkpoints.FailedState
+	// if compare-checksum-only is true, skip data-check.
+	if needDataCheck && !df.compareChecksumOnly {
 		// if the chunk's checksum differ, try to do binary check
+		// if skip checksum-compare, `count` is set to 0 so that binary-check is also skipped.
 		info := rangeInfo
 		if count > splitter.SplitThreshold {
 			log.Debug("count greater than threshold, start do bingenerate", zap.Any("chunk id", rangeInfo.ChunkRange.Index), zap.Int64("chunk size", count))
@@ -437,12 +455,11 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 				df.report.SetTableMeetError(schema, table, err)
 			}
 		}
-		_, err := df.compareRows(ctx, info, dml)
+		isDataEqual, err := df.compareRows(ctx, info, dml)
 		if err != nil {
 			df.report.SetTableMeetError(schema, table, err)
 		}
-	} else if err != nil {
-		state = checkpoints.FailedState
+		isEqual = isEqual && isDataEqual
 	}
 	dml.node.State = state
 	id := rangeInfo.ChunkRange.Index
