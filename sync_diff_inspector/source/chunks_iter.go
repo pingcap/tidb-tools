@@ -20,6 +20,7 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/progress"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
@@ -57,43 +58,73 @@ func (t *ChunksIterator) produceChunks(ctx context.Context, startRange *splitter
 	pool := utils.NewWorkerPool(3, "chunks producer")
 	t.nextTableIndex = 0
 
+	// If chunkRange
 	if startRange != nil {
 		curIndex := startRange.GetTableIndex()
 		curTable := t.TableDiffs[curIndex]
 		t.nextTableIndex = curIndex + 1
-		pool.Apply(func() {
-			chunkIter, err := t.tableAnalyzer.AnalyzeSplitter(ctx, curTable, startRange)
-			if err != nil {
-				t.errCh <- errors.Trace(err)
-				return
-			}
-			defer chunkIter.Close()
-			for {
-				c, err := chunkIter.Next()
+		// if this chunk is empty, data-check for this table should be skipped
+		if startRange.ChunkRange.Type != chunk.Empty {
+			pool.Apply(func() {
+				chunkIter, err := t.tableAnalyzer.AnalyzeSplitter(ctx, curTable, startRange)
 				if err != nil {
 					t.errCh <- errors.Trace(err)
 					return
 				}
-				if c == nil {
-					break
+				defer chunkIter.Close()
+				for {
+					c, err := chunkIter.Next()
+					if err != nil {
+						t.errCh <- errors.Trace(err)
+						return
+					}
+					if c == nil {
+						break
+					}
+					c.Index.TableIndex = curIndex
+					select {
+					case <-ctx.Done():
+						log.Info("Stop do produce chunks by context done")
+						return
+					case t.chunksCh <- &splitter.RangeInfo{
+						ChunkRange: c,
+						IndexID:    getCurTableIndexID(chunkIter),
+						ProgressID: dbutil.TableName(curTable.Schema, curTable.Table),
+					}:
+					}
 				}
-				c.Index.TableIndex = curIndex
+			})
+		}
+	}
+
+	for ; t.nextTableIndex < len(t.TableDiffs); t.nextTableIndex++ {
+		curTableIndex := t.nextTableIndex
+		// skip data-check, but still need to send a empty chunk to make checkpoint continuous
+		if t.TableDiffs[curTableIndex].IgnoreDataCheck {
+			pool.Apply(func() {
+				table := t.TableDiffs[curTableIndex]
+				progressID := dbutil.TableName(table.Schema, table.Table)
+				progress.StartTable(progressID, 1, true)
 				select {
 				case <-ctx.Done():
 					log.Info("Stop do produce chunks by context done")
 					return
 				case t.chunksCh <- &splitter.RangeInfo{
-					ChunkRange: c,
-					IndexID:    getCurTableIndexID(chunkIter),
-					ProgressID: dbutil.TableName(curTable.Schema, curTable.Table),
+					ChunkRange: &chunk.Range{
+						Index: &chunk.ChunkID{
+							TableIndex: curTableIndex,
+						},
+						Type:    chunk.Empty,
+						IsFirst: true,
+						IsLast:  true,
+					},
+					ProgressID: progressID,
 				}:
 				}
-			}
-		})
-	}
+			})
+			continue
+		}
 
-	for ; t.nextTableIndex < len(t.TableDiffs); t.nextTableIndex++ {
-		curTableIndex := t.nextTableIndex
 		pool.Apply(func() {
 			table := t.TableDiffs[curTableIndex]
 			chunkIter, err := t.tableAnalyzer.AnalyzeSplitter(ctx, table, nil)
