@@ -190,6 +190,10 @@ func (df *Diff) initCheckpoint() error {
 				df.startRange = splitter.FromNode(node)
 				df.report.LoadReport(reportInfo)
 				finishTableNums = df.startRange.GetTableIndex()
+				if df.startRange.ChunkRange.Type == chunk.Empty {
+					// chunk_iter will skip this table directly
+					finishTableNums++
+				}
 			}
 		} else {
 			log.Info("not found checkpoint file, start from beginning")
@@ -297,28 +301,30 @@ func (df *Diff) Equal(ctx context.Context) error {
 
 func (df *Diff) StructEqual(ctx context.Context) error {
 	tables := df.downstream.GetTables()
-	for tableIndex := range tables {
-		structEq, err := df.compareStruct(ctx, tableIndex)
+	tableIndex := 0
+	if df.startRange != nil {
+		tableIndex = df.startRange.ChunkRange.Index.TableIndex
+	}
+	for ; tableIndex < len(tables); tableIndex++ {
+		isEqual, isSkip, err := df.compareStruct(ctx, tableIndex)
 		if err != nil {
 			return errors.Trace(err)
 		}
-		progress.RegisterTable(dbutil.TableName(tables[tableIndex].Schema, tables[tableIndex].Table), !structEq, false)
-		df.report.SetTableStructCheckResult(tables[tableIndex].Schema, tables[tableIndex].Table, structEq)
+		progress.RegisterTable(dbutil.TableName(tables[tableIndex].Schema, tables[tableIndex].Table), !isEqual, isSkip)
+		df.report.SetTableStructCheckResult(tables[tableIndex].Schema, tables[tableIndex].Table, isEqual, isSkip)
 	}
 	return nil
 }
 
-func (df *Diff) compareStruct(ctx context.Context, tableIndex int) (structEq bool, err error) {
+func (df *Diff) compareStruct(ctx context.Context, tableIndex int) (isEqual bool, isSkip bool, err error) {
 	sourceTableInfos, err := df.upstream.GetSourceStructInfo(ctx, tableIndex)
 	if err != nil {
-		return false, errors.Trace(err)
+		return false, true, errors.Trace(err)
 	}
-	structEq = true
-	for _, tableInfo := range sourceTableInfos {
-		eq, _ := dbutil.EqualTableInfo(tableInfo, df.downstream.GetTables()[tableIndex].Info)
-		structEq = structEq && eq
-	}
-	return structEq, nil
+	table := df.downstream.GetTables()[tableIndex]
+	isEqual, isSkip = utils.CompareStruct(sourceTableInfos, table.Info)
+	table.IgnoreDataCheck = isSkip
+	return isEqual, isSkip, nil
 }
 
 func (df *Diff) startGCKeeperForTiDB(ctx context.Context, db *sql.DB) {
@@ -401,14 +407,22 @@ func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {
 }
 
 func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool {
+	dml := &ChunkDML{
+		node: rangeInfo.ToNode(),
+	}
+	defer func() { df.sqlCh <- dml }()
+	if rangeInfo.ChunkRange.Type == chunk.Empty {
+		dml.node.State = checkpoints.IgnoreState
+		return true
+	}
 	tableDiff := df.downstream.GetTables()[rangeInfo.GetTableIndex()]
 	schema, table := tableDiff.Schema, tableDiff.Table
 	isEqual, count, err := df.compareChecksumAndGetCount(ctx, rangeInfo)
 	if err != nil {
 		df.report.SetTableMeetError(schema, table, err)
 	}
+
 	var state string = checkpoints.SuccessState
-	dml := &ChunkDML{}
 	// If an error occurs during the checksum phase, skip the data compare phase.
 	if !isEqual && err == nil {
 		log.Debug("checksum failed", zap.Any("chunk id", rangeInfo.ChunkRange.Index), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTables()[rangeInfo.GetTableIndex()].Table))
@@ -430,11 +444,9 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 	} else if err != nil {
 		state = checkpoints.FailedState
 	}
-	dml.node = rangeInfo.ToNode()
 	dml.node.State = state
 	id := rangeInfo.ChunkRange.Index
 	df.report.SetTableDataCheckResult(schema, table, isEqual, dml.rowAdd, dml.rowDelete, id)
-	df.sqlCh <- dml
 	return isEqual
 }
 

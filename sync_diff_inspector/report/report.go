@@ -58,6 +58,7 @@ type TableResult struct {
 	Schema      string                  `json:"schma"`
 	Table       string                  `json:"table"`
 	StructEqual bool                    `json:"struct-equal"`
+	DataSkip    bool                    `json:"data-skip"`
 	DataEqual   bool                    `json:"data-equal"`
 	MeetError   error                   `json:"-"`
 	ChunkMap    map[string]*ChunkResult `json:"chunk-result"` // `ChunkMap` stores the `ChunkResult` of each chunk of the table
@@ -220,7 +221,11 @@ func (r *Report) Print(w io.Writer) error {
 		for schema, tableMap := range r.TableResults {
 			for table, result := range tableMap {
 				if !result.StructEqual {
-					summary.WriteString(fmt.Sprintf("The structure of %s is not equal\n", dbutil.TableName(schema, table)))
+					if result.DataSkip {
+						summary.WriteString(fmt.Sprintf("The structure of %s is not equal, and data-check is skipped\n", dbutil.TableName(schema, table)))
+					} else {
+						summary.WriteString(fmt.Sprintf("The structure of %s is not equal\n", dbutil.TableName(schema, table)))
+					}
 				}
 				if !result.DataEqual {
 					summary.WriteString(fmt.Sprintf("The data of %s is not equal\n", dbutil.TableName(schema, table)))
@@ -274,10 +279,12 @@ func (r *Report) Init(tableDiffs []*common.TableDiff, sourceConfig [][]byte, tar
 }
 
 // SetTableStructCheckResult sets the struct check result for table.
-func (r *Report) SetTableStructCheckResult(schema, table string, equal bool) {
+func (r *Report) SetTableStructCheckResult(schema, table string, equal bool, skip bool) {
 	r.Lock()
 	defer r.Unlock()
-	r.TableResults[schema][table].StructEqual = equal
+	tableResult := r.TableResults[schema][table]
+	tableResult.StructEqual = equal
+	tableResult.DataSkip = skip
 	if !equal && r.Result != Error {
 		r.Result = Fail
 	}
