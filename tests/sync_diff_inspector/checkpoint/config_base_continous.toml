@@ -13,9 +13,6 @@ sample-percent = 100
 # set true if just want compare data by checksum, will skip select data when checksum is not equal.
 compare-checksum-only = false
 
-# set true if just want compare data by line, will skip compare checksum
-use-checksum = true
-
 # set true will continue check from the latest checkpoint
 use-checkpoint = true
 

@@ -256,8 +256,6 @@ type Config struct {
 	CheckThreadCount int `toml:"check-thread-count" json:"check-thread-count"`
 	// set true if want to compare cheksum only
 	CompareChecksumOnly bool `toml:"compare-checksum-only" json:"compare-checksum-only"`
-	// set false if want to compare the data directly
-	UseChecksum bool `toml:"use-checksum" json:"use-checksum"`
 	// ignore check table's struct
 	IgnoreStructCheck bool `toml:"ignore-struct-check" json:"ignore-struct-check"`
 	// ignore tidb stats only use randomSpliter to split chunks
@@ -297,7 +295,6 @@ func NewConfig() *Config {
 	fs.IntVar(&cfg.Sample, "sample", 100, "the percent of sampling check")
 	fs.IntVar(&cfg.CheckThreadCount, "check-thread-count", 1, "how many goroutines are created to check data")
 	fs.BoolVar(&cfg.CompareChecksumOnly, "compare-checksum-only", true, "set true if want to compare cheksum only")
-	fs.BoolVar(&cfg.UseChecksum, "use-checksum", true, "set false if want to comapre the data directly")
 	fs.BoolVar(&cfg.PrintVersion, "V", false, "print version of sync_diff_inspector")
 	fs.StringVar(&cfg.DMAddr, "A", "", "the address of DM")
 	fs.StringVar(&cfg.DMTask, "T", "", "identifier of dm task")

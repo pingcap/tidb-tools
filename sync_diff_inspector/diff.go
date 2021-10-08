@@ -69,7 +69,6 @@ type Diff struct {
 	sample              int
 	checkThreadCount    int
 	compareChecksumOnly bool
-	useChecksum         bool
 	useCheckpoint       bool
 	ignoreDataCheck     bool
 	ignoreStructCheck   bool
@@ -92,7 +91,6 @@ func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 		sample:              cfg.Sample,
 		checkThreadCount:    cfg.CheckThreadCount,
 		compareChecksumOnly: cfg.CompareChecksumOnly,
-		useChecksum:         cfg.UseChecksum,
 		useCheckpoint:       cfg.UseCheckpoint,
 		ignoreDataCheck:     cfg.IgnoreDataCheck,
 		ignoreStructCheck:   cfg.IgnoreStructCheck,
@@ -419,31 +417,16 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 	}
 	tableDiff := df.downstream.GetTables()[rangeInfo.GetTableIndex()]
 	schema, table := tableDiff.Schema, tableDiff.Table
-	var (
-		count         int64  = 0
-		isEqual       bool   = true
-		needDataCheck bool   = true
-		err           error  = nil
-		state         string = checkpoints.SuccessState
-	)
-	if !df.compareChecksumOnly {
-		isEqual, count, err = df.compareChecksumAndGetCount(ctx, rangeInfo)
-		if err != nil {
-			// If an error occurs during the checksum phase, skip the data compare phase.
-			needDataCheck = false
-			df.report.SetTableMeetError(schema, table, err)
-			log.Debug("checksum failed", zap.Any("chunk id", rangeInfo.ChunkRange.Index), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTables()[rangeInfo.GetTableIndex()].Table))
-			state = checkpoints.FailedState
-		} else if isEqual {
-			needDataCheck = false
-		} else {
-			log.Debug("checksum failed", zap.Any("chunk id", rangeInfo.ChunkRange.Index), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTables()[rangeInfo.GetTableIndex()].Table))
-			state = checkpoints.FailedState
-		}
-	}
+	var state string = checkpoints.SuccessState
 
-	// if compare-checksum-only is true, skip data-check.
-	if needDataCheck && !df.compareChecksumOnly {
+	isEqual, count, err := df.compareChecksumAndGetCount(ctx, rangeInfo)
+	if err != nil {
+		// If an error occurs during the checksum phase, skip the data compare phase.
+		state = checkpoints.FailedState
+		df.report.SetTableMeetError(schema, table, err)
+	} else if !isEqual && !df.compareChecksumOnly {
+		log.Debug("checksum failed", zap.Any("chunk id", rangeInfo.ChunkRange.Index), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTables()[rangeInfo.GetTableIndex()].Table))
+		state = checkpoints.FailedState
 		// if the chunk's checksum differ, try to do binary check
 		// if skip checksum-compare, `count` is set to 0 so that binary-check is also skipped.
 		info := rangeInfo
