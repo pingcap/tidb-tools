@@ -265,7 +265,7 @@ type Config struct {
 	// set true will continue check from the latest checkpoint
 	UseCheckpoint bool `toml:"use-checkpoint" json:"use-checkpoint"`
 
-	// DMAddr is dm-master's address, the fromat should like "http://127.0.0.1:8261"
+	// DMAddr is dm-master's address, the format should like "http://127.0.0.1:8261"
 	DMAddr string `toml:"dm-addr" json:"dm-addr"`
 	// DMTask string `toml:"dm-task" json:"dm-task"`
 	DMTask string `toml:"dm-task" json:"dm-task"`
