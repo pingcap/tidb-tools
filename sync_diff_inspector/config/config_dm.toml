@@ -10,11 +10,8 @@ check-thread-count = 4
 # sampling check percent, for example 10 means only check 10% data
 sample-percent = 100
 
-# calculate the data's checksum, and compare data by checksum.
-# set false if want to comapre the data directly
-use-checksum = true
-
-# set true if just want compare data by checksum, will skip select data when checksum is not equal. 
+# set true if just want compare data by checksum, will skip select data when checksum is not equal.
+use-checksum = false
 
 # set true will continue check from the latest checkpoint
 use-checkpoint = true
@@ -24,8 +21,6 @@ ignore-data-check = false
 
 # ignore check table's struct
 ignore-struct-check = false
-
-# the name of the file which saves sqls used to fix different data.
 
 # dm-master's address, the format should like "http://127.0.0.1:8261"
 dm-addr = "http://127.0.0.1:8261"
