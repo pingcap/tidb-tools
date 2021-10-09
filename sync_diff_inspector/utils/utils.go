@@ -251,7 +251,7 @@ func GenerateDeleteDML(data map[string]*dbutil.ColumnData, table *model.TableInf
 			kvs = append(kvs, fmt.Sprintf("%s = %s", dbutil.ColumnName(col.Name.O), string(data[col.Name.O].Data)))
 		}
 	}
-	return fmt.Sprintf("DELETE FROM %s WHERE %s;", dbutil.TableName(schema, table.Name.O), strings.Join(kvs, " AND "))
+	return fmt.Sprintf("DELETE FROM %s WHERE %s LIMIT 1;", dbutil.TableName(schema, table.Name.O), strings.Join(kvs, " AND "))
 
 }
 
