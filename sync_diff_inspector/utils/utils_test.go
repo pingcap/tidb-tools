@@ -155,7 +155,7 @@ func (*testUtilsSuite) TestBasicTableUtilOperation(c *C) {
 			"╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╍╍\n"+
 			"*/\n"+
 			"REPLACE INTO `schema`.`test`(`a`,`b`,`c`,`d`) VALUES (1,'a',1.22,'sdf');")
-	c.Assert(GenerateDeleteDML(data1, tableInfo, "schema"), Equals, "DELETE FROM `schema`.`test` WHERE `a` = 1 AND `b` = 'a' AND `c` = 1.22 AND `d` = 'sdf';")
+	c.Assert(GenerateDeleteDML(data1, tableInfo, "schema"), Equals, "DELETE FROM `schema`.`test` WHERE `a` = 1 AND `b` = 'a' AND `c` = 1.22 AND `d` = 'sdf' LIMIT 1;")
 
 	// same
 	equal, cmp, err := CompareData(data1, data1, orderKeyCols, columns)
@@ -294,7 +294,7 @@ func (*testUtilsSuite) TestGenerateSQLs(c *C) {
 	replaceSQL := GenerateReplaceDML(rowsData, tableInfo, "diff_test")
 	deleteSQL := GenerateDeleteDML(rowsData, tableInfo, "diff_test")
 	c.Assert(replaceSQL, Equals, "REPLACE INTO `diff_test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (1,'xxx','2018-01-01 00:00:00','10:10:10',11.1111);")
-	c.Assert(deleteSQL, Equals, "DELETE FROM `diff_test`.`atest` WHERE `id` = 1 AND `name` = 'xxx' AND `birthday` = '2018-01-01 00:00:00' AND `update_time` = '10:10:10' AND `money` = 11.1111;")
+	c.Assert(deleteSQL, Equals, "DELETE FROM `diff_test`.`atest` WHERE `id` = 1 AND `name` = 'xxx' AND `birthday` = '2018-01-01 00:00:00' AND `update_time` = '10:10:10' AND `money` = 11.1111 LIMIT 1;")
 
 	// test the unique key
 	createTableSQL2 := "CREATE TABLE `diff_test`.`atest` (`id` int(24), `name` varchar(24), `birthday` datetime, `update_time` time, `money` decimal(20,2), unique key(`id`, `name`))"
@@ -303,27 +303,27 @@ func (*testUtilsSuite) TestGenerateSQLs(c *C) {
 	replaceSQL = GenerateReplaceDML(rowsData, tableInfo2, "diff_test")
 	deleteSQL = GenerateDeleteDML(rowsData, tableInfo2, "diff_test")
 	c.Assert(replaceSQL, Equals, "REPLACE INTO `diff_test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (1,'xxx','2018-01-01 00:00:00','10:10:10',11.1111);")
-	c.Assert(deleteSQL, Equals, "DELETE FROM `diff_test`.`atest` WHERE `id` = 1 AND `name` = 'xxx' AND `birthday` = '2018-01-01 00:00:00' AND `update_time` = '10:10:10' AND `money` = 11.1111;")
+	c.Assert(deleteSQL, Equals, "DELETE FROM `diff_test`.`atest` WHERE `id` = 1 AND `name` = 'xxx' AND `birthday` = '2018-01-01 00:00:00' AND `update_time` = '10:10:10' AND `money` = 11.1111 LIMIT 1;")
 
 	// test value is nil
 	rowsData["name"] = &dbutil.ColumnData{Data: []byte(""), IsNull: true}
 	replaceSQL = GenerateReplaceDML(rowsData, tableInfo, "diff_test")
 	deleteSQL = GenerateDeleteDML(rowsData, tableInfo, "diff_test")
 	c.Assert(replaceSQL, Equals, "REPLACE INTO `diff_test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (1,NULL,'2018-01-01 00:00:00','10:10:10',11.1111);")
-	c.Assert(deleteSQL, Equals, "DELETE FROM `diff_test`.`atest` WHERE `id` = 1 AND `name` is NULL AND `birthday` = '2018-01-01 00:00:00' AND `update_time` = '10:10:10' AND `money` = 11.1111;")
+	c.Assert(deleteSQL, Equals, "DELETE FROM `diff_test`.`atest` WHERE `id` = 1 AND `name` is NULL AND `birthday` = '2018-01-01 00:00:00' AND `update_time` = '10:10:10' AND `money` = 11.1111 LIMIT 1;")
 
 	rowsData["id"] = &dbutil.ColumnData{Data: []byte(""), IsNull: true}
 	replaceSQL = GenerateReplaceDML(rowsData, tableInfo, "diff_test")
 	deleteSQL = GenerateDeleteDML(rowsData, tableInfo, "diff_test")
 	c.Assert(replaceSQL, Equals, "REPLACE INTO `diff_test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (NULL,NULL,'2018-01-01 00:00:00','10:10:10',11.1111);")
-	c.Assert(deleteSQL, Equals, "DELETE FROM `diff_test`.`atest` WHERE `id` is NULL AND `name` is NULL AND `birthday` = '2018-01-01 00:00:00' AND `update_time` = '10:10:10' AND `money` = 11.1111;")
+	c.Assert(deleteSQL, Equals, "DELETE FROM `diff_test`.`atest` WHERE `id` is NULL AND `name` is NULL AND `birthday` = '2018-01-01 00:00:00' AND `update_time` = '10:10:10' AND `money` = 11.1111 LIMIT 1;")
 
 	// test value with "'"
 	rowsData["name"] = &dbutil.ColumnData{Data: []byte("a'a"), IsNull: false}
 	replaceSQL = GenerateReplaceDML(rowsData, tableInfo, "diff_test")
 	deleteSQL = GenerateDeleteDML(rowsData, tableInfo, "diff_test")
 	c.Assert(replaceSQL, Equals, "REPLACE INTO `diff_test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (NULL,'a\\'a','2018-01-01 00:00:00','10:10:10',11.1111);")
-	c.Assert(deleteSQL, Equals, "DELETE FROM `diff_test`.`atest` WHERE `id` is NULL AND `name` = 'a\\'a' AND `birthday` = '2018-01-01 00:00:00' AND `update_time` = '10:10:10' AND `money` = 11.1111;")
+	c.Assert(deleteSQL, Equals, "DELETE FROM `diff_test`.`atest` WHERE `id` is NULL AND `name` = 'a\\'a' AND `birthday` = '2018-01-01 00:00:00' AND `update_time` = '10:10:10' AND `money` = 11.1111 LIMIT 1;")
 }
 
 func (s *testUtilsSuite) TestIgnoreColumns(c *C) {
