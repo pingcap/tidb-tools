@@ -14,6 +14,7 @@
 package router
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -42,33 +43,33 @@ type Extractors struct {
 type TableExtractor struct {
 	TargetColumn string `json:"target-column" toml:"target-column" yaml:"target-column"`
 	TableRegexp  string `json:"table-regexp" toml:"table-regexp" yaml:"table-regexp"`
-	Regexp       *regexp.Regexp
+	regexp       *regexp.Regexp
 }
 
 // SchemaExtractor extracts schema name to column
 type SchemaExtractor struct {
 	TargetColumn string `json:"target-column" toml:"target-column" yaml:"target-column"`
 	SchemaRegexp string `json:"schema-regexp" toml:"schema-regexp" yaml:"schema-regexp"`
-	Regexp       *regexp.Regexp
+	regexp       *regexp.Regexp
 }
 
 // SourceExtractor extracts source name to column
 type SourceExtractor struct {
 	TargetColumn string `json:"target-column" toml:"target-column" yaml:"target-column"`
 	SourceRegexp string `json:"source-regexp" toml:"source-regexp" yaml:"source-regexp"`
-	Regexp       *regexp.Regexp
+	regexp       *regexp.Regexp
 }
 
 // MatchVal match value via regexp
 func (t *Extractors) MatchVal(s string, ext interface{}) string {
 	var params []string
-	switch ext.(type) {
+	switch e := ext.(type) {
 	case *TableExtractor:
-		params = ext.(*TableExtractor).Regexp.FindStringSubmatch(s)
+		params = e.regexp.FindStringSubmatch(s)
 	case *SchemaExtractor:
-		params = ext.(*SchemaExtractor).Regexp.FindStringSubmatch(s)
+		params = e.regexp.FindStringSubmatch(s)
 	case *SourceExtractor:
-		params = ext.(*SourceExtractor).Regexp.FindStringSubmatch(s)
+		params = e.regexp.FindStringSubmatch(s)
 	}
 	var transferVal string
 	for idx, param := range params {
@@ -90,34 +91,37 @@ func (t *TableRule) Valid() error {
 	}
 
 	if t.Extractors.TableExtractor != nil {
-		re, err := regexp.Compile(t.Extractors.TableExtractor.TableRegexp)
+		tableRe := t.Extractors.TableExtractor.TableRegexp
+		re, err := regexp.Compile(tableRe)
 		if err != nil {
-			return errors.New("table extractor table regexp illegal")
+			return fmt.Errorf("table extractor table regexp illegal %s", tableRe)
 		}
 		if len(t.Extractors.TableExtractor.TargetColumn) == 0 {
 			return errors.New("table extractor target column cannot be empty")
 		}
-		t.Extractors.TableExtractor.Regexp = re
+		t.Extractors.TableExtractor.regexp = re
 	}
 	if t.Extractors.SchemaExtractor != nil {
-		re, err := regexp.Compile(t.Extractors.SchemaExtractor.SchemaRegexp)
+		schemaRe := t.Extractors.SchemaExtractor.SchemaRegexp
+		re, err := regexp.Compile(schemaRe)
 		if err != nil {
-			return errors.New("schema extractor schema regexp illegal")
+			return fmt.Errorf("schema extractor schema regexp illegal %s", schemaRe)
 		}
 		if len(t.Extractors.SchemaExtractor.TargetColumn) == 0 {
 			return errors.New("schema extractor target column cannot be empty")
 		}
-		t.Extractors.SchemaExtractor.Regexp = re
+		t.Extractors.SchemaExtractor.regexp = re
 	}
 	if t.Extractors.SourceExtractor != nil {
-		re, err := regexp.Compile(t.Extractors.SourceExtractor.SourceRegexp)
+		sourceRe := t.Extractors.SourceExtractor.SourceRegexp
+		re, err := regexp.Compile(sourceRe)
 		if err != nil {
-			return errors.New("source extractor source regexp illegal")
+			return fmt.Errorf("source extractor source regexp illegal %s", sourceRe)
 		}
 		if len(t.Extractors.SourceExtractor.TargetColumn) == 0 {
 			return errors.New("source extractor target column cannot be empty")
 		}
-		t.Extractors.SourceExtractor.Regexp = re
+		t.Extractors.SourceExtractor.regexp = re
 	}
 	return nil
 }
