@@ -124,7 +124,7 @@ func (cp *testChunkSuite) TestChunkToString(c *C) {
 	}
 
 	conditions, args = chunk.ToString("latin1")
-	c.Assert(conditions, Equals, "((`a` COLLATE 'latin1' > ?) OR (`a` = ? AND `b` COLLATE 'latin1' > ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE 'latin1' > ?)) AND ((`a` COLLATE 'latin1' < ?) OR (`a` = ? AND `b` COLLATE 'latin1' < ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE 'latin1' <= ?))")
+	c.Assert(conditions, Equals, "((`a` COLLATE 'latin1' > ?) OR (`a` COLLATE 'latin1' = ? AND `b` COLLATE 'latin1' > ?) OR (`a` COLLATE 'latin1' = ? AND `b` COLLATE 'latin1' = ? AND `c` COLLATE 'latin1' > ?)) AND ((`a` COLLATE 'latin1' < ?) OR (`a` COLLATE 'latin1' = ? AND `b` COLLATE 'latin1' < ?) OR (`a` COLLATE 'latin1' = ? AND `b` COLLATE 'latin1' = ? AND `c` COLLATE 'latin1' <= ?))")
 	expectArgs = []string{"1", "1", "3", "1", "3", "5", "2", "2", "4", "2", "4", "6"}
 	for i, arg := range args {
 		c.Assert(arg, Equals, expectArgs[i])
@@ -159,7 +159,7 @@ func (cp *testChunkSuite) TestChunkToString(c *C) {
 	}
 
 	conditions, args = chunk.ToString("latin1")
-	c.Assert(conditions, Equals, "(`a` COLLATE 'latin1' < ?) OR (`a` = ? AND `b` COLLATE 'latin1' < ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE 'latin1' <= ?)")
+	c.Assert(conditions, Equals, "(`a` COLLATE 'latin1' < ?) OR (`a` COLLATE 'latin1' = ? AND `b` COLLATE 'latin1' < ?) OR (`a` COLLATE 'latin1' = ? AND `b` COLLATE 'latin1' = ? AND `c` COLLATE 'latin1' <= ?)")
 	expectArgs = []string{"2", "2", "4", "2", "4", "6"}
 	for i, arg := range args {
 		c.Assert(arg, Equals, expectArgs[i])
@@ -201,7 +201,7 @@ func (cp *testChunkSuite) TestChunkToString(c *C) {
 	}
 
 	conditions, args = chunk.ToString("latin1")
-	c.Assert(conditions, Equals, "(`a` COLLATE 'latin1' > ?) OR (`a` = ? AND `b` COLLATE 'latin1' > ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE 'latin1' > ?)")
+	c.Assert(conditions, Equals, "(`a` COLLATE 'latin1' > ?) OR (`a` COLLATE 'latin1' = ? AND `b` COLLATE 'latin1' > ?) OR (`a` COLLATE 'latin1' = ? AND `b` COLLATE 'latin1' = ? AND `c` COLLATE 'latin1' > ?)")
 	expectArgs = []string{"1", "1", "3", "1", "3", "5"}
 	for i, arg := range args {
 		c.Assert(arg, Equals, expectArgs[i])
@@ -276,7 +276,7 @@ func (cp *testChunkSuite) TestChunkToString(c *C) {
 	}
 
 	conditions, args = chunk.ToString("latin1")
-	c.Assert(conditions, Equals, "(`a` COLLATE 'latin1' = ?) AND ((`b` COLLATE 'latin1' > ?) OR (`b` = ? AND `c` COLLATE 'latin1' > ?)) AND ((`b` COLLATE 'latin1' < ?) OR (`b` = ? AND `c` COLLATE 'latin1' <= ?))")
+	c.Assert(conditions, Equals, "(`a` COLLATE 'latin1' = ?) AND ((`b` COLLATE 'latin1' > ?) OR (`b` COLLATE 'latin1' = ? AND `c` COLLATE 'latin1' > ?)) AND ((`b` COLLATE 'latin1' < ?) OR (`b` COLLATE 'latin1' = ? AND `c` COLLATE 'latin1' <= ?))")
 	expectArgs = []string{"1", "3", "3", "5", "4", "4", "5"}
 	for i, arg := range args {
 		c.Assert(arg, Equals, expectArgs[i])
@@ -311,7 +311,7 @@ func (cp *testChunkSuite) TestChunkToString(c *C) {
 	}
 
 	conditions, args = chunk.ToString("latin1")
-	c.Assert(conditions, Equals, "(`a` COLLATE 'latin1' < ?) OR (`a` = ? AND `b` COLLATE 'latin1' < ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE 'latin1' <= ?)")
+	c.Assert(conditions, Equals, "(`a` COLLATE 'latin1' < ?) OR (`a` COLLATE 'latin1' = ? AND `b` COLLATE 'latin1' < ?) OR (`a` COLLATE 'latin1' = ? AND `b` COLLATE 'latin1' = ? AND `c` COLLATE 'latin1' <= ?)")
 	expectArgs = []string{"2", "2", "4", "2", "4", "6"}
 	for i, arg := range args {
 		c.Assert(arg, Equals, expectArgs[i])
@@ -353,7 +353,7 @@ func (cp *testChunkSuite) TestChunkToString(c *C) {
 	}
 
 	conditions, args = chunk.ToString("latin1")
-	c.Assert(conditions, Equals, "(`a` COLLATE 'latin1' > ?) OR (`a` = ? AND `b` COLLATE 'latin1' > ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE 'latin1' > ?)")
+	c.Assert(conditions, Equals, "(`a` COLLATE 'latin1' > ?) OR (`a` COLLATE 'latin1' = ? AND `b` COLLATE 'latin1' > ?) OR (`a` COLLATE 'latin1' = ? AND `b` COLLATE 'latin1' = ? AND `c` COLLATE 'latin1' > ?)")
 	expectArgs = []string{"1", "1", "3", "1", "3", "5"}
 	for i, arg := range args {
 		c.Assert(arg, Equals, expectArgs[i])
@@ -446,11 +446,11 @@ func (*testChunkSuite) TestChunkInit(c *C) {
 	}
 
 	InitChunks(chunks, Others, 1, 1, 0, "[123]", "[sdfds fsd fd gd]", 1)
-	c.Assert(chunks[0].Where, Equals, "((((`a` COLLATE '[123]' > ?) OR (`a` = ? AND `b` COLLATE '[123]' > ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[123]' > ?)) AND ((`a` COLLATE '[123]' < ?) OR (`a` = ? AND `b` COLLATE '[123]' < ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[123]' <= ?))) AND [sdfds fsd fd gd])")
+	c.Assert(chunks[0].Where, Equals, "((((`a` COLLATE '[123]' > ?) OR (`a` COLLATE '[123]' = ? AND `b` COLLATE '[123]' > ?) OR (`a` COLLATE '[123]' = ? AND `b` COLLATE '[123]' = ? AND `c` COLLATE '[123]' > ?)) AND ((`a` COLLATE '[123]' < ?) OR (`a` COLLATE '[123]' = ? AND `b` COLLATE '[123]' < ?) OR (`a` COLLATE '[123]' = ? AND `b` COLLATE '[123]' = ? AND `c` COLLATE '[123]' <= ?))) AND [sdfds fsd fd gd])")
 	c.Assert(chunks[0].Args, DeepEquals, []interface{}{"1", "1", "3", "1", "3", "5", "2", "2", "4", "2", "4", "6"})
 	c.Assert(chunks[0].Type, Equals, Others)
 	InitChunk(chunks[1], Others, 2, 2, "[456]", "[dsfsdf]")
-	c.Assert(chunks[1].Where, Equals, "((((`a` COLLATE '[456]' > ?) OR (`a` = ? AND `b` COLLATE '[456]' > ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[456]' > ?)) AND ((`a` COLLATE '[456]' < ?) OR (`a` = ? AND `b` COLLATE '[456]' < ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[456]' <= ?))) AND [dsfsdf])")
+	c.Assert(chunks[1].Where, Equals, "((((`a` COLLATE '[456]' > ?) OR (`a` COLLATE '[456]' = ? AND `b` COLLATE '[456]' > ?) OR (`a` COLLATE '[456]' = ? AND `b` COLLATE '[456]' = ? AND `c` COLLATE '[456]' > ?)) AND ((`a` COLLATE '[456]' < ?) OR (`a` COLLATE '[456]' = ? AND `b` COLLATE '[456]' < ?) OR (`a` COLLATE '[456]' = ? AND `b` COLLATE '[456]' = ? AND `c` COLLATE '[456]' <= ?))) AND [dsfsdf])")
 	c.Assert(chunks[1].Args, DeepEquals, []interface{}{"2", "2", "4", "2", "4", "6", "3", "3", "5", "3", "5", "7"})
 	c.Assert(chunks[1].Type, Equals, Others)
 }
@@ -480,7 +480,7 @@ func (*testChunkSuite) TestChunkCopyAndUpdate(c *C) {
 	InitChunk(chunk, Others, 2, 2, "[324]", "[543]")
 	chunk3 := chunk.Clone()
 	chunk3.Update("a", "2", "3", true, true)
-	c.Assert(chunk3.Where, Equals, "((((`a` COLLATE '[324]' > ?) OR (`a` = ? AND `b` COLLATE '[324]' > ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[324]' > ?)) AND ((`a` COLLATE '[324]' < ?) OR (`a` = ? AND `b` COLLATE '[324]' < ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[324]' <= ?))) AND [543])")
+	c.Assert(chunk3.Where, Equals, "((((`a` COLLATE '[324]' > ?) OR (`a` COLLATE '[324]' = ? AND `b` COLLATE '[324]' > ?) OR (`a` COLLATE '[324]' = ? AND `b` COLLATE '[324]' = ? AND `c` COLLATE '[324]' > ?)) AND ((`a` COLLATE '[324]' < ?) OR (`a` COLLATE '[324]' = ? AND `b` COLLATE '[324]' < ?) OR (`a` COLLATE '[324]' = ? AND `b` COLLATE '[324]' = ? AND `c` COLLATE '[324]' <= ?))) AND [543])")
 	c.Log(chunk3.Args)
 	c.Assert(chunk3.Args, DeepEquals, []interface{}{"2", "2", "4", "2", "4", "10", "3", "3", "9", "3", "9", "7"})
 	c.Assert(chunk3.Type, Equals, Others)

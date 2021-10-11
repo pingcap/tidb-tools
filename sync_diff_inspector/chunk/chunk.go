@@ -276,7 +276,7 @@ func (c *Range) ToString(collation string) (string, []interface{}) {
 				lowerCondition = append(lowerCondition, fmt.Sprintf("(%s%s %s ?)", dbutil.ColumnName(bound.Column), collation, lowerSymbol))
 				lowerArgs = append(lowerArgs, bound.Lower)
 			}
-			preConditionForLower = append(preConditionForLower, fmt.Sprintf("%s = ?", dbutil.ColumnName(bound.Column)))
+			preConditionForLower = append(preConditionForLower, fmt.Sprintf("%s%s = ?", dbutil.ColumnName(bound.Column), collation))
 			preConditionArgsForLower = append(preConditionArgsForLower, bound.Lower)
 		}
 
@@ -288,7 +288,7 @@ func (c *Range) ToString(collation string) (string, []interface{}) {
 				upperCondition = append(upperCondition, fmt.Sprintf("(%s%s %s ?)", dbutil.ColumnName(bound.Column), collation, upperSymbol))
 				upperArgs = append(upperArgs, bound.Upper)
 			}
-			preConditionForUpper = append(preConditionForUpper, fmt.Sprintf("%s = ?", dbutil.ColumnName(bound.Column)))
+			preConditionForUpper = append(preConditionForUpper, fmt.Sprintf("%s%s = ?", dbutil.ColumnName(bound.Column), collation))
 			preConditionArgsForUpper = append(preConditionArgsForUpper, bound.Upper)
 		}
 	}
