@@ -75,14 +75,15 @@ func (s *filterSuite) TestMatchTables(c *C) {
 			acceptedCI: []bool{true, false, true},
 		},
 		{
-			args: []string{"foo.bar1"},
+			args: []string{"foo.bar1\\.d"},
 			tables: []filter.Table{
 				{Schema: "foo", Name: "bar"},
 				{Schema: "foo", Name: "bar1"},
 				{Schema: "fff", Name: "bar1"},
+				{Schema: "foo", Name: "bar1.d"},
 			},
-			acceptedCS: []bool{false, true, false},
-			acceptedCI: []bool{false, true, false},
+			acceptedCS: []bool{false, false, false, true},
+			acceptedCI: []bool{false, false, false, true},
 		},
 		{
 			args: []string{"*.*", "!foo.bar"},
@@ -463,10 +464,10 @@ func (s *filterSuite) TestRecursiveImport(c *C) {
 	ioutil.WriteFile(path4, []byte("# comment\n\n@"+path3), 0644)
 
 	_, err := filter.Parse([]string{"@" + path4})
-	c.Assert(err, ErrorMatches, `.*4\.txt:3: importing filter files recursively is not allowed`)
+	c.Assert(err, ErrorMatches, `.*4\.txt:3: importing tableFilter files recursively is not allowed`)
 
 	_, err = filter.Parse([]string{"@" + filepath.Join(dir, "5.txt")})
-	c.Assert(err, ErrorMatches, `.*: cannot open filter file: open .*5\.txt: .*`)
+	c.Assert(err, ErrorMatches, `.*: cannot open tableFilter file: open .*5\.txt: .*`)
 }
 
 func (s *filterSuite) TestAll(c *C) {
