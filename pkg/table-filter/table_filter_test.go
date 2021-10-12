@@ -75,15 +75,14 @@ func (s *filterSuite) TestMatchTables(c *C) {
 			acceptedCI: []bool{true, false, true},
 		},
 		{
-			args: []string{"foo.bar1\\.d"},
+			args: []string{"foo.bar1"},
 			tables: []filter.Table{
 				{Schema: "foo", Name: "bar"},
 				{Schema: "foo", Name: "bar1"},
 				{Schema: "fff", Name: "bar1"},
-				{Schema: "foo", Name: "bar1.d"},
 			},
-			acceptedCS: []bool{false, false, false, true},
-			acceptedCI: []bool{false, false, false, true},
+			acceptedCS: []bool{false, true, false},
+			acceptedCI: []bool{false, true, false},
 		},
 		{
 			args: []string{"*.*", "!foo.bar"},
