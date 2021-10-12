@@ -604,14 +604,14 @@ func (s *testSourceSuite) TestSource(c *C) {
 	defer cancel()
 
 	cfg := &config.Config{
-		LogLevel:          "debug",
-		Sample:            100,
-		CheckThreadCount:  4,
-		UseChecksum:       false,
-		IgnoreStructCheck: false,
-		IgnoreStats:       false,
-		IgnoreDataCheck:   false,
-		UseCheckpoint:     true,
+		LogLevel:            "debug",
+		Sample:              100,
+		CheckThreadCount:    4,
+		CompareChecksumOnly: false,
+		IgnoreStructCheck:   false,
+		IgnoreStats:         false,
+		IgnoreDataCheck:     false,
+		UseCheckpoint:       true,
 		DataSources: map[string]*config.DataSource{
 			"mysql1": {
 				Host: host,
