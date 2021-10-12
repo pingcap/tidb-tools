@@ -124,7 +124,7 @@ func (cp *testChunkSuite) TestChunkToString(c *C) {
 	}
 
 	conditions, args = chunk.ToString("latin1")
-	c.Assert(conditions, Equals, "((`a` COLLATE 'latin1' > ?) OR (`a` = ? AND `b` COLLATE 'latin1' > ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE 'latin1' > ?)) AND ((`a` COLLATE 'latin1' < ?) OR (`a` = ? AND `b` COLLATE 'latin1' < ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE 'latin1' <= ?))")
+	c.Assert(conditions, Equals, "((`a` COLLATE 'latin1' > ?) OR (`a` COLLATE 'latin1' = ? AND `b` COLLATE 'latin1' > ?) OR (`a` COLLATE 'latin1' = ? AND `b` COLLATE 'latin1' = ? AND `c` COLLATE 'latin1' > ?)) AND ((`a` COLLATE 'latin1' < ?) OR (`a` COLLATE 'latin1' = ? AND `b` COLLATE 'latin1' < ?) OR (`a` COLLATE 'latin1' = ? AND `b` COLLATE 'latin1' = ? AND `c` COLLATE 'latin1' <= ?))")
 	expectArgs = []string{"1", "1", "3", "1", "3", "5", "2", "2", "4", "2", "4", "6"}
 	for i, arg := range args {
 		c.Assert(arg, Equals, expectArgs[i])
@@ -159,7 +159,7 @@ func (cp *testChunkSuite) TestChunkToString(c *C) {
 	}
 
 	conditions, args = chunk.ToString("latin1")
-	c.Assert(conditions, Equals, "(`a` COLLATE 'latin1' < ?) OR (`a` = ? AND `b` COLLATE 'latin1' < ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE 'latin1' <= ?)")
+	c.Assert(conditions, Equals, "(`a` COLLATE 'latin1' < ?) OR (`a` COLLATE 'latin1' = ? AND `b` COLLATE 'latin1' < ?) OR (`a` COLLATE 'latin1' = ? AND `b` COLLATE 'latin1' = ? AND `c` COLLATE 'latin1' <= ?)")
 	expectArgs = []string{"2", "2", "4", "2", "4", "6"}
 	for i, arg := range args {
 		c.Assert(arg, Equals, expectArgs[i])
@@ -201,7 +201,7 @@ func (cp *testChunkSuite) TestChunkToString(c *C) {
 	}
 
 	conditions, args = chunk.ToString("latin1")
-	c.Assert(conditions, Equals, "(`a` COLLATE 'latin1' > ?) OR (`a` = ? AND `b` COLLATE 'latin1' > ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE 'latin1' > ?)")
+	c.Assert(conditions, Equals, "(`a` COLLATE 'latin1' > ?) OR (`a` COLLATE 'latin1' = ? AND `b` COLLATE 'latin1' > ?) OR (`a` COLLATE 'latin1' = ? AND `b` COLLATE 'latin1' = ? AND `c` COLLATE 'latin1' > ?)")
 	expectArgs = []string{"1", "1", "3", "1", "3", "5"}
 	for i, arg := range args {
 		c.Assert(arg, Equals, expectArgs[i])
@@ -240,9 +240,159 @@ func (cp *testChunkSuite) TestChunkToString(c *C) {
 	for i, arg := range args {
 		c.Assert(arg, Equals, expectArgs[i])
 	}
-
 	c.Assert(chunk.String(), DeepEquals, "{\"index\":null,\"type\":0,\"bounds\":[{\"column\":\"a\",\"lower\":\"1\",\"upper\":\"2\",\"has-lower\":false,\"has-upper\":false},{\"column\":\"b\",\"lower\":\"3\",\"upper\":\"4\",\"has-lower\":false,\"has-upper\":false},{\"column\":\"c\",\"lower\":\"5\",\"upper\":\"6\",\"has-lower\":false,\"has-upper\":false}],\"is-first\":false,\"is-last\":false,\"where\":\"\",\"args\":null}")
+	c.Assert(chunk.ToMeta(), DeepEquals, "range in sequence: Full")
 
+	// same & lower & upper
+	chunk = &Range{
+		Bounds: []*Bound{
+			{
+				Column:   "a",
+				Lower:    "1",
+				Upper:    "1",
+				HasLower: true,
+				HasUpper: true,
+			}, {
+				Column:   "b",
+				Lower:    "3",
+				Upper:    "4",
+				HasLower: true,
+				HasUpper: true,
+			}, {
+				Column:   "c",
+				Lower:    "5",
+				Upper:    "5",
+				HasLower: true,
+				HasUpper: true,
+			},
+		},
+	}
+
+	conditions, args = chunk.ToString("")
+	c.Assert(conditions, Equals, "(`a` = ?) AND ((`b` > ?) OR (`b` = ? AND `c` > ?)) AND ((`b` < ?) OR (`b` = ? AND `c` <= ?))")
+	expectArgs = []string{"1", "3", "3", "5", "4", "4", "5"}
+	for i, arg := range args {
+		c.Assert(arg, Equals, expectArgs[i])
+	}
+
+	conditions, args = chunk.ToString("latin1")
+	c.Assert(conditions, Equals, "(`a` COLLATE 'latin1' = ?) AND ((`b` COLLATE 'latin1' > ?) OR (`b` COLLATE 'latin1' = ? AND `c` COLLATE 'latin1' > ?)) AND ((`b` COLLATE 'latin1' < ?) OR (`b` COLLATE 'latin1' = ? AND `c` COLLATE 'latin1' <= ?))")
+	expectArgs = []string{"1", "3", "3", "5", "4", "4", "5"}
+	for i, arg := range args {
+		c.Assert(arg, Equals, expectArgs[i])
+	}
+
+	c.Assert(chunk.String(), DeepEquals, "{\"index\":null,\"type\":0,\"bounds\":[{\"column\":\"a\",\"lower\":\"1\",\"upper\":\"1\",\"has-lower\":true,\"has-upper\":true},{\"column\":\"b\",\"lower\":\"3\",\"upper\":\"4\",\"has-lower\":true,\"has-upper\":true},{\"column\":\"c\",\"lower\":\"5\",\"upper\":\"5\",\"has-lower\":true,\"has-upper\":true}],\"is-first\":false,\"is-last\":false,\"where\":\"\",\"args\":null}")
+	c.Assert(chunk.ToMeta(), DeepEquals, "range in sequence: (1,3,5) < (a,b,c) <= (1,4,5)")
+
+	// same & upper
+	chunk = &Range{
+		Bounds: []*Bound{
+			{
+				Column:   "a",
+				Lower:    "2",
+				Upper:    "2",
+				HasLower: false,
+				HasUpper: true,
+			}, {
+				Column:   "b",
+				Lower:    "3",
+				Upper:    "4",
+				HasLower: false,
+				HasUpper: true,
+			}, {
+				Column:   "c",
+				Lower:    "5",
+				Upper:    "6",
+				HasLower: false,
+				HasUpper: true,
+			},
+		},
+	}
+
+	conditions, args = chunk.ToString("latin1")
+	c.Assert(conditions, Equals, "(`a` COLLATE 'latin1' < ?) OR (`a` COLLATE 'latin1' = ? AND `b` COLLATE 'latin1' < ?) OR (`a` COLLATE 'latin1' = ? AND `b` COLLATE 'latin1' = ? AND `c` COLLATE 'latin1' <= ?)")
+	expectArgs = []string{"2", "2", "4", "2", "4", "6"}
+	for i, arg := range args {
+		c.Assert(arg, Equals, expectArgs[i])
+	}
+
+	c.Assert(chunk.String(), DeepEquals, "{\"index\":null,\"type\":0,\"bounds\":[{\"column\":\"a\",\"lower\":\"2\",\"upper\":\"2\",\"has-lower\":false,\"has-upper\":true},{\"column\":\"b\",\"lower\":\"3\",\"upper\":\"4\",\"has-lower\":false,\"has-upper\":true},{\"column\":\"c\",\"lower\":\"5\",\"upper\":\"6\",\"has-lower\":false,\"has-upper\":true}],\"is-first\":false,\"is-last\":false,\"where\":\"\",\"args\":null}")
+	c.Assert(chunk.ToMeta(), DeepEquals, "range in sequence: (a,b,c) <= (2,4,6)")
+
+	// same & lower
+	chunk = &Range{
+		Bounds: []*Bound{
+			{
+				Column:   "a",
+				Lower:    "1",
+				Upper:    "1",
+				HasLower: true,
+				HasUpper: false,
+			}, {
+				Column:   "b",
+				Lower:    "3",
+				Upper:    "4",
+				HasLower: true,
+				HasUpper: false,
+			}, {
+				Column:   "c",
+				Lower:    "5",
+				Upper:    "6",
+				HasLower: true,
+				HasUpper: false,
+			},
+		},
+	}
+
+	conditions, args = chunk.ToString("")
+	c.Assert(conditions, Equals, "(`a` > ?) OR (`a` = ? AND `b` > ?) OR (`a` = ? AND `b` = ? AND `c` > ?)")
+	expectArgs = []string{"1", "1", "3", "1", "3", "5"}
+	for i, arg := range args {
+		c.Assert(arg, Equals, expectArgs[i])
+	}
+
+	conditions, args = chunk.ToString("latin1")
+	c.Assert(conditions, Equals, "(`a` COLLATE 'latin1' > ?) OR (`a` COLLATE 'latin1' = ? AND `b` COLLATE 'latin1' > ?) OR (`a` COLLATE 'latin1' = ? AND `b` COLLATE 'latin1' = ? AND `c` COLLATE 'latin1' > ?)")
+	expectArgs = []string{"1", "1", "3", "1", "3", "5"}
+	for i, arg := range args {
+		c.Assert(arg, Equals, expectArgs[i])
+	}
+
+	c.Assert(chunk.String(), DeepEquals, "{\"index\":null,\"type\":0,\"bounds\":[{\"column\":\"a\",\"lower\":\"1\",\"upper\":\"1\",\"has-lower\":true,\"has-upper\":false},{\"column\":\"b\",\"lower\":\"3\",\"upper\":\"4\",\"has-lower\":true,\"has-upper\":false},{\"column\":\"c\",\"lower\":\"5\",\"upper\":\"6\",\"has-lower\":true,\"has-upper\":false}],\"is-first\":false,\"is-last\":false,\"where\":\"\",\"args\":null}")
+	c.Assert(chunk.ToMeta(), DeepEquals, "range in sequence: (1,3,5) < (a,b,c)")
+
+	// same & none
+	chunk = &Range{
+		Bounds: []*Bound{
+			{
+				Column:   "a",
+				Lower:    "1",
+				Upper:    "1",
+				HasLower: false,
+				HasUpper: false,
+			}, {
+				Column:   "b",
+				Lower:    "3",
+				Upper:    "4",
+				HasLower: false,
+				HasUpper: false,
+			}, {
+				Column:   "c",
+				Lower:    "5",
+				Upper:    "6",
+				HasLower: false,
+				HasUpper: false,
+			},
+		},
+	}
+	conditions, args = chunk.ToString("")
+	c.Assert(conditions, Equals, "TRUE")
+	expectArgs = []string{}
+	for i, arg := range args {
+		c.Assert(arg, Equals, expectArgs[i])
+	}
+	c.Assert(chunk.String(), DeepEquals, "{\"index\":null,\"type\":0,\"bounds\":[{\"column\":\"a\",\"lower\":\"1\",\"upper\":\"1\",\"has-lower\":false,\"has-upper\":false},{\"column\":\"b\",\"lower\":\"3\",\"upper\":\"4\",\"has-lower\":false,\"has-upper\":false},{\"column\":\"c\",\"lower\":\"5\",\"upper\":\"6\",\"has-lower\":false,\"has-upper\":false}],\"is-first\":false,\"is-last\":false,\"where\":\"\",\"args\":null}")
 	c.Assert(chunk.ToMeta(), DeepEquals, "range in sequence: Full")
 }
 
@@ -296,11 +446,11 @@ func (*testChunkSuite) TestChunkInit(c *C) {
 	}
 
 	InitChunks(chunks, Others, 1, 1, 0, "[123]", "[sdfds fsd fd gd]", 1)
-	c.Assert(chunks[0].Where, Equals, "((((`a` COLLATE '[123]' > ?) OR (`a` = ? AND `b` COLLATE '[123]' > ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[123]' > ?)) AND ((`a` COLLATE '[123]' < ?) OR (`a` = ? AND `b` COLLATE '[123]' < ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[123]' <= ?))) AND [sdfds fsd fd gd])")
+	c.Assert(chunks[0].Where, Equals, "((((`a` COLLATE '[123]' > ?) OR (`a` COLLATE '[123]' = ? AND `b` COLLATE '[123]' > ?) OR (`a` COLLATE '[123]' = ? AND `b` COLLATE '[123]' = ? AND `c` COLLATE '[123]' > ?)) AND ((`a` COLLATE '[123]' < ?) OR (`a` COLLATE '[123]' = ? AND `b` COLLATE '[123]' < ?) OR (`a` COLLATE '[123]' = ? AND `b` COLLATE '[123]' = ? AND `c` COLLATE '[123]' <= ?))) AND [sdfds fsd fd gd])")
 	c.Assert(chunks[0].Args, DeepEquals, []interface{}{"1", "1", "3", "1", "3", "5", "2", "2", "4", "2", "4", "6"})
 	c.Assert(chunks[0].Type, Equals, Others)
 	InitChunk(chunks[1], Others, 2, 2, "[456]", "[dsfsdf]")
-	c.Assert(chunks[1].Where, Equals, "((((`a` COLLATE '[456]' > ?) OR (`a` = ? AND `b` COLLATE '[456]' > ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[456]' > ?)) AND ((`a` COLLATE '[456]' < ?) OR (`a` = ? AND `b` COLLATE '[456]' < ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[456]' <= ?))) AND [dsfsdf])")
+	c.Assert(chunks[1].Where, Equals, "((((`a` COLLATE '[456]' > ?) OR (`a` COLLATE '[456]' = ? AND `b` COLLATE '[456]' > ?) OR (`a` COLLATE '[456]' = ? AND `b` COLLATE '[456]' = ? AND `c` COLLATE '[456]' > ?)) AND ((`a` COLLATE '[456]' < ?) OR (`a` COLLATE '[456]' = ? AND `b` COLLATE '[456]' < ?) OR (`a` COLLATE '[456]' = ? AND `b` COLLATE '[456]' = ? AND `c` COLLATE '[456]' <= ?))) AND [dsfsdf])")
 	c.Assert(chunks[1].Args, DeepEquals, []interface{}{"2", "2", "4", "2", "4", "6", "3", "3", "5", "3", "5", "7"})
 	c.Assert(chunks[1].Type, Equals, Others)
 }
@@ -330,7 +480,7 @@ func (*testChunkSuite) TestChunkCopyAndUpdate(c *C) {
 	InitChunk(chunk, Others, 2, 2, "[324]", "[543]")
 	chunk3 := chunk.Clone()
 	chunk3.Update("a", "2", "3", true, true)
-	c.Assert(chunk3.Where, Equals, "((((`a` COLLATE '[324]' > ?) OR (`a` = ? AND `b` COLLATE '[324]' > ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[324]' > ?)) AND ((`a` COLLATE '[324]' < ?) OR (`a` = ? AND `b` COLLATE '[324]' < ?) OR (`a` = ? AND `b` = ? AND `c` COLLATE '[324]' <= ?))) AND [543])")
+	c.Assert(chunk3.Where, Equals, "((((`a` COLLATE '[324]' > ?) OR (`a` COLLATE '[324]' = ? AND `b` COLLATE '[324]' > ?) OR (`a` COLLATE '[324]' = ? AND `b` COLLATE '[324]' = ? AND `c` COLLATE '[324]' > ?)) AND ((`a` COLLATE '[324]' < ?) OR (`a` COLLATE '[324]' = ? AND `b` COLLATE '[324]' < ?) OR (`a` COLLATE '[324]' = ? AND `b` COLLATE '[324]' = ? AND `c` COLLATE '[324]' <= ?))) AND [543])")
 	c.Log(chunk3.Args)
 	c.Assert(chunk3.Args, DeepEquals, []interface{}{"2", "2", "4", "2", "4", "10", "3", "3", "9", "3", "9", "7"})
 	c.Assert(chunk3.Type, Equals, Others)
