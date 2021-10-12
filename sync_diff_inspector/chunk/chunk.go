@@ -229,12 +229,14 @@ func (c *Range) ToString(collation string) (string, []interface{}) {
 	}
 
 	/* for example:
-	there is a bucket in TiDB, and the lowerbound and upperbound are (v1, v3), (v2, v4), and the columns are `a` and `b`,
-	this bucket's data range is (a > v1 or (a == v1 and b > v3)) and (a < v2 or (a == v2 and b <= v4))
+	there is a bucket in TiDB, and the lowerbound and upperbound are (A, B1, C1), (A, B2, C2), and the columns are `a`, `b` and `c`,
+	this bucket's data range is (a = A) AND (b > B1 or (b == B1 and c > C1)) AND (b < B2 or (b == B2 and c <= C2))
 	*/
 
+	sameCondition := make([]string, 0, 1)
 	lowerCondition := make([]string, 0, 1)
 	upperCondition := make([]string, 0, 1)
+	sameArgs := make([]interface{}, 0, 1)
 	lowerArgs := make([]interface{}, 0, 1)
 	upperArgs := make([]interface{}, 0, 1)
 
@@ -243,7 +245,23 @@ func (c *Range) ToString(collation string) (string, []interface{}) {
 	preConditionArgsForLower := make([]interface{}, 0, 1)
 	preConditionArgsForUpper := make([]interface{}, 0, 1)
 
-	for i, bound := range c.Bounds {
+	i := 0
+	for ; i < len(c.Bounds); i++ {
+		bound := c.Bounds[i]
+		if !(bound.HasLower && bound.HasUpper) {
+			break
+		}
+
+		if bound.Lower != bound.Upper {
+			break
+		}
+
+		sameCondition = append(sameCondition, fmt.Sprintf("%s%s = ?", dbutil.ColumnName(bound.Column), collation))
+		sameArgs = append(sameArgs, bound.Lower)
+	}
+
+	for ; i < len(c.Bounds); i++ {
+		bound := c.Bounds[i]
 		lowerSymbol := gt
 		upperSymbol := lt
 		if i == len(c.Bounds)-1 {
@@ -258,7 +276,7 @@ func (c *Range) ToString(collation string) (string, []interface{}) {
 				lowerCondition = append(lowerCondition, fmt.Sprintf("(%s%s %s ?)", dbutil.ColumnName(bound.Column), collation, lowerSymbol))
 				lowerArgs = append(lowerArgs, bound.Lower)
 			}
-			preConditionForLower = append(preConditionForLower, fmt.Sprintf("%s = ?", dbutil.ColumnName(bound.Column)))
+			preConditionForLower = append(preConditionForLower, fmt.Sprintf("%s%s = ?", dbutil.ColumnName(bound.Column), collation))
 			preConditionArgsForLower = append(preConditionArgsForLower, bound.Lower)
 		}
 
@@ -270,24 +288,40 @@ func (c *Range) ToString(collation string) (string, []interface{}) {
 				upperCondition = append(upperCondition, fmt.Sprintf("(%s%s %s ?)", dbutil.ColumnName(bound.Column), collation, upperSymbol))
 				upperArgs = append(upperArgs, bound.Upper)
 			}
-			preConditionForUpper = append(preConditionForUpper, fmt.Sprintf("%s = ?", dbutil.ColumnName(bound.Column)))
+			preConditionForUpper = append(preConditionForUpper, fmt.Sprintf("%s%s = ?", dbutil.ColumnName(bound.Column), collation))
 			preConditionArgsForUpper = append(preConditionArgsForUpper, bound.Upper)
 		}
 	}
 
-	if len(upperCondition) == 0 && len(lowerCondition) == 0 {
-		return "TRUE", nil
-	}
+	if len(sameCondition) == 0 {
+		if len(upperCondition) == 0 && len(lowerCondition) == 0 {
+			return "TRUE", nil
+		}
 
-	if len(upperCondition) == 0 {
-		return strings.Join(lowerCondition, " OR "), lowerArgs
-	}
+		if len(upperCondition) == 0 {
+			return strings.Join(lowerCondition, " OR "), lowerArgs
+		}
 
-	if len(lowerCondition) == 0 {
-		return strings.Join(upperCondition, " OR "), upperArgs
-	}
+		if len(lowerCondition) == 0 {
+			return strings.Join(upperCondition, " OR "), upperArgs
+		}
 
-	return fmt.Sprintf("(%s) AND (%s)", strings.Join(lowerCondition, " OR "), strings.Join(upperCondition, " OR ")), append(lowerArgs, upperArgs...)
+		return fmt.Sprintf("(%s) AND (%s)", strings.Join(lowerCondition, " OR "), strings.Join(upperCondition, " OR ")), append(lowerArgs, upperArgs...)
+	} else {
+		if len(upperCondition) == 0 && len(lowerCondition) == 0 {
+			return strings.Join(sameCondition, " AND "), sameArgs
+		}
+
+		if len(upperCondition) == 0 {
+			return fmt.Sprintf("(%s) AND (%s)", strings.Join(sameCondition, " AND "), strings.Join(lowerCondition, " OR ")), append(sameArgs, lowerArgs...)
+		}
+
+		if len(lowerCondition) == 0 {
+			return fmt.Sprintf("(%s) AND (%s)", strings.Join(sameCondition, " AND "), strings.Join(upperCondition, " OR ")), append(sameArgs, upperArgs...)
+		}
+
+		return fmt.Sprintf("(%s) AND (%s) AND (%s)", strings.Join(sameCondition, " AND "), strings.Join(lowerCondition, " OR "), strings.Join(upperCondition, " OR ")), append(append(sameArgs, lowerArgs...), upperArgs...)
+	}
 }
 
 func (c *Range) ToMeta() string {
