@@ -237,7 +237,7 @@ func (s *testSourceSuite) TestTiDBSource(c *C) {
 		row++
 	}
 	c.Assert(tidb.GenerateFixSQL(Insert, firstRow, secondRow, 0), Equals, "REPLACE INTO `source_test`.`test1`(`a`,`b`,`c`) VALUES (1,'a',1.2);")
-	c.Assert(tidb.GenerateFixSQL(Delete, firstRow, secondRow, 0), Equals, "DELETE FROM `source_test`.`test1` WHERE `a` = 2 AND `b` = 'b' AND `c` = 3.4;")
+	c.Assert(tidb.GenerateFixSQL(Delete, firstRow, secondRow, 0), Equals, "DELETE FROM `source_test`.`test1` WHERE `a` = 2 AND `b` = 'b' AND `c` = 3.4 LIMIT 1;")
 	c.Assert(tidb.GenerateFixSQL(Replace, firstRow, secondRow, 0), Equals,
 		"/*\n"+
 			"  DIFF COLUMNS ╏ `A` ╏ `B` ╏ `C`  \n"+
@@ -475,7 +475,7 @@ func (s *testSourceSuite) TestMysqlRouter(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(secondRow, NotNil)
 	c.Assert(mysql.GenerateFixSQL(Insert, firstRow, secondRow, 0), Equals, "REPLACE INTO `source_test`.`test1`(`a`,`b`,`c`) VALUES (1,'a',1.2);")
-	c.Assert(mysql.GenerateFixSQL(Delete, firstRow, secondRow, 0), Equals, "DELETE FROM `source_test`.`test1` WHERE `a` = 2 AND `b` = 'b' AND `c` = 3.4;")
+	c.Assert(mysql.GenerateFixSQL(Delete, firstRow, secondRow, 0), Equals, "DELETE FROM `source_test`.`test1` WHERE `a` = 2 AND `b` = 'b' AND `c` = 3.4 LIMIT 1;")
 	c.Assert(mysql.GenerateFixSQL(Replace, firstRow, secondRow, 0), Equals,
 		"/*\n"+
 			"  DIFF COLUMNS ╏ `A` ╏ `B` ╏ `C`  \n"+
