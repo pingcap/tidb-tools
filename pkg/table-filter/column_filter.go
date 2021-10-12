@@ -24,7 +24,7 @@ type ColumnFilter interface {
 // columnFilter is a concrete implementation of ColumnFilter.
 type columnFilter []columnRule
 
-// ParseColumnFilter a tableFilter from a list of serialized tableFilter rules.
+// ParseColumnFilter a columnFilter from a list of serialized columnFilter rules.
 // Column is not case-sensitive on any platform, nor are column aliases.
 // So the parsed columnFilter is case-insensitive.
 func ParseColumnFilter(args []string) (ColumnFilter, error) {
@@ -47,7 +47,7 @@ func ParseColumnFilter(args []string) (ColumnFilter, error) {
 	return columnFilter(p.rules), nil
 }
 
-// MatchColumn checks if a column can be processed after applying the tableFilter `f`.
+// MatchColumn checks if a column can be processed after applying the columnFilter `f`.
 // Column is not case-sensitive on any platform, nor are column aliases.
 // So we always match in lowercase.
 func (f columnFilter) MatchColumn(column string) bool {
