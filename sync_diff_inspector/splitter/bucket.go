@@ -253,7 +253,6 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 		}
 	}
 	halfChunkSize := s.chunkSize >> 1
-	fourChunkSize := s.chunkSize << 2
 	for i := firstBucket; i < len(s.buckets); i++ {
 		count := s.buckets[i].Count - latestCount
 		if count < s.chunkSize {
@@ -284,17 +283,18 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 
 		// `splitRangeByRandom` will skip when chunkCnt <= 1
 		// assume the number of the selected buckets is `x`
-		// if x > 2                               ->  chunkCnt = 1
-		// if x = 2 AND 0.75 * count <= chunkSize ->  chunkCnt = 1
-		// if x = 2 AND 0.75 * count > chunkSize  -> chunkCnt = 2
+		// if x >= 2                              ->  chunkCnt = 1
 		// if x = 1                               ->  chunkCnt = (count + halfChunkSize) / chunkSize
-		chunkCnt := 1
+		// count >= chunkSize
 		if i == firstBucket {
-			chunkCnt = int((count + halfChunkSize) / s.chunkSize)
-		} else if i == firstBucket+1 && 3*count > fourChunkSize {
-			chunkCnt = 2
+			//
+			chunkCnt := int((count + halfChunkSize) / s.chunkSize)
+			s.splitChunkForBucket(ctx, firstBucket, i, 0, chunkCnt, chunkCnt, chunkRange)
+		} else {
+			// use multi-buckets so chunkCnt = 1
+			s.splitChunkForBucket(ctx, firstBucket, i, 0, 1, 1, chunkRange)
 		}
-		s.splitChunkForBucket(ctx, firstBucket, i, 0, chunkCnt, chunkCnt, chunkRange)
+
 		latestCount = s.buckets[i].Count
 		lowerValues = upperValues
 		firstBucket = i + 1
