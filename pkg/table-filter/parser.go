@@ -318,7 +318,7 @@ func (p *matcherParser) importFile(fileName string, parseMatcher func(string, bo
 	p.fileName, p.lineNum = oldFileName, oldLineNum
 
 	if err := scanner.Err(); err != nil {
-		return p.annotatef(err, "cannot read tableFilter file")
+		return p.annotatef(err, "cannot read filter file")
 	}
 	return nil
 }

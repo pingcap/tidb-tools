@@ -196,7 +196,7 @@ func (s *columnFilterSuite) TestMatchColumns(c *C) {
 	}
 }
 
-func (s *columnFilterSuite) TestColumnFilterParseFailures(c *C) {
+func (s *columnFilterSuite) TestParseFailures(c *C) {
 	cases := []struct {
 		arg string
 		msg string
@@ -261,7 +261,7 @@ func (s *columnFilterSuite) TestColumnFilterParseFailures(c *C) {
 	}
 }
 
-func (s *columnFilterSuite) TestColumnFilterImport(c *C) {
+func (s *columnFilterSuite) TestImport(c *C) {
 	dir := c.MkDir()
 	path1 := filepath.Join(dir, "1.txt")
 	path2 := filepath.Join(dir, "2.txt")
@@ -287,4 +287,18 @@ func (s *columnFilterSuite) TestColumnFilterImport(c *C) {
 	c.Assert(f.MatchColumn("col02.tql02"), IsTrue)
 	c.Assert(f.MatchColumn("col03.tql03"), IsTrue)
 	c.Assert(f.MatchColumn("col04.tql04"), IsTrue)
+}
+
+func (s *columnFilterSuite) TestRecursiveImport(c *C) {
+	dir := c.MkDir()
+	path3 := filepath.Join(dir, "3.txt")
+	path4 := filepath.Join(dir, "4.txt")
+	ioutil.WriteFile(path3, []byte("col1"), 0644)
+	ioutil.WriteFile(path4, []byte("# comment\n\n@"+path3), 0644)
+
+	_, err := filter.ParseColumnFilter([]string{"@" + path4})
+	c.Assert(err, ErrorMatches, `.*4\.txt:3: importing columnFilter files recursively is not allowed`)
+
+	_, err = filter.ParseColumnFilter([]string{"@" + filepath.Join(dir, "5.txt")})
+	c.Assert(err, ErrorMatches, `.*: cannot open filter file: open .*5\.txt: .*`)
 }
