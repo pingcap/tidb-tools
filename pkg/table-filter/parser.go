@@ -297,10 +297,10 @@ parseLoop:
 	return m, line, nil
 }
 
-func (p *matcherParser) importFile(fileName string, parse func(string, bool) error) error {
+func (p *matcherParser) importFile(fileName string, parseMatcher func(string, bool) error) error {
 	file, err := os.Open(fileName)
 	if err != nil {
-		return p.annotatef(err, "cannot open tableFilter file")
+		return p.annotatef(err, "cannot open filter file")
 	}
 	defer file.Close()
 
@@ -309,7 +309,7 @@ func (p *matcherParser) importFile(fileName string, parse func(string, bool) err
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		if err := parse(scanner.Text(), false); err != nil {
+		if err := parseMatcher(scanner.Text(), false); err != nil {
 			return err
 		}
 		p.lineNum++

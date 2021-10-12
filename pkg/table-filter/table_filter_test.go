@@ -466,7 +466,7 @@ func (s *filterSuite) TestRecursiveImport(c *C) {
 	c.Assert(err, ErrorMatches, `.*4\.txt:3: importing tableFilter files recursively is not allowed`)
 
 	_, err = filter.Parse([]string{"@" + filepath.Join(dir, "5.txt")})
-	c.Assert(err, ErrorMatches, `.*: cannot open tableFilter file: open .*5\.txt: .*`)
+	c.Assert(err, ErrorMatches, `.*: cannot open filter file: open .*5\.txt: .*`)
 }
 
 func (s *filterSuite) TestAll(c *C) {
