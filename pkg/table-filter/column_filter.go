@@ -17,7 +17,7 @@ import "strings"
 
 // ColumnFilter is a structure to check if a column should be included for processing.
 type ColumnFilter interface {
-	// MatchColumn checks if a column can be processed after applying the tableFilter.
+	// MatchColumn checks if a column can be processed after applying the columnFilter.
 	MatchColumn(column string) bool
 }
 
