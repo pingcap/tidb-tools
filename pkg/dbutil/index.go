@@ -7,7 +7,7 @@ import (
 	"strconv"
 
 	"github.com/pingcap/errors"
-	"github.com/pingcap/parser/model"
+	"github.com/pingcap/tidb/parser/model"
 )
 
 // IndexInfo contains information of table index.

@@ -22,11 +22,11 @@ import (
 	"github.com/Shopify/sarama"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/pingcap/log"
-	"github.com/pingcap/parser"
-	"github.com/pingcap/parser/ast"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/tidb-binlog/driver/reader"
 	pb "github.com/pingcap/tidb-tools/tidb-binlog/proto/go-binlog"
+	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/parser/ast"
 	_ "github.com/pingcap/tidb/types/parser_driver" // for parser driver
 	"go.uber.org/zap"
 )
