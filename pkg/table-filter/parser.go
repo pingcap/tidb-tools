@@ -44,7 +44,7 @@ func (p *tableRulesParser) parse(line string, canImport bool) error {
 	case '@':
 		if !canImport {
 			// FIXME: should we relax this?
-			return p.errorf("importing tableFilter files recursively is not allowed")
+			return p.errorf("importing filter files recursively is not allowed")
 		}
 		// FIXME: can't deal with file names which ends in spaces (perhaps not a big deal)
 		return p.importFile(line[1:], p.parse)
@@ -99,7 +99,7 @@ func (p *columnRulesParser) parse(line string, canImport bool) error {
 		line = line[1:]
 	case '@':
 		if !canImport {
-			return p.errorf("importing columnFilter files recursively is not allowed")
+			return p.errorf("importing filter files recursively is not allowed")
 		}
 		return p.importFile(line[1:], p.parse)
 	}

@@ -297,7 +297,7 @@ func (s *columnFilterSuite) TestRecursiveImport(c *C) {
 	ioutil.WriteFile(path4, []byte("# comment\n\n@"+path3), 0644)
 
 	_, err := filter.ParseColumnFilter([]string{"@" + path4})
-	c.Assert(err, ErrorMatches, `.*4\.txt:3: importing columnFilter files recursively is not allowed`)
+	c.Assert(err, ErrorMatches, `.*4\.txt:3: importing filter files recursively is not allowed`)
 
 	_, err = filter.ParseColumnFilter([]string{"@" + filepath.Join(dir, "5.txt")})
 	c.Assert(err, ErrorMatches, `.*: cannot open filter file: open .*5\.txt: .*`)
