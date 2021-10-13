@@ -14,9 +14,10 @@
 package filter_test
 
 import (
-	. "github.com/pingcap/check"
 	"io/ioutil"
 	"path/filepath"
+
+	. "github.com/pingcap/check"
 
 	filter "github.com/pingcap/tidb-tools/pkg/table-filter"
 )
