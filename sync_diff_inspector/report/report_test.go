@@ -19,6 +19,7 @@ import (
 	"errors"
 	"os"
 	"path"
+	"strings"
 	"testing"
 
 	"github.com/BurntSushi/toml"
@@ -142,13 +143,14 @@ func (s *testReportSuite) TestReport(c *C) {
 
 	buf := new(bytes.Buffer)
 	new_report.Print(buf)
-	c.Assert(buf.String(), Equals, "The structure of `atest`.`atbl` is not equal\n"+
-		"The data of `atest`.`atbl` is not equal\n"+
-		"The structure of `ctest`.`atbl` is not equal, and data-check is skipped\n"+
-		"\n"+
+	info := buf.String()
+	c.Assert(strings.Contains(info, "The structure of `atest`.`atbl` is not equal\n"), IsTrue)
+	c.Assert(strings.Contains(info, "The data of `atest`.`atbl` is not equal\n"), IsTrue)
+	c.Assert(strings.Contains(info, "The structure of `ctest`.`atbl` is not equal, and data-check is skipped\n"), IsTrue)
+	c.Assert(strings.Contains(info, "\n"+
 		"The rest of tables are all equal.\n"+
 		"The patch file has been generated in \n\t'output_dir/123456/fix-on-tidb1/'\n"+
-		"You can view the comparision details through 'output_dir/sync_diff.log'\n")
+		"You can view the comparision details through 'output_dir/sync_diff.log'\n"), IsTrue)
 }
 
 func (s *testReportSuite) TestCalculateTotal(c *C) {
