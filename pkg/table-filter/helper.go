@@ -13,11 +13,14 @@
 
 package filter
 
-import "sort"
+import "reflect"
 
 // reversing replace the contents of a slice with the same elements but in reverse order.
 func reversing(items interface{}) {
-	sort.SliceStable(items, func(i, j int) bool {
-		return true
-	})
+	n := reflect.ValueOf(items).Len()
+	swap := reflect.Swapper(items)
+	for i := n/2 - 1; i >= 0; i-- {
+		opp := n - 1 - i
+		swap(i, opp)
+	}
 }
