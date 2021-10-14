@@ -17,8 +17,8 @@ import (
 	"testing"
 
 	. "github.com/pingcap/check"
-	"github.com/pingcap/parser"
-	"github.com/pingcap/parser/mysql"
+	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/parser/mysql"
 )
 
 func TestClient(t *testing.T) {
