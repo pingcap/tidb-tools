@@ -92,14 +92,6 @@ type DataSource struct {
 	// SourceType string `toml:"source-type" json:"source-type"`
 }
 
-func (d *DataSource) HashCode() string {
-	b, err := json.Marshal(d)
-	if err != nil {
-		log.Fatal("invalid data source config")
-	}
-	return fmt.Sprintf("%x", md5.Sum(b))
-}
-
 func (d *DataSource) ToDBConfig() *dbutil.DBConfig {
 	return &dbutil.DBConfig{
 		Host:     d.Host,
@@ -113,7 +105,7 @@ func (d *DataSource) ToDBConfig() *dbutil.DBConfig {
 type TaskConfig struct {
 	Source       []string `toml:"source-instances" json:"source-instances"`
 	Routes       []string `toml:"source-routes" json:"source-routes"`
-	Target       []string `toml:"target-instance" json:"target-instance"`
+	Target       string   `toml:"target-instance" json:"target-instance"`
 	CheckTables  []string `toml:"target-check-tables" json:"target-check-tables"`
 	TableConfigs []string `toml:"target-configs" json:"target-configs"`
 	// OutputDir include these
@@ -143,28 +135,24 @@ func (t *TaskConfig) Init(
 	for _, si := range t.Source {
 		ds, ok := dataSources[si]
 		if !ok {
-			log.Fatal("not found source instance, please correct the config", zap.String("instance", si))
+			log.Error("not found source instance, please correct the config", zap.String("instance", si))
+			return errors.Errorf("not found source instance, please correct the config. instance is `%s`", si)
 		}
 		dataSourceList = append(dataSourceList, ds)
 	}
 	t.SourceInstances = dataSourceList
 
-	if len(t.Target) != 1 {
-		log.Fatal("only support one target instance for now")
-	}
-	ts, ok := dataSources[t.Target[0]]
+	ts, ok := dataSources[t.Target]
 	if !ok {
-		log.Fatal("not found target instance, please correct the config", zap.String("instance", t.Target[0]))
+		log.Error("not found target instance, please correct the config", zap.String("instance", t.Target))
+		return errors.Errorf("not found target instance, please correct the config. instance is `%s`", t.Target)
 	}
 	t.TargetInstance = ts
 
-	targetCheckTables := t.CheckTables
-	if !ok {
-		log.Fatal("not found target check tables, please correct the config")
-	}
-	t.TargetCheckTables, err = filter.Parse(targetCheckTables)
+	t.TargetCheckTables, err = filter.Parse(t.CheckTables)
 	if err != nil {
-		log.Fatal("parse check tables failed", zap.Error(err))
+		log.Error("parse check tables failed", zap.Error(err))
+		return errors.Annotate(err, "parse check tables failed")
 	}
 
 	targetConfigs := t.TableConfigs
@@ -174,7 +162,8 @@ func (t *TaskConfig) Init(
 		for _, c := range targetConfigs {
 			tc, ok := tableConfigs[c]
 			if !ok {
-				log.Fatal("not found table config", zap.String("config", c))
+				log.Error("not found table config", zap.String("config", c))
+				return errors.Errorf("not found table config. config is `%s`", c)
 			}
 			tableConfigsList = append(tableConfigsList, tc)
 		}
@@ -198,8 +187,7 @@ func (t *TaskConfig) Init(
 		return errors.Trace(err)
 	}
 
-	target := t.Target[0]
-	t.FixDir = filepath.Join(t.OutputDir, hash, fmt.Sprintf("fix-on-%s", target))
+	t.FixDir = filepath.Join(t.OutputDir, hash, fmt.Sprintf("fix-on-%s", t.Target))
 	if err = mkdirAll(t.FixDir); err != nil {
 		return errors.Trace(err)
 	}
@@ -396,7 +384,7 @@ func (c *Config) adjustConfigByDMSubTasks() (err error) {
 		}
 	}
 	c.DataSources = dataSources
-	c.Task.Target = []string{"target"}
+	c.Task.Target = "target"
 	for id := range dataSources {
 		if id == "target" {
 			continue
@@ -410,11 +398,11 @@ func (c *Config) Init() (err error) {
 	if len(c.DMAddr) > 0 {
 		err := c.adjustConfigByDMSubTasks()
 		if err != nil {
-			return errors.Trace(err)
+			return errors.Annotate(err, "failed to init Task")
 		}
 		err = c.Task.Init(c.DataSources, c.TableConfigs)
 		if err != nil {
-			return errors.Trace(err)
+			return errors.Annotate(err, "failed to init Task")
 		}
 		return nil
 	}
