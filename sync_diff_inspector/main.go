@@ -60,11 +60,15 @@ func main() {
 	utils.PrintInfo("sync_diff_inspector")
 
 	// Initial config
-	cfg.Init()
+	err = cfg.Init()
+	if err != nil {
+		fmt.Printf("Fail to initialize config.\n%s\n", err.Error())
+		return
+	}
 
 	ok := cfg.CheckConfig()
 	if !ok {
-		log.Error("there is something wrong with your config, please check it!")
+		fmt.Printf("There is something wrong with your config, please check log info in %s", conf.File.Filename)
 		return
 	}
 

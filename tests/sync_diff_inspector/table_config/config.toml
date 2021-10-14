@@ -58,7 +58,7 @@ ignore-columns = [""]#IGNORE
 
     source-instances = ["tidb1"]
 
-    target-instance = ["tidb"]
+    target-instance = "tidb"
 
     # tables need to check.
 	target-check-tables = ["diff_test.test"]
