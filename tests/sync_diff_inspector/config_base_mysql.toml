@@ -51,7 +51,7 @@ ignore-struct-check = false
 
     source-instances = ["mysql1"]
 
-    target-instance = ["tidb"]
+    target-instance = "tidb"
 
     # tables need to check.
 	target-check-tables = ["diff_test.test"]

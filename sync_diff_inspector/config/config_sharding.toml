@@ -91,7 +91,7 @@ target-table = "t" # 目标表名
 
     source-instances = ["mysql1", "mysql2", "mysql3"]
 
-    target-instance = ["tidb"]
+    target-instance = "tidb"
 
     # tables need to check. *Include `schema` and `table`. Use `.` to split*
     target-check-tables = ["schema*.table*", "!c.*", "test2.t2"]
