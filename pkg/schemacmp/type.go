@@ -159,35 +159,30 @@ func (a typ) getStandardDefaultValue() interface{} {
 		tail = "." + strings.Repeat("0", dec)
 	}
 
-	var defaultValue interface{}
-	tp := a.Tuple[fieldTypeTupleIndexTp].Unwrap().(byte)
-	switch tp {
+	switch a.Tuple[fieldTypeTupleIndexTp].Unwrap().(byte) {
 	case mysql.TypeTiny, mysql.TypeInt24, mysql.TypeShort, mysql.TypeLong, mysql.TypeLonglong, mysql.TypeFloat, mysql.TypeDouble, mysql.TypeNewDecimal:
-		defaultValue = "0"
+		return "0"
 	case mysql.TypeTimestamp, mysql.TypeDatetime:
-		defaultValue = "0000-00-00 00:00:00" + tail
+		return "0000-00-00 00:00:00" + tail
 	case mysql.TypeDate:
-		defaultValue = "0000-00-00"
+		return "0000-00-00"
 	case mysql.TypeDuration:
-		defaultValue = "00:00:00" + tail
+		return "00:00:00" + tail
 	case mysql.TypeYear:
-		defaultValue = "0000"
+		return "0000"
 	case mysql.TypeJSON:
-		defaultValue = "null"
+		return "null"
 	case mysql.TypeEnum:
-		defaultValue = a.Tuple[fieldTypeTupleIndexElems].(StringList)[0]
+		return a.Tuple[fieldTypeTupleIndexElems].(StringList)[0]
+	case mysql.TypeString:
+		// ref https://github.com/pingcap/tidb/blob/66948b2fd9bec8ea11644770a2fa746c7eba1a1f/ddl/ddl_api.go#L3916
+		if a.Tuple[fieldTypeTupleIndexCollate].Unwrap().(string) == charset.CollationBin {
+			return string(make([]byte, a.Tuple[fieldTypeTupleIndexFlen].Unwrap().(int)))
+		}
+		return ""
 	default:
-		defaultValue = ""
+		return ""
 	}
-
-	// ref https://github.com/pingcap/tidb/blob/66948b2fd9bec8ea11644770a2fa746c7eba1a1f/ddl/ddl_api.go#L3916
-	flen := a.Tuple[fieldTypeTupleIndexFlen].Unwrap().(int)
-	collate := a.Tuple[fieldTypeTupleIndexCollate].Unwrap().(string)
-	if toPad := flen - len(defaultValue.(string)); tp == mysql.TypeString && collate == charset.CollationBin && toPad > 0 {
-		padding := make([]byte, toPad)
-		defaultValue = string(append([]byte(defaultValue.(string)), padding...))
-	}
-	return defaultValue
 }
 
 func (a typ) clone() typ {
