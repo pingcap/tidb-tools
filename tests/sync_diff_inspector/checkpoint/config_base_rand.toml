@@ -56,7 +56,7 @@ chunk-size = 500
 
     source-instances = ["mysql1"]
 
-    target-instance = ["mysql"]
+    target-instance = "mysql"
 
     # tables need to check.
 	target-check-tables = ["diff_test.test"]

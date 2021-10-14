@@ -253,6 +253,8 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 		}
 	}
 	halfChunkSize := s.chunkSize >> 1
+	// `firstBucket` is the first bucket of one chunk.
+	// It is equivalent to `BucketLeftIndex` of the chunk's ID.
 	for i := firstBucket; i < len(s.buckets); i++ {
 		count := s.buckets[i].Count - latestCount
 		if count < s.chunkSize {

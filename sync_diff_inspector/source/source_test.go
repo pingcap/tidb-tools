@@ -639,7 +639,7 @@ func (s *testSourceSuite) TestSource(c *C) {
 		Task: config.TaskConfig{
 			Source:       []string{"mysql1"},
 			Routes:       nil,
-			Target:       []string{"tidb"},
+			Target:       "tidb",
 			CheckTables:  []string{"schema*.tbl"},
 			TableConfigs: []string{"config1"},
 			OutputDir:    "./output",
