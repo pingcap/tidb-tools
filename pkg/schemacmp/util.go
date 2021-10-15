@@ -13,7 +13,7 @@
 
 package schemacmp
 
-import "github.com/pingcap/parser/mysql"
+import "github.com/pingcap/tidb/parser/mysql"
 
 // compareMySQLIntegerType compares two MySQL integer types,
 // return -1 if a < b, 0 if a == b and 1 if a > b.

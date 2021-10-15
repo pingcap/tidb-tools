@@ -17,8 +17,9 @@ import (
 	"math/bits"
 	"strings"
 
-	"github.com/pingcap/parser/mysql"
-	"github.com/pingcap/parser/types"
+	"github.com/pingcap/tidb/parser/charset"
+	"github.com/pingcap/tidb/parser/mysql"
+	"github.com/pingcap/tidb/parser/types"
 )
 
 const (
@@ -173,6 +174,12 @@ func (a typ) getStandardDefaultValue() interface{} {
 		return "null"
 	case mysql.TypeEnum:
 		return a.Tuple[fieldTypeTupleIndexElems].(StringList)[0]
+	case mysql.TypeString:
+		// ref https://github.com/pingcap/tidb/blob/66948b2fd9bec8ea11644770a2fa746c7eba1a1f/ddl/ddl_api.go#L3916
+		if a.Tuple[fieldTypeTupleIndexCollate].Unwrap().(string) == charset.CollationBin {
+			return string(make([]byte, a.Tuple[fieldTypeTupleIndexFlen].Unwrap().(int)))
+		}
+		return ""
 	default:
 		return ""
 	}

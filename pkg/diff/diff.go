@@ -30,9 +30,9 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/log"
-	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/utils"
+	"github.com/pingcap/tidb/parser/model"
 	"go.uber.org/zap"
 )
 
