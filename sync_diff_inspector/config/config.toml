@@ -30,8 +30,7 @@ ignore-struct-check = false
     port = 3306
     user = "root"
     password = ""
-    # remove comment if use tidb's snapshot data
-    # snapshot = "2016-10-08 16:45:26"
+    # mysql doesn't has snapshot config
 
 [data-sources.tidb]
     host = "127.0.0.1"

@@ -23,11 +23,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pingcap/parser"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	filter "github.com/pingcap/tidb-tools/pkg/table-filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
+	"github.com/pingcap/tidb/parser"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
