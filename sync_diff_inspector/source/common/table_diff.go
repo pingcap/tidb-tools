@@ -16,7 +16,7 @@ package common
 import (
 	"database/sql"
 
-	"github.com/pingcap/parser/model"
+	"github.com/pingcap/tidb/parser/model"
 )
 
 // TableShardSource represents the origin schema and table and DB connection before router.

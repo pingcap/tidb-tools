@@ -14,12 +14,13 @@
 package common
 
 import (
+	"strconv"
+
 	"github.com/pingcap/log"
-	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb/parser/model"
 	"github.com/pingcap/tidb/types"
 	"go.uber.org/zap"
-	"strconv"
 )
 
 type RowData struct {

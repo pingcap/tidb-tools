@@ -59,7 +59,7 @@ chunk-size = 500
     target-instance = "mysql"
 
     # tables need to check.
-	target-check-tables = ["diff_test.test"]
+    target-check-tables = ["diff_test.test"]
 
     # extra table config
-	target-configs= ["config1"]
+    target-configs= ["config1"]

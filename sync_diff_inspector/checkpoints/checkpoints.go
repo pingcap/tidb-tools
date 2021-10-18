@@ -26,9 +26,6 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/siddontang/go/ioutil2"
 
-	//"github.com/golang/protobuf/proto"
-	//"github.com/pingcap/errors"
-
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"go.uber.org/zap"
