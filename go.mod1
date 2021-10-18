@@ -16,9 +16,10 @@ require (
 	github.com/pingcap/failpoint v0.0.0-20210316064728-7acb0f0a3dfd
 	github.com/pingcap/kvproto v0.0.0-20210915062418-0f5764a128ad
 	github.com/pingcap/log v0.0.0-20210906054005-afc726e70354
-	github.com/pingcap/tidb v1.1.0-beta.0.20211014070527-bd68045ffb03
+	github.com/pingcap/parser v0.0.0-20210525032559-c37778aff307
+	github.com/pingcap/tidb v1.1.0-beta.0.20211012114926-d53f9f55a0f9
 	github.com/pingcap/tidb/parser v0.0.0-20211012113926-e933e0008d04
-	github.com/pingcap/tipb v0.0.0-20211008080435-3fd327dfce0e
+	github.com/pingcap/tipb v0.0.0-20210802080519-94b831c6db55
 	github.com/rcrowley/go-metrics v0.0.0-20190826022208-cac0b30c2563 // indirect
 	github.com/satori/go.uuid v1.2.1-0.20181028125025-b2ce2384e17b // indirect
 	github.com/shirou/gopsutil v3.21.4+incompatible // indirect
