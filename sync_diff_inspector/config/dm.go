@@ -36,7 +36,7 @@ func getDMTaskCfgURL(dmAddr, task string) string {
 	return fmt.Sprintf("%s/apis/%s/subtasks/%s", dmAddr, apiVersion, task)
 }
 
-// GetDMTaskCfg gets dm's sub task config
+// getDMTaskCfg gets dm's sub task config
 func getDMTaskCfg(dmAddr, task string) ([]*config.SubTaskConfig, error) {
 	tr := &http.Transport{
 		// TODO: support tls

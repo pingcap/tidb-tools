@@ -61,4 +61,4 @@ target-table = "test" # 目标表名
     target-instance = "tidb"
 
     # tables need to check.
-	target-check-tables = ["shard_test.test"]
+    target-check-tables = ["shard_test.test"]

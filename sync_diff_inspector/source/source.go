@@ -20,8 +20,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	"github.com/pingcap/tidb/parser/model"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
