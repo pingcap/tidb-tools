@@ -14,7 +14,7 @@
 package filter_test
 
 import (
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -433,11 +433,11 @@ func (s *filterSuite) TestImport(c *C) {
 	dir := c.MkDir()
 	path1 := filepath.Join(dir, "1.txt")
 	path2 := filepath.Join(dir, "2.txt")
-	ioutil.WriteFile(path1, []byte(`
+	os.WriteFile(path1, []byte(`
 		db?.tbl?
 		db02.tbl02
 	`), 0644)
-	ioutil.WriteFile(path2, []byte(`
+	os.WriteFile(path2, []byte(`
 		db03.tbl03
 		!db4.tbl4
 	`), 0644)
@@ -459,8 +459,8 @@ func (s *filterSuite) TestRecursiveImport(c *C) {
 	dir := c.MkDir()
 	path3 := filepath.Join(dir, "3.txt")
 	path4 := filepath.Join(dir, "4.txt")
-	ioutil.WriteFile(path3, []byte("db1.tbl1"), 0644)
-	ioutil.WriteFile(path4, []byte("# comment\n\n@"+path3), 0644)
+	os.WriteFile(path3, []byte("db1.tbl1"), 0644)
+	os.WriteFile(path4, []byte("# comment\n\n@"+path3), 0644)
 
 	_, err := filter.Parse([]string{"@" + path4})
 	c.Assert(err, ErrorMatches, `.*4\.txt:3: importing filter files recursively is not allowed`)

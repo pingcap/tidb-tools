@@ -14,7 +14,7 @@
 package filter_test
 
 import (
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	. "github.com/pingcap/check"
@@ -266,12 +266,12 @@ func (s *columnFilterSuite) TestImport(c *C) {
 	dir := c.MkDir()
 	path1 := filepath.Join(dir, "1.txt")
 	path2 := filepath.Join(dir, "2.txt")
-	ioutil.WriteFile(path1, []byte(`
+	os.WriteFile(path1, []byte(`
 		col?tql?
 		col?\.tql?
 		col02\.tql02
 	`), 0644)
-	ioutil.WriteFile(path2, []byte(`
+	os.WriteFile(path2, []byte(`
 		col03\.tql03
 		!col4\.tql4
 	`), 0644)
@@ -294,8 +294,8 @@ func (s *columnFilterSuite) TestRecursiveImport(c *C) {
 	dir := c.MkDir()
 	path3 := filepath.Join(dir, "3.txt")
 	path4 := filepath.Join(dir, "4.txt")
-	ioutil.WriteFile(path3, []byte("col1"), 0644)
-	ioutil.WriteFile(path4, []byte("# comment\n\n@"+path3), 0644)
+	os.WriteFile(path3, []byte("col1"), 0644)
+	os.WriteFile(path4, []byte("# comment\n\n@"+path3), 0644)
 
 	_, err := filter.ParseColumnFilter([]string{"@" + path4})
 	c.Assert(err, ErrorMatches, `.*4\.txt:3: importing filter files recursively is not allowed`)
