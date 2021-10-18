@@ -51,8 +51,9 @@ func ParseColumnFilter(args []string) (ColumnFilter, error) {
 // Column is not case-sensitive on any platform, nor are column aliases.
 // So we always match in lowercase.
 func (f columnFilter) MatchColumn(column string) bool {
+	lowercaseColumn := strings.ToLower(column)
 	for _, rule := range f {
-		if rule.column.matchString(strings.ToLower(column)) {
+		if rule.column.matchString(lowercaseColumn) {
 			return rule.positive
 		}
 	}
