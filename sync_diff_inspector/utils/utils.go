@@ -625,7 +625,7 @@ func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table stri
 	}
 	columnValues := make(map[string]string)
 	for i, column := range columns {
-		columnValues[columnNames[i][1:len(columnNames[i])-1]] = *column.(*string)
+		columnValues[indexColumns[i].Name.O] = *column.(*string)
 	}
 	return columnValues, nil
 }
