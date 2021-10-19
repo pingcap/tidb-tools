@@ -603,6 +603,7 @@ func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table stri
 		limitRange,
 		strings.Join(columnNames, ", "),
 		strconv.FormatInt(count/2, 10))
+	log.Debug("get mid by size", zap.String("sql", query), zap.Reflect("args", args))
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, errors.Trace(err)
