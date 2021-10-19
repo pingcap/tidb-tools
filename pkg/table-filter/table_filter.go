@@ -47,7 +47,7 @@ func Parse(args []string) (Filter, error) {
 		}
 	}
 
-	reversing(p.rules)
+	reverse(p.rules)
 
 	return tableFilter(p.rules), nil
 }

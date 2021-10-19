@@ -42,7 +42,7 @@ func ParseColumnFilter(args []string) (ColumnFilter, error) {
 		}
 	}
 
-	reversing(p.rules)
+	reverse(p.rules)
 
 	return columnFilter(p.rules), nil
 }
@@ -50,6 +50,7 @@ func ParseColumnFilter(args []string) (ColumnFilter, error) {
 // MatchColumn checks if a column can be processed after applying the columnFilter `f`.
 // Column is not case-sensitive on any platform, nor are column aliases.
 // So we always match in lowercase.
+// See also: https://dev.mysql.com/doc/refman/5.7/en/identifier-case-sensitivity.html
 func (f columnFilter) MatchColumn(column string) bool {
 	lowercaseColumn := strings.ToLower(column)
 	for _, rule := range f {
