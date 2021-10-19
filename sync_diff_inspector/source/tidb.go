@@ -232,6 +232,13 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 				}
 			}
 		}
+
+		// check tablesMap
+		for _, tableDiff := range tableDiffs {
+			if _, ok := sourceTableMap[utils.UniqueID(tableDiff.Schema, tableDiff.Table)]; !ok {
+				return nil, errors.Errorf("the source has no table to be compared. target-table is `%s.%s`", tableDiff.Schema, tableDiff.Table)
+			}
+		}
 	}
 	return sourceTableMap, nil
 }

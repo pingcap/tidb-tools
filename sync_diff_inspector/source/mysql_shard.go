@@ -210,6 +210,7 @@ func (s *MySQLSources) GetDB() *sql.DB {
 			return db.DBConn
 		}
 	}
+	log.Warn("the source has no DB connection.")
 	return nil
 }
 
@@ -309,19 +310,20 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 					}
 				}
 				uniqueId := utils.UniqueID(targetSchema, targetTable)
-				maxSourceRouteTableCount[uniqueId]++
 				if _, ok := uniqueMap[uniqueId]; !ok {
+					continue
+				}
+				maxSourceRouteTableCount[uniqueId]++
+				if _, ok := sourceTablesMap[uniqueId]; !ok {
 					sourceTablesMap[uniqueId] = make([]*common.TableShardSource, 0)
 				}
-				if _, ok := uniqueMap[uniqueId]; ok {
-					sourceTablesMap[uniqueId] = append(sourceTablesMap[uniqueId], &common.TableShardSource{
-						TableSource: common.TableSource{
-							OriginSchema: schema,
-							OriginTable:  table,
-						},
-						DBConn: sourceDB.Conn,
-					})
-				}
+				sourceTablesMap[uniqueId] = append(sourceTablesMap[uniqueId], &common.TableShardSource{
+					TableSource: common.TableSource{
+						OriginSchema: schema,
+						OriginTable:  table,
+					},
+					DBConn: sourceDB.Conn,
+				})
 			}
 		}
 		maxConn := 0
@@ -336,6 +338,13 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 		sourceDB.Conn.SetMaxOpenConns(maxConn*threadCount + 1)
 		sourceDB.Conn.SetMaxIdleConns(maxConn*threadCount + 1)
 
+	}
+
+	// check tablesMap
+	for _, tableDiff := range tableDiffs {
+		if _, ok := sourceTablesMap[utils.UniqueID(tableDiff.Schema, tableDiff.Table)]; !ok {
+			return nil, errors.Errorf("the source has no table to be compared. target-table is `%s.%s`", tableDiff.Schema, tableDiff.Table)
+		}
 	}
 
 	mss := &MySQLSources{
