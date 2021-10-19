@@ -23,25 +23,12 @@ import (
 	"github.com/pingcap/errors"
 )
 
-type parser struct {
-	rules    []rule
-	fileName string
-	lineNum  int64
+type tableRulesParser struct {
+	rules []tableRule
+	matcherParser
 }
 
-func (p *parser) wrapErrorFormat(format string) string {
-	return fmt.Sprintf("at %s:%d: %s", strings.ReplaceAll(p.fileName, "%", "%%"), p.lineNum, format)
-}
-
-func (p *parser) errorf(format string, args ...interface{}) error {
-	return errors.Errorf(p.wrapErrorFormat(format), args...)
-}
-
-func (p *parser) annotatef(err error, format string, args ...interface{}) error {
-	return errors.Annotatef(err, p.wrapErrorFormat(format), args...)
-}
-
-func (p *parser) parse(line string, canImport bool) (err error) {
+func (p *tableRulesParser) parse(line string, canImport bool) error {
 	line = strings.Trim(line, " \t")
 	if len(line) == 0 {
 		return nil
@@ -60,12 +47,12 @@ func (p *parser) parse(line string, canImport bool) (err error) {
 			return p.errorf("importing filter files recursively is not allowed")
 		}
 		// FIXME: can't deal with file names which ends in spaces (perhaps not a big deal)
-		return p.importFile(line[1:])
+		return p.importFile(line[1:], p.parse)
 	}
 
 	var sm, tm matcher
 
-	sm, line, err = p.parsePattern(line)
+	sm, line, err := p.parsePattern(line, true)
 	if err != nil {
 		return err
 	}
@@ -76,7 +63,7 @@ func (p *parser) parse(line string, canImport bool) (err error) {
 		return p.errorf("syntax error: missing '.' between schema and table patterns")
 	}
 
-	tm, line, err = p.parsePattern(line[1:])
+	tm, line, err = p.parsePattern(line[1:], true)
 	if err != nil {
 		return err
 	}
@@ -84,7 +71,7 @@ func (p *parser) parse(line string, canImport bool) (err error) {
 		return p.errorf("syntax error: stray characters after table pattern")
 	}
 
-	p.rules = append(p.rules, rule{
+	p.rules = append(p.rules, tableRule{
 		schema:   sm,
 		table:    tm,
 		positive: positive,
@@ -92,30 +79,66 @@ func (p *parser) parse(line string, canImport bool) (err error) {
 	return nil
 }
 
-func (p *parser) importFile(fileName string) error {
-	file, err := os.Open(fileName)
-	if err != nil {
-		return p.annotatef(err, "cannot open filter file")
+type columnRulesParser struct {
+	rules []columnRule
+	matcherParser
+}
+
+func (p *columnRulesParser) parse(line string, canImport bool) error {
+	line = strings.Trim(line, " \t")
+	if len(line) == 0 {
+		return nil
 	}
-	defer file.Close()
 
-	oldFileName, oldLineNum := p.fileName, p.lineNum
-	p.fileName, p.lineNum = fileName, 1
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		if err := p.parse(scanner.Text(), false); err != nil {
-			return err
+	positive := true
+	switch line[0] {
+	case '#':
+		return nil
+	case '!':
+		positive = false
+		line = line[1:]
+	case '@':
+		if !canImport {
+			return p.errorf("importing filter files recursively is not allowed")
 		}
-		p.lineNum++
+		return p.importFile(line[1:], p.parse)
 	}
 
-	p.fileName, p.lineNum = oldFileName, oldLineNum
+	var cm matcher
 
-	if err := scanner.Err(); err != nil {
-		return p.annotatef(err, "cannot read filter file")
+	cm, line, err := p.parsePattern(line, false)
+	if err != nil {
+		return err
 	}
+
+	if len(line) != 0 {
+		return p.errorf("syntax error: stray characters after column pattern")
+	}
+
+	p.rules = append(p.rules, columnRule{
+		// Column is not case-sensitive on any platform, nor are column aliases.
+		// So we always match in lowercase.
+		column:   cm.toLower(),
+		positive: positive,
+	})
 	return nil
+}
+
+type matcherParser struct {
+	fileName string
+	lineNum  int64
+}
+
+func (p *matcherParser) wrapErrorFormat(format string) string {
+	return fmt.Sprintf("at %s:%d: %s", strings.ReplaceAll(p.fileName, "%", "%%"), p.lineNum, format)
+}
+
+func (p *matcherParser) errorf(format string, args ...interface{}) error {
+	return errors.Errorf(p.wrapErrorFormat(format), args...)
+}
+
+func (p *matcherParser) annotatef(err error, format string, args ...interface{}) error {
+	return errors.Annotatef(err, p.wrapErrorFormat(format), args...)
 }
 
 var (
@@ -125,7 +148,7 @@ var (
 	wildcardRangeRegexp = regexp.MustCompile(`^\[!?(?:\\[^0-9a-zA-Z]|[^\\\]])+\]`)
 )
 
-func (p *parser) newRegexpMatcher(pat string) (matcher, error) {
+func (p *matcherParser) newRegexpMatcher(pat string) (matcher, error) {
 	m, err := newRegexpMatcher(pat)
 	if err != nil {
 		return nil, p.annotatef(err, "invalid pattern")
@@ -133,7 +156,7 @@ func (p *parser) newRegexpMatcher(pat string) (matcher, error) {
 	return m, nil
 }
 
-func (p *parser) parsePattern(line string) (matcher, string, error) {
+func (p *matcherParser) parsePattern(line string, needsDotSeparator bool) (matcher, string, error) {
 	if len(line) == 0 {
 		return nil, "", p.errorf("syntax error: missing pattern")
 	}
@@ -171,7 +194,7 @@ func (p *parser) parsePattern(line string) (matcher, string, error) {
 
 	default:
 		// wildcard or literal string.
-		return p.parseWildcardPattern(line)
+		return p.parseWildcardPattern(line, needsDotSeparator)
 	}
 }
 
@@ -179,7 +202,7 @@ func isASCIIAlphanumeric(b byte) bool {
 	return '0' <= b && b <= '9' || 'a' <= b && b <= 'z' || 'A' <= b && b <= 'Z'
 }
 
-func (p *parser) parseWildcardPattern(line string) (matcher, string, error) {
+func (p *matcherParser) parseWildcardPattern(line string, needsDotSeparator bool) (matcher, string, error) {
 	var (
 		literalStringBuilder   strings.Builder
 		wildcardPatternBuilder strings.Builder
@@ -214,9 +237,12 @@ parseLoop:
 			i += 2
 
 		case '.':
-			// table separator, end now.
-			break parseLoop
-
+			if needsDotSeparator {
+				// table separator, end now.
+				break parseLoop
+			} else {
+				return nil, "", p.errorf("unexpected special character '%c'", c)
+			}
 		case '*':
 			// wildcard
 			isLiteralString = false
@@ -269,4 +295,30 @@ parseLoop:
 		return nil, "", err
 	}
 	return m, line, nil
+}
+
+func (p *matcherParser) importFile(fileName string, parseMatcher func(string, bool) error) error {
+	file, err := os.Open(fileName)
+	if err != nil {
+		return p.annotatef(err, "cannot open filter file")
+	}
+	defer file.Close()
+
+	oldFileName, oldLineNum := p.fileName, p.lineNum
+	p.fileName, p.lineNum = fileName, 1
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		if err := parseMatcher(scanner.Text(), false); err != nil {
+			return err
+		}
+		p.lineNum++
+	}
+
+	p.fileName, p.lineNum = oldFileName, oldLineNum
+
+	if err := scanner.Err(); err != nil {
+		return p.annotatef(err, "cannot read filter file")
+	}
+	return nil
 }

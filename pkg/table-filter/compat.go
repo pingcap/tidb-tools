@@ -48,7 +48,7 @@ func (t *Table) Clone() *Table {
 	}
 }
 
-// MySQLReplicationRules is a set of rules based on MySQL's replication filter.
+// MySQLReplicationRules is a set of rules based on MySQL's replication tableFilter.
 type MySQLReplicationRules struct {
 	// DoTables is an allowlist of tables.
 	DoTables []*Table `json:"do-tables" toml:"do-tables" yaml:"do-tables"`
@@ -105,7 +105,7 @@ func (f schemasFilter) toLower() Filter {
 	return schemasFilter{schemas: loweredSchemas}
 }
 
-// NewSchemasFilter creates a filter which only accepts a list of schemas.
+// NewSchemasFilter creates a tableFilter which only accepts a list of schemas.
 func NewSchemasFilter(schemas ...string) Filter {
 	schemaMap := make(map[string]struct{}, len(schemas))
 	for _, schema := range schemas {
@@ -148,7 +148,7 @@ func (f tablesFilter) toLower() Filter {
 	return tablesFilter{schemas: loweredSchemas}
 }
 
-// NewTablesFilter creates a filter which only accepts a list of tables.
+// NewTablesFilter creates a tableFilter which only accepts a list of tables.
 func NewTablesFilter(tables ...Table) Filter {
 	schemas := make(map[string]map[string]struct{})
 	for _, table := range tables {
@@ -162,7 +162,7 @@ func NewTablesFilter(tables ...Table) Filter {
 	return tablesFilter{schemas: schemas}
 }
 
-// bothFilter is a filter which passes if both filters in the field passes.
+// bothFilter is a tableFilter which passes if both filters in the field passes.
 type bothFilter struct {
 	a Filter
 	b Filter
@@ -225,20 +225,20 @@ func ParseMySQLReplicationRules(rules *MySQLReplicationRules) (Filter, error) {
 		rulesLen = len(schemas) + 1
 	}
 
-	schemaRules := make([]rule, 0, rulesLen)
+	schemaRules := make([]tableRule, 0, rulesLen)
 	for _, schema := range schemas {
 		m, err := matcherFromLegacyPattern(schema)
 		if err != nil {
 			return nil, err
 		}
-		schemaRules = append(schemaRules, rule{
+		schemaRules = append(schemaRules, tableRule{
 			schema:   m,
 			table:    trueMatcher{},
 			positive: positive,
 		})
 	}
 	if !positive {
-		schemaRules = append(schemaRules, rule{
+		schemaRules = append(schemaRules, tableRule{
 			schema:   trueMatcher{},
 			table:    trueMatcher{},
 			positive: true,
@@ -254,7 +254,7 @@ func ParseMySQLReplicationRules(rules *MySQLReplicationRules) (Filter, error) {
 		rulesLen = len(tables) + 1
 	}
 
-	tableRules := make([]rule, 0, rulesLen)
+	tableRules := make([]tableRule, 0, rulesLen)
 	for _, table := range tables {
 		sm, err := matcherFromLegacyPattern(table.Schema)
 		if err != nil {
@@ -264,19 +264,19 @@ func ParseMySQLReplicationRules(rules *MySQLReplicationRules) (Filter, error) {
 		if err != nil {
 			return nil, err
 		}
-		tableRules = append(tableRules, rule{
+		tableRules = append(tableRules, tableRule{
 			schema:   sm,
 			table:    tm,
 			positive: positive,
 		})
 	}
 	if !positive {
-		tableRules = append(tableRules, rule{
+		tableRules = append(tableRules, tableRule{
 			schema:   trueMatcher{},
 			table:    trueMatcher{},
 			positive: true,
 		})
 	}
 
-	return &bothFilter{a: filter(schemaRules), b: filter(tableRules)}, nil
+	return &bothFilter{a: tableFilter(schemaRules), b: tableFilter(tableRules)}, nil
 }

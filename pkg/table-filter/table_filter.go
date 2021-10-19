@@ -19,24 +19,26 @@ import (
 
 // Filter is a structure to check if a table should be included for processing.
 type Filter interface {
-	// MatchTable checks if a table can be processed after applying the filter.
+	// MatchTable checks if a table can be processed after applying the tableFilter.
 	MatchTable(schema string, table string) bool
-	// MatchSchema checks if a schema can be processed after applying the filter.
+	// MatchSchema checks if a schema can be processed after applying the tableFilter.
 	MatchSchema(schema string) bool
-	// toLower changes the filter to compare with case-insensitive strings.
+	// toLower changes the tableFilter to compare with case-insensitive strings.
 	toLower() Filter
 }
 
-// filter is a concrete implementation of Filter.
-type filter []rule
+// tableFilter is a concrete implementation of Filter.
+type tableFilter []tableRule
 
-// Parse a filter from a list of serialized filter rules. The parsed filter is
+// Parse a tableFilter from a list of serialized tableFilter rules. The parsed tableFilter is
 // case-sensitive by default.
 func Parse(args []string) (Filter, error) {
-	p := parser{
-		rules:    make([]rule, 0, len(args)),
-		fileName: "<cmdline>",
-		lineNum:  1,
+	p := tableRulesParser{
+		make([]tableRule, 0, len(args)),
+		matcherParser{
+			fileName: "<cmdline>",
+			lineNum:  1,
+		},
 	}
 
 	for _, arg := range args {
@@ -45,23 +47,19 @@ func Parse(args []string) (Filter, error) {
 		}
 	}
 
-	// https://github.com/golang/go/wiki/SliceTricks#reversing.
-	rules := p.rules
-	for i := len(rules)/2 - 1; i >= 0; i-- {
-		opp := len(rules) - 1 - i
-		rules[i], rules[opp] = rules[opp], rules[i]
-	}
-	return filter(rules), nil
+	reverse(p.rules)
+
+	return tableFilter(p.rules), nil
 }
 
-// CaseInsensitive returns a new filter which is the case-insensitive version of
-// the input filter.
+// CaseInsensitive returns a new tableFilter which is the case-insensitive version of
+// the input tableFilter.
 func CaseInsensitive(f Filter) Filter {
 	return loweredFilter{wrapped: f.toLower()}
 }
 
-// MatchTable checks if a table can be processed after applying the filter `f`.
-func (f filter) MatchTable(schema string, table string) bool {
+// MatchTable checks if a table can be processed after applying the tableFilter `f`.
+func (f tableFilter) MatchTable(schema string, table string) bool {
 	for _, rule := range f {
 		if rule.schema.matchString(schema) && rule.table.matchString(table) {
 			return rule.positive
@@ -70,8 +68,8 @@ func (f filter) MatchTable(schema string, table string) bool {
 	return false
 }
 
-// MatchSchema checks if a schema can be processed after applying the filter `f`.
-func (f filter) MatchSchema(schema string) bool {
+// MatchSchema checks if a schema can be processed after applying the tableFilter `f`.
+func (f tableFilter) MatchSchema(schema string) bool {
 	for _, rule := range f {
 		if rule.schema.matchString(schema) && (rule.positive || rule.table.matchAllStrings()) {
 			return rule.positive
@@ -80,16 +78,16 @@ func (f filter) MatchSchema(schema string) bool {
 	return false
 }
 
-func (f filter) toLower() Filter {
-	rules := make([]rule, 0, len(f))
+func (f tableFilter) toLower() Filter {
+	rules := make([]tableRule, 0, len(f))
 	for _, r := range f {
-		rules = append(rules, rule{
+		rules = append(rules, tableRule{
 			schema:   r.schema.toLower(),
 			table:    r.table.toLower(),
 			positive: r.positive,
 		})
 	}
-	return filter(rules)
+	return tableFilter(rules)
 }
 
 type loweredFilter struct {
@@ -122,7 +120,7 @@ func (f allFilter) toLower() Filter {
 	return f
 }
 
-// All creates a filter which matches everything.
+// All creates a tableFilter which matches everything.
 func All() Filter {
 	return allFilter{}
 }
