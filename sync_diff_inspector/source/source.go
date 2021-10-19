@@ -123,6 +123,10 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 			})
 		}
 	}
+	
+	if len(tableDiffs) == 0 {
+		return nil, nil, errors.Errorf("no table need to be compared")
+	}
 
 	// Sort TableDiff is important!
 	// because we compare table one by one.
