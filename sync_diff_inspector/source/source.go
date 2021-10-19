@@ -133,11 +133,11 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 	})
 	upstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.CheckThreadCount, cfg.Task.SourceInstances...)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, errors.Annotate(err, "from upstream")
 	}
 	downstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.CheckThreadCount, cfg.Task.TargetInstance)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, errors.Annotate(err, "from downstream")
 	}
 	return downstream, upstream, nil
 }
