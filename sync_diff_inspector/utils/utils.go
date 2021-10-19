@@ -582,10 +582,10 @@ func SliceToMap(slice []string) map[string]interface{} {
 }
 
 // GetApproximateMidBySize return the `count`th row in rows that meet the `limitRange`.
-func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table string, tbInfo *model.TableInfo, limitRange string, args []interface{}, count int64) (map[string]string, error) {
+func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table string, indexColumns []*model.ColumnInfo, limitRange string, args []interface{}, count int64) (map[string]string, error) {
 	/*
 		example
-		mysql> select i_id, i_im_id, i_name from item where i_id > 0 order by i_id, i_im_id limit 5000,1;
+		mysql> select i_id, i_im_id, i_name from item where i_id > 0 order by i_id, i_im_id, i_name limit 5000,1;
 		+------+---------+-----------------+
 		| i_id | i_im_id | i_name          |
 		+------+---------+-----------------+
@@ -593,8 +593,8 @@ func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table stri
 		+------+---------+-----------------+
 		1 row in set (0.09 sec)
 	*/
-	columnNames := make([]string, 0, len(tbInfo.Columns))
-	for _, col := range tbInfo.Columns {
+	columnNames := make([]string, 0, len(indexColumns))
+	for _, col := range indexColumns {
 		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
 	}
 	query := fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s LIMIT %s,1",
@@ -608,7 +608,7 @@ func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table stri
 		return nil, errors.Trace(err)
 	}
 	defer rows.Close()
-	columns := make([]interface{}, len(tbInfo.Columns))
+	columns := make([]interface{}, len(indexColumns))
 	for i := range columns {
 		columns[i] = new(string)
 	}
