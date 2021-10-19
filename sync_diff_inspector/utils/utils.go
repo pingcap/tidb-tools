@@ -597,12 +597,12 @@ func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table stri
 	for _, col := range indexColumns {
 		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
 	}
-	query := fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s LIMIT %s,1",
+	query := fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s LIMIT %d,1",
 		strings.Join(columnNames, ", "),
 		dbutil.TableName(schema, table),
 		limitRange,
 		strings.Join(columnNames, ", "),
-		strconv.FormatInt(count/2, 10))
+		count/2)
 	log.Debug("get mid by size", zap.String("sql", query), zap.Reflect("args", args))
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
