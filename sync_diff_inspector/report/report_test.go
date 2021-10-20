@@ -452,8 +452,8 @@ func TestCommitSummary(t *testing.T) {
 
 	p := make([]byte, 1024)
 	file.Read(p)
-
-	require.Contains(t, string(p), "Summary\n\n\n\n"+
+	str := string(p)
+	require.Contains(t, str, "Summary\n\n\n\n"+
 		"Source Database\n\n\n\n"+
 		"host = \"127.0.0.1\"\n"+
 		"port = 3306\n"+
@@ -472,11 +472,11 @@ func TestCommitSummary(t *testing.T) {
 		"The following tables contains inconsistent data\n\n"+
 		"+---------------+--------------------+----------------+\n"+
 		"|     TABLE     | STRUCTURE EQUALITY | DATA DIFF ROWS |\n"+
-		"+---------------+--------------------+----------------+\n"+
-		"| `atest`.`tbl` | true               | +100/-200      |\n"+
-		"| `xtest`.`tbl` | false              | +100/-200      |\n"+
-		"+---------------+--------------------+----------------+\n"+
-		"Time Cost:")
+		"+---------------+--------------------+----------------+\n")
+	require.Contains(t, str,
+		"| `atest`.`tbl` | true               | +100/-200      |")
+	require.Contains(t, str,
+		"| `xtest`.`tbl` | false              | +100/-200      |")
 
 	file.Close()
 	err = os.Remove(filename)
