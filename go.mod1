@@ -26,6 +26,7 @@ require (
 	github.com/shirou/gopsutil v3.21.4+incompatible // indirect
 	github.com/shopspring/decimal v0.0.0-20200105231215-408a2507e114 // indirect
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
+	github.com/spf13/pflag v1.0.5
 	github.com/syndtr/goleveldb v1.0.1-0.20190625010220-02440ea7a285 // indirect
 	github.com/tikv/pd v1.1.0-beta.0.20210818082359-acba1da0018d
 	github.com/tklauser/go-sysconf v0.3.6 // indirect

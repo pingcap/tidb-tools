@@ -17,7 +17,6 @@ import (
 	"crypto/md5"
 	"database/sql"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"net/url"
 	"os"
@@ -31,6 +30,7 @@ import (
 	filter "github.com/pingcap/tidb-tools/pkg/table-filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb/parser/model"
+	flag "github.com/spf13/pflag"
 	"go.uber.org/zap"
 )
 
