@@ -17,27 +17,19 @@ import (
 	"container/heap"
 	"testing"
 
-	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"github.com/pingcap/tidb/parser"
+	"github.com/stretchr/testify/require"
 )
 
-func TestClient(t *testing.T) {
-	TestingT(t)
-}
-
-var _ = Suite(&testCommonSuite{})
-
-type testCommonSuite struct{}
-
-func (cp *testCommonSuite) TestRowData(c *C) {
+func TestRowData(t *testing.T) {
 	createTableSQL := "create table test.test(id int(24), name varchar(24), age int(24), primary key(id, name));"
 	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	_, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
-	c.Assert(utils.NeedQuotes(orderKeyCols[1].FieldType.Tp), Equals, true)
+	require.Equal(t, utils.NeedQuotes(orderKeyCols[1].FieldType.Tp), true)
 	ids := []string{"3", "2", "2", "2", "4", "1", "NULL"}
 	names := []string{"d", "NULL", "c", "g", "b", "a", "e"}
 	ages := []string{"1", "2", "3", "3", "NULL", "5", "4"}
@@ -66,7 +58,7 @@ func (cp *testCommonSuite) TestRowData(c *C) {
 		rowData := heap.Pop(rowDatas).(RowData)
 		id := string(rowData.Data["id"].Data)
 		name := string(rowData.Data["name"].Data)
-		c.Assert(id, Equals, expectIDs[i])
-		c.Assert(name, Equals, expectNames[i])
+		require.Equal(t, id, expectIDs[i])
+		require.Equal(t, name, expectNames[i])
 	}
 }

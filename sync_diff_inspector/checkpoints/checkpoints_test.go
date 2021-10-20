@@ -22,26 +22,18 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
+	"github.com/stretchr/testify/require"
 )
 
-func TestClient(t *testing.T) {
-	TestingT(t)
-}
-
-var _ = Suite(&testCheckpointSuit{})
-
-type testCheckpointSuit struct{}
-
-func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
+func TestSaveChunk(t *testing.T) {
 	checker := new(Checkpoint)
 	checker.Init()
 	ctx := context.Background()
 	cur := checker.GetChunkSnapshot()
 	id, err := checker.SaveChunk(ctx, "TestSaveChunk", cur, nil)
-	c.Assert(err, IsNil)
-	c.Assert(id, IsNil)
+	require.NoError(t, err)
+	require.Nil(t, id)
 	wg := &sync.WaitGroup{}
 	rounds := 100
 	for i := 0; i < rounds; i++ {
@@ -79,13 +71,13 @@ func (cp *testCheckpointSuit) TestSaveChunk(c *C) {
 	defer os.Remove("TestSaveChunk")
 
 	cur = checker.GetChunkSnapshot()
-	c.Assert(cur, NotNil)
+	require.NotNil(t, cur)
 	id, err = checker.SaveChunk(ctx, "TestSaveChunk", cur, nil)
-	c.Assert(err, IsNil)
-	c.Assert(id.Compare(&chunk.ChunkID{TableIndex: 0, BucketIndexLeft: 9, BucketIndexRight: 9, ChunkIndex: 9}), Equals, 0)
+	require.NoError(t, err)
+	require.Equal(t, id.Compare(&chunk.ChunkID{TableIndex: 0, BucketIndexLeft: 9, BucketIndexRight: 9, ChunkIndex: 9}), 0)
 }
 
-func (cp *testCheckpointSuit) TestLoadChunk(c *C) {
+func TestLoadChunk(t *testing.T) {
 	checker := new(Checkpoint)
 	checker.Init()
 	ctx := context.Background()
@@ -121,8 +113,8 @@ func (cp *testCheckpointSuit) TestLoadChunk(c *C) {
 	defer os.Remove("TestLoadChunk")
 	cur := checker.GetChunkSnapshot()
 	id, err := checker.SaveChunk(ctx, "TestLoadChunk", cur, nil)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	node, _, err := checker.LoadChunk("TestLoadChunk")
-	c.Assert(err, IsNil)
-	c.Assert(node.GetID().Compare(id), Equals, 0)
+	require.NoError(t, err)
+	require.Equal(t, node.GetID().Compare(id), 0)
 }
