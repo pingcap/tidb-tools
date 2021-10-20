@@ -187,14 +187,15 @@ func (hp *Heap) Pop() (item interface{}) {
 }
 
 func (cp *Checkpoint) Init() {
-	hp := new(Heap)
-	hp.mu = &sync.Mutex{}
-	hp.Nodes = make([]*Node, 0)
-	hp.CurrentSavedNode = &Node{
-		ChunkRange: &chunk.Range{
-			Index:   chunk.GetInitChunkID(),
-			IsFirst: true,
-			IsLast:  true,
+	hp := &Heap{
+		mu:    &sync.Mutex{},
+		Nodes: make([]*Node, 0),
+		CurrentSavedNode: &Node{
+			ChunkRange: &chunk.Range{
+				Index:   chunk.GetInitChunkID(),
+				IsFirst: true,
+				IsLast:  true,
+			},
 		},
 	}
 	heap.Init(hp)
