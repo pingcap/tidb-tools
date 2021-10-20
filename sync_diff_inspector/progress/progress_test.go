@@ -19,18 +19,10 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/pingcap/check"
+	"github.com/stretchr/testify/require"
 )
 
-func TestClient(t *testing.T) {
-	TestingT(t)
-}
-
-var _ = Suite(&testProgressSuite{})
-
-type testProgressSuite struct{}
-
-func (s *testProgressSuite) TestProgress(c *C) {
+func TestProgress(t *testing.T) {
 	p := NewTableProgressPrinter(4, 0)
 	p.RegisterTable("1", true, true)
 	p.StartTable("1", 50, true)
@@ -52,16 +44,16 @@ func (s *testProgressSuite) TestProgress(c *C) {
 	buffer := new(bytes.Buffer)
 	p.SetOutput(buffer)
 	p.PrintSummary()
-	c.Assert(
+	require.Equal(
+		t,
 		buffer.String(),
-		DeepEquals,
 		"\x1b[1A\x1b[J\nSummary:\n\nThe structure of `1` is not equal.\nThe structure of `2` is not equal.\nThe data of `4` is not equal.\n"+
 			"\nThe rest of the tables are all equal.\nThe patch file has been generated to './output_dir/patch.sql'\n"+
 			"You can view the comparison details through './output_dir/sync_diff_inspector.log'\n\n",
 	)
 }
 
-func (s *testProgressSuite) TestTableError(c *C) {
+func TestTableError(t *testing.T) {
 	p := NewTableProgressPrinter(4, 0)
 	p.RegisterTable("1", true, true)
 	p.StartTable("1", 50, true)
@@ -72,9 +64,9 @@ func (s *testProgressSuite) TestTableError(c *C) {
 	p.SetOutput(buffer)
 	p.Error(errors.New("[aaa]"))
 	time.Sleep(500 * time.Millisecond)
-	c.Assert(
+	require.Equal(
+		t,
 		buffer.String(),
-		DeepEquals,
 		"\x1b[0A\x1b[JComparing the table structure of `1` ... failure\n"+
 			"_____________________________________________________________________________\n"+
 			"Progress [===============>---------------------------------------------] 25% 0/0\n"+
@@ -86,7 +78,7 @@ func (s *testProgressSuite) TestTableError(c *C) {
 	)
 }
 
-func (s *testProgressSuite) TestAllSuccess(c *C) {
+func TestAllSuccess(t *testing.T) {
 	Init(2, 0)
 	RegisterTable("1", false, false)
 	StartTable("1", 1, true)
@@ -98,7 +90,7 @@ func (s *testProgressSuite) TestAllSuccess(c *C) {
 	buf := new(bytes.Buffer)
 	SetOutput(buf)
 	PrintSummary()
-	c.Assert(buf.String(), Equals, "\x1b[1A\x1b[J\nSummary:\n\n"+
+	require.Equal(t, buf.String(), "\x1b[1A\x1b[J\nSummary:\n\n"+
 		"A total of 2 tables have been compared and all are equal.\n"+
 		"You can view the comparison details through './output_dir/sync_diff_inspector.log'\n\n",
 	)

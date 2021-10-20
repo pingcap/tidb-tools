@@ -17,70 +17,62 @@ import (
 	"os"
 	"testing"
 
-	. "github.com/pingcap/check"
+	"github.com/stretchr/testify/require"
 )
 
-func TestClient(t *testing.T) {
-	TestingT(t)
-}
-
-var _ = Suite(&testConfigSuite{})
-
-type testConfigSuite struct{}
-
-func (s *testConfigSuite) TestParseConfig(c *C) {
+func TestParseConfig(t *testing.T) {
 	cfg := NewConfig()
-	c.Assert(cfg.Parse([]string{"--L", "info"}), IsNil)
+	require.Nil(t, cfg.Parse([]string{"--L", "info"}))
 
 	unknownFlag := []string{"--LL", "info"}
 	err := cfg.Parse(unknownFlag)
-	c.Assert(err, ErrorMatches, ".*LL.*")
+	require.Contains(t, err.Error(), "LL")
 
-	c.Assert(cfg.Parse([]string{"--config", "config.toml"}), IsNil)
-	c.Assert(cfg.Init(), IsNil)
-	c.Assert(cfg.Task.Init(cfg.DataSources, cfg.TableConfigs), IsNil)
+	require.Nil(t, cfg.Parse([]string{"--config", "config.toml"}))
+	require.Nil(t, cfg.Init())
+	require.Nil(t, cfg.Task.Init(cfg.DataSources, cfg.TableConfigs))
 
-	c.Assert(cfg.Parse([]string{"--config", "config_sharding.toml"}), IsNil)
-	c.Assert(cfg.Init(), IsNil)
-	c.Assert(cfg.Task.Init(cfg.DataSources, cfg.TableConfigs), IsNil)
+	require.Nil(t, cfg.Parse([]string{"--config", "config_sharding.toml"}))
+	require.Nil(t, cfg.Init())
+	require.Nil(t, cfg.Task.Init(cfg.DataSources, cfg.TableConfigs))
 
-	c.Assert(cfg.CheckConfig(), Equals, true)
+	require.True(t, cfg.CheckConfig())
 
 	// we might not use the same config to run this test. e.g. MYSQL_PORT can be 4000
-	c.Assert(cfg.String(), Equals, `{"log-level":"info","sample-percent":100,"check-thread-count":4,"compare-checksum-only":false,"ignore-struct-check":false,"ignore-stats":false,"ignore-data-check":false,"use-checkpoint":true,"dm-addr":"","dm-task":"","data-sources":{"mysql1":{"host":"127.0.0.1","port":3306,"user":"root","password":"","sql-mode":"","snapshot":"","route-rules":["rule1","rule2"],"Router":{"Selector":{}},"Conn":null},"mysql2":{"host":"127.0.0.1","port":3306,"user":"root","password":"","sql-mode":"","snapshot":"","route-rules":["rule1","rule2"],"Router":{"Selector":{}},"Conn":null},"mysql3":{"host":"127.0.0.1","port":3306,"user":"root","password":"","sql-mode":"","snapshot":"","route-rules":["rule1","rule3"],"Router":{"Selector":{}},"Conn":null},"tidb":{"host":"127.0.0.1","port":4000,"user":"root","password":"","sql-mode":"","snapshot":"","route-rules":null,"Router":{"Selector":{}},"Conn":null}},"routes":{"rule1":{"schema-pattern":"test_*","table-pattern":"t_*","target-schema":"test","target-table":"t"},"rule2":{"schema-pattern":"test2_*","table-pattern":"t2_*","target-schema":"test2","target-table":"t2"},"rule3":{"schema-pattern":"test2_*","table-pattern":"t2_*","target-schema":"test","target-table":"t"}},"table-configs":{"config1":{"schema":"schema1","table":"table","IgnoreColumns":["",""],"Fields":"","Range":"age \u003e 10 AND age \u003c 20","TargetTableInfo":null,"Collation":"","chunk-size":0}},"task":{"source-instances":["mysql1","mysql2","mysql3"],"source-routes":null,"target-instance":"tidb","target-check-tables":["schema*.table*","!c.*","test2.t2"],"target-configs":["config1"],"output-dir":"./output","SourceInstances":[{"host":"127.0.0.1","port":3306,"user":"root","password":"","sql-mode":"","snapshot":"","route-rules":["rule1","rule2"],"Router":{"Selector":{}},"Conn":null},{"host":"127.0.0.1","port":3306,"user":"root","password":"","sql-mode":"","snapshot":"","route-rules":["rule1","rule2"],"Router":{"Selector":{}},"Conn":null},{"host":"127.0.0.1","port":3306,"user":"root","password":"","sql-mode":"","snapshot":"","route-rules":["rule1","rule3"],"Router":{"Selector":{}},"Conn":null}],"TargetInstance":{"host":"127.0.0.1","port":4000,"user":"root","password":"","sql-mode":"","snapshot":"","route-rules":null,"Router":{"Selector":{}},"Conn":null},"TargetTableConfigs":[{"schema":"schema1","table":"table","IgnoreColumns":["",""],"Fields":"","Range":"age \u003e 10 AND age \u003c 20","TargetTableInfo":null,"Collation":"","chunk-size":0}],"TargetCheckTables":[{},{},{}],"FixDir":"output/7a0babf855b73acd3d2e8bcb9a368819a19ceb7b0f0a63f28aadfaa48482de30/fix-on-tidb","CheckpointDir":"output/7a0babf855b73acd3d2e8bcb9a368819a19ceb7b0f0a63f28aadfaa48482de30/checkpoint","HashFile":""},"ConfigFile":"config_sharding.toml","PrintVersion":false}`)
+	require.Equal(t, cfg.String(), `{"log-level":"info","sample-percent":100,"check-thread-count":4,"compare-checksum-only":false,"ignore-struct-check":false,"ignore-stats":false,"ignore-data-check":false,"use-checkpoint":true,"dm-addr":"","dm-task":"","data-sources":{"mysql1":{"host":"127.0.0.1","port":3306,"user":"root","password":"","sql-mode":"","snapshot":"","route-rules":["rule1","rule2"],"Router":{"Selector":{}},"Conn":null},"mysql2":{"host":"127.0.0.1","port":3306,"user":"root","password":"","sql-mode":"","snapshot":"","route-rules":["rule1","rule2"],"Router":{"Selector":{}},"Conn":null},"mysql3":{"host":"127.0.0.1","port":3306,"user":"root","password":"","sql-mode":"","snapshot":"","route-rules":["rule1","rule3"],"Router":{"Selector":{}},"Conn":null},"tidb":{"host":"127.0.0.1","port":4000,"user":"root","password":"","sql-mode":"","snapshot":"","route-rules":null,"Router":{"Selector":{}},"Conn":null}},"routes":{"rule1":{"schema-pattern":"test_*","table-pattern":"t_*","target-schema":"test","target-table":"t"},"rule2":{"schema-pattern":"test2_*","table-pattern":"t2_*","target-schema":"test2","target-table":"t2"},"rule3":{"schema-pattern":"test2_*","table-pattern":"t2_*","target-schema":"test","target-table":"t"}},"table-configs":{"config1":{"schema":"schema1","table":"table","IgnoreColumns":["",""],"Fields":"","Range":"age \u003e 10 AND age \u003c 20","TargetTableInfo":null,"Collation":"","chunk-size":0}},"task":{"source-instances":["mysql1","mysql2","mysql3"],"source-routes":null,"target-instance":"tidb","target-check-tables":["schema*.table*","!c.*","test2.t2"],"target-configs":["config1"],"output-dir":"./output","SourceInstances":[{"host":"127.0.0.1","port":3306,"user":"root","password":"","sql-mode":"","snapshot":"","route-rules":["rule1","rule2"],"Router":{"Selector":{}},"Conn":null},{"host":"127.0.0.1","port":3306,"user":"root","password":"","sql-mode":"","snapshot":"","route-rules":["rule1","rule2"],"Router":{"Selector":{}},"Conn":null},{"host":"127.0.0.1","port":3306,"user":"root","password":"","sql-mode":"","snapshot":"","route-rules":["rule1","rule3"],"Router":{"Selector":{}},"Conn":null}],"TargetInstance":{"host":"127.0.0.1","port":4000,"user":"root","password":"","sql-mode":"","snapshot":"","route-rules":null,"Router":{"Selector":{}},"Conn":null},"TargetTableConfigs":[{"schema":"schema1","table":"table","IgnoreColumns":["",""],"Fields":"","Range":"age \u003e 10 AND age \u003c 20","TargetTableInfo":null,"Collation":"","chunk-size":0}],"TargetCheckTables":[{},{},{}],"FixDir":"output/7a0babf855b73acd3d2e8bcb9a368819a19ceb7b0f0a63f28aadfaa48482de30/fix-on-tidb","CheckpointDir":"output/7a0babf855b73acd3d2e8bcb9a368819a19ceb7b0f0a63f28aadfaa48482de30/checkpoint","HashFile":""},"ConfigFile":"config_sharding.toml","PrintVersion":false}`)
 	hash, err := cfg.Task.ComputeConfigHash()
-	c.Assert(err, IsNil)
-	c.Assert(hash, Equals, "7a0babf855b73acd3d2e8bcb9a368819a19ceb7b0f0a63f28aadfaa48482de30")
+	require.NoError(t, err)
+	require.Equal(t, hash, "7a0babf855b73acd3d2e8bcb9a368819a19ceb7b0f0a63f28aadfaa48482de30")
 
-	c.Assert(cfg.TableConfigs["config1"].Valid(), Equals, true)
+	require.True(t, cfg.TableConfigs["config1"].Valid())
 
-	c.Assert(os.RemoveAll(cfg.Task.OutputDir), IsNil)
+	require.NoError(t, os.RemoveAll(cfg.Task.OutputDir))
 
 }
 
-func (s *testConfigSuite) TestError(c *C) {
+func TestError(t *testing.T) {
 	tableConfig := &TableConfig{}
-	c.Assert(tableConfig.Valid(), IsFalse)
+	require.False(t, tableConfig.Valid())
 	tableConfig.Schema = "123"
-	c.Assert(tableConfig.Valid(), IsFalse)
+	require.False(t, tableConfig.Valid())
 	tableConfig.Table = "234"
-	c.Assert(tableConfig.Valid(), IsTrue)
+	require.True(t, tableConfig.Valid())
 
 	cfg := NewConfig()
 	// Parse
-	c.Assert(cfg.Parse([]string{"--config", "no_exist.toml"}), ErrorMatches, ".*no_exist.toml: no such file or directory.*")
+	require.Contains(t, cfg.Parse([]string{"--config", "no_exist.toml"}).Error(), "no_exist.toml: no such file or directory")
 
 	// CheckConfig
 	cfg.Sample = 101
-	c.Assert(cfg.CheckConfig(), IsFalse)
+	require.False(t, cfg.CheckConfig())
 	cfg.Sample = -1
-	c.Assert(cfg.CheckConfig(), IsFalse)
+	require.False(t, cfg.CheckConfig())
 	cfg.Sample = 20
-	c.Assert(cfg.CheckConfig(), IsTrue)
+	require.True(t, cfg.CheckConfig())
 	cfg.CheckThreadCount = 0
-	c.Assert(cfg.CheckConfig(), IsFalse)
+	require.False(t, cfg.CheckConfig())
 	cfg.CheckThreadCount = 1
-	c.Assert(cfg.CheckConfig(), IsTrue)
+	require.True(t, cfg.CheckConfig())
 
 	// Init
 	cfg.DataSources = make(map[string]*DataSource)
@@ -88,5 +80,5 @@ func (s *testConfigSuite) TestError(c *C) {
 		RouteRules: []string{"111"},
 	}
 	err := cfg.Init()
-	c.Assert(err, ErrorMatches, "not found source routes for rule 111, please correct the config")
+	require.Contains(t, err.Error(), "not found source routes for rule 111, please correct the config")
 }

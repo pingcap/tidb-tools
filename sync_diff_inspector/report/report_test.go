@@ -19,17 +19,16 @@ import (
 	"errors"
 	"os"
 	"path"
-	"strings"
 	"testing"
 
 	"github.com/BurntSushi/toml"
 	"github.com/DATA-DOG/go-sqlmock"
-	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb/parser"
+	"github.com/stretchr/testify/require"
 )
 
 var task *config.TaskConfig = &config.TaskConfig{
@@ -38,27 +37,19 @@ var task *config.TaskConfig = &config.TaskConfig{
 	CheckpointDir: "output_dir/123456/checkpoint",
 }
 
-func TestClient(t *testing.T) {
-	TestingT(t)
-}
-
-var _ = Suite(&testReportSuite{})
-
-type testReportSuite struct{}
-
-func (s *testReportSuite) TestReport(c *C) {
+func TestReport(t *testing.T) {
 	ctx := context.Background()
 
 	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	report := NewReport(task)
 	createTableSQL1 := "create table `test`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
 	tableInfo1, err := dbutil.GetTableInfoBySQL(createTableSQL1, parser.New())
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	createTableSQL2 := "create table `atest`.`atbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
 	tableInfo2, err := dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	tableDiffs := []*common.TableDiff{
 		{
@@ -102,7 +93,7 @@ func (s *testReportSuite) TestReport(c *C) {
 	for i := 0; i < 3; i++ {
 		buf := new(bytes.Buffer)
 		err := toml.NewEncoder(buf).Encode(configs[i])
-		c.Assert(err, IsNil)
+		require.NoError(t, err)
 		configsBytes[i] = buf.Bytes()
 	}
 	report.Init(tableDiffs, configsBytes[:2], configsBytes[2])
@@ -120,49 +111,49 @@ func (s *testReportSuite) TestReport(c *C) {
 	new_report := NewReport(task)
 	new_report.LoadReport(report)
 
-	c.Assert(new_report.TotalSize, Equals, int64(579))
+	require.Equal(t, new_report.TotalSize, int64(579))
 	result, ok := new_report.TableResults["test"]["tbl"]
-	c.Assert(ok, IsTrue)
-	c.Assert(result.MeetError.Error(), Equals, "eeee")
-	c.Assert(result.DataEqual, IsTrue)
-	c.Assert(result.StructEqual, IsTrue)
+	require.True(t, ok)
+	require.Equal(t, result.MeetError.Error(), "eeee")
+	require.True(t, result.DataEqual)
+	require.True(t, result.StructEqual)
 
-	c.Assert(new_report.getSortedTables(), DeepEquals, []string{"`atest`.`atbl`", "`ctest`.`atbl`", "`test`.`tbl`"})
-	c.Assert(new_report.getDiffRows(), DeepEquals, [][]string{})
+	require.Equal(t, new_report.getSortedTables(), []string{"`atest`.`atbl`", "`ctest`.`atbl`", "`test`.`tbl`"})
+	require.Equal(t, new_report.getDiffRows(), [][]string{})
 
 	new_report.SetTableStructCheckResult("atest", "atbl", true, false)
 	new_report.SetTableDataCheckResult("atest", "atbl", false, 111, 222, &chunk.ChunkID{1, 1, 1, 1, 2})
-	c.Assert(new_report.getSortedTables(), DeepEquals, []string{"`ctest`.`atbl`", "`test`.`tbl`"})
-	c.Assert(new_report.getDiffRows(), DeepEquals, [][]string{{"`atest`.`atbl`", "true", "+111/-222"}})
+	require.Equal(t, new_report.getSortedTables(), []string{"`ctest`.`atbl`", "`test`.`tbl`"})
+	require.Equal(t, new_report.getDiffRows(), [][]string{{"`atest`.`atbl`", "true", "+111/-222"}})
 
 	new_report.SetTableStructCheckResult("atest", "atbl", false, false)
-	c.Assert(new_report.getSortedTables(), DeepEquals, []string{"`ctest`.`atbl`", "`test`.`tbl`"})
-	c.Assert(new_report.getDiffRows(), DeepEquals, [][]string{{"`atest`.`atbl`", "false", "+111/-222"}})
+	require.Equal(t, new_report.getSortedTables(), []string{"`ctest`.`atbl`", "`test`.`tbl`"})
+	require.Equal(t, new_report.getDiffRows(), [][]string{{"`atest`.`atbl`", "false", "+111/-222"}})
 
 	new_report.SetTableStructCheckResult("ctest", "atbl", false, true)
 
 	buf := new(bytes.Buffer)
 	new_report.Print(buf)
 	info := buf.String()
-	c.Assert(strings.Contains(info, "The structure of `atest`.`atbl` is not equal\n"), IsTrue)
-	c.Assert(strings.Contains(info, "The data of `atest`.`atbl` is not equal\n"), IsTrue)
-	c.Assert(strings.Contains(info, "The structure of `ctest`.`atbl` is not equal, and data-check is skipped\n"), IsTrue)
-	c.Assert(strings.Contains(info, "\n"+
+	require.Contains(t, info, "The structure of `atest`.`atbl` is not equal\n")
+	require.Contains(t, info, "The data of `atest`.`atbl` is not equal\n")
+	require.Contains(t, info, "The structure of `ctest`.`atbl` is not equal, and data-check is skipped\n")
+	require.Contains(t, info, "\n"+
 		"The rest of tables are all equal.\n"+
 		"The patch file has been generated in \n\t'output_dir/123456/fix-on-tidb1/'\n"+
-		"You can view the comparision details through 'output_dir/sync_diff.log'\n"), IsTrue)
+		"You can view the comparision details through 'output_dir/sync_diff.log'\n")
 }
 
-func (s *testReportSuite) TestCalculateTotal(c *C) {
+func TestCalculateTotal(t *testing.T) {
 	ctx := context.Background()
 
 	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	report := NewReport(task)
 	createTableSQL := "create table `test`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
 	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	tableDiffs := []*common.TableDiff{
 		{
@@ -194,7 +185,7 @@ func (s *testReportSuite) TestCalculateTotal(c *C) {
 	for i := 0; i < 3; i++ {
 		buf := new(bytes.Buffer)
 		err := toml.NewEncoder(buf).Encode(configs[i])
-		c.Assert(err, IsNil)
+		require.NoError(t, err)
 		configsBytes[i] = buf.Bytes()
 	}
 	report.Init(tableDiffs, configsBytes[:2], configsBytes[2])
@@ -202,14 +193,14 @@ func (s *testReportSuite) TestCalculateTotal(c *C) {
 	// Normal
 	mock.ExpectQuery("select sum.*").WillReturnRows(sqlmock.NewRows([]string{"data"}).AddRow("123"))
 	report.CalculateTotalSize(ctx, db)
-	c.Assert(report.TotalSize, Equals, int64(123))
+	require.Equal(t, report.TotalSize, int64(123))
 }
 
-func (s *testReportSuite) TestPrint(c *C) {
+func TestPrint(t *testing.T) {
 	report := NewReport(task)
 	createTableSQL := "create table `test`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
 	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	tableDiffs := []*common.TableDiff{
 		{
@@ -241,7 +232,7 @@ func (s *testReportSuite) TestPrint(c *C) {
 	for i := 0; i < 3; i++ {
 		buf := new(bytes.Buffer)
 		err := toml.NewEncoder(buf).Encode(configs[i])
-		c.Assert(err, IsNil)
+		require.NoError(t, err)
 		configsBytes[i] = buf.Bytes()
 	}
 	report.Init(tableDiffs, configsBytes[:2], configsBytes[2])
@@ -252,7 +243,7 @@ func (s *testReportSuite) TestPrint(c *C) {
 	report.SetTableDataCheckResult("test", "tbl", true, 0, 0, &chunk.ChunkID{0, 0, 0, 0, 1})
 	buf = new(bytes.Buffer)
 	report.Print(buf)
-	c.Assert(buf.String(), Equals, "A total of 0 table have been compared and all are equal.\n"+
+	require.Equal(t, buf.String(), "A total of 0 table have been compared and all are equal.\n"+
 		"You can view the comparision details through 'output_dir/sync_diff.log'\n")
 
 	// Error
@@ -260,22 +251,22 @@ func (s *testReportSuite) TestPrint(c *C) {
 	report.SetTableStructCheckResult("test", "tbl", false, false)
 	buf = new(bytes.Buffer)
 	report.Print(buf)
-	c.Assert(buf.String(), Equals, "Error in comparison process:\n"+
+	require.Equal(t, buf.String(), "Error in comparison process:\n"+
 		"123 error occured in `test`.`tbl`\n"+
 		"You can view the comparision details through 'output_dir/sync_diff.log'\n")
 }
 
-func (s *testReportSuite) TestGetSnapshot(c *C) {
+func TestGetSnapshot(t *testing.T) {
 	report := NewReport(task)
 	createTableSQL1 := "create table `test`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
 	tableInfo1, err := dbutil.GetTableInfoBySQL(createTableSQL1, parser.New())
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	createTableSQL2 := "create table `atest`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
 	tableInfo2, err := dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	createTableSQL3 := "create table `xtest`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
 	tableInfo3, err := dbutil.GetTableInfoBySQL(createTableSQL3, parser.New())
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	tableDiffs := []*common.TableDiff{
 		{
@@ -317,7 +308,7 @@ func (s *testReportSuite) TestGetSnapshot(c *C) {
 	for i := 0; i < 3; i++ {
 		buf := new(bytes.Buffer)
 		err := toml.NewEncoder(buf).Encode(configs[i])
-		c.Assert(err, IsNil)
+		require.NoError(t, err)
 		configsBytes[i] = buf.Bytes()
 	}
 	report.Init(tableDiffs, configsBytes[:2], configsBytes[2])
@@ -338,61 +329,61 @@ func (s *testReportSuite) TestGetSnapshot(c *C) {
 	report.SetTableDataCheckResult("xtest", "tbl", false, 200, 200, &chunk.ChunkID{0, 0, 0, 3, 10})
 
 	report_snap, err := report.GetSnapshot(&chunk.ChunkID{0, 0, 0, 1, 10}, "test", "tbl")
-	c.Assert(err, IsNil)
-	c.Assert(report_snap.TotalSize, Equals, report.TotalSize)
-	c.Assert(report_snap.Result, Equals, report.Result)
+	require.NoError(t, err)
+	require.Equal(t, report_snap.TotalSize, report.TotalSize)
+	require.Equal(t, report_snap.Result, report.Result)
 	for key, value := range report.TableResults {
 		if _, ok := report_snap.TableResults[key]; !ok {
 			v, ok := value["tbl"]
-			c.Assert(ok, IsTrue)
-			c.Assert(v.Schema, Equals, "atest")
+			require.True(t, ok)
+			require.Equal(t, v.Schema, "atest")
 			continue
 		}
 
 		if _, ok := report_snap.TableResults[key]["tbl"]; !ok {
-			c.Assert(key, Equals, "atest")
+			require.Equal(t, key, "atest")
 			continue
 		}
 
 		v1 := value["tbl"]
 		v2 := report_snap.TableResults[key]["tbl"]
-		c.Assert(v1.Schema, Equals, v2.Schema)
-		c.Assert(v1.Table, Equals, v2.Table)
-		c.Assert(v1.StructEqual, Equals, v2.StructEqual)
-		c.Assert(v1.DataEqual, Equals, v2.DataEqual)
-		c.Assert(v1.MeetError, Equals, v2.MeetError)
+		require.Equal(t, v1.Schema, v2.Schema)
+		require.Equal(t, v1.Table, v2.Table)
+		require.Equal(t, v1.StructEqual, v2.StructEqual)
+		require.Equal(t, v1.DataEqual, v2.DataEqual)
+		require.Equal(t, v1.MeetError, v2.MeetError)
 
 		chunkMap1 := v1.ChunkMap
 		chunkMap2 := v2.ChunkMap
 		for id, r1 := range chunkMap1 {
 			sid := new(chunk.ChunkID)
 			if _, ok := chunkMap2[id]; !ok {
-				c.Assert(sid.FromString(id), IsNil)
-				c.Assert(sid.Compare(&chunk.ChunkID{0, 0, 0, 3, 10}), Equals, 0)
+				require.NoError(t, sid.FromString(id))
+				require.Equal(t, sid.Compare(&chunk.ChunkID{0, 0, 0, 3, 10}), 0)
 				continue
 			}
-			c.Assert(sid.FromString(id), IsNil)
-			c.Assert(sid.Compare(&chunk.ChunkID{0, 0, 0, 1, 10}), LessEqual, 0)
+			require.NoError(t, sid.FromString(id))
+			require.True(t, sid.Compare(&chunk.ChunkID{0, 0, 0, 1, 10}) <= 0)
 			r2 := chunkMap2[id]
-			c.Assert(r1.RowsAdd, Equals, r2.RowsAdd)
-			c.Assert(r1.RowsDelete, Equals, r2.RowsDelete)
+			require.Equal(t, r1.RowsAdd, r2.RowsAdd)
+			require.Equal(t, r1.RowsDelete, r2.RowsDelete)
 		}
 
 	}
 }
 
-func (s *testReportSuite) TestCommitSummary(c *C) {
+func TestCommitSummary(t *testing.T) {
 	outputDir := "./"
 	report := NewReport(&config.TaskConfig{OutputDir: outputDir, FixDir: task.FixDir})
 	createTableSQL1 := "create table `test`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
 	tableInfo1, err := dbutil.GetTableInfoBySQL(createTableSQL1, parser.New())
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	createTableSQL2 := "create table `atest`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
 	tableInfo2, err := dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	createTableSQL3 := "create table `xtest`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
 	tableInfo3, err := dbutil.GetTableInfoBySQL(createTableSQL3, parser.New())
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	tableDiffs := []*common.TableDiff{
 		{
@@ -439,7 +430,7 @@ func (s *testReportSuite) TestCommitSummary(c *C) {
 	for i := 0; i < 3; i++ {
 		buf := new(bytes.Buffer)
 		err := toml.NewEncoder(buf).Encode(configs[i])
-		c.Assert(err, IsNil)
+		require.NoError(t, err)
 		configsBytes[i] = buf.Bytes()
 	}
 	report.Init(tableDiffs, configsBytes[:2], configsBytes[2])
@@ -454,15 +445,15 @@ func (s *testReportSuite) TestCommitSummary(c *C) {
 	report.SetTableDataCheckResult("xtest", "tbl", false, 100, 200, &chunk.ChunkID{0, 0, 0, 3, 10})
 
 	err = report.CommitSummary()
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	filename := path.Join(outputDir, "summary.txt")
 	file, err := os.Open(filename)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	p := make([]byte, 1024)
 	file.Read(p)
 
-	c.Assert(string(p), Matches, "Summary\n\n\n\n"+
+	require.Contains(t, string(p), "Summary\n\n\n\n"+
 		"Source Database\n\n\n\n"+
 		"host = \"127.0.0.1\"\n"+
 		"port = 3306\n"+
@@ -476,7 +467,8 @@ func (s *testReportSuite) TestCommitSummary(c *C) {
 		"user = \"root\"\n\n"+
 		"Comparison Result\n\n\n\n"+
 		"The table structure and data in following tables are equivalent\n\n"+
-		"`test`.`tbl`\n\n"+
+		"`test`.`tbl`\n"+
+		"`ytest`.`tbl`\n\n"+
 		"The following tables contains inconsistent data\n\n"+
 		"+---------------+--------------------+----------------+\n"+
 		"|     TABLE     | STRUCTURE EQUALITY | DATA DIFF ROWS |\n"+
@@ -484,9 +476,9 @@ func (s *testReportSuite) TestCommitSummary(c *C) {
 		"| `atest`.`tbl` | true               | +100/-200      |\n"+
 		"| `xtest`.`tbl` | false              | +100/-200      |\n"+
 		"+---------------+--------------------+----------------+\n"+
-		"Time Cost:.*")
+		"Time Cost:")
 
 	file.Close()
 	err = os.Remove(filename)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 }
