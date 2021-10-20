@@ -597,7 +597,7 @@ func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table stri
 	for _, col := range indexColumns {
 		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
 	}
-	query := fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s LIMIT %d,1",
+	query := fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s LIMIT 1 OFFSET %d",
 		strings.Join(columnNames, ", "),
 		dbutil.TableName(schema, table),
 		limitRange,
