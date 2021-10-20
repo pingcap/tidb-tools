@@ -23,28 +23,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	filter "github.com/pingcap/tidb-tools/pkg/table-filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
-	"github.com/pingcap/tidb/parser"
-
-	"github.com/DATA-DOG/go-sqlmock"
-	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
+	"github.com/pingcap/tidb/parser"
+	"github.com/stretchr/testify/require"
 
 	_ "github.com/go-sql-driver/mysql"
 )
-
-func TestClient(t *testing.T) {
-	TestingT(t)
-}
-
-var _ = Suite(&testSourceSuite{})
-
-type testSourceSuite struct{}
 
 type tableCaseType struct {
 	schema         string
@@ -131,12 +122,12 @@ func (m *MockAnalyzer) AnalyzeSplitter(ctx context.Context, tableDiff *common.Ta
 	}, nil
 }
 
-func (s *testSourceSuite) TestTiDBSource(c *C) {
+func TestTiDBSource(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	conn, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	tableCases := []*tableCaseType{
@@ -166,42 +157,40 @@ func (s *testSourceSuite) TestTiDBSource(c *C) {
 		},
 	}
 
-	tableDiffs := prepareTiDBTables(c, tableCases)
+	tableDiffs := prepareTiDBTables(t, tableCases)
 
 	tidb, err := NewTiDBSource(ctx, tableDiffs, &config.DataSource{Conn: conn}, 1)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	for n, tableCase := range tableCases {
-		c.Assert(n, Equals, tableCase.rangeInfo.GetTableIndex())
+		require.Equal(t, n, tableCase.rangeInfo.GetTableIndex())
 		countRows := sqlmock.NewRows([]string{"CNT", "CHECKSUM"}).AddRow(123, 456)
 		mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
 		checksum := tidb.GetCountAndCrc32(ctx, tableCase.rangeInfo)
-		c.Assert(checksum.Err, IsNil)
-		c.Assert(checksum.Count, Equals, int64(123))
-		c.Assert(checksum.Checksum, Equals, int64(456))
-		//c.Assert(checksum, Equals, tableCase.checksum)
+		require.NoError(t, checksum.Err)
+		require.Equal(t, checksum.Count, int64(123))
+		require.Equal(t, checksum.Checksum, int64(456))
 	}
 
 	// Test ChunkIterator
 	iter, err := tidb.GetRangeIterator(ctx, tableCases[0].rangeInfo, &MockAnalyzer{})
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	resRecords := [][]bool{
 		{false, false, false, false, false},
 		{false, false, false, false, false},
 	}
 	for {
 		ch, err := iter.Next(ctx)
-		c.Assert(err, IsNil)
+		require.NoError(t, err)
 		if ch == nil {
 			break
 		}
-		c.Log(ch.ChunkRange.Index)
-		c.Assert(ch.ChunkRange.Index.ChunkCnt, Equals, 5)
-		c.Assert(resRecords[ch.ChunkRange.Index.TableIndex][ch.ChunkRange.Index.ChunkIndex], Equals, false)
+		require.Equal(t, ch.ChunkRange.Index.ChunkCnt, 5)
+		require.Equal(t, resRecords[ch.ChunkRange.Index.TableIndex][ch.ChunkRange.Index.ChunkIndex], false)
 		resRecords[ch.ChunkRange.Index.TableIndex][ch.ChunkRange.Index.ChunkIndex] = true
 	}
 	iter.Close()
-	c.Assert(resRecords, DeepEquals, [][]bool{
+	require.Equal(t, resRecords, [][]bool{
 		{true, true, true, true, true},
 		{true, true, true, true, true},
 	})
@@ -214,20 +203,20 @@ func (s *testSourceSuite) TestTiDBSource(c *C) {
 	}
 	mock.ExpectQuery(tableCase.rowQuery).WillReturnRows(dataRows)
 	rowIter, err := tidb.GetRowsIterator(ctx, tableCase.rangeInfo)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	row := 0
 	var firstRow, secondRow map[string]*dbutil.ColumnData
 	for {
 		columns, err := rowIter.Next()
-		c.Assert(err, IsNil)
+		require.NoError(t, err)
 		if columns == nil {
-			c.Assert(row, Equals, len(tableCase.rows))
+			require.Equal(t, row, len(tableCase.rows))
 			break
 		}
 		for j, value := range tableCase.rows[row] {
-			c.Assert(columns[tableCase.rowColumns[j]].IsNull, Equals, false)
-			c.Assert(columns[tableCase.rowColumns[j]].Data, DeepEquals, []byte(value.(string)))
+			require.Equal(t, columns[tableCase.rowColumns[j]].IsNull, false)
+			require.Equal(t, columns[tableCase.rowColumns[j]].Data, []byte(value.(string)))
 		}
 		if row == 0 {
 			firstRow = columns
@@ -236,9 +225,9 @@ func (s *testSourceSuite) TestTiDBSource(c *C) {
 		}
 		row++
 	}
-	c.Assert(tidb.GenerateFixSQL(Insert, firstRow, secondRow, 0), Equals, "REPLACE INTO `source_test`.`test1`(`a`,`b`,`c`) VALUES (1,'a',1.2);")
-	c.Assert(tidb.GenerateFixSQL(Delete, firstRow, secondRow, 0), Equals, "DELETE FROM `source_test`.`test1` WHERE `a` = 2 AND `b` = 'b' AND `c` = 3.4 LIMIT 1;")
-	c.Assert(tidb.GenerateFixSQL(Replace, firstRow, secondRow, 0), Equals,
+	require.Equal(t, tidb.GenerateFixSQL(Insert, firstRow, secondRow, 0), "REPLACE INTO `source_test`.`test1`(`a`,`b`,`c`) VALUES (1,'a',1.2);")
+	require.Equal(t, tidb.GenerateFixSQL(Delete, firstRow, secondRow, 0), "DELETE FROM `source_test`.`test1` WHERE `a` = 2 AND `b` = 'b' AND `c` = 3.4 LIMIT 1;")
+	require.Equal(t, tidb.GenerateFixSQL(Replace, firstRow, secondRow, 0),
 		"/*\n"+
 			"  DIFF COLUMNS ╏ `A` ╏ `B` ╏ `C`  \n"+
 			"╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╍\n"+
@@ -255,12 +244,12 @@ func (s *testSourceSuite) TestTiDBSource(c *C) {
 	countRows := sqlmock.NewRows([]string{"Cnt"}).AddRow(0)
 	mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
 	chunkIter, err := analyze.AnalyzeSplitter(ctx, tableDiffs[0], tableCase.rangeInfo)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	chunkIter.Close()
 	tidb.Close()
 }
 
-func (s *testSourceSuite) TestMysqlShardSources(c *C) {
+func TestMysqlShardSources(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -299,10 +288,10 @@ func (s *testSourceSuite) TestMysqlShardSources(c *C) {
 		},
 	}
 
-	tableDiffs := prepareTiDBTables(c, tableCases)
+	tableDiffs := prepareTiDBTables(t, tableCases)
 
 	conn, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	dbs := []*sql.DB{
@@ -317,7 +306,7 @@ func (s *testSourceSuite) TestMysqlShardSources(c *C) {
 	}
 
 	shard, err := NewMySQLSources(ctx, tableDiffs, cs, 4)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	for i := 0; i < len(dbs); i++ {
 		infoRows := sqlmock.NewRows([]string{"Table", "Create Table"}).AddRow("test_t", "CREATE TABLE `source_test`.`test1` (`a` int, `b` varchar(24), `c` float, primary key(`a`, `b`))")
@@ -327,11 +316,11 @@ func (s *testSourceSuite) TestMysqlShardSources(c *C) {
 		mock.ExpectQuery("SHOW VARIABLE.*").WillReturnRows(variableRows)
 	}
 	info, err := shard.GetSourceStructInfo(ctx, 0)
-	c.Assert(err, IsNil)
-	c.Assert(info[0].Name.O, Equals, "test1")
+	require.NoError(t, err)
+	require.Equal(t, info[0].Name.O, "test1")
 
 	for n, tableCase := range tableCases {
-		c.Assert(n, Equals, tableCase.rangeInfo.GetTableIndex())
+		require.Equal(t, n, tableCase.rangeInfo.GetTableIndex())
 		var resChecksum int64 = 0
 		for i := 0; i < len(dbs); i++ {
 			resChecksum = resChecksum + 1<<i
@@ -340,10 +329,9 @@ func (s *testSourceSuite) TestMysqlShardSources(c *C) {
 		}
 
 		checksum := shard.GetCountAndCrc32(ctx, tableCase.rangeInfo)
-		c.Assert(checksum.Err, IsNil)
-		c.Assert(checksum.Count, Equals, int64(len(dbs)))
-		c.Assert(checksum.Checksum, Equals, resChecksum)
-		//c.Assert(checksum, Equals, tableCase.checksum)
+		require.NoError(t, checksum.Err)
+		require.Equal(t, checksum.Count, int64(len(dbs)))
+		require.Equal(t, checksum.Checksum, resChecksum)
 	}
 
 	// Test RowIterator
@@ -356,26 +344,24 @@ func (s *testSourceSuite) TestMysqlShardSources(c *C) {
 			dataRows.AddRow(tableCase.rows[i]...)
 			i++
 		}
-		c.Log(dataRows)
 		mock.ExpectQuery(tableCase.rowQuery).WillReturnRows(dataRows)
 	}
 
 	rowIter, err := shard.GetRowsIterator(ctx, tableCase.rangeInfo)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	i = 0
 	for {
 		columns, err := rowIter.Next()
-		c.Assert(err, IsNil)
+		require.NoError(t, err)
 		if columns == nil {
-			c.Assert(i, Equals, len(tableCase.rows))
+			require.Equal(t, i, len(tableCase.rows))
 			break
 		}
-		c.Log(i)
 		for j, value := range tableCase.rows[i] {
 			//c.Log(j)
-			c.Assert(columns[tableCase.rowColumns[j]].IsNull, Equals, false)
-			c.Assert(columns[tableCase.rowColumns[j]].Data, DeepEquals, []byte(value.(string)))
+			require.Equal(t, columns[tableCase.rowColumns[j]].IsNull, false)
+			require.Equal(t, columns[tableCase.rowColumns[j]].Data, []byte(value.(string)))
 		}
 
 		i++
@@ -385,12 +371,12 @@ func (s *testSourceSuite) TestMysqlShardSources(c *C) {
 	shard.Close()
 }
 
-func (s *testSourceSuite) TestMysqlRouter(c *C) {
+func TestMysqlRouter(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	conn, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	tableCases := []*tableCaseType{
@@ -420,7 +406,7 @@ func (s *testSourceSuite) TestMysqlRouter(c *C) {
 		},
 	}
 
-	tableDiffs := prepareTiDBTables(c, tableCases)
+	tableDiffs := prepareTiDBTables(t, tableCases)
 
 	routeRuleList := []*router.TableRule{
 		{
@@ -431,7 +417,7 @@ func (s *testSourceSuite) TestMysqlRouter(c *C) {
 		},
 	}
 	router, err := router.NewTableRouter(false, routeRuleList)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	ds := &config.DataSource{
 		Router: router,
 		Conn:   conn,
@@ -444,18 +430,18 @@ func (s *testSourceSuite) TestMysqlRouter(c *C) {
 	tablesRows = sqlmock.NewRows([]string{"Tables_in_test", "Table_type"}).AddRow("test_t", "BASE TABLE")
 	mock.ExpectQuery("SHOW FULL TABLES IN.*").WillReturnRows(tablesRows)
 	mysql, err := NewMySQLSources(ctx, tableDiffs, []*config.DataSource{ds}, 4)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	// random splitter
 	countRows := sqlmock.NewRows([]string{"Cnt"}).AddRow(0)
 	mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
 	rangeIter, err := mysql.GetRangeIterator(ctx, nil, mysql.GetTableAnalyzer())
 	rangeIter.Next(ctx)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	rangeIter.Close()
 
 	rangeIter, err = mysql.GetRangeIterator(ctx, tableCases[0].rangeInfo, mysql.GetTableAnalyzer())
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	rangeIter.Close()
 
 	// row Iterator
@@ -463,20 +449,19 @@ func (s *testSourceSuite) TestMysqlRouter(c *C) {
 	for k := 0; k < 2; k++ {
 		dataRows.AddRow(tableCases[0].rows[k]...)
 	}
-	c.Log(dataRows)
 	mock.ExpectQuery(tableCases[0].rowQuery).WillReturnRows(dataRows)
 
 	rowIter, err := mysql.GetRowsIterator(ctx, tableCases[0].rangeInfo)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	firstRow, err := rowIter.Next()
-	c.Assert(err, IsNil)
-	c.Assert(firstRow, NotNil)
+	require.NoError(t, err)
+	require.NotNil(t, firstRow)
 	secondRow, err := rowIter.Next()
-	c.Assert(err, IsNil)
-	c.Assert(secondRow, NotNil)
-	c.Assert(mysql.GenerateFixSQL(Insert, firstRow, secondRow, 0), Equals, "REPLACE INTO `source_test`.`test1`(`a`,`b`,`c`) VALUES (1,'a',1.2);")
-	c.Assert(mysql.GenerateFixSQL(Delete, firstRow, secondRow, 0), Equals, "DELETE FROM `source_test`.`test1` WHERE `a` = 2 AND `b` = 'b' AND `c` = 3.4 LIMIT 1;")
-	c.Assert(mysql.GenerateFixSQL(Replace, firstRow, secondRow, 0), Equals,
+	require.NoError(t, err)
+	require.NotNil(t, secondRow)
+	require.Equal(t, mysql.GenerateFixSQL(Insert, firstRow, secondRow, 0), "REPLACE INTO `source_test`.`test1`(`a`,`b`,`c`) VALUES (1,'a',1.2);")
+	require.Equal(t, mysql.GenerateFixSQL(Delete, firstRow, secondRow, 0), "DELETE FROM `source_test`.`test1` WHERE `a` = 2 AND `b` = 'b' AND `c` = 3.4 LIMIT 1;")
+	require.Equal(t, mysql.GenerateFixSQL(Replace, firstRow, secondRow, 0),
 		"/*\n"+
 			"  DIFF COLUMNS ╏ `A` ╏ `B` ╏ `C`  \n"+
 			"╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╍\n"+
@@ -491,12 +476,12 @@ func (s *testSourceSuite) TestMysqlRouter(c *C) {
 	mysql.Close()
 }
 
-func (s *testSourceSuite) TestTiDBRouter(c *C) {
+func TestTiDBRouter(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	conn, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	tableCases := []*tableCaseType{
@@ -526,7 +511,7 @@ func (s *testSourceSuite) TestTiDBRouter(c *C) {
 		},
 	}
 
-	tableDiffs := prepareTiDBTables(c, tableCases)
+	tableDiffs := prepareTiDBTables(t, tableCases)
 
 	routeRuleList := []*router.TableRule{
 		{
@@ -537,7 +522,7 @@ func (s *testSourceSuite) TestTiDBRouter(c *C) {
 		},
 	}
 	router, err := router.NewTableRouter(false, routeRuleList)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	ds := &config.DataSource{
 		Router: router,
 		Conn:   conn,
@@ -550,21 +535,21 @@ func (s *testSourceSuite) TestTiDBRouter(c *C) {
 	tablesRows = sqlmock.NewRows([]string{"Tables_in_test", "Table_type"}).AddRow("test2", "BASE TABLE")
 	mock.ExpectQuery("SHOW FULL TABLES IN.*").WillReturnRows(tablesRows)
 	tidb, err := NewTiDBSource(ctx, tableDiffs, ds, 1)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	infoRows := sqlmock.NewRows([]string{"Table", "Create Table"}).AddRow("test_t", "CREATE TABLE `source_test`.`test1` (`a` int, `b` varchar(24), `c` float, primary key(`a`, `b`))")
 	mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(infoRows)
 	variableRows := sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION")
 	mock.ExpectQuery("SHOW VARIABLE.*").WillReturnRows(variableRows)
 	info, err := tidb.GetSourceStructInfo(ctx, 0)
-	c.Assert(err, IsNil)
-	c.Assert(info[0].Name.O, Equals, "test1")
+	require.NoError(t, err)
+	require.Equal(t, info[0].Name.O, "test1")
 }
 
-func prepareTiDBTables(c *C, tableCases []*tableCaseType) []*common.TableDiff {
+func prepareTiDBTables(t *testing.T, tableCases []*tableCaseType) []*common.TableDiff {
 	tableDiffs := make([]*common.TableDiff, 0, len(tableCases))
 	for n, tableCase := range tableCases {
 		tableInfo, err := dbutil.GetTableInfoBySQL(tableCase.createTableSQL, parser.New())
-		c.Assert(err, IsNil)
+		require.NoError(t, err)
 		tableDiffs = append(tableDiffs, &common.TableDiff{
 			Schema: "source_test",
 			Table:  fmt.Sprintf("test%d", n+1),
@@ -587,7 +572,7 @@ func prepareTiDBTables(c *C, tableCases []*tableCaseType) []*common.TableDiff {
 	return tableDiffs
 }
 
-func (s *testSourceSuite) TestSource(c *C) {
+func TestSource(t *testing.T) {
 	host, isExist := os.LookupEnv("MYSQL_HOST")
 	if host == "" || !isExist {
 		return
@@ -598,7 +583,7 @@ func (s *testSourceSuite) TestSource(c *C) {
 	}
 
 	port, err := strconv.Atoi(portstr)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -675,16 +660,16 @@ func (s *testSourceSuite) TestSource(c *C) {
 		PrintVersion: false,
 	}
 	cfg.Task.TargetCheckTables, err = filter.Parse([]string{"schema*.tbl"})
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	// create table
 	conn, err := sql.Open("mysql", fmt.Sprintf("root:@tcp(%s:%d)/?charset=utf8mb4", host, port))
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	conn.Exec("CREATE DATABASE IF NOT EXISTS schema1")
 	conn.Exec("CREATE TABLE IF NOT EXISTS `schema1`.`tbl` (`a` int, `b` varchar(24), `c` float, `d` datetime, primary key(`a`, `b`))")
 	// create db connections refused.
 	// TODO unit_test covers source.go
 	_, _, err = NewSources(ctx, cfg)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 }

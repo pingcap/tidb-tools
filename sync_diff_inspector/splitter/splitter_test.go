@@ -21,30 +21,22 @@ import (
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
-	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"github.com/pingcap/tidb/parser"
+	"github.com/stretchr/testify/require"
 )
-
-func TestClient(t *testing.T) {
-	TestingT(t)
-}
-
-var _ = Suite(&testSplitterSuite{})
-
-type testSplitterSuite struct{}
 
 type chunkResult struct {
 	chunkStr string
 	args     []interface{}
 }
 
-func (s *testSplitterSuite) TestSplitRangeByRandom(c *C) {
+func TestSplitRangeByRandom(t *testing.T) {
 	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	testCases := []struct {
 		createTableSQL string
@@ -124,29 +116,28 @@ func (s *testSplitterSuite) TestSplitRangeByRandom(c *C) {
 		},
 	}
 
-	for i, testCase := range testCases {
+	for _, testCase := range testCases {
 		tableInfo, err := dbutil.GetTableInfoBySQL(testCase.createTableSQL, parser.New())
-		c.Assert(err, IsNil)
+		require.NoError(t, err)
 
 		splitCols, err := GetSplitFields(tableInfo, nil)
-		c.Assert(err, IsNil)
+		require.NoError(t, err)
 		createFakeResultForRandomSplit(mock, 0, testCase.randomValues)
 
 		chunks, err := splitRangeByRandom(db, testCase.originChunk, testCase.splitCount, "test", "test", splitCols, "", "")
-		c.Assert(err, IsNil)
+		require.NoError(t, err)
 		for j, chunk := range chunks {
 			chunkStr, args := chunk.ToString("")
-			c.Log(i, j, chunkStr, args)
-			c.Assert(chunkStr, Equals, testCase.expectResult[j].chunkStr)
-			c.Assert(args, DeepEquals, testCase.expectResult[j].args)
+			require.Equal(t, chunkStr, testCase.expectResult[j].chunkStr)
+			require.Equal(t, args, testCase.expectResult[j].args)
 		}
 	}
 }
 
-func (s *testSplitterSuite) TestRandomSpliter(c *C) {
+func TestRandomSpliter(t *testing.T) {
 	ctx := context.Background()
 	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	testCases := []struct {
 		createTableSQL string
@@ -306,9 +297,9 @@ func (s *testSplitterSuite) TestRandomSpliter(c *C) {
 		},
 	}
 
-	for i, testCase := range testCases {
+	for _, testCase := range testCases {
 		tableInfo, err := dbutil.GetTableInfoBySQL(testCase.createTableSQL, parser.New())
-		c.Assert(err, IsNil)
+		require.NoError(t, err)
 
 		tableDiff := &common.TableDiff{
 			Schema:        "test",
@@ -322,19 +313,18 @@ func (s *testSplitterSuite) TestRandomSpliter(c *C) {
 		createFakeResultForRandomSplit(mock, testCase.count, testCase.randomValues)
 
 		iter, err := NewRandomIterator(ctx, "", tableDiff, db)
-		c.Assert(err, IsNil)
+		require.NoError(t, err)
 
 		j := 0
 		for {
 			chunk, err := iter.Next()
-			c.Assert(err, IsNil)
+			require.NoError(t, err)
 			if chunk == nil {
 				break
 			}
 			chunkStr, args := chunk.ToString("")
-			c.Log(i, j, chunkStr, args)
-			c.Assert(chunkStr, Equals, testCase.expectResult[j].chunkStr)
-			c.Assert(args, DeepEquals, testCase.expectResult[j].args)
+			require.Equal(t, chunkStr, testCase.expectResult[j].chunkStr)
+			require.Equal(t, args, testCase.expectResult[j].args)
 			j = j + 1
 		}
 	}
@@ -342,7 +332,7 @@ func (s *testSplitterSuite) TestRandomSpliter(c *C) {
 	// Test Checkpoint
 	stopJ := 3
 	tableInfo, err := dbutil.GetTableInfoBySQL(testCases[0].createTableSQL, parser.New())
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	tableDiff := &common.TableDiff{
 		Schema: "test",
@@ -356,12 +346,12 @@ func (s *testSplitterSuite) TestRandomSpliter(c *C) {
 	createFakeResultForRandomSplit(mock, testCases[0].count, testCases[0].randomValues)
 
 	iter, err := NewRandomIterator(ctx, "", tableDiff, db)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	var chunk *chunk.Range
 	for j := 0; j < stopJ; j++ {
 		chunk, err = iter.Next()
-		c.Assert(err, IsNil)
+		require.NoError(t, err)
 	}
 
 	bounds1 := chunk.Bounds
@@ -374,17 +364,17 @@ func (s *testSplitterSuite) TestRandomSpliter(c *C) {
 	createFakeResultForRandomSplit(mock, testCases[0].count, testCases[0].randomValues)
 
 	iter, err = NewRandomIteratorWithCheckpoint(ctx, "", tableDiff, db, rangeInfo)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	chunk, err = iter.Next()
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	for i, bound := range chunk.Bounds {
-		c.Assert(bounds1[i].Upper, DeepEquals, bound.Lower)
+		require.Equal(t, bounds1[i].Upper, bound.Lower)
 	}
 
-	c.Assert(chunk.Index.ChunkCnt, Equals, chunkID1.ChunkCnt)
-	c.Assert(chunk.Index.ChunkIndex, Equals, chunkID1.ChunkIndex+1)
+	require.Equal(t, chunk.Index.ChunkCnt, chunkID1.ChunkCnt)
+	require.Equal(t, chunk.Index.ChunkIndex, chunkID1.ChunkIndex+1)
 
 }
 
@@ -402,14 +392,14 @@ func createFakeResultForRandomSplit(mock sqlmock.Sqlmock, count int, randomValue
 	}
 }
 
-func (s *testSplitterSuite) TestBucketSpliter(c *C) {
+func TestBucketSpliter(t *testing.T) {
 	ctx := context.Background()
 	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	createTableSQL := "create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
 	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	testCases := []struct {
 		chunkSize     int64
@@ -578,26 +568,25 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 		Info:   tableInfo,
 	}
 
-	for i, testCase := range testCases {
+	for _, testCase := range testCases {
 		createFakeResultForBucketSplit(mock, testCase.aRandomValues, testCase.bRandomValues)
 		tableDiff.ChunkSize = testCase.chunkSize
 		iter, err := NewBucketIterator(ctx, "", tableDiff, db)
-		c.Assert(err, IsNil)
+		require.NoError(t, err)
 
 		obtainChunks := make([]chunkResult, 0, len(testCase.expectResult))
 		nextBeginBucket := 0
 		for {
 			chunk, err := iter.Next()
-			c.Assert(err, IsNil)
+			require.NoError(t, err)
 			if chunk == nil {
 				break
 			}
-			chunkStr, args := chunk.ToString("")
-			c.Log(i, chunkStr, args, chunk.Index.BucketIndexLeft, chunk.Index.BucketIndexRight, chunk.Index.ChunkIndex, chunk.Index.ChunkCnt)
+			chunkStr, _ := chunk.ToString("")
 			if nextBeginBucket == 0 {
-				c.Assert(chunk.Index.BucketIndexLeft, Equals, 0)
+				require.Equal(t, chunk.Index.BucketIndexLeft, 0)
 			} else {
-				c.Assert(chunk.Index.BucketIndexLeft, Equals, nextBeginBucket)
+				require.Equal(t, chunk.Index.BucketIndexLeft, nextBeginBucket)
 			}
 			if chunk.Index.ChunkIndex+1 == chunk.Index.ChunkCnt {
 				nextBeginBucket = chunk.Index.BucketIndexRight + 1
@@ -626,10 +615,10 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 			return len(obtainChunks[i].args) < len(obtainChunks[j].args)
 		})
 		// we expect chunk count is same after we generate chunk concurrently
-		c.Assert(len(obtainChunks), Equals, len(testCase.expectResult))
+		require.Equal(t, len(obtainChunks), len(testCase.expectResult))
 		for i, e := range testCase.expectResult {
-			c.Assert(obtainChunks[i].args, DeepEquals, e.args)
-			c.Assert(obtainChunks[i].chunkStr, Equals, e.chunkStr)
+			require.Equal(t, obtainChunks[i].args, e.args)
+			require.Equal(t, obtainChunks[i].chunkStr, e.chunkStr)
 		}
 	}
 
@@ -638,12 +627,12 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 	createFakeResultForBucketSplit(mock, testCases[0].aRandomValues[:stopJ], testCases[0].bRandomValues[:stopJ])
 	tableDiff.ChunkSize = testCases[0].chunkSize
 	iter, err := NewBucketIterator(ctx, "", tableDiff, db)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	j := 0
 	var chunk *chunk.Range
 	for ; j < stopJ; j++ {
 		chunk, err = iter.Next()
-		c.Assert(err, IsNil)
+		require.NoError(t, err)
 	}
 	bounds1 := chunk.Bounds
 
@@ -654,17 +643,17 @@ func (s *testSplitterSuite) TestBucketSpliter(c *C) {
 
 	// drop the origin db since we cannot ensure order of mock string after we concurrent produce chunks.
 	db, mock, err = sqlmock.New()
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	createFakeResultForBucketSplit(mock, nil, nil)
 	createFakeResultForCount(mock, 64)
 	createFakeResultForRandom(mock, testCases[0].aRandomValues[stopJ:], testCases[0].bRandomValues[stopJ:])
 	iter, err = NewBucketIteratorWithCheckpoint(ctx, "", tableDiff, db, rangeInfo, 1)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	chunk, err = iter.Next()
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	for i, bound := range chunk.Bounds {
-		c.Assert(bounds1[i].Upper, DeepEquals, bound.Lower)
+		require.Equal(t, bounds1[i].Upper, bound.Lower)
 	}
 }
 
@@ -710,14 +699,14 @@ func createFakeResultForRandom(mock sqlmock.Sqlmock, aRandomValues, bRandomValue
 	}
 }
 
-func (s *testSplitterSuite) TestLimitSpliter(c *C) {
+func TestLimitSpliter(t *testing.T) {
 	ctx := context.Background()
 	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	createTableSQL := "create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
 	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	testCases := []struct {
 		limitAValues []string
@@ -755,23 +744,22 @@ func (s *testSplitterSuite) TestLimitSpliter(c *C) {
 		ChunkSize: 1000,
 	}
 
-	for i, testCase := range testCases {
+	for _, testCase := range testCases {
 		createFakeResultForLimitSplit(mock, testCase.limitAValues, testCase.limitBValues, true)
 
 		iter, err := NewLimitIterator(ctx, "", tableDiff, db)
-		c.Assert(err, IsNil)
+		require.NoError(t, err)
 
 		j := 0
 		for {
 			chunk, err := iter.Next()
-			c.Assert(err, IsNil)
+			require.NoError(t, err)
 			if chunk == nil {
 				break
 			}
 			chunkStr, args := chunk.ToString("")
-			c.Log(i, j, chunkStr, args)
-			c.Assert(chunkStr, Equals, testCase.expectResult[j].chunkStr)
-			c.Assert(args, DeepEquals, testCase.expectResult[j].args)
+			require.Equal(t, chunkStr, testCase.expectResult[j].chunkStr)
+			require.Equal(t, args, testCase.expectResult[j].args)
 			j = j + 1
 		}
 	}
@@ -780,12 +768,12 @@ func (s *testSplitterSuite) TestLimitSpliter(c *C) {
 	stopJ := 2
 	createFakeResultForLimitSplit(mock, testCases[0].limitAValues[:stopJ], testCases[0].limitBValues[:stopJ], true)
 	iter, err := NewLimitIterator(ctx, "", tableDiff, db)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	j := 0
 	var chunk *chunk.Range
 	for ; j < stopJ; j++ {
 		chunk, err = iter.Next()
-		c.Assert(err, IsNil)
+		require.NoError(t, err)
 	}
 	bounds1 := chunk.Bounds
 
@@ -796,12 +784,12 @@ func (s *testSplitterSuite) TestLimitSpliter(c *C) {
 
 	createFakeResultForLimitSplit(mock, testCases[0].limitAValues[stopJ:], testCases[0].limitBValues[stopJ:], true)
 	iter, err = NewLimitIteratorWithCheckpoint(ctx, "", tableDiff, db, rangeInfo)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 	chunk, err = iter.Next()
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	for i, bound := range chunk.Bounds {
-		c.Assert(bounds1[i].Upper, DeepEquals, bound.Lower)
+		require.Equal(t, bounds1[i].Upper, bound.Lower)
 	}
 }
 
@@ -817,7 +805,7 @@ func createFakeResultForLimitSplit(mock sqlmock.Sqlmock, aValues []string, bValu
 	}
 }
 
-func (s *testSplitterSuite) TestRangeInfo(c *C) {
+func TestRangeInfo(t *testing.T) {
 	rangeInfo := &RangeInfo{
 		ChunkRange: chunk.NewChunkRange(),
 		IndexID:    2,
@@ -826,29 +814,29 @@ func (s *testSplitterSuite) TestRangeInfo(c *C) {
 	rangeInfo.Update("a", "1", "2", true, true, "[23]", "[sdg]")
 	rangeInfo.ChunkRange.Index.TableIndex = 1
 	chunkRange := rangeInfo.GetChunk()
-	c.Assert(chunkRange.Where, Equals, "((((`a` COLLATE '[23]' > ?)) AND ((`a` COLLATE '[23]' <= ?))) AND [sdg])")
-	c.Assert(chunkRange.Args, DeepEquals, []interface{}{"1", "2"})
+	require.Equal(t, chunkRange.Where, "((((`a` COLLATE '[23]' > ?)) AND ((`a` COLLATE '[23]' <= ?))) AND [sdg])")
+	require.Equal(t, chunkRange.Args, []interface{}{"1", "2"})
 
-	c.Assert(rangeInfo.GetTableIndex(), Equals, 1)
+	require.Equal(t, rangeInfo.GetTableIndex(), 1)
 
 	rangeInfo2 := FromNode(rangeInfo.ToNode())
 
 	chunkRange = rangeInfo2.GetChunk()
-	c.Assert(chunkRange.Where, Equals, "((((`a` COLLATE '[23]' > ?)) AND ((`a` COLLATE '[23]' <= ?))) AND [sdg])")
-	c.Assert(chunkRange.Args, DeepEquals, []interface{}{"1", "2"})
+	require.Equal(t, chunkRange.Where, "((((`a` COLLATE '[23]' > ?)) AND ((`a` COLLATE '[23]' <= ?))) AND [sdg])")
+	require.Equal(t, chunkRange.Args, []interface{}{"1", "2"})
 
-	c.Assert(rangeInfo2.GetTableIndex(), Equals, 1)
+	require.Equal(t, rangeInfo2.GetTableIndex(), 1)
 
 }
 
-func (s *testSplitterSuite) TestChunkSize(c *C) {
+func TestChunkSize(t *testing.T) {
 	ctx := context.Background()
 	db, mock, err := sqlmock.New()
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	createTableSQL := "create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
 	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	tableDiff := &common.TableDiff{
 		Schema:    "test",
@@ -864,32 +852,32 @@ func (s *testSplitterSuite) TestChunkSize(c *C) {
 	mock.ExpectQuery("SHOW STATS_BUCKETS").WillReturnRows(statsRows)
 
 	bucketIter, err := NewBucketIterator(ctx, "", tableDiff, db)
-	c.Assert(err, IsNil)
-	c.Assert(bucketIter.chunkSize, Equals, int64(100000))
+	require.NoError(t, err)
+	require.Equal(t, bucketIter.chunkSize, int64(100000))
 
 	createFakeResultForBucketSplit(mock, nil, nil)
 	bucketIter, err = NewBucketIterator(ctx, "", tableDiff, db)
-	c.Assert(err, IsNil)
-	c.Assert(bucketIter.chunkSize, Equals, int64(50000))
+	require.NoError(t, err)
+	require.Equal(t, bucketIter.chunkSize, int64(50000))
 
 	// test random splitter chunksize
 	// chunkNum is only 1, so don't need randomValues
 	createFakeResultForRandomSplit(mock, 1000, nil)
 	randomIter, err := NewRandomIterator(ctx, "", tableDiff, db)
-	c.Assert(err, IsNil)
-	c.Assert(randomIter.chunkSize, Equals, int64(50000))
+	require.NoError(t, err)
+	require.Equal(t, randomIter.chunkSize, int64(50000))
 
 	createFakeResultForRandomSplit(mock, 1000000000, [][]interface{}{
 		{1, 2, 3, 4, 5},
 		{"a", "b", "c", "d", "e"},
 	})
 	randomIter, err = NewRandomIterator(ctx, "", tableDiff, db)
-	c.Assert(err, IsNil)
-	c.Assert(randomIter.chunkSize, Equals, int64(100000))
+	require.NoError(t, err)
+	require.Equal(t, randomIter.chunkSize, int64(100000))
 
 	createTableSQL = "create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime)"
 	tableInfo, err = dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 	tableDiff_noindex := &common.TableDiff{
 		Schema:    "test",
@@ -900,13 +888,13 @@ func (s *testSplitterSuite) TestChunkSize(c *C) {
 	// no index
 	createFakeResultForRandomSplit(mock, 1000, nil)
 	randomIter, err = NewRandomIterator(ctx, "", tableDiff_noindex, db)
-	c.Assert(err, IsNil)
-	c.Assert(randomIter.chunkSize, Equals, int64(1000))
+	require.NoError(t, err)
+	require.Equal(t, randomIter.chunkSize, int64(1000))
 
 	// test limit splitter chunksize
 	createFakeResultForCount(mock, 1000)
 	mock.ExpectQuery("SELECT `a`,.*limit 50000.*").WillReturnRows(sqlmock.NewRows([]string{"a", "b"}))
 	_, err = NewLimitIterator(ctx, "", tableDiff, db)
-	c.Assert(err, IsNil)
+	require.NoError(t, err)
 
 }
