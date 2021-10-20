@@ -68,7 +68,7 @@ func main() {
 
 	ok := cfg.CheckConfig()
 	if !ok {
-		fmt.Printf("There is something wrong with your config, please check log info in %s", conf.File.Filename)
+		fmt.Printf("There is something wrong with your config, please check log info in %s\n", conf.File.Filename)
 		return
 	}
 
@@ -90,20 +90,26 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 
 	d, err := NewDiff(ctx, cfg)
 	if err != nil {
+		fmt.Printf("There is something error when initialize diff, please check log info in %s\n", filepath.Join(cfg.Task.OutputDir, config.LogFileName))
 		log.Fatal("failed to initialize diff process", zap.Error(err))
+		return false
 	}
 	defer d.Close()
 
 	if !d.ignoreStructCheck {
 		err = d.StructEqual(ctx)
 		if err != nil {
+			fmt.Printf("There is something error when compare structure of table, please check log info in %s\n", filepath.Join(cfg.Task.OutputDir, config.LogFileName))
 			log.Fatal("failed to check structure difference", zap.Error(err))
+			return false
 		}
 	}
 	if !d.ignoreDataCheck {
 		err = d.Equal(ctx)
 		if err != nil {
+			fmt.Printf("There is something error when compare data of table, please check log info in %s\n", filepath.Join(cfg.Task.OutputDir, config.LogFileName))
 			log.Fatal("failed to check data difference", zap.Error(err))
+			return false
 		}
 	}
 	return d.PrintSummary(ctx)

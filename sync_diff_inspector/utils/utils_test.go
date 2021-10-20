@@ -271,7 +271,7 @@ func (*testUtilsSuite) TestGetApproximateMid(c *C) {
 	rows := sqlmock.NewRows([]string{"a", "b"}).AddRow("5", "10")
 	mock.ExpectQuery("SELECT `a`, `b` FROM `test`\\.`test_utils` WHERE 2222.* LIMIT 10,1*").WithArgs("aaaa").WillReturnRows(rows)
 
-	data, err := GetApproximateMidBySize(ctx, conn, "test", "test_utils", tableInfo, "2222", []interface{}{"aaaa"}, 20)
+	data, err := GetApproximateMidBySize(ctx, conn, "test", "test_utils", tableInfo.Columns, "2222", []interface{}{"aaaa"}, 20)
 	c.Assert(err, IsNil)
 	c.Assert(data["a"], Equals, "5")
 	c.Assert(data["b"], Equals, "10")

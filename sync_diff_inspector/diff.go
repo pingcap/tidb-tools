@@ -432,9 +432,13 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 		if count > splitter.SplitThreshold {
 			log.Debug("count greater than threshold, start do bingenerate", zap.Any("chunk id", rangeInfo.ChunkRange.Index), zap.Int64("chunk size", count))
 			info, err = df.BinGenerate(ctx, df.workSource, rangeInfo, count)
-			log.Debug("bin generate finished", zap.Reflect("chunk", info.ChunkRange), zap.Any("chunk id", info.ChunkRange.Index))
 			if err != nil {
+				log.Error("fail to do binary search.", zap.Error(err))
 				df.report.SetTableMeetError(schema, table, err)
+				// reuse rangeInfo to compare data
+				info = rangeInfo
+			} else {
+				log.Debug("bin generate finished", zap.Reflect("chunk", info.ChunkRange), zap.Any("chunk id", info.ChunkRange.Index))
 			}
 		}
 		isDataEqual, err := df.compareRows(ctx, info, dml)
@@ -485,7 +489,7 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 	}
 	chunkLimits, args := tableRange.ChunkRange.ToString(tableDiff.Collation)
 	limitRange := fmt.Sprintf("(%s) AND %s", chunkLimits, tableDiff.Range)
-	midValues, err := utils.GetApproximateMidBySize(ctx, targetSource.GetDB(), tableDiff.Schema, tableDiff.Table, tableDiff.Info, limitRange, args, count)
+	midValues, err := utils.GetApproximateMidBySize(ctx, targetSource.GetDB(), tableDiff.Schema, tableDiff.Table, indexColumns, limitRange, args, count)
 	log.Debug("mid values", zap.Reflect("mid values", midValues), zap.Reflect("indices", indexColumns), zap.Reflect("bounds", tableRange.ChunkRange.Bounds))
 	if err != nil {
 		return nil, errors.Trace(err)

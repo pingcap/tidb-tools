@@ -177,15 +177,13 @@ func (hp *Heap) Push(x interface{}) {
 }
 
 // Pop - implementation of pop for heap interface
-func (hp *Heap) Pop() interface{} {
+func (hp *Heap) Pop() (item interface{}) {
 	if len(hp.Nodes) == 0 {
-		return nil
+		return
 	}
-	old := hp.Nodes
-	n := len(old)
-	item := old[n-1]
-	hp.Nodes = old[0 : n-1]
-	return item
+
+	hp.Nodes, item = hp.Nodes[:len(hp.Nodes)-1], hp.Nodes[len(hp.Nodes)-1]
+	return
 }
 
 func (cp *Checkpoint) Init() {
@@ -207,25 +205,11 @@ func (cp *Checkpoint) Init() {
 func (cp *Checkpoint) GetChunkSnapshot() *Node {
 	cp.hp.mu.Lock()
 	defer cp.hp.mu.Unlock()
-	var cur, next *Node
-	for cp.hp.Len() != 0 {
-		if cp.hp.CurrentSavedNode.IsAdjacent(cp.hp.Nodes[0]) {
-			cur = heap.Pop(cp.hp).(*Node)
-			cp.hp.CurrentSavedNode = cur
-			if cp.hp.Len() == 0 {
-				break
-			}
-			next = cp.hp.Nodes[0]
-			if !cur.IsAdjacent(next) {
-				// wait for next 10s to check
-				break
-			}
-		} else {
-			// wait for next 10s to check
-			break
-		}
+	for cp.hp.Len() != 0 && cp.hp.CurrentSavedNode.IsAdjacent(cp.hp.Nodes[0]) {
+		cp.hp.CurrentSavedNode = heap.Pop(cp.hp).(*Node)
 	}
-	return cur
+	// wait for next 10s to check
+	return cp.hp.CurrentSavedNode
 }
 
 // SaveChunk saves the chunk to file.

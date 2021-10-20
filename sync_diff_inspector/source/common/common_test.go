@@ -19,6 +19,7 @@ import (
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"github.com/pingcap/tidb/parser"
 )
 
@@ -36,7 +37,7 @@ func (cp *testCommonSuite) TestRowData(c *C) {
 	c.Assert(err, IsNil)
 
 	_, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
-	c.Assert(needQuotes(orderKeyCols[1].FieldType), Equals, true)
+	c.Assert(utils.NeedQuotes(orderKeyCols[1].FieldType.Tp), Equals, true)
 	ids := []string{"3", "2", "2", "2", "4", "1", "NULL"}
 	names := []string{"d", "NULL", "c", "g", "b", "a", "e"}
 	ages := []string{"1", "2", "3", "3", "NULL", "5", "4"}
