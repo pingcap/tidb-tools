@@ -14,7 +14,7 @@
 package config
 
 import (
-	"crypto/md5"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -229,7 +229,7 @@ func (t *TaskConfig) ComputeConfigHash() (string, error) {
 		hash = append(hash, []byte(c)...)
 	}
 
-	return fmt.Sprintf("%x", md5.Sum(hash)), nil
+	return fmt.Sprintf("%x", sha256.Sum256(hash)), nil
 }
 
 // Config is the configuration.

@@ -202,14 +202,15 @@ func (cp *Checkpoint) Init() {
 }
 
 // GetChunkSnapshot get the snapshot of the minimum continuous checked chunk
-func (cp *Checkpoint) GetChunkSnapshot() *Node {
+func (cp *Checkpoint) GetChunkSnapshot() (cur *Node) {
 	cp.hp.mu.Lock()
 	defer cp.hp.mu.Unlock()
 	for cp.hp.Len() != 0 && cp.hp.CurrentSavedNode.IsAdjacent(cp.hp.Nodes[0]) {
 		cp.hp.CurrentSavedNode = heap.Pop(cp.hp).(*Node)
+		cur = cp.hp.CurrentSavedNode
 	}
 	// wait for next 10s to check
-	return cp.hp.CurrentSavedNode
+	return cur
 }
 
 // SaveChunk saves the chunk to file.
