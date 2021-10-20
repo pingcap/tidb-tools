@@ -155,7 +155,7 @@ func GenerateReplaceDML(data map[string]*dbutil.ColumnData, table *model.TableIn
 			continue
 		}
 
-		if needQuotes(col.FieldType.Tp) {
+		if NeedQuotes(col.FieldType.Tp) {
 			values = append(values, fmt.Sprintf("'%s'", strings.Replace(string(data[col.Name.O].Data), "'", "\\'", -1)))
 		} else {
 			values = append(values, string(data[col.Name.O].Data))
@@ -188,7 +188,7 @@ func GenerateReplaceDMLWithAnnotation(source, target map[string]*dbutil.ColumnDa
 		if data1.IsNull {
 			value1 = "NULL"
 		} else {
-			if needQuotes(col.FieldType.Tp) {
+			if NeedQuotes(col.FieldType.Tp) {
 				value1 = fmt.Sprintf("'%s'", strings.Replace(string(data1.Data), "'", "\\'", -1))
 			} else {
 				value1 = string(data1.Data)
@@ -209,7 +209,7 @@ func GenerateReplaceDMLWithAnnotation(source, target map[string]*dbutil.ColumnDa
 		if data2.IsNull {
 			values2 = append(values2, "NULL")
 		} else {
-			if needQuotes(col.FieldType.Tp) {
+			if NeedQuotes(col.FieldType.Tp) {
 				values2 = append(values2, fmt.Sprintf("'%s'", strings.Replace(string(data2.Data), "'", "\\'", -1)))
 			} else {
 				values2 = append(values2, string(data2.Data))
@@ -245,7 +245,7 @@ func GenerateDeleteDML(data map[string]*dbutil.ColumnData, table *model.TableInf
 			continue
 		}
 
-		if needQuotes(col.FieldType.Tp) {
+		if NeedQuotes(col.FieldType.Tp) {
 			kvs = append(kvs, fmt.Sprintf("%s = '%s'", dbutil.ColumnName(col.Name.O), strings.Replace(string(data[col.Name.O].Data), "'", "\\'", -1)))
 		} else {
 			kvs = append(kvs, fmt.Sprintf("%s = %s", dbutil.ColumnName(col.Name.O), string(data[col.Name.O].Data)))
@@ -272,7 +272,7 @@ func isCompatible(tp1, tp2 byte) bool {
 	case mysql.TypeVarString, mysql.TypeString, mysql.TypeVarchar:
 		t1 = 3
 	default:
-		t1 = 111
+		return false
 	}
 
 	switch tp2 {
@@ -283,7 +283,7 @@ func isCompatible(tp1, tp2 byte) bool {
 	case mysql.TypeVarString, mysql.TypeString, mysql.TypeVarchar:
 		t2 = 3
 	default:
-		t2 = 222
+		return false
 	}
 
 	return t1 == t2
@@ -412,8 +412,8 @@ func CompareStruct(upstreamTableInfos []*model.TableInfo, downstreamTableInfo *m
 	return len(deleteIndicesSet) == 0, false
 }
 
-// needQuotes determines whether an escape character is required for `'`.
-func needQuotes(tp byte) bool {
+// NeedQuotes determines whether an escape character is required for `'`.
+func NeedQuotes(tp byte) bool {
 	return !(dbutil.IsNumberType(tp) || dbutil.IsFloatType(tp))
 }
 
@@ -495,7 +495,7 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 			return
 		}
 
-		if needQuotes(col.FieldType.Tp) {
+		if NeedQuotes(col.FieldType.Tp) {
 			strData1 := string(data1.Data)
 			strData2 := string(data2.Data)
 
@@ -582,10 +582,10 @@ func SliceToMap(slice []string) map[string]interface{} {
 }
 
 // GetApproximateMidBySize return the `count`th row in rows that meet the `limitRange`.
-func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table string, tbInfo *model.TableInfo, limitRange string, args []interface{}, count int64) (map[string]string, error) {
+func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table string, indexColumns []*model.ColumnInfo, limitRange string, args []interface{}, count int64) (map[string]string, error) {
 	/*
 		example
-		mysql> select i_id, i_im_id, i_name from item where i_id > 0 order by i_id, i_im_id limit 5000,1;
+		mysql> select i_id, i_im_id, i_name from item where i_id > 0 order by i_id, i_im_id, i_name limit 5000,1;
 		+------+---------+-----------------+
 		| i_id | i_im_id | i_name          |
 		+------+---------+-----------------+
@@ -593,22 +593,23 @@ func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table stri
 		+------+---------+-----------------+
 		1 row in set (0.09 sec)
 	*/
-	columnNames := make([]string, 0, len(tbInfo.Columns))
-	for _, col := range tbInfo.Columns {
+	columnNames := make([]string, 0, len(indexColumns))
+	for _, col := range indexColumns {
 		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
 	}
-	query := fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s LIMIT %s,1",
+	query := fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s LIMIT %d,1",
 		strings.Join(columnNames, ", "),
 		dbutil.TableName(schema, table),
 		limitRange,
 		strings.Join(columnNames, ", "),
-		strconv.FormatInt(count/2, 10))
+		count/2)
+	log.Debug("get mid by size", zap.String("sql", query), zap.Reflect("args", args))
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	defer rows.Close()
-	columns := make([]interface{}, len(tbInfo.Columns))
+	columns := make([]interface{}, len(indexColumns))
 	for i := range columns {
 		columns[i] = new(string)
 	}
@@ -624,16 +625,16 @@ func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table stri
 	}
 	columnValues := make(map[string]string)
 	for i, column := range columns {
-		columnValues[columnNames[i][1:len(columnNames[i])-1]] = *column.(*string)
+		columnValues[indexColumns[i].Name.O] = *column.(*string)
 	}
 	return columnValues, nil
 }
 
 // GetTableSize loads the TableSize from `information_schema`.`tables`.
 func GetTableSize(ctx context.Context, db *sql.DB, schemaName, tableName string) (int64, error) {
-	query := fmt.Sprintf("select sum(data_length) as data from `information_schema`.`tables` where table_schema='%s' and table_name='%s' GROUP BY data_length;", schemaName, tableName)
+	query := "select sum(data_length) as data from `information_schema`.`tables` where table_schema=? and table_name=? GROUP BY data_length;"
 	var dataSize sql.NullInt64
-	err := db.QueryRowContext(ctx, query).Scan(&dataSize)
+	err := db.QueryRowContext(ctx, query, schemaName, tableName).Scan(&dataSize)
 	if err != nil {
 		return int64(0), errors.Trace(err)
 	}

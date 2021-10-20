@@ -63,22 +63,22 @@ ignore-struct-check = false
     # snapshot = "2016-10-08 16:45:26"
 
 [routes.rule1]
-schema-pattern = "test_*"      # 匹配数据源的库名，支持通配符 "*" 和 "?"
-table-pattern = "t_*"          # 匹配数据源的表名，支持通配符 "*" 和 "?"
-target-schema = "test"         # 目标库名
-target-table = "t" # 目标表名
+schema-pattern = "test_*"      # schema to match. Support wildcard characters * and ?.
+table-pattern = "t_*"          # table to match. Support wildcard characters * and ?.
+target-schema = "test"         # target schema
+target-table = "t"             # target table
 
 [routes.rule2]
-schema-pattern = "test2_*"      # 匹配数据源的库名，支持通配符 "*" 和 "?"
-table-pattern = "t2_*"          # 匹配数据源的表名，支持通配符 "*" 和 "?"
-target-schema = "test2"         # 目标库名
-target-table = "t2" # 目标表名
+schema-pattern = "test2_*"     # schema to match. Support wildcard characters * and ?.
+table-pattern = "t2_*"         # table to match. Support wildcard characters * and ?.
+target-schema = "test2"        # target schema
+target-table = "t2"            # target table
 
 [routes.rule3]
-schema-pattern = "test2_*"      # 匹配数据源的库名，支持通配符 "*" 和 "?"
-table-pattern = "t2_*"          # 匹配数据源的表名，支持通配符 "*" 和 "?"
-target-schema = "test"         # 目标库名
-target-table = "t" # 目标表名
+schema-pattern = "test2_*"     # schema to match. Support wildcard characters * and ?.
+table-pattern = "t2_*"         # table to match. Support wildcard characters * and ?.
+target-schema = "test"         # target schema
+target-table = "t"             # target table
 
 
 ######################### Task config #########################

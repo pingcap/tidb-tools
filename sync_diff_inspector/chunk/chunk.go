@@ -25,7 +25,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var (
+const (
 	lt  = "<"
 	lte = "<="
 	gt  = ">"
@@ -193,11 +193,12 @@ func (c *Range) IsLastChunkForTable() bool {
 		return true
 	}
 	// calculate from bounds
-	hasUpper := false
 	for _, b := range c.Bounds {
-		hasUpper = hasUpper || b.HasUpper
+		if b.HasUpper {
+			return false
+		}
 	}
-	return !hasUpper
+	return true
 }
 
 func (c *Range) IsFirstChunkForTable() bool {
@@ -205,11 +206,12 @@ func (c *Range) IsFirstChunkForTable() bool {
 		return true
 	}
 	// calculate from bounds
-	hasLower := false
 	for _, b := range c.Bounds {
-		hasLower = hasLower || b.HasLower
+		if b.HasLower {
+			return false
+		}
 	}
-	return !hasLower
+	return true
 }
 
 // String returns the string of Range, used for log.

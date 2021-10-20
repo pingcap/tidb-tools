@@ -20,16 +20,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pingcap/tidb-tools/pkg/filter"
-	"github.com/pingcap/tidb/parser/model"
-
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
+	"github.com/pingcap/tidb/parser/model"
 	"go.uber.org/zap"
 )
 
@@ -124,6 +123,10 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 		}
 	}
 
+	if len(tableDiffs) == 0 {
+		return nil, nil, errors.Errorf("no table need to be compared")
+	}
+
 	// Sort TableDiff is important!
 	// because we compare table one by one.
 	sort.Slice(tableDiffs, func(i, j int) bool {
@@ -133,11 +136,11 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 	})
 	upstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.CheckThreadCount, cfg.Task.SourceInstances...)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, errors.Annotate(err, "from upstream")
 	}
 	downstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.CheckThreadCount, cfg.Task.TargetInstance)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, errors.Annotate(err, "from downstream")
 	}
 	return downstream, upstream, nil
 }
@@ -248,7 +251,7 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 			return nil, errors.NotFoundf("schema `%s` in check tables", table.Schema)
 		}
 		if _, ok := cfgTables[table.Schema][table.Table]; !ok {
-			return nil, errors.NotFoundf("table `%s.%s` in check tables", table.Schema, table.Table)
+			return nil, errors.NotFoundf("table `%s`.`%s` in check tables", table.Schema, table.Table)
 		}
 
 		if table.Range != "" {

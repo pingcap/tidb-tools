@@ -18,8 +18,8 @@ import (
 
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"github.com/pingcap/tidb/parser/model"
-	"github.com/pingcap/tidb/types"
 	"go.uber.org/zap"
 )
 
@@ -46,28 +46,23 @@ func (r RowDatas) Less(i, j int) bool {
 			log.Fatal("data don't have column", zap.String("column", col.Name.O), zap.Reflect("data", r.Rows[j].Data))
 		}
 
-		if col1.IsNull {
-			if col2.IsNull {
-				continue
-			}
-
+		switch {
+		case col1.IsNull && col2.IsNull:
+			continue
+		case col1.IsNull:
 			return true
-		}
-		if col2.IsNull {
+		case col2.IsNull:
 			return false
 		}
 
 		strData1 := string(col1.Data)
 		strData2 := string(col2.Data)
 
-		if needQuotes(col.FieldType) {
+		if utils.NeedQuotes(col.FieldType.Tp) {
 			if strData1 == strData2 {
 				continue
 			}
-			if strData1 > strData2 {
-				return false
-			}
-			return true
+			return strData1 < strData2
 		}
 
 		num1, err1 := strconv.ParseFloat(strData1, 64)
@@ -82,10 +77,7 @@ func (r RowDatas) Less(i, j int) bool {
 		if num1 == num2 {
 			continue
 		}
-		if num1 > num2 {
-			return false
-		}
-		return true
+		return num1 < num2
 
 	}
 
@@ -99,17 +91,11 @@ func (r *RowDatas) Push(x interface{}) {
 }
 
 // Pop implements heap.Interface's Pop function
-func (r *RowDatas) Pop() interface{} {
+func (r *RowDatas) Pop() (x interface{}) {
 	if len(r.Rows) == 0 {
 		return nil
 	}
-	old := r.Rows
-	n := len(old)
-	x := old[n-1]
-	r.Rows = old[0 : n-1]
-	return x
-}
 
-func needQuotes(ft types.FieldType) bool {
-	return !(dbutil.IsNumberType(ft.Tp) || dbutil.IsFloatType(ft.Tp))
+	r.Rows, x = r.Rows[:len(r.Rows)-1], r.Rows[len(r.Rows)-1]
+	return
 }
