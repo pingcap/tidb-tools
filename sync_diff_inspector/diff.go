@@ -485,7 +485,8 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 	log.Debug("index for BinGenerate", zap.String("index", index.Name.O))
 	indexColumns := utils.GetColumnsFromIndex(index, tableDiff.Info)
 	if len(indexColumns) == 0 {
-		log.Warn("no index to split")
+		log.Warn("no index to split, directly return the origin chunk")
+		return tableRange, nil
 	}
 	chunkLimits, args := tableRange.ChunkRange.ToString(tableDiff.Collation)
 	limitRange := fmt.Sprintf("(%s) AND %s", chunkLimits, tableDiff.Range)
