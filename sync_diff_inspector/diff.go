@@ -474,6 +474,12 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 			break
 		}
 	}
+	// TODO use selectivity from utils.GetBetterIndex
+	// only support PK/UK
+	if !(index.Primary || index.Unique) {
+		log.Warn("BinGenerate only support PK/UK")
+		return tableRange, nil
+	}
 	if index == nil {
 		log.Warn("have indexs but cannot found a proper index to split and disable the BinGenerate",
 			zap.String("table", dbutil.TableName(tableDiff.Schema, tableDiff.Table)))
