@@ -36,6 +36,7 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/progress"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/report"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	tidbconfig "github.com/pingcap/tidb/config"
@@ -459,14 +460,10 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 	}
 	tableDiff := targetSource.GetTables()[tableRange.GetTableIndex()]
 	indices := dbutil.FindAllIndex(tableDiff.Info)
-	var (
-		isEqual1, isEqual2 bool
-		count1, count2     int64
-	)
-	tableRange1 := tableRange.Copy()
-	tableRange2 := tableRange.Copy()
 	// if no index, do not split
 	if len(indices) == 0 {
+		log.Warn("cannot found an index to split and disable the BinGenerate",
+			zap.String("table", dbutil.TableName(tableDiff.Schema, tableDiff.Table)))
 		return tableRange, nil
 	}
 	var index *model.IndexInfo
@@ -478,16 +475,31 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 		}
 	}
 	if index == nil {
-		log.Warn("cannot found a index to split and disable the BinGenerate",
+		log.Warn("have indexs but cannot found a proper index to split and disable the BinGenerate",
 			zap.String("table", dbutil.TableName(tableDiff.Schema, tableDiff.Table)))
-		return nil, nil
+		return tableRange, nil
 	}
 	log.Debug("index for BinGenerate", zap.String("index", index.Name.O))
 	indexColumns := utils.GetColumnsFromIndex(index, tableDiff.Info)
 	if len(indexColumns) == 0 {
-		log.Warn("no index to split, directly return the origin chunk")
+		log.Warn("fail to get columns of the selected index, directly return the origin chunk")
 		return tableRange, nil
 	}
+
+	return df.binSearch(ctx, targetSource, tableRange, count, tableDiff, indexColumns)
+}
+
+func (df *Diff) binSearch(ctx context.Context, targetSource source.Source, tableRange *splitter.RangeInfo, count int64, tableDiff *common.TableDiff, indexColumns []*model.ColumnInfo) (*splitter.RangeInfo, error) {
+	if count <= splitter.SplitThreshold {
+		return tableRange, nil
+	}
+	var (
+		isEqual1, isEqual2 bool
+		count1, count2     int64
+	)
+	tableRange1 := tableRange.Copy()
+	tableRange2 := tableRange.Copy()
+
 	chunkLimits, args := tableRange.ChunkRange.ToString(tableDiff.Collation)
 	limitRange := fmt.Sprintf("(%s) AND %s", chunkLimits, tableDiff.Range)
 	midValues, err := utils.GetApproximateMidBySize(ctx, targetSource.GetDB(), tableDiff.Schema, tableDiff.Table, indexColumns, limitRange, args, count)
@@ -524,18 +536,19 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 	if !isEqual1 && !isEqual2 {
 		return tableRange, nil
 	} else if !isEqual1 {
-		c, err := df.BinGenerate(ctx, targetSource, tableRange1, count1)
+		c, err := df.binSearch(ctx, targetSource, tableRange1, count1, tableDiff, indexColumns)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 		return c, nil
 	} else if !isEqual2 {
-		c, err := df.BinGenerate(ctx, targetSource, tableRange2, count2)
+		c, err := df.binSearch(ctx, targetSource, tableRange2, count2, tableDiff, indexColumns)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 		return c, nil
 	} else {
+		// TODO: handle the error to foreground
 		log.Fatal("the isEqual1 and isEqual2 cannot be both true")
 		return nil, nil
 	}
