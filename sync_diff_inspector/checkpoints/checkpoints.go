@@ -31,8 +31,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var (
-
+const (
 	// SuccessState
 	// for chunk: means this chunk's data is equal
 	// for table: means this all chunk in this table is equal(except ignore chunk)
@@ -42,18 +41,6 @@ var (
 	// for chunk: means this chunk's data is not equal
 	// for table: means some chunks' data is not equal or some chunk check failed in this table
 	FailedState = "failed"
-
-	// for chunk: means meet error when check, don't know the chunk's data is equal or not equal
-	// for table: don't have this state
-	errorState = "error"
-
-	// for chunk: means this chunk is not in check
-	// for table: this table is checking but not finished
-	notCheckedState = "not_checked"
-
-	// for chunk: means this chunk is checking
-	// for table: don't have this state
-	checkingState = "checking"
 
 	// for chunk: this chunk is ignored. if sample is not 100% or it is Empty chunk, will ignore some chunk
 	// for table: don't have this state
@@ -87,6 +74,7 @@ func (n *Node) IsAdjacent(next *Node) bool {
 		if n.ChunkRange.IsLastChunkForTable() && next.ChunkRange.IsFirstChunkForTable() {
 			return true
 		}
+		return false
 	}
 	if n.GetTableIndex() == next.GetTableIndex() {
 		// same table
@@ -106,7 +94,7 @@ func (n *Node) IsAdjacent(next *Node) bool {
 
 // IsLess represents whether the cur node is less than next node.
 func (n *Node) IsLess(next *Node) bool {
-	if n.GetTableIndex() <= next.GetTableIndex()-1 {
+	if n.GetTableIndex() < next.GetTableIndex() {
 		return true
 	}
 	if n.GetTableIndex() == next.GetTableIndex() {
@@ -121,8 +109,8 @@ func (n *Node) IsLess(next *Node) bool {
 	return false
 }
 
-// Heap maintain a Min Heap, which can be accessed by multiple threads and protected by mutex.
-type Heap struct {
+// heap maintain a Min Heap, which can be accessed by multiple threads and protected by mutex.
+type nodeHeap struct {
 	Nodes            []*Node
 	CurrentSavedNode *Node       // CurrentSavedNode save the minimum checker chunk, updated by `GetChunkSnapshot` method
 	mu               *sync.Mutex // protect critical section
@@ -131,7 +119,7 @@ type Heap struct {
 // Checkpoint provide the ability to restart the sync-diff process from the
 // latest previous exit point (due to error or intention).
 type Checkpoint struct {
-	hp *Heap
+	hp *nodeHeap
 }
 
 // SaveState contains the information of the latest checked chunk and state of `report`
@@ -159,25 +147,25 @@ func (cp *Checkpoint) Insert(node *Node) {
 }
 
 // Len - get the length of the heap
-func (hp Heap) Len() int { return len(hp.Nodes) }
+func (hp *nodeHeap) Len() int { return len(hp.Nodes) }
 
 // Less - determine which is more priority than another
-func (hp Heap) Less(i, j int) bool {
+func (hp *nodeHeap) Less(i, j int) bool {
 	return hp.Nodes[i].IsLess(hp.Nodes[j])
 }
 
 // Swap - implementation of swap for the heap interface
-func (hp Heap) Swap(i, j int) {
+func (hp *nodeHeap) Swap(i, j int) {
 	hp.Nodes[i], hp.Nodes[j] = hp.Nodes[j], hp.Nodes[i]
 }
 
 // Push - implementation of push for the heap interface
-func (hp *Heap) Push(x interface{}) {
+func (hp *nodeHeap) Push(x interface{}) {
 	hp.Nodes = append(hp.Nodes, x.(*Node))
 }
 
 // Pop - implementation of pop for heap interface
-func (hp *Heap) Pop() (item interface{}) {
+func (hp *nodeHeap) Pop() (item interface{}) {
 	if len(hp.Nodes) == 0 {
 		return
 	}
@@ -187,7 +175,7 @@ func (hp *Heap) Pop() (item interface{}) {
 }
 
 func (cp *Checkpoint) Init() {
-	hp := &Heap{
+	hp := &nodeHeap{
 		mu:    &sync.Mutex{},
 		Nodes: make([]*Node, 0),
 		CurrentSavedNode: &Node{
@@ -216,26 +204,27 @@ func (cp *Checkpoint) GetChunkSnapshot() (cur *Node) {
 
 // SaveChunk saves the chunk to file.
 func (cp *Checkpoint) SaveChunk(ctx context.Context, fileName string, cur *Node, reportInfo *report.Report) (*chunk.ChunkID, error) {
-	if cur != nil {
-		savedState := &SavedState{
-			Chunk:  cur,
-			Report: reportInfo,
-		}
-		checkpointData, err := json.Marshal(savedState)
-		if err != nil {
-			log.Warn("fail to save the chunk to the file", zap.Any("chunk index", cur.GetID()), zap.Error(err))
-			return nil, errors.Trace(err)
-		}
-
-		if err = ioutil2.WriteFileAtomic(fileName, checkpointData, config.LocalFilePerm); err != nil {
-			return nil, err
-		}
-		log.Info("save checkpoint",
-			zap.Any("chunk", cur),
-			zap.String("state", cur.GetState()))
-		return cur.GetID(), nil
+	if cur == nil {
+		return nil, nil
 	}
-	return nil, nil
+
+	savedState := &SavedState{
+		Chunk:  cur,
+		Report: reportInfo,
+	}
+	checkpointData, err := json.Marshal(savedState)
+	if err != nil {
+		log.Warn("fail to save the chunk to the file", zap.Any("chunk index", cur.GetID()), zap.Error(err))
+		return nil, errors.Trace(err)
+	}
+
+	if err = ioutil2.WriteFileAtomic(fileName, checkpointData, config.LocalFilePerm); err != nil {
+		return nil, err
+	}
+	log.Info("save checkpoint",
+		zap.Any("chunk", cur),
+		zap.String("state", cur.GetState()))
+	return cur.GetID(), nil
 }
 
 // LoadChunk loads chunk info from file `chunk`
