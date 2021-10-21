@@ -80,32 +80,30 @@ func (c *ChunkID) Compare(o *ChunkID) int {
 	if c.TableIndex < o.TableIndex {
 		return -1
 	}
-	if c.TableIndex == o.TableIndex {
-		if c.BucketIndexLeft < o.BucketIndexLeft {
-			return -1
-		}
-		if c.BucketIndexLeft == o.BucketIndexLeft {
-			if c.ChunkIndex < o.ChunkIndex {
-				return -1
-			}
-			if c.ChunkIndex == o.ChunkIndex {
-				return 0
-			}
-			return 1
-		}
+	if c.TableIndex > o.TableIndex {
 		return 1
+	}
+
+	// c.TableIndex == o.TableIndex
+	if c.BucketIndexLeft < o.BucketIndexLeft {
+		return -1
+	}
+	if c.BucketIndexLeft > o.BucketIndexLeft {
+		return 1
+	}
+	// c.BucketIndexLeft == o.BucketIndexLeft
+	if c.ChunkIndex < o.ChunkIndex {
+		return -1
+	}
+	if c.ChunkIndex == o.ChunkIndex {
+		return 0
 	}
 	return 1
 }
 
 func (c *ChunkID) Copy() *ChunkID {
-	return &ChunkID{
-		TableIndex:       c.TableIndex,
-		BucketIndexLeft:  c.BucketIndexLeft,
-		BucketIndexRight: c.BucketIndexRight,
-		ChunkIndex:       c.ChunkIndex,
-		ChunkCnt:         c.ChunkCnt,
-	}
+	cp := *c
+	return &cp
 }
 
 func (c *ChunkID) ToString() string {
