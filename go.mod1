@@ -5,30 +5,32 @@ require (
 	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/Shopify/sarama v1.24.1
 	github.com/coreos/go-semver v0.3.0
+	github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f // indirect
 	github.com/frankban/quicktest v1.11.1 // indirect
+	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32 // indirect
+	github.com/go-openapi/swag v0.19.8 // indirect
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang/protobuf v1.5.2
 	github.com/hashicorp/go-uuid v1.0.2 // indirect
 	github.com/jcmturner/gofork v1.0.0 // indirect
+	github.com/mailru/easyjson v0.7.1 // indirect
 	github.com/olekukonko/tablewriter v0.0.4
 	github.com/pierrec/lz4 v2.5.2+incompatible // indirect
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
-	github.com/pingcap/dm v1.1.0-alpha.0.20200729032940-53a08d777030
-	github.com/pingcap/errors v0.11.5-0.20210425183316-da1aaba5fb63
+	github.com/pingcap/dm v1.1.0-alpha.0.20211025084048-a3046087c461
+	github.com/pingcap/errors v0.11.5-0.20210513014640-40f9a1999b3b
 	github.com/pingcap/failpoint v0.0.0-20210316064728-7acb0f0a3dfd
-	github.com/pingcap/kvproto v0.0.0-20210915062418-0f5764a128ad
+	github.com/pingcap/kvproto v0.0.0-20211011042309-a4518fcacbc8
 	github.com/pingcap/log v0.0.0-20210906054005-afc726e70354
-	github.com/pingcap/tidb v1.1.0-beta.0.20211012114926-d53f9f55a0f9
-	github.com/pingcap/tidb/parser v0.0.0-20211012113926-e933e0008d04
-	github.com/pingcap/tipb v0.0.0-20210802080519-94b831c6db55
+	github.com/pingcap/tidb v1.1.0-beta.0.20211025024448-36e694bfc536
+	github.com/pingcap/tidb/parser v0.0.0-20211025024448-36e694bfc536
+	github.com/pingcap/tipb v0.0.0-20211008080435-3fd327dfce0e
 	github.com/rcrowley/go-metrics v0.0.0-20190826022208-cac0b30c2563 // indirect
-	github.com/satori/go.uuid v1.2.1-0.20181028125025-b2ce2384e17b // indirect
 	github.com/shirou/gopsutil v3.21.4+incompatible // indirect
-	github.com/shopspring/decimal v0.0.0-20200105231215-408a2507e114 // indirect
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
+	github.com/siddontang/go-log v0.0.0-20190221022429-1e957dd83bed // indirect
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.0
-	github.com/syndtr/goleveldb v1.0.1-0.20190625010220-02440ea7a285 // indirect
 	github.com/tikv/pd v1.1.0-beta.0.20210818082359-acba1da0018d
 	github.com/tklauser/go-sysconf v0.3.6 // indirect
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20210512015243-d19fbe541bf9
