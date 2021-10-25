@@ -17,4 +17,5 @@ do
 done
 
 echo "$3 is not alive"
+cat "$4"
 exit 2

@@ -5,7 +5,7 @@ set -ex
 cd "$(dirname "$0")"
 
 # check mysql status
-check_db_status "${MYSQL_HOST}" "${MYSQL_PORT}" mysql
+check_db_status "${MYSQL_HOST}" "${MYSQL_PORT}" mysql "."
 
 BASE_DIR=/tmp/tidb_tools_test/sync_diff_inspector
 OUT_DIR=$BASE_DIR/output

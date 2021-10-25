@@ -72,7 +72,7 @@ EOF
         --log-file "$OUT_DIR/tidb.log" &
 
     echo "Verifying TiDB is started..."
-    check_db_status "127.0.0.1" 4000 "tidb"
+    check_db_status "127.0.0.1" 4000 "tidb" "$OUT_DIR/tidb.log"
 
     echo "Starting Upstream TiDB..."
     tidb-server \
@@ -83,7 +83,7 @@ EOF
         -socket "$OUT_DIR/down_tidb.sock" &
 
     echo "Verifying Upstream TiDB is started..."
-    check_db_status "127.0.0.1" 4001 "tidb"
+    check_db_status "127.0.0.1" 4001 "tidb" "$OUT_DIR/down_tidb.log"
 }
 
 trap stop_services EXIT
