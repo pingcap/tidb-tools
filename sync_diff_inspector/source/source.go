@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
@@ -120,6 +121,16 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 				Collation:     tableConfig.Collation,
 				ChunkSize:     tableConfig.ChunkSize,
 			})
+
+			// add rule match itself to make table case unsensitive
+			for _, d := range cfg.Task.SourceInstances {
+				d.Router.AddRule(&router.TableRule{
+					SchemaPattern: tableConfig.Schema,
+					TablePattern:  tableConfig.Table,
+					TargetSchema:  tableConfig.Schema,
+					TargetTable:   tableConfig.Table,
+				})
+			}
 		}
 	}
 
