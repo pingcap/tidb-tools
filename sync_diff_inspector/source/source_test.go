@@ -588,6 +588,7 @@ func TestSource(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	router, err := router.NewTableRouter(false, nil)
 	cfg := &config.Config{
 		LogLevel:            "debug",
 		Sample:              100,
@@ -630,9 +631,10 @@ func TestSource(t *testing.T) {
 			OutputDir:    "./output",
 			SourceInstances: []*config.DataSource{
 				{
-					Host: host,
-					Port: port,
-					User: "root",
+					Host:   host,
+					Port:   port,
+					User:   "root",
+					Router: router,
 				},
 			},
 			TargetInstance: &config.DataSource{
