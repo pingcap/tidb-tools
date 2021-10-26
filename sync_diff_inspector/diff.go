@@ -203,6 +203,13 @@ func (df *Diff) initCheckpoint() error {
 				return errors.Trace(err)
 			}
 		}
+	} else {
+		log.Info("skip load checkpoint file, start from beginning")
+		id := &chunk.ChunkID{TableIndex: -1, BucketIndexLeft: -1, BucketIndexRight: -1, ChunkIndex: -1, ChunkCnt: 0}
+		err := df.removeSQLFiles(id)
+		if err != nil {
+			return errors.Trace(err)
+		}
 	}
 	progress.Init(len(df.workSource.GetTables()), finishTableNums)
 	return nil
