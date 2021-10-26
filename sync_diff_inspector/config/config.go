@@ -238,20 +238,16 @@ type Config struct {
 	*flag.FlagSet `json:"-"`
 
 	// log level
-	LogLevel string `toml:"log-level" json:"log-level"`
+	LogLevel string `toml:"-" json:"-"`
 	// how many goroutines are created to check data
 	CheckThreadCount int `toml:"check-thread-count" json:"check-thread-count"`
-	// set true if want to compare checksum only
-	CompareChecksumOnly bool `toml:"compare-checksum-only" json:"compare-checksum-only"`
-	// ignore check table's struct
-	IgnoreStructCheck bool `toml:"ignore-struct-check" json:"ignore-struct-check"`
+	// set true if want to compare rows
+	// set false won't compare rows.
+	ExportFixSQL bool `toml:"export-fix-sql" json:"export-fix-sql"`
 	// ignore tidb stats only use randomSpliter to split chunks
 	IgnoreStats bool `toml:"ignore-stats" json:"ignore-stats"`
-	// ignore check table's data
-	IgnoreDataCheck bool `toml:"ignore-data-check" json:"ignore-data-check"`
-	// set true will continue check from the latest checkpoint
-	UseCheckpoint bool `toml:"use-checkpoint" json:"use-checkpoint"`
-
+	// only check table struct without table data.
+	CheckStructOnly bool `toml:"check-struct-only" json:"check-struct-only"`
 	// DMAddr is dm-master's address, the format should like "http://127.0.0.1:8261"
 	DMAddr string `toml:"dm-addr" json:"dm-addr"`
 	// DMTask string `toml:"dm-task" json:"dm-task"`
@@ -280,14 +276,12 @@ func NewConfig() *Config {
 	fs.StringVar(&cfg.ConfigFile, "config", "", "Config file")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.IntVar(&cfg.CheckThreadCount, "check-thread-count", 1, "how many goroutines are created to check data")
-	fs.BoolVar(&cfg.CompareChecksumOnly, "compare-checksum-only", true, "set true if want to compare checksum only")
+	fs.BoolVar(&cfg.ExportFixSQL, "export-fix-sql", true, "set true if want to compare rows or set to false will only compare checksum")
 	fs.BoolVar(&cfg.PrintVersion, "V", false, "print version of sync_diff_inspector")
 	fs.StringVar(&cfg.DMAddr, "A", "", "the address of DM")
 	fs.StringVar(&cfg.DMTask, "T", "", "identifier of dm task")
-	fs.BoolVar(&cfg.IgnoreDataCheck, "ignore-data-check", false, "ignore check table's data")
-	fs.BoolVar(&cfg.IgnoreStructCheck, "ignore-struct-check", false, "ignore check table's struct")
+	fs.BoolVar(&cfg.CheckStructOnly, "ignore-data-check", false, "ignore check table's data")
 	fs.BoolVar(&cfg.IgnoreStats, "ignore-stats", false, "don't use tidb stats to split chunks")
-	fs.BoolVar(&cfg.UseCheckpoint, "use-checkpoint", true, "set true will continue check from the latest checkpoint")
 
 	return cfg
 }
