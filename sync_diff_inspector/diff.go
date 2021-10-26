@@ -72,7 +72,6 @@ type Diff struct {
 	exportFixSQL     bool
 	useCheckpoint    bool
 	ignoreDataCheck  bool
-	ignoreStats      bool
 	sqlWg            sync.WaitGroup
 	checkpointWg     sync.WaitGroup
 
@@ -91,7 +90,6 @@ func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 		checkThreadCount: cfg.CheckThreadCount,
 		exportFixSQL:     cfg.ExportFixSQL,
 		ignoreDataCheck:  cfg.CheckStructOnly,
-		ignoreStats:      cfg.IgnoreStats,
 		sqlCh:            make(chan *ChunkDML, splitter.DefaultChannelBuffer),
 		cp:               new(checkpoints.Checkpoint),
 		report:           report.NewReport(&cfg.Task),
