@@ -2,22 +2,15 @@
 
 ######################### Global config #########################
 
-log-level = "info"
-
 # how many goroutines are created to check data
 check-thread-count = 4
 
-# set true if just want compare data by checksum, will skip select data when checksum is not equal.
-compare-checksum-only = false
-
-# set true will continue check from the latest checkpoint
-use-checkpoint = true
+# set false if just want compare data by checksum, will skip select data when checksum is not equal.
+# set true if want compare all different rows, will slow down the total compare time.
+export-fix-sql= false
 
 # ignore check table's data
-ignore-data-check = false
-
-# ignore check table's struct
-ignore-struct-check = false
+check-struct-only = true
 
 
 ######################### Databases config #########################
@@ -29,13 +22,14 @@ ignore-struct-check = false
     password = ""
     # mysql doesn't has snapshot config
 
-[data-sources.tidb]
+[data-sources.tidb0]
     host = "127.0.0.1"
     port = 4000
     user = "root"
     password = ""
     # remove comment if use tidb's snapshot data
     # snapshot = "2016-10-08 16:45:26"
+    # snapshot = "386902609362944000"
 
 [table-configs]
 [table-configs.config1]
@@ -57,7 +51,7 @@ collation = ""
 
     source-instances = ["mysql1"]
 
-    target-instance = "tidb"
+    target-instance = "tidb0"
 
     # tables need to check. *Include `schema` and `table`. Use `.` to split*
     target-check-tables = ["schema*.table*", "!c.*", "test2.t2"]

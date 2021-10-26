@@ -67,15 +67,14 @@ type Diff struct {
 	// workSource is one of upstream/downstream by some policy in #pickSource.
 	workSource source.Source
 
-	sample              int
-	checkThreadCount    int
-	compareChecksumOnly bool
-	useCheckpoint       bool
-	ignoreDataCheck     bool
-	ignoreStructCheck   bool
-	ignoreStats         bool
-	sqlWg               sync.WaitGroup
-	checkpointWg        sync.WaitGroup
+	sample           int
+	checkThreadCount int
+	exportFixSQL     bool
+	useCheckpoint    bool
+	ignoreDataCheck  bool
+	ignoreStats      bool
+	sqlWg            sync.WaitGroup
+	checkpointWg     sync.WaitGroup
 
 	FixSQLDir     string
 	CheckpointDir string
@@ -89,15 +88,13 @@ type Diff struct {
 // NewDiff returns a Diff instance.
 func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 	diff = &Diff{
-		checkThreadCount:    cfg.CheckThreadCount,
-		compareChecksumOnly: cfg.CompareChecksumOnly,
-		useCheckpoint:       cfg.UseCheckpoint,
-		ignoreDataCheck:     cfg.IgnoreDataCheck,
-		ignoreStructCheck:   cfg.IgnoreStructCheck,
-		ignoreStats:         cfg.IgnoreStats,
-		sqlCh:               make(chan *ChunkDML, splitter.DefaultChannelBuffer),
-		cp:                  new(checkpoints.Checkpoint),
-		report:              report.NewReport(&cfg.Task),
+		checkThreadCount: cfg.CheckThreadCount,
+		exportFixSQL:     cfg.ExportFixSQL,
+		ignoreDataCheck:  cfg.CheckStructOnly,
+		ignoreStats:      cfg.IgnoreStats,
+		sqlCh:            make(chan *ChunkDML, splitter.DefaultChannelBuffer),
+		cp:               new(checkpoints.Checkpoint),
+		report:           report.NewReport(&cfg.Task),
 	}
 	if err = diff.init(ctx, cfg); err != nil {
 		diff.Close()
@@ -165,46 +162,37 @@ func (df *Diff) initCheckpoint() error {
 	df.cp.Init()
 
 	finishTableNums := 0
-	if df.useCheckpoint {
-		path := filepath.Join(df.CheckpointDir, checkpointFile)
-		if ioutil2.FileExists(path) {
-			node, reportInfo, err := df.cp.LoadChunk(path)
-			if err != nil {
-				return errors.Annotate(err, "the checkpoint load process failed")
-			} else {
-				// this need not be synchronized, because at the moment, the is only one thread access the section
-				log.Info("load checkpoint",
-					zap.Any("chunk index", node.GetID()),
-					zap.Reflect("chunk", node),
-					zap.String("state", node.GetState()))
-				df.cp.SetCurrentSavedID(node)
-			}
-
-			if node != nil {
-				// remove the sql file that ID bigger than node.
-				// cause we will generate these sql again.
-				err = df.removeSQLFiles(node.GetID())
-				if err != nil {
-					return errors.Trace(err)
-				}
-				df.startRange = splitter.FromNode(node)
-				df.report.LoadReport(reportInfo)
-				finishTableNums = df.startRange.GetTableIndex()
-				if df.startRange.ChunkRange.Type == chunk.Empty {
-					// chunk_iter will skip this table directly
-					finishTableNums++
-				}
-			}
+	path := filepath.Join(df.CheckpointDir, checkpointFile)
+	if ioutil2.FileExists(path) {
+		node, reportInfo, err := df.cp.LoadChunk(path)
+		if err != nil {
+			return errors.Annotate(err, "the checkpoint load process failed")
 		} else {
-			log.Info("not found checkpoint file, start from beginning")
-			id := &chunk.ChunkID{TableIndex: -1, BucketIndexLeft: -1, BucketIndexRight: -1, ChunkIndex: -1, ChunkCnt: 0}
-			err := df.removeSQLFiles(id)
+			// this need not be synchronized, because at the moment, the is only one thread access the section
+			log.Info("load checkpoint",
+				zap.Any("chunk index", node.GetID()),
+				zap.Reflect("chunk", node),
+				zap.String("state", node.GetState()))
+			df.cp.SetCurrentSavedID(node)
+		}
+
+		if node != nil {
+			// remove the sql file that ID bigger than node.
+			// cause we will generate these sql again.
+			err = df.removeSQLFiles(node.GetID())
 			if err != nil {
 				return errors.Trace(err)
 			}
+			df.startRange = splitter.FromNode(node)
+			df.report.LoadReport(reportInfo)
+			finishTableNums = df.startRange.GetTableIndex()
+			if df.startRange.ChunkRange.Type == chunk.Empty {
+				// chunk_iter will skip this table directly
+				finishTableNums++
+			}
 		}
 	} else {
-		log.Info("skip load checkpoint file, start from beginning")
+		log.Info("not found checkpoint file, start from beginning")
 		id := &chunk.ChunkID{TableIndex: -1, BucketIndexLeft: -1, BucketIndexRight: -1, ChunkIndex: -1, ChunkCnt: 0}
 		err := df.removeSQLFiles(id)
 		if err != nil {
@@ -276,7 +264,7 @@ func (df *Diff) Equal(ctx context.Context) error {
 
 	defer func() {
 		pool.WaitFinished()
-		log.Debug("all comsume tasks finished")
+		log.Debug("all consume tasks finished")
 		// close the sql channel
 		close(df.sqlCh)
 		df.sqlWg.Wait()
@@ -293,7 +281,7 @@ func (df *Diff) Equal(ctx context.Context) error {
 			// finish read the tables
 			break
 		}
-		log.Info("chunk index", zap.Any("chunk index", c.ChunkRange.Index), zap.Any("chunk bound", c.ChunkRange.Bounds))
+		log.Info("global consume chunk info", zap.Any("chunk index", c.ChunkRange.Index), zap.Any("chunk bound", c.ChunkRange.Bounds))
 		pool.Apply(func() {
 			isEqual := df.consume(ctx, c)
 			if !isEqual {
@@ -431,7 +419,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 		// If an error occurs during the checksum phase, skip the data compare phase.
 		state = checkpoints.FailedState
 		df.report.SetTableMeetError(schema, table, err)
-	} else if !isEqual && !df.compareChecksumOnly {
+	} else if !isEqual && df.exportFixSQL {
 		log.Debug("checksum failed", zap.Any("chunk id", rangeInfo.ChunkRange.Index), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTables()[rangeInfo.GetTableIndex()].Table))
 		state = checkpoints.FailedState
 		// if the chunk's checksum differ, try to do binary check

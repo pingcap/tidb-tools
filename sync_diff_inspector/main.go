@@ -96,13 +96,11 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 	}
 	defer d.Close()
 
-	if !d.ignoreStructCheck {
-		err = d.StructEqual(ctx)
-		if err != nil {
-			fmt.Printf("There is something error when compare structure of table, please check log info in %s\n", filepath.Join(cfg.Task.OutputDir, config.LogFileName))
-			log.Fatal("failed to check structure difference", zap.Error(err))
-			return false
-		}
+	err = d.StructEqual(ctx)
+	if err != nil {
+		fmt.Printf("There is something error when compare structure of table, please check log info in %s\n", filepath.Join(cfg.Task.OutputDir, config.LogFileName))
+		log.Fatal("failed to check structure difference", zap.Error(err))
+		return false
 	}
 	if !d.ignoreDataCheck {
 		err = d.Equal(ctx)
