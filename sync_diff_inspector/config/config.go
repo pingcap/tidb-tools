@@ -243,8 +243,6 @@ type Config struct {
 	// set true if want to compare rows
 	// set false won't compare rows.
 	ExportFixSQL bool `toml:"export-fix-sql" json:"export-fix-sql"`
-	// ignore tidb stats only use randomSpliter to split chunks
-	IgnoreStats bool `toml:"ignore-stats" json:"ignore-stats"`
 	// only check table struct without table data.
 	CheckStructOnly bool `toml:"check-struct-only" json:"check-struct-only"`
 	// DMAddr is dm-master's address, the format should like "http://127.0.0.1:8261"
@@ -279,8 +277,7 @@ func NewConfig() *Config {
 	fs.BoolVar(&cfg.PrintVersion, "V", false, "print version of sync_diff_inspector")
 	fs.StringVar(&cfg.DMAddr, "A", "", "the address of DM")
 	fs.StringVar(&cfg.DMTask, "T", "", "identifier of dm task")
-	fs.BoolVar(&cfg.CheckStructOnly, "ignore-data-check", false, "ignore check table's data")
-	fs.BoolVar(&cfg.IgnoreStats, "ignore-stats", false, "don't use tidb stats to split chunks")
+	fs.BoolVar(&cfg.CheckStructOnly, "check-struct-only", false, "ignore check table's data")
 
 	return cfg
 }
