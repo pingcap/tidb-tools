@@ -89,7 +89,6 @@ type Diff struct {
 // NewDiff returns a Diff instance.
 func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 	diff = &Diff{
-		sample:              cfg.Sample,
 		checkThreadCount:    cfg.CheckThreadCount,
 		compareChecksumOnly: cfg.CompareChecksumOnly,
 		useCheckpoint:       cfg.UseCheckpoint,
