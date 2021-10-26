@@ -2,22 +2,15 @@
 
 ######################### Global config #########################
 
-log-level = "info"
-
 # how many goroutines are created to check data
 check-thread-count = 4
 
-# set true if just want compare data by checksum, will skip select data when checksum is not equal.
-compare-checksum-only = false
-
-# set true will continue check from the latest checkpoint
-use-checkpoint = true
+# set false if just want compare data by checksum, will skip select data when checksum is not equal.
+# set true if want compare all different rows, will slow down the total compare time.
+export-fix-sql = false
 
 # ignore check table's data
-ignore-data-check = false
-
-# ignore check table's struct
-ignore-struct-check = false
+check-struct-only = true
 
 # dm-master's address, the format should like "http://127.0.0.1:8261"
 dm-addr = "http://127.0.0.1:8261"

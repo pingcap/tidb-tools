@@ -590,13 +590,11 @@ func TestSource(t *testing.T) {
 
 	router, err := router.NewTableRouter(false, nil)
 	cfg := &config.Config{
-		LogLevel:            "debug",
-		CheckThreadCount:    4,
-		CompareChecksumOnly: false,
-		IgnoreStructCheck:   false,
-		IgnoreStats:         false,
-		IgnoreDataCheck:     false,
-		UseCheckpoint:       true,
+		LogLevel:         "debug",
+		CheckThreadCount: 4,
+		ExportFixSQL:     true,
+		IgnoreStats:      false,
+		CheckStructOnly:  false,
 		DataSources: map[string]*config.DataSource{
 			"mysql1": {
 				Host: host,
