@@ -238,8 +238,6 @@ type Config struct {
 
 	// log level
 	LogLevel string `toml:"log-level" json:"log-level"`
-	// sampling check percent, for example 10 means only check 10% data
-	Sample int `toml:"sample-percent" json:"sample-percent"`
 	// how many goroutines are created to check data
 	CheckThreadCount int `toml:"check-thread-count" json:"check-thread-count"`
 	// set true if want to compare checksum only
@@ -280,7 +278,6 @@ func NewConfig() *Config {
 
 	fs.StringVar(&cfg.ConfigFile, "config", "", "Config file")
 	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
-	fs.IntVar(&cfg.Sample, "sample", 100, "the percent of sampling check")
 	fs.IntVar(&cfg.CheckThreadCount, "check-thread-count", 1, "how many goroutines are created to check data")
 	fs.BoolVar(&cfg.CompareChecksumOnly, "compare-checksum-only", true, "set true if want to compare checksum only")
 	fs.BoolVar(&cfg.PrintVersion, "V", false, "print version of sync_diff_inspector")
@@ -430,11 +427,6 @@ func (c *Config) Init() (err error) {
 }
 
 func (c *Config) CheckConfig() bool {
-	if c.Sample > percent100 || c.Sample < percent0 {
-		log.Error("sample must be greater than 0 and less than or equal to 100!")
-		return false
-	}
-
 	if c.CheckThreadCount <= 0 {
 		log.Error("check-thread-count must greater than 0!")
 		return false

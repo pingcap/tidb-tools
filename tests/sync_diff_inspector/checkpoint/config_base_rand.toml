@@ -7,9 +7,6 @@ log-level = "debug"
 # how many goroutines are created to check data
 check-thread-count = 4
 
-# sampling check percent, for example 10 means only check 10% data
-sample-percent = 100
-
 # set true if just want compare data by checksum, will skip select data when checksum is not equal.
 compare-checksum-only = false
 
