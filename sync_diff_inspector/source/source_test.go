@@ -591,7 +591,6 @@ func TestSource(t *testing.T) {
 	router, err := router.NewTableRouter(false, nil)
 	cfg := &config.Config{
 		LogLevel:            "debug",
-		Sample:              100,
 		CheckThreadCount:    4,
 		CompareChecksumOnly: false,
 		IgnoreStructCheck:   false,
