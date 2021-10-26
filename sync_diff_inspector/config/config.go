@@ -170,31 +170,54 @@ func (t *TaskConfig) Init(
 		t.TargetTableConfigs = tableConfigsList
 	}
 
+	hash, err := t.ComputeConfigHash()
+	if err != nil {
+		return errors.Trace(err)
+	}
+
 	// Create output Dir if not exists
 	ok, err = pathExists(t.OutputDir)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	if !ok {
-		err = mkdirAll(t.OutputDir)
-		if err != nil {
+		if err = mkdirAll(t.OutputDir); err != nil {
 			return errors.Trace(err)
 		}
 	}
-
-	hash, err := t.ComputeConfigHash()
+	// outputDir exists, we need to check the config hash for checkpoint.
+	t.CheckpointDir = filepath.Join(t.OutputDir, "checkpoint")
+	ok, err = pathExists(t.CheckpointDir)
 	if err != nil {
 		return errors.Trace(err)
 	}
+	if !ok {
+		// no checkpoint, we can use this outputDir directly.
+		if err = mkdirAll(t.CheckpointDir); err != nil {
+			return errors.Trace(err)
+		}
+		// create config hash in checkpointDir.
+		err = os.WriteFile(filepath.Join(t.CheckpointDir, hash), []byte{}, LocalFilePerm)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	} else {
+		// checkpoint exists, we need compare the config hash.
+		ok, err = pathExists(filepath.Join(t.CheckpointDir, hash))
+		if err != nil {
+			return errors.Trace(err)
+		}
+		if !ok {
+			// not match, raise error
+			return errors.Errorf("config changes breaking the checkpoint, please use another outputDir and start over again!")
+		}
+	}
 
-	t.FixDir = filepath.Join(t.OutputDir, hash, fmt.Sprintf("fix-on-%s", t.Target))
+	t.FixDir = filepath.Join(t.OutputDir, fmt.Sprintf("fix-on-%s", t.Target))
 	if err = mkdirAll(t.FixDir); err != nil {
 		return errors.Trace(err)
 	}
-	t.CheckpointDir = filepath.Join(t.OutputDir, hash, "checkpoint")
-	if err = mkdirAll(t.CheckpointDir); err != nil {
-		return errors.Trace(err)
-	}
+
 	return nil
 }
 
