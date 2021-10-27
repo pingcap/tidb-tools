@@ -1,0 +1,22 @@
+# Time: 2021-10-27T17:02:03.985667+08:00
+# Txn_start_ts: 0
+# Query_time: 0.412561784
+# Parse_time: 0
+# Compile_time: 0.00007349
+# Rewrite_time: 0.000001569
+# Optimize_time: 0
+# Wait_TS: 0
+# Is_internal: true
+# Digest: a19edbb3caff8cc57619278ab6eb5f791d7a821432309abe7184d0a7bca66b4d
+# Num_cop_tasks: 0
+# Prepared: false
+# Plan_from_cache: false
+# Plan_from_binding: false
+# Has_more_results: false
+# KV_total: 0
+# PD_total: 0
+# Backoff_total: 0
+# Write_sql_response_total: 0
+# Result_rows: 0
+# Succ: true
+CREATE TABLE IF NOT EXISTS mysql.columns_priv(   Host  CHAR(255),   DB   CHAR(64),   User  CHAR(32),   Table_name CHAR(64),   Column_name CHAR(64),   Timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,   Column_priv SET('Select','Insert','Update','References'),   PRIMARY KEY (Host, DB, User, Table_name, Column_name));
