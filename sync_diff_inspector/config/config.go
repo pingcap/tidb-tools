@@ -35,9 +35,6 @@ import (
 )
 
 const (
-	percent0   = 0
-	percent100 = 100
-
 	LocalDirPerm  os.FileMode = 0o755
 	LocalFilePerm os.FileMode = 0o644
 
@@ -293,15 +290,16 @@ func NewConfig() *Config {
 	cfg.FlagSet = flag.NewFlagSet("diff", flag.ContinueOnError)
 	fs := cfg.FlagSet
 
-	fs.StringVar(&cfg.ConfigFile, "config", "", "Config file")
-	fs.StringVar(&cfg.LogLevel, "L", "info", "log level: debug, info, warn, error, fatal")
+	fs.BoolVarP(&cfg.PrintVersion, "version", "V", false, "print version of sync_diff_inspector")
+	fs.StringVarP(&cfg.LogLevel, "log-level", "L", "info", "log level: debug, info, warn, error, fatal")
+	fs.StringVarP(&cfg.ConfigFile, "config", "C", "", "Config file")
+	fs.StringVar(&cfg.DMAddr, "dm-addr", "", "the address of DM")
+	fs.StringVar(&cfg.DMTask, "dm-task", "", "identifier of dm task")
 	fs.IntVar(&cfg.CheckThreadCount, "check-thread-count", 1, "how many goroutines are created to check data")
 	fs.BoolVar(&cfg.ExportFixSQL, "export-fix-sql", true, "set true if want to compare rows or set to false will only compare checksum")
-	fs.BoolVar(&cfg.PrintVersion, "V", false, "print version of sync_diff_inspector")
-	fs.StringVar(&cfg.DMAddr, "A", "", "the address of DM")
-	fs.StringVar(&cfg.DMTask, "T", "", "identifier of dm task")
 	fs.BoolVar(&cfg.CheckStructOnly, "check-struct-only", false, "ignore check table's data")
 
+	fs.SortFlags = false
 	return cfg
 }
 
@@ -313,12 +311,17 @@ func (c *Config) Parse(arguments []string) error {
 		return errors.Trace(err)
 	}
 
+	if c.PrintVersion {
+		return nil
+	}
+
 	// Load config file if specified.
-	if c.ConfigFile != "" {
-		err = c.configFromFile(c.ConfigFile)
-		if err != nil {
-			return errors.Trace(err)
-		}
+	if c.ConfigFile == "" {
+		return errors.Errorf("argument --config is required")
+	}
+	err = c.configFromFile(c.ConfigFile)
+	if err != nil {
+		return errors.Trace(err)
 	}
 
 	// Parse again to replace with command line options.
