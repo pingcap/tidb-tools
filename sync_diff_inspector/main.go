@@ -43,7 +43,7 @@ func main() {
 	}
 
 	if cfg.PrintVersion {
-		fmt.Printf("version: \n%s", utils.GetRawInfo("sync_diff_inspector"))
+		fmt.Printf(utils.GetRawInfo("sync_diff_inspector"))
 		return
 	}
 
