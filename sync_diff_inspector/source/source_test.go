@@ -593,7 +593,6 @@ func TestSource(t *testing.T) {
 		LogLevel:         "debug",
 		CheckThreadCount: 4,
 		ExportFixSQL:     true,
-		IgnoreStats:      false,
 		CheckStructOnly:  false,
 		DataSources: map[string]*config.DataSource{
 			"mysql1": {
@@ -651,8 +650,8 @@ func TestSource(t *testing.T) {
 				},
 			},
 			TargetCheckTables: nil,
-			FixDir:            "output/e44ad7682cf25cc16041996127350c23/fix-on-tidb",
-			CheckpointDir:     "output/e44ad7682cf25cc16041996127350c23/checkpoint",
+			FixDir:            "output/fix-on-tidb0",
+			CheckpointDir:     "output/checkpoint",
 			HashFile:          "",
 		},
 		ConfigFile:   "config.toml",
