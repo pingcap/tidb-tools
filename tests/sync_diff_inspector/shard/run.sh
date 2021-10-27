@@ -27,12 +27,12 @@ sed "s/\"127.0.0.1\"#MYSQL_HOST/\"${MYSQL_HOST}\"/g" ./config_base.toml | sed "s
 echo "compare sharding tables with one table in downstream, check result should be pass"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/shard_diff.output
 check_contains "check pass!!!" $OUT_DIR/sync_diff.log
-rm -f $OUT_DIR/sync_diff.log
+rm -rf $OUT_DIR/*
 
 echo "update data in one shard table, and data should not be equal"
 mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "update shard_test.test1 set b = 'abc' limit 1"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/shard_diff.output || true
 check_contains "check failed" $OUT_DIR/sync_diff.log
-rm -f $OUT_DIR/sync_diff.log
+rm -rf $OUT_DIR/*
 
 echo "shard test passed"

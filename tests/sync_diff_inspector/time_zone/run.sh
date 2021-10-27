@@ -19,7 +19,7 @@ done
 echo "check with the same time_zone, check result should be pass"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/time_zone_diff.output
 check_contains "check pass!!!" $OUT_DIR/sync_diff.log
-rm -f $OUT_DIR/sync_diff.log
+rm -rf $OUT_DIR/*
 
 # check upstream and downstream time_zone
 mysql -uroot -h 127.0.0.1 -P 4000 -e "SET @@global.time_zone = '+08:00'";
@@ -29,7 +29,7 @@ sleep 5
 echo "check with different time_zone, check result should be pass again"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/time_zone_diff.output
 check_contains "check pass!!!" $OUT_DIR/sync_diff.log
-rm -f $OUT_DIR/sync_diff.log
+rm -rf $OUT_DIR/*
 
 # reset time_zone
 mysql -uroot -h 127.0.0.1 -P 4000 -e "SET @@global.time_zone = 'SYSTEM'";

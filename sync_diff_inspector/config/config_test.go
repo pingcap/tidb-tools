@@ -22,7 +22,9 @@ import (
 
 func TestParseConfig(t *testing.T) {
 	cfg := NewConfig()
-	require.Nil(t, cfg.Parse([]string{"--L", "info"}))
+	require.Nil(t, cfg.Parse([]string{"-L", "info", "--config", "config.toml"}))
+	cfg = NewConfig()
+	require.Contains(t, cfg.Parse([]string{"-L", "info"}).Error(), "argument --config is required")
 
 	unknownFlag := []string{"--LL", "info"}
 	err := cfg.Parse(unknownFlag)
