@@ -59,8 +59,7 @@ EOF
         -P 4000 \
         --store tikv \
         --path 127.0.0.1:2379 \
-        --log-file "$OUT_DIR/tidb.log" \
-        -socket "$OUT_DIR/down_tidb.sock" &
+        --log-file "$OUT_DIR/tidb.log" &
 
     echo "Verifying TiDB is started..."
     check_db_status "127.0.0.1" 4000 "tidb"
