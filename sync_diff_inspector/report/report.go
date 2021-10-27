@@ -55,7 +55,7 @@ type ReportConfig struct {
 
 // TableResult saves the check result for every table.
 type TableResult struct {
-	Schema      string                  `json:"schma"`
+	Schema      string                  `json:"schema"`
 	Table       string                  `json:"table"`
 	StructEqual bool                    `json:"struct-equal"`
 	DataSkip    bool                    `json:"data-skip"`
