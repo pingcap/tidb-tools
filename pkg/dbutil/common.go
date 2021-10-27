@@ -436,7 +436,9 @@ func GetCRC32Checksum(ctx context.Context, db QueryExecutor, schemaName, tableNa
 		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", ColumnName(col.Name.O)))
 	}
 
-	query := fmt.Sprintf("SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED)) AS checksum FROM %s WHERE %s;",
+	// TiDB EXPLAIN is wrong ,need tidb fixed
+	// FORCE PRIMARY INDEX, NOT better solution, Because maybe unique index
+	query := fmt.Sprintf("SELECT BIT_XOR(CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED)) AS checksum FROM %s FORCE INDEX(PRIMARY) WHERE %s;",
 		strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), TableName(schemaName, tableName), limitRange)
 	log.Debug("checksum", zap.String("sql", query), zap.Reflect("args", args))
 
