@@ -707,7 +707,8 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 				return
 			}
 			if len(dml.sqls) > 0 {
-				fileName := fmt.Sprintf("%s.sql", utils.GetSQLFileName(dml.node.GetID()))
+				tableDiff := df.downstream.GetTables()[dml.node.GetTableIndex()]
+				fileName := fmt.Sprintf("%s:%s:%s.sql", tableDiff.Schema, tableDiff.Table, utils.GetSQLFileName(dml.node.GetID()))
 				fixSQLPath := filepath.Join(df.FixSQLDir, fileName)
 				if ok := ioutil2.FileExists(fixSQLPath); ok {
 					// unreachable
@@ -720,7 +721,6 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 				}
 				// write chunk meta
 				chunkRange := dml.node.ChunkRange
-				tableDiff := df.workSource.GetTables()[dml.node.GetTableIndex()]
 				fixSQLFile.WriteString(fmt.Sprintf("-- table: %s.%s\n-- %s\n", tableDiff.Schema, tableDiff.Table, chunkRange.ToMeta()))
 				for _, sql := range dml.sqls {
 					_, err = fixSQLFile.WriteString(fmt.Sprintf("%s\n", sql))
@@ -773,7 +773,11 @@ func (df *Diff) removeSQLFiles(checkPointId *chunk.ChunkID) error {
 
 		if strings.HasSuffix(name, ".sql") {
 			fileIDStr := strings.TrimRight(name, ".sql")
-			tableIndex, bucketIndexLeft, bucketIndexRight, chunkIndex, err := utils.GetChunkIDFromSQLFileName(fileIDStr)
+			fileIDSubstrs := strings.SplitN(fileIDStr, ":", 3)
+			if len(fileIDSubstrs) != 3 {
+				return nil
+			}
+			tableIndex, bucketIndexLeft, bucketIndexRight, chunkIndex, err := utils.GetChunkIDFromSQLFileName(fileIDSubstrs[2])
 			if err != nil {
 				return errors.Trace(err)
 			}
