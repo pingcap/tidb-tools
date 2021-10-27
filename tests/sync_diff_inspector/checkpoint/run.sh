@@ -41,7 +41,7 @@ done
 bucket_index_right=$(($(echo ${last_chunk_index_array[1]} | awk -F '-' '{print $2}') + 1))
 echo $bucket_index_right
 
-rm -f $OUT_DIR/sync_diff.log
+rm -rf $OUT_DIR/*
 export GO_FAILPOINTS="github.com/pingcap/tidb-tools/sync_diff_inspector/splitter/print-chunk-info=return()"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/checkpoint_diff.output
 first_chunk_info=$(grep 'print-chunk-info' $OUT_DIR/sync_diff.log | awk -F 'lowerBounds=' '{print $2}' | sed 's/[]["]//g' | sort -n | awk 'NR==1')
@@ -85,7 +85,7 @@ bucket_index_left=$(echo ${last_chunk_index_array[1]} | awk -F '-' '{print $1}')
 bucket_index_right=$(echo ${last_chunk_index_array[1]} | awk -F '-' '{print $2}')
 echo "${bucket_index_left}-${bucket_index_right}"
 
-rm -f $OUT_DIR/sync_diff.log
+rm -rf $OUT_DIR/*
 export GO_FAILPOINTS="github.com/pingcap/tidb-tools/sync_diff_inspector/splitter/print-chunk-info=return()"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/checkpoint_diff.output
 first_chunk_info=$(grep 'print-chunk-info' $OUT_DIR/sync_diff.log | awk -F 'lowerBounds=' '{print $2}' | sed 's/[]["]//g' | sort -n | awk 'NR==1')
@@ -128,7 +128,7 @@ done
 # chunkIndex should be the last Index
 [[ $((${last_chunk_index_array[2]} + 2)) -eq ${last_chunk_index_array[3]} ]] || exit 1
 
-rm -f $OUT_DIR/sync_diff.log
+rm -rf $OUT_DIR/*
 export GO_FAILPOINTS="github.com/pingcap/tidb-tools/sync_diff_inspector/splitter/print-chunk-info=return()"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/checkpoint_diff.output
 first_chunk_info=$(grep 'print-chunk-info' $OUT_DIR/sync_diff.log | awk -F 'lowerBounds=' '{print $2}' | sed 's/[]["]//g' | sort -n | awk 'NR==1')
