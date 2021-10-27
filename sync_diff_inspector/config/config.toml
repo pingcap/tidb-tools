@@ -7,10 +7,10 @@ check-thread-count = 4
 
 # set false if just want compare data by checksum, will skip select data when checksum is not equal.
 # set true if want compare all different rows, will slow down the total compare time.
-export-fix-sql= false
+export-fix-sql= true
 
 # ignore check table's data
-check-struct-only = true
+check-struct-only = false
 
 
 ######################### Databases config #########################
