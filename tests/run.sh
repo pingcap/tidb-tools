@@ -69,7 +69,8 @@ EOF
         -P 4001 \
         --path=$OUT_DIR/tidb \
         --status=20080 \
-        --log-file "$OUT_DIR/down_tidb.log" &
+        --log-file "$OUT_DIR/down_tidb.log" \
+        -socket "$OUT_DIR/down_tidb.sock" &
 
     echo "Verifying Upstream TiDB is started..."
     check_db_status "127.0.0.1" 4001 "tidb"

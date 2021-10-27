@@ -37,6 +37,8 @@ message ColumnInfo {
   // for json type: json
   optional string mysql_type = 2 [ (gogoproto.nullable) = false ];
   optional bool is_primary_key = 3 [ (gogoproto.nullable) = false ];
+  optional int32 flen = 4 [ (gogoproto.nullable) = false ];
+  optional int32 decimal = 5 [ (gogoproto.nullable) = false ];
 }
 
 message Row { repeated Column columns = 1; }
