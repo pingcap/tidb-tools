@@ -37,7 +37,8 @@ func main() {
 	case flag.ErrHelp:
 		os.Exit(0)
 	default:
-		log.Error("parse cmd flags", zap.Error(err))
+		fmt.Printf("Error: %s\n", err.Error())
+		cfg.FlagSet.PrintDefaults()
 		os.Exit(2)
 	}
 
@@ -109,6 +110,8 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 			log.Fatal("failed to check data difference", zap.Error(err))
 			return false
 		}
+	} else {
+		fmt.Printf("Check table struct only, skip data check\n")
 	}
 	return d.PrintSummary(ctx)
 }
