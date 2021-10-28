@@ -374,6 +374,7 @@ func (r *Report) GetSnapshot(chunkID *chunk.ChunkID, schema, table string) (*Rep
 		FailedNum:    0,
 		Result:       result,
 		TableResults: reserveMap,
+		StartTime:    r.StartTime,
 		Duration:     duration,
 		TotalSize:    totalSize,
 
