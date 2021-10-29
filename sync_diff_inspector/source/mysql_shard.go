@@ -214,6 +214,11 @@ func (s *MySQLSources) GetDB() *sql.DB {
 	return nil
 }
 
+func (s *MySQLSources) GetSnapshot() string {
+	log.Fatal("unreachable!, mysql doesn't have the snapshot")
+	return ""
+}
+
 func (s *MySQLSources) GetSourceStructInfo(ctx context.Context, tableIndex int) ([]*model.TableInfo, error) {
 	tableDiff := s.GetTables()[tableIndex]
 	tableSources := getMatchedSourcesForTable(s.sourceTablesMap, tableDiff)
