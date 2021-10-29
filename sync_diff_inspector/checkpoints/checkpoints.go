@@ -42,6 +42,7 @@ const (
 	// for table: means some chunks' data is not equal or some chunk check failed in this table
 	FailedState = "failed"
 
+	// IgnoreState
 	// for chunk: this chunk is ignored. if sample is not 100% or it is Empty chunk, will ignore some chunk
 	// for table: don't have this state
 	IgnoreState = "ignore"
