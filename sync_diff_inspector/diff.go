@@ -320,22 +320,31 @@ func (df *Diff) compareStruct(ctx context.Context, tableIndex int) (isEqual bool
 	return isEqual, isSkip, nil
 }
 
-func (df *Diff) startGCKeeperForTiDB(ctx context.Context, db *sql.DB) {
+func (df *Diff) startGCKeeperForTiDB(ctx context.Context, db *sql.DB, snap string) {
 	pdCli, _ := utils.GetPDClientForGC(ctx, db)
 	if pdCli != nil {
 		// Get latest snapshot
-		snap, err := utils.GetSnapshot(ctx, db)
+		latestSnap, err := utils.GetSnapshot(ctx, db)
 		if err != nil {
 			log.Info("failed to get snapshot, user should guarantee the GC stopped during diff progress.")
 			return
 		}
-		if len(snap) == 1 {
-			err = utils.StartGCSavepointUpdateService(ctx, pdCli, db, snap[0])
-			if err != nil {
-				log.Info("failed to keep snapshot, user should guarantee the GC stopped during diff progress.")
-			} else {
-				log.Info("start update service to keep GC stopped automatically")
+
+		if len(latestSnap) == 1 {
+			if len(snap) == 0 {
+				snap = latestSnap[0]
 			}
+			// compare the snapshot and choose the small one to lock
+			if strings.Compare(latestSnap[0], snap) < 0 {
+				snap = latestSnap[0]
+			}
+		}
+
+		err = utils.StartGCSavepointUpdateService(ctx, pdCli, db, snap)
+		if err != nil {
+			log.Info("failed to keep snapshot, user should guarantee the GC stopped during diff progress.")
+		} else {
+			log.Info("start update service to keep GC stopped automatically")
 		}
 	}
 }
@@ -345,12 +354,12 @@ func (df *Diff) pickSource(ctx context.Context) source.Source {
 	workSource := df.downstream
 	if ok, _ := dbutil.IsTiDB(ctx, df.upstream.GetDB()); ok {
 		log.Info("The upstream is TiDB. pick it as work source candidate")
-		df.startGCKeeperForTiDB(ctx, df.upstream.GetDB())
+		df.startGCKeeperForTiDB(ctx, df.upstream.GetDB(), df.upstream.GetSnapshot())
 		workSource = df.upstream
 	}
 	if ok, _ := dbutil.IsTiDB(ctx, df.downstream.GetDB()); ok {
 		log.Info("The downstream is TiDB. pick it as work source first")
-		df.startGCKeeperForTiDB(ctx, df.downstream.GetDB())
+		df.startGCKeeperForTiDB(ctx, df.downstream.GetDB(), df.downstream.GetSnapshot())
 		workSource = df.downstream
 	}
 	return workSource
@@ -467,7 +476,7 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 		}
 	}
 	if index == nil {
-		log.Warn("have indexs but cannot found a proper index to split and disable the BinGenerate",
+		log.Warn("have indices but cannot found a proper index to split and disable the BinGenerate",
 			zap.String("table", dbutil.TableName(tableDiff.Schema, tableDiff.Table)))
 		return tableRange, nil
 	}
