@@ -181,6 +181,7 @@ func (t *ChunksIterator) getCurTableIndex() int {
 	return t.nextTableIndex - 1
 }
 
+// TODO: getCurTableIndexID only used for binary search, should be optimized later.
 func getCurTableIndexID(tableIter splitter.ChunkIterator) int64 {
 	if bt, ok := tableIter.(*splitter.BucketIterator); ok {
 		return bt.GetIndexID()

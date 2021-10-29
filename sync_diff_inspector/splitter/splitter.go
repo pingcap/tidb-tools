@@ -68,7 +68,7 @@ func (r *RangeInfo) Copy() *RangeInfo {
 func (r *RangeInfo) Update(column, lower, upper string, updateLower, updateUpper bool, collation, limits string) {
 	r.ChunkRange.Update(column, lower, upper, updateLower, updateUpper)
 	conditions, args := r.ChunkRange.ToString(collation)
-	r.ChunkRange.Where = fmt.Sprintf("((%s) AND %s)", conditions, limits)
+	r.ChunkRange.Where = fmt.Sprintf("((%s) AND (%s))", conditions, limits)
 	r.ChunkRange.Args = args
 }
 
