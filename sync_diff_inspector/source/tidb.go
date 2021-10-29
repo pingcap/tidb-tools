@@ -82,6 +82,7 @@ func (s *TiDBRowsIterator) Next() (map[string]*dbutil.ColumnData, error) {
 type TiDBSource struct {
 	tableDiffs     []*common.TableDiff
 	sourceTableMap map[string]*common.TableSource
+	snapshot       string
 	// checkThreadCount is the pool size of produce chunks
 	checkThreadCount int
 	dbConn           *sql.DB
@@ -184,6 +185,10 @@ func (s *TiDBSource) GetDB() *sql.DB {
 	return s.dbConn
 }
 
+func (s *TiDBSource) GetSnapshot() string {
+	return s.snapshot
+}
+
 func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource) (map[string]*common.TableSource, error) {
 	sourceTableMap := make(map[string]*common.TableSource)
 	if ds.Router != nil {
@@ -251,6 +256,7 @@ func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *conf
 	ts := &TiDBSource{
 		tableDiffs:       tableDiffs,
 		sourceTableMap:   sourceTableMap,
+		snapshot:         ds.Snapshot,
 		dbConn:           ds.Conn,
 		checkThreadCount: checkThreadCount,
 	}
