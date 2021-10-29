@@ -43,7 +43,7 @@ const (
 	FailedState = "failed"
 
 	// IgnoreState
-	// for chunk: this chunk is ignored. if sample is not 100% or it is Empty chunk, will ignore some chunk
+	// for chunk: this chunk is ignored. if it is Empty chunk, will ignore some chunk
 	// for table: don't have this state
 	IgnoreState = "ignore"
 )
@@ -130,8 +130,8 @@ type SavedState struct {
 	Report *report.Report `json:"report-info"`
 }
 
-// SetCurrentSavedID the method is unsynchronized, be cautious
-func (cp *Checkpoint) SetCurrentSavedID(n *Node) {
+// InitCurrentSavedID the method is only used in initialization without lock, be cautious
+func (cp *Checkpoint) InitCurrentSavedID(n *Node) {
 	cp.hp.CurrentSavedNode = n
 }
 
@@ -242,12 +242,3 @@ func (cp *Checkpoint) LoadChunk(fileName string) (*Node, *report.Report, error) 
 	return n.Chunk, n.Report, nil
 }
 
-// CheckConfig stores the information about the config of the current run.
-// If we restart a sync-diff from a different config, the checkpoint is disable.
-type CheckConfig struct {
-	Table     string `json:"table"`
-	Fields    string `json:"fields"`
-	Range     string `json:"range"`
-	Snapshot  string `json:"snapshot"`
-	Collation string `json:"collation"`
-}

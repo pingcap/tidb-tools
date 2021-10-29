@@ -431,7 +431,7 @@ func InitChunks(chunks []*Range, t ChunkType, firstBucketID, lastBucketID int, i
 	}
 	for _, chunk := range chunks {
 		conditions, args := chunk.ToString(collation)
-		chunk.Where = fmt.Sprintf("((%s) AND %s)", conditions, limits)
+		chunk.Where = fmt.Sprintf("((%s) AND (%s))", conditions, limits)
 		chunk.Args = args
 		chunk.Index = &ChunkID{
 			BucketIndexLeft:  firstBucketID,
@@ -446,7 +446,7 @@ func InitChunks(chunks []*Range, t ChunkType, firstBucketID, lastBucketID int, i
 
 func InitChunk(chunk *Range, t ChunkType, firstBucketID, lastBucketID int, collation, limits string) {
 	conditions, args := chunk.ToString(collation)
-	chunk.Where = fmt.Sprintf("((%s) AND %s)", conditions, limits)
+	chunk.Where = fmt.Sprintf("((%s) AND (%s))", conditions, limits)
 	chunk.Args = args
 	chunk.Index = &ChunkID{
 		BucketIndexLeft:  firstBucketID,

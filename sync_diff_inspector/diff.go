@@ -171,7 +171,7 @@ func (df *Diff) initCheckpoint() error {
 				zap.Any("chunk index", node.GetID()),
 				zap.Reflect("chunk", node),
 				zap.String("state", node.GetState()))
-			df.cp.SetCurrentSavedID(node)
+			df.cp.InitCurrentSavedID(node)
 		}
 
 		if node != nil {
@@ -320,31 +320,22 @@ func (df *Diff) compareStruct(ctx context.Context, tableIndex int) (isEqual bool
 	return isEqual, isSkip, nil
 }
 
-func (df *Diff) startGCKeeperForTiDB(ctx context.Context, db *sql.DB, snap string) {
+func (df *Diff) startGCKeeperForTiDB(ctx context.Context, db *sql.DB) {
 	pdCli, _ := utils.GetPDClientForGC(ctx, db)
 	if pdCli != nil {
 		// Get latest snapshot
-		latestSnap, err := utils.GetSnapshot(ctx, db)
+		snap, err := utils.GetSnapshot(ctx, db)
 		if err != nil {
 			log.Info("failed to get snapshot, user should guarantee the GC stopped during diff progress.")
 			return
 		}
-
-		if len(latestSnap) == 1 {
-			if len(snap) == 0 {
-				snap = latestSnap[0]
+		if len(snap) == 1 {
+			err = utils.StartGCSavepointUpdateService(ctx, pdCli, db, snap[0])
+			if err != nil {
+				log.Info("failed to keep snapshot, user should guarantee the GC stopped during diff progress.")
+			} else {
+				log.Info("start update service to keep GC stopped automatically")
 			}
-			// compare the snapshot and choose the small one to lock
-			if strings.Compare(latestSnap[0], snap) < 0 {
-				snap = latestSnap[0]
-			}
-		}
-
-		err = utils.StartGCSavepointUpdateService(ctx, pdCli, db, snap)
-		if err != nil {
-			log.Info("failed to keep snapshot, user should guarantee the GC stopped during diff progress.")
-		} else {
-			log.Info("start update service to keep GC stopped automatically")
 		}
 	}
 }
@@ -354,12 +345,12 @@ func (df *Diff) pickSource(ctx context.Context) source.Source {
 	workSource := df.downstream
 	if ok, _ := dbutil.IsTiDB(ctx, df.upstream.GetDB()); ok {
 		log.Info("The upstream is TiDB. pick it as work source candidate")
-		df.startGCKeeperForTiDB(ctx, df.upstream.GetDB(), df.upstream.GetSnapshot())
+		df.startGCKeeperForTiDB(ctx, df.upstream.GetDB())
 		workSource = df.upstream
 	}
 	if ok, _ := dbutil.IsTiDB(ctx, df.downstream.GetDB()); ok {
 		log.Info("The downstream is TiDB. pick it as work source first")
-		df.startGCKeeperForTiDB(ctx, df.downstream.GetDB(), df.upstream.GetSnapshot())
+		df.startGCKeeperForTiDB(ctx, df.downstream.GetDB())
 		workSource = df.downstream
 	}
 	return workSource
@@ -476,7 +467,7 @@ func (df *Diff) BinGenerate(ctx context.Context, targetSource source.Source, tab
 		}
 	}
 	if index == nil {
-		log.Warn("have indices but cannot found a proper index to split and disable the BinGenerate",
+		log.Warn("have indexs but cannot found a proper index to split and disable the BinGenerate",
 			zap.String("table", dbutil.TableName(tableDiff.Schema, tableDiff.Table)))
 		return tableRange, nil
 	}
@@ -509,7 +500,7 @@ func (df *Diff) binSearch(ctx context.Context, targetSource source.Source, table
 	tableRange2 := tableRange.Copy()
 
 	chunkLimits, args := tableRange.ChunkRange.ToString(tableDiff.Collation)
-	limitRange := fmt.Sprintf("(%s) AND %s", chunkLimits, tableDiff.Range)
+	limitRange := fmt.Sprintf("(%s) AND (%s)", chunkLimits, tableDiff.Range)
 	midValues, err := utils.GetApproximateMidBySize(ctx, targetSource.GetDB(), tableDiff.Schema, tableDiff.Table, indexColumns, limitRange, args, count)
 	log.Debug("mid values", zap.Reflect("mid values", midValues), zap.Reflect("indices", indexColumns), zap.Reflect("bounds", tableRange.ChunkRange.Bounds))
 	if err != nil {
