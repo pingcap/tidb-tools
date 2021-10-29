@@ -304,7 +304,7 @@ func TestRandomSpliter(t *testing.T) {
 		tableDiff := &common.TableDiff{
 			Schema:        "test",
 			Table:         "test",
-			Info:          utils.IgnoreColumns(tableInfo, testCase.IgnoreColumns),
+			Info:          utils.ResetColumns(tableInfo, testCase.IgnoreColumns),
 			IgnoreColumns: testCase.IgnoreColumns,
 			Fields:        testCase.fields,
 			ChunkSize:     5,
@@ -814,7 +814,7 @@ func TestRangeInfo(t *testing.T) {
 	rangeInfo.Update("a", "1", "2", true, true, "[23]", "[sdg]")
 	rangeInfo.ChunkRange.Index.TableIndex = 1
 	chunkRange := rangeInfo.GetChunk()
-	require.Equal(t, chunkRange.Where, "((((`a` COLLATE '[23]' > ?)) AND ((`a` COLLATE '[23]' <= ?))) AND [sdg])")
+	require.Equal(t, chunkRange.Where, "((((`a` COLLATE '[23]' > ?)) AND ((`a` COLLATE '[23]' <= ?))) AND ([sdg]))")
 	require.Equal(t, chunkRange.Args, []interface{}{"1", "2"})
 
 	require.Equal(t, rangeInfo.GetTableIndex(), 1)
@@ -822,7 +822,7 @@ func TestRangeInfo(t *testing.T) {
 	rangeInfo2 := FromNode(rangeInfo.ToNode())
 
 	chunkRange = rangeInfo2.GetChunk()
-	require.Equal(t, chunkRange.Where, "((((`a` COLLATE '[23]' > ?)) AND ((`a` COLLATE '[23]' <= ?))) AND [sdg])")
+	require.Equal(t, chunkRange.Where, "((((`a` COLLATE '[23]' > ?)) AND ((`a` COLLATE '[23]' <= ?))) AND ([sdg]))")
 	require.Equal(t, chunkRange.Args, []interface{}{"1", "2"})
 
 	require.Equal(t, rangeInfo2.GetTableIndex(), 1)
