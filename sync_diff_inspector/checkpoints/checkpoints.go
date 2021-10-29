@@ -245,7 +245,7 @@ func (cp *Checkpoint) LoadChunk(fileName string) (*Node, *report.Report, error) 
 // CheckConfig stores the information about the config of the current run.
 // If we restart a sync-diff from a different config, the checkpoint is disable.
 type CheckConfig struct {
-	Table     string `json:"tables"`
+	Table     string `json:"table"`
 	Fields    string `json:"fields"`
 	Range     string `json:"range"`
 	Snapshot  string `json:"snapshot"`
