@@ -92,6 +92,11 @@ type Source interface {
 	// GetDB represents the db connection.
 	GetDB() *sql.DB
 
+	// GetSnapshot represents the snapshot of source.
+	// only TiDB source has the snapshot.
+	// TODO refine the interface.
+	GetSnapshot() string
+
 	// Close ...
 	Close()
 }
