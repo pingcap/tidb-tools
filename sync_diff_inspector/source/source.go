@@ -127,14 +127,17 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 				ChunkSize:     tableConfig.ChunkSize,
 			})
 
-			// add rule match itself to make table case unsensitive
+			// When the router set case-sensitive false,
+			// that add rule match itself will make table case unsensitive.
 			for _, d := range cfg.Task.SourceInstances {
-				d.Router.AddRule(&router.TableRule{
+				if d.Router.AddRule(&router.TableRule{
 					SchemaPattern: tableConfig.Schema,
 					TablePattern:  tableConfig.Table,
 					TargetSchema:  tableConfig.Schema,
 					TargetTable:   tableConfig.Table,
-				})
+				}) != nil {
+					return nil, nil, errors.Errorf("set case unsensitive failed. The schema/table name cannot be parttern. [schema = %s] [table = %s]", tableConfig.Schema, tableConfig.Table)
+				}
 			}
 		}
 	}
