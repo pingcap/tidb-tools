@@ -241,4 +241,3 @@ func (cp *Checkpoint) LoadChunk(fileName string) (*Node, *report.Report, error) 
 	}
 	return n.Chunk, n.Report, nil
 }
-

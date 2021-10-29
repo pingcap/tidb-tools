@@ -359,7 +359,7 @@ func (df *Diff) pickSource(ctx context.Context) source.Source {
 	}
 	if ok, _ := dbutil.IsTiDB(ctx, df.downstream.GetDB()); ok {
 		log.Info("The downstream is TiDB. pick it as work source first")
-		df.startGCKeeperForTiDB(ctx, df.downstream.GetDB(), df.upstream.GetSnapshot())
+		df.startGCKeeperForTiDB(ctx, df.downstream.GetDB(), df.downstream.GetSnapshot())
 		workSource = df.downstream
 	}
 	return workSource
