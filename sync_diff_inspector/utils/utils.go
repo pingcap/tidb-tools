@@ -666,7 +666,7 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 			name = fmt.Sprintf("round(%s, 14-floor(log10(abs(%s))))", name, name)
 		}
 		columnNames = append(columnNames, name)
-		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", dbutil.ColumnName(col.Name.O)))
+		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", name))
 	}
 
 	query := fmt.Sprintf("SELECT COUNT(t.crc32) as CNT, BIT_XOR(t.crc32) as CHECKSUM from (SELECT CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED) AS crc32 FROM %s WHERE %s) as t;",

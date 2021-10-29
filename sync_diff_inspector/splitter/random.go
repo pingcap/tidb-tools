@@ -209,7 +209,7 @@ func splitRangeByRandom(db *sql.DB, chunk *chunk.Range, count int, schema string
 	}
 
 	chunkLimits, args := chunk.ToString(collation)
-	limitRange := fmt.Sprintf("(%s) AND %s", chunkLimits, limits)
+	limitRange := fmt.Sprintf("(%s) AND (%s)", chunkLimits, limits)
 
 	randomValues := make([][]string, len(columns))
 	for i, column := range columns {
