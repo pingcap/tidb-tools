@@ -221,7 +221,7 @@ func TestBasicTableUtilOperation(t *testing.T) {
 	require.Equal(t, len(tableInfo.Columns), 4)
 	require.Equal(t, tableInfo.Indices[0].Columns[1].Name.O, "b")
 	require.Equal(t, tableInfo.Indices[0].Columns[1].Offset, 2)
-	info := IgnoreColumns(tableInfo, []string{"c"})
+	info := ResetColumns(tableInfo, []string{"c"})
 	require.Equal(t, len(info.Indices), 1)
 	require.Equal(t, len(info.Columns), 3)
 	require.Equal(t, tableInfo.Indices[0].Columns[1].Name.O, "b")
@@ -318,11 +318,11 @@ func TestGenerateSQLs(t *testing.T) {
 	require.Equal(t, deleteSQL, "DELETE FROM `diff_test`.`atest` WHERE `id` is NULL AND `name` = 'a\\'a' AND `birthday` = '2018-01-01 00:00:00' AND `update_time` = '10:10:10' AND `money` = 11.1111 LIMIT 1;")
 }
 
-func TestIgnoreColumns(t *testing.T) {
+func TestResetColumns(t *testing.T) {
 	createTableSQL1 := "CREATE TABLE `test`.`atest` (`a` int, `b` int, `c` int, `d` int, primary key(`a`))"
 	tableInfo1, err := dbutil.GetTableInfoBySQL(createTableSQL1, parser.New())
 	require.NoError(t, err)
-	tbInfo := IgnoreColumns(tableInfo1, []string{"a"})
+	tbInfo := ResetColumns(tableInfo1, []string{"a"})
 	require.Equal(t, len(tbInfo.Columns), 3)
 	require.Equal(t, len(tbInfo.Indices), 0)
 	require.Equal(t, tbInfo.Columns[2].Offset, 2)
@@ -330,14 +330,14 @@ func TestIgnoreColumns(t *testing.T) {
 	createTableSQL2 := "CREATE TABLE `test`.`atest` (`a` int, `b` int, `c` int, `d` int, primary key(`a`), index idx(`b`, `c`))"
 	tableInfo2, err := dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
 	require.NoError(t, err)
-	tbInfo = IgnoreColumns(tableInfo2, []string{"a", "b"})
+	tbInfo = ResetColumns(tableInfo2, []string{"a", "b"})
 	require.Equal(t, len(tbInfo.Columns), 2)
 	require.Equal(t, len(tbInfo.Indices), 0)
 
 	createTableSQL3 := "CREATE TABLE `test`.`atest` (`a` int, `b` int, `c` int, `d` int, primary key(`a`), index idx(`b`, `c`))"
 	tableInfo3, err := dbutil.GetTableInfoBySQL(createTableSQL3, parser.New())
 	require.NoError(t, err)
-	tbInfo = IgnoreColumns(tableInfo3, []string{"b", "c"})
+	tbInfo = ResetColumns(tableInfo3, []string{"b", "c"})
 	require.Equal(t, len(tbInfo.Columns), 2)
 	require.Equal(t, len(tbInfo.Indices), 1)
 }

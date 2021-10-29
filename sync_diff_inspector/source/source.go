@@ -118,7 +118,7 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 			tableDiffs = append(tableDiffs, &common.TableDiff{
 				Schema: tableConfig.Schema,
 				Table:  tableConfig.Table,
-				Info:   utils.IgnoreColumns(tableConfig.TargetTableInfo, tableConfig.IgnoreColumns),
+				Info:   utils.ResetColumns(tableConfig.TargetTableInfo, tableConfig.IgnoreColumns),
 				// TODO: field `IgnoreColumns` can be deleted.
 				IgnoreColumns: tableConfig.IgnoreColumns,
 				Fields:        tableConfig.Fields,
