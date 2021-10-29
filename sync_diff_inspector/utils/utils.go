@@ -689,13 +689,11 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 	return count.Int64, checksum.Int64, nil
 }
 
-// IgnoreColumns removes index from `tableInfo.Indices`, whose columns appear in `columns`.
+// ResetColumns removes index from `tableInfo.Indices`, whose columns appear in `columns`.
 // And removes column from `tableInfo.Columns`, which appears in `columns`.
 // And initializes the offset of the column of each index to new `tableInfo.Columns`.
-func IgnoreColumns(tableInfo *model.TableInfo, columns []string) *model.TableInfo {
-	if len(columns) == 0 {
-		return tableInfo
-	}
+func ResetColumns(tableInfo *model.TableInfo, columns []string) *model.TableInfo {
+	// Although columns is empty, need to initialize indices' offset mapping to column.
 
 	// Remove all index from `tableInfo.Indices`, whose columns are involved of any column in `columns`.
 	removeColMap := SliceToMap(columns)
