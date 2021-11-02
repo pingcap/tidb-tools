@@ -54,7 +54,7 @@ func main() {
 	lg, p, e := log.InitLogger(conf)
 	if e != nil {
 		log.Error("Log init failed!", zap.String("error", e.Error()))
-		return
+		os.Exit(2)
 	}
 	log.ReplaceGlobals(lg, p)
 
@@ -64,13 +64,13 @@ func main() {
 	err = cfg.Init()
 	if err != nil {
 		fmt.Printf("Fail to initialize config.\n%s\n", err.Error())
-		return
+		os.Exit(2)
 	}
 
 	ok := cfg.CheckConfig()
 	if !ok {
 		fmt.Printf("There is something wrong with your config, please check log info in %s\n", conf.File.Filename)
-		return
+		os.Exit(2)
 	}
 
 	log.Info("", zap.Stringer("config", cfg))
