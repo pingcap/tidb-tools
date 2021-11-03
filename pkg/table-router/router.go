@@ -250,13 +250,13 @@ func (t *TableRule) extractVal(s string, ext interface{}) string {
 	case *SourceExtractor:
 		params = e.regexp.FindStringSubmatch(s)
 	}
-	var val string
+	var val strings.Builder
 	for idx, param := range params {
 		if idx > 0 {
-			val += param
+			val.WriteString(param)
 		}
 	}
-	return val
+	return val.String()
 }
 
 // FetchExtendColumn get extract rule.
