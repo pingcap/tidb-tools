@@ -20,11 +20,18 @@ import (
 	"github.com/pingcap/errors"
 )
 
-// rule of a filter, consisting of a schema and table pattern, and may be an
+// tableRule of a tableFilter, consisting of a schema and table pattern, and may be an
 // accept-list (positive) or deny-list (negative).
-type rule struct {
+type tableRule struct {
 	schema   matcher
 	table    matcher
+	positive bool
+}
+
+// columnRule of a columnFilter, consisting of a column pattern, and may be an
+// accept-list (positive) or deny-list (negative).
+type columnRule struct {
+	column   matcher
 	positive bool
 }
 

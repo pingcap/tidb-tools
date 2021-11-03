@@ -15,9 +15,9 @@ package diff
 
 import (
 	. "github.com/pingcap/check"
-	"github.com/pingcap/parser"
-	"github.com/pingcap/parser/model"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/parser/model"
 )
 
 var _ = Suite(&testUtilSuite{})

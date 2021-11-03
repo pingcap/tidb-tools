@@ -1,4 +1,4 @@
-// Copyright 2018 PingCAP, Inc.
+// Copyright 2021 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,48 +15,62 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/utils"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
+	flag "github.com/spf13/pflag"
 	"go.uber.org/zap"
 )
 
 func main() {
-	cfg := NewConfig()
+	cfg := config.NewConfig()
 	err := cfg.Parse(os.Args[1:])
 	switch errors.Cause(err) {
 	case nil:
 	case flag.ErrHelp:
 		os.Exit(0)
 	default:
-		log.Error("parse cmd flags", zap.Error(err))
+		fmt.Printf("Error: %s\n", err.Error())
+		cfg.FlagSet.PrintDefaults()
 		os.Exit(2)
 	}
 
 	if cfg.PrintVersion {
-		fmt.Printf("version: \n%s", utils.GetRawInfo("sync_diff_inspector"))
+		fmt.Printf(utils.GetRawInfo("sync_diff_inspector"))
 		return
 	}
 
-	l := zap.NewAtomicLevel()
-	if err := l.UnmarshalText([]byte(cfg.LogLevel)); err != nil {
-		log.Error("invalide log level", zap.String("log level", cfg.LogLevel))
-		return
+	conf := new(log.Config)
+	conf.Level = cfg.LogLevel
+
+	conf.File.Filename = filepath.Join(cfg.Task.OutputDir, config.LogFileName)
+	lg, p, e := log.InitLogger(conf)
+	if e != nil {
+		log.Error("Log init failed!", zap.String("error", e.Error()))
+		os.Exit(2)
 	}
-	log.SetLevel(l.Level())
+	log.ReplaceGlobals(lg, p)
 
 	utils.PrintInfo("sync_diff_inspector")
 
-	ok := cfg.checkConfig()
+	// Initial config
+	err = cfg.Init()
+	if err != nil {
+		fmt.Printf("Fail to initialize config.\n%s\n", err.Error())
+		os.Exit(2)
+	}
+
+	ok := cfg.CheckConfig()
 	if !ok {
-		log.Error("there is something wrong with your config, please check it!")
-		return
+		fmt.Printf("There is something wrong with your config, please check log info in %s\n", conf.File.Filename)
+		os.Exit(2)
 	}
 
 	log.Info("", zap.Stringer("config", cfg))
@@ -69,7 +83,7 @@ func main() {
 	log.Info("check pass!!!")
 }
 
-func checkSyncState(ctx context.Context, cfg *Config) bool {
+func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 	beginTime := time.Now()
 	defer func() {
 		log.Info("check data finished", zap.Duration("cost", time.Since(beginTime)))
@@ -77,15 +91,27 @@ func checkSyncState(ctx context.Context, cfg *Config) bool {
 
 	d, err := NewDiff(ctx, cfg)
 	if err != nil {
-		log.Fatal("fail to initialize diff process", zap.Error(err))
+		fmt.Printf("There is something error when initialize diff, please check log info in %s\n", filepath.Join(cfg.Task.OutputDir, config.LogFileName))
+		log.Fatal("failed to initialize diff process", zap.Error(err))
+		return false
 	}
+	defer d.Close()
 
-	err = d.Equal()
+	err = d.StructEqual(ctx)
 	if err != nil {
-		log.Fatal("check data difference failed", zap.Error(err))
+		fmt.Printf("There is something error when compare structure of table, please check log info in %s\n", filepath.Join(cfg.Task.OutputDir, config.LogFileName))
+		log.Fatal("failed to check structure difference", zap.Error(err))
+		return false
 	}
-
-	d.report.Print()
-
-	return d.report.Result == Pass
+	if !d.ignoreDataCheck {
+		err = d.Equal(ctx)
+		if err != nil {
+			fmt.Printf("There is something error when compare data of table, please check log info in %s\n", filepath.Join(cfg.Task.OutputDir, config.LogFileName))
+			log.Fatal("failed to check data difference", zap.Error(err))
+			return false
+		}
+	} else {
+		fmt.Printf("Check table struct only, skip data check\n")
+	}
+	return d.PrintSummary(ctx)
 }

@@ -1,4 +1,4 @@
-.PHONY: build importer dump_region sync_diff_inspector ddl_checker test check deps version
+.PHONY: build importer dump_region sync_diff_inspector ddl_checker test check deps version tools
 
 # Ensure GOPATH is set before running build process.
 ifeq "$(GOPATH)" ""
@@ -26,33 +26,27 @@ PACKAGE_LIST  := go list ./...
 PACKAGES  := $$($(PACKAGE_LIST))
 FAIL_ON_STDOUT := awk '{ print } END { if (NR > 0) { exit 1 } }'
 
-FAILPOINT_DIR := $$(for p in $(PACKAGES); do echo $${p\#"github.com/pingcap/tidb-tools/"}; done)
-FAILPOINT := retool do failpoint-ctl
-FAILPOINT_ENABLE  := $$(echo $(FAILPOINT_DIR) | xargs $(FAILPOINT) enable >/dev/null)
-FAILPOINT_DISABLE := $$(find $(FAILPOINT_DIR) | xargs $(FAILPOINT) disable >/dev/null)
-
 define run_unit_test
 	@echo "running unit test for packages:" $(1)
-	$(FAILPOINT_ENABLE)
+	@make failpoint-enable
 	@export log_level=error; \
 	$(GOTEST) -cover $(1) \
-	|| { $(FAILPOINT_DISABLE); exit 1; }
-	$(FAILPOINT_DISABLE)
+	|| { @make failpoint-disable; exit 1; }
+	@make failpoint-disable
 endef
 
 build: prepare version check importer sync_diff_inspector ddl_checker finish
 
 
-failpoint-enable: retool_setup
-	$(FAILPOINT_ENABLE)
+failpoint-enable: tools
+	tools/bin/failpoint-ctl enable
 
-failpoint-disable: retool_setup
-	$(FAILPOINT_DISABLE)
+failpoint-disable: tools
+	tools/bin/failpoint-ctl disable
 
-retool_setup:
-	@echo "setup retool"
-	go get github.com/twitchtv/retool
-	GO111MODULE=off retool sync
+tools:
+	@echo "install tools..."
+	@cd tools && make
 
 version:
 	$(GO) version
@@ -73,10 +67,10 @@ sync_diff_inspector:
 ddl_checker:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/ddl_checker ./ddl_checker
 
-test: version retool_setup
+test: version
 	$(call run_unit_test,$(PACKAGES))
 
-integration_test: build
+integration_test: prepare failpoint-enable importer sync_diff_inspector ddl_checker failpoint-disable finish
 	@which bin/tidb-server
 	@which bin/tikv-server
 	@which bin/pd-server

@@ -4,6 +4,16 @@ set -eu
 
 OUT_DIR=/tmp/tidb_tools_test
 
+# assign default value to mysql config
+if [[ -z ${MYSQL_HOST+x} ]]; then
+    echo "set MYSQL_HOST as default value \"127.0.0.1\""
+    export MYSQL_HOST="127.0.0.1"
+fi
+if [[ -z ${MYSQL_PORT+x} ]]; then
+    echo "set MYSQL_PORT as default value 3306"
+    export MYSQL_PORT=3306
+fi
+
 mkdir -p $OUT_DIR || true
 # to the dir of this script
 cd "$(dirname "$0")"
@@ -62,17 +72,18 @@ EOF
         --log-file "$OUT_DIR/tidb.log" &
 
     echo "Verifying TiDB is started..."
-    check_db_status "127.0.0.1" 4000 "tidb"
+    check_db_status "127.0.0.1" 4000 "tidb" "$OUT_DIR/tidb.log"
 
     echo "Starting Upstream TiDB..."
     tidb-server \
         -P 4001 \
         --path=$OUT_DIR/tidb \
         --status=20080 \
-        --log-file "$OUT_DIR/down_tidb.log" &
+        --log-file "$OUT_DIR/down_tidb.log" \
+        -socket "$OUT_DIR/down_tidb.sock" &
 
     echo "Verifying Upstream TiDB is started..."
-    check_db_status "127.0.0.1" 4001 "tidb"
+    check_db_status "127.0.0.1" 4001 "tidb" "$OUT_DIR/down_tidb.log"
 }
 
 trap stop_services EXIT
