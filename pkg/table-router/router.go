@@ -25,18 +25,13 @@ import (
 // TableRule is a rule to route schema/table to target schema/table
 // pattern format refers 'pkg/table-rule-selector'
 type TableRule struct {
-	SchemaPattern string     `json:"schema-pattern" toml:"schema-pattern" yaml:"schema-pattern"`
-	TablePattern  string     `json:"table-pattern" toml:"table-pattern" yaml:"table-pattern"`
-	TargetSchema  string     `json:"target-schema" toml:"target-schema" yaml:"target-schema"`
-	TargetTable   string     `json:"target-table" toml:"target-table" yaml:"target-table"`
-	Extractors    Extractors `json:",inline" toml:",inline" yaml:",inline"`
-}
-
-// Extractors is a rule that extracts certain values into a column
-type Extractors struct {
-	TableExtractor  *TableExtractor  `json:"extract-table" toml:"extract-table" yaml:"extract-table"`
-	SchemaExtractor *SchemaExtractor `json:"extract-schema" toml:"extract-schema" yaml:"extract-schema"`
-	SourceExtractor *SourceExtractor `json:"extract-source" toml:"extract-source" yaml:"extract-source"`
+	SchemaPattern   string           `json:"schema-pattern" toml:"schema-pattern" yaml:"schema-pattern"`
+	TablePattern    string           `json:"table-pattern" toml:"table-pattern" yaml:"table-pattern"`
+	TargetSchema    string           `json:"target-schema" toml:"target-schema" yaml:"target-schema"`
+	TargetTable     string           `json:"target-table" toml:"target-table" yaml:"target-table"`
+	TableExtractor  *TableExtractor  `json:"extract-table,omitempty" toml:"extract-table,omitempty" yaml:"extract-table,omitempty"`
+	SchemaExtractor *SchemaExtractor `json:"extract-schema,omitempty" toml:"extract-schema,omitempty" yaml:"extract-schema,omitempty"`
+	SourceExtractor *SourceExtractor `json:"extract-source,omitempty" toml:"extract-source,omitempty" yaml:"extract-source,omitempty"`
 }
 
 // TableExtractor extracts table name to column
@@ -60,26 +55,6 @@ type SourceExtractor struct {
 	regexp       *regexp.Regexp
 }
 
-// MatchVal match value via regexp
-func (t *Extractors) MatchVal(s string, ext interface{}) string {
-	var params []string
-	switch e := ext.(type) {
-	case *TableExtractor:
-		params = e.regexp.FindStringSubmatch(s)
-	case *SchemaExtractor:
-		params = e.regexp.FindStringSubmatch(s)
-	case *SourceExtractor:
-		params = e.regexp.FindStringSubmatch(s)
-	}
-	var transferVal string
-	for idx, param := range params {
-		if idx > 0 {
-			transferVal += param
-		}
-	}
-	return transferVal
-}
-
 // Valid checks validity of rule
 func (t *TableRule) Valid() error {
 	if len(t.SchemaPattern) == 0 {
@@ -90,38 +65,38 @@ func (t *TableRule) Valid() error {
 		return errors.New("target schema of table route rule should not be empty")
 	}
 
-	if t.Extractors.TableExtractor != nil {
-		tableRe := t.Extractors.TableExtractor.TableRegexp
+	if t.TableExtractor != nil {
+		tableRe := t.TableExtractor.TableRegexp
 		re, err := regexp.Compile(tableRe)
 		if err != nil {
 			return fmt.Errorf("table extractor table regexp illegal %s", tableRe)
 		}
-		if len(t.Extractors.TableExtractor.TargetColumn) == 0 {
+		if len(t.TableExtractor.TargetColumn) == 0 {
 			return errors.New("table extractor target column cannot be empty")
 		}
-		t.Extractors.TableExtractor.regexp = re
+		t.TableExtractor.regexp = re
 	}
-	if t.Extractors.SchemaExtractor != nil {
-		schemaRe := t.Extractors.SchemaExtractor.SchemaRegexp
+	if t.SchemaExtractor != nil {
+		schemaRe := t.SchemaExtractor.SchemaRegexp
 		re, err := regexp.Compile(schemaRe)
 		if err != nil {
 			return fmt.Errorf("schema extractor schema regexp illegal %s", schemaRe)
 		}
-		if len(t.Extractors.SchemaExtractor.TargetColumn) == 0 {
+		if len(t.SchemaExtractor.TargetColumn) == 0 {
 			return errors.New("schema extractor target column cannot be empty")
 		}
-		t.Extractors.SchemaExtractor.regexp = re
+		t.SchemaExtractor.regexp = re
 	}
-	if t.Extractors.SourceExtractor != nil {
-		sourceRe := t.Extractors.SourceExtractor.SourceRegexp
+	if t.SourceExtractor != nil {
+		sourceRe := t.SourceExtractor.SourceRegexp
 		re, err := regexp.Compile(sourceRe)
 		if err != nil {
 			return fmt.Errorf("source extractor source regexp illegal %s", sourceRe)
 		}
-		if len(t.Extractors.SourceExtractor.TargetColumn) == 0 {
+		if len(t.SourceExtractor.TargetColumn) == 0 {
 			return errors.New("source extractor target column cannot be empty")
 		}
-		t.Extractors.SourceExtractor.regexp = re
+		t.SourceExtractor.regexp = re
 	}
 	return nil
 }
@@ -262,4 +237,72 @@ func (r *Table) Route(schema, table string) (string, string, error) {
 	}
 
 	return targetSchema, targetTable, nil
+}
+
+// ExtractVal match value via regexp
+func (t *TableRule) extractVal(s string, ext interface{}) string {
+	var params []string
+	switch e := ext.(type) {
+	case *TableExtractor:
+		params = e.regexp.FindStringSubmatch(s)
+	case *SchemaExtractor:
+		params = e.regexp.FindStringSubmatch(s)
+	case *SourceExtractor:
+		params = e.regexp.FindStringSubmatch(s)
+	}
+	var val string
+	for idx, param := range params {
+		if idx > 0 {
+			val += param
+		}
+	}
+	return val
+}
+
+// FetchExtendColumn get extract rule.
+func (r *Table) FetchExtendColumn(schema, table, source string) ([]string, []string) {
+	var cols []string
+	var vals []string
+	rules := r.Match(schema, table)
+	var (
+		schemaRules = make([]*TableRule, 0, len(rules))
+		tableRules  = make([]*TableRule, 0, len(rules))
+	)
+	for i := range rules {
+		rule, ok := rules[i].(*TableRule)
+		if !ok {
+			return cols, vals
+		}
+		if len(rule.TablePattern) == 0 {
+			schemaRules = append(schemaRules, rule)
+		} else {
+			tableRules = append(tableRules, rule)
+		}
+	}
+	if len(tableRules) == 0 && len(schemaRules) == 0 {
+		return cols, vals
+	}
+	var rule *TableRule
+	// table level rules have highest priority
+	if len(tableRules) == 0 {
+		rule = schemaRules[0]
+	} else {
+		rule = tableRules[0]
+	}
+
+	if rule.TableExtractor != nil {
+		cols = append(cols, rule.TableExtractor.TargetColumn)
+		vals = append(vals, rule.extractVal(table, rule.TableExtractor))
+	}
+
+	if rule.SchemaExtractor != nil {
+		cols = append(cols, rule.SchemaExtractor.TargetColumn)
+		vals = append(vals, rule.extractVal(schema, rule.SchemaExtractor))
+	}
+
+	if rule.SourceExtractor != nil {
+		cols = append(cols, rule.SourceExtractor.TargetColumn)
+		vals = append(vals, rule.extractVal(source, rule.SourceExtractor))
+	}
+	return cols, vals
 }
