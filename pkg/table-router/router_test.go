@@ -30,11 +30,11 @@ type testRouterSuite struct{}
 
 func (t *testRouterSuite) TestRoute(c *C) {
 	rules := []*TableRule{
-		{"Test_1_*", "abc*", "t1", "abc"},
-		{"test_1_*", "test*", "t2", "test"},
-		{"test_1_*", "", "test", ""},
-		{"test_2_*", "abc*", "t1", "abc"},
-		{"test_2_*", "test*", "t2", "test"},
+		{SchemaPattern: "Test_1_*", TablePattern: "abc*", TargetSchema: "t1", TargetTable: "abc"},
+		{SchemaPattern: "test_1_*", TablePattern: "test*", TargetSchema: "t2", TargetTable: "test"},
+		{SchemaPattern: "test_1_*", TablePattern: "", TargetSchema: "test", TargetTable: ""},
+		{SchemaPattern: "test_2_*", TablePattern: "abc*", TargetSchema: "t1", TargetTable: "abc"},
+		{SchemaPattern: "test_2_*", TablePattern: "test*", TargetSchema: "t2", TargetTable: "test"},
 	}
 
 	cases := [][]string{
@@ -92,12 +92,12 @@ func (t *testRouterSuite) TestRoute(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(schema, Equals, "test_3_a")
 	// test multiple schema level rules
-	err = router.AddRule(&TableRule{"test_*", "", "error", ""})
+	err = router.AddRule(&TableRule{SchemaPattern: "test_*", TablePattern: "", TargetSchema: "error", TargetTable: ""})
 	c.Assert(err, IsNil)
 	_, _, err = router.Route("test_1_a", "")
 	c.Assert(err, NotNil)
 	// test multiple table level rules
-	err = router.AddRule(&TableRule{"test_1_*", "tes*", "error", "error"})
+	err = router.AddRule(&TableRule{SchemaPattern: "test_1_*", TablePattern: "tes*", TargetSchema: "error", TargetTable: "error"})
 	c.Assert(err, IsNil)
 	_, _, err = router.Route("test_1_a", "test")
 	c.Assert(err, NotNil)
@@ -121,11 +121,11 @@ func (t *testRouterSuite) TestRoute(c *C) {
 func (t *testRouterSuite) TestCaseSensitive(c *C) {
 	// we test case insensitive in TestRoute
 	rules := []*TableRule{
-		{"Test_1_*", "abc*", "t1", "abc"},
-		{"test_1_*", "test*", "t2", "test"},
-		{"test_1_*", "", "test", ""},
-		{"test_2_*", "abc*", "t1", "abc"},
-		{"test_2_*", "test*", "t2", "test"},
+		{SchemaPattern: "Test_1_*", TablePattern: "abc*", TargetSchema: "t1", TargetTable: "abc"},
+		{SchemaPattern: "test_1_*", TablePattern: "test*", TargetSchema: "t2", TargetTable: "test"},
+		{SchemaPattern: "test_1_*", TablePattern: "", TargetSchema: "test", TargetTable: ""},
+		{SchemaPattern: "test_2_*", TablePattern: "abc*", TargetSchema: "t1", TargetTable: "abc"},
+		{SchemaPattern: "test_2_*", TablePattern: "test*", TargetSchema: "t2", TargetTable: "test"},
 	}
 
 	cases := [][]string{
@@ -151,4 +151,59 @@ func (t *testRouterSuite) TestCaseSensitive(c *C) {
 		c.Assert(schema, Equals, cs[2])
 		c.Assert(table, Equals, cs[3])
 	}
+}
+
+func (t *testRouterSuite) TestFetchExtendColumn(c *C) {
+	rules := []*TableRule{
+		{
+			SchemaPattern: "schema*",
+			TablePattern:  "t*",
+			TargetSchema:  "test",
+			TargetTable:   "t",
+			TableExtractor: &TableExtractor{
+				TargetColumn: "table_name",
+				TableRegexp:  "table_(.*)",
+			},
+			SchemaExtractor: &SchemaExtractor{
+				TargetColumn: "schema_name",
+				SchemaRegexp: "schema_(.*)",
+			},
+			SourceExtractor: &SourceExtractor{
+				TargetColumn: "source_name",
+				SourceRegexp: "source_(.*)_(.*)",
+			},
+		},
+		{
+			SchemaPattern: "schema*",
+			TargetSchema:  "test",
+			TargetTable:   "t2",
+			SchemaExtractor: &SchemaExtractor{
+				TargetColumn: "schema_name",
+				SchemaRegexp: "(.*)",
+			},
+			SourceExtractor: &SourceExtractor{
+				TargetColumn: "source_name",
+				SourceRegexp: "(.*)",
+			},
+		},
+	}
+	r, err := NewTableRouter(false, rules)
+	c.Assert(err, IsNil)
+	expected := [][]string{
+		{"table_name", "schema_name", "source_name"},
+		{"t1", "s1", "s1s1"},
+
+		{"schema_name", "source_name"},
+		{"schema_s2", "source_s2"},
+	}
+
+	// table level rules have highest priority
+	extendCol, extendVal := r.FetchExtendColumn("schema_s1", "table_t1", "source_s1_s1")
+	c.Assert(expected[0], DeepEquals, extendCol)
+	c.Assert(expected[1], DeepEquals, extendVal)
+
+	// only schema rules
+	extendCol2, extendVal2 := r.FetchExtendColumn("schema_s2", "a_table_t2", "source_s2")
+	c.Assert(expected[2], DeepEquals, extendCol2)
+	c.Assert(expected[3], DeepEquals, extendVal2)
 }
