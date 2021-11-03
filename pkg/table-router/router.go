@@ -259,7 +259,7 @@ func (t *TableRule) extractVal(s string, ext interface{}) string {
 	return val.String()
 }
 
-// FetchExtendColumn get extract rule.
+// FetchExtendColumn get extract rule, return extracted cols and extracted vals.
 func (r *Table) FetchExtendColumn(schema, table, source string) ([]string, []string) {
 	var cols []string
 	var vals []string
