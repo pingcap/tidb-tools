@@ -4,8 +4,11 @@ set -e
 
 cd "$(dirname "$0")"
 OUT_DIR=/tmp/tidb_tools_test/sync_diff_inspector/output
+FIX_DIR=/tmp/tidb_tools_test/sync_diff_inspector/fixsql
 rm -rf $OUT_DIR
+rm -rf $FIX_DIR
 mkdir -p $OUT_DIR
+mkdir -p $FIX_DIR
 
 mysql -uroot -h 127.0.0.1 -P 4000 -e "SET @@GLOBAL.SQL_MODE='ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION';"
 sleep 3
@@ -36,6 +39,7 @@ echo "set different rows"
 mysql -uroot -h 127.0.0.1 -P 4001 -e "SET @@session.time_zone = '-06:00'; insert into tz_test.diff values (4, '2020-05-17 09:12:13', '2020-05-17 09:12:13');"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/time_zone_diff.output
 check_contains "check failed" $OUT_DIR/sync_diff.log
+mv $OUT_DIR/fix-on-tidb/ $FIX_DIR/
 rm -rf $OUT_DIR/*
 
 echo "fix the rows"
