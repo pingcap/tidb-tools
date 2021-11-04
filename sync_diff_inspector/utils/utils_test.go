@@ -218,13 +218,13 @@ func TestBasicTableUtilOperation(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, len(tableInfo.Indices), 2)
-	require.Equal(t, len(tableInfo.Columns), 4)
+	require.Equal(t, len(tableInfo.Columns), 5)
 	require.Equal(t, tableInfo.Indices[0].Columns[1].Name.O, "b")
 	require.Equal(t, tableInfo.Indices[0].Columns[1].Offset, 2)
 	info, hasTimeStampType := ResetColumns(tableInfo, []string{"c"})
 	require.True(t, hasTimeStampType)
 	require.Equal(t, len(info.Indices), 1)
-	require.Equal(t, len(info.Columns), 3)
+	require.Equal(t, len(info.Columns), 4)
 	require.Equal(t, tableInfo.Indices[0].Columns[1].Name.O, "b")
 	require.Equal(t, tableInfo.Indices[0].Columns[1].Offset, 1)
 }
