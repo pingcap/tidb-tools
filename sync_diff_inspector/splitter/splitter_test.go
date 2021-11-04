@@ -626,7 +626,7 @@ func TestBucketSpliter(t *testing.T) {
 
 	// Test Checkpoint
 	stopJ := 3
-	createFakeResultForBucketSplit(mock, testCases[0].aRandomValues[:stopJ], testCases[0].bRandomValues[:stopJ])
+	createFakeResultForBucketSplit(mock, testCases[0].aRandomValues, testCases[0].bRandomValues)
 	tableDiff.ChunkSize = testCases[0].chunkSize
 	iter, err := NewBucketIterator(ctx, "", tableDiff, db)
 	require.NoError(t, err)
@@ -635,6 +635,13 @@ func TestBucketSpliter(t *testing.T) {
 	for ; j < stopJ; j++ {
 		chunk, err = iter.Next()
 		require.NoError(t, err)
+	}
+	for {
+		c, err := iter.Next()
+		require.NoError(t, err)
+		if c == nil {
+			break
+		}
 	}
 	bounds1 := chunk.Bounds
 
