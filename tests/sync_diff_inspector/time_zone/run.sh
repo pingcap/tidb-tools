@@ -14,6 +14,7 @@ for port in 4000 4001; do
   mysql -uroot -h 127.0.0.1 -P $port -e "create database if not exists tz_test"
   mysql -uroot -h 127.0.0.1 -P $port -e "create table tz_test.diff(id int, dt datetime, ts timestamp);"
   mysql -uroot -h 127.0.0.1 -P $port -e "insert into tz_test.diff values (1, '2020-05-17 09:12:13', '2020-05-17 09:12:13');"
+  mysql -uroot -h 127.0.0.1 -P $port -e "set @@session.time_zone = \"-7:00\"; insert into tz_test.diff values (2, '2020-05-17 09:12:13', '2020-05-17 09:12:13');"
 done
 
 echo "check with the same time_zone, check result should be pass"
