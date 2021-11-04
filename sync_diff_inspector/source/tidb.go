@@ -145,7 +145,7 @@ func (s *TiDBSource) GetSourceStructInfo(ctx context.Context, tableIndex int) ([
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	tableInfos[0] = utils.ResetColumns(tableInfos[0], tableDiff.IgnoreColumns)
+	tableInfos[0], _ = utils.ResetColumns(tableInfos[0], tableDiff.IgnoreColumns)
 	return tableInfos, nil
 }
 

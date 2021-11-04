@@ -229,7 +229,7 @@ func (s *MySQLSources) GetSourceStructInfo(ctx context.Context, tableIndex int) 
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		sourceTableInfo = utils.ResetColumns(sourceTableInfo, tableDiff.IgnoreColumns)
+		sourceTableInfo, _ = utils.ResetColumns(sourceTableInfo, tableDiff.IgnoreColumns)
 		sourceTableInfos[i] = sourceTableInfo
 	}
 	return sourceTableInfos, nil

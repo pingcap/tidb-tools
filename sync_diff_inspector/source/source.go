@@ -41,6 +41,8 @@ const (
 	Replace
 )
 
+const UnifiedTimeZone string = "+0:00"
+
 type ChecksumInfo struct {
 	Checksum int64
 	Count    int64
@@ -115,16 +117,18 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 	tableDiffs := make([]*common.TableDiff, 0, len(tablesToBeCheck))
 	for _, tables := range tablesToBeCheck {
 		for _, tableConfig := range tables {
+			new_Info, needUnifiedTimeZone := utils.ResetColumns(tableConfig.TargetTableInfo, tableConfig.IgnoreColumns)
 			tableDiffs = append(tableDiffs, &common.TableDiff{
 				Schema: tableConfig.Schema,
 				Table:  tableConfig.Table,
-				Info:   utils.ResetColumns(tableConfig.TargetTableInfo, tableConfig.IgnoreColumns),
+				Info:   new_Info,
 				// TODO: field `IgnoreColumns` can be deleted.
-				IgnoreColumns: tableConfig.IgnoreColumns,
-				Fields:        tableConfig.Fields,
-				Range:         tableConfig.Range,
-				Collation:     tableConfig.Collation,
-				ChunkSize:     tableConfig.ChunkSize,
+				IgnoreColumns:       tableConfig.IgnoreColumns,
+				Fields:              tableConfig.Fields,
+				Range:               tableConfig.Range,
+				NeedUnifiedTimeZone: needUnifiedTimeZone,
+				Collation:           tableConfig.Collation,
+				ChunkSize:           tableConfig.ChunkSize,
 			})
 
 			// When the router set case-sensitive false,
@@ -186,7 +190,7 @@ func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, che
 func initDBConn(ctx context.Context, cfg *config.Config) error {
 	// Unified time zone
 	vars := map[string]string{
-		"time_zone": "+0:00",
+		"time_zone": UnifiedTimeZone,
 	}
 	// we had 3 producers and `cfg.CheckThreadCount` consumer to use db connections.
 	// so the connection count need to be cfg.CheckThreadCount + 3.

@@ -301,13 +301,15 @@ func TestRandomSpliter(t *testing.T) {
 		tableInfo, err := dbutil.GetTableInfoBySQL(testCase.createTableSQL, parser.New())
 		require.NoError(t, err)
 
+		info, needUnifiedTimeStamp := utils.ResetColumns(tableInfo, testCase.IgnoreColumns)
 		tableDiff := &common.TableDiff{
-			Schema:        "test",
-			Table:         "test",
-			Info:          utils.ResetColumns(tableInfo, testCase.IgnoreColumns),
-			IgnoreColumns: testCase.IgnoreColumns,
-			Fields:        testCase.fields,
-			ChunkSize:     5,
+			Schema:              "test",
+			Table:               "test",
+			Info:                info,
+			IgnoreColumns:       testCase.IgnoreColumns,
+			NeedUnifiedTimeZone: needUnifiedTimeStamp,
+			Fields:              testCase.fields,
+			ChunkSize:           5,
 		}
 
 		createFakeResultForRandomSplit(mock, testCase.count, testCase.randomValues)

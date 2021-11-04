@@ -56,17 +56,11 @@ type TableDiff struct {
 	// select range, for example: "age > 10 AND age < 20"
 	Range string `json:"range"`
 
-	// set false if want to comapre the data directly
-	UseChecksum bool `json:"-"`
-
-	// set true if just want compare data by checksum, will skip select data when checksum is not equal
-	OnlyUseChecksum bool `json:"-"`
-
-	// ignore check table's struct
-	IgnoreStructCheck bool `json:"-"`
-
 	// ignore check table's data
 	IgnoreDataCheck bool `json:"-"`
+
+	// the table has column timestamp, which need to reset time_zone.
+	NeedUnifiedTimeZone bool `json:"-"`
 
 	Collation string `json:"collation"`
 

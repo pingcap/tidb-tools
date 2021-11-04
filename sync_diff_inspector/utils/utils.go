@@ -692,9 +692,12 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 // ResetColumns removes index from `tableInfo.Indices`, whose columns appear in `columns`.
 // And removes column from `tableInfo.Columns`, which appears in `columns`.
 // And initializes the offset of the column of each index to new `tableInfo.Columns`.
-func ResetColumns(tableInfo *model.TableInfo, columns []string) *model.TableInfo {
+//
+// Return the new tableInfo and the flag whether the columns have timestamp type.
+func ResetColumns(tableInfo *model.TableInfo, columns []string) (*model.TableInfo, bool) {
 	// Although columns is empty, need to initialize indices' offset mapping to column.
 
+	hasTimeStampType := false
 	// Remove all index from `tableInfo.Indices`, whose columns are involved of any column in `columns`.
 	removeColMap := SliceToMap(columns)
 	for i := 0; i < len(tableInfo.Indices); i++ {
@@ -723,6 +726,7 @@ func ResetColumns(tableInfo *model.TableInfo, columns []string) *model.TableInfo
 	for i, col := range tableInfo.Columns {
 		col.Offset = i
 		colMap[col.Name.O] = i
+		hasTimeStampType = hasTimeStampType || (col.FieldType.Tp == mysql.TypeTimestamp)
 	}
 
 	// Initialize the offset of the column of each index to new `tableInfo.Columns`.
@@ -737,7 +741,7 @@ func ResetColumns(tableInfo *model.TableInfo, columns []string) *model.TableInfo
 		}
 	}
 
-	return tableInfo
+	return tableInfo, hasTimeStampType
 }
 
 // UniqueID returns `schema:table`
