@@ -301,13 +301,15 @@ func TestRandomSpliter(t *testing.T) {
 		tableInfo, err := dbutil.GetTableInfoBySQL(testCase.createTableSQL, parser.New())
 		require.NoError(t, err)
 
+		info, needUnifiedTimeStamp := utils.ResetColumns(tableInfo, testCase.IgnoreColumns)
 		tableDiff := &common.TableDiff{
-			Schema:        "test",
-			Table:         "test",
-			Info:          utils.ResetColumns(tableInfo, testCase.IgnoreColumns),
-			IgnoreColumns: testCase.IgnoreColumns,
-			Fields:        testCase.fields,
-			ChunkSize:     5,
+			Schema:              "test",
+			Table:               "test",
+			Info:                info,
+			IgnoreColumns:       testCase.IgnoreColumns,
+			NeedUnifiedTimeZone: needUnifiedTimeStamp,
+			Fields:              testCase.fields,
+			ChunkSize:           5,
 		}
 
 		createFakeResultForRandomSplit(mock, testCase.count, testCase.randomValues)
@@ -624,7 +626,7 @@ func TestBucketSpliter(t *testing.T) {
 
 	// Test Checkpoint
 	stopJ := 3
-	createFakeResultForBucketSplit(mock, testCases[0].aRandomValues[:stopJ], testCases[0].bRandomValues[:stopJ])
+	createFakeResultForBucketSplit(mock, testCases[0].aRandomValues, testCases[0].bRandomValues)
 	tableDiff.ChunkSize = testCases[0].chunkSize
 	iter, err := NewBucketIterator(ctx, "", tableDiff, db)
 	require.NoError(t, err)
@@ -633,6 +635,13 @@ func TestBucketSpliter(t *testing.T) {
 	for ; j < stopJ; j++ {
 		chunk, err = iter.Next()
 		require.NoError(t, err)
+	}
+	for {
+		c, err := iter.Next()
+		require.NoError(t, err)
+		if c == nil {
+			break
+		}
 	}
 	bounds1 := chunk.Bounds
 

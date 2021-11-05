@@ -213,17 +213,18 @@ func TestBasicTableUtilOperation(t *testing.T) {
 	require.True(t, equal)
 
 	// Test ignore columns
-	createTableSQL = "create table `test`.`test`(`a` int, `c` float, `b` varchar(10), `d` datetime, primary key(`a`, `b`), key(`c`, `d`))"
+	createTableSQL = "create table `test`.`test`(`a` int, `c` float, `b` varchar(10), `d` datetime, `e` timestamp, primary key(`a`, `b`), key(`c`, `d`))"
 	tableInfo, err = dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
 	require.NoError(t, err)
 
 	require.Equal(t, len(tableInfo.Indices), 2)
-	require.Equal(t, len(tableInfo.Columns), 4)
+	require.Equal(t, len(tableInfo.Columns), 5)
 	require.Equal(t, tableInfo.Indices[0].Columns[1].Name.O, "b")
 	require.Equal(t, tableInfo.Indices[0].Columns[1].Offset, 2)
-	info := ResetColumns(tableInfo, []string{"c"})
+	info, hasTimeStampType := ResetColumns(tableInfo, []string{"c"})
+	require.True(t, hasTimeStampType)
 	require.Equal(t, len(info.Indices), 1)
-	require.Equal(t, len(info.Columns), 3)
+	require.Equal(t, len(info.Columns), 4)
 	require.Equal(t, tableInfo.Indices[0].Columns[1].Name.O, "b")
 	require.Equal(t, tableInfo.Indices[0].Columns[1].Offset, 1)
 }
@@ -322,22 +323,23 @@ func TestResetColumns(t *testing.T) {
 	createTableSQL1 := "CREATE TABLE `test`.`atest` (`a` int, `b` int, `c` int, `d` int, primary key(`a`))"
 	tableInfo1, err := dbutil.GetTableInfoBySQL(createTableSQL1, parser.New())
 	require.NoError(t, err)
-	tbInfo := ResetColumns(tableInfo1, []string{"a"})
+	tbInfo, hasTimeStampType := ResetColumns(tableInfo1, []string{"a"})
 	require.Equal(t, len(tbInfo.Columns), 3)
 	require.Equal(t, len(tbInfo.Indices), 0)
 	require.Equal(t, tbInfo.Columns[2].Offset, 2)
+	require.False(t, hasTimeStampType)
 
 	createTableSQL2 := "CREATE TABLE `test`.`atest` (`a` int, `b` int, `c` int, `d` int, primary key(`a`), index idx(`b`, `c`))"
 	tableInfo2, err := dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
 	require.NoError(t, err)
-	tbInfo = ResetColumns(tableInfo2, []string{"a", "b"})
+	tbInfo, _ = ResetColumns(tableInfo2, []string{"a", "b"})
 	require.Equal(t, len(tbInfo.Columns), 2)
 	require.Equal(t, len(tbInfo.Indices), 0)
 
 	createTableSQL3 := "CREATE TABLE `test`.`atest` (`a` int, `b` int, `c` int, `d` int, primary key(`a`), index idx(`b`, `c`))"
 	tableInfo3, err := dbutil.GetTableInfoBySQL(createTableSQL3, parser.New())
 	require.NoError(t, err)
-	tbInfo = ResetColumns(tableInfo3, []string{"b", "c"})
+	tbInfo, _ = ResetColumns(tableInfo3, []string{"b", "c"})
 	require.Equal(t, len(tbInfo.Columns), 2)
 	require.Equal(t, len(tbInfo.Indices), 1)
 }
