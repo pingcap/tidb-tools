@@ -647,7 +647,7 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 		calculate CRC32 checksum and count example:
 		mysql> select count(*) as CNT, BIT_XOR(CAST(CRC32(CONCAT_WS(',', id, name, age, CONCAT(ISNULL(id), ISNULL(name), ISNULL(age))))AS UNSIGNED)) as CHECKSUM from test.test where id > 0) as t;
 		+--------+------------+
-		| count  | checksum   |
+		|  CNT   |  CHECKSUM  |
 		+--------+------------+
 		| 100000 | 1128664311 |
 		+--------+------------+
