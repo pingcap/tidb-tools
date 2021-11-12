@@ -55,6 +55,6 @@ check-struct-only = false
 # if use this config. target-tables should be a subset of #target-check-tables
 target-tables = ["diff_test.test"]
 
-range = "TRUE" #RANGE"a < 10 OR a > 200"
+range = "TRUE"#RANGE"a < 10 OR a > 200"
 index-fields = [""]
-ignore-columns = [""] #IGNORE column to check
+ignore-columns = [""]#IGNORE
