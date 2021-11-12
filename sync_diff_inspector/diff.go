@@ -67,10 +67,8 @@ type Diff struct {
 	// workSource is one of upstream/downstream by some policy in #pickSource.
 	workSource source.Source
 
-	sample           int
 	checkThreadCount int
 	exportFixSQL     bool
-	useCheckpoint    bool
 	ignoreDataCheck  bool
 	sqlWg            sync.WaitGroup
 	checkpointWg     sync.WaitGroup
@@ -510,7 +508,7 @@ func (df *Diff) binSearch(ctx context.Context, targetSource source.Source, table
 
 	chunkLimits, args := tableRange.ChunkRange.ToString(tableDiff.Collation)
 	limitRange := fmt.Sprintf("(%s) AND (%s)", chunkLimits, tableDiff.Range)
-	midValues, err := utils.GetApproximateMidBySize(ctx, targetSource.GetDB(), tableDiff.Schema, tableDiff.Table, indexColumns, limitRange, args, count)
+	midValues, err := utils.GetApproximateMidBySize(ctx, targetSource.GetDB(), tableDiff.Schema, tableDiff.Table, indexColumns, limitRange, args, count, tableDiff.Collation)
 	log.Debug("mid values", zap.Reflect("mid values", midValues), zap.Reflect("indices", indexColumns), zap.Reflect("bounds", tableRange.ChunkRange.Bounds))
 	if err != nil {
 		return nil, errors.Trace(err)

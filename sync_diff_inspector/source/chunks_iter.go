@@ -35,7 +35,6 @@ type ChunksIterator struct {
 	nextTableIndex int
 	chunksCh       chan *splitter.RangeInfo
 	errCh          chan error
-	limit          int
 
 	cancel context.CancelFunc
 }
@@ -175,10 +174,6 @@ func (t *ChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, error) 
 
 func (t *ChunksIterator) Close() {
 	t.cancel()
-}
-
-func (t *ChunksIterator) getCurTableIndex() int {
-	return t.nextTableIndex - 1
 }
 
 // TODO: getCurTableIndexID only used for binary search, should be optimized later.

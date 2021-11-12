@@ -127,7 +127,7 @@ func GetTableRowsQueryFormat(schema, table string, tableInfo *model.TableInfo, c
 	}
 	columns := strings.Join(columnNames, ", ")
 	if collation != "" {
-		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
+		collation = fmt.Sprintf(" COLLATE '%s'", collation)
 	}
 
 	for i, key := range orderKeys {
@@ -582,10 +582,10 @@ func SliceToMap(slice []string) map[string]interface{} {
 }
 
 // GetApproximateMidBySize return the `count`th row in rows that meet the `limitRange`.
-func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table string, indexColumns []*model.ColumnInfo, limitRange string, args []interface{}, count int64) (map[string]string, error) {
+func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table string, indexColumns []*model.ColumnInfo, limitRange string, args []interface{}, count int64, collation string) (map[string]string, error) {
 	/*
 		example
-		mysql> select i_id, i_im_id, i_name from item where i_id > 0 order by i_id, i_im_id, i_name limit 5000,1;
+		mysql> select i_id, i_im_id, i_name from item where i_id > 0 order by i_id, i_im_id, i_name collate limit 5000,1;
 		+------+---------+-----------------+
 		| i_id | i_im_id | i_name          |
 		+------+---------+-----------------+
@@ -597,11 +597,15 @@ func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table stri
 	for _, col := range indexColumns {
 		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
 	}
-	query := fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s LIMIT 1 OFFSET %d",
+	if collation != "" {
+		collation = fmt.Sprintf(" COLLATE '%s'", collation)
+	}
+	query := fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s%s LIMIT 1 OFFSET %d",
 		strings.Join(columnNames, ", "),
 		dbutil.TableName(schema, table),
 		limitRange,
 		strings.Join(columnNames, ", "),
+		collation,
 		count/2)
 	log.Debug("get mid by size", zap.String("sql", query), zap.Reflect("args", args))
 	rows, err := db.QueryContext(ctx, query, args...)

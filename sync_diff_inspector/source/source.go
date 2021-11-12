@@ -274,9 +274,7 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 			return nil, errors.NotFoundf("table `%s`.`%s` in check tables", table.Schema, table.Table)
 		}
 
-		if table.Range != "" {
-			cfgTables[table.Schema][table.Table].Range = table.Range
-		}
+		cfgTables[table.Schema][table.Table].Range = table.Range
 		cfgTables[table.Schema][table.Table].IgnoreColumns = table.IgnoreColumns
 		cfgTables[table.Schema][table.Table].Fields = table.Fields
 		cfgTables[table.Schema][table.Table].Collation = table.Collation

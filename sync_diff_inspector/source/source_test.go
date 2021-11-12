@@ -60,29 +60,6 @@ type MockChunkIterator struct {
 const CHUNKS = 5
 const BUCKETS = 1
 
-func equal(a, b *chunk.ChunkID) bool {
-	return a.TableIndex == b.TableIndex && a.BucketIndexLeft == b.BucketIndexLeft && a.ChunkIndex == b.ChunkIndex
-}
-
-func next(a *chunk.ChunkID) {
-	if a.ChunkIndex == a.ChunkCnt-1 {
-		a.TableIndex++
-		a.ChunkIndex = 0
-	} else {
-		a.ChunkIndex = a.ChunkIndex + 1
-	}
-}
-
-func newIndex() *chunk.ChunkID {
-	return &chunk.ChunkID{
-		TableIndex:       0,
-		BucketIndexLeft:  0,
-		BucketIndexRight: 0,
-		ChunkIndex:       0,
-		ChunkCnt:         CHUNKS,
-	}
-}
-
 func (m *MockChunkIterator) Next() (*chunk.Range, error) {
 	if m.index.ChunkIndex == m.index.ChunkCnt-1 {
 		return nil, nil
@@ -589,6 +566,7 @@ func TestSource(t *testing.T) {
 	defer cancel()
 
 	router, err := router.NewTableRouter(false, nil)
+	require.NoError(t, err)
 	cfg := &config.Config{
 		LogLevel:         "debug",
 		CheckThreadCount: 4,
