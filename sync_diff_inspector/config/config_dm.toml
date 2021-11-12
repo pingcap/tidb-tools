@@ -24,7 +24,7 @@ dm-task = "test"
     # 2 log: sync-diff.log
     # 3 summary: summary.txt
     # 4 checkpoint: a dir
-    output-dir = "./output"
+    output-dir = "/tmp/output/config_dm"
 
     # tables need to check. *Include `schema` and `table`. Use `.` to split*
     target-check-tables = ["hb_test.*"]

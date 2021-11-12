@@ -671,3 +671,56 @@ func TestSource(t *testing.T) {
 	_, _, err = NewSources(ctx, cfg)
 	require.NoError(t, err)
 }
+
+func TestInitTables(t *testing.T) {
+	ctx := context.Background()
+	cfg := config.NewConfig()
+	// Test case 1: test2.t2 will parse after filter.
+	require.NoError(t, cfg.Parse([]string{"--config", "../config/config.toml"}))
+	require.NoError(t, cfg.Init())
+
+	conn, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer conn.Close()
+
+	cfg.Task.TargetInstance.Conn = conn
+
+	rows := sqlmock.NewRows([]string{"Database"}).AddRow("mysql").AddRow("test2")
+	mock.ExpectQuery("SHOW DATABASES").WillReturnRows(rows)
+	rows = sqlmock.NewRows([]string{"col1", "col2"}).AddRow("t1", "t1").AddRow("t2", "t2")
+	mock.ExpectQuery("SHOW FULL TABLES*").WillReturnRows(rows)
+	rows = sqlmock.NewRows([]string{"col1", "col2"}).AddRow("t2", "CREATE TABLE `t2` (\n\t\t\t`id` int(11) DEFAULT NULL,\n\t\t  \t`name` varchar(24) DEFAULT NULL\n\t\t\t) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin")
+	mock.ExpectQuery("SHOW CREATE TABLE *").WillReturnRows(rows)
+	rows = sqlmock.NewRows([]string{"col1", "col2"}).AddRow("", "")
+	mock.ExpectQuery("SHOW VARIABLES LIKE*").WillReturnRows(rows)
+
+	tablesToBeCheck, err := initTables(ctx, cfg)
+	require.NoError(t, err)
+
+	require.Len(t, tablesToBeCheck, 1)
+	require.Equal(t, tablesToBeCheck[0].Schema, "test2")
+	require.Equal(t, tablesToBeCheck[0].Table, "t2")
+	// Range can be replaced during initTables
+	require.Equal(t, tablesToBeCheck[0].Range, "age > 10 AND age < 20")
+
+	require.NoError(t, mock.ExpectationsWereMet())
+
+	// Test case 2: init failed due to conflict table config point to one table.
+	cfg = config.NewConfig()
+	require.NoError(t, cfg.Parse([]string{"--config", "../config/config_conflict.toml"}))
+	require.NoError(t, cfg.Init())
+	cfg.Task.TargetInstance.Conn = conn
+
+	rows = sqlmock.NewRows([]string{"Database"}).AddRow("mysql").AddRow("test2")
+	mock.ExpectQuery("SHOW DATABASES").WillReturnRows(rows)
+	rows = sqlmock.NewRows([]string{"col1", "col2"}).AddRow("t1", "t1").AddRow("t2", "t2")
+	mock.ExpectQuery("SHOW FULL TABLES*").WillReturnRows(rows)
+	rows = sqlmock.NewRows([]string{"col1", "col2"}).AddRow("t2", "CREATE TABLE `t2` (\n\t\t\t`id` int(11) DEFAULT NULL,\n\t\t  \t`name` varchar(24) DEFAULT NULL\n\t\t\t) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin")
+	mock.ExpectQuery("SHOW CREATE TABLE *").WillReturnRows(rows)
+	rows = sqlmock.NewRows([]string{"col1", "col2"}).AddRow("", "")
+	mock.ExpectQuery("SHOW VARIABLES LIKE*").WillReturnRows(rows)
+
+	tablesToBeCheck, err = initTables(ctx, cfg)
+	require.Contains(t, err.Error(), "different config matched to same target table")
+	require.NoError(t, mock.ExpectationsWereMet())
+}

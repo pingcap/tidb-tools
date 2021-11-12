@@ -258,11 +258,11 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables []*config.Ta
 
 	// Reset fields of some tables of `cfgTables` according to `table-configs`[config.toml].
 	// The table in `table-configs`[config.toml] should exist in both `target-check-tables`[config.toml] and tables from downstream.
-	for _, table := range cfg.Task.TargetTableConfigs {
+	for i, table := range cfg.Task.TargetTableConfigs {
 		// parse every config to find target table.
 		cfgFilter, err := tableFilter.Parse(table.TargetTables)
 		if err != nil {
-			return nil, errors.Errorf("unable to parse target table for config for %s.%s", table.Schema, table.Table)
+			return nil, errors.Errorf("unable to parse target table for the %dth config", i)
 		}
 		// iterate all target tables to make sure
 		// 1. one table only match at most one config.
@@ -270,7 +270,7 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables []*config.Ta
 		for _, cfgTable := range cfgTables {
 			if cfgFilter.MatchTable(cfgTable.Schema, cfgTable.Table) {
 				if cfgTable.HasMatch {
-					return nil, errors.Errorf("different config matched to same target table %s.%s", table.Schema, table.Table)
+					return nil, errors.Errorf("different config matched to same target table %s.%s", cfgTable.Schema, cfgTable.Table)
 				}
 				if table.Range != "" {
 					cfgTable.Range = table.Range
