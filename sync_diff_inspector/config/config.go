@@ -43,13 +43,20 @@ const (
 
 // TableConfig is the config of table.
 type TableConfig struct {
-	// table's origin information
-	Schema string `toml:"schema" json:"schema"`
-	Table  string `toml:"table" json:"table"`
+	// table's filter to tell us which table should adapt to this config.
+	TargetTables []string `toml:"target-tables" json:"target-tables"`
+	// Internally used to indicate which specified table in target is using this config.
+	Schema string
+	Table  string
+	// Internally used to distinguish different config.
+	ConfigIndex int
+	// Internally used to valid config.
+	HasMatched bool
+
 	// columns be ignored, will not check this column's data
 	IgnoreColumns []string `toml:"ignore-columns"`
 	// field should be the primary key, unique key or field with index
-	Fields string `toml:"index-fields"`
+	Fields []string `toml:"index-fields"`
 	// select range, for example: "age > 10 AND age < 20"
 	Range string `toml:"range"`
 
@@ -64,8 +71,8 @@ type TableConfig struct {
 
 // Valid returns true if table's config is valide.
 func (t *TableConfig) Valid() bool {
-	if t.Schema == "" || t.Table == "" {
-		log.Error("schema and table's name can't be empty")
+	if len(t.TargetTables) == 0 {
+		log.Error("target tables can't be empty in TableConfig")
 		return false
 	}
 
@@ -155,12 +162,13 @@ func (t *TaskConfig) Init(
 	if targetConfigs != nil {
 		// table config can be nil
 		tableConfigsList := make([]*TableConfig, 0, len(targetConfigs))
-		for _, c := range targetConfigs {
+		for configIndex, c := range targetConfigs {
 			tc, ok := tableConfigs[c]
 			if !ok {
 				log.Error("not found table config", zap.String("config", c))
 				return errors.Errorf("not found table config. config is `%s`", c)
 			}
+			tc.ConfigIndex = configIndex
 			tableConfigsList = append(tableConfigsList, tc)
 		}
 		t.TargetTableConfigs = tableConfigsList
