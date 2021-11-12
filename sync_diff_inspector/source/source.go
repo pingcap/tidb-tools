@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	tableFilter "github.com/pingcap/tidb-tools/pkg/table-filter"
 	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
@@ -115,33 +116,31 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 	}
 
 	tableDiffs := make([]*common.TableDiff, 0, len(tablesToBeCheck))
-	for _, tables := range tablesToBeCheck {
-		for _, tableConfig := range tables {
-			newInfo, needUnifiedTimeZone := utils.ResetColumns(tableConfig.TargetTableInfo, tableConfig.IgnoreColumns)
-			tableDiffs = append(tableDiffs, &common.TableDiff{
-				Schema: tableConfig.Schema,
-				Table:  tableConfig.Table,
-				Info:   newInfo,
-				// TODO: field `IgnoreColumns` can be deleted.
-				IgnoreColumns:       tableConfig.IgnoreColumns,
-				Fields:              tableConfig.Fields,
-				Range:               tableConfig.Range,
-				NeedUnifiedTimeZone: needUnifiedTimeZone,
-				Collation:           tableConfig.Collation,
-				ChunkSize:           tableConfig.ChunkSize,
-			})
+	for _, tableConfig := range tablesToBeCheck {
+		newInfo, needUnifiedTimeZone := utils.ResetColumns(tableConfig.TargetTableInfo, tableConfig.IgnoreColumns)
+		tableDiffs = append(tableDiffs, &common.TableDiff{
+			Schema: tableConfig.Schema,
+			Table:  tableConfig.Table,
+			Info:   newInfo,
+			// TODO: field `IgnoreColumns` can be deleted.
+			IgnoreColumns:       tableConfig.IgnoreColumns,
+			Fields:              strings.Join(tableConfig.Fields, ","),
+			Range:               tableConfig.Range,
+			NeedUnifiedTimeZone: needUnifiedTimeZone,
+			Collation:           tableConfig.Collation,
+			ChunkSize:           tableConfig.ChunkSize,
+		})
 
-			// When the router set case-sensitive false,
-			// that add rule match itself will make table case unsensitive.
-			for _, d := range cfg.Task.SourceInstances {
-				if d.Router.AddRule(&router.TableRule{
-					SchemaPattern: tableConfig.Schema,
-					TablePattern:  tableConfig.Table,
-					TargetSchema:  tableConfig.Schema,
-					TargetTable:   tableConfig.Table,
-				}) != nil {
-					return nil, nil, errors.Errorf("set case unsensitive failed. The schema/table name cannot be parttern. [schema = %s] [table = %s]", tableConfig.Schema, tableConfig.Table)
-				}
+		// When the router set case-sensitive false,
+		// that add rule match itself will make table case unsensitive.
+		for _, d := range cfg.Task.SourceInstances {
+			if d.Router.AddRule(&router.TableRule{
+				SchemaPattern: tableConfig.Schema,
+				TablePattern:  tableConfig.Table,
+				TargetSchema:  tableConfig.Schema,
+				TargetTable:   tableConfig.Table,
+			}) != nil {
+				return nil, nil, errors.Errorf("set case unsensitive failed. The schema/table name cannot be parttern. [schema = %s] [table = %s]", tableConfig.Schema, tableConfig.Table)
 			}
 		}
 	}
@@ -212,7 +211,7 @@ func initDBConn(ctx context.Context, cfg *config.Config) error {
 	return nil
 }
 
-func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]map[string]*config.TableConfig, err error) {
+func initTables(ctx context.Context, cfg *config.Config) (cfgTables []*config.TableConfig, err error) {
 	downStreamConn := cfg.Task.TargetInstance.Conn
 	TargetTablesList := make([]*common.TableSource, 0)
 	targetSchemas, err := dbutil.GetSchemas(ctx, downStreamConn)
@@ -239,7 +238,7 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 	// fill the table information.
 	// will add default source information, don't worry, we will use table config's info replace this later.
 	// cfg.Tables.Schema => cfg.Tables.Tables => target/source Schema.Table
-	cfgTables = make(map[string]map[string]*config.TableConfig)
+	cfgTables = make([]*config.TableConfig, 0, len(TargetTablesList))
 	for _, tables := range TargetTablesList {
 		if cfg.Task.TargetCheckTables.MatchTable(tables.OriginSchema, tables.OriginTable) {
 			log.Debug("match target table", zap.String("table", dbutil.TableName(tables.OriginSchema, tables.OriginTable)))
@@ -247,40 +246,42 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables map[string]m
 			if err != nil {
 				return nil, errors.Errorf("get table %s.%s's information error %s", tables.OriginSchema, tables.OriginTable, errors.ErrorStack(err))
 			}
-			if _, ok := cfgTables[tables.OriginSchema]; !ok {
-				cfgTables[tables.OriginSchema] = make(map[string]*config.TableConfig)
-			}
-			if _, ok := cfgTables[tables.OriginSchema][tables.OriginTable]; ok {
-				log.Error("duplicate config for one table", zap.String("table", dbutil.TableName(tables.OriginSchema, tables.OriginTable)))
-				continue
-			}
 			// Initialize all the tables that matches the `target-check-tables`[config.toml] and appears in downstream.
-			cfgTables[tables.OriginSchema][tables.OriginTable] = &config.TableConfig{
+			cfgTables = append(cfgTables, &config.TableConfig{
 				Schema:          tables.OriginSchema,
 				Table:           tables.OriginTable,
 				TargetTableInfo: tableInfo,
 				Range:           "TRUE",
-			}
+			})
 		}
 	}
 
 	// Reset fields of some tables of `cfgTables` according to `table-configs`[config.toml].
 	// The table in `table-configs`[config.toml] should exist in both `target-check-tables`[config.toml] and tables from downstream.
 	for _, table := range cfg.Task.TargetTableConfigs {
-		if _, ok := cfgTables[table.Schema]; !ok {
-			return nil, errors.NotFoundf("schema `%s` in check tables", table.Schema)
+		// parse every config to find target table.
+		cfgFilter, err := tableFilter.Parse(table.TargetTables)
+		if err != nil {
+			return nil, errors.Errorf("unable to parse target table for config for %s.%s", table.Schema, table.Table)
 		}
-		if _, ok := cfgTables[table.Schema][table.Table]; !ok {
-			return nil, errors.NotFoundf("table `%s`.`%s` in check tables", table.Schema, table.Table)
+		// iterate all target tables to make sure
+		// 1. one table only match at most one config.
+		// 2. config can miss table.
+		for _, cfgTable := range cfgTables {
+			if cfgFilter.MatchTable(cfgTable.Schema, cfgTable.Table) {
+				if cfgTable.HasMatch {
+					return nil, errors.Errorf("different config matched to same target table %s.%s", table.Schema, table.Table)
+				}
+				if table.Range != "" {
+					cfgTable.Range = table.Range
+				}
+				cfgTable.IgnoreColumns = table.IgnoreColumns
+				cfgTable.Fields = table.Fields
+				cfgTable.Collation = table.Collation
+				cfgTable.ChunkSize = table.ChunkSize
+				cfgTable.HasMatch = true
+			}
 		}
-
-		if table.Range != "" {
-			cfgTables[table.Schema][table.Table].Range = table.Range
-		}
-		cfgTables[table.Schema][table.Table].IgnoreColumns = table.IgnoreColumns
-		cfgTables[table.Schema][table.Table].Fields = table.Fields
-		cfgTables[table.Schema][table.Table].Collation = table.Collation
-		cfgTables[table.Schema][table.Table].ChunkSize = table.ChunkSize
 	}
 	return cfgTables, nil
 }

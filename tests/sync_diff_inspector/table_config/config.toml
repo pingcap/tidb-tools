@@ -51,8 +51,10 @@ check-struct-only = false
 
 [table-configs]
 [table-configs.config1]
-schema = "diff_test"
-table = "test"
-range = "TRUE"#RANGE"a < 10 OR a > 200"
+# tables need to use this specified config.
+# if use this config. target-tables should be a subset of #target-check-tables
+target-tables = ["diff_test.test"]
+
+range = "TRUE" #RANGE"a < 10 OR a > 200"
 index-fields = [""]
-ignore-columns = [""]#IGNORE
+ignore-columns = [""] #IGNORE column to check
