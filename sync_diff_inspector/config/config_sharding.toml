@@ -93,5 +93,5 @@ target-table = "t"             # target table
 schema = "schema1"
 table = "table"
 range = "age > 10 AND age < 20"
-index-fields = ""
+index-fields = [""]
 ignore-columns = ["",""]

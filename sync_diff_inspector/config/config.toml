@@ -31,16 +31,6 @@ check-struct-only = false
     # snapshot = "2016-10-08 16:45:26"
     # snapshot = "386902609362944000"
 
-[table-configs]
-[table-configs.config1]
-schema = "schema1"
-table = "table"
-range = "age > 10 AND age < 20"
-index-fields = ""
-ignore-columns = ["",""]
-chunk-size = 0
-collation = ""
-
 ######################### Task config #########################
 [task]
     # 1 fix sql: fix-target-TIDB1.sql
@@ -59,3 +49,12 @@ collation = ""
     # extra table config
     target-configs= ["config1"]
 
+[table-configs]
+[table-configs.config1]
+schema = "schema1"
+table = "table"
+range = "age > 10 AND age < 20"
+index-fields = [""]
+ignore-columns = ["",""]
+chunk-size = 0
+collation = ""
