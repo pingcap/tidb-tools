@@ -182,7 +182,7 @@ func (s *BucketIterator) Close() {
 
 func (s *BucketIterator) splitChunkForBucket(ctx context.Context, firstBucketID, lastBucketID int, beginIndex int, bucketChunkCnt int, splitChunkCnt int, chunkRange *chunk.Range) {
 	s.chunkPool.Apply(func() {
-		chunks, err := splitRangeByRandom(s.dbConn, chunkRange, splitChunkCnt, s.table.Schema, s.table.Table, s.indexColumns, s.table.Range, s.table.Collation)
+		chunks, err := splitRangeByRandom(ctx, s.dbConn, chunkRange, splitChunkCnt, s.table.Schema, s.table.Table, s.indexColumns, s.table.Range, s.table.Collation)
 		if err != nil {
 			select {
 			case <-ctx.Done():

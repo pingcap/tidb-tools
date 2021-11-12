@@ -84,7 +84,7 @@ func TestBasicTableUtilOperation(t *testing.T) {
 	require.NoError(t, err)
 
 	query, orderKeyCols := GetTableRowsQueryFormat("test", "test", tableInfo, "123")
-	require.Equal(t, query, "SELECT /*!40001 SQL_NO_CACHE */ `a`, `b`, `c`, `d` FROM `test`.`test` WHERE %s ORDER BY `a`,`b` COLLATE \"123\"")
+	require.Equal(t, query, "SELECT /*!40001 SQL_NO_CACHE */ `a`, `b`, `c`, `d` FROM `test`.`test` WHERE %s ORDER BY `a`,`b` COLLATE '123'")
 	expectName := []string{"a", "b"}
 	for i, col := range orderKeyCols {
 		require.Equal(t, col.Name.O, expectName[i])
@@ -262,9 +262,9 @@ func TestGetApproximateMid(t *testing.T) {
 	require.NoError(t, err)
 
 	rows := sqlmock.NewRows([]string{"a", "b"}).AddRow("5", "10")
-	mock.ExpectQuery("SELECT `a`, `b` FROM `test`.`test_utils` WHERE 2222 ORDER BY `a`, `b` COLLATE \"\\[collate\\]\" LIMIT 1 OFFSET 10").WithArgs("aaaa").WillReturnRows(rows)
+	mock.ExpectQuery("SELECT `a`, `b` FROM `test`.`test_utils` WHERE 2222 ORDER BY `a`, `b` LIMIT 1 OFFSET 10").WithArgs("aaaa").WillReturnRows(rows)
 
-	data, err := GetApproximateMidBySize(ctx, conn, "test", "test_utils", tableInfo.Columns, "2222", []interface{}{"aaaa"}, 20, "[collate]")
+	data, err := GetApproximateMidBySize(ctx, conn, "test", "test_utils", tableInfo.Columns, "2222", []interface{}{"aaaa"}, 20)
 	require.NoError(t, err)
 	require.Equal(t, data["a"], "5")
 	require.Equal(t, data["b"], "10")

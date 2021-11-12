@@ -582,7 +582,7 @@ func SliceToMap(slice []string) map[string]interface{} {
 }
 
 // GetApproximateMidBySize return the `count`th row in rows that meet the `limitRange`.
-func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table string, indexColumns []*model.ColumnInfo, limitRange string, args []interface{}, count int64, collation string) (map[string]string, error) {
+func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table string, indexColumns []*model.ColumnInfo, limitRange string, args []interface{}, count int64) (map[string]string, error) {
 	/*
 		example
 		mysql> select i_id, i_im_id, i_name from item where i_id > 0 order by i_id, i_im_id, i_name collate limit 5000,1;
@@ -597,15 +597,13 @@ func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table stri
 	for _, col := range indexColumns {
 		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
 	}
-	if collation != "" {
-		collation = fmt.Sprintf(" COLLATE '%s'", collation)
-	}
-	query := fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s%s LIMIT 1 OFFSET %d",
+
+	// Note: add collation after order by will largely reduce the speed.
+	query := fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s LIMIT 1 OFFSET %d",
 		strings.Join(columnNames, ", "),
 		dbutil.TableName(schema, table),
 		limitRange,
 		strings.Join(columnNames, ", "),
-		collation,
 		count/2)
 	log.Debug("get mid by size", zap.String("sql", query), zap.Reflect("args", args))
 	rows, err := db.QueryContext(ctx, query, args...)
@@ -690,6 +688,70 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 	}
 
 	return count.Int64, checksum.Int64, nil
+}
+
+// GetRandomValues returns some random values. Different from /pkg/dbutil.GetRandomValues, it returns multi-columns at the same time.
+func GetRandomValues(ctx context.Context, db *sql.DB, schema, table string, columns []*model.ColumnInfo, num int, limitRange string, limitArgs []interface{}, collation string) ([][]string, error) {
+	/*
+		example: there is one index consists of `id`, `a`, `b`.
+		mysql> SELECT `id`, `a`, `b` FROM (SELECT `id`, `a`, `b`, rand() rand_value FROM `test`.`test`  WHERE `id` COLLATE "latin1_bin" > 0 AND `id` COLLATE "latin1_bin" < 100 ORDER BY rand_value LIMIT 5) rand_tmp ORDER BY `id` COLLATE "latin1_bin";
+		+------+------+------+
+		| id   | a    | b    |
+		+------+------+------+
+		|    1 |    2 |    3 |
+		|    2 |    3 |    4 |
+		|    3 |    4 |    5 |
+		+------+------+------+
+	*/
+
+	if limitRange == "" {
+		limitRange = "TRUE"
+	}
+
+	if collation != "" {
+		collation = fmt.Sprintf(" COLLATE '%s'", collation)
+	}
+
+	columnNames := make([]string, 0, len(columns))
+	for _, col := range columns {
+		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
+	}
+
+	query := fmt.Sprintf("SELECT %[1]s FROM (SELECT %[1]s, rand() rand_value FROM %[2]s WHERE %[3]s ORDER BY rand_value LIMIT %[4]d)rand_tmp ORDER BY %[1]s%[5]s",
+		strings.Join(columnNames, ", "), dbutil.TableName(schema, table), limitRange, num, collation)
+	log.Debug("get random values", zap.String("sql", query), zap.Reflect("args", limitArgs))
+
+	rows, err := db.QueryContext(ctx, query, limitArgs...)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	defer rows.Close()
+
+	randomValues := make([][]string, 0, num)
+NEXTROW:
+	for rows.Next() {
+		rowColumns := make([]interface{}, len(columns))
+		for i := range columns {
+			rowColumns[i] = new(string)
+		}
+		err = rows.Scan(rowColumns...)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+
+		randomValue := make([]string, len(columns))
+
+		for i, col := range rowColumns {
+			str := *col.(*string)
+			if str == "" {
+				continue NEXTROW
+			}
+			randomValue[i] = *col.(*string)
+		}
+		randomValues = append(randomValues, randomValue)
+	}
+
+	return randomValues, errors.Trace(rows.Err())
 }
 
 // ResetColumns removes index from `tableInfo.Indices`, whose columns appear in `columns`.

@@ -508,7 +508,7 @@ func (df *Diff) binSearch(ctx context.Context, targetSource source.Source, table
 
 	chunkLimits, args := tableRange.ChunkRange.ToString(tableDiff.Collation)
 	limitRange := fmt.Sprintf("(%s) AND (%s)", chunkLimits, tableDiff.Range)
-	midValues, err := utils.GetApproximateMidBySize(ctx, targetSource.GetDB(), tableDiff.Schema, tableDiff.Table, indexColumns, limitRange, args, count, tableDiff.Collation)
+	midValues, err := utils.GetApproximateMidBySize(ctx, targetSource.GetDB(), tableDiff.Schema, tableDiff.Table, indexColumns, limitRange, args, count)
 	log.Debug("mid values", zap.Reflect("mid values", midValues), zap.Reflect("indices", indexColumns), zap.Reflect("bounds", tableRange.ChunkRange.Bounds))
 	if err != nil {
 		return nil, errors.Trace(err)

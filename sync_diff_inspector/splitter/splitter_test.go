@@ -124,7 +124,7 @@ func TestSplitRangeByRandom(t *testing.T) {
 		require.NoError(t, err)
 		createFakeResultForRandomSplit(mock, 0, testCase.randomValues)
 
-		chunks, err := splitRangeByRandom(db, testCase.originChunk, testCase.splitCount, "test", "test", splitCols, "", "")
+		chunks, err := splitRangeByRandom(context.Background(), db, testCase.originChunk, testCase.splitCount, "test", "test", splitCols, "", "")
 		require.NoError(t, err)
 		for j, chunk := range chunks {
 			chunkStr, args := chunk.ToString("")
