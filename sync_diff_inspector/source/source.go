@@ -269,7 +269,7 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables []*config.Ta
 		// 2. config can miss table.
 		for _, cfgTable := range cfgTables {
 			if cfgFilter.MatchTable(cfgTable.Schema, cfgTable.Table) {
-				if cfgTable.HasMatch {
+				if cfgTable.HasMatched {
 					return nil, errors.Errorf("different config matched to same target table %s.%s", cfgTable.Schema, cfgTable.Table)
 				}
 				if table.Range != "" {
@@ -279,7 +279,7 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables []*config.Ta
 				cfgTable.Fields = table.Fields
 				cfgTable.Collation = table.Collation
 				cfgTable.ChunkSize = table.ChunkSize
-				cfgTable.HasMatch = true
+				cfgTable.HasMatched = true
 			}
 		}
 	}

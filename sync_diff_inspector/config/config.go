@@ -48,10 +48,10 @@ type TableConfig struct {
 	// Internally used to indicate which specified table in target is using this config.
 	Schema string
 	Table  string
-	// only used to distinguish different config internally
+	// Internally used to distinguish different config.
 	ConfigIndex int
-	// only used to valid config internally
-	HasMatch bool
+	// Internally used to valid config.
+	HasMatched bool
 
 	// columns be ignored, will not check this column's data
 	IgnoreColumns []string `toml:"ignore-columns"`
