@@ -77,7 +77,7 @@ target-table = "t"             # target table
     # 2 log: sync-diff.log
     # 3 summary: summary.txt
     # 4 checkpoint: a dir
-    output-dir = "./output"
+    output-dir = "/tmp/output/config"
 
     source-instances = ["mysql1", "mysql2", "mysql3"]
 
@@ -90,8 +90,10 @@ target-table = "t"             # target table
     target-configs= ["config1"]
 
 [table-configs.config1]
-schema = "schema1"
-table = "table"
+# tables need to use this specified config.
+# if use this config. target-tables should be a subset of #target-check-tables
+target-tables = ["schema*.table*", "test2.t2"]
+
 range = "age > 10 AND age < 20"
-index-fields = ""
+index-fields = [""]
 ignore-columns = ["",""]
