@@ -732,8 +732,8 @@ func TestCheckTableMatched(t *testing.T) {
 	tmap := make(map[string]struct{})
 	smap := make(map[string]struct{})
 
-	tmap["1"] = struct {}{}
-	tmap["2"] = struct {}{}
+	tmap["1"] = struct{}{}
+	tmap["2"] = struct{}{}
 
 	smap["1"] = struct{}{}
 	smap["2"] = struct{}{}
