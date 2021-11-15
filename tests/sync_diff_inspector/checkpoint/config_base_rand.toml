@@ -33,8 +33,7 @@ check-struct-only = false
 
 [table-configs]
 [table-configs.config1]
-schema = "diff_test"
-table = "test"
+target-tables = ["diff_test.test"]
 chunk-size = 500
 ######################### Task config #########################
 [task]

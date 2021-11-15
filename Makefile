@@ -68,6 +68,7 @@ ddl_checker:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/ddl_checker ./ddl_checker
 
 test: version
+	rm -rf /tmp/output
 	$(call run_unit_test,$(PACKAGES))
 
 integration_test: prepare failpoint-enable importer sync_diff_inspector ddl_checker failpoint-disable finish
