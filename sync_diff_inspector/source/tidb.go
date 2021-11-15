@@ -231,6 +231,7 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 			}
 
 			uniqueId := utils.UniqueID(targetSchema, targetTable)
+			sourceTablesAfterRoute[uniqueId] = struct{}{}
 			if _, ok := targetUniqueTableMap[uniqueId]; ok {
 				if _, ok := sourceTableMap[uniqueId]; ok {
 					log.Fatal("TiDB source don't merge multiple tables into one table")
@@ -244,7 +245,7 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 	}
 
 	if err = checkTableMatched(targetUniqueTableMap, sourceTablesAfterRoute); err != nil {
-		return nil, errors.Errorf("please make sure the filter is correct.")
+		return nil, errors.Annotatef(err,"please make sure the filter is correct.")
 	}
 	return sourceTableMap, nil
 }

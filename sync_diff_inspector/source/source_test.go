@@ -159,6 +159,9 @@ func TestTiDBSource(t *testing.T) {
 
 	tableDiffs := prepareTiDBTables(t, tableCases)
 
+	mock.ExpectQuery("SHOW DATABASES").WillReturnRows(sqlmock.NewRows([]string{"Database"}).AddRow("mysql").AddRow("source_test"))
+	mock.ExpectQuery("SHOW FULL TABLES*").WillReturnRows(sqlmock.NewRows([]string{"Table", "type"}).AddRow("test1", "base").AddRow("test2", "base"))
+
 	tidb, err := NewTiDBSource(ctx, tableDiffs, &config.DataSource{Conn: conn}, 1)
 	require.NoError(t, err)
 
@@ -723,4 +726,23 @@ func TestInitTables(t *testing.T) {
 	tablesToBeCheck, err = initTables(ctx, cfg)
 	require.Contains(t, err.Error(), "different config matched to same target table")
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestCheckTableMatched(t *testing.T) {
+	tmap := make(map[string]struct{})
+	smap := make(map[string]struct{})
+
+	tmap["1"] = struct {}{}
+	tmap["2"] = struct {}{}
+
+	smap["1"] = struct{}{}
+	smap["2"] = struct{}{}
+	require.NoError(t, checkTableMatched(tmap, smap))
+
+	delete(smap, "1")
+	require.Contains(t, checkTableMatched(tmap, smap).Error(), "the source has no table to be compared. target-table")
+
+	delete(tmap, "1")
+	smap["1"] = struct{}{}
+	require.Contains(t, checkTableMatched(tmap, smap).Error(), "the target has no table to be compared. source-table")
 }
