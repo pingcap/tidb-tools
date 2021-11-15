@@ -351,7 +351,7 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 	}
 
 	if err := checkTableMatched(targetUniqueTableMap, sourceTablesAfterRoute); err != nil {
-		return nil, errors.Errorf("please make sure the filter is correct.")
+		return nil, errors.Annotatef(err, "please make sure the filter is correct.")
 	}
 
 	mss := &MySQLSources{
