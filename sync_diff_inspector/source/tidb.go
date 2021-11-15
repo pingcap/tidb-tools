@@ -191,59 +191,60 @@ func (s *TiDBSource) GetSnapshot() string {
 
 func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource) (map[string]*common.TableSource, error) {
 	sourceTableMap := make(map[string]*common.TableSource)
-	if ds.Router != nil {
-		log.Info("find router for tidb source")
-		// we should get the real table name
-		// and real table row query from source.
-		uniqueMap := make(map[string]struct{})
-		for _, tableDiff := range tableDiffs {
-			uniqueMap[utils.UniqueID(tableDiff.Schema, tableDiff.Table)] = struct{}{}
-		}
+	log.Info("find router for tidb source")
+	// we should get the real table name
+	// and real table row query from source.
+	targetUniqueTableMap := make(map[string]struct{})
+	for _, tableDiff := range tableDiffs {
+		targetUniqueTableMap[utils.UniqueID(tableDiff.Schema, tableDiff.Table)] = struct{}{}
+	}
+	sourceTablesAfterRoute := make(map[string]struct{})
 
-		// instance -> db -> table
-		allTablesMap := make(map[string]map[string]interface{})
-		sourceSchemas, err := dbutil.GetSchemas(ctx, ds.Conn)
+	// instance -> db -> table
+	allTablesMap := make(map[string]map[string]interface{})
+	sourceSchemas, err := dbutil.GetSchemas(ctx, ds.Conn)
+
+	if err != nil {
+		return nil, errors.Annotatef(err, "get schemas from database")
+	}
+
+	for _, schema := range sourceSchemas {
+		if filter.IsSystemSchema(schema) {
+			// ignore system schema
+			continue
+		}
+		allTables, err := dbutil.GetTables(ctx, ds.Conn, schema)
 		if err != nil {
-			return nil, errors.Annotatef(err, "get schemas from database")
+			return nil, errors.Annotatef(err, "get tables from %s", schema)
 		}
+		allTablesMap[schema] = utils.SliceToMap(allTables)
+	}
 
-		for _, schema := range sourceSchemas {
-			if filter.IsSystemSchema(schema) {
-				// ignore system schema
-				continue
-			}
-			allTables, err := dbutil.GetTables(ctx, ds.Conn, schema)
-			if err != nil {
-				return nil, errors.Annotatef(err, "get tables from %s", schema)
-			}
-			allTablesMap[schema] = utils.SliceToMap(allTables)
-		}
-
-		for schema, allTables := range allTablesMap {
-			for table := range allTables {
-				targetSchema, targetTable, err := ds.Router.Route(schema, table)
+	for schema, allTables := range allTablesMap {
+		for table := range allTables {
+			targetSchema, targetTable := schema, table
+			if ds.Router != nil {
+				targetSchema, targetTable, err = ds.Router.Route(schema, table)
 				if err != nil {
 					return nil, errors.Errorf("get route result for %s.%s failed, error %v", schema, table, err)
 				}
-				uniqueId := utils.UniqueID(targetSchema, targetTable)
-				if _, ok := uniqueMap[uniqueId]; ok {
-					if _, ok := sourceTableMap[uniqueId]; ok {
-						log.Fatal("TiDB source don't merge multiple tables into one table")
-					}
-					sourceTableMap[uniqueId] = &common.TableSource{
-						OriginSchema: schema,
-						OriginTable:  table,
-					}
+			}
+
+			uniqueId := utils.UniqueID(targetSchema, targetTable)
+			if _, ok := targetUniqueTableMap[uniqueId]; ok {
+				if _, ok := sourceTableMap[uniqueId]; ok {
+					log.Fatal("TiDB source don't merge multiple tables into one table")
+				}
+				sourceTableMap[uniqueId] = &common.TableSource{
+					OriginSchema: schema,
+					OriginTable:  table,
 				}
 			}
 		}
+	}
 
-		// check tablesMap
-		for _, tableDiff := range tableDiffs {
-			if _, ok := sourceTableMap[utils.UniqueID(tableDiff.Schema, tableDiff.Table)]; !ok {
-				return nil, errors.Errorf("the source has no table to be compared. target-table is `%s`.`%s`", tableDiff.Schema, tableDiff.Table)
-			}
-		}
+	if err = checkTableMatched(targetUniqueTableMap, sourceTablesAfterRoute); err != nil {
+		return nil, errors.Errorf("please make sure the filter is correct.")
 	}
 	return sourceTableMap, nil
 }

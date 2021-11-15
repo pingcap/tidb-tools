@@ -293,3 +293,20 @@ type RangeIterator interface {
 
 	Close()
 }
+
+func checkTableMatched(targetMap map[string]struct{}, sourceMap map[string]struct{}) error {
+	// check target exists but source not found
+	for tableDiff := range targetMap {
+		if _, ok := sourceMap[tableDiff]; !ok {
+			return errors.Errorf("the source has no table to be compared. target-table is `%s`", tableDiff)
+		}
+	}
+	// check source exists but target not found
+	for tableDiff := range sourceMap {
+		if _, ok := targetMap[tableDiff]; !ok {
+			return errors.Errorf("the target has no table to be compared. source-table is `%s`", tableDiff)
+		}
+	}
+	log.Info("table match check passed!!")
+	return nil
+}
