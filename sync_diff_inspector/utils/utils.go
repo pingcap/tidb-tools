@@ -730,23 +730,23 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schema, table string, colu
 	randomValues := make([][]string, 0, num)
 NEXTROW:
 	for rows.Next() {
-		rowColumns := make([]interface{}, len(columns))
-		for i := range columns {
-			rowColumns[i] = new(string)
+		colVals := make([][]byte, len(columns))
+		colValsI := make([]interface{}, len(colVals))
+		for i := range colValsI {
+			colValsI[i] = &colVals[i]
 		}
-		err = rows.Scan(rowColumns...)
+		err = rows.Scan(colValsI...)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 
 		randomValue := make([]string, len(columns))
 
-		for i, col := range rowColumns {
-			str := *col.(*string)
-			if str == "" {
+		for i, col := range colVals {
+			if col == nil {
 				continue NEXTROW
 			}
-			randomValue[i] = *col.(*string)
+			randomValue[i] = string(col)
 		}
 		randomValues = append(randomValues, randomValue)
 	}
