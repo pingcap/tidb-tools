@@ -162,7 +162,9 @@ func TestTiDBSource(t *testing.T) {
 	mock.ExpectQuery("SHOW DATABASES").WillReturnRows(sqlmock.NewRows([]string{"Database"}).AddRow("mysql").AddRow("source_test"))
 	mock.ExpectQuery("SHOW FULL TABLES*").WillReturnRows(sqlmock.NewRows([]string{"Table", "type"}).AddRow("test1", "base").AddRow("test2", "base"))
 
-	tidb, err := NewTiDBSource(ctx, tableDiffs, &config.DataSource{Conn: conn}, 1)
+	f, err := filter.Parse([]string{"source_test.*"})
+	require.NoError(t, err)
+	tidb, err := NewTiDBSource(ctx, tableDiffs, &config.DataSource{Conn: conn}, 1, f)
 	require.NoError(t, err)
 
 	for n, tableCase := range tableCases {
@@ -308,7 +310,9 @@ func TestMysqlShardSources(t *testing.T) {
 		cs[i] = &config.DataSource{Conn: conn}
 	}
 
-	shard, err := NewMySQLSources(ctx, tableDiffs, cs, 4)
+	f, err := filter.Parse([]string{"source_test.*"})
+	require.NoError(t, err)
+	shard, err := NewMySQLSources(ctx, tableDiffs, cs, 4, f)
 	require.NoError(t, err)
 
 	for i := 0; i < len(dbs); i++ {
@@ -432,7 +436,10 @@ func TestMysqlRouter(t *testing.T) {
 	mock.ExpectQuery("SHOW FULL TABLES IN.*").WillReturnRows(tablesRows)
 	tablesRows = sqlmock.NewRows([]string{"Tables_in_test", "Table_type"}).AddRow("test_t", "BASE TABLE")
 	mock.ExpectQuery("SHOW FULL TABLES IN.*").WillReturnRows(tablesRows)
-	mysql, err := NewMySQLSources(ctx, tableDiffs, []*config.DataSource{ds}, 4)
+
+	f, err := filter.Parse([]string{"*.*"})
+	require.NoError(t, err)
+	mysql, err := NewMySQLSources(ctx, tableDiffs, []*config.DataSource{ds}, 4, f)
 	require.NoError(t, err)
 
 	// random splitter
@@ -537,7 +544,10 @@ func TestTiDBRouter(t *testing.T) {
 	mock.ExpectQuery("SHOW FULL TABLES IN.*").WillReturnRows(tablesRows)
 	tablesRows = sqlmock.NewRows([]string{"Tables_in_test", "Table_type"}).AddRow("test2", "BASE TABLE")
 	mock.ExpectQuery("SHOW FULL TABLES IN.*").WillReturnRows(tablesRows)
-	tidb, err := NewTiDBSource(ctx, tableDiffs, ds, 1)
+
+	f, err := filter.Parse([]string{"*.*"})
+	require.NoError(t, err)
+	tidb, err := NewTiDBSource(ctx, tableDiffs, ds, 1, f)
 	require.NoError(t, err)
 	infoRows := sqlmock.NewRows([]string{"Table", "Create Table"}).AddRow("test_t", "CREATE TABLE `source_test`.`test1` (`a` int, `b` varchar(24), `c` float, primary key(`a`, `b`))")
 	mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(infoRows)

@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	tableFilter "github.com/pingcap/tidb-tools/pkg/table-filter"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -189,7 +190,7 @@ func (s *TiDBSource) GetSnapshot() string {
 	return s.snapshot
 }
 
-func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource) (map[string]*common.TableSource, error) {
+func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource, f tableFilter.Filter) (map[string]*common.TableSource, error) {
 	sourceTableMap := make(map[string]*common.TableSource)
 	log.Info("find router for tidb source")
 	// we should get the real table name
@@ -231,7 +232,10 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 			}
 
 			uniqueId := utils.UniqueID(targetSchema, targetTable)
-			sourceTablesAfterRoute[uniqueId] = struct{}{}
+			if f.MatchTable(targetSchema, targetTable) {
+				// if match the filter, we should respect it and check target has this table later.
+				sourceTablesAfterRoute[uniqueId] = struct{}{}
+			}
 			if _, ok := targetUniqueTableMap[uniqueId]; ok {
 				if _, ok := sourceTableMap[uniqueId]; ok {
 					log.Fatal("TiDB source don't merge multiple tables into one table")
@@ -250,8 +254,8 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 	return sourceTableMap, nil
 }
 
-func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource, checkThreadCount int) (Source, error) {
-	sourceTableMap, err := getSourceTableMap(ctx, tableDiffs, ds)
+func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource, checkThreadCount int, f tableFilter.Filter) (Source, error) {
+	sourceTableMap, err := getSourceTableMap(ctx, tableDiffs, ds, f)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

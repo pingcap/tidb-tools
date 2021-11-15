@@ -74,7 +74,7 @@ func TestStringsToInterface(t *testing.T) {
 	}
 	require.Equal(t, len(sliceMap), len(expectSlice))
 
-	require.Equal(t, UniqueID("123", "456"), "123:456")
+	require.Equal(t, UniqueID("123", "456"), "`123`.`456`")
 
 }
 

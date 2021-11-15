@@ -18,6 +18,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	tableFilter "github.com/pingcap/tidb-tools/pkg/table-filter"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -280,7 +281,7 @@ func (ms *MultiSourceRowsIterator) Close() {
 	}
 }
 
-func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*config.DataSource, threadCount int) (Source, error) {
+func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*config.DataSource, threadCount int, f tableFilter.Filter) (Source, error) {
 	sourceTablesMap := make(map[string][]*common.TableShardSource)
 	// we should get the real table name
 	// and real table row query from sourceDB.
@@ -319,7 +320,10 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 				}
 				uniqueId := utils.UniqueID(targetSchema, targetTable)
 				// get all tables from all source db instance
-				sourceTablesAfterRoute[uniqueId] = struct{}{}
+				if f.MatchTable(targetSchema, targetTable) {
+					// if match the filter, we should respect it and check target has this table later.
+					sourceTablesAfterRoute[uniqueId] = struct{}{}
+				}
 				if _, ok := targetUniqueTableMap[uniqueId]; !ok {
 					continue
 				}
