@@ -211,12 +211,15 @@ func splitRangeByRandom(ctx context.Context, db *sql.DB, chunk *chunk.Range, cou
 		return nil, errors.Trace(err)
 	}
 	log.Debug("get split values by random", zap.Stringer("chunk", chunk), zap.Int("random values num", len(randomValues)))
-
 	for i := 0; i <= len(randomValues); i++ {
 		newChunk := chunk.Copy()
 
 		for j, column := range columns {
 			if i == 0 {
+				if len(randomValues) == 0 {
+					// randomValues is empty, so chunks will append chunk itself.
+					break
+				}
 				newChunk.Update(column.Name.O, "", randomValues[i][j], false, true)
 			} else if i == len(randomValues) {
 				newChunk.Update(column.Name.O, randomValues[i-1][j], "", true, false)
