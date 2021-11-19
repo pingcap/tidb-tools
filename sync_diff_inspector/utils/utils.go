@@ -304,7 +304,7 @@ func CompareStruct(upstreamTableInfos []*TableInfoWithHost, downstreamTableInfo 
 	for _, upstreamTableInfo := range upstreamTableInfos {
 		if len(upstreamTableInfo.Info.Columns) != len(downstreamTableInfo.Info.Columns) {
 			// the numbers of each columns are different, don't compare data
-			log.Error("column num not equal", zap.String("upstream host", upstreamTableInfo.Host), zap.String("upstream table", upstreamTableInfo.Info.Name.O), zap.Int("column num", len(upstreamTableInfo.Info.Columns)), zap.String("downstream host", downstreamTableInfo.Host), zap.String("downstream table", downstreamTableInfo.Info.Name.O), zap.Int("column num", len(upstreamTableInfo.Info.Columns)))
+			log.Error("column num not equal", zap.String("upstream host", upstreamTableInfo.Host), zap.String("upstream table", upstreamTableInfo.Info.Name.O), zap.Int("column num", len(upstreamTableInfo.Info.Columns)), zap.String("downstream host", downstreamTableInfo.Host), zap.String("downstream table", downstreamTableInfo.Info.Name.O), zap.Int("column num", len(downstreamTableInfo.Info.Columns)))
 			return false, true
 		}
 
