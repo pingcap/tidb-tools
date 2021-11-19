@@ -219,18 +219,18 @@ func (s *MySQLSources) GetSnapshot() string {
 	return ""
 }
 
-func (s *MySQLSources) GetSourceStructInfo(ctx context.Context, tableIndex int) ([]*model.TableInfo, error) {
+func (s *MySQLSources) GetSourceStructInfo(ctx context.Context, tableIndex int) ([]*utils.TableInfoWithHost, error) {
 	tableDiff := s.GetTables()[tableIndex]
 	tableSources := getMatchedSourcesForTable(s.sourceTablesMap, tableDiff)
-	sourceTableInfos := make([]*model.TableInfo, len(tableSources))
+	sourceTableInfos := make([]*utils.TableInfoWithHost, len(tableSources))
 	for i, tableSource := range tableSources {
 		sourceSchema, sourceTable := tableSource.OriginSchema, tableSource.OriginTable
 		sourceTableInfo, err := dbutil.GetTableInfo(ctx, tableSource.DBConn, sourceSchema, sourceTable)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.Annotatef(err, "host: %s", tableSource.Host)
 		}
 		sourceTableInfo, _ = utils.ResetColumns(sourceTableInfo, tableDiff.IgnoreColumns)
-		sourceTableInfos[i] = sourceTableInfo
+		sourceTableInfos[i] = &utils.TableInfoWithHost{Info: sourceTableInfo, Host: tableSource.Host}
 	}
 	return sourceTableInfos, nil
 }
@@ -290,9 +290,10 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 	}
 
 	for i, sourceDB := range ds {
+		host := fmt.Sprintf("%s@%s:%d", sourceDB.User, sourceDB.Host, sourceDB.Port)
 		sourceSchemas, err := dbutil.GetSchemas(ctx, sourceDB.Conn)
 		if err != nil {
-			return nil, errors.Annotatef(err, "get schemas from %d source", i)
+			return nil, errors.Annotatef(err, "[Host = %s] fail to get schemas from %d source", host, i)
 		}
 
 		// use this map to record max Connection for this source.
@@ -304,14 +305,14 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 			}
 			allTables, err := dbutil.GetTables(ctx, sourceDB.Conn, schema)
 			if err != nil {
-				return nil, errors.Annotatef(err, "get tables from %d source %s", i, schema)
+				return nil, errors.Annotatef(err, "[Host = %s] fail to get tables from %d source %s", host, i, schema)
 			}
 			for _, table := range allTables {
 				targetSchema, targetTable := schema, table
 				if sourceDB.Router != nil {
 					targetSchema, targetTable, err = sourceDB.Router.Route(schema, table)
 					if err != nil {
-						return nil, errors.Errorf("get route result for %d source %s.%s failed, error %v", i, schema, table, err)
+						return nil, errors.Errorf("[Host = %s] fail to get route result for %d source %s.%s failed, error %v", host, i, schema, table, err)
 					}
 				}
 				uniqueId := utils.UniqueID(targetSchema, targetTable)
@@ -326,6 +327,7 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 					TableSource: common.TableSource{
 						OriginSchema: schema,
 						OriginTable:  table,
+						Host:         host,
 					},
 					DBConn: sourceDB.Conn,
 				})
@@ -338,6 +340,7 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 			}
 		}
 		log.Info("will increase connection configurations for DB of instance",
+			zap.String("host", host),
 			zap.Int("connection limit", maxConn*threadCount+1))
 		// Set this conn to max
 		sourceDB.Conn.SetMaxOpenConns(maxConn*threadCount + 1)

@@ -302,7 +302,13 @@ func TestMysqlShardSources(t *testing.T) {
 	for i := range dbs {
 		mock.ExpectQuery("SHOW DATABASES").WillReturnRows(sqlmock.NewRows([]string{"Database"}).AddRow("mysql").AddRow("source_test"))
 		mock.ExpectQuery("SHOW FULL TABLES*").WillReturnRows(sqlmock.NewRows([]string{"Table", "type"}).AddRow("test1", "base").AddRow("test2", "base"))
-		cs[i] = &config.DataSource{Conn: conn}
+		cs[i] = &config.DataSource{
+			Host: "1.2.3.4",
+			Port: i,
+			User: "123456",
+
+			Conn: conn,
+		}
 	}
 
 	shard, err := NewMySQLSources(ctx, tableDiffs, cs, 4)
@@ -317,7 +323,10 @@ func TestMysqlShardSources(t *testing.T) {
 	}
 	info, err := shard.GetSourceStructInfo(ctx, 0)
 	require.NoError(t, err)
-	require.Equal(t, info[0].Name.O, "test1")
+	for i := 0; i < 3; i++ {
+		require.Equal(t, info[i].Info.Name.O, "test1")
+		require.Equal(t, info[i].Host, fmt.Sprintf("123456@1.2.3.4:%d", i))
+	}
 
 	for n, tableCase := range tableCases {
 		require.Equal(t, n, tableCase.rangeInfo.GetTableIndex())
@@ -524,6 +533,11 @@ func TestTiDBRouter(t *testing.T) {
 	router, err := router.NewTableRouter(false, routeRuleList)
 	require.NoError(t, err)
 	ds := &config.DataSource{
+		Host:     "1.2.3.4",
+		Port:     4000,
+		User:     "654321",
+		Password: "123456",
+
 		Router: router,
 		Conn:   conn,
 	}
@@ -542,7 +556,8 @@ func TestTiDBRouter(t *testing.T) {
 	mock.ExpectQuery("SHOW VARIABLE.*").WillReturnRows(variableRows)
 	info, err := tidb.GetSourceStructInfo(ctx, 0)
 	require.NoError(t, err)
-	require.Equal(t, info[0].Name.O, "test1")
+	require.Equal(t, info[0].Info.Name.O, "test1")
+	require.Equal(t, info[0].Host, "654321@1.2.3.4:4000")
 }
 
 func prepareTiDBTables(t *testing.T, tableCases []*tableCaseType) []*common.TableDiff {

@@ -188,7 +188,7 @@ func (r *Report) CommitSummary() error {
 	summaryFile.Write(r.TargetConfig)
 	summaryFile.WriteString("\n")
 
-	summaryFile.WriteString("Comparison Result\n\n\n\n")
+	summaryFile.WriteString(fmt.Sprintf("Comparison Result (%d tables in total)\n\n\n\n", r.PassNum+r.FailedNum))
 	summaryFile.WriteString("The table structure and data in following tables are equivalent\n\n")
 	equalTables := r.getSortedTables()
 	for _, table := range equalTables {

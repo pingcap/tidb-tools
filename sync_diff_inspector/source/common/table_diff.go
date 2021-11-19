@@ -33,6 +33,7 @@ type TableShardSource struct {
 type TableSource struct {
 	OriginSchema string
 	OriginTable  string
+	Host         string
 }
 
 // TableDiff saves config for diff table

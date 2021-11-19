@@ -312,10 +312,14 @@ func (df *Diff) StructEqual(ctx context.Context) error {
 func (df *Diff) compareStruct(ctx context.Context, tableIndex int) (isEqual bool, isSkip bool, err error) {
 	sourceTableInfos, err := df.upstream.GetSourceStructInfo(ctx, tableIndex)
 	if err != nil {
-		return false, true, errors.Trace(err)
+		return false, true, errors.Annotate(err, "from upstream")
+	}
+	downstreamTableInfos, err := df.downstream.GetSourceStructInfo(ctx, tableIndex)
+	if err != nil {
+		return false, true, errors.Annotate(err, "from downstream")
 	}
 	table := df.downstream.GetTables()[tableIndex]
-	isEqual, isSkip = utils.CompareStruct(sourceTableInfos, table.Info)
+	isEqual, isSkip = utils.CompareStruct(sourceTableInfos, downstreamTableInfos[0])
 	table.IgnoreDataCheck = isSkip
 	return isEqual, isSkip, nil
 }

@@ -27,7 +27,6 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
-	"github.com/pingcap/tidb/parser/model"
 	"go.uber.org/zap"
 )
 
@@ -136,17 +135,15 @@ func (s *TiDBSource) GetTables() []*common.TableDiff {
 	return s.tableDiffs
 }
 
-func (s *TiDBSource) GetSourceStructInfo(ctx context.Context, tableIndex int) ([]*model.TableInfo, error) {
-	var err error
-	tableInfos := make([]*model.TableInfo, 1)
+func (s *TiDBSource) GetSourceStructInfo(ctx context.Context, tableIndex int) ([]*utils.TableInfoWithHost, error) {
 	tableDiff := s.GetTables()[tableIndex]
 	source := getMatchSource(s.sourceTableMap, tableDiff)
-	tableInfos[0], err = dbutil.GetTableInfo(ctx, s.GetDB(), source.OriginSchema, source.OriginTable)
+	tableInfo, err := dbutil.GetTableInfo(ctx, s.GetDB(), source.OriginSchema, source.OriginTable)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.Annotatef(err, "host: %s", source.Host)
 	}
-	tableInfos[0], _ = utils.ResetColumns(tableInfos[0], tableDiff.IgnoreColumns)
-	return tableInfos, nil
+	tableInfo, _ = utils.ResetColumns(tableInfo, tableDiff.IgnoreColumns)
+	return []*utils.TableInfoWithHost{{Info: tableInfo, Host: source.Host}}, nil
 }
 
 func (s *TiDBSource) GenerateFixSQL(t DMLType, upstreamData, downstreamData map[string]*dbutil.ColumnData, tableIndex int) string {
@@ -190,6 +187,7 @@ func (s *TiDBSource) GetSnapshot() string {
 }
 
 func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource) (map[string]*common.TableSource, error) {
+	host := fmt.Sprintf("%s@%s:%d", ds.User, ds.Host, ds.Port)
 	sourceTableMap := make(map[string]*common.TableSource)
 	if ds.Router != nil {
 		log.Info("find router for tidb source")
@@ -204,7 +202,7 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 		allTablesMap := make(map[string]map[string]interface{})
 		sourceSchemas, err := dbutil.GetSchemas(ctx, ds.Conn)
 		if err != nil {
-			return nil, errors.Annotatef(err, "get schemas from database")
+			return nil, errors.Annotatef(err, "[Host = %s] fail to get schemas from database", host)
 		}
 
 		for _, schema := range sourceSchemas {
@@ -214,7 +212,7 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 			}
 			allTables, err := dbutil.GetTables(ctx, ds.Conn, schema)
 			if err != nil {
-				return nil, errors.Annotatef(err, "get tables from %s", schema)
+				return nil, errors.Annotatef(err, "[Host = %s] fail to get tables from %s", host, schema)
 			}
 			allTablesMap[schema] = utils.SliceToMap(allTables)
 		}
@@ -223,16 +221,17 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 			for table := range allTables {
 				targetSchema, targetTable, err := ds.Router.Route(schema, table)
 				if err != nil {
-					return nil, errors.Errorf("get route result for %s.%s failed, error %v", schema, table, err)
+					return nil, errors.Errorf("[Host = %s] fail to get route result for %s.%s failed, error %v", host, schema, table, err)
 				}
 				uniqueId := utils.UniqueID(targetSchema, targetTable)
 				if _, ok := uniqueMap[uniqueId]; ok {
 					if _, ok := sourceTableMap[uniqueId]; ok {
-						log.Fatal("TiDB source don't merge multiple tables into one table")
+						log.Fatal("TiDB source don't merge multiple tables into one table", zap.String("host", host))
 					}
 					sourceTableMap[uniqueId] = &common.TableSource{
 						OriginSchema: schema,
 						OriginTable:  table,
+						Host:         host,
 					}
 				}
 			}
@@ -241,7 +240,7 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 		// check tablesMap
 		for _, tableDiff := range tableDiffs {
 			if _, ok := sourceTableMap[utils.UniqueID(tableDiff.Schema, tableDiff.Table)]; !ok {
-				return nil, errors.Errorf("the source has no table to be compared. target-table is `%s`.`%s`", tableDiff.Schema, tableDiff.Table)
+				return nil, errors.Errorf("[Host = %s] the source has no table to be compared. target-table is `%s`.`%s`", host, tableDiff.Schema, tableDiff.Table)
 			}
 		}
 	}

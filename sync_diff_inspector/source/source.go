@@ -30,7 +30,6 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
-	"github.com/pingcap/tidb/parser/model"
 	"go.uber.org/zap"
 )
 
@@ -90,7 +89,7 @@ type Source interface {
 	GetTables() []*common.TableDiff
 
 	// GetSourceStructInfo get the source table info from a given target table
-	GetSourceStructInfo(context.Context, int) ([]*model.TableInfo, error)
+	GetSourceStructInfo(context.Context, int) ([]*utils.TableInfoWithHost, error)
 
 	// GetDB represents the db connection.
 	GetDB() *sql.DB

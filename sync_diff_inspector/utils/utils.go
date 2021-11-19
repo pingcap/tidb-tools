@@ -289,29 +289,35 @@ func isCompatible(tp1, tp2 byte) bool {
 	return t1 == t2
 }
 
+// TableInfoWithHost used by utils.CompareStruct, print the specific host when compare failed.
+type TableInfoWithHost struct {
+	Info *model.TableInfo
+	Host string
+}
+
 // CompareStruct compare tables' columns and indices from upstream and downstream.
 // There are 2 return values:
 // 	isEqual	: result of comparing tables' columns and indices
 // 	isPanic	: the differences of tables' struct can not be ignored. Need to skip data comparing.
-func CompareStruct(upstreamTableInfos []*model.TableInfo, downstreamTableInfo *model.TableInfo) (isEqual bool, isPanic bool) {
+func CompareStruct(upstreamTableInfos []*TableInfoWithHost, downstreamTableInfo *TableInfoWithHost) (isEqual bool, isPanic bool) {
 	// compare columns
 	for _, upstreamTableInfo := range upstreamTableInfos {
-		if len(upstreamTableInfo.Columns) != len(downstreamTableInfo.Columns) {
+		if len(upstreamTableInfo.Info.Columns) != len(downstreamTableInfo.Info.Columns) {
 			// the numbers of each columns are different, don't compare data
-			log.Error("column num not equal", zap.String("upstream table", upstreamTableInfo.Name.O), zap.Int("column num", len(upstreamTableInfo.Columns)), zap.String("downstream table", downstreamTableInfo.Name.O), zap.Int("column num", len(upstreamTableInfo.Columns)))
+			log.Error("column num not equal", zap.String("upstream host", upstreamTableInfo.Host), zap.String("upstream table", upstreamTableInfo.Info.Name.O), zap.Int("column num", len(upstreamTableInfo.Info.Columns)), zap.String("downstream host", downstreamTableInfo.Host), zap.String("downstream table", downstreamTableInfo.Info.Name.O), zap.Int("column num", len(upstreamTableInfo.Info.Columns)))
 			return false, true
 		}
 
-		for i, column := range upstreamTableInfo.Columns {
-			if column.Name.O != downstreamTableInfo.Columns[i].Name.O {
+		for i, column := range upstreamTableInfo.Info.Columns {
+			if column.Name.O != downstreamTableInfo.Info.Columns[i].Name.O {
 				// names are different, panic!
-				log.Error("column name not equal", zap.String("upstream table", upstreamTableInfo.Name.O), zap.String("column name", column.Name.O), zap.String("downstream table", downstreamTableInfo.Name.O), zap.String("column name", downstreamTableInfo.Columns[i].Name.O))
+				log.Error("column name not equal", zap.String("upstream host", upstreamTableInfo.Host), zap.String("upstream table", upstreamTableInfo.Info.Name.O), zap.String("column name", column.Name.O), zap.String("downstream host", downstreamTableInfo.Host), zap.String("downstream table", downstreamTableInfo.Info.Name.O), zap.String("column name", downstreamTableInfo.Info.Columns[i].Name.O))
 				return false, true
 			}
 
-			if !isCompatible(column.Tp, downstreamTableInfo.Columns[i].Tp) {
+			if !isCompatible(column.Tp, downstreamTableInfo.Info.Columns[i].Tp) {
 				// column types are different, panic!
-				log.Error("column type not compatible", zap.String("upstream table", upstreamTableInfo.Name.O), zap.String("column name", column.Name.O), zap.Uint8("column type", column.Tp), zap.String("downstream table", downstreamTableInfo.Name.O), zap.String("column name", downstreamTableInfo.Columns[i].Name.O), zap.Uint8("column type", downstreamTableInfo.Columns[i].Tp))
+				log.Error("column type not compatible", zap.String("upstream host", upstreamTableInfo.Host), zap.String("upstream table", upstreamTableInfo.Info.Name.O), zap.String("column name", column.Name.O), zap.Uint8("column type", column.Tp), zap.String("downstream host", downstreamTableInfo.Host), zap.String("downstream table", downstreamTableInfo.Info.Name.O), zap.String("column name", downstreamTableInfo.Info.Columns[i].Name.O), zap.Uint8("column type", downstreamTableInfo.Info.Columns[i].Tp))
 				return false, true
 			}
 		}
@@ -324,7 +330,7 @@ func CompareStruct(upstreamTableInfos []*model.TableInfo, downstreamTableInfo *m
 		index *model.IndexInfo
 		cnt   int
 	})
-	for _, index := range downstreamTableInfo.Indices {
+	for _, index := range downstreamTableInfo.Info.Indices {
 		downstreamIndicesMap[index.Name.O] = &struct {
 			index *model.IndexInfo
 			cnt   int
@@ -333,7 +339,7 @@ func CompareStruct(upstreamTableInfos []*model.TableInfo, downstreamTableInfo *m
 	for _, upstreamTableInfo := range upstreamTableInfos {
 
 	NextIndex:
-		for _, upstreamIndex := range upstreamTableInfo.Indices {
+		for _, upstreamIndex := range upstreamTableInfo.Info.Indices {
 			if _, ok := deleteIndicesSet[upstreamIndex.Name.O]; ok {
 				continue NextIndex
 			}
@@ -375,36 +381,36 @@ func CompareStruct(upstreamTableInfos []*model.TableInfo, downstreamTableInfo *m
 		}
 	}
 
-	// delete indices
+	// delete indices (just let sync-diff-inspector ignores these indices)
 	// If there exist bilateral index, unilateral indices can be deleted.
 	if existBilateralIndex {
 		for indexName := range unilateralIndicesSet {
 			deleteIndicesSet[indexName] = struct{}{}
 		}
 	} else {
-		log.Warn("no index exists in both upstream and downstream", zap.String("table", downstreamTableInfo.Name.O))
+		log.Warn("no index exists in both upstream and downstream", zap.String("table", downstreamTableInfo.Info.Name.O))
 	}
 	if len(deleteIndicesSet) > 0 {
-		newDownstreamIndices := make([]*model.IndexInfo, 0, len(downstreamTableInfo.Indices))
-		for _, index := range downstreamTableInfo.Indices {
+		newDownstreamIndices := make([]*model.IndexInfo, 0, len(downstreamTableInfo.Info.Indices))
+		for _, index := range downstreamTableInfo.Info.Indices {
 			if _, ok := deleteIndicesSet[index.Name.O]; !ok {
 				newDownstreamIndices = append(newDownstreamIndices, index)
 			} else {
-				log.Debug("delete downstream index", zap.String("name", downstreamTableInfo.Name.O), zap.String("index", index.Name.O))
+				log.Debug("ignore downstream index", zap.String("downstream host", downstreamTableInfo.Host), zap.String("name", downstreamTableInfo.Info.Name.O), zap.String("index", index.Name.O))
 			}
 		}
-		downstreamTableInfo.Indices = newDownstreamIndices
+		downstreamTableInfo.Info.Indices = newDownstreamIndices
 
 		for _, upstreamTableInfo := range upstreamTableInfos {
-			newUpstreamIndices := make([]*model.IndexInfo, 0, len(upstreamTableInfo.Indices))
-			for _, index := range upstreamTableInfo.Indices {
+			newUpstreamIndices := make([]*model.IndexInfo, 0, len(upstreamTableInfo.Info.Indices))
+			for _, index := range upstreamTableInfo.Info.Indices {
 				if _, ok := deleteIndicesSet[index.Name.O]; !ok {
 					newUpstreamIndices = append(newUpstreamIndices, index)
 				} else {
-					log.Debug("delete upstream index", zap.String("name", upstreamTableInfo.Name.O), zap.String("index", index.Name.O))
+					log.Debug("ignore upstream index", zap.String("upstream host", upstreamTableInfo.Host), zap.String("name", upstreamTableInfo.Info.Name.O), zap.String("index", index.Name.O))
 				}
 			}
-			upstreamTableInfo.Indices = newUpstreamIndices
+			upstreamTableInfo.Info.Indices = newUpstreamIndices
 		}
 
 	}
