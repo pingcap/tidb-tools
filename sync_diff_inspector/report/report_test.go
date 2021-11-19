@@ -465,7 +465,7 @@ func TestCommitSummary(t *testing.T) {
 		"host = \"127.0.0.1\"\n"+
 		"port = 4000\n"+
 		"user = \"root\"\n\n"+
-		"Comparison Result\n\n\n\n"+
+		"Comparison Result (4 tables in total)\n\n\n\n"+
 		"The table structure and data in following tables are equivalent\n\n"+
 		"`test`.`tbl`\n"+
 		"`ytest`.`tbl`\n\n"+
