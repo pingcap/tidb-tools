@@ -336,6 +336,10 @@ func (c *Config) Parse(arguments []string) error {
 		return nil
 	}
 
+	if c.Template != "" {
+		return nil
+	}
+
 	// Load config file if specified.
 	if c.ConfigFile == "" {
 		return errors.Errorf("argument --config is required")
