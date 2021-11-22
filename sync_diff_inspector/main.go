@@ -47,6 +47,14 @@ func main() {
 		return
 	}
 
+	if cfg.Template != "" {
+		if err := config.ExportTemplateConfig(cfg.Template); err != nil {
+			fmt.Printf("%s\n", err.Error())
+			os.Exit(2)
+		}
+		return
+	}
+
 	conf := new(log.Config)
 	conf.Level = cfg.LogLevel
 

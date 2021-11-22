@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
@@ -179,6 +180,14 @@ func (t *TaskConfig) Init(
 		return errors.Trace(err)
 	}
 
+	// Set default value when output is empty
+	if t.OutputDir == "" {
+		t.OutputDir = timestampOutputDir()
+		if err := os.RemoveAll(t.OutputDir); err != nil && !os.IsNotExist(err) {
+			log.Fatal("fail to remove the temp directory", zap.String("path", t.OutputDir), zap.String("error", err.Error()))
+		}
+	}
+
 	// Create output Dir if not exists
 	ok, err = pathExists(t.OutputDir)
 	if err != nil {
@@ -288,6 +297,9 @@ type Config struct {
 	// config file
 	ConfigFile string
 
+	// export a template config file in the current directory
+	Template string `toml:"-" json:"-"`
+
 	// print version if set true
 	PrintVersion bool
 }
@@ -301,6 +313,7 @@ func NewConfig() *Config {
 	fs.BoolVarP(&cfg.PrintVersion, "version", "V", false, "print version of sync_diff_inspector")
 	fs.StringVarP(&cfg.LogLevel, "log-level", "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVarP(&cfg.ConfigFile, "config", "C", "", "Config file")
+	fs.StringVarP(&cfg.Template, "template", "T", "", "<dm|norm> export a template config file in the current directory")
 	fs.StringVar(&cfg.DMAddr, "dm-addr", "", "the address of DM")
 	fs.StringVar(&cfg.DMTask, "dm-task", "", "identifier of dm task")
 	fs.IntVar(&cfg.CheckThreadCount, "check-thread-count", 1, "how many goroutines are created to check data")
@@ -469,6 +482,10 @@ func (c *Config) CheckConfig() bool {
 		}
 	}
 	return true
+}
+
+func timestampOutputDir() string {
+	return filepath.Join(os.TempDir(), time.Now().Format("sync-diff.output.2006-01-02T15.04.05Z0700"))
 }
 
 func pathExists(_path string) (bool, error) {
