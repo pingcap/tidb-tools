@@ -618,6 +618,7 @@ func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table stri
 			return nil, errors.Trace(err)
 		}
 		log.Error("there is no row in result set")
+		return nil, nil
 	}
 	err = rows.Scan(columns...)
 	if err != nil {
