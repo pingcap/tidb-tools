@@ -118,16 +118,16 @@ func TestReport(t *testing.T) {
 	require.True(t, result.DataEqual)
 	require.True(t, result.StructEqual)
 
-	require.Equal(t, new_report.getSortedTables(), [][]string{{"`atest`.`atbl`", "0"}, {"`ctest`.`atbl`", "0"}, {"`test`.`tbl`", "0"}})
+	require.Equal(t, new_report.getSortedTables(), [][]string{{"`atest`.`atbl`", "0"}, {"`ctest`.`atbl`", "0"}, {"`test`.`tbl`", "222"}})
 	require.Equal(t, new_report.getDiffRows(), [][]string{})
 
 	new_report.SetTableStructCheckResult("atest", "atbl", true, false)
 	new_report.SetTableDataCheckResult("atest", "atbl", false, 111, 222, 333, &chunk.ChunkID{1, 1, 1, 1, 2})
-	require.Equal(t, new_report.getSortedTables(), [][]string{{"`ctest`.`atbl`", "0"}, {"`test`.`tbl`", "0"}})
+	require.Equal(t, new_report.getSortedTables(), [][]string{{"`ctest`.`atbl`", "0"}, {"`test`.`tbl`", "222"}})
 	require.Equal(t, new_report.getDiffRows(), [][]string{{"`atest`.`atbl`", "true", "+111/-222", "333"}})
 
 	new_report.SetTableStructCheckResult("atest", "atbl", false, false)
-	require.Equal(t, new_report.getSortedTables(), [][]string{{"`ctest`.`atbl`", "0"}, {"`test`.`tbl`", "0"}})
+	require.Equal(t, new_report.getSortedTables(), [][]string{{"`ctest`.`atbl`", "0"}, {"`test`.`tbl`", "222"}})
 	require.Equal(t, new_report.getDiffRows(), [][]string{{"`atest`.`atbl`", "false", "+111/-222", "333"}})
 
 	new_report.SetTableStructCheckResult("ctest", "atbl", false, true)
@@ -470,7 +470,7 @@ func TestCommitSummary(t *testing.T) {
 		"+---------------+-------+\n"+
 		"|     TABLE     | COUNT |\n"+
 		"+---------------+-------+\n"+
-		"| `test`.`tbl`  |     0 |\n"+
+		"| `test`.`tbl`  |   400 |\n"+
 		"| `ytest`.`tbl` |     0 |\n"+
 		"+---------------+-------+\n\n\n"+
 		"The following tables contains inconsistent data\n\n"+
