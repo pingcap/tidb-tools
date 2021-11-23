@@ -62,13 +62,14 @@ type TableResult struct {
 	DataEqual   bool                    `json:"data-equal"`
 	MeetError   error                   `json:"-"`
 	ChunkMap    map[string]*ChunkResult `json:"chunk-result"` // `ChunkMap` stores the `ChunkResult` of each chunk of the table
+	Count       int64                   `json:"count"`        // `Count` is the number of rows in the table
+
 }
 
 // ChunkResult save the necessarily information to provide summary information
 type ChunkResult struct {
-	RowsAdd    int   `json:"rows-add"`    // `RowsAdd` is the number of rows needed to add
-	RowsDelete int   `json:"rows-delete"` // `RowsDelete` is the number of rows needed to delete
-	RowsCount  int64 `json:"rows-count"`  // `RowsCount` is the number of rows in the table
+	RowsAdd    int `json:"rows-add"`    // `RowsAdd` is the number of rows needed to add
+	RowsDelete int `json:"rows-delete"` // `RowsDelete` is the number of rows needed to delete
 }
 
 // Report saves the check results.
@@ -109,11 +110,7 @@ func (r *Report) getSortedTables() [][]string {
 			if result.StructEqual && result.DataEqual {
 				equalRow := make([]string, 0)
 				equalRow = append(equalRow, dbutil.TableName(schema, table))
-				var rowsCount int64 = 0
-				for _, chunkResult := range result.ChunkMap {
-					rowsCount += chunkResult.RowsCount
-				}
-				equalRow = append(equalRow, fmt.Sprintf("%d", rowsCount))
+				equalRow = append(equalRow, fmt.Sprintf("%d", result.Count))
 				equalTables = append(equalTables, equalRow)
 			}
 		}
@@ -137,13 +134,11 @@ func (r *Report) getDiffRows() [][]string {
 				diffRow = append(diffRow, "true")
 			}
 			rowsAdd, rowsDelete := 0, 0
-			var rowsCount int64 = 0
 			for _, chunkResult := range result.ChunkMap {
 				rowsAdd += chunkResult.RowsAdd
 				rowsDelete += chunkResult.RowsDelete
-				rowsCount += chunkResult.RowsCount
 			}
-			diffRow = append(diffRow, fmt.Sprintf("+%d/-%d", rowsAdd, rowsDelete), fmt.Sprintf("%d", rowsCount))
+			diffRow = append(diffRow, fmt.Sprintf("+%d/-%d", rowsAdd, rowsDelete), fmt.Sprintf("%d", result.Count))
 			diffRows = append(diffRows, diffRow)
 		}
 	}
@@ -201,16 +196,19 @@ func (r *Report) CommitSummary() error {
 	summaryFile.WriteString("Comparison Result\n\n\n\n")
 	summaryFile.WriteString("The table structure and data in following tables are equivalent\n\n")
 	equalTables := r.getSortedTables()
-	tableString := &strings.Builder{}
-	table := tablewriter.NewWriter(tableString)
-	table.SetHeader([]string{"Table", "Count"})
-	for _, v := range equalTables {
-		table.Append(v)
+	if len(equalTables) > 0 {
+		tableString := &strings.Builder{}
+		table := tablewriter.NewWriter(tableString)
+		table.SetHeader([]string{"Table", "Count"})
+		for _, v := range equalTables {
+			table.Append(v)
+		}
+		table.Render()
+		summaryFile.WriteString(tableString.String())
+		summaryFile.WriteString("\n\n")
 	}
-	table.Render()
-	summaryFile.WriteString(tableString.String())
 	if r.Result == Fail {
-		summaryFile.WriteString("\n\nThe following tables contains inconsistent data\n\n")
+		summaryFile.WriteString("The following tables contains inconsistent data\n\n")
 		tableString := &strings.Builder{}
 		table := tablewriter.NewWriter(tableString)
 		table.SetHeader([]string{"Table", "Structure equality", "Data diff rows", "Count"})
@@ -306,22 +304,21 @@ func (r *Report) SetTableStructCheckResult(schema, table string, equal bool, ski
 }
 
 // SetTableDataCheckResult sets the data check result for table.
-func (r *Report) SetTableDataCheckResult(schema, table string, equal bool, rowsAdd, rowsDelete int, rowsCount int64, id *chunk.ChunkID) {
+func (r *Report) SetTableDataCheckResult(schema, table string, equal bool, rowsAdd, rowsDelete int, count int64, id *chunk.ChunkID) {
 	r.Lock()
 	defer r.Unlock()
+	result := r.TableResults[schema][table]
+	result.Count += count
 	if !equal {
-		result := r.TableResults[schema][table]
 		result.DataEqual = equal
 		if _, ok := result.ChunkMap[id.ToString()]; !ok {
 			result.ChunkMap[id.ToString()] = &ChunkResult{
 				RowsAdd:    0,
 				RowsDelete: 0,
-				RowsCount:  0,
 			}
 		}
 		result.ChunkMap[id.ToString()].RowsAdd += rowsAdd
 		result.ChunkMap[id.ToString()].RowsDelete += rowsDelete
-		result.ChunkMap[id.ToString()].RowsCount += rowsCount
 		if r.Result != Error {
 			r.Result = Fail
 		}
