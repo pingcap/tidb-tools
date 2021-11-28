@@ -438,7 +438,7 @@ func (c *Config) Init() (err error) {
 			routeRuleList = append(routeRuleList, rr)
 		}
 		// t.SourceRoute can be nil, the caller should check it.
-		d.Router, err = router.NewTableRouter(false, routeRuleList)
+		d.Router, err = router.BuildTableRouter(false, routeRuleList)
 		if err != nil {
 			return errors.Annotate(err, "failed to build route config")
 		}
