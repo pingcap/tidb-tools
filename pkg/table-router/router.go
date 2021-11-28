@@ -116,6 +116,9 @@ type Table struct {
 
 // NewTableRouter returns a table router
 func NewTableRouter(caseSensitive bool, rules []*TableRule) (*Table, error) {
+	if len(rules) == 0 {
+		return nil, nil
+	}
 	r := &Table{
 		Selector:      selector.NewTrieSelector(),
 		caseSensitive: caseSensitive,
@@ -189,6 +192,9 @@ func (r *Table) Route(schema, table string) (string, string, error) {
 	}
 
 	rules := r.Match(schemaL, tableL)
+	if len(rules) == 0 {
+		return "", "", nil
+	}
 	var (
 		schemaRules = make([]*TableRule, 0, len(rules))
 		tableRules  = make([]*TableRule, 0, len(rules))

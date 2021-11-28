@@ -310,6 +310,9 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 				targetSchema, targetTable := schema, table
 				if sourceDB.Router != nil {
 					targetSchema, targetTable, err = sourceDB.Router.Route(schema, table)
+					if targetSchema == "" && targetTable == "" {
+						continue
+					}
 					if err != nil {
 						return nil, errors.Errorf("get route result for %d source %s.%s failed, error %v", i, schema, table, err)
 					}
