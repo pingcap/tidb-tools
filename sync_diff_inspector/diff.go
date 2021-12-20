@@ -820,7 +820,7 @@ func setTiDBCfg() {
 	// to support long index key in TiDB
 	tidbCfg := tidbconfig.GetGlobalConfig()
 	// 3027 * 4 is the max value the MaxIndexLength can be set
-	tidbCfg.MaxIndexLength = 3027 * 4
+	tidbCfg.MaxIndexLength = tidbconfig.DefMaxOfMaxIndexLength
 	tidbconfig.StoreGlobalConfig(tidbCfg)
 
 	log.Info("set tidb cfg")
