@@ -548,7 +548,7 @@ func TestCompareStruct(t *testing.T) {
 	require.NoError(t, err)
 
 	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo)
-	require.True(t, isEqual)
+	require.False(t, isEqual)
 	require.False(t, isPanic)
 	require.Equal(t, len(tableInfo.Indices), 1)
 	require.Equal(t, tableInfo.Indices[0].Name.O, "PRIMARY")
@@ -563,7 +563,7 @@ func TestCompareStruct(t *testing.T) {
 	require.NoError(t, err)
 
 	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo)
-	require.True(t, isEqual)
+	require.False(t, isEqual)
 	require.False(t, isPanic)
 	require.Equal(t, len(tableInfo.Indices), 1)
 	require.Equal(t, tableInfo.Indices[0].Name.O, "c")

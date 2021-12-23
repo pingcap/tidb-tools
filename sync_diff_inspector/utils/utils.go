@@ -409,7 +409,7 @@ func CompareStruct(upstreamTableInfos []*model.TableInfo, downstreamTableInfo *m
 
 	}
 
-	return true, false
+	return len(deleteIndicesSet) == 0, false
 }
 
 // NeedQuotes determines whether an escape character is required for `'`.
