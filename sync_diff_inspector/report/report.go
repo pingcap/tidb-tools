@@ -240,7 +240,7 @@ func (r *Report) Print(w io.Writer) error {
 		summary.WriteString("Error in comparison process:\n")
 		for schema, tableMap := range r.TableResults {
 			for table, result := range tableMap {
-				// not every table failed in this time.
+				// not all tables failed.
 				if result.MeetError != nil {
 					summary.WriteString(fmt.Sprintf("%s error occured in %s\n", result.MeetError.Error(), dbutil.TableName(schema, table)))
 				}
