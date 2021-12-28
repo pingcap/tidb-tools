@@ -240,7 +240,10 @@ func (r *Report) Print(w io.Writer) error {
 		summary.WriteString("Error in comparison process:\n")
 		for schema, tableMap := range r.TableResults {
 			for table, result := range tableMap {
-				summary.WriteString(fmt.Sprintf("%s error occured in %s\n", result.MeetError.Error(), dbutil.TableName(schema, table)))
+				// not every table failed in this time.
+				if result.MeetError != nil {
+					summary.WriteString(fmt.Sprintf("%s error occured in %s\n", result.MeetError.Error(), dbutil.TableName(schema, table)))
+				}
 			}
 		}
 		summary.WriteString(fmt.Sprintf("You can view the comparision details through '%s/%s'\n", r.task.OutputDir, config.LogFileName))
