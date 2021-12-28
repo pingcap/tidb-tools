@@ -255,8 +255,6 @@ func TestPrint(t *testing.T) {
 	// Error
 	report.SetTableMeetError("test", "tbl1", errors.New("123"))
 	report.SetTableStructCheckResult("test", "tbl1", false, false)
-	report.SetTableMeetError("test", "tbl", errors.New("123"))
-	report.SetTableStructCheckResult("test", "tbl", false, false)
 	buf = new(bytes.Buffer)
 	report.Print(buf)
 	require.Equal(t, buf.String(), "Error in comparison process:\n"+
