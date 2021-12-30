@@ -297,6 +297,29 @@ func isCompatible(tp1, tp2 byte) bool {
 	return t1 == t2
 }
 
+func sameProperties(c1, c2 *model.ColumnInfo) bool {
+	switch c1.Tp {
+	case mysql.TypeVarString, mysql.TypeString, mysql.TypeVarchar:
+		if c1.FieldType.Charset != c2.FieldType.Charset {
+			log.Warn("Ignoring character set differences",
+				zap.String("column name", c1.Name.O),
+				zap.String("charset source", c1.FieldType.Charset),
+				zap.String("charset target", c2.FieldType.Charset),
+			)
+		}
+		if c1.FieldType.Collate != c2.FieldType.Collate {
+			log.Warn("Ignoring collation differences",
+				zap.String("column name", c1.Name.O),
+				zap.String("collation source", c1.FieldType.Collate),
+				zap.String("collation target", c2.FieldType.Collate),
+			)
+		}
+		return c1.FieldType.Flen == c2.FieldType.Flen
+	default:
+		return true
+	}
+}
+
 // CompareStruct compare tables' columns and indices from upstream and downstream.
 // There are 2 return values:
 // 	isEqual	: result of comparing tables' columns and indices
@@ -306,20 +329,50 @@ func CompareStruct(upstreamTableInfos []*model.TableInfo, downstreamTableInfo *m
 	for _, upstreamTableInfo := range upstreamTableInfos {
 		if len(upstreamTableInfo.Columns) != len(downstreamTableInfo.Columns) {
 			// the numbers of each columns are different, don't compare data
-			log.Error("column num not equal", zap.String("upstream table", upstreamTableInfo.Name.O), zap.Int("column num", len(upstreamTableInfo.Columns)), zap.String("downstream table", downstreamTableInfo.Name.O), zap.Int("column num", len(downstreamTableInfo.Columns)))
+			log.Error("column num not equal",
+				zap.String("upstream table", upstreamTableInfo.Name.O),
+				zap.Int("column num", len(upstreamTableInfo.Columns)),
+				zap.String("downstream table", downstreamTableInfo.Name.O),
+				zap.Int("column num", len(downstreamTableInfo.Columns)),
+			)
 			return false, true
 		}
 
 		for i, column := range upstreamTableInfo.Columns {
 			if column.Name.O != downstreamTableInfo.Columns[i].Name.O {
 				// names are different, panic!
-				log.Error("column name not equal", zap.String("upstream table", upstreamTableInfo.Name.O), zap.String("column name", column.Name.O), zap.String("downstream table", downstreamTableInfo.Name.O), zap.String("column name", downstreamTableInfo.Columns[i].Name.O))
+				log.Error("column name not equal",
+					zap.String("upstream table", upstreamTableInfo.Name.O),
+					zap.String("column name", column.Name.O),
+					zap.String("downstream table", downstreamTableInfo.Name.O),
+					zap.String("column name", downstreamTableInfo.Columns[i].Name.O),
+				)
 				return false, true
 			}
 
 			if !isCompatible(column.Tp, downstreamTableInfo.Columns[i].Tp) {
 				// column types are different, panic!
-				log.Error("column type not compatible", zap.String("upstream table", upstreamTableInfo.Name.O), zap.String("column name", column.Name.O), zap.Uint8("column type", column.Tp), zap.String("downstream table", downstreamTableInfo.Name.O), zap.String("column name", downstreamTableInfo.Columns[i].Name.O), zap.Uint8("column type", downstreamTableInfo.Columns[i].Tp))
+				log.Error("column type not compatible",
+					zap.String("upstream table", upstreamTableInfo.Name.O),
+					zap.String("column name", column.Name.O),
+					zap.Uint8("column type", column.Tp),
+					zap.String("downstream table", downstreamTableInfo.Name.O),
+					zap.String("column name", downstreamTableInfo.Columns[i].Name.O),
+					zap.Uint8("column type", downstreamTableInfo.Columns[i].Tp),
+				)
+				return false, true
+			}
+
+			if !sameProperties(column, downstreamTableInfo.Columns[i]) {
+				// column properties are different, panic!
+				log.Error("column properties not compatible",
+					zap.String("upstream table", upstreamTableInfo.Name.O),
+					zap.String("column name", column.Name.O),
+					zap.Uint8("column type", column.Tp),
+					zap.String("downstream table", downstreamTableInfo.Name.O),
+					zap.String("column name", downstreamTableInfo.Columns[i].Name.O),
+					zap.Uint8("column type", downstreamTableInfo.Columns[i].Tp),
+				)
 				return false, true
 			}
 		}
