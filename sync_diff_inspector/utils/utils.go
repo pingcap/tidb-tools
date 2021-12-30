@@ -123,7 +123,15 @@ func GetTableRowsQueryFormat(schema, table string, tableInfo *model.TableInfo, c
 
 	columnNames := make([]string, 0, len(tableInfo.Columns))
 	for _, col := range tableInfo.Columns {
-		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
+		name := dbutil.ColumnName(col.Name.O)
+		// When col value is 0, the result is NULL.
+		// But we can use ISNULL to distinguish between null and 0.
+		if col.FieldType.Tp == mysql.TypeFloat {
+			name = fmt.Sprintf("round(%s, 5-floor(log10(abs(%s)))) as %s", name, name, name)
+		} else if col.FieldType.Tp == mysql.TypeDouble {
+			name = fmt.Sprintf("round(%s, 14-floor(log10(abs(%s)))) as %s", name, name, name)
+		}
+		columnNames = append(columnNames, name)
 	}
 	columns := strings.Join(columnNames, ", ")
 	if collation != "" {
