@@ -180,6 +180,10 @@ func (t *TaskConfig) Init(
 	}
 
 	// Create output Dir if not exists
+	if t.OutputDir == "" {
+		return errors.New("output-dir is missing from the task configuration")
+	}
+
 	ok, err = pathExists(t.OutputDir)
 	if err != nil {
 		return errors.Trace(err)

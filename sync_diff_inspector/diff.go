@@ -823,5 +823,5 @@ func setTiDBCfg() {
 	tidbCfg.MaxIndexLength = tidbconfig.DefMaxOfMaxIndexLength
 	tidbconfig.StoreGlobalConfig(tidbCfg)
 
-	log.Info("set tidb cfg")
+	log.Debug("set tidb cfg")
 }
