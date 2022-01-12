@@ -540,6 +540,15 @@ func TestCompareStruct(t *testing.T) {
 	require.False(t, isEqual)
 	require.True(t, isPanic)
 
+	// column properties not compatible
+	createTableSQL2 = "create table `test`(`a` int, `b` varchar(11), `c` int, `d` datetime, primary key(`a`, `b`), index(`c`))"
+	tableInfo2, err = dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
+	require.NoError(t, err)
+
+	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo)
+	require.False(t, isEqual)
+	require.True(t, isPanic)
+
 	// index check
 
 	// index different
