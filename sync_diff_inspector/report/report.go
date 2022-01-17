@@ -151,11 +151,9 @@ func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB) {
 	for schema, tableMap := range r.TableResults {
 		for table := range tableMap {
 			size, err := utils.GetTableSize(ctx, db, schema, table)
-			if err != nil {
-				r.SetTableMeetError(schema, table, err)
-			}
-			if size == 0 {
-				log.Warn("fail to get the correct size of table, if you want to get the correct size, please analyze the corresponding tables", zap.String("table", dbutil.TableName(schema, table)))
+
+			if size == 0 || err != nil {
+				log.Warn("fail to get the correct size of table, if you want to get the correct size, please analyze the corresponding tables", zap.String("table", dbutil.TableName(schema, table)), zap.Error(err))
 			} else {
 				r.TotalSize += size
 			}
@@ -253,7 +251,9 @@ func (r *Report) Print(w io.Writer) error {
 		summary.WriteString("Error in comparison process:\n")
 		for schema, tableMap := range r.TableResults {
 			for table, result := range tableMap {
-				summary.WriteString(fmt.Sprintf("%s error occured in %s\n", result.MeetError.Error(), dbutil.TableName(schema, table)))
+				if result.MeetError != nil {
+					summary.WriteString(fmt.Sprintf("%s error occured in %s\n", result.MeetError.Error(), dbutil.TableName(schema, table)))
+				}
 			}
 		}
 		summary.WriteString(fmt.Sprintf("You can view the comparision details through '%s/%s'\n", r.task.OutputDir, config.LogFileName))

@@ -427,7 +427,6 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 		state = checkpoints.FailedState
 		df.report.SetTableMeetError(schema, table, err)
 	} else if !isEqual && df.exportFixSQL {
-		log.Debug("checksum failed", zap.Any("chunk id", rangeInfo.ChunkRange.Index), zap.Int64("upstream chunk size", upCount), zap.Int64("downstream chun size", downCount), zap.String("table", df.workSource.GetTables()[rangeInfo.GetTableIndex()].Table))
 		state = checkpoints.FailedState
 		// if the chunk's checksum differ, try to do binary check
 		info := rangeInfo
@@ -591,6 +590,7 @@ func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *spli
 	if upstreamInfo.Count == downstreamInfo.Count && upstreamInfo.Checksum == downstreamInfo.Checksum {
 		return true, upstreamInfo.Count, downstreamInfo.Count, nil
 	}
+	log.Debug("checksum failed", zap.Any("chunk id", tableRange.ChunkRange.Index), zap.String("table", df.workSource.GetTables()[tableRange.GetTableIndex()].Table), zap.Int64("upstream chunk size", upstreamInfo.Count), zap.Int64("downstream chunk size", downstreamInfo.Count), zap.Int64("upstream checksum", upstreamInfo.Checksum), zap.Int64("downstream checksum", downstreamInfo.Checksum))
 	return false, upstreamInfo.Count, downstreamInfo.Count, nil
 }
 
@@ -825,8 +825,8 @@ func setTiDBCfg() {
 	// to support long index key in TiDB
 	tidbCfg := tidbconfig.GetGlobalConfig()
 	// 3027 * 4 is the max value the MaxIndexLength can be set
-	tidbCfg.MaxIndexLength = 3027 * 4
+	tidbCfg.MaxIndexLength = tidbconfig.DefMaxOfMaxIndexLength
 	tidbconfig.StoreGlobalConfig(tidbCfg)
 
-	log.Info("set tidb cfg")
+	log.Debug("set tidb cfg")
 }
