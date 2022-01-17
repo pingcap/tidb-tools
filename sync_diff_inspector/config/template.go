@@ -1,28 +1,13 @@
 package config
 
 import (
-	"os"
+	"fmt"
 
 	"github.com/pingcap/errors"
 )
 
-func ExportTemplateConfig(configType string) error {
-	switch configType {
-	case "dm", "DM", "Dm", "dM":
-		return exportTemplateConfigDM()
-	case "norm", "normal", "Norm", "Normal":
-		return exportTemplateConfigNorm()
-	default:
-		return errors.Errorf("Error: unexpect template name: %s\n-T dm: export a dm config\n-T norm: export a normal config\n", configType)
-	}
-}
-
-func exportTemplateConfigDM() error {
-	file, err := os.Create("./config_dm_template.toml")
-	if err != nil {
-		return errors.Annotatef(err, "Error: fail to create a dm template config file, filename is './config_dm_template.toml'.\nError info: %s\n", err.Error())
-	}
-	_, err = file.WriteString(`# Diff Configuration.
+const (
+	dmConfig = `# Diff Configuration.
 
 ######################### Global config #########################
 
@@ -41,22 +26,10 @@ dm-task = "test"
 	output-dir = "./output"
 
 	target-check-tables = ["hb_test.*"]
-`)
-	if err != nil {
-		return errors.Annotatef(err, "Error: fail to write the template config into the file\nError info: %s\n", err.Error())
-	}
 
-	file.Close()
-	return nil
-}
+`
 
-func exportTemplateConfigNorm() error {
-	file, err := os.Create("./config_template.toml")
-	if err != nil {
-		return errors.Annotatef(err, "Error: fail to create a template config file, filename is './config_template.toml'.\nError info: %s\n", err.Error())
-	}
-
-	_, err = file.WriteString(`# Diff Configuration.
+	normConfig = `# Diff Configuration.
 
 ######################### Global config #########################
 
@@ -119,11 +92,18 @@ index-fields = ["col1","col2"]
 ignore-columns = ["",""]
 chunk-size = 0
 collation = ""
-`)
-	if err != nil {
-		return errors.Annotatef(err, "Error: fail to write the template config into the file\nError info: %s\n", err.Error())
-	}
 
-	file.Close()
+`
+)
+
+func ExportTemplateConfig(configType string) error {
+	switch configType {
+	case "dm", "DM", "Dm", "dM":
+		fmt.Print(dmConfig)
+	case "norm", "normal", "Norm", "Normal":
+		fmt.Print(normConfig)
+	default:
+		return errors.Errorf("Error: unexpect template name: %s\n-T dm: export a dm config\n-T norm: export a normal config\n", configType)
+	}
 	return nil
 }
