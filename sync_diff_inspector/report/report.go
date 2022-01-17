@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -62,7 +63,8 @@ type TableResult struct {
 	DataEqual   bool                    `json:"data-equal"`
 	MeetError   error                   `json:"-"`
 	ChunkMap    map[string]*ChunkResult `json:"chunk-result"` // `ChunkMap` stores the `ChunkResult` of each chunk of the table
-	Count       int64                   `json:"count"`        // `Count` is the number of rows in the table
+	UpCount     int64                   `json:"up-count"`     // `UpCount` is the number of rows in the table from upstream
+	DownCount   int64                   `json:"down-count"`   // `DownCount` is the number of rows in the table from downstream
 
 }
 
@@ -108,9 +110,10 @@ func (r *Report) getSortedTables() [][]string {
 	for schema, tableMap := range r.TableResults {
 		for table, result := range tableMap {
 			if result.StructEqual && result.DataEqual {
-				equalRow := make([]string, 0)
+				equalRow := make([]string, 0, 3)
 				equalRow = append(equalRow, dbutil.TableName(schema, table))
-				equalRow = append(equalRow, fmt.Sprintf("%d", result.Count))
+				equalRow = append(equalRow, strconv.FormatInt(result.UpCount, 10))
+				equalRow = append(equalRow, strconv.FormatInt(result.DownCount, 10))
 				equalTables = append(equalTables, equalRow)
 			}
 		}
@@ -138,7 +141,7 @@ func (r *Report) getDiffRows() [][]string {
 				rowsAdd += chunkResult.RowsAdd
 				rowsDelete += chunkResult.RowsDelete
 			}
-			diffRow = append(diffRow, fmt.Sprintf("+%d/-%d", rowsAdd, rowsDelete), fmt.Sprintf("%d", result.Count))
+			diffRow = append(diffRow, fmt.Sprintf("+%d/-%d", rowsAdd, rowsDelete), strconv.FormatInt(result.UpCount, 10), strconv.FormatInt(result.DownCount, 10))
 			diffRows = append(diffRows, diffRow)
 		}
 	}
@@ -197,7 +200,7 @@ func (r *Report) CommitSummary() error {
 	if len(equalTables) > 0 {
 		tableString := &strings.Builder{}
 		table := tablewriter.NewWriter(tableString)
-		table.SetHeader([]string{"Table", "Count"})
+		table.SetHeader([]string{"Table", "UpCount", "DownCount"})
 		for _, v := range equalTables {
 			table.Append(v)
 		}
@@ -209,7 +212,7 @@ func (r *Report) CommitSummary() error {
 		summaryFile.WriteString("The following tables contains inconsistent data\n\n")
 		tableString := &strings.Builder{}
 		table := tablewriter.NewWriter(tableString)
-		table.SetHeader([]string{"Table", "Structure equality", "Data diff rows", "Count"})
+		table.SetHeader([]string{"Table", "Structure equality", "Data diff rows", "UpCount", "DownCount"})
 		diffRows := r.getDiffRows()
 		for _, v := range diffRows {
 			table.Append(v)
@@ -304,11 +307,12 @@ func (r *Report) SetTableStructCheckResult(schema, table string, equal bool, ski
 }
 
 // SetTableDataCheckResult sets the data check result for table.
-func (r *Report) SetTableDataCheckResult(schema, table string, equal bool, rowsAdd, rowsDelete int, count int64, id *chunk.ChunkID) {
+func (r *Report) SetTableDataCheckResult(schema, table string, equal bool, rowsAdd, rowsDelete int, upCount, downCount int64, id *chunk.ChunkID) {
 	r.Lock()
 	defer r.Unlock()
 	result := r.TableResults[schema][table]
-	result.Count += count
+	result.UpCount += upCount
+	result.DownCount += downCount
 	if !equal {
 		result.DataEqual = equal
 		if _, ok := result.ChunkMap[id.ToString()]; !ok {

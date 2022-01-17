@@ -450,7 +450,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 	}
 	dml.node.State = state
 	id := rangeInfo.ChunkRange.Index
-	df.report.SetTableDataCheckResult(schema, table, isEqual, dml.rowAdd, dml.rowDelete, downCount, id)
+	df.report.SetTableDataCheckResult(schema, table, isEqual, dml.rowAdd, dml.rowDelete, upCount, downCount, id)
 	return isEqual
 }
 
