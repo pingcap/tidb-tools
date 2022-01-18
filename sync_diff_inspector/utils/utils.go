@@ -806,7 +806,13 @@ func ResetColumns(tableInfo *model.TableInfo, columns []string) (*model.TableInf
 
 // UniqueID returns `schema:table`
 func UniqueID(schema string, table string) string {
-	return schema + ":" + table
+	// QuoteSchema quotes a full table name
+	return fmt.Sprintf("`%s`.`%s`", EscapeName(schema), EscapeName(table))
+}
+
+// EscapeName replaces all "`" in name with "``"
+func EscapeName(name string) string {
+	return strings.Replace(name, "`", "``", -1)
 }
 
 // GetBetterIndex returns the index more dinstict.
