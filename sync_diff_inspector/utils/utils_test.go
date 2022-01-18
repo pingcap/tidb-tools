@@ -84,7 +84,7 @@ func TestBasicTableUtilOperation(t *testing.T) {
 	require.NoError(t, err)
 
 	query, orderKeyCols := GetTableRowsQueryFormat("test", "test", tableInfo, "123")
-	require.Equal(t, query, "SELECT /*!40001 SQL_NO_CACHE */ `a`, `b`, `c`, `d` FROM `test`.`test` WHERE %s ORDER BY `a`,`b` COLLATE \"123\"")
+	require.Equal(t, query, "SELECT /*!40001 SQL_NO_CACHE */ `a`, `b`, round(`c`, 5-floor(log10(abs(`c`)))) as `c`, `d` FROM `test`.`test` WHERE %s ORDER BY `a`,`b` COLLATE \"123\"")
 	expectName := []string{"a", "b"}
 	for i, col := range orderKeyCols {
 		require.Equal(t, col.Name.O, expectName[i])
@@ -533,6 +533,15 @@ func TestCompareStruct(t *testing.T) {
 
 	// column type not compatible
 	createTableSQL2 = "create table `test`(`a` int, `b` varchar(10), `c` int, `d` datetime, primary key(`a`, `b`), index(`c`))"
+	tableInfo2, err = dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
+	require.NoError(t, err)
+
+	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo)
+	require.False(t, isEqual)
+	require.True(t, isPanic)
+
+	// column properties not compatible
+	createTableSQL2 = "create table `test`(`a` int, `b` varchar(11), `c` int, `d` datetime, primary key(`a`, `b`), index(`c`))"
 	tableInfo2, err = dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
 	require.NoError(t, err)
 

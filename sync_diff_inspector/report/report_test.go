@@ -209,6 +209,12 @@ func TestPrint(t *testing.T) {
 			Info:      tableInfo,
 			Collation: "[123]",
 		},
+		{
+			Schema:    "test",
+			Table:     "tbl1",
+			Info:      tableInfo,
+			Collation: "[123]",
+		},
 	}
 	configs := []*ReportConfig{
 		{
@@ -247,12 +253,12 @@ func TestPrint(t *testing.T) {
 		"You can view the comparision details through 'output_dir/sync_diff.log'\n")
 
 	// Error
-	report.SetTableMeetError("test", "tbl", errors.New("123"))
-	report.SetTableStructCheckResult("test", "tbl", false, false)
+	report.SetTableMeetError("test", "tbl1", errors.New("123"))
+	report.SetTableStructCheckResult("test", "tbl1", false, false)
 	buf = new(bytes.Buffer)
 	report.Print(buf)
 	require.Equal(t, buf.String(), "Error in comparison process:\n"+
-		"123 error occured in `test`.`tbl`\n"+
+		"123 error occured in `test`.`tbl1`\n"+
 		"You can view the comparision details through 'output_dir/sync_diff.log'\n")
 }
 
