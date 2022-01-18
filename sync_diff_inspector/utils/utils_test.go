@@ -268,6 +268,14 @@ func TestGetApproximateMid(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, data["a"], "5")
 	require.Equal(t, data["b"], "10")
+
+	// no data
+	rows = sqlmock.NewRows([]string{"a", "b"})
+	mock.ExpectQuery("SELECT `a`, `b` FROM `test`\\.`test_utils` WHERE 2222.* LIMIT 1 OFFSET 10*").WithArgs("aaaa").WillReturnRows(rows)
+
+	data, err = GetApproximateMidBySize(ctx, conn, "test", "test_utils", tableInfo.Columns, "2222", []interface{}{"aaaa"}, 20)
+	require.NoError(t, err)
+	require.Nil(t, data)
 }
 
 func TestGenerateSQLs(t *testing.T) {
