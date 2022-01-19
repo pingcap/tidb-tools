@@ -510,10 +510,10 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 
 	for _, column := range columns {
 		if data1, ok = map1[column.Name.O]; !ok {
-			return false, 0, errors.Errorf("upstream don't have key %s", key)
+			return false, 0, errors.Errorf("upstream don't have key %s", column.Name.O)
 		}
 		if data2, ok = map2[column.Name.O]; !ok {
-			return false, 0, errors.Errorf("downstream don't have key %s", key)
+			return false, 0, errors.Errorf("downstream don't have key %s", column.Name.O)
 		}
 		str1 = string(data1.Data)
 		str2 = string(data2.Data)
@@ -538,6 +538,7 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 		}
 
 		equal = false
+		key = column.Name.O
 		break
 
 	}

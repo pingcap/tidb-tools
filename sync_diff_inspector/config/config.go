@@ -181,7 +181,7 @@ func (t *TaskConfig) Init(
 	}
 
 	if t.OutputDir == "" {
-		return errors.New("output-dir is missing from the task configuration")
+		return errors.New("failed to set temporary output-dir, output-dir is still empty.")
 	}
 
 	ok, err = pathExists(t.OutputDir)
