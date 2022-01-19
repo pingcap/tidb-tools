@@ -241,7 +241,7 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 				sourceTableMap[uniqueId] = &common.TableSource{
 					OriginSchema: schema,
 					OriginTable:  table,
-          Host:         host,
+					Host:         host,
 				}
 			}
 		}

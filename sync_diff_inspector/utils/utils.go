@@ -297,7 +297,6 @@ func isCompatible(tp1, tp2 byte) bool {
 	return t1 == t2
 }
 
-
 // TableInfoWithHost used by utils.CompareStruct, print the specific host when compare failed.
 type TableInfoWithHost struct {
 	Info *model.TableInfo
@@ -337,12 +336,12 @@ func CompareStruct(upstreamTableInfos []*TableInfoWithHost, downstreamTableInfo 
 		if len(upstreamTableInfo.Info.Columns) != len(downstreamTableInfo.Info.Columns) {
 			// the numbers of each columns are different, don't compare data
 			log.Error("column num not equal",
-        zap.String("upstream host", upstreamTableInfo.Host),
-				zap.String("upstream table", upstreamTableInfo.Name.O),
-				zap.Int("column num", len(upstreamTableInfo.Columns)),
-        zap.String("downstream host", downstreamTableInfo.Host),
-				zap.String("downstream table", downstreamTableInfo.Name.O),
-				zap.Int("column num", len(downstreamTableInfo.Columns)),
+				zap.String("upstream host", upstreamTableInfo.Host),
+				zap.String("upstream table", upstreamTableInfo.Info.Name.O),
+				zap.Int("column num", len(upstreamTableInfo.Info.Columns)),
+				zap.String("downstream host", downstreamTableInfo.Host),
+				zap.String("downstream table", downstreamTableInfo.Info.Name.O),
+				zap.Int("column num", len(downstreamTableInfo.Info.Columns)),
 			)
 			return false, true
 		}
@@ -351,12 +350,12 @@ func CompareStruct(upstreamTableInfos []*TableInfoWithHost, downstreamTableInfo 
 			if column.Name.O != downstreamTableInfo.Info.Columns[i].Name.O {
 				// names are different, panic!
 				log.Error("column name not equal",
-          zap.String("upstream host", upstreamTableInfo.Host),
-					zap.String("upstream table", upstreamTableInfo.Name.O),
+					zap.String("upstream host", upstreamTableInfo.Host),
+					zap.String("upstream table", upstreamTableInfo.Info.Name.O),
 					zap.String("column name", column.Name.O),
-          zap.String("downstream host", downstreamTableInfo.Host),
-					zap.String("downstream table", downstreamTableInfo.Name.O),
-					zap.String("column name", downstreamTableInfo.Columns[i].Name.O),
+					zap.String("downstream host", downstreamTableInfo.Host),
+					zap.String("downstream table", downstreamTableInfo.Info.Name.O),
+					zap.String("column name", downstreamTableInfo.Info.Columns[i].Name.O),
 				)
 				return false, true
 			}
@@ -364,29 +363,29 @@ func CompareStruct(upstreamTableInfos []*TableInfoWithHost, downstreamTableInfo 
 			if !isCompatible(column.Tp, downstreamTableInfo.Info.Columns[i].Tp) {
 				// column types are different, panic!
 				log.Error("column type not compatible",
-          zap.String("upstream host", upstreamTableInfo.Host),
-					zap.String("upstream table", upstreamTableInfo.Name.O),
+					zap.String("upstream host", upstreamTableInfo.Host),
+					zap.String("upstream table", upstreamTableInfo.Info.Name.O),
 					zap.String("column name", column.Name.O),
 					zap.Uint8("column type", column.Tp),
-          zap.String("downstream host", downstreamTableInfo.Host),
-					zap.String("downstream table", downstreamTableInfo.Name.O),
-					zap.String("column name", downstreamTableInfo.Columns[i].Name.O),
-					zap.Uint8("column type", downstreamTableInfo.Columns[i].Tp),
+					zap.String("downstream host", downstreamTableInfo.Host),
+					zap.String("downstream table", downstreamTableInfo.Info.Name.O),
+					zap.String("column name", downstreamTableInfo.Info.Columns[i].Name.O),
+					zap.Uint8("column type", downstreamTableInfo.Info.Columns[i].Tp),
 				)
 				return false, true
 			}
 
-			if !sameProperties(column, downstreamTableInfo.Columns[i]) {
+			if !sameProperties(column, downstreamTableInfo.Info.Columns[i]) {
 				// column properties are different, panic!
 				log.Error("column properties not compatible",
-          zap.String("upstream host", upstreamTableInfo.Host),
-					zap.String("upstream table", upstreamTableInfo.Name.O),
+					zap.String("upstream host", upstreamTableInfo.Host),
+					zap.String("upstream table", upstreamTableInfo.Info.Name.O),
 					zap.String("column name", column.Name.O),
 					zap.Uint8("column type", column.Tp),
-          zap.String("downstream host", downstreamTableInfo.Host),
-					zap.String("downstream table", downstreamTableInfo.Name.O),
-					zap.String("column name", downstreamTableInfo.Columns[i].Name.O),
-					zap.Uint8("column type", downstreamTableInfo.Columns[i].Tp),
+					zap.String("downstream host", downstreamTableInfo.Host),
+					zap.String("downstream table", downstreamTableInfo.Info.Name.O),
+					zap.String("column name", downstreamTableInfo.Info.Columns[i].Name.O),
+					zap.Uint8("column type", downstreamTableInfo.Info.Columns[i].Tp),
 				)
 				return false, true
 			}
@@ -451,7 +450,7 @@ func CompareStruct(upstreamTableInfos []*TableInfoWithHost, downstreamTableInfo 
 		}
 	}
 
-	// delete indices (just let sync-diff-inspector ignores these indices)
+	// delete indices (just let sync-diff-inspector ignore these indices)
 	// If there exist bilateral index, unilateral indices can be deleted.
 	if existBilateralIndex {
 		for indexName := range unilateralIndicesSet {
