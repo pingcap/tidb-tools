@@ -180,10 +180,6 @@ func (t *TaskConfig) Init(
 		return errors.Trace(err)
 	}
 
-	if t.OutputDir == "" {
-		return errors.New("failed to set temporary output-dir, output-dir is still empty.")
-	}
-
 	ok, err = pathExists(t.OutputDir)
 	if err != nil {
 		return errors.Trace(err)
