@@ -74,7 +74,7 @@ func TestStringsToInterface(t *testing.T) {
 	}
 	require.Equal(t, len(sliceMap), len(expectSlice))
 
-	require.Equal(t, UniqueID("123", "456"), "123:456")
+	require.Equal(t, UniqueID("123", "456"), "`123`.`456`")
 
 }
 
@@ -84,7 +84,7 @@ func TestBasicTableUtilOperation(t *testing.T) {
 	require.NoError(t, err)
 
 	query, orderKeyCols := GetTableRowsQueryFormat("test", "test", tableInfo, "123")
-	require.Equal(t, query, "SELECT /*!40001 SQL_NO_CACHE */ `a`, `b`, `c`, `d` FROM `test`.`test` WHERE %s ORDER BY `a`,`b` COLLATE '123'")
+	require.Equal(t, query, "SELECT /*!40001 SQL_NO_CACHE */ `a`, `b`, round(`c`, 5-floor(log10(abs(`c`)))) as `c`, `d` FROM `test`.`test` WHERE %s ORDER BY `a`,`b` COLLATE '123'")
 	expectName := []string{"a", "b"}
 	for i, col := range orderKeyCols {
 		require.Equal(t, col.Name.O, expectName[i])
@@ -268,6 +268,14 @@ func TestGetApproximateMid(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, data["a"], "5")
 	require.Equal(t, data["b"], "10")
+
+	// no data
+	rows = sqlmock.NewRows([]string{"a", "b"})
+	mock.ExpectQuery("SELECT `a`, `b` FROM `test`\\.`test_utils` WHERE 2222.* LIMIT 1 OFFSET 10*").WithArgs("aaaa").WillReturnRows(rows)
+
+	data, err = GetApproximateMidBySize(ctx, conn, "test", "test_utils", tableInfo.Columns, "2222", []interface{}{"aaaa"}, 20)
+	require.NoError(t, err)
+	require.Nil(t, data)
 }
 
 func TestGenerateSQLs(t *testing.T) {
@@ -533,6 +541,15 @@ func TestCompareStruct(t *testing.T) {
 
 	// column type not compatible
 	createTableSQL2 = "create table `test`(`a` int, `b` varchar(10), `c` int, `d` datetime, primary key(`a`, `b`), index(`c`))"
+	tableInfo2, err = dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
+	require.NoError(t, err)
+
+	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo)
+	require.False(t, isEqual)
+	require.True(t, isPanic)
+
+	// column properties not compatible
+	createTableSQL2 = "create table `test`(`a` int, `b` varchar(11), `c` int, `d` datetime, primary key(`a`, `b`), index(`c`))"
 	tableInfo2, err = dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
 	require.NoError(t, err)
 

@@ -925,7 +925,7 @@ func TestChunkSize(t *testing.T) {
 	createFakeResultForRandomSplit(mock, 1000, nil)
 	randomIter, err = NewRandomIterator(ctx, "", tableDiff_noindex, db)
 	require.NoError(t, err)
-	require.Equal(t, randomIter.chunkSize, int64(1000))
+	require.Equal(t, randomIter.chunkSize, int64(1001))
 
 	// test limit splitter chunksize
 	createFakeResultForCount(mock, 1000)

@@ -102,7 +102,9 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 				// no index
 				// will use table scan
 				// so we use one chunk
-				chunkSize = cnt
+				// plus 1 to avoid chunkSize is 0
+				// while chunkCnt = (2cnt)/(cnt+1) <= 1
+				chunkSize = cnt + 1
 			}
 		}
 		log.Info("get chunk size for table", zap.Int64("chunk size", chunkSize),

@@ -419,19 +419,18 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 	schema, table := tableDiff.Schema, tableDiff.Table
 	var state string = checkpoints.SuccessState
 
-	isEqual, count, err := df.compareChecksumAndGetCount(ctx, rangeInfo)
+	isEqual, upCount, downCount, err := df.compareChecksumAndGetCount(ctx, rangeInfo)
 	if err != nil {
 		// If an error occurs during the checksum phase, skip the data compare phase.
 		state = checkpoints.FailedState
 		df.report.SetTableMeetError(schema, table, err)
 	} else if !isEqual && df.exportFixSQL {
-		log.Debug("checksum failed", zap.Any("chunk id", rangeInfo.ChunkRange.Index), zap.Int64("chunk size", count), zap.String("table", df.workSource.GetTables()[rangeInfo.GetTableIndex()].Table))
 		state = checkpoints.FailedState
 		// if the chunk's checksum differ, try to do binary check
 		info := rangeInfo
-		if count > splitter.SplitThreshold {
-			log.Debug("count greater than threshold, start do bingenerate", zap.Any("chunk id", rangeInfo.ChunkRange.Index), zap.Int64("chunk size", count))
-			info, err = df.BinGenerate(ctx, df.workSource, rangeInfo, count)
+		if upCount > splitter.SplitThreshold {
+			log.Debug("count greater than threshold, start do bingenerate", zap.Any("chunk id", rangeInfo.ChunkRange.Index), zap.Int64("upstream chunk size", upCount))
+			info, err = df.BinGenerate(ctx, df.workSource, rangeInfo, upCount)
 			if err != nil {
 				log.Error("fail to do binary search.", zap.Error(err))
 				df.report.SetTableMeetError(schema, table, err)
@@ -449,7 +448,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 	}
 	dml.node.State = state
 	id := rangeInfo.ChunkRange.Index
-	df.report.SetTableDataCheckResult(schema, table, isEqual, dml.rowAdd, dml.rowDelete, id)
+	df.report.SetTableDataCheckResult(schema, table, isEqual, dml.rowAdd, dml.rowDelete, upCount, downCount, id)
 	return isEqual
 }
 
@@ -509,10 +508,15 @@ func (df *Diff) binSearch(ctx context.Context, targetSource source.Source, table
 	chunkLimits, args := tableRange.ChunkRange.ToString(tableDiff.Collation)
 	limitRange := fmt.Sprintf("(%s) AND (%s)", chunkLimits, tableDiff.Range)
 	midValues, err := utils.GetApproximateMidBySize(ctx, targetSource.GetDB(), tableDiff.Schema, tableDiff.Table, indexColumns, limitRange, args, count)
-	log.Debug("mid values", zap.Reflect("mid values", midValues), zap.Reflect("indices", indexColumns), zap.Reflect("bounds", tableRange.ChunkRange.Bounds))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+	if midValues == nil {
+		// TODO Since the count is from upstream,
+		// the midValues may be empty when downstream has much less rows in this chunk.
+		return tableRange, nil
+	}
+	log.Debug("mid values", zap.Reflect("mid values", midValues), zap.Reflect("indices", indexColumns), zap.Reflect("bounds", tableRange.ChunkRange.Bounds))
 	log.Debug("table ranges", zap.Reflect("original range", tableRange))
 	for i := range indexColumns {
 		log.Debug("update tableRange", zap.String("field", indexColumns[i].Name.O), zap.String("value", midValues[indexColumns[i].Name.O]))
@@ -520,11 +524,11 @@ func (df *Diff) binSearch(ctx context.Context, targetSource source.Source, table
 		tableRange2.Update(indexColumns[i].Name.O, midValues[indexColumns[i].Name.O], "", true, false, tableDiff.Collation, tableDiff.Range)
 	}
 	log.Debug("table ranges", zap.Reflect("tableRange 1", tableRange1), zap.Reflect("tableRange 2", tableRange2))
-	isEqual1, count1, err = df.compareChecksumAndGetCount(ctx, tableRange1)
+	isEqual1, count1, _, err = df.compareChecksumAndGetCount(ctx, tableRange1)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	isEqual2, count2, err = df.compareChecksumAndGetCount(ctx, tableRange2)
+	isEqual2, count2, _, err = df.compareChecksumAndGetCount(ctx, tableRange2)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -560,7 +564,7 @@ func (df *Diff) binSearch(ctx context.Context, targetSource source.Source, table
 	}
 }
 
-func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *splitter.RangeInfo) (bool, int64, error) {
+func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *splitter.RangeInfo) (bool, int64, int64, error) {
 	var wg sync.WaitGroup
 	var upstreamInfo, downstreamInfo *source.ChecksumInfo
 	wg.Add(1)
@@ -573,18 +577,19 @@ func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *spli
 
 	if upstreamInfo.Err != nil {
 		log.Warn("failed to compare upstream checksum")
-		return false, -1, errors.Trace(upstreamInfo.Err)
+		return false, -1, -1, errors.Trace(upstreamInfo.Err)
 	}
 	if downstreamInfo.Err != nil {
 		log.Warn("failed to compare downstream checksum")
-		return false, -1, errors.Trace(downstreamInfo.Err)
+		return false, -1, -1, errors.Trace(downstreamInfo.Err)
 
 	}
-	// TODO two counts are not necessary equal
+
 	if upstreamInfo.Count == downstreamInfo.Count && upstreamInfo.Checksum == downstreamInfo.Checksum {
-		return true, upstreamInfo.Count, nil
+		return true, upstreamInfo.Count, downstreamInfo.Count, nil
 	}
-	return false, upstreamInfo.Count, nil
+	log.Debug("checksum failed", zap.Any("chunk id", tableRange.ChunkRange.Index), zap.String("table", df.workSource.GetTables()[tableRange.GetTableIndex()].Table), zap.Int64("upstream chunk size", upstreamInfo.Count), zap.Int64("downstream chunk size", downstreamInfo.Count), zap.Int64("upstream checksum", upstreamInfo.Checksum), zap.Int64("downstream checksum", downstreamInfo.Checksum))
+	return false, upstreamInfo.Count, downstreamInfo.Count, nil
 }
 
 func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, dml *ChunkDML) (bool, error) {
@@ -818,8 +823,8 @@ func setTiDBCfg() {
 	// to support long index key in TiDB
 	tidbCfg := tidbconfig.GetGlobalConfig()
 	// 3027 * 4 is the max value the MaxIndexLength can be set
-	tidbCfg.MaxIndexLength = 3027 * 4
+	tidbCfg.MaxIndexLength = tidbconfig.DefMaxOfMaxIndexLength
 	tidbconfig.StoreGlobalConfig(tidbCfg)
 
-	log.Info("set tidb cfg")
+	log.Debug("set tidb cfg")
 }

@@ -18,6 +18,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	tableFilter "github.com/pingcap/tidb-tools/pkg/table-filter"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -280,14 +281,17 @@ func (ms *MultiSourceRowsIterator) Close() {
 	}
 }
 
-func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*config.DataSource, threadCount int) (Source, error) {
+func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*config.DataSource, threadCount int, f tableFilter.Filter) (Source, error) {
 	sourceTablesMap := make(map[string][]*common.TableShardSource)
 	// we should get the real table name
 	// and real table row query from sourceDB.
-	uniqueMap := make(map[string]struct{})
+	targetUniqueTableMap := make(map[string]struct{})
 	for _, tableDiff := range tableDiffs {
-		uniqueMap[utils.UniqueID(tableDiff.Schema, tableDiff.Table)] = struct{}{}
+		targetUniqueTableMap[utils.UniqueID(tableDiff.Schema, tableDiff.Table)] = struct{}{}
 	}
+
+	// only used for check
+	sourceTablesAfterRoute := make(map[string]struct{})
 
 	for i, sourceDB := range ds {
 		sourceSchemas, err := dbutil.GetSchemas(ctx, sourceDB.Conn)
@@ -315,7 +319,12 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 					}
 				}
 				uniqueId := utils.UniqueID(targetSchema, targetTable)
-				if _, ok := uniqueMap[uniqueId]; !ok {
+				// get all tables from all source db instance
+				if f.MatchTable(targetSchema, targetTable) {
+					// if match the filter, we should respect it and check target has this table later.
+					sourceTablesAfterRoute[uniqueId] = struct{}{}
+				}
+				if _, ok := targetUniqueTableMap[uniqueId]; !ok {
 					continue
 				}
 				maxSourceRouteTableCount[uniqueId]++
@@ -345,11 +354,8 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 
 	}
 
-	// check tablesMap
-	for _, tableDiff := range tableDiffs {
-		if _, ok := sourceTablesMap[utils.UniqueID(tableDiff.Schema, tableDiff.Table)]; !ok {
-			return nil, errors.Errorf("the source has no table to be compared. target-table is `%s`.`%s`", tableDiff.Schema, tableDiff.Table)
-		}
+	if err := checkTableMatched(targetUniqueTableMap, sourceTablesAfterRoute); err != nil {
+		return nil, errors.Annotatef(err, "please make sure the filter is correct.")
 	}
 
 	mss := &MySQLSources{
