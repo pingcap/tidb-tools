@@ -552,7 +552,7 @@ func TestCompareStruct(t *testing.T) {
 	tableInfo2, err = dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
 	require.NoError(t, err)
 
-	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo)
+	isEqual, isPanic = CompareStruct([]*TableInfoWithHost{{tableInfo, ""}, {tableInfo2, ""}}, &TableInfoWithHost{tableInfo, ""})
 	require.False(t, isEqual)
 	require.True(t, isPanic)
 
