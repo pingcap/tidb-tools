@@ -180,12 +180,8 @@ func (t *TaskConfig) Init(
 		return errors.Trace(err)
 	}
 
-	// Set default value when output is empty
 	if t.OutputDir == "" {
-		t.OutputDir = timestampOutputDir()
-		if err := os.RemoveAll(t.OutputDir); err != nil && !os.IsNotExist(err) {
-			log.Fatal("fail to remove the temp directory", zap.String("path", t.OutputDir), zap.String("error", err.Error()))
-		}
+		return errors.New("output-dir is missing from the task configuration")
 	}
 
 	ok, err = pathExists(t.OutputDir)
@@ -356,6 +352,14 @@ func (c *Config) Parse(arguments []string) error {
 
 	if len(c.FlagSet.Args()) != 0 {
 		return errors.Errorf("'%s' is an invalid flag", c.FlagSet.Arg(0))
+	}
+
+	// Set default value when output is empty
+	if c.Task.OutputDir == "" {
+		c.Task.OutputDir = timestampOutputDir()
+		if err := os.RemoveAll(c.Task.OutputDir); err != nil && !os.IsNotExist(err) {
+			log.Fatal("fail to remove the temp directory", zap.String("path", c.Task.OutputDir), zap.String("error", err.Error()))
+		}
 	}
 
 	return nil
