@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	tableFilter "github.com/pingcap/tidb-tools/pkg/table-filter"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -186,69 +187,74 @@ func (s *TiDBSource) GetSnapshot() string {
 	return s.snapshot
 }
 
-func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource) (map[string]*common.TableSource, error) {
+func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource, f tableFilter.Filter) (map[string]*common.TableSource, error) {
 	host := fmt.Sprintf("%s@%s:%d", ds.User, ds.Host, ds.Port)
 	sourceTableMap := make(map[string]*common.TableSource)
-	if ds.Router != nil {
-		log.Info("find router for tidb source")
-		// we should get the real table name
-		// and real table row query from source.
-		uniqueMap := make(map[string]struct{})
-		for _, tableDiff := range tableDiffs {
-			uniqueMap[utils.UniqueID(tableDiff.Schema, tableDiff.Table)] = struct{}{}
-		}
+	log.Info("find router for tidb source")
+	// we should get the real table name
+	// and real table row query from source.
+	targetUniqueTableMap := make(map[string]struct{})
+	for _, tableDiff := range tableDiffs {
+		targetUniqueTableMap[utils.UniqueID(tableDiff.Schema, tableDiff.Table)] = struct{}{}
+	}
+	sourceTablesAfterRoute := make(map[string]struct{})
 
-		// instance -> db -> table
-		allTablesMap := make(map[string]map[string]interface{})
-		sourceSchemas, err := dbutil.GetSchemas(ctx, ds.Conn)
+	// instance -> db -> table
+	allTablesMap := make(map[string]map[string]interface{})
+	sourceSchemas, err := dbutil.GetSchemas(ctx, ds.Conn)
+
+	if err != nil {
+		return nil, errors.Annotatef(err, "[Host = %s] fail to get schemas from database", host)
+	}
+
+	for _, schema := range sourceSchemas {
+		if filter.IsSystemSchema(schema) {
+			// ignore system schema
+			continue
+		}
+		allTables, err := dbutil.GetTables(ctx, ds.Conn, schema)
 		if err != nil {
-			return nil, errors.Annotatef(err, "[Host = %s] fail to get schemas from database", host)
+			return nil, errors.Annotatef(err, "[Host = %s] fail to get tables from %s", host, schema)
 		}
+		allTablesMap[schema] = utils.SliceToMap(allTables)
+	}
 
-		for _, schema := range sourceSchemas {
-			if filter.IsSystemSchema(schema) {
-				// ignore system schema
-				continue
-			}
-			allTables, err := dbutil.GetTables(ctx, ds.Conn, schema)
-			if err != nil {
-				return nil, errors.Annotatef(err, "[Host = %s] fail to get tables from %s", host, schema)
-			}
-			allTablesMap[schema] = utils.SliceToMap(allTables)
-		}
-
-		for schema, allTables := range allTablesMap {
-			for table := range allTables {
-				targetSchema, targetTable, err := ds.Router.Route(schema, table)
+	for schema, allTables := range allTablesMap {
+		for table := range allTables {
+			targetSchema, targetTable := schema, table
+			if ds.Router != nil {
+				targetSchema, targetTable, err = ds.Router.Route(schema, table)
 				if err != nil {
 					return nil, errors.Errorf("[Host = %s] fail to get route result for %s.%s failed, error %v", host, schema, table, err)
 				}
-				uniqueId := utils.UniqueID(targetSchema, targetTable)
-				if _, ok := uniqueMap[uniqueId]; ok {
-					if _, ok := sourceTableMap[uniqueId]; ok {
-						log.Fatal("TiDB source don't merge multiple tables into one table", zap.String("host", host))
-					}
-					sourceTableMap[uniqueId] = &common.TableSource{
-						OriginSchema: schema,
-						OriginTable:  table,
-						Host:         host,
-					}
+			}
+
+			uniqueId := utils.UniqueID(targetSchema, targetTable)
+			if f.MatchTable(targetSchema, targetTable) {
+				// if match the filter, we should respect it and check target has this table later.
+				sourceTablesAfterRoute[uniqueId] = struct{}{}
+			}
+			if _, ok := targetUniqueTableMap[uniqueId]; ok {
+				if _, ok := sourceTableMap[uniqueId]; ok {
+					log.Fatal("TiDB source don't merge multiple tables into one table", zap.String("host", host))
+				}
+				sourceTableMap[uniqueId] = &common.TableSource{
+					OriginSchema: schema,
+					OriginTable:  table,
+          Host:         host,
 				}
 			}
 		}
+	}
 
-		// check tablesMap
-		for _, tableDiff := range tableDiffs {
-			if _, ok := sourceTableMap[utils.UniqueID(tableDiff.Schema, tableDiff.Table)]; !ok {
-				return nil, errors.Errorf("[Host = %s] the source has no table to be compared. target-table is `%s`.`%s`", host, tableDiff.Schema, tableDiff.Table)
-			}
-		}
+	if err = checkTableMatched(targetUniqueTableMap, sourceTablesAfterRoute); err != nil {
+		return nil, errors.Annotatef(err, "please make sure the filter is correct.")
 	}
 	return sourceTableMap, nil
 }
 
-func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource, checkThreadCount int) (Source, error) {
-	sourceTableMap, err := getSourceTableMap(ctx, tableDiffs, ds)
+func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource, checkThreadCount int, f tableFilter.Filter) (Source, error) {
+	sourceTableMap, err := getSourceTableMap(ctx, tableDiffs, ds, f)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

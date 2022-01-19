@@ -25,4 +25,9 @@ Usage of sync_diff_inspector:
         target database's snapshot config
 ```
 
-For more details you can read the [config.toml](./config.toml), [config_sharding.toml](./config_sharding.toml) and [config_dm.toml](./config_dm.toml).
+
+For more details you can read the [config.toml](./config/config.toml), [config_sharding.toml](./config/config_sharding.toml) and [config_dm.toml](./config/config_dm.toml).
+
+## Documents
+- `zh`: [Overview in Chinese](https://github.com/pingcap/docs-cn/blob/master/sync-diff-inspector/sync-diff-inspector-overview.md) 
+- `en`: [Overview in English](https://github.com/pingcap/docs/blob/master/sync-diff-inspector/sync-diff-inspector-overview.md)

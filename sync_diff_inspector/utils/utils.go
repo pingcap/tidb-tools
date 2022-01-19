@@ -123,7 +123,15 @@ func GetTableRowsQueryFormat(schema, table string, tableInfo *model.TableInfo, c
 
 	columnNames := make([]string, 0, len(tableInfo.Columns))
 	for _, col := range tableInfo.Columns {
-		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
+		name := dbutil.ColumnName(col.Name.O)
+		// When col value is 0, the result is NULL.
+		// But we can use ISNULL to distinguish between null and 0.
+		if col.FieldType.Tp == mysql.TypeFloat {
+			name = fmt.Sprintf("round(%s, 5-floor(log10(abs(%s)))) as %s", name, name, name)
+		} else if col.FieldType.Tp == mysql.TypeDouble {
+			name = fmt.Sprintf("round(%s, 14-floor(log10(abs(%s)))) as %s", name, name, name)
+		}
+		columnNames = append(columnNames, name)
 	}
 	columns := strings.Join(columnNames, ", ")
 	if collation != "" {
@@ -289,10 +297,34 @@ func isCompatible(tp1, tp2 byte) bool {
 	return t1 == t2
 }
 
+
 // TableInfoWithHost used by utils.CompareStruct, print the specific host when compare failed.
 type TableInfoWithHost struct {
 	Info *model.TableInfo
 	Host string
+}
+
+func sameProperties(c1, c2 *model.ColumnInfo) bool {
+	switch c1.Tp {
+	case mysql.TypeVarString, mysql.TypeString, mysql.TypeVarchar:
+		if c1.FieldType.Charset != c2.FieldType.Charset {
+			log.Warn("Ignoring character set differences",
+				zap.String("column name", c1.Name.O),
+				zap.String("charset source", c1.FieldType.Charset),
+				zap.String("charset target", c2.FieldType.Charset),
+			)
+		}
+		if c1.FieldType.Collate != c2.FieldType.Collate {
+			log.Warn("Ignoring collation differences",
+				zap.String("column name", c1.Name.O),
+				zap.String("collation source", c1.FieldType.Collate),
+				zap.String("collation target", c2.FieldType.Collate),
+			)
+		}
+		return c1.FieldType.Flen == c2.FieldType.Flen
+	default:
+		return true
+	}
 }
 
 // CompareStruct compare tables' columns and indices from upstream and downstream.
@@ -304,20 +336,58 @@ func CompareStruct(upstreamTableInfos []*TableInfoWithHost, downstreamTableInfo 
 	for _, upstreamTableInfo := range upstreamTableInfos {
 		if len(upstreamTableInfo.Info.Columns) != len(downstreamTableInfo.Info.Columns) {
 			// the numbers of each columns are different, don't compare data
-			log.Error("column num not equal", zap.String("upstream host", upstreamTableInfo.Host), zap.String("upstream table", upstreamTableInfo.Info.Name.O), zap.Int("column num", len(upstreamTableInfo.Info.Columns)), zap.String("downstream host", downstreamTableInfo.Host), zap.String("downstream table", downstreamTableInfo.Info.Name.O), zap.Int("column num", len(downstreamTableInfo.Info.Columns)))
+			log.Error("column num not equal",
+        zap.String("upstream host", upstreamTableInfo.Host),
+				zap.String("upstream table", upstreamTableInfo.Name.O),
+				zap.Int("column num", len(upstreamTableInfo.Columns)),
+        zap.String("downstream host", downstreamTableInfo.Host),
+				zap.String("downstream table", downstreamTableInfo.Name.O),
+				zap.Int("column num", len(downstreamTableInfo.Columns)),
+			)
 			return false, true
 		}
 
 		for i, column := range upstreamTableInfo.Info.Columns {
 			if column.Name.O != downstreamTableInfo.Info.Columns[i].Name.O {
 				// names are different, panic!
-				log.Error("column name not equal", zap.String("upstream host", upstreamTableInfo.Host), zap.String("upstream table", upstreamTableInfo.Info.Name.O), zap.String("column name", column.Name.O), zap.String("downstream host", downstreamTableInfo.Host), zap.String("downstream table", downstreamTableInfo.Info.Name.O), zap.String("column name", downstreamTableInfo.Info.Columns[i].Name.O))
+				log.Error("column name not equal",
+          zap.String("upstream host", upstreamTableInfo.Host),
+					zap.String("upstream table", upstreamTableInfo.Name.O),
+					zap.String("column name", column.Name.O),
+          zap.String("downstream host", downstreamTableInfo.Host),
+					zap.String("downstream table", downstreamTableInfo.Name.O),
+					zap.String("column name", downstreamTableInfo.Columns[i].Name.O),
+				)
 				return false, true
 			}
 
 			if !isCompatible(column.Tp, downstreamTableInfo.Info.Columns[i].Tp) {
 				// column types are different, panic!
-				log.Error("column type not compatible", zap.String("upstream host", upstreamTableInfo.Host), zap.String("upstream table", upstreamTableInfo.Info.Name.O), zap.String("column name", column.Name.O), zap.Uint8("column type", column.Tp), zap.String("downstream host", downstreamTableInfo.Host), zap.String("downstream table", downstreamTableInfo.Info.Name.O), zap.String("column name", downstreamTableInfo.Info.Columns[i].Name.O), zap.Uint8("column type", downstreamTableInfo.Info.Columns[i].Tp))
+				log.Error("column type not compatible",
+          zap.String("upstream host", upstreamTableInfo.Host),
+					zap.String("upstream table", upstreamTableInfo.Name.O),
+					zap.String("column name", column.Name.O),
+					zap.Uint8("column type", column.Tp),
+          zap.String("downstream host", downstreamTableInfo.Host),
+					zap.String("downstream table", downstreamTableInfo.Name.O),
+					zap.String("column name", downstreamTableInfo.Columns[i].Name.O),
+					zap.Uint8("column type", downstreamTableInfo.Columns[i].Tp),
+				)
+				return false, true
+			}
+
+			if !sameProperties(column, downstreamTableInfo.Columns[i]) {
+				// column properties are different, panic!
+				log.Error("column properties not compatible",
+          zap.String("upstream host", upstreamTableInfo.Host),
+					zap.String("upstream table", upstreamTableInfo.Name.O),
+					zap.String("column name", column.Name.O),
+					zap.Uint8("column type", column.Tp),
+          zap.String("downstream host", downstreamTableInfo.Host),
+					zap.String("downstream table", downstreamTableInfo.Name.O),
+					zap.String("column name", downstreamTableInfo.Columns[i].Name.O),
+					zap.Uint8("column type", downstreamTableInfo.Columns[i].Tp),
+				)
 				return false, true
 			}
 		}
@@ -624,6 +694,7 @@ func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table stri
 			return nil, errors.Trace(err)
 		}
 		log.Error("there is no row in result set")
+		return nil, nil
 	}
 	err = rows.Scan(columns...)
 	if err != nil {
@@ -751,7 +822,13 @@ func ResetColumns(tableInfo *model.TableInfo, columns []string) (*model.TableInf
 
 // UniqueID returns `schema:table`
 func UniqueID(schema string, table string) string {
-	return schema + ":" + table
+	// QuoteSchema quotes a full table name
+	return fmt.Sprintf("`%s`.`%s`", EscapeName(schema), EscapeName(table))
+}
+
+// EscapeName replaces all "`" in name with "``"
+func EscapeName(name string) string {
+	return strings.Replace(name, "`", "``", -1)
 }
 
 // GetBetterIndex returns the index more dinstict.
