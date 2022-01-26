@@ -19,6 +19,7 @@ import (
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/parser/mysql"
+	"github.com/pingcap/tidb/types"
 )
 
 func TestClient(t *testing.T) {
@@ -33,6 +34,7 @@ type testCase struct {
 	sql     string
 	columns []string
 	indexs  []string
+	colLen  [][]int
 	colName string
 	fineCol bool
 }
@@ -50,6 +52,7 @@ func (*testDBSuite) TestTable(c *C) {
 			`,
 			[]string{"a", "b", "c", "d"},
 			[]string{mysql.PrimaryKeyName, "d"},
+			[][]int{{types.UnspecifiedLength, types.UnspecifiedLength}, {types.UnspecifiedLength}},
 			"a",
 			true,
 		}, {
@@ -63,6 +66,7 @@ func (*testDBSuite) TestTable(c *C) {
 			`,
 			[]string{"a", "b", "c"},
 			[]string{mysql.PrimaryKeyName},
+			[][]int{{types.UnspecifiedLength}},
 			"c",
 			true,
 		}, {
@@ -73,6 +77,7 @@ func (*testDBSuite) TestTable(c *C) {
 			`,
 			[]string{"a"},
 			[]string{"test"},
+			[][]int{{types.UnspecifiedLength}},
 			"d",
 			false,
 		},
@@ -87,6 +92,9 @@ func (*testDBSuite) TestTable(c *C) {
 
 		for j, index := range tableInfo.Indices {
 			c.Assert(testCase.indexs[j], Equals, index.Name.O)
+			for k, indexCol := range index.Columns {
+				c.Assert(indexCol.Length, Equals, testCase.colLen[j][k])
+			}
 		}
 
 		col := FindColumnByName(tableInfo.Columns, testCase.colName)
