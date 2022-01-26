@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/tidb-tools/pkg/schemacmp"
 	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/parser/mysql"
 	"github.com/pingcap/tidb/types"
@@ -122,4 +123,13 @@ func (*testDBSuite) TestTableStructEqual(c *C) {
 
 	equal, _ = EqualTableInfo(tableInfo1, tableInfo3)
 	c.Assert(equal, Equals, false)
+}
+
+func (*testDBSuite) TestSchemacmpEncode(c *C) {
+	createTableSQL := "CREATE TABLE `test`.`atest` (`id` int(24), primary key(`id`))"
+	tableInfo, err := GetTableInfoBySQL(createTableSQL, parser.New())
+	c.Assert(err, IsNil)
+
+	table := schemacmp.Encode(tableInfo)
+	c.Assert(table.String(), Equals, "CREATE TABLE `tbl`(`id` INT(24) NOT NULL, PRIMARY KEY (`id`)) CHARSET UTF8MB4 COLLATE UTF8MB4_BIN")
 }
