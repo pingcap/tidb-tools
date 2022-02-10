@@ -10,7 +10,7 @@ require (
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang/protobuf v1.5.2
 	github.com/mailru/easyjson v0.7.1 // indirect
-	github.com/olekukonko/tablewriter v0.0.4
+	github.com/olekukonko/tablewriter v0.0.5
 	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
 	github.com/pingcap/errors v0.11.5-0.20211009033009-93128226aaa3
 	github.com/pingcap/failpoint v0.0.0-20210316064728-7acb0f0a3dfd
@@ -27,7 +27,9 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/tikv/pd v1.1.0-beta.0.20211118054146-02848d2660ee
 	github.com/tklauser/go-sysconf v0.3.6 // indirect
-	go.etcd.io/etcd v0.5.0-alpha.5.0.20210512015243-d19fbe541bf9
+	go.etcd.io/etcd/api/v3 v3.5.2
+	go.etcd.io/etcd/client/v3 v3.5.2
+	go.etcd.io/etcd/tests/v3 v3.5.2
 	go.uber.org/atomic v1.9.0
 	go.uber.org/zap v1.19.1
 	golang.org/x/net v0.0.0-20211020060615-d418f374d309

@@ -21,8 +21,8 @@ import (
 	"github.com/pingcap/check"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
-	"go.etcd.io/etcd/clientv3"
-	"go.etcd.io/etcd/integration"
+	clientv3 "go.etcd.io/etcd/client/v3"
+	"go.etcd.io/etcd/tests/v3/integration"
 )
 
 var (

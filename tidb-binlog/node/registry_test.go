@@ -20,7 +20,7 @@ import (
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/etcd"
-	"go.etcd.io/etcd/integration"
+	"go.etcd.io/etcd/tests/v3/integration"
 	"golang.org/x/net/context"
 )
 
