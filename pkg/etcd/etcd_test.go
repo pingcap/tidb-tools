@@ -32,6 +32,7 @@ var (
 )
 
 func TestClient(t *testing.T) {
+	integration.BeforeTest(t)
 	ctx, etcdCli, etcdMockCluster = testSetup(t)
 	defer etcdMockCluster.Terminate(t)
 	TestingT(t)
