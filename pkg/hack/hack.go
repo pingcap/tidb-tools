@@ -14,5 +14,5 @@
 package hack
 
 import (
-	_ "go.etcd.io/etcd/integration" // for update vendor
+	_ "go.etcd.io/etcd/tests/v3/integration" // for update vendor
 )

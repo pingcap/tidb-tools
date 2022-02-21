@@ -20,7 +20,7 @@ import (
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/etcd"
-	"go.etcd.io/etcd/integration"
+	"go.etcd.io/etcd/tests/v3/integration"
 	"golang.org/x/net/context"
 )
 
@@ -36,6 +36,8 @@ type RegisrerTestClient interface {
 var testEtcdCluster *integration.ClusterV3
 
 func TestNode(t *testing.T) {
+	integration.BeforeTest(t)
+
 	testEtcdCluster = integration.NewClusterV3(t, &integration.ClusterConfig{Size: 1})
 	defer testEtcdCluster.Terminate(t)
 
