@@ -17,10 +17,11 @@ import (
 	"testing"
 
 	. "github.com/pingcap/check"
-	"github.com/pingcap/tidb-tools/pkg/schemacmp"
 	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/parser/mysql"
 	"github.com/pingcap/tidb/types"
+
+	"github.com/pingcap/tidb-tools/pkg/schemacmp"
 )
 
 func TestClient(t *testing.T) {
@@ -44,12 +45,23 @@ func (*testDBSuite) TestTable(c *C) {
 	testCases := []*testCase{
 		{
 			`
+			CREATE TABLE htest (
+				a int(11) PRIMARY KEY
+			) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_bin
+			`,
+			[]string{"a"},
+			[]string{mysql.PrimaryKeyName},
+			[][]int{{types.UnspecifiedLength}},
+			"c",
+			false,
+		}, {
+			`
 			CREATE TABLE itest (a int(11) NOT NULL,
-			b double NOT NULL DEFAULT '2',
-			c varchar(10) NOT NULL,
-			d time DEFAULT NULL,
-			PRIMARY KEY (a, b),
-			UNIQUE KEY d (d))
+				b double NOT NULL DEFAULT '2',
+				c varchar(10) NOT NULL,
+				d time DEFAULT NULL,
+				PRIMARY KEY (a, b),
+				UNIQUE KEY d (d))
 			`,
 			[]string{"a", "b", "c", "d"},
 			[]string{mysql.PrimaryKeyName, "d"},
@@ -81,6 +93,31 @@ func (*testDBSuite) TestTable(c *C) {
 			[][]int{{types.UnspecifiedLength}},
 			"d",
 			false,
+		}, {
+			`
+			CREATE TABLE ntest (
+				a int(24) PRIMARY KEY CLUSTERED
+			)
+			`,
+			[]string{"a"},
+			[]string{mysql.PrimaryKeyName},
+			[][]int{{types.UnspecifiedLength}},
+			"d",
+			false,
+		}, {
+			`
+			CREATE TABLE otest (
+				a int(11) NOT NULL,
+				b varchar(10) DEFAULT NULL,
+				c varchar(255) DEFAULT NULL,
+				PRIMARY KEY (a)
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+			`,
+			[]string{"a", "b", "c"},
+			[]string{mysql.PrimaryKeyName},
+			[][]int{{types.UnspecifiedLength}},
+			"c",
+			true,
 		},
 	}
 
@@ -91,6 +128,7 @@ func (*testDBSuite) TestTable(c *C) {
 			c.Assert(testCase.columns[i], Equals, column.Name.O)
 		}
 
+		c.Assert(tableInfo.Indices, HasLen, len(testCase.indexs))
 		for j, index := range tableInfo.Indices {
 			c.Assert(testCase.indexs[j], Equals, index.Name.O)
 			for k, indexCol := range index.Columns {
