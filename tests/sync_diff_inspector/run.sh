@@ -29,7 +29,7 @@ mysql -h ${MYSQL_HOST} -P ${MYSQL_PORT} -u root -e "select * from diff_test.test
 
 echo "use sync_diff_inspector to compare data"
 # sync diff tidb-tidb
-sync_diff_inspector --config=./config_base_tidb.toml > $OUT_DIR/diff.output
+sync_diff_inspector --log-level=debug --config=./config_base_tidb.toml > $OUT_DIR/diff.output
 check_contains "check pass!!!" $OUT_DIR/sync_diff.log
 
 echo "analyze table, and will use tidb's statistical information to split chunks"
