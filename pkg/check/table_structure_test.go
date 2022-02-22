@@ -157,7 +157,7 @@ func (t *testCheckSuite) TestTablesChecker(c *tc.C) {
 		AddRow("test-table-1", `CREATE TABLE "test-table-1" (
   "c" int(11) NOT NULL,
   PRIMARY KEY ("c")
-) ENGINE=InnoDB DEFAULT CHARSET=gb2312`)
+) ENGINE=InnoDB DEFAULT CHARSET=gbk`)
 	mock.ExpectQuery("SHOW CREATE TABLE `test-db`.`test-table-1`").WillReturnRows(createTableRow)
 	sqlModeRow = sqlmock.NewRows([]string{"Variable_name", "Value"}).
 		AddRow("sql_mode", "ANSI_QUOTES")
