@@ -26,7 +26,12 @@ import (
 	_ "github.com/pingcap/tidb/planner/core" // to setup expression.EvalAstExpr. See: https://github.com/pingcap/tidb/blob/a94cff903cd1e7f3b050db782da84273ef5592f4/planner/core/optimizer.go#L202
 	"github.com/pingcap/tidb/types"
 	_ "github.com/pingcap/tidb/types/parser_driver" // for parser driver
+	"github.com/pingcap/tidb/util/collate"
 )
+
+func init() {
+	collate.SetNewCollationEnabledForTest(false)
+}
 
 // GetTableInfo returns table information.
 func GetTableInfo(ctx context.Context, db QueryExecutor, schemaName string, tableName string) (*model.TableInfo, error) {
