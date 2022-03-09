@@ -14,7 +14,7 @@ require (
 	github.com/pingcap/kvproto v0.0.0-20220215045702-d229fcc888c8
 	github.com/pingcap/log v0.0.0-20211215031037-e024ba4eb0ee
 	github.com/pingcap/tidb v1.1.0-beta.0.20220309053749-d30cfc3db467
-	github.com/pingcap/tidb/parser v0.0.0-20220218045740-61986869ea19
+	github.com/pingcap/tidb/parser v0.0.0-20220309065149-4ab66b8ac2c5
 	github.com/pingcap/tiflow v0.0.0-20220217071740-1e3dd1550494
 	github.com/pingcap/tipb v0.0.0-20220303075026-f3286471a05a
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
