@@ -841,7 +841,7 @@ func ignoreDDLError(err error) bool {
 		infoschema.ErrTableExists.Code(), infoschema.ErrTableDropExists.Code(),
 		infoschema.ErrColumnExists.Code(), infoschema.ErrIndexExists.Code():
 		return true
-	case ddl.ErrDupKeyName.Code():
+	case types.ErrDupKeyName.Code():
 		return true
 	default:
 		return false
