@@ -13,7 +13,6 @@ require (
 	github.com/pingcap/failpoint v0.0.0-20210918120811-547c13e3eb00
 	github.com/pingcap/kvproto v0.0.0-20220215045702-d229fcc888c8
 	github.com/pingcap/log v0.0.0-20211215031037-e024ba4eb0ee
-	github.com/pingcap/parser v0.0.0-20210415081931-48e7f467fd74 // indirect
 	github.com/pingcap/tidb v1.1.0-beta.0.20220210065735-92f5a6340ca2
 	github.com/pingcap/tidb/parser v0.0.0-20220218045740-61986869ea19
 	github.com/pingcap/tiflow v0.0.0-20220217071740-1e3dd1550494
@@ -32,9 +31,6 @@ require (
 )
 
 replace github.com/golang/lint => golang.org/x/lint v0.0.0-20190930215403-16217165b5de
-
-// FIXME: Change to master TiDB after upgrade TiDB.
-replace github.com/pingcap/tidb => github.com/oh-my-tidb/tidb v1.1.0-beta.0.20220218042203-2e273f3f990d
 
 // Suppress 'ambiguous imports' error caused by that old tikv/pd also provides `tikv/pd/client`
 replace github.com/tikv/pd => github.com/tikv/pd v0.0.0-20220218061340-602217e4455a
