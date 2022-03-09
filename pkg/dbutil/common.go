@@ -34,6 +34,7 @@ import (
 	tmysql "github.com/pingcap/tidb/parser/mysql"
 	"github.com/pingcap/tidb/sessionctx/stmtctx"
 	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/tidb/util/dbterror"
 	"go.uber.org/zap"
 )
 
@@ -840,7 +841,7 @@ func ignoreDDLError(err error) bool {
 		infoschema.ErrTableExists.Code(), infoschema.ErrTableDropExists.Code(),
 		infoschema.ErrColumnExists.Code(), infoschema.ErrIndexExists.Code():
 		return true
-	case types.ErrDupKeyName.Code():
+	case dbterror.ErrDupKeyName.Code():
 		return true
 	default:
 		return false
