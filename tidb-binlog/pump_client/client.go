@@ -29,7 +29,7 @@ import (
 	"github.com/pingcap/tidb-tools/tidb-binlog/node"
 	pb "github.com/pingcap/tipb/go-binlog"
 	pd "github.com/tikv/pd/client"
-	"go.etcd.io/etcd/mvcc/mvccpb"
+	"go.etcd.io/etcd/api/v3/mvccpb"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

@@ -156,18 +156,18 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 		tj := utils.UniqueID(tableDiffs[j].Schema, tableDiffs[j].Table)
 		return strings.Compare(ti, tj) > 0
 	})
-	upstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.CheckThreadCount, cfg.Task.SourceInstances...)
+	upstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.CheckThreadCount, cfg.Task.TargetCheckTables, cfg.Task.SourceInstances...)
 	if err != nil {
 		return nil, nil, errors.Annotate(err, "from upstream")
 	}
-	downstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.CheckThreadCount, cfg.Task.TargetInstance)
+	downstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.CheckThreadCount, cfg.Task.TargetCheckTables, cfg.Task.TargetInstance)
 	if err != nil {
 		return nil, nil, errors.Annotate(err, "from downstream")
 	}
 	return downstream, upstream, nil
 }
 
-func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, checkThreadCount int, dbs ...*config.DataSource) (Source, error) {
+func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, checkThreadCount int, f tableFilter.Filter, dbs ...*config.DataSource) (Source, error) {
 	if len(dbs) < 1 {
 		return nil, errors.Errorf("no db config detected")
 	}
@@ -178,12 +178,12 @@ func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, che
 
 	if ok {
 		if len(dbs) == 1 {
-			return NewTiDBSource(ctx, tableDiffs, dbs[0], checkThreadCount)
+			return NewTiDBSource(ctx, tableDiffs, dbs[0], checkThreadCount, f)
 		} else {
 			log.Fatal("Don't support check table in multiple tidb instance, please specify one tidb instance.")
 		}
 	}
-	return NewMySQLSources(ctx, tableDiffs, dbs, checkThreadCount)
+	return NewMySQLSources(ctx, tableDiffs, dbs, checkThreadCount, f)
 }
 
 func initDBConn(ctx context.Context, cfg *config.Config) error {
@@ -292,4 +292,23 @@ type RangeIterator interface {
 	Next(context.Context) (*splitter.RangeInfo, error)
 
 	Close()
+}
+
+func checkTableMatched(targetMap map[string]struct{}, sourceMap map[string]struct{}) error {
+	// check target exists but source not found
+	for tableDiff := range targetMap {
+		// target table have all passed in tableFilter
+		if _, ok := sourceMap[tableDiff]; !ok {
+			return errors.Errorf("the source has no table to be compared. target-table is `%s`", tableDiff)
+		}
+	}
+	// check source exists but target not found
+	for tableDiff := range sourceMap {
+		// need check source table have passd in tableFilter here
+		if _, ok := targetMap[tableDiff]; !ok {
+			return errors.Errorf("the target has no table to be compared. source-table is `%s`", tableDiff)
+		}
+	}
+	log.Info("table match check passed!!")
+	return nil
 }
