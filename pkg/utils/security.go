@@ -94,6 +94,7 @@ func ToTLSConfigWithVerify(caPath, certPath, keyPath string, verifyCN []string) 
 	}
 
 	tlsCfg := &tls.Config{
+		MinVersion:   tls.VersionTLS10,
 		Certificates: certificates,
 		RootCAs:      certPool,
 		ClientCAs:    certPool,
@@ -123,6 +124,7 @@ func ToTLSConfigWithVerifyByRawbytes(caData, certData, keyData []byte, verifyCN 
 	}
 
 	tlsCfg := &tls.Config{
+		MinVersion:   tls.VersionTLS10,
 		Certificates: certificates,
 		RootCAs:      certPool,
 		ClientCAs:    certPool,
