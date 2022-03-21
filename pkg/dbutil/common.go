@@ -27,13 +27,13 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
-	"github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/parser/model"
 	tmysql "github.com/pingcap/tidb/parser/mysql"
 	"github.com/pingcap/tidb/sessionctx/stmtctx"
 	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/tidb/util/dbterror"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/tidb-tools/pkg/utils"
@@ -842,7 +842,7 @@ func ignoreDDLError(err error) bool {
 		infoschema.ErrTableExists.Code(), infoschema.ErrTableDropExists.Code(),
 		infoschema.ErrColumnExists.Code(), infoschema.ErrIndexExists.Code():
 		return true
-	case ddl.ErrDupKeyName.Code():
+	case dbterror.ErrDupKeyName.Code():
 		return true
 	default:
 		return false
