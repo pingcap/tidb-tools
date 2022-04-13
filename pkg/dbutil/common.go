@@ -375,7 +375,7 @@ func GetTables(ctx context.Context, db QueryExecutor, schemaName string) (tables
 		| NTEST          | BASE TABLE |
 		+----------------+------------+
 	*/
-	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type != 'VIEW' and Table_Type != 'SEQUENCE';", escapeName(schemaName))
+	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type = 'BASE TABLE';", escapeName(schemaName))
 	return queryTables(ctx, db, query)
 }
 
