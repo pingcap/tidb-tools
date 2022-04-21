@@ -150,7 +150,7 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 		for _, r := range d.RouteRuleList {
 			err := d.Router.UpdateRule(r)
 			if err != nil {
-				return nil, nil, errors.Errorf("update rule failed [schema = %s] [table = %s]", tableConfig.Schema, tableConfig.Table)
+				return nil, nil, errors.Annotatef(err, "update rule list failed")
 			}
 		}
 	}

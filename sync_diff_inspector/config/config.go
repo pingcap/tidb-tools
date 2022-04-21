@@ -91,7 +91,7 @@ type DataSource struct {
 
 	RouteRules    []string `toml:"route-rules" json:"route-rules"`
 	Router        *router.Table
-	RouteRuleList []*router.TableRule
+	RouteRuleList []*router.TableRule `json:"-"`
 
 	Conn *sql.DB
 	// SourceType string `toml:"source-type" json:"source-type"`
