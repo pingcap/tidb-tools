@@ -91,6 +91,7 @@ type DataSource struct {
 
 	RouteRules []string `toml:"route-rules" json:"route-rules"`
 	Router     *router.Table
+	RouteRuleList []*router.TableRule
 
 	Conn *sql.DB
 	// SourceType string `toml:"source-type" json:"source-type"`
@@ -285,8 +286,6 @@ type Config struct {
 	DMAddr string `toml:"dm-addr" json:"dm-addr"`
 	// DMTask string `toml:"dm-task" json:"dm-task"`
 	DMTask string `toml:"dm-task" json:"dm-task"`
-	// when CaseSensitive is false we'll add default rule for same table.
-	CaseSensitive bool `toml:"case-sensitive" json:"case-sensitive"`
 
 	DataSources map[string]*DataSource `toml:"data-sources" json:"data-sources"`
 
@@ -456,7 +455,9 @@ func (c *Config) Init() (err error) {
 			routeRuleList = append(routeRuleList, rr)
 		}
 		// t.SourceRoute can be nil, the caller should check it.
-		d.Router, err = router.NewTableRouter(false, routeRuleList)
+		d.Router, err = router.NewTableRouter(false, nil)
+		// we will add these rule later
+		d.RouteRuleList = routeRuleList
 		if err != nil {
 			return errors.Annotate(err, "failed to build route config")
 		}
