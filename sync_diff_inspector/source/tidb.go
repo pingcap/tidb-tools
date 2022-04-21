@@ -238,7 +238,8 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 			}
 			if _, ok := targetUniqueTableMap[uniqueId]; ok {
 				if _, ok := sourceTableMap[uniqueId]; ok {
-					log.Fatal("TiDB source don't merge multiple tables into one table")
+					log.Error("TiDB source don't support compare multiple source tables with one downstream table," +
+						" if this happening when diff on same instance is fine. otherwise we are not guarantee this diff result is right")
 				}
 				sourceTableMap[uniqueId] = &common.TableSource{
 					OriginSchema: schema,
