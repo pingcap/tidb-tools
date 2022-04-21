@@ -142,12 +142,15 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 			}) != nil {
 				return nil, nil, errors.Errorf("add rule failed [schema = %s] [table = %s]", tableConfig.Schema, tableConfig.Table)
 			}
-			// we update the rules to make sure user setting cover the default rule.
-			for _, r := range d.RouteRuleList {
-				err := d.Router.UpdateRule(r)
-				if err != nil {
-					return nil, nil, errors.Errorf("update rule failed [schema = %s] [table = %s]", tableConfig.Schema, tableConfig.Table)
-				}
+		}
+	}
+
+	// we update the rules to make sure user setting cover the default rule.
+	for _, d := range cfg.Task.SourceInstances {
+		for _, r := range d.RouteRuleList {
+			err := d.Router.UpdateRule(r)
+			if err != nil {
+				return nil, nil, errors.Errorf("update rule failed [schema = %s] [table = %s]", tableConfig.Schema, tableConfig.Table)
 			}
 		}
 	}
