@@ -285,6 +285,8 @@ type Config struct {
 	DMAddr string `toml:"dm-addr" json:"dm-addr"`
 	// DMTask string `toml:"dm-task" json:"dm-task"`
 	DMTask string `toml:"dm-task" json:"dm-task"`
+	// when CaseSensitive is false we'll add default rule for same table.
+	CaseSensitive bool `toml:"case-sensitive" json:"case-sensitive"`
 
 	DataSources map[string]*DataSource `toml:"data-sources" json:"data-sources"`
 
