@@ -89,8 +89,8 @@ type DataSource struct {
 	SqlMode  string `toml:"sql-mode" json:"sql-mode"`
 	Snapshot string `toml:"snapshot" json:"snapshot"`
 
-	RouteRules []string `toml:"route-rules" json:"route-rules"`
-	Router     *router.Table
+	RouteRules    []string `toml:"route-rules" json:"route-rules"`
+	Router        *router.Table
 	RouteRuleList []*router.TableRule
 
 	Conn *sql.DB
