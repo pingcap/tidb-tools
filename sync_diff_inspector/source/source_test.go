@@ -685,6 +685,100 @@ func TestSource(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestRouterRules(t *testing.T) {
+	host, isExist := os.LookupEnv("MYSQL_HOST")
+	if host == "" || !isExist {
+		return
+	}
+	portStr, isExist := os.LookupEnv("MYSQL_PORT")
+	if portStr == "" || !isExist {
+		//return
+	}
+	port, err := strconv.Atoi(portStr)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	r, err := router.NewTableRouter(false, nil)
+	cfg := &config.Config{
+		LogLevel:         "debug",
+		CheckThreadCount: 4,
+		ExportFixSQL:     true,
+		CheckStructOnly:  false,
+		DataSources: map[string]*config.DataSource{
+			"mysql1": {
+				Host: host,
+				Port: port,
+				User: "root",
+			},
+			"tidb": {
+				Host: host,
+				Port: port,
+				User: "root",
+			},
+		},
+		Routes: nil,
+		Task: config.TaskConfig{
+			Source:      []string{"mysql1"},
+			Routes:      nil,
+			Target:      "tidb",
+			CheckTables: []string{"schema2.tbl"},
+			OutputDir:   "./output",
+			SourceInstances: []*config.DataSource{
+				{
+					Host:   host,
+					Port:   port,
+					User:   "root",
+					Router: r,
+					RouteRuleList: []*router.TableRule{
+						// make sure this rule works
+						{
+							SchemaPattern: "schema1",
+							TablePattern:  "tbl",
+							TargetSchema:  "schema2",
+							TargetTable:   "tbl",
+						},
+					},
+				},
+			},
+			TargetInstance: &config.DataSource{
+				Host: host,
+				Port: port,
+				User: "root",
+			},
+			TargetCheckTables: nil,
+			FixDir:            "output/fix-on-tidb0",
+			CheckpointDir:     "output/checkpoint",
+			HashFile:          "",
+		},
+		ConfigFile:   "config.toml",
+		PrintVersion: false,
+	}
+	cfg.Task.TargetCheckTables, err = filter.Parse([]string{"schema2.tbl"})
+	require.NoError(t, err)
+
+	// create table
+	conn, err := sql.Open("mysql", fmt.Sprintf("root:@tcp(%s:%d)/?charset=utf8mb4", host, port))
+	require.NoError(t, err)
+
+	conn.Exec("CREATE DATABASE IF NOT EXISTS schema1")
+	conn.Exec("CREATE TABLE IF NOT EXISTS `schema1`.`tbl` (`a` int, `b` varchar(24), `c` float, `d` datetime, primary key(`a`, `b`))")
+	conn.Exec("CREATE DATABASE IF NOT EXISTS schema2")
+	conn.Exec("CREATE TABLE IF NOT EXISTS `schema2`.`tbl` (`a` int, `b` varchar(24), `c` float, `d` datetime, primary key(`a`, `b`))")
+
+	_, _, err = NewSources(ctx, cfg)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(cfg.Task.SourceInstances))
+	targetSchema, targetTable, err := cfg.Task.SourceInstances[0].Router.Route("schema1", "tbl")
+	require.NoError(t, err)
+	require.Equal(t, "schema2", targetSchema)
+	require.Equal(t, "tbl", targetTable)
+	_, tableRules := cfg.Task.SourceInstances[0].Router.AllRules()
+	require.Equal(t, 1, len(tableRules["schema1"]))
+}
+
 func TestInitTables(t *testing.T) {
 	ctx := context.Background()
 	cfg := config.NewConfig()
