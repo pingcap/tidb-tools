@@ -700,7 +700,15 @@ func TestRouterRules(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	r, err := router.NewTableRouter(false, nil)
+	r, err := router.NewTableRouter(false, []*router.TableRule{
+		// make sure this rule works
+		{
+			SchemaPattern: "schema1",
+			TablePattern:  "tbl",
+			TargetSchema:  "schema2",
+			TargetTable:   "tbl",
+		},
+	})
 	cfg := &config.Config{
 		LogLevel:         "debug",
 		CheckThreadCount: 4,

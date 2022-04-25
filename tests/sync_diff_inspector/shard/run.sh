@@ -50,8 +50,8 @@ mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table router_test_0.Tb
 mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "insert into router_test_0.Tbl values (1,\"hello1\",1);"
 # router_test_1.tbl
 mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create database if not exists router_test_1;"
-mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table router_test_1.Tbl (id INT(11), name VARCHAR(25), deptId INT(11));"
-mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "insert into router_test_1.Tbl values (1,\"hello1\",1);"
+mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table router_test_1.tbl (id INT(11), name VARCHAR(25), deptId INT(11));"
+mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "insert into router_test_1.tbl values (1,\"hello1\",1);"
 # Router_test_1.tbl
 mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create database if not exists Router_test_1;"
 mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table Router_test_1.tbl (id INT(11), name VARCHAR(25), deptId INT(11));"
