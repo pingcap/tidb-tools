@@ -44,6 +44,11 @@ const (
 
 const UnifiedTimeZone string = "+0:00"
 
+const (
+	ShieldDBName    = "_no__exists__db_"
+	ShieldTableName = "_no__exists__table_"
+)
+
 type ChecksumInfo struct {
 	Checksum int64
 	Count    int64
@@ -144,8 +149,8 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 					if d.Router.AddRule(&router.TableRule{
 						SchemaPattern: tableConfig.Schema,
 						TablePattern:  tableConfig.Table,
-						TargetSchema:  "_____",
-						TargetTable:   "_____",
+						TargetSchema:  ShieldDBName,
+						TargetTable:   ShieldTableName,
 					}) != nil {
 						return nil, nil, errors.Errorf("add shield rule failed [schema =  %s] [table = %s]", tableConfig.Schema, tableConfig.Table)
 					}
@@ -160,8 +165,8 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 					if d.Router.AddRule(&router.TableRule{
 						SchemaPattern: tableConfig.Schema,
 						TablePattern:  tableConfig.Table,
-						TargetSchema:  "_____",
-						TargetTable:   "_____",
+						TargetSchema:  ShieldDBName,
+						TargetTable:   ShieldTableName,
 					}) != nil {
 						return nil, nil, errors.Errorf("add shield rule failed [schema =  %s] [table = %s]", tableConfig.Schema, tableConfig.Table)
 					}
