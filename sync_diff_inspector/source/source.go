@@ -134,23 +134,48 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 		// When the router set case-sensitive false,
 		// that add rule match itself will make table case unsensitive.
 		for _, d := range cfg.Task.SourceInstances {
-			if d.Router.AddRule(&router.TableRule{
-				SchemaPattern: tableConfig.Schema,
-				TablePattern:  tableConfig.Table,
-				TargetSchema:  tableConfig.Schema,
-				TargetTable:   tableConfig.Table,
-			}) != nil {
-				return nil, nil, errors.Errorf("add rule failed [schema = %s] [table = %s]", tableConfig.Schema, tableConfig.Table)
-			}
-		}
-	}
+			if _, ok := d.RouteTargetSet[dbutil.TableName(tableConfig.Schema, tableConfig.Table)]; ok {
+				// There is a user rule routing to `tableConfig.Schema`.`tableConfig.Table`
+				rules := d.Router.Match(tableConfig.Schema, tableConfig.Table)
 
-	// we update the rules to make sure user setting cover the default rule.
-	for _, d := range cfg.Task.SourceInstances {
-		for _, r := range d.RouteRuleList {
-			err := d.Router.UpdateRule(r)
-			if err != nil {
-				return nil, nil, errors.Annotatef(err, "update rule list failed")
+				if len(rules) == 0 {
+					// There is no self match in these user rules.
+					// Need to shield the table for this source.
+					if d.Router.AddRule(&router.TableRule{
+						SchemaPattern: tableConfig.Schema,
+						TablePattern:  tableConfig.Table,
+						TargetSchema:  "_____",
+						TargetTable:   "_____",
+					}) != nil {
+						return nil, nil, errors.Errorf("add shield rule failed [schema =  %s] [table = %s]", tableConfig.Schema, tableConfig.Table)
+					}
+				}
+			} else if _, ok := d.RouteTargetSet[dbutil.TableName(tableConfig.Schema, "")]; ok {
+				// There is a user rule routing to `tableConfig.Schema`
+				rules := d.Router.Match(tableConfig.Schema, tableConfig.Table)
+
+				if len(rules) == 0 {
+					// There is no self match in these user rules.
+					// Need to shield the table for this source.
+					if d.Router.AddRule(&router.TableRule{
+						SchemaPattern: tableConfig.Schema,
+						TablePattern:  tableConfig.Table,
+						TargetSchema:  "_____",
+						TargetTable:   "_____",
+					}) != nil {
+						return nil, nil, errors.Errorf("add shield rule failed [schema =  %s] [table = %s]", tableConfig.Schema, tableConfig.Table)
+					}
+				}
+			} else {
+				// Add the default rule to match upper/lower case
+				if d.Router.AddRule(&router.TableRule{
+					SchemaPattern: tableConfig.Schema,
+					TablePattern:  tableConfig.Table,
+					TargetSchema:  tableConfig.Schema,
+					TargetTable:   tableConfig.Table,
+				}) != nil {
+					return nil, nil, errors.Errorf("add rule failed [schema = %s] [table = %s]", tableConfig.Schema, tableConfig.Table)
+				}
 			}
 		}
 	}
