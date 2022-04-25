@@ -727,19 +727,11 @@ func TestRouterRules(t *testing.T) {
 			OutputDir:   "./output",
 			SourceInstances: []*config.DataSource{
 				{
-					Host:   host,
-					Port:   port,
-					User:   "root",
-					Router: r,
-					RouteRuleList: []*router.TableRule{
-						// make sure this rule works
-						{
-							SchemaPattern: "schema1",
-							TablePattern:  "tbl",
-							TargetSchema:  "schema2",
-							TargetTable:   "tbl",
-						},
-					},
+					Host:           host,
+					Port:           port,
+					User:           "root",
+					Router:         r,
+					RouteTargetSet: make(map[string]struct{}),
 				},
 			},
 			TargetInstance: &config.DataSource{
@@ -757,6 +749,7 @@ func TestRouterRules(t *testing.T) {
 	}
 	cfg.Task.TargetCheckTables, err = filter.Parse([]string{"schema2.tbl"})
 	require.NoError(t, err)
+	cfg.Task.SourceInstances[0].RouteTargetSet[dbutil.TableName("schema2", "tbl")] = struct{}{}
 
 	// create table
 	conn, err := sql.Open("mysql", fmt.Sprintf("root:@tcp(%s:%d)/?charset=utf8mb4", host, port))
@@ -775,8 +768,13 @@ func TestRouterRules(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "schema2", targetSchema)
 	require.Equal(t, "tbl", targetTable)
+	targetSchema, targetTable, err = cfg.Task.SourceInstances[0].Router.Route("schema2", "tbl")
+	require.NoError(t, err)
+	require.Equal(t, "_____", targetSchema)
+	require.Equal(t, "_____", targetTable)
 	_, tableRules := cfg.Task.SourceInstances[0].Router.AllRules()
 	require.Equal(t, 1, len(tableRules["schema1"]))
+	require.Equal(t, 1, len(tableRules["schema2"]))
 }
 
 func TestInitTables(t *testing.T) {
