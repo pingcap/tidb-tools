@@ -260,7 +260,7 @@ func (c *Range) ToString(collation string) (string, []interface{}) {
 		sameArgs = append(sameArgs, bound.Lower)
 	}
 
-	if i == len(c.Bounds) {
+	if i == len(c.Bounds) && i > 0 {
 		// All the columns are equal in bounds, should return FALSE!
 		return "FALSE", nil
 	}
