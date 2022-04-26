@@ -755,7 +755,7 @@ func TestRouterRules(t *testing.T) {
 		ConfigFile:   "config.toml",
 		PrintVersion: false,
 	}
-	cfg.Task.TargetCheckTables, err = filter.Parse([]string{"schema2.tbl"})
+	cfg.Task.TargetCheckTables, err = filter.Parse([]string{"schema2.tbl", "schema_test.tbl"})
 	require.NoError(t, err)
 	cfg.Task.SourceInstances[0].RouteTargetSet[dbutil.TableName("schema2", "tbl")] = struct{}{}
 
@@ -767,6 +767,8 @@ func TestRouterRules(t *testing.T) {
 	conn.Exec("CREATE TABLE IF NOT EXISTS `schema1`.`tbl` (`a` int, `b` varchar(24), `c` float, `d` datetime, primary key(`a`, `b`))")
 	conn.Exec("CREATE DATABASE IF NOT EXISTS schema2")
 	conn.Exec("CREATE TABLE IF NOT EXISTS `schema2`.`tbl` (`a` int, `b` varchar(24), `c` float, `d` datetime, primary key(`a`, `b`))")
+	conn.Exec("CREATE DATABASE IF NOT EXISTS schema_test")
+	conn.Exec("CREATE TABLE IF NOT EXISTS `schema_test`.`tbl` (`a` int, `b` varchar(24), `c` float, `d` datetime, primary key(`a`, `b`))")
 
 	_, _, err = NewSources(ctx, cfg)
 	require.NoError(t, err)
@@ -780,9 +782,14 @@ func TestRouterRules(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, ShieldDBName, targetSchema)
 	require.Equal(t, ShieldTableName, targetTable)
+	targetSchema, targetTable, err = cfg.Task.SourceInstances[0].Router.Route("schema_test", "tbl")
+	require.NoError(t, err)
+	require.Equal(t, "schema_test", targetSchema)
+	require.Equal(t, "tbl", targetTable)
 	_, tableRules := cfg.Task.SourceInstances[0].Router.AllRules()
 	require.Equal(t, 1, len(tableRules["schema1"]))
 	require.Equal(t, 1, len(tableRules["schema2"]))
+	require.Equal(t, 1, len(tableRules["schema_test"]))
 }
 
 func TestInitTables(t *testing.T) {
