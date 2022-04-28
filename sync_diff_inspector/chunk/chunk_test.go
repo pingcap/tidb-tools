@@ -386,6 +386,40 @@ func TestChunkToString(t *testing.T) {
 	}
 	require.Equal(t, chunk.String(), `{"index":null,"type":0,"bounds":[{"column":"a","lower":"1","upper":"1","has-lower":false,"has-upper":false},{"column":"b","lower":"3","upper":"4","has-lower":false,"has-upper":false},{"column":"c","lower":"5","upper":"6","has-lower":false,"has-upper":false}],"is-first":false,"is-last":false,"where":"","args":null}`)
 	require.Equal(t, chunk.ToMeta(), "range in sequence: Full")
+
+	// all equal
+	chunk = &Range{
+		Bounds: []*Bound{
+			{
+				Column:   "a",
+				Lower:    "1",
+				Upper:    "1",
+				HasLower: true,
+				HasUpper: true,
+			}, {
+				Column:   "b",
+				Lower:    "3",
+				Upper:    "3",
+				HasLower: true,
+				HasUpper: true,
+			}, {
+				Column:   "c",
+				Lower:    "6",
+				Upper:    "6",
+				HasLower: true,
+				HasUpper: true,
+			},
+		},
+	}
+	conditions, args = chunk.ToString("")
+	require.Equal(t, conditions, "FALSE")
+	expectArgs = []string{}
+	for i, arg := range args {
+		require.Equal(t, arg, expectArgs[i])
+	}
+	require.Equal(t, chunk.String(), `{"index":null,"type":0,"bounds":[{"column":"a","lower":"1","upper":"1","has-lower":true,"has-upper":true},{"column":"b","lower":"3","upper":"3","has-lower":true,"has-upper":true},{"column":"c","lower":"6","upper":"6","has-lower":true,"has-upper":true}],"is-first":false,"is-last":false,"where":"","args":null}`)
+	require.Equal(t, chunk.ToMeta(), "range in sequence: (1,3,6) < (a,b,c) <= (1,3,6)")
+
 }
 
 func TestChunkInit(t *testing.T) {
