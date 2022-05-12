@@ -169,5 +169,5 @@ func (*testDBSuite) TestSchemacmpEncode(c *C) {
 	c.Assert(err, IsNil)
 
 	table := schemacmp.Encode(tableInfo)
-	c.Assert(table.String(), Equals, "CREATE TABLE `tbl`(`id` INT(24) NOT NULL, PRIMARY KEY (`id`)) CHARSET UTF8MB4 COLLATE UTF8MB4_BIN")
+	c.Assert(table.String(), Equals, "CREATE TABLE `tbl`(`id` INT(24), PRIMARY KEY (`id`)) CHARSET UTF8MB4 COLLATE UTF8MB4_BIN")
 }
