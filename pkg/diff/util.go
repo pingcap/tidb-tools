@@ -98,7 +98,7 @@ func getColumnsFromIndex(index *model.IndexInfo, tableInfo *model.TableInfo) []*
 }
 
 func needQuotes(ft types.FieldType) bool {
-	return !(dbutil.IsNumberType(ft.Tp) || dbutil.IsFloatType(ft.Tp))
+	return !(dbutil.IsNumberType(ft.GetType()) || dbutil.IsFloatType(ft.GetType()))
 }
 
 func rowContainsCols(row map[string]*dbutil.ColumnData, cols []*model.ColumnInfo) bool {

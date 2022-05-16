@@ -185,6 +185,10 @@ func (s *testDBSuite) TestGetParser(c *C) {
 }
 
 func (s *testDBSuite) TestAnalyzeValuesFromBuckets(c *C) {
+	ftTypeDatetime := types.NewFieldType(pmysql.TypeDatetime)
+	ftTypeTimestamp := types.NewFieldType(pmysql.TypeTimestamp)
+	ftTypeDate := types.NewFieldType(pmysql.TypeDate)
+
 	cases := []struct {
 		value  string
 		col    *model.ColumnInfo
@@ -192,32 +196,32 @@ func (s *testDBSuite) TestAnalyzeValuesFromBuckets(c *C) {
 	}{
 		{
 			"2021-03-05 21:31:03",
-			&model.ColumnInfo{FieldType: types.FieldType{Tp: pmysql.TypeDatetime}},
+			&model.ColumnInfo{FieldType: *ftTypeDatetime},
 			"2021-03-05 21:31:03",
 		},
 		{
 			"2021-03-05 21:31:03",
-			&model.ColumnInfo{FieldType: types.FieldType{Tp: pmysql.TypeTimestamp}},
+			&model.ColumnInfo{FieldType: *ftTypeTimestamp},
 			"2021-03-05 21:31:03",
 		},
 		{
 			"2021-03-05",
-			&model.ColumnInfo{FieldType: types.FieldType{Tp: pmysql.TypeDate}},
+			&model.ColumnInfo{FieldType: *ftTypeDate},
 			"2021-03-05",
 		},
 		{
 			"1847956477067657216",
-			&model.ColumnInfo{FieldType: types.FieldType{Tp: pmysql.TypeDatetime}},
+			&model.ColumnInfo{FieldType: *ftTypeDatetime},
 			"2020-01-01 10:00:00",
 		},
 		{
 			"1847955927311843328",
-			&model.ColumnInfo{FieldType: types.FieldType{Tp: pmysql.TypeTimestamp}},
+			&model.ColumnInfo{FieldType: *ftTypeTimestamp},
 			"2020-01-01 02:00:00",
 		},
 		{
 			"1847955789872889856",
-			&model.ColumnInfo{FieldType: types.FieldType{Tp: pmysql.TypeDate}},
+			&model.ColumnInfo{FieldType: *ftTypeDate},
 			"2020-01-01 00:00:00",
 		},
 	}

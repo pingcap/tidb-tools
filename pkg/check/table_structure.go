@@ -438,9 +438,9 @@ func (c *ShardingTablesChecker) findAutoIncrementKey(stmt *ast.CreateTableStmt, 
 
 		if hasAutoIncrementOpt {
 			if isUnique {
-				autoIncrementKeys[col.Name.Name.O] = col.Tp.Tp == mysql.TypeLonglong
+				autoIncrementKeys[col.Name.Name.O] = col.Tp.GetType() == mysql.TypeLonglong
 			} else {
-				autoIncrementCols[col.Name.Name.O] = col.Tp.Tp == mysql.TypeLonglong
+				autoIncrementCols[col.Name.Name.O] = col.Tp.GetType() == mysql.TypeLonglong
 			}
 		}
 	}

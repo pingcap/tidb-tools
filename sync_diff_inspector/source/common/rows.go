@@ -58,7 +58,7 @@ func (r RowDatas) Less(i, j int) bool {
 		strData1 := string(col1.Data)
 		strData2 := string(col2.Data)
 
-		if utils.NeedQuotes(col.FieldType.Tp) {
+		if utils.NeedQuotes(col.FieldType.GetType()) {
 			if strData1 == strData2 {
 				continue
 			}
