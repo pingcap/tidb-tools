@@ -154,12 +154,6 @@ func (s *BucketIterator) init(startRange *RangeInfo) error {
 			continue
 		}
 
-		bucket, ok := buckets[index.Name.O]
-		if !ok {
-			return errors.NotFoundf("index %s in buckets info", index.Name.O)
-		}
-		log.Debug("buckets for index", zap.String("index", index.Name.O), zap.Reflect("buckets", buckets))
-
 		indexColumns := utils.GetColumnsFromIndex(index, s.table.Info)
 
 		if len(indexColumns) < len(index.Columns) {
@@ -171,6 +165,15 @@ func (s *BucketIterator) init(startRange *RangeInfo) error {
 			// We are enforcing user configured "index-fields" settings.
 			continue
 		}
+
+		bucket, ok := buckets[index.Name.O]
+		if !ok {
+			// We found an index matching the "index-fields", but no bucket is found
+			// for that index. Returning an error here will make the caller retry with
+			// the random splitter.
+			return errors.NotFoundf("index %s in buckets info", index.Name.O)
+		}
+		log.Debug("buckets for index", zap.String("index", index.Name.O), zap.Reflect("buckets", buckets))
 
 		s.buckets = bucket
 		s.indexColumns = indexColumns
