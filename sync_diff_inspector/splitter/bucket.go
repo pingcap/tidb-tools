@@ -54,7 +54,7 @@ func NewBucketIterator(ctx context.Context, progressID string, table *common.Tab
 }
 
 func NewBucketIteratorWithCheckpoint(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, startRange *RangeInfo, checkThreadCount int) (*BucketIterator, error) {
-	if utils.IsRangeTrivial(table.Range) {
+	if !utils.IsRangeTrivial(table.Range) {
 		return nil, errors.Errorf(
 			"BucketIterator does not support user configured Range. Range: %s",
 			table.Range)
