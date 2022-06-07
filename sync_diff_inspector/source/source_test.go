@@ -19,6 +19,7 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"testing"
 	"time"
@@ -250,6 +251,54 @@ func TestTiDBSource(t *testing.T) {
 	mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
 	chunkIter, err := analyze.AnalyzeSplitter(ctx, tableDiffs[0], tableCase.rangeInfo)
 	require.NoError(t, err)
+	chunkIter.Close()
+	tidb.Close()
+}
+
+func TestFallbackToRandomIfRangeIsSet(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer conn.Close()
+
+	mock.ExpectQuery("SHOW DATABASES").WillReturnRows(sqlmock.NewRows([]string{"Database"}).AddRow("mysql").AddRow("source_test"))
+	mock.ExpectQuery("SHOW FULL TABLES*").WillReturnRows(sqlmock.NewRows([]string{"Table", "type"}).AddRow("test1", "base"))
+	statsRows := sqlmock.NewRows([]string{"Db_name", "Table_name", "Column_name", "Is_index", "Bucket_id", "Count", "Repeats", "Lower_Bound", "Upper_Bound"})
+	for i := 0; i < 5; i++ {
+		statsRows.AddRow("source_test", "test1", "PRIMARY", 1, (i+1)*64, (i+1)*64, 1,
+			fmt.Sprintf("(%d, %d)", i*64, i*12), fmt.Sprintf("(%d, %d)", (i+1)*64-1, (i+1)*12-1))
+	}
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT COUNT(1) cnt")).WillReturnRows(sqlmock.NewRows([]string{"cnt"}).AddRow(100))
+
+	f, err := filter.Parse([]string{"source_test.*"})
+	require.NoError(t, err)
+
+	createTableSQL1 := "CREATE TABLE `test1` " +
+		"(`id` int(11) NOT NULL AUTO_INCREMENT, " +
+		" `k` int(11) NOT NULL DEFAULT '0', " +
+		"`c` char(120) NOT NULL DEFAULT '', " +
+		"PRIMARY KEY (`id`), KEY `k_1` (`k`))"
+
+	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL1, parser.New())
+	require.NoError(t, err)
+
+	table1 := &common.TableDiff{
+		Schema: "source_test",
+		Table:  "test1",
+		Info:   tableInfo,
+		Range:  "id < 10", // This should prevent using BucketIterator
+	}
+
+	tidb, err := NewTiDBSource(ctx, []*common.TableDiff{table1}, &config.DataSource{Conn: conn}, 1, f)
+	require.NoError(t, err)
+
+	analyze := tidb.GetTableAnalyzer()
+	chunkIter, err := analyze.AnalyzeSplitter(ctx, table1, nil)
+	require.NoError(t, err)
+	require.IsType(t, &splitter.RandomIterator{}, chunkIter)
+
 	chunkIter.Close()
 	tidb.Close()
 }
