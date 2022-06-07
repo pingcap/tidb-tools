@@ -905,3 +905,11 @@ func GetChunkIDFromSQLFileName(fileIDStr string) (int, int, int, int, error) {
 	}
 	return tableIndex, bucketIndexLeft, bucketIndexRight, chunkIndex, nil
 }
+
+// IsRangeTrivial checks if a user configured Range is empty or `TRUE`.
+func IsRangeTrivial(rangeCond string) bool {
+	if rangeCond == "" {
+		return true
+	}
+	return strings.ToLower(rangeCond) == "true"
+}
