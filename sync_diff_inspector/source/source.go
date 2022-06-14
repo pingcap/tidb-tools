@@ -80,7 +80,7 @@ type Source interface {
 	// this is the mainly iterator across the whole sync diff.
 	// One source has one range iterator to produce the range to channel.
 	// there are many workers consume the range from the channel to compare.
-	GetRangeIterator(context.Context, *splitter.RangeInfo, TableAnalyzer) (RangeIterator, error)
+	GetRangeIterator(context.Context, *splitter.RangeInfo, TableAnalyzer, int) (RangeIterator, error)
 
 	// GetCountAndCrc32 gets the crc32 result and the count from given range.
 	GetCountAndCrc32(context.Context, *splitter.RangeInfo) *ChecksumInfo

@@ -17,8 +17,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	tableFilter "github.com/pingcap/tidb-tools/pkg/table-filter"
 	"time"
+
+	tableFilter "github.com/pingcap/tidb-tools/pkg/table-filter"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -109,8 +110,8 @@ func getMatchSource(sourceTableMap map[string]*common.TableSource, table *common
 	return sourceTableMap[uniqueID]
 }
 
-func (s *TiDBSource) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
-	return NewChunksIterator(ctx, analyzer, s.tableDiffs, r)
+func (s *TiDBSource) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo, analyzer TableAnalyzer, splitThreadCount int) (RangeIterator, error) {
+	return NewChunksIterator(ctx, analyzer, s.tableDiffs, r, splitThreadCount)
 }
 
 func (s *TiDBSource) Close() {

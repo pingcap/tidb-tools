@@ -18,8 +18,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	tableFilter "github.com/pingcap/tidb-tools/pkg/table-filter"
 	"time"
+
+	tableFilter "github.com/pingcap/tidb-tools/pkg/table-filter"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -80,8 +81,8 @@ func (s *MySQLSources) GetTableAnalyzer() TableAnalyzer {
 	}
 }
 
-func (s *MySQLSources) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo, analyzer TableAnalyzer) (RangeIterator, error) {
-	return NewChunksIterator(ctx, analyzer, s.tableDiffs, r)
+func (s *MySQLSources) GetRangeIterator(ctx context.Context, r *splitter.RangeInfo, analyzer TableAnalyzer, splitThreadCount int) (RangeIterator, error) {
+	return NewChunksIterator(ctx, analyzer, s.tableDiffs, r, splitThreadCount)
 }
 
 func (s *MySQLSources) Close() {

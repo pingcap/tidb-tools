@@ -277,6 +277,8 @@ type Config struct {
 	LogLevel string `toml:"-" json:"-"`
 	// how many goroutines are created to check data
 	CheckThreadCount int `toml:"check-thread-count" json:"check-thread-count"`
+	// how many goroutines are created to split chunk. A goroutine splits one table at a time.
+	SplitThreadCount int `toml:"split-thread-count" json:"split-thread-count"`
 	// set true if want to compare rows
 	// set false won't compare rows.
 	ExportFixSQL bool `toml:"export-fix-sql" json:"export-fix-sql"`
@@ -316,7 +318,8 @@ func NewConfig() *Config {
 	fs.StringVarP(&cfg.Template, "template", "T", "", "<dm|norm> export a template config file in the current directory")
 	fs.StringVar(&cfg.DMAddr, "dm-addr", "", "the address of DM")
 	fs.StringVar(&cfg.DMTask, "dm-task", "", "identifier of dm task")
-	fs.IntVar(&cfg.CheckThreadCount, "check-thread-count", 1, "how many goroutines are created to check data")
+	fs.IntVar(&cfg.CheckThreadCount, "check-thread-count", 4, "how many goroutines are created to check data")
+	fs.IntVar(&cfg.SplitThreadCount, "split-thread-count", 3, "how many goroutines are created to split chunk")
 	fs.BoolVar(&cfg.ExportFixSQL, "export-fix-sql", true, "set true if want to compare rows or set to false will only compare checksum")
 	fs.BoolVar(&cfg.CheckStructOnly, "check-struct-only", false, "ignore check table's data")
 
@@ -477,6 +480,10 @@ func (c *Config) Init() (err error) {
 func (c *Config) CheckConfig() bool {
 	if c.CheckThreadCount <= 0 {
 		log.Error("check-thread-count must greater than 0!")
+		return false
+	}
+	if c.SplitThreadCount <= 0 {
+		log.Error("split-thread-count must greater than 0!")
 		return false
 	}
 	if len(c.DMAddr) != 0 {

@@ -179,7 +179,7 @@ func TestTiDBSource(t *testing.T) {
 	}
 
 	// Test ChunkIterator
-	iter, err := tidb.GetRangeIterator(ctx, tableCases[0].rangeInfo, &MockAnalyzer{})
+	iter, err := tidb.GetRangeIterator(ctx, tableCases[0].rangeInfo, &MockAnalyzer{}, 3)
 	require.NoError(t, err)
 	resRecords := [][]bool{
 		{false, false, false, false, false},
@@ -494,12 +494,12 @@ func TestMysqlRouter(t *testing.T) {
 	// random splitter
 	countRows := sqlmock.NewRows([]string{"Cnt"}).AddRow(0)
 	mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
-	rangeIter, err := mysql.GetRangeIterator(ctx, nil, mysql.GetTableAnalyzer())
+	rangeIter, err := mysql.GetRangeIterator(ctx, nil, mysql.GetTableAnalyzer(), 3)
 	rangeIter.Next(ctx)
 	require.NoError(t, err)
 	rangeIter.Close()
 
-	rangeIter, err = mysql.GetRangeIterator(ctx, tableCases[0].rangeInfo, mysql.GetTableAnalyzer())
+	rangeIter, err = mysql.GetRangeIterator(ctx, tableCases[0].rangeInfo, mysql.GetTableAnalyzer(), 3)
 	require.NoError(t, err)
 	rangeIter.Close()
 
