@@ -34,9 +34,9 @@ import (
 )
 
 type TiDBTableAnalyzer struct {
-	dbConn           *sql.DB
-	checkThreadCount int
-	sourceTableMap   map[string]*common.TableSource
+	dbConn            *sql.DB
+	bucketSpliterPool *utils.WorkerPool
+	sourceTableMap    map[string]*common.TableSource
 }
 
 func (a *TiDBTableAnalyzer) AnalyzeSplitter(ctx context.Context, table *common.TableDiff, startRange *splitter.RangeInfo) (splitter.ChunkIterator, error) {
@@ -50,7 +50,7 @@ func (a *TiDBTableAnalyzer) AnalyzeSplitter(ctx context.Context, table *common.T
 	// we always use bucksIter even we load from checkpoint is not bucketNode
 	// TODO check whether we can use bucket for this table to split chunks.
 	// NOTICE: If checkpoint use random splitter, it will also fail the next time build bucket splitter.
-	bucketIter, err := splitter.NewBucketIteratorWithCheckpoint(ctx, progressID, &originTable, a.dbConn, startRange, a.checkThreadCount)
+	bucketIter, err := splitter.NewBucketIteratorWithCheckpoint(ctx, progressID, &originTable, a.dbConn, startRange, a.bucketSpliterPool)
 	if err == nil {
 		return bucketIter, nil
 	}
@@ -85,15 +85,15 @@ type TiDBSource struct {
 	tableDiffs     []*common.TableDiff
 	sourceTableMap map[string]*common.TableSource
 	snapshot       string
-	// checkThreadCount is the pool size of produce chunks
-	checkThreadCount int
-	dbConn           *sql.DB
+	// bucketSpliterPool is the shared pool to produce chunks using bucket
+	bucketSpliterPool *utils.WorkerPool
+	dbConn            *sql.DB
 }
 
 func (s *TiDBSource) GetTableAnalyzer() TableAnalyzer {
 	return &TiDBTableAnalyzer{
 		s.dbConn,
-		s.checkThreadCount,
+		s.bucketSpliterPool,
 		s.sourceTableMap,
 	}
 }
@@ -256,17 +256,17 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 	return sourceTableMap, nil
 }
 
-func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource, checkThreadCount int, f tableFilter.Filter) (Source, error) {
+func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource, bucketSpliterPool *utils.WorkerPool, f tableFilter.Filter) (Source, error) {
 	sourceTableMap, err := getSourceTableMap(ctx, tableDiffs, ds, f)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	ts := &TiDBSource{
-		tableDiffs:       tableDiffs,
-		sourceTableMap:   sourceTableMap,
-		snapshot:         ds.Snapshot,
-		dbConn:           ds.Conn,
-		checkThreadCount: checkThreadCount,
+		tableDiffs:        tableDiffs,
+		sourceTableMap:    sourceTableMap,
+		snapshot:          ds.Snapshot,
+		dbConn:            ds.Conn,
+		bucketSpliterPool: bucketSpliterPool,
 	}
 	return ts, nil
 }

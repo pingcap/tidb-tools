@@ -32,6 +32,7 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"github.com/pingcap/tidb/parser"
 	"github.com/stretchr/testify/require"
 
@@ -165,7 +166,7 @@ func TestTiDBSource(t *testing.T) {
 
 	f, err := filter.Parse([]string{"source_test.*"})
 	require.NoError(t, err)
-	tidb, err := NewTiDBSource(ctx, tableDiffs, &config.DataSource{Conn: conn}, 1, f)
+	tidb, err := NewTiDBSource(ctx, tableDiffs, &config.DataSource{Conn: conn}, utils.NewWorkerPool(1, "bucketIter"), f)
 	require.NoError(t, err)
 
 	for n, tableCase := range tableCases {
@@ -291,7 +292,7 @@ func TestFallbackToRandomIfRangeIsSet(t *testing.T) {
 		Range:  "id < 10", // This should prevent using BucketIterator
 	}
 
-	tidb, err := NewTiDBSource(ctx, []*common.TableDiff{table1}, &config.DataSource{Conn: conn}, 1, f)
+	tidb, err := NewTiDBSource(ctx, []*common.TableDiff{table1}, &config.DataSource{Conn: conn}, utils.NewWorkerPool(1, "bucketIter"), f)
 	require.NoError(t, err)
 
 	analyze := tidb.GetTableAnalyzer()
@@ -596,7 +597,7 @@ func TestTiDBRouter(t *testing.T) {
 
 	f, err := filter.Parse([]string{"*.*"})
 	require.NoError(t, err)
-	tidb, err := NewTiDBSource(ctx, tableDiffs, ds, 1, f)
+	tidb, err := NewTiDBSource(ctx, tableDiffs, ds, utils.NewWorkerPool(1, "bucketIter"), f)
 	require.NoError(t, err)
 	infoRows := sqlmock.NewRows([]string{"Table", "Create Table"}).AddRow("test_t", "CREATE TABLE `source_test`.`test1` (`a` int, `b` varchar(24), `c` float, primary key(`a`, `b`))")
 	mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(infoRows)

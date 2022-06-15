@@ -16,6 +16,7 @@ package splitter
 import (
 	"context"
 	"database/sql"
+
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/log"
@@ -50,10 +51,10 @@ type BucketIterator struct {
 }
 
 func NewBucketIterator(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB) (*BucketIterator, error) {
-	return NewBucketIteratorWithCheckpoint(ctx, progressID, table, dbConn, nil, 1)
+	return NewBucketIteratorWithCheckpoint(ctx, progressID, table, dbConn, nil, utils.NewWorkerPool(1, "bucketIter"))
 }
 
-func NewBucketIteratorWithCheckpoint(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, startRange *RangeInfo, checkThreadCount int) (*BucketIterator, error) {
+func NewBucketIteratorWithCheckpoint(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, startRange *RangeInfo, bucketSpliterPool *utils.WorkerPool) (*BucketIterator, error) {
 	if !utils.IsRangeTrivial(table.Range) {
 		return nil, errors.Errorf(
 			"BucketIterator does not support user configured Range. Range: %s",
@@ -63,6 +64,7 @@ func NewBucketIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 	bctx, cancel := context.WithCancel(ctx)
 	bs := &BucketIterator{
 		table:     table,
+		chunkPool: bucketSpliterPool,
 		chunkSize: table.ChunkSize,
 		chunksCh:  make(chan []*chunk.Range, DefaultChannelBuffer),
 		errCh:     make(chan error, 1),
@@ -72,12 +74,7 @@ func NewBucketIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 		progressID: progressID,
 	}
 
-	// If `bucket size` is much larger than `chunk size`,
-	// we need to split the bucket into some chunks, which wastes much time.
-	// So we use WorkPool to split buckets in parallel.
-	bs.chunkPool = utils.NewWorkerPool(uint(checkThreadCount), "bucketIter")
-
-	if err := bs.init(startRange); err != nil {
+	if err := bs.init(ctx, startRange); err != nil {
 		return nil, errors.Trace(err)
 	}
 
@@ -129,14 +126,14 @@ func (s *BucketIterator) Next() (*chunk.Range, error) {
 	return c, nil
 }
 
-func (s *BucketIterator) init(startRange *RangeInfo) error {
+func (s *BucketIterator) init(ctx context.Context, startRange *RangeInfo) error {
 	fields, err := indexFieldsFromConfigString(s.table.Fields, s.table.Info)
 	if err != nil {
 		return err
 	}
 
 	s.nextChunk = 0
-	buckets, err := dbutil.GetBucketsInfo(context.Background(), s.dbConn, s.table.Schema, s.table.Table, s.table.Info)
+	buckets, err := dbutil.GetBucketsInfo(ctx, s.dbConn, s.table.Schema, s.table.Table, s.table.Info)
 	if err != nil {
 		return errors.Trace(err)
 	}

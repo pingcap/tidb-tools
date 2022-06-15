@@ -196,18 +196,26 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 		tj := utils.UniqueID(tableDiffs[j].Schema, tableDiffs[j].Table)
 		return strings.Compare(ti, tj) > 0
 	})
-	upstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.CheckThreadCount, cfg.Task.TargetCheckTables, cfg.Task.SourceInstances...)
+
+	// If `bucket size` is much larger than `chunk size`,
+	// we need to split the bucket into some chunks, which wastes much time.
+	// So we use WorkPool to split buckets in parallel.
+	// Besides, bucketSpliters of each table use shared WorkPool
+	bucketSpliterPool := utils.NewWorkerPool(uint(cfg.CheckThreadCount), "bucketIter")
+	// for mysql_shard, it needs `cfg.CheckThreadCount` + `cfg.SplitThreadCount` at most, because it cannot use bucket.
+	connCount := cfg.CheckThreadCount + cfg.SplitThreadCount
+	upstream, err = buildSourceFromCfg(ctx, tableDiffs, connCount, bucketSpliterPool, cfg.Task.TargetCheckTables, cfg.Task.SourceInstances...)
 	if err != nil {
 		return nil, nil, errors.Annotate(err, "from upstream")
 	}
-	downstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.CheckThreadCount, cfg.Task.TargetCheckTables, cfg.Task.TargetInstance)
+	downstream, err = buildSourceFromCfg(ctx, tableDiffs, connCount, bucketSpliterPool, cfg.Task.TargetCheckTables, cfg.Task.TargetInstance)
 	if err != nil {
 		return nil, nil, errors.Annotate(err, "from downstream")
 	}
 	return downstream, upstream, nil
 }
 
-func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, checkThreadCount int, f tableFilter.Filter, dbs ...*config.DataSource) (Source, error) {
+func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, connCount int, bucketSpliterPool *utils.WorkerPool, f tableFilter.Filter, dbs ...*config.DataSource) (Source, error) {
 	if len(dbs) < 1 {
 		return nil, errors.Errorf("no db config detected")
 	}
@@ -218,12 +226,12 @@ func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, che
 
 	if ok {
 		if len(dbs) == 1 {
-			return NewTiDBSource(ctx, tableDiffs, dbs[0], checkThreadCount, f)
+			return NewTiDBSource(ctx, tableDiffs, dbs[0], bucketSpliterPool, f)
 		} else {
 			log.Fatal("Don't support check table in multiple tidb instance, please specify one tidb instance.")
 		}
 	}
-	return NewMySQLSources(ctx, tableDiffs, dbs, checkThreadCount, f)
+	return NewMySQLSources(ctx, tableDiffs, dbs, connCount, f)
 }
 
 func initDBConn(ctx context.Context, cfg *config.Config) error {
@@ -233,7 +241,7 @@ func initDBConn(ctx context.Context, cfg *config.Config) error {
 	}
 	// we had `cfg.SplitThreadCount` producers and `cfg.CheckThreadCount` consumer to use db connections.
 	// so the connection count need to be cfg.SplitThreadCount + cfg.CheckThreadCount.
-	targetConn, err := common.CreateDB(ctx, cfg.Task.TargetInstance.ToDBConfig(), vars, cfg.SplitThreadCount+cfg.CheckThreadCount)
+	targetConn, err := common.CreateDB(ctx, cfg.Task.TargetInstance.ToDBConfig(), vars, cfg.SplitThreadCount+2*cfg.CheckThreadCount)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -242,7 +250,7 @@ func initDBConn(ctx context.Context, cfg *config.Config) error {
 
 	for _, source := range cfg.Task.SourceInstances {
 		// connect source db with target db time_zone
-		conn, err := common.CreateDB(ctx, source.ToDBConfig(), vars, cfg.SplitThreadCount+cfg.CheckThreadCount)
+		conn, err := common.CreateDB(ctx, source.ToDBConfig(), vars, cfg.SplitThreadCount+2*cfg.CheckThreadCount)
 		if err != nil {
 			return errors.Trace(err)
 		}
