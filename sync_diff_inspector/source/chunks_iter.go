@@ -47,9 +47,11 @@ func NewChunksIterator(ctx context.Context, analyzer TableAnalyzer, tableDiffs [
 		splitThreadCount: splitThreadCount,
 		tableAnalyzer:    analyzer,
 		TableDiffs:       tableDiffs,
-		chunksCh:         make(chan *splitter.RangeInfo, 30*splitThreadCount),
-		errCh:            make(chan error, len(tableDiffs)),
-		cancel:           cancel,
+
+		// reserve 30 capacity for each goroutine on average
+		chunksCh: make(chan *splitter.RangeInfo, 30*splitThreadCount),
+		errCh:    make(chan error, len(tableDiffs)),
+		cancel:   cancel,
 	}
 	go iter.produceChunks(ctxx, startRange)
 	return iter, nil

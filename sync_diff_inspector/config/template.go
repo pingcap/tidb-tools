@@ -26,6 +26,8 @@ const (
 
 check-thread-count = 4
 
+split-thread-count = 3
+
 export-fix-sql = true
 
 check-struct-only = false
@@ -47,6 +49,8 @@ dm-task = "test"
 ######################### Global config #########################
 
 check-thread-count = 4
+
+split-thread-count = 3
 
 export-fix-sql = true
 

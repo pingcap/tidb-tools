@@ -231,9 +231,9 @@ func initDBConn(ctx context.Context, cfg *config.Config) error {
 	vars := map[string]string{
 		"time_zone": UnifiedTimeZone,
 	}
-	// we had 3 producers and `cfg.CheckThreadCount` consumer to use db connections.
-	// so the connection count need to be cfg.CheckThreadCount + 3.
-	targetConn, err := common.CreateDB(ctx, cfg.Task.TargetInstance.ToDBConfig(), vars, cfg.CheckThreadCount+3)
+	// we had `cfg.SplitThreadCount` producers and `cfg.CheckThreadCount` consumer to use db connections.
+	// so the connection count need to be cfg.SplitThreadCount + cfg.CheckThreadCount.
+	targetConn, err := common.CreateDB(ctx, cfg.Task.TargetInstance.ToDBConfig(), vars, cfg.SplitThreadCount+cfg.CheckThreadCount)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -242,7 +242,7 @@ func initDBConn(ctx context.Context, cfg *config.Config) error {
 
 	for _, source := range cfg.Task.SourceInstances {
 		// connect source db with target db time_zone
-		conn, err := common.CreateDB(ctx, source.ToDBConfig(), vars, cfg.CheckThreadCount+1)
+		conn, err := common.CreateDB(ctx, source.ToDBConfig(), vars, cfg.SplitThreadCount+cfg.CheckThreadCount)
 		if err != nil {
 			return errors.Trace(err)
 		}
