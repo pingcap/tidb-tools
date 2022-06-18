@@ -16,6 +16,7 @@ package splitter
 import (
 	"context"
 	"database/sql"
+	"sync"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
@@ -37,6 +38,8 @@ type BucketIterator struct {
 	indexColumns []*model.ColumnInfo
 
 	chunkPool *utils.WorkerPool
+	wg        sync.WaitGroup // control for one bucket in shared chunkPool
+
 	chunkSize int64
 	chunks    []*chunk.Range
 	nextChunk uint
@@ -206,6 +209,7 @@ func (s *BucketIterator) Close() {
 }
 
 func (s *BucketIterator) splitChunkForBucket(ctx context.Context, firstBucketID, lastBucketID int, beginIndex int, bucketChunkCnt int, splitChunkCnt int, chunkRange *chunk.Range) {
+	s.wg.Add(1)
 	s.chunkPool.Apply(func() {
 		chunks, err := splitRangeByRandom(s.dbConn, chunkRange, splitChunkCnt, s.table.Schema, s.table.Table, s.indexColumns, s.table.Range, s.table.Collation)
 		if err != nil {
@@ -218,12 +222,13 @@ func (s *BucketIterator) splitChunkForBucket(ctx context.Context, firstBucketID,
 		chunk.InitChunks(chunks, chunk.Bucket, firstBucketID, lastBucketID, beginIndex, s.table.Collation, s.table.Range, bucketChunkCnt)
 		progress.UpdateTotal(s.progressID, len(chunks), false)
 		s.chunksCh <- chunks
+		s.wg.Done()
 	})
 }
 
 func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInfo) {
 	defer func() {
-		s.chunkPool.WaitFinished()
+		s.wg.Wait()
 		progress.UpdateTotal(s.progressID, 0, true)
 		close(s.chunksCh)
 	}()
