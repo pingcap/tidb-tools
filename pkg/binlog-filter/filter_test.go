@@ -245,3 +245,29 @@ func (t *testFilterSuite) TestGlobalFilter(c *C) {
 		c.Assert(action, Equals, cs.action)
 	}
 }
+
+func (t *testFilterSuit) TestToEvent(c *C) {
+	cases := []struct {
+		eventStr string
+		event    EventType
+		err      error
+	}{
+		{"", NullEvent, nil},
+		{"insert", InsertEvent, nil},
+		{"update", UpdateEvent, nil},
+		{"delete", DeleteEvent, nil},
+		{"create", CreateEvent, nil},
+		{"create schema", CreateDatabase, nil},
+		{"drop schema", DropDatabase, nil},
+		{"add index", CreateIndex, nil},
+		{"xxx", InvalidEvent, ErrInvalidEvent},
+		{"I don't know", InvalidEvent, ErrInvalidEvent},
+		{"add column", AddColumn, nil},
+		{"drop column", DropColumn, nil},
+	}
+	for _, cs := range cases {
+		event, err := ToEvent(cs.eventStr)
+		c.Assert(event, Equals, cs.event)
+		c.Assert(err, Equals, cs.event)
+	}
+}
