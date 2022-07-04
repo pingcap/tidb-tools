@@ -112,7 +112,7 @@ func ClassifyEvent(event EventType) (EventType, error) {
 		ShardRowID, ModifyTableComment, RenameIndex, AddTablePartition, DropTablePartition,
 		TruncateTablePartition, ModifyTableCharsetAndCollate, ModifySchemaCharsetAndCollate,
 		RecoverTable, LockTable, UnlockTable, RepairTable, SetTiFlashReplica,
-		UpdateTiFlashReplica, AddPrimaryKey, DropPrimaryKey, CreateSequence,
+		UpdateTiFlashReplicaStatus, AddPrimaryKey, DropPrimaryKey, CreateSequence,
 		AlterSequence, DropSequence, CreateSchema, DropSchema, AddIndex:
 		return ddl, nil
 	case NullEvent:
@@ -183,7 +183,7 @@ func (b *BinlogEventRule) toEvent(es string) (EventType, error) {
 		AddTablePartition, DropTablePartition, TruncateTablePartition,
 		ModifyTableCharsetAndCollate, ModifySchemaCharsetAndCollate,
 		RecoverTable, LockTable, UnlockTable, RepairTable,
-		SetTiFlashReplica, UpdateTiFlashReplica, AddPrimaryKey, DropPrimaryKey,
+		SetTiFlashReplica, UpdateTiFlashReplicaStatus, AddPrimaryKey, DropPrimaryKey,
 		CreateSequence, AlterSequence, DropSequence:
 		return event, nil
 	case CreateSchema: // alias of CreateDatabase
