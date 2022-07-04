@@ -14,7 +14,6 @@
 package filter
 
 import (
-	"fmt"
 	. "github.com/pingcap/check"
 	selector "github.com/pingcap/tidb-tools/pkg/table-rule-selector"
 	"testing"
