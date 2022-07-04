@@ -246,7 +246,7 @@ func (t *testFilterSuite) TestGlobalFilter(c *C) {
 	}
 }
 
-func (t *testFilterSuit) TestToEvent(c *C) {
+func (t *testFilterSuite) TestToEvent(c *C) {
 	cases := []struct {
 		eventStr string
 		event    EventType
