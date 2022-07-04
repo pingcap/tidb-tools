@@ -170,7 +170,7 @@ var ErrInvalidEventType = errors.New("event type not found")
 func (b *BinlogEventRule) toEvent(es string) (EventType, error) {
 	event := EventType(strings.ToLower(es))
 	switch event {
-	case dml, ddl, AllEvent, AllDDL, AllDML,
+	case AllEvent, AllDDL, AllDML, NullEvent,
 		NoneEvent, NoneDDL, NoneDML,
 		InsertEvent, UpdateEvent, DeleteEvent,
 		CreateDatabase, DropDatabase, CreateTable,

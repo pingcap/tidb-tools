@@ -14,10 +14,10 @@
 package filter
 
 import (
-	"testing"
-
+	"fmt"
 	. "github.com/pingcap/check"
 	selector "github.com/pingcap/tidb-tools/pkg/table-rule-selector"
+	"testing"
 )
 
 func TestClient(t *testing.T) {
@@ -268,9 +268,11 @@ func (t *testFilterSuite) TestToEvent(c *C) {
 		{"add column", AddColumn, nil},
 		{"drop column", DropColumn, nil},
 	}
+	br := &BinlogEventRule{}
+
 	for _, cs := range cases {
-		event, err := ToEvent(cs.eventStr)
-		c.Assert(event, Equals, cs.event)
-		c.Assert(err, Equals, cs.err)
+		event, err := br.toEvent(cs.eventStr)
+		c.Assert(cs.event, Equals, event)
+		c.Assert(cs.err, Equals, err)
 	}
 }
