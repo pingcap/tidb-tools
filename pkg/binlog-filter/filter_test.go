@@ -268,6 +268,6 @@ func (t *testFilterSuit) TestToEvent(c *C) {
 	for _, cs := range cases {
 		event, err := ToEvent(cs.eventStr)
 		c.Assert(event, Equals, cs.event)
-		c.Assert(err, Equals, cs.event)
+		c.Assert(err, Equals, cs.err)
 	}
 }
