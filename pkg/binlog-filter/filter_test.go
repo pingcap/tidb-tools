@@ -14,9 +14,10 @@
 package filter
 
 import (
+	"testing"
+
 	. "github.com/pingcap/check"
 	selector "github.com/pingcap/tidb-tools/pkg/table-rule-selector"
-	"testing"
 )
 
 func TestClient(t *testing.T) {
