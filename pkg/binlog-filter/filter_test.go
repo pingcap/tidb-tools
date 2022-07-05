@@ -124,6 +124,7 @@ func (t *testFilterSuite) TestFilter(c *C) {
 
 	// mismatched
 	action, err := filter.Filter("xxx_a", "", InsertEvent, "")
+	c.Assert(err, IsNil)
 	c.Assert(action, Equals, Do)
 
 	// invalid rule

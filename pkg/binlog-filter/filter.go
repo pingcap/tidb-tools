@@ -70,12 +70,8 @@ const (
 	AddColumn                     EventType = "add column"
 	DropColumn                    EventType = "drop column"
 	AddIndex                      EventType = "add index" // alias of CreateIndex
-	AddForeignKey                 EventType = "add foreign key"
-	DropForeignKey                EventType = "drop foreign key"
 	ModifyColumn                  EventType = "modify column"
-	RebaseAutoID                  EventType = "rebase auto_increment"
 	SetDefaultValue               EventType = "set default value"
-	ShardRowID                    EventType = "shard row id"
 	ModifyTableComment            EventType = "modify table comment"
 	RenameIndex                   EventType = "rename index"
 	AddTablePartition             EventType = "add table partition"
@@ -84,16 +80,9 @@ const (
 	ModifyTableCharsetAndCollate  EventType = "modify table charset and collate"
 	ModifySchemaCharsetAndCollate EventType = "modify schema charset and collate"
 	RecoverTable                  EventType = "recover table"
-	LockTable                     EventType = "lock table"
-	UnlockTable                   EventType = "unlock table"
-	RepairTable                   EventType = "repair table"
-	SetTiFlashReplica             EventType = "set tiflash replica"
 	UpdateTiFlashReplicaStatus    EventType = "update tiflash replica status"
 	AddPrimaryKey                 EventType = "add primary key"
 	DropPrimaryKey                EventType = "drop primary key"
-	CreateSequence                EventType = "create sequence"
-	AlterSequence                 EventType = "alter sequence"
-	DropSequence                  EventType = "drop sequence"
 	// if need, add more	AlertTableOption     = "alert table option"
 
 	NullEvent EventType = ""
@@ -106,14 +95,15 @@ func ClassifyEvent(event EventType) (EventType, error) {
 	switch event {
 	case InsertEvent, UpdateEvent, DeleteEvent:
 		return dml, nil
-	case CreateDatabase, DropDatabase, CreateTable, DropTable, TruncateTable, RenameTable,
-		CreateIndex, DropIndex, CreateView, DropView, AlertTable, AddColumn, DropColumn,
-		AddForeignKey, DropForeignKey, ModifyColumn, RebaseAutoID, SetDefaultValue,
-		ShardRowID, ModifyTableComment, RenameIndex, AddTablePartition, DropTablePartition,
-		TruncateTablePartition, ModifyTableCharsetAndCollate, ModifySchemaCharsetAndCollate,
-		RecoverTable, LockTable, UnlockTable, RepairTable, SetTiFlashReplica,
-		UpdateTiFlashReplicaStatus, AddPrimaryKey, DropPrimaryKey, CreateSequence,
-		AlterSequence, DropSequence, CreateSchema, DropSchema, AddIndex:
+	case CreateDatabase, DropDatabase, CreateTable,
+		DropTable, TruncateTable, RenameTable,
+		CreateIndex, DropIndex, CreateView,
+		DropView, AlertTable, AddColumn,
+		DropColumn, ModifyColumn, SetDefaultValue,
+		ModifyTableComment, RenameIndex, AddTablePartition,
+		DropTablePartition, TruncateTablePartition, ModifyTableCharsetAndCollate,
+		ModifySchemaCharsetAndCollate, RecoverTable, UpdateTiFlashReplicaStatus,
+		AddPrimaryKey, DropPrimaryKey, CreateSchema, DropSchema, AddIndex:
 		return ddl, nil
 	case NullEvent:
 		return NullEvent, nil
@@ -177,14 +167,11 @@ func (b *BinlogEventRule) toEvent(es string) (EventType, error) {
 		DropTable, TruncateTable, RenameTable,
 		CreateIndex, DropIndex, CreateView, DropView,
 		AlertTable, AddColumn, DropColumn,
-		AddForeignKey, DropForeignKey,
-		ModifyColumn, RebaseAutoID, SetDefaultValue,
-		ShardRowID, ModifyTableComment, RenameIndex,
-		AddTablePartition, DropTablePartition, TruncateTablePartition,
-		ModifyTableCharsetAndCollate, ModifySchemaCharsetAndCollate,
-		RecoverTable, LockTable, UnlockTable, RepairTable,
-		SetTiFlashReplica, UpdateTiFlashReplicaStatus, AddPrimaryKey, DropPrimaryKey,
-		CreateSequence, AlterSequence, DropSequence:
+		ModifyColumn, SetDefaultValue, ModifyTableComment,
+		RenameIndex, AddTablePartition, DropTablePartition,
+		TruncateTablePartition, ModifyTableCharsetAndCollate,
+		ModifySchemaCharsetAndCollate, RecoverTable, UpdateTiFlashReplicaStatus,
+		AddPrimaryKey, DropPrimaryKey:
 		return event, nil
 	case CreateSchema: // alias of CreateDatabase
 		return CreateDatabase, nil
