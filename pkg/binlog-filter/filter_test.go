@@ -280,6 +280,8 @@ func (t *testFilterSuite) TestToEventType(c *C) {
 		c.Assert(cs.event, Equals, event)
 		if err != nil {
 			c.Assert(cs.err.Error(), Equals, err.Error())
+		} else {
+			c.Assert(cs.err, IsNil)
 		}
 	}
 }
