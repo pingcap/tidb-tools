@@ -55,6 +55,7 @@ const (
 
 	CreateDatabase EventType = "create database"
 	DropDatabase   EventType = "drop database"
+	AlterDatabase  EventType = "alter database"
 	CreateTable    EventType = "create table"
 	DropTable      EventType = "drop table"
 	TruncateTable  EventType = "truncate table"
@@ -63,9 +64,16 @@ const (
 	DropIndex      EventType = "drop index"
 	CreateView     EventType = "create view"
 	DropView       EventType = "drop view"
-	AlertTable     EventType = "alter table"
+	AlterTable     EventType = "alter table"
+
+	CreateSchema EventType = "create schema" // alias of CreateDatabase
+	DropSchema   EventType = "drop schema"   // alias of DropDatabase
+	AlterSchema  EventType = "alter schema"  // alias of AlterDatabase
+	AddIndex     EventType = "add index"     // alias of CreateIndex
 	// if need, add more	AlertTableOption     = "alert table option"
 
+	// NullEvent is used to represents unsupported ddl event type when we
+	// convert a ast.StmtNode or a string to EventType.
 	NullEvent EventType = ""
 )
 
@@ -74,13 +82,16 @@ func ClassifyEvent(event EventType) (EventType, error) {
 	switch event {
 	case InsertEvent, UpdateEvent, DeleteEvent:
 		return dml, nil
-	case CreateDatabase, DropDatabase, CreateTable, DropTable, TruncateTable, RenameTable,
-		CreateIndex, DropIndex, CreateView, DropView, AlertTable:
+	case CreateDatabase, DropDatabase, CreateTable,
+		DropTable, TruncateTable, RenameTable,
+		CreateIndex, DropIndex, CreateView,
+		DropView, AlterTable,
+		CreateSchema, DropSchema, AddIndex:
 		return ddl, nil
 	case NullEvent:
 		return NullEvent, nil
 	default:
-		return NoneEvent, errors.NotValidf("event type %s", event)
+		return NullEvent, errors.NotValidf("event type %s", event)
 	}
 }
 
@@ -115,11 +126,13 @@ func (b *BinlogEventRule) Valid() error {
 		return errors.Errorf("action of binlog event rule %+v should not be empty", b)
 	}
 
-	// TODO: check validity of dml/ddl event.
 	for i := range b.Events {
-		b.Events[i] = EventType(strings.ToLower(string(b.Events[i])))
+		et, err := toEventType(string(b.Events[i]))
+		if err != nil {
+			return errors.NotValidf("event type %s", b.Events[i])
+		}
+		b.Events[i] = et
 	}
-
 	return nil
 }
 

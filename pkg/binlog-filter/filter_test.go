@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/errors"
 	selector "github.com/pingcap/tidb-tools/pkg/table-rule-selector"
 )
 
@@ -125,6 +126,7 @@ func (t *testFilterSuite) TestFilter(c *C) {
 
 	// mismatched
 	action, err := filter.Filter("xxx_a", "", InsertEvent, "")
+	c.Assert(err, IsNil)
 	c.Assert(action, Equals, Do)
 
 	// invalid rule
@@ -243,5 +245,43 @@ func (t *testFilterSuite) TestGlobalFilter(c *C) {
 		action, err := filter.Filter(cs.schema, cs.table, NullEvent, cs.sql)
 		c.Assert(err, IsNil)
 		c.Assert(action, Equals, cs.action)
+	}
+}
+
+func (t *testFilterSuite) TestToEventType(c *C) {
+	cases := []struct {
+		eventStr string
+		event    EventType
+		err      error
+	}{
+		{"", NullEvent, nil},
+		{"insert", InsertEvent, nil},
+		{"Insert", InsertEvent, nil},
+		{"update", UpdateEvent, nil},
+		{"UPDATE", UpdateEvent, nil},
+		{"delete", DeleteEvent, nil},
+		{"create", NullEvent, errors.NotValidf("event type %s", "create")},
+		{"create schema", CreateDatabase, nil},
+		{"create SCHEMA", CreateDatabase, nil},
+		{"create database", CreateDatabase, nil},
+		{"drop schema", DropDatabase, nil},
+		{"drop Schema", DropDatabase, nil},
+		{"drop database", DropDatabase, nil},
+		{"alter database", AlterDatabase, nil},
+		{"alter schema", AlterDatabase, nil},
+		{"add index", CreateIndex, nil},
+		{"create index", CreateIndex, nil},
+		{"xxx", NullEvent, errors.NotValidf("event type %s", "xxx")},
+		{"I don't know", NullEvent, errors.NotValidf("event type %s", "I don't know")},
+	}
+
+	for _, cs := range cases {
+		event, err := toEventType(cs.eventStr)
+		c.Assert(cs.event, Equals, event)
+		if err != nil {
+			c.Assert(cs.err.Error(), Equals, err.Error())
+		} else {
+			c.Assert(cs.err, IsNil)
+		}
 	}
 }
