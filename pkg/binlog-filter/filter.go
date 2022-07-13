@@ -80,13 +80,26 @@ const (
 // ClassifyEvent classify event into dml/ddl
 func ClassifyEvent(event EventType) (EventType, error) {
 	switch event {
-	case InsertEvent, UpdateEvent, DeleteEvent:
+	case InsertEvent,
+		UpdateEvent,
+		DeleteEvent:
 		return dml, nil
-	case CreateDatabase, DropDatabase, CreateTable,
-		DropTable, TruncateTable, RenameTable,
-		CreateIndex, DropIndex, CreateView,
-		DropView, AlterTable,
-		CreateSchema, DropSchema, AddIndex:
+	case CreateDatabase,
+		DropDatabase,
+		AlterDatabase,
+		AlterSchema,
+		CreateTable,
+		DropTable,
+		TruncateTable,
+		RenameTable,
+		CreateIndex,
+		DropIndex,
+		CreateView,
+		DropView,
+		AlterTable,
+		CreateSchema,
+		DropSchema,
+		AddIndex:
 		return ddl, nil
 	case NullEvent:
 		return NullEvent, nil

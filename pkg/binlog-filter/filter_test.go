@@ -285,3 +285,45 @@ func (t *testFilterSuite) TestToEventType(c *C) {
 		}
 	}
 }
+
+func (t *testFilterSuite) TestClassifyEvent(c *C) {
+	cases := []struct {
+		event    EventType
+		evenType EventType
+		err      error
+	}{
+		{NullEvent, NullEvent, nil},
+		// dml
+		{InsertEvent, dml, nil},
+		{UpdateEvent, dml, nil},
+		{DeleteEvent, dml, nil},
+		// ddl
+		{CreateDatabase, ddl, nil},
+		{CreateSchema, ddl, nil},
+		{DropDatabase, ddl, nil},
+		{DropSchema, ddl, nil},
+		{AlterSchema, ddl, nil},
+		{CreateTable, ddl, nil},
+		{DropTable, ddl, nil},
+		{TruncateTable, ddl, nil},
+		{RenameTable, ddl, nil},
+		{CreateIndex, ddl, nil},
+		{DropIndex, ddl, nil},
+		{CreateView, ddl, nil},
+		{DropView, ddl, nil},
+		{AlterTable, ddl, nil},
+		{"create", NullEvent, errors.NotValidf("event type %s", "create")},
+		{EventType("xxx"), NullEvent, errors.NotValidf("event type %s", "xxx")},
+		{EventType("I don't know"), NullEvent, errors.NotValidf("event type %s", "I don't know")},
+	}
+
+	for _, cs := range cases {
+		et, err := ClassifyEvent(cs.event)
+		c.Assert(cs.evenType, Equals, et)
+		if err != nil {
+			c.Assert(cs.err.Error(), Equals, err.Error())
+		} else {
+			c.Assert(cs.err, IsNil)
+		}
+	}
+}
