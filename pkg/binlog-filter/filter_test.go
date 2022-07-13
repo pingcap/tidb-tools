@@ -266,8 +266,6 @@ func (t *testFilterSuite) TestToEvent(c *C) {
 		{"create index", CreateIndex, nil},
 		{"xxx", InvalidEvent, ErrInvalidEventType},
 		{"I don't know", InvalidEvent, ErrInvalidEventType},
-		{"add column", AddColumn, nil},
-		{"drop column", DropColumn, nil},
 	}
 	br := &BinlogEventRule{}
 

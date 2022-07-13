@@ -63,26 +63,11 @@ const (
 	DropIndex      EventType = "drop index"
 	CreateView     EventType = "create view"
 	DropView       EventType = "drop view"
-	AlertTable     EventType = "alter table"
+	AlterTable     EventType = "alter table"
 
-	CreateSchema                  EventType = "create schema" // alias of CreateDatabase
-	DropSchema                    EventType = "drop schema"   // alias of DropDatabase
-	AddColumn                     EventType = "add column"
-	DropColumn                    EventType = "drop column"
-	AddIndex                      EventType = "add index" // alias of CreateIndex
-	ModifyColumn                  EventType = "modify column"
-	SetDefaultValue               EventType = "set default value"
-	ModifyTableComment            EventType = "modify table comment"
-	RenameIndex                   EventType = "rename index"
-	AddTablePartition             EventType = "add table partition"
-	DropTablePartition            EventType = "drop table partition"
-	TruncateTablePartition        EventType = "truncate table partition"
-	ModifyTableCharsetAndCollate  EventType = "modify table charset and collate"
-	ModifySchemaCharsetAndCollate EventType = "modify schema charset and collate"
-	RecoverTable                  EventType = "recover table"
-	UpdateTiFlashReplicaStatus    EventType = "update tiflash replica status"
-	AddPrimaryKey                 EventType = "add primary key"
-	DropPrimaryKey                EventType = "drop primary key"
+	CreateSchema EventType = "create schema" // alias of CreateDatabase
+	DropSchema   EventType = "drop schema"   // alias of DropDatabase
+	AddIndex     EventType = "add index"     // alias of CreateIndex
 	// if need, add more	AlertTableOption     = "alert table option"
 
 	NullEvent EventType = ""
@@ -98,12 +83,8 @@ func ClassifyEvent(event EventType) (EventType, error) {
 	case CreateDatabase, DropDatabase, CreateTable,
 		DropTable, TruncateTable, RenameTable,
 		CreateIndex, DropIndex, CreateView,
-		DropView, AlertTable, AddColumn,
-		DropColumn, ModifyColumn, SetDefaultValue,
-		ModifyTableComment, RenameIndex, AddTablePartition,
-		DropTablePartition, TruncateTablePartition, ModifyTableCharsetAndCollate,
-		ModifySchemaCharsetAndCollate, RecoverTable, UpdateTiFlashReplicaStatus,
-		AddPrimaryKey, DropPrimaryKey, CreateSchema, DropSchema, AddIndex:
+		DropView, AlterTable,
+		CreateSchema, DropSchema, AddIndex:
 		return ddl, nil
 	case NullEvent:
 		return NullEvent, nil
@@ -166,12 +147,7 @@ func (b *BinlogEventRule) toEvent(es string) (EventType, error) {
 		CreateDatabase, DropDatabase, CreateTable,
 		DropTable, TruncateTable, RenameTable,
 		CreateIndex, DropIndex, CreateView, DropView,
-		AlertTable, AddColumn, DropColumn,
-		ModifyColumn, SetDefaultValue, ModifyTableComment,
-		RenameIndex, AddTablePartition, DropTablePartition,
-		TruncateTablePartition, ModifyTableCharsetAndCollate,
-		ModifySchemaCharsetAndCollate, RecoverTable, UpdateTiFlashReplicaStatus,
-		AddPrimaryKey, DropPrimaryKey:
+		AlterTable:
 		return event, nil
 	case CreateSchema: // alias of CreateDatabase
 		return CreateDatabase, nil

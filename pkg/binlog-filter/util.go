@@ -38,7 +38,7 @@ func AstToDDLEvent(node ast.StmtNode) EventType {
 	case *ast.DropIndexStmt:
 		return DropIndex
 	case *ast.AlterTableStmt:
-		return AlertTable
+		return AlterTable
 	case *ast.CreateViewStmt:
 		return CreateView
 	}
