@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/errors"
 	selector "github.com/pingcap/tidb-tools/pkg/table-rule-selector"
 )
 
@@ -255,24 +256,30 @@ func (t *testFilterSuite) TestToEventType(c *C) {
 	}{
 		{"", NullEvent, nil},
 		{"insert", InsertEvent, nil},
+		{"Insert", InsertEvent, nil},
 		{"update", UpdateEvent, nil},
+		{"UPDATE", UpdateEvent, nil},
 		{"delete", DeleteEvent, nil},
-		{"create", InvalidEvent, ErrInvalidEventType},
+		{"create", NullEvent, errors.NotValidf("event type %s", "create")},
 		{"create schema", CreateDatabase, nil},
+		{"create SCHEMA", CreateDatabase, nil},
 		{"create database", CreateDatabase, nil},
 		{"drop schema", DropDatabase, nil},
+		{"drop Schema", DropDatabase, nil},
 		{"drop database", DropDatabase, nil},
 		{"alter database", AlterDatabase, nil},
 		{"alter schema", AlterDatabase, nil},
 		{"add index", CreateIndex, nil},
 		{"create index", CreateIndex, nil},
-		{"xxx", InvalidEvent, ErrInvalidEventType},
-		{"I don't know", InvalidEvent, ErrInvalidEventType},
+		{"xxx", NullEvent, errors.NotValidf("event type %s", "xxx")},
+		{"I don't know", NullEvent, errors.NotValidf("event type %s", "I don't know")},
 	}
 
 	for _, cs := range cases {
 		event, err := toEventType(cs.eventStr)
 		c.Assert(cs.event, Equals, event)
-		c.Assert(cs.err, Equals, err)
+		if err != nil {
+			c.Assert(cs.err.Error(), Equals, err.Error())
+		}
 	}
 }

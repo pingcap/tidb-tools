@@ -16,6 +16,7 @@ package filter
 import (
 	"strings"
 
+	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/parser/ast"
 )
 
@@ -68,6 +69,7 @@ func toEventType(es string) (EventType, error) {
 		DeleteEvent,
 		CreateDatabase,
 		DropDatabase,
+		AlterDatabase,
 		CreateTable,
 		DropTable,
 		TruncateTable,
@@ -76,8 +78,7 @@ func toEventType(es string) (EventType, error) {
 		DropIndex,
 		CreateView,
 		DropView,
-		AlterTable,
-		AlterDatabase:
+		AlterTable:
 		return event, nil
 	case CreateSchema: // alias of CreateDatabase
 		return CreateDatabase, nil
@@ -88,6 +89,6 @@ func toEventType(es string) (EventType, error) {
 	case AlterSchema:
 		return AlterDatabase, nil
 	default:
-		return InvalidEvent, ErrInvalidEventType
+		return NullEvent, errors.NotValidf("event type %s", es)
 	}
 }

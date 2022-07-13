@@ -55,6 +55,7 @@ const (
 
 	CreateDatabase EventType = "create database"
 	DropDatabase   EventType = "drop database"
+	AlterDatabase  EventType = "alter database"
 	CreateTable    EventType = "create table"
 	DropTable      EventType = "drop table"
 	TruncateTable  EventType = "truncate table"
@@ -65,16 +66,15 @@ const (
 	DropView       EventType = "drop view"
 	AlterTable     EventType = "alter table"
 
-	CreateSchema  EventType = "create schema" // alias of CreateDatabase
-	DropSchema    EventType = "drop schema"   // alias of DropDatabase
-	AddIndex      EventType = "add index"     // alias of CreateIndex
-	AlterDatabase EventType = "alter database"
-	AlterSchema   EventType = "alter schema" // alias of AlterDatabase
+	CreateSchema EventType = "create schema" // alias of CreateDatabase
+	DropSchema   EventType = "drop schema"   // alias of DropDatabase
+	AlterSchema  EventType = "alter schema"  // alias of AlterDatabase
+	AddIndex     EventType = "add index"     // alias of CreateIndex
 	// if need, add more	AlertTableOption     = "alert table option"
 
+	// NullEvent is used to represents unsupported ddl event type when we
+	// convert a ast.StmtNode or a string to EventType.
 	NullEvent EventType = ""
-	// InvalidEvent is used to indicate invalid event type
-	InvalidEvent EventType = "invalid event"
 )
 
 // ClassifyEvent classify event into dml/ddl
@@ -91,7 +91,7 @@ func ClassifyEvent(event EventType) (EventType, error) {
 	case NullEvent:
 		return NullEvent, nil
 	default:
-		return InvalidEvent, errors.NotValidf("event type %s", event)
+		return NullEvent, errors.NotValidf("event type %s", event)
 	}
 }
 
@@ -129,15 +129,12 @@ func (b *BinlogEventRule) Valid() error {
 	for i := range b.Events {
 		et, err := toEventType(string(b.Events[i]))
 		if err != nil {
-			return errors.Annotatef(ErrInvalidEventType, "event type %s", b.Events[i])
+			return errors.NotValidf("event type %s", b.Events[i])
 		}
 		b.Events[i] = et
 	}
 	return nil
 }
-
-// ErrInvalidEventType is returned when event type is not valid.
-var ErrInvalidEventType = errors.New("event type not found")
 
 // BinlogEvent filters binlog events by given rules
 type BinlogEvent struct {
