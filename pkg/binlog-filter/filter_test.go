@@ -247,7 +247,7 @@ func (t *testFilterSuite) TestGlobalFilter(c *C) {
 	}
 }
 
-func (t *testFilterSuite) TestToEvent(c *C) {
+func (t *testFilterSuite) TestToEventType(c *C) {
 	cases := []struct {
 		eventStr string
 		event    EventType
@@ -262,15 +262,16 @@ func (t *testFilterSuite) TestToEvent(c *C) {
 		{"create database", CreateDatabase, nil},
 		{"drop schema", DropDatabase, nil},
 		{"drop database", DropDatabase, nil},
+		{"alter database", AlterDatabase, nil},
+		{"alter schema", AlterDatabase, nil},
 		{"add index", CreateIndex, nil},
 		{"create index", CreateIndex, nil},
 		{"xxx", InvalidEvent, ErrInvalidEventType},
 		{"I don't know", InvalidEvent, ErrInvalidEventType},
 	}
-	br := &BinlogEventRule{}
 
 	for _, cs := range cases {
-		event, err := br.toEvent(cs.eventStr)
+		event, err := toEventType(cs.eventStr)
 		c.Assert(cs.event, Equals, event)
 		c.Assert(cs.err, Equals, err)
 	}

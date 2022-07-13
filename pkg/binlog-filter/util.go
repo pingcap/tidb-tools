@@ -13,7 +13,11 @@
 
 package filter
 
-import "github.com/pingcap/tidb/parser/ast"
+import (
+	"strings"
+
+	"github.com/pingcap/tidb/parser/ast"
+)
 
 // AstToDDLEvent returns filter.DDLEvent
 func AstToDDLEvent(node ast.StmtNode) EventType {
@@ -41,7 +45,49 @@ func AstToDDLEvent(node ast.StmtNode) EventType {
 		return AlterTable
 	case *ast.CreateViewStmt:
 		return CreateView
+	case *ast.AlterDatabaseStmt:
+		return AlterDatabase
 	}
 
 	return NullEvent
+}
+
+// toEventType converts event type string to EventType and check if it is valid.
+func toEventType(es string) (EventType, error) {
+	event := EventType(strings.ToLower(es))
+	switch event {
+	case AllEvent,
+		AllDDL,
+		AllDML,
+		NullEvent,
+		NoneEvent,
+		NoneDDL,
+		NoneDML,
+		InsertEvent,
+		UpdateEvent,
+		DeleteEvent,
+		CreateDatabase,
+		DropDatabase,
+		CreateTable,
+		DropTable,
+		TruncateTable,
+		RenameTable,
+		CreateIndex,
+		DropIndex,
+		CreateView,
+		DropView,
+		AlterTable,
+		AlterDatabase:
+		return event, nil
+	case CreateSchema: // alias of CreateDatabase
+		return CreateDatabase, nil
+	case DropSchema: // alias of DropDatabase
+		return DropDatabase, nil
+	case AddIndex: // alias of CreateIndex
+		return CreateIndex, nil
+	case AlterSchema:
+		return AlterDatabase, nil
+	default:
+		return InvalidEvent, ErrInvalidEventType
+	}
 }

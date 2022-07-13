@@ -65,9 +65,11 @@ const (
 	DropView       EventType = "drop view"
 	AlterTable     EventType = "alter table"
 
-	CreateSchema EventType = "create schema" // alias of CreateDatabase
-	DropSchema   EventType = "drop schema"   // alias of DropDatabase
-	AddIndex     EventType = "add index"     // alias of CreateIndex
+	CreateSchema  EventType = "create schema" // alias of CreateDatabase
+	DropSchema    EventType = "drop schema"   // alias of DropDatabase
+	AddIndex      EventType = "add index"     // alias of CreateIndex
+	AlterDatabase EventType = "alter database"
+	AlterSchema   EventType = "alter schema" // alias of AlterDatabase
 	// if need, add more	AlertTableOption     = "alert table option"
 
 	NullEvent EventType = ""
@@ -125,7 +127,7 @@ func (b *BinlogEventRule) Valid() error {
 	}
 
 	for i := range b.Events {
-		et, err := b.toEvent(string(b.Events[i]))
+		et, err := toEventType(string(b.Events[i]))
 		if err != nil {
 			return errors.Annotatef(ErrInvalidEventType, "event type %s", b.Events[i])
 		}
@@ -136,29 +138,6 @@ func (b *BinlogEventRule) Valid() error {
 
 // ErrInvalidEventType is returned when event type is not valid.
 var ErrInvalidEventType = errors.New("event type not found")
-
-// toEvent converts event type string to EventType and check if it is valid.
-func (b *BinlogEventRule) toEvent(es string) (EventType, error) {
-	event := EventType(strings.ToLower(es))
-	switch event {
-	case AllEvent, AllDDL, AllDML, NullEvent,
-		NoneEvent, NoneDDL, NoneDML,
-		InsertEvent, UpdateEvent, DeleteEvent,
-		CreateDatabase, DropDatabase, CreateTable,
-		DropTable, TruncateTable, RenameTable,
-		CreateIndex, DropIndex, CreateView, DropView,
-		AlterTable:
-		return event, nil
-	case CreateSchema: // alias of CreateDatabase
-		return CreateDatabase, nil
-	case DropSchema: // alias of DropDatabase
-		return DropDatabase, nil
-	case AddIndex: // alias of CreateIndex
-		return CreateIndex, nil
-	default:
-		return InvalidEvent, ErrInvalidEventType
-	}
-}
 
 // BinlogEvent filters binlog events by given rules
 type BinlogEvent struct {
