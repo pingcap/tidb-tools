@@ -72,7 +72,7 @@ const (
 
 	NullEvent EventType = ""
 	// InvalidEvent is used to indicate invalid event type
-	InvalidEvent EventType = "InvalidEvent"
+	InvalidEvent EventType = "invalid event"
 )
 
 // ClassifyEvent classify event into dml/ddl
