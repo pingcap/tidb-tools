@@ -78,14 +78,15 @@ func toEventType(es string) (EventType, error) {
 		DropIndex,
 		CreateView,
 		DropView,
-		AlterTable:
+		AlterTable,
+		AddTablePartition,
+		DropTablePartition,
+		TruncateTablePartition:
 		return event, nil
 	case CreateSchema: // alias of CreateDatabase
 		return CreateDatabase, nil
 	case DropSchema: // alias of DropDatabase
 		return DropDatabase, nil
-	case AddIndex: // alias of CreateIndex
-		return CreateIndex, nil
 	case AlterSchema:
 		return AlterDatabase, nil
 	default:
