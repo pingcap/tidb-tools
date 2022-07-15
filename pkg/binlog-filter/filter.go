@@ -69,7 +69,10 @@ const (
 	CreateSchema EventType = "create schema" // alias of CreateDatabase
 	DropSchema   EventType = "drop schema"   // alias of DropDatabase
 	AlterSchema  EventType = "alter schema"  // alias of AlterDatabase
-	AddIndex     EventType = "add index"     // alias of CreateIndex
+
+	AddTablePartition      EventType = "add table partition"
+	DropTablePartition     EventType = "drop table partition"
+	TruncateTablePartition EventType = "truncate table partition"
 	// if need, add more	AlertTableOption     = "alert table option"
 
 	// NullEvent is used to represents unsupported ddl event type when we
@@ -99,7 +102,9 @@ func ClassifyEvent(event EventType) (EventType, error) {
 		AlterTable,
 		CreateSchema,
 		DropSchema,
-		AddIndex:
+		AddTablePartition,
+		DropTablePartition,
+		TruncateTablePartition:
 		return ddl, nil
 	case NullEvent:
 		return NullEvent, nil

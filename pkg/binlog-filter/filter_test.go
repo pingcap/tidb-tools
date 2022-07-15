@@ -269,15 +269,17 @@ func (t *testFilterSuite) TestToEventType(c *C) {
 		{"drop database", DropDatabase, nil},
 		{"alter database", AlterDatabase, nil},
 		{"alter schema", AlterDatabase, nil},
-		{"add index", CreateIndex, nil},
 		{"create index", CreateIndex, nil},
+		{"add table partition", AddTablePartition, nil},
+		{"drop taBle partition", DropTablePartition, nil},
+		{"truncate tablE parTition", TruncateTablePartition, nil},
 		{"xxx", NullEvent, errors.NotValidf("event type %s", "xxx")},
 		{"I don't know", NullEvent, errors.NotValidf("event type %s", "I don't know")},
 	}
 
 	for _, cs := range cases {
 		event, err := toEventType(cs.eventStr)
-		c.Assert(cs.event, Equals, event)
+		c.Assert(event, Equals, cs.event)
 		if err != nil {
 			c.Assert(cs.err.Error(), Equals, err.Error())
 		} else {
@@ -312,6 +314,9 @@ func (t *testFilterSuite) TestClassifyEvent(c *C) {
 		{CreateView, ddl, nil},
 		{DropView, ddl, nil},
 		{AlterTable, ddl, nil},
+		{AddTablePartition, ddl, nil},
+		{DropTablePartition, ddl, nil},
+		{TruncateTablePartition, ddl, nil},
 		{"create", NullEvent, errors.NotValidf("event type %s", "create")},
 		{EventType("xxx"), NullEvent, errors.NotValidf("event type %s", "xxx")},
 		{EventType("I don't know"), NullEvent, errors.NotValidf("event type %s", "I don't know")},
