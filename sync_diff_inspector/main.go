@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -26,25 +25,10 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
-	"github.com/pingcap/tidb/parser/charset"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/diff"
 	flag "github.com/spf13/pflag"
 	"go.uber.org/zap"
 )
-
-func init() {
-	c := &charset.Charset{
-		Name:             "gbk",
-		DefaultCollation: "gbk_chinese_ci",
-		Collations:       map[string]*charset.Collation{},
-		Maxlen:           2,
-	}
-	charset.AddCharset(c)
-	for _, coll := range charset.GetCollations() {
-		if strings.EqualFold(coll.CharsetName, c.Name) {
-			charset.AddCollation(coll)
-		}
-	}
-}
 
 func main() {
 	cfg := config.NewConfig()
@@ -114,7 +98,7 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 		log.Info("check data finished", zap.Duration("cost", time.Since(beginTime)))
 	}()
 
-	d, err := NewDiff(ctx, cfg)
+	d, err := diff.NewDiff(ctx, cfg)
 	if err != nil {
 		fmt.Printf("There is something error when initialize diff, please check log info in %s\n", filepath.Join(cfg.Task.OutputDir, config.LogFileName))
 		log.Fatal("failed to initialize diff process", zap.Error(err))
@@ -128,7 +112,7 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 		log.Fatal("failed to check structure difference", zap.Error(err))
 		return false
 	}
-	if !d.ignoreDataCheck {
+	if !d.IgnoreDataCheck {
 		err = d.Equal(ctx)
 		if err != nil {
 			fmt.Printf("There is something error when compare data of table, please check log info in %s\n", filepath.Join(cfg.Task.OutputDir, config.LogFileName))

@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package diff
 
 import (
 	"bytes"
@@ -40,6 +40,7 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	tidbconfig "github.com/pingcap/tidb/config"
+	"github.com/pingcap/tidb/parser/charset"
 	"github.com/pingcap/tidb/parser/model"
 	"github.com/siddontang/go/ioutil2"
 	"go.uber.org/zap"
@@ -49,6 +50,21 @@ const (
 	// checkpointFile represents the checkpoints' file name which used for save and loads chunks
 	checkpointFile = "sync_diff_checkpoints.pb"
 )
+
+func init() {
+	c := &charset.Charset{
+		Name:             "gbk",
+		DefaultCollation: "gbk_chinese_ci",
+		Collations:       map[string]*charset.Collation{},
+		Maxlen:           2,
+	}
+	charset.AddCharset(c)
+	for _, coll := range charset.GetCollations() {
+		if strings.EqualFold(coll.CharsetName, c.Name) {
+			charset.AddCollation(coll)
+		}
+	}
+}
 
 // ChunkDML SQL struct for each chunk
 type ChunkDML struct {
@@ -67,11 +83,10 @@ type Diff struct {
 	// workSource is one of upstream/downstream by some policy in #pickSource.
 	workSource source.Source
 
-	sample           int
 	checkThreadCount int
 	exportFixSQL     bool
 	useCheckpoint    bool
-	ignoreDataCheck  bool
+	IgnoreDataCheck  bool
 	sqlWg            sync.WaitGroup
 	checkpointWg     sync.WaitGroup
 
@@ -89,7 +104,7 @@ func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 	diff = &Diff{
 		checkThreadCount: cfg.CheckThreadCount,
 		exportFixSQL:     cfg.ExportFixSQL,
-		ignoreDataCheck:  cfg.CheckStructOnly,
+		IgnoreDataCheck:  cfg.CheckStructOnly,
 		sqlCh:            make(chan *ChunkDML, splitter.DefaultChannelBuffer),
 		cp:               new(checkpoints.Checkpoint),
 		report:           report.NewReport(&cfg.Task),
