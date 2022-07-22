@@ -169,7 +169,6 @@ func GetSpecifiedColumnValueAndClose(rows *sql.Rows, columnName string) ([]strin
 	}
 	return strs, errors.Trace(rows.Err())
 }
-
 // StartGCSavepointUpdateService keeps GC safePoint stop moving forward.
 func StartGCSavepointUpdateService(ctx context.Context, pdCli pd.Client, db *sql.DB, snapshot string) error {
 	versionStr, err := selectVersion(db)
@@ -177,6 +176,7 @@ func StartGCSavepointUpdateService(ctx context.Context, pdCli pd.Client, db *sql
 		log.Info("detect version of tidb failed")
 		return nil
 	}
+	log.Info("detect version", zap.String("version", versionStr))
 	versionStr = tidbVersionRegex.FindString(versionStr)[1:]
 	versionStr = strings.TrimPrefix(versionStr, "v")
 	tidbVersion, err := semver.NewVersion(versionStr)
