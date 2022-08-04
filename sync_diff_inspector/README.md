@@ -13,7 +13,6 @@ Usage of diff:
       --dm-addr string           the address of DM
       --dm-task string           identifier of dm task
       --check-thread-count int   how many goroutines are created to check data (default 4)
-      --split-thread-count int   how many goroutines are created to split chunk (default 3)
       --export-fix-sql           set true if want to compare rows or set to false will only compare checksum (default true)
 ```
 

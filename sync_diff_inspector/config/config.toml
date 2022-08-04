@@ -5,9 +5,6 @@
 # how many goroutines are created to check data
 check-thread-count = 4
 
-# how many goroutines are created to split chunk
-split-thread-count = 3
-
 # set false if just want compare data by checksum, will skip select data when checksum is not equal.
 # set true if want compare all different rows, will slow down the total compare time.
 export-fix-sql = true

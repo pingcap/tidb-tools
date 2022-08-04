@@ -203,12 +203,12 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 	// Besides, bucketSpliters of each table use shared WorkPool
 	bucketSpliterPool := utils.NewWorkerPool(uint(cfg.CheckThreadCount), "bucketIter")
 	// for mysql_shard, it needs `cfg.CheckThreadCount` + `cfg.SplitThreadCount` at most, because it cannot use bucket.
-	connCount := cfg.CheckThreadCount + cfg.SplitThreadCount
-	upstream, err = buildSourceFromCfg(ctx, tableDiffs, connCount, bucketSpliterPool, cfg.Task.TargetCheckTables, cfg.Task.SourceInstances...)
+	mysqlConnCount := cfg.CheckThreadCount + cfg.SplitThreadCount
+	upstream, err = buildSourceFromCfg(ctx, tableDiffs, mysqlConnCount, bucketSpliterPool, cfg.Task.TargetCheckTables, cfg.Task.SourceInstances...)
 	if err != nil {
 		return nil, nil, errors.Annotate(err, "from upstream")
 	}
-	downstream, err = buildSourceFromCfg(ctx, tableDiffs, connCount, bucketSpliterPool, cfg.Task.TargetCheckTables, cfg.Task.TargetInstance)
+	downstream, err = buildSourceFromCfg(ctx, tableDiffs, mysqlConnCount, bucketSpliterPool, cfg.Task.TargetCheckTables, cfg.Task.TargetInstance)
 	if err != nil {
 		return nil, nil, errors.Annotate(err, "from downstream")
 	}
