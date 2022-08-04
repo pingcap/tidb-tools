@@ -30,6 +30,8 @@ check-struct-only = false
     # remove comment if use tidb's snapshot data
     # snapshot = "2016-10-08 16:45:26"
     # snapshot = "386902609362944000"
+    # When using TiCDC syncpoint source and target can be set to auto
+    # snapshot = "auto"
 
 ######################### Task config #########################
 # Required

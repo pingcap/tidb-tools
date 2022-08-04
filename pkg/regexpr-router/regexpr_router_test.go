@@ -15,10 +15,11 @@ package regexprrouter
 
 import (
 	"fmt"
+	"testing"
+
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	router "github.com/pingcap/tidb-tools/pkg/table-router"
-	"testing"
+	router "github.com/pingcap/tidb/util/table-router"
 )
 
 var _ = Suite(&testRouteSuite{})
