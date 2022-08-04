@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	. "github.com/pingcap/check"
+	"github.com/pingcap/errors"
 	selector "github.com/pingcap/tidb-tools/pkg/table-rule-selector"
 )
 
@@ -125,6 +126,7 @@ func (t *testFilterSuite) TestFilter(c *C) {
 
 	// mismatched
 	action, err := filter.Filter("xxx_a", "", InsertEvent, "")
+	c.Assert(err, IsNil)
 	c.Assert(action, Equals, Do)
 
 	// invalid rule
@@ -243,5 +245,90 @@ func (t *testFilterSuite) TestGlobalFilter(c *C) {
 		action, err := filter.Filter(cs.schema, cs.table, NullEvent, cs.sql)
 		c.Assert(err, IsNil)
 		c.Assert(action, Equals, cs.action)
+	}
+}
+
+func (t *testFilterSuite) TestToEventType(c *C) {
+	cases := []struct {
+		eventStr string
+		event    EventType
+		err      error
+	}{
+		{"", NullEvent, nil},
+		{"insert", InsertEvent, nil},
+		{"Insert", InsertEvent, nil},
+		{"update", UpdateEvent, nil},
+		{"UPDATE", UpdateEvent, nil},
+		{"delete", DeleteEvent, nil},
+		{"create", NullEvent, errors.NotValidf("event type %s", "create")},
+		{"create schema", CreateDatabase, nil},
+		{"create SCHEMA", CreateDatabase, nil},
+		{"create database", CreateDatabase, nil},
+		{"drop schema", DropDatabase, nil},
+		{"drop Schema", DropDatabase, nil},
+		{"drop database", DropDatabase, nil},
+		{"alter database", AlterDatabase, nil},
+		{"alter schema", AlterDatabase, nil},
+		{"create index", CreateIndex, nil},
+		{"add table partition", AddTablePartition, nil},
+		{"drop taBle partition", DropTablePartition, nil},
+		{"truncate tablE parTition", TruncateTablePartition, nil},
+		{"xxx", NullEvent, errors.NotValidf("event type %s", "xxx")},
+		{"I don't know", NullEvent, errors.NotValidf("event type %s", "I don't know")},
+	}
+
+	for _, cs := range cases {
+		event, err := toEventType(cs.eventStr)
+		c.Assert(event, Equals, cs.event)
+		if err != nil {
+			c.Assert(cs.err.Error(), Equals, err.Error())
+		} else {
+			c.Assert(cs.err, IsNil)
+		}
+	}
+}
+
+func (t *testFilterSuite) TestClassifyEvent(c *C) {
+	cases := []struct {
+		event    EventType
+		evenType EventType
+		err      error
+	}{
+		{NullEvent, NullEvent, nil},
+		// dml
+		{InsertEvent, dml, nil},
+		{UpdateEvent, dml, nil},
+		{DeleteEvent, dml, nil},
+		// ddl
+		{CreateDatabase, ddl, nil},
+		{CreateSchema, ddl, nil},
+		{DropDatabase, ddl, nil},
+		{DropSchema, ddl, nil},
+		{AlterSchema, ddl, nil},
+		{CreateTable, ddl, nil},
+		{DropTable, ddl, nil},
+		{TruncateTable, ddl, nil},
+		{RenameTable, ddl, nil},
+		{CreateIndex, ddl, nil},
+		{DropIndex, ddl, nil},
+		{CreateView, ddl, nil},
+		{DropView, ddl, nil},
+		{AlterTable, ddl, nil},
+		{AddTablePartition, ddl, nil},
+		{DropTablePartition, ddl, nil},
+		{TruncateTablePartition, ddl, nil},
+		{"create", NullEvent, errors.NotValidf("event type %s", "create")},
+		{EventType("xxx"), NullEvent, errors.NotValidf("event type %s", "xxx")},
+		{EventType("I don't know"), NullEvent, errors.NotValidf("event type %s", "I don't know")},
+	}
+
+	for _, cs := range cases {
+		et, err := ClassifyEvent(cs.event)
+		c.Assert(cs.evenType, Equals, et)
+		if err != nil {
+			c.Assert(cs.err.Error(), Equals, err.Error())
+		} else {
+			c.Assert(cs.err, IsNil)
+		}
 	}
 }
