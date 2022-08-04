@@ -45,8 +45,9 @@ const (
 const UnifiedTimeZone string = "+0:00"
 
 const (
-	ShieldDBName    = "_no__exists__db_"
-	ShieldTableName = "_no__exists__table_"
+	ShieldDBName      = "_no__exists__db_"
+	ShieldTableName   = "_no__exists__table_"
+	GetSyncPointQuery = "SELECT primary_ts, secondary_ts FROM tidb_cdc.syncpoint_v1 ORDER BY primary_ts DESC LIMIT 1"
 )
 
 type ChecksumInfo struct {
@@ -226,10 +227,42 @@ func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, che
 	return NewMySQLSources(ctx, tableDiffs, dbs, checkThreadCount, f)
 }
 
+func getAutoSnapshotPosition(dbConfig *dbutil.DBConfig, vars map[string]string) (string, string, error) {
+	tmpConn, err := dbutil.OpenDB(*dbConfig, vars)
+	if err != nil {
+		return "", "", errors.Annotatef(err, "connecting to auto-position tidb_snapshot failed")
+	}
+	defer tmpConn.Close()
+	var primaryTs, secondaryTs string
+	err = tmpConn.QueryRow(GetSyncPointQuery).Scan(&primaryTs, &secondaryTs)
+	if err != nil {
+		return "", "", errors.Annotatef(err, "fetching auto-position tidb_snapshot failed")
+	}
+	return primaryTs, secondaryTs, nil
+}
+
 func initDBConn(ctx context.Context, cfg *config.Config) error {
 	// Unified time zone
 	vars := map[string]string{
 		"time_zone": UnifiedTimeZone,
+	}
+	// Fill in tidb_snapshot if it is set to AUTO
+	// This is only supported when set to auto on both target/source.
+	if cfg.Task.TargetInstance.IsAutoSnapshot() {
+		if len(cfg.Task.SourceInstances) > 1 {
+			return errors.Errorf("'auto' snapshot only supports one tidb source")
+		}
+		if !cfg.Task.SourceInstances[0].IsAutoSnapshot() {
+			return errors.Errorf("'auto' snapshot should be set on both target and source")
+		}
+		tmpDBConfig := cfg.Task.TargetInstance.ToDBConfig()
+		tmpDBConfig.Snapshot = ""
+		primaryTs, secondaryTs, err := getAutoSnapshotPosition(tmpDBConfig, vars)
+		if err != nil {
+			return err
+		}
+		cfg.Task.TargetInstance.SetSnapshot(secondaryTs)
+		cfg.Task.SourceInstances[0].SetSnapshot(primaryTs)
 	}
 	// we had 3 producers and `cfg.CheckThreadCount` consumer to use db connections.
 	// so the connection count need to be cfg.CheckThreadCount + 3.
@@ -241,6 +274,11 @@ func initDBConn(ctx context.Context, cfg *config.Config) error {
 	cfg.Task.TargetInstance.Conn = targetConn
 
 	for _, source := range cfg.Task.SourceInstances {
+		// If it is still set to AUTO it means it was not set on the target.
+		// We require it to be set to AUTO on both.
+		if source.IsAutoSnapshot() {
+			return errors.Errorf("'auto' snapshot should be set on both target and source")
+		}
 		// connect source db with target db time_zone
 		conn, err := common.CreateDB(ctx, source.ToDBConfig(), vars, cfg.CheckThreadCount+1)
 		if err != nil {

@@ -21,6 +21,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -95,6 +96,18 @@ type DataSource struct {
 
 	Conn *sql.DB
 	// SourceType string `toml:"source-type" json:"source-type"`
+}
+
+// IsAutoSnapshot returns true if the tidb_snapshot is expected to automatically
+// be set from the syncpoint from the target TiDB instance.
+func (d *DataSource) IsAutoSnapshot() bool {
+	return strings.EqualFold(d.Snapshot, "auto")
+}
+
+// SetSnapshot changes the snapshot in configuration. This is typically
+// used with the auto-snapshot feature.
+func (d *DataSource) SetSnapshot(newSnapshot string) {
+	d.Snapshot = newSnapshot
 }
 
 func (d *DataSource) ToDBConfig() *dbutil.DBConfig {
