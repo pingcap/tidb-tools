@@ -227,10 +227,16 @@ func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, che
 }
 
 func initDBConn(ctx context.Context, cfg *config.Config) error {
-	// Unified time zone
-	vars := map[string]string{
-		"time_zone":         UnifiedTimeZone,
-		"interpolateParams": "true",
+	vars := []dbutil.DSNType{
+		// Unified time zone
+		dbutil.DSNStringType{
+			Key:   "time_zone",
+			Value: UnifiedTimeZone,
+		},
+		dbutil.DSNBoolType{
+			Key:   "interpolateParams",
+			Value: true,
+		},
 	}
 	// we had 3 producers and `cfg.CheckThreadCount` consumer to use db connections.
 	// so the connection count need to be cfg.CheckThreadCount + 3.
