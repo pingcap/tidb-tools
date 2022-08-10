@@ -19,6 +19,7 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"testing"
 	"time"
@@ -26,12 +27,12 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	filter "github.com/pingcap/tidb-tools/pkg/table-filter"
-	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb/parser"
+	router "github.com/pingcap/tidb/util/table-router"
 	"github.com/stretchr/testify/require"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -227,6 +228,54 @@ func TestTiDBSource(t *testing.T) {
 	mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
 	chunkIter, err := analyze.AnalyzeSplitter(ctx, tableDiffs[0], tableCase.rangeInfo)
 	require.NoError(t, err)
+	chunkIter.Close()
+	tidb.Close()
+}
+
+func TestFallbackToRandomIfRangeIsSet(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer conn.Close()
+
+	mock.ExpectQuery("SHOW DATABASES").WillReturnRows(sqlmock.NewRows([]string{"Database"}).AddRow("mysql").AddRow("source_test"))
+	mock.ExpectQuery("SHOW FULL TABLES*").WillReturnRows(sqlmock.NewRows([]string{"Table", "type"}).AddRow("test1", "base"))
+	statsRows := sqlmock.NewRows([]string{"Db_name", "Table_name", "Column_name", "Is_index", "Bucket_id", "Count", "Repeats", "Lower_Bound", "Upper_Bound"})
+	for i := 0; i < 5; i++ {
+		statsRows.AddRow("source_test", "test1", "PRIMARY", 1, (i+1)*64, (i+1)*64, 1,
+			fmt.Sprintf("(%d, %d)", i*64, i*12), fmt.Sprintf("(%d, %d)", (i+1)*64-1, (i+1)*12-1))
+	}
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT COUNT(1) cnt")).WillReturnRows(sqlmock.NewRows([]string{"cnt"}).AddRow(100))
+
+	f, err := filter.Parse([]string{"source_test.*"})
+	require.NoError(t, err)
+
+	createTableSQL1 := "CREATE TABLE `test1` " +
+		"(`id` int(11) NOT NULL AUTO_INCREMENT, " +
+		" `k` int(11) NOT NULL DEFAULT '0', " +
+		"`c` char(120) NOT NULL DEFAULT '', " +
+		"PRIMARY KEY (`id`), KEY `k_1` (`k`))"
+
+	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL1, parser.New())
+	require.NoError(t, err)
+
+	table1 := &common.TableDiff{
+		Schema: "source_test",
+		Table:  "test1",
+		Info:   tableInfo,
+		Range:  "id < 10", // This should prevent using BucketIterator
+	}
+
+	tidb, err := NewTiDBSource(ctx, []*common.TableDiff{table1}, &config.DataSource{Conn: conn}, 1, f)
+	require.NoError(t, err)
+
+	analyze := tidb.GetTableAnalyzer()
+	chunkIter, err := analyze.AnalyzeSplitter(ctx, table1, nil)
+	require.NoError(t, err)
+	require.IsType(t, &splitter.RandomIterator{}, chunkIter)
+
 	chunkIter.Close()
 	tidb.Close()
 }
@@ -661,6 +710,113 @@ func TestSource(t *testing.T) {
 	// TODO unit_test covers source.go
 	_, _, err = NewSources(ctx, cfg)
 	require.NoError(t, err)
+}
+
+func TestRouterRules(t *testing.T) {
+	host, isExist := os.LookupEnv("MYSQL_HOST")
+	if host == "" || !isExist {
+		return
+	}
+	portStr, isExist := os.LookupEnv("MYSQL_PORT")
+	if portStr == "" || !isExist {
+		//return
+	}
+	port, err := strconv.Atoi(portStr)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	r, err := router.NewTableRouter(false, []*router.TableRule{
+		// make sure this rule works
+		{
+			SchemaPattern: "schema1",
+			TablePattern:  "tbl",
+			TargetSchema:  "schema2",
+			TargetTable:   "tbl",
+		},
+	})
+	cfg := &config.Config{
+		LogLevel:         "debug",
+		CheckThreadCount: 4,
+		ExportFixSQL:     true,
+		CheckStructOnly:  false,
+		DataSources: map[string]*config.DataSource{
+			"mysql1": {
+				Host: host,
+				Port: port,
+				User: "root",
+			},
+			"tidb": {
+				Host: host,
+				Port: port,
+				User: "root",
+			},
+		},
+		Routes: nil,
+		Task: config.TaskConfig{
+			Source:      []string{"mysql1"},
+			Routes:      nil,
+			Target:      "tidb",
+			CheckTables: []string{"schema2.tbl"},
+			OutputDir:   "./output",
+			SourceInstances: []*config.DataSource{
+				{
+					Host:           host,
+					Port:           port,
+					User:           "root",
+					Router:         r,
+					RouteTargetSet: make(map[string]struct{}),
+				},
+			},
+			TargetInstance: &config.DataSource{
+				Host: host,
+				Port: port,
+				User: "root",
+			},
+			TargetCheckTables: nil,
+			FixDir:            "output/fix-on-tidb0",
+			CheckpointDir:     "output/checkpoint",
+			HashFile:          "",
+		},
+		ConfigFile:   "config.toml",
+		PrintVersion: false,
+	}
+	cfg.Task.TargetCheckTables, err = filter.Parse([]string{"schema2.tbl", "schema_test.tbl"})
+	require.NoError(t, err)
+	cfg.Task.SourceInstances[0].RouteTargetSet[dbutil.TableName("schema2", "tbl")] = struct{}{}
+
+	// create table
+	conn, err := sql.Open("mysql", fmt.Sprintf("root:@tcp(%s:%d)/?charset=utf8mb4", host, port))
+	require.NoError(t, err)
+
+	conn.Exec("CREATE DATABASE IF NOT EXISTS schema1")
+	conn.Exec("CREATE TABLE IF NOT EXISTS `schema1`.`tbl` (`a` int, `b` varchar(24), `c` float, `d` datetime, primary key(`a`, `b`))")
+	conn.Exec("CREATE DATABASE IF NOT EXISTS schema2")
+	conn.Exec("CREATE TABLE IF NOT EXISTS `schema2`.`tbl` (`a` int, `b` varchar(24), `c` float, `d` datetime, primary key(`a`, `b`))")
+	conn.Exec("CREATE DATABASE IF NOT EXISTS schema_test")
+	conn.Exec("CREATE TABLE IF NOT EXISTS `schema_test`.`tbl` (`a` int, `b` varchar(24), `c` float, `d` datetime, primary key(`a`, `b`))")
+
+	_, _, err = NewSources(ctx, cfg)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(cfg.Task.SourceInstances))
+	targetSchema, targetTable, err := cfg.Task.SourceInstances[0].Router.Route("schema1", "tbl")
+	require.NoError(t, err)
+	require.Equal(t, "schema2", targetSchema)
+	require.Equal(t, "tbl", targetTable)
+	targetSchema, targetTable, err = cfg.Task.SourceInstances[0].Router.Route("schema2", "tbl")
+	require.NoError(t, err)
+	require.Equal(t, ShieldDBName, targetSchema)
+	require.Equal(t, ShieldTableName, targetTable)
+	targetSchema, targetTable, err = cfg.Task.SourceInstances[0].Router.Route("schema_test", "tbl")
+	require.NoError(t, err)
+	require.Equal(t, "schema_test", targetSchema)
+	require.Equal(t, "tbl", targetTable)
+	_, tableRules := cfg.Task.SourceInstances[0].Router.AllRules()
+	require.Equal(t, 1, len(tableRules["schema1"]))
+	require.Equal(t, 1, len(tableRules["schema2"]))
+	require.Equal(t, 1, len(tableRules["schema_test"]))
 }
 
 func TestInitTables(t *testing.T) {

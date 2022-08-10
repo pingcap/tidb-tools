@@ -27,15 +27,16 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
-	"github.com/pingcap/tidb-tools/pkg/utils"
-	"github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/parser/model"
 	tmysql "github.com/pingcap/tidb/parser/mysql"
 	"github.com/pingcap/tidb/sessionctx/stmtctx"
 	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/tidb/util/dbterror"
 	"go.uber.org/zap"
+
+	"github.com/pingcap/tidb-tools/pkg/utils"
 )
 
 const (
@@ -374,7 +375,7 @@ func GetTables(ctx context.Context, db QueryExecutor, schemaName string) (tables
 		| NTEST          | BASE TABLE |
 		+----------------+------------+
 	*/
-	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type != 'VIEW';", escapeName(schemaName))
+	query := fmt.Sprintf("SHOW FULL TABLES IN `%s` WHERE Table_Type = 'BASE TABLE';", escapeName(schemaName))
 	return queryTables(ctx, db, query)
 }
 
@@ -547,10 +548,10 @@ func AnalyzeValuesFromBuckets(valueString string, cols []*model.ColumnInfo) ([]s
 	}
 
 	for i, col := range cols {
-		if IsTimeTypeAndNeedDecode(col.Tp) {
+		if IsTimeTypeAndNeedDecode(col.GetType()) {
 			// check if values[i] is already a time string
 			sc := &stmtctx.StatementContext{TimeZone: time.UTC}
-			_, err := types.ParseTime(sc, values[i], col.Tp, types.MinFsp)
+			_, err := types.ParseTime(sc, values[i], col.GetType(), types.MinFsp)
 			if err == nil {
 				continue
 			}
@@ -841,7 +842,7 @@ func ignoreDDLError(err error) bool {
 		infoschema.ErrTableExists.Code(), infoschema.ErrTableDropExists.Code(),
 		infoschema.ErrColumnExists.Code(), infoschema.ErrIndexExists.Code():
 		return true
-	case ddl.ErrDupKeyName.Code():
+	case dbterror.ErrDupKeyName.Code():
 		return true
 	default:
 		return false

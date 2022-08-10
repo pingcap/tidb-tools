@@ -16,7 +16,6 @@ package splitter
 import (
 	"context"
 	"database/sql"
-
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/log"
@@ -55,6 +54,12 @@ func NewBucketIterator(ctx context.Context, progressID string, table *common.Tab
 }
 
 func NewBucketIteratorWithCheckpoint(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, startRange *RangeInfo, checkThreadCount int) (*BucketIterator, error) {
+	if !utils.IsRangeTrivial(table.Range) {
+		return nil, errors.Errorf(
+			"BucketIterator does not support user configured Range. Range: %s",
+			table.Range)
+	}
+
 	bctx, cancel := context.WithCancel(ctx)
 	bs := &BucketIterator{
 		table:     table,
@@ -125,15 +130,28 @@ func (s *BucketIterator) Next() (*chunk.Range, error) {
 }
 
 func (s *BucketIterator) init(startRange *RangeInfo) error {
+	fields, err := indexFieldsFromConfigString(s.table.Fields, s.table.Info)
+	if err != nil {
+		return err
+	}
+
 	s.nextChunk = 0
 	buckets, err := dbutil.GetBucketsInfo(context.Background(), s.dbConn, s.table.Schema, s.table.Table, s.table.Info)
 	if err != nil {
 		return errors.Trace(err)
 	}
-	indices, err := utils.GetBetterIndex(context.Background(), s.dbConn, s.table.Schema, s.table.Table, s.table.Info)
-	if err != nil {
-		return errors.Trace(err)
+
+	var indices []*model.IndexInfo
+	if fields.IsEmpty() {
+		indices, err = utils.GetBetterIndex(context.Background(), s.dbConn, s.table.Schema, s.table.Table, s.table.Info)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	} else {
+		// There are user configured "index-fields", so we will try to match from all indices.
+		indices = dbutil.FindAllIndex(s.table.Info)
 	}
+
 	for _, index := range indices {
 		if index == nil {
 			continue
@@ -141,11 +159,6 @@ func (s *BucketIterator) init(startRange *RangeInfo) error {
 		if startRange != nil && startRange.IndexID != index.ID {
 			continue
 		}
-		bucket, ok := buckets[index.Name.O]
-		if !ok {
-			return errors.NotFoundf("index %s in buckets info", index.Name.O)
-		}
-		log.Debug("buckets for index", zap.String("index", index.Name.O), zap.Reflect("buckets", buckets))
 
 		indexColumns := utils.GetColumnsFromIndex(index, s.table.Info)
 
@@ -153,6 +166,21 @@ func (s *BucketIterator) init(startRange *RangeInfo) error {
 			// some column in index is ignored.
 			continue
 		}
+
+		if !fields.MatchesIndex(index) {
+			// We are enforcing user configured "index-fields" settings.
+			continue
+		}
+
+		bucket, ok := buckets[index.Name.O]
+		if !ok {
+			// We found an index matching the "index-fields", but no bucket is found
+			// for that index. Returning an error here will make the caller retry with
+			// the random splitter.
+			return errors.NotFoundf("index %s in buckets info", index.Name.O)
+		}
+		log.Debug("buckets for index", zap.String("index", index.Name.O), zap.Reflect("buckets", buckets))
+
 		s.buckets = bucket
 		s.indexColumns = indexColumns
 		s.indexID = index.ID

@@ -1,43 +1,38 @@
 module github.com/pingcap/tidb-tools
 
 require (
-	github.com/BurntSushi/toml v0.3.1
+	github.com/BurntSushi/toml v1.1.0
 	github.com/DATA-DOG/go-sqlmock v1.5.0
-	github.com/Shopify/sarama v1.27.2
+	github.com/Shopify/sarama v1.31.1
 	github.com/coreos/go-semver v0.3.0
-	github.com/ghodss/yaml v1.0.1-0.20190212211648-25d852aebe32 // indirect
-	github.com/go-openapi/swag v0.19.8 // indirect
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang/protobuf v1.5.2
-	github.com/mailru/easyjson v0.7.1 // indirect
-	github.com/olekukonko/tablewriter v0.0.4
-	github.com/pingcap/check v0.0.0-20200212061837-5e12011dc712
-	github.com/pingcap/errors v0.11.5-0.20211009033009-93128226aaa3
-	github.com/pingcap/failpoint v0.0.0-20210316064728-7acb0f0a3dfd
-	github.com/pingcap/kvproto v0.0.0-20211202065422-a412f7a319c3
-	github.com/pingcap/log v0.0.0-20210906054005-afc726e70354
-	github.com/pingcap/tidb v1.1.0-beta.0.20211209055157-9f744cdf8266
-	github.com/pingcap/tidb/parser v0.0.0-20211209055157-9f744cdf8266
-	github.com/pingcap/tiflow v0.0.0-20211220021146-bf29e42c75ae
-	github.com/pingcap/tipb v0.0.0-20211201080053-bd104bb270ba
-	github.com/shirou/gopsutil v3.21.4+incompatible // indirect
+	github.com/olekukonko/tablewriter v0.0.5
+	github.com/pingcap/check v0.0.0-20211026125417-57bd13f7b5f0
+	github.com/pingcap/errors v0.11.5-0.20211224045212-9687c2b0f87c
+	github.com/pingcap/failpoint v0.0.0-20220423142525-ae43b7f4e5c3
+	github.com/pingcap/kvproto v0.0.0-20220517085838-12e2f5a9d167
+	github.com/pingcap/log v1.1.0
+	github.com/pingcap/tidb v1.1.0-beta.0.20220617092035-96526518b4e8
+	github.com/pingcap/tidb/parser v0.0.0-20220617085035-580a68dff3a8
+	github.com/pingcap/tiflow v0.0.0-20220622093837-49960d68d8b7
+	github.com/pingcap/tipb v0.0.0-20220602075447-4847c5d68e73
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
-	github.com/siddontang/go-log v0.0.0-20190221022429-1e957dd83bed // indirect
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.7.0
-	github.com/tikv/pd v1.1.0-beta.0.20211118054146-02848d2660ee
-	github.com/tklauser/go-sysconf v0.3.6 // indirect
-	go.etcd.io/etcd v0.5.0-alpha.5.0.20210512015243-d19fbe541bf9
+	github.com/stretchr/testify v1.7.2-0.20220504104629-106ec21d14df
+	github.com/tikv/pd/client v0.0.0-20220307081149-841fa61e9710
+	go.etcd.io/etcd/api/v3 v3.5.2
+	go.etcd.io/etcd/client/v3 v3.5.2
+	go.etcd.io/etcd/tests/v3 v3.5.2
 	go.uber.org/atomic v1.9.0
-	go.uber.org/zap v1.19.1
-	golang.org/x/net v0.0.0-20211020060615-d418f374d309
-	google.golang.org/grpc v1.40.0
+	go.uber.org/zap v1.21.0
+	golang.org/x/net v0.0.0-20220516155154-20f960328961
+	google.golang.org/grpc v1.46.2
 )
 
 replace github.com/golang/lint => golang.org/x/lint v0.0.0-20190930215403-16217165b5de
 
-// cloud.google.com/go/storage will upgrade grpc to v1.40.0
-// we need keep the replacement until go.etcd.io supports the higher version of grpc.
-replace google.golang.org/grpc => google.golang.org/grpc v1.29.1
+// Suppress 'ambiguous imports' error caused by that old tikv/pd also provides `tikv/pd/client`
+replace github.com/tikv/pd => github.com/tikv/pd v0.0.0-20220218061340-602217e4455a
 
 go 1.16

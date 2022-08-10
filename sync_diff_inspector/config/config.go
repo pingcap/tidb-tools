@@ -21,6 +21,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -29,8 +30,8 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	filter "github.com/pingcap/tidb-tools/pkg/table-filter"
-	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb/parser/model"
+	router "github.com/pingcap/tidb/util/table-router"
 	flag "github.com/spf13/pflag"
 	"go.uber.org/zap"
 )
@@ -89,11 +90,24 @@ type DataSource struct {
 	SqlMode  string `toml:"sql-mode" json:"sql-mode"`
 	Snapshot string `toml:"snapshot" json:"snapshot"`
 
-	RouteRules []string `toml:"route-rules" json:"route-rules"`
-	Router     *router.Table
+	RouteRules     []string `toml:"route-rules" json:"route-rules"`
+	Router         *router.Table
+	RouteTargetSet map[string]struct{} `json:"-"`
 
 	Conn *sql.DB
 	// SourceType string `toml:"source-type" json:"source-type"`
+}
+
+// IsAutoSnapshot returns true if the tidb_snapshot is expected to automatically
+// be set from the syncpoint from the target TiDB instance.
+func (d *DataSource) IsAutoSnapshot() bool {
+	return strings.EqualFold(d.Snapshot, "auto")
+}
+
+// SetSnapshot changes the snapshot in configuration. This is typically
+// used with the auto-snapshot feature.
+func (d *DataSource) SetSnapshot(newSnapshot string) {
+	d.Snapshot = newSnapshot
 }
 
 func (d *DataSource) ToDBConfig() *dbutil.DBConfig {
@@ -402,6 +416,7 @@ func (c *Config) adjustConfigByDMSubTasks() (err error) {
 	}
 	for _, subTaskCfg := range subTaskCfgs {
 		tableRouter, err := router.NewTableRouter(subTaskCfg.CaseSensitive, []*router.TableRule{})
+		routeTargetSet := make(map[string]struct{})
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -410,6 +425,7 @@ func (c *Config) adjustConfigByDMSubTasks() (err error) {
 			if err != nil {
 				return errors.Trace(err)
 			}
+			routeTargetSet[dbutil.TableName(rule.TargetSchema, rule.TargetTable)] = struct{}{}
 		}
 		dataSources[subTaskCfg.SourceID] = &DataSource{
 			Host:     subTaskCfg.From.Host,
@@ -418,6 +434,8 @@ func (c *Config) adjustConfigByDMSubTasks() (err error) {
 			Password: subTaskCfg.From.Password,
 			SqlMode:  sqlMode,
 			Router:   tableRouter,
+
+			RouteTargetSet: routeTargetSet,
 		}
 	}
 	c.DataSources = dataSources
@@ -445,12 +463,14 @@ func (c *Config) Init() (err error) {
 	}
 	for _, d := range c.DataSources {
 		routeRuleList := make([]*router.TableRule, 0, len(c.Routes))
+		d.RouteTargetSet = make(map[string]struct{})
 		// if we had rules
 		for _, r := range d.RouteRules {
 			rr, ok := c.Routes[r]
 			if !ok {
 				return errors.Errorf("not found source routes for rule %s, please correct the config", r)
 			}
+			d.RouteTargetSet[dbutil.TableName(rr.TargetSchema, rr.TargetTable)] = struct{}{}
 			routeRuleList = append(routeRuleList, rr)
 		}
 		// t.SourceRoute can be nil, the caller should check it.

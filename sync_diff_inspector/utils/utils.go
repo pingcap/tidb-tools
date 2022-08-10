@@ -126,9 +126,9 @@ func GetTableRowsQueryFormat(schema, table string, tableInfo *model.TableInfo, c
 		name := dbutil.ColumnName(col.Name.O)
 		// When col value is 0, the result is NULL.
 		// But we can use ISNULL to distinguish between null and 0.
-		if col.FieldType.Tp == mysql.TypeFloat {
+		if col.FieldType.GetType() == mysql.TypeFloat {
 			name = fmt.Sprintf("round(%s, 5-floor(log10(abs(%s)))) as %s", name, name, name)
-		} else if col.FieldType.Tp == mysql.TypeDouble {
+		} else if col.FieldType.GetType() == mysql.TypeDouble {
 			name = fmt.Sprintf("round(%s, 14-floor(log10(abs(%s)))) as %s", name, name, name)
 		}
 		columnNames = append(columnNames, name)
@@ -163,7 +163,7 @@ func GenerateReplaceDML(data map[string]*dbutil.ColumnData, table *model.TableIn
 			continue
 		}
 
-		if NeedQuotes(col.FieldType.Tp) {
+		if NeedQuotes(col.FieldType.GetType()) {
 			values = append(values, fmt.Sprintf("'%s'", strings.Replace(string(data[col.Name.O].Data), "'", "\\'", -1)))
 		} else {
 			values = append(values, string(data[col.Name.O].Data))
@@ -196,7 +196,7 @@ func GenerateReplaceDMLWithAnnotation(source, target map[string]*dbutil.ColumnDa
 		if data1.IsNull {
 			value1 = "NULL"
 		} else {
-			if NeedQuotes(col.FieldType.Tp) {
+			if NeedQuotes(col.FieldType.GetType()) {
 				value1 = fmt.Sprintf("'%s'", strings.Replace(string(data1.Data), "'", "\\'", -1))
 			} else {
 				value1 = string(data1.Data)
@@ -217,7 +217,7 @@ func GenerateReplaceDMLWithAnnotation(source, target map[string]*dbutil.ColumnDa
 		if data2.IsNull {
 			values2 = append(values2, "NULL")
 		} else {
-			if NeedQuotes(col.FieldType.Tp) {
+			if NeedQuotes(col.FieldType.GetType()) {
 				values2 = append(values2, fmt.Sprintf("'%s'", strings.Replace(string(data2.Data), "'", "\\'", -1)))
 			} else {
 				values2 = append(values2, string(data2.Data))
@@ -253,7 +253,7 @@ func GenerateDeleteDML(data map[string]*dbutil.ColumnData, table *model.TableInf
 			continue
 		}
 
-		if NeedQuotes(col.FieldType.Tp) {
+		if NeedQuotes(col.FieldType.GetType()) {
 			kvs = append(kvs, fmt.Sprintf("%s = '%s'", dbutil.ColumnName(col.Name.O), strings.Replace(string(data[col.Name.O].Data), "'", "\\'", -1)))
 		} else {
 			kvs = append(kvs, fmt.Sprintf("%s = %s", dbutil.ColumnName(col.Name.O), string(data[col.Name.O].Data)))
@@ -298,23 +298,23 @@ func isCompatible(tp1, tp2 byte) bool {
 }
 
 func sameProperties(c1, c2 *model.ColumnInfo) bool {
-	switch c1.Tp {
+	switch c1.GetType() {
 	case mysql.TypeVarString, mysql.TypeString, mysql.TypeVarchar:
-		if c1.FieldType.Charset != c2.FieldType.Charset {
+		if c1.FieldType.GetCharset() != c2.FieldType.GetCharset() {
 			log.Warn("Ignoring character set differences",
 				zap.String("column name", c1.Name.O),
-				zap.String("charset source", c1.FieldType.Charset),
-				zap.String("charset target", c2.FieldType.Charset),
+				zap.String("charset source", c1.FieldType.GetCharset()),
+				zap.String("charset target", c2.FieldType.GetCharset()),
 			)
 		}
-		if c1.FieldType.Collate != c2.FieldType.Collate {
+		if c1.FieldType.GetCollate() != c2.FieldType.GetCollate() {
 			log.Warn("Ignoring collation differences",
 				zap.String("column name", c1.Name.O),
-				zap.String("collation source", c1.FieldType.Collate),
-				zap.String("collation target", c2.FieldType.Collate),
+				zap.String("collation source", c1.FieldType.GetCollate()),
+				zap.String("collation target", c2.FieldType.GetCollate()),
 			)
 		}
-		return c1.FieldType.Flen == c2.FieldType.Flen
+		return c1.FieldType.GetFlen() == c2.FieldType.GetFlen()
 	default:
 		return true
 	}
@@ -350,15 +350,15 @@ func CompareStruct(upstreamTableInfos []*model.TableInfo, downstreamTableInfo *m
 				return false, true
 			}
 
-			if !isCompatible(column.Tp, downstreamTableInfo.Columns[i].Tp) {
+			if !isCompatible(column.GetType(), downstreamTableInfo.Columns[i].GetType()) {
 				// column types are different, panic!
 				log.Error("column type not compatible",
 					zap.String("upstream table", upstreamTableInfo.Name.O),
 					zap.String("column name", column.Name.O),
-					zap.Uint8("column type", column.Tp),
+					zap.Uint8("column type", column.GetType()),
 					zap.String("downstream table", downstreamTableInfo.Name.O),
 					zap.String("column name", downstreamTableInfo.Columns[i].Name.O),
-					zap.Uint8("column type", downstreamTableInfo.Columns[i].Tp),
+					zap.Uint8("column type", downstreamTableInfo.Columns[i].GetType()),
 				)
 				return false, true
 			}
@@ -368,10 +368,10 @@ func CompareStruct(upstreamTableInfos []*model.TableInfo, downstreamTableInfo *m
 				log.Error("column properties not compatible",
 					zap.String("upstream table", upstreamTableInfo.Name.O),
 					zap.String("column name", column.Name.O),
-					zap.Uint8("column type", column.Tp),
+					zap.Uint8("column type", column.GetType()),
 					zap.String("downstream table", downstreamTableInfo.Name.O),
 					zap.String("column name", downstreamTableInfo.Columns[i].Name.O),
-					zap.Uint8("column type", downstreamTableInfo.Columns[i].Tp),
+					zap.Uint8("column type", downstreamTableInfo.Columns[i].GetType()),
 				)
 				return false, true
 			}
@@ -517,7 +517,7 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 		}
 		str1 = string(data1.Data)
 		str2 = string(data2.Data)
-		if column.FieldType.Tp == mysql.TypeFloat || column.FieldType.Tp == mysql.TypeDouble {
+		if column.FieldType.GetType() == mysql.TypeFloat || column.FieldType.GetType() == mysql.TypeDouble {
 			if data1.IsNull == data2.IsNull && data1.IsNull {
 				continue
 			}
@@ -557,7 +557,7 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 			return
 		}
 
-		if NeedQuotes(col.FieldType.Tp) {
+		if NeedQuotes(col.FieldType.GetType()) {
 			strData1 := string(data1.Data)
 			strData2 := string(data2.Data)
 
@@ -724,9 +724,9 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 		name := dbutil.ColumnName(col.Name.O)
 		// When col value is 0, the result is NULL.
 		// But we can use ISNULL to distinguish between null and 0.
-		if col.FieldType.Tp == mysql.TypeFloat {
+		if col.FieldType.GetType() == mysql.TypeFloat {
 			name = fmt.Sprintf("round(%s, 5-floor(log10(abs(%s))))", name, name)
-		} else if col.FieldType.Tp == mysql.TypeDouble {
+		} else if col.FieldType.GetType() == mysql.TypeDouble {
 			name = fmt.Sprintf("round(%s, 14-floor(log10(abs(%s))))", name, name)
 		}
 		columnNames = append(columnNames, name)
@@ -854,7 +854,7 @@ func ResetColumns(tableInfo *model.TableInfo, columns []string) (*model.TableInf
 	for i, col := range tableInfo.Columns {
 		col.Offset = i
 		colMap[col.Name.O] = i
-		hasTimeStampType = hasTimeStampType || (col.FieldType.Tp == mysql.TypeTimestamp)
+		hasTimeStampType = hasTimeStampType || (col.FieldType.GetType() == mysql.TypeTimestamp)
 	}
 
 	// Initialize the offset of the column of each index to new `tableInfo.Columns`.
@@ -971,4 +971,12 @@ func GetChunkIDFromSQLFileName(fileIDStr string) (int, int, int, int, error) {
 		return 0, 0, 0, 0, errors.Trace(err)
 	}
 	return tableIndex, bucketIndexLeft, bucketIndexRight, chunkIndex, nil
+}
+
+// IsRangeTrivial checks if a user configured Range is empty or `TRUE`.
+func IsRangeTrivial(rangeCond string) bool {
+	if rangeCond == "" {
+		return true
+	}
+	return strings.ToLower(rangeCond) == "true"
 }

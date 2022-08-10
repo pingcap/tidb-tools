@@ -29,7 +29,7 @@ func TestRowData(t *testing.T) {
 	require.NoError(t, err)
 
 	_, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
-	require.Equal(t, utils.NeedQuotes(orderKeyCols[1].FieldType.Tp), true)
+	require.Equal(t, utils.NeedQuotes(orderKeyCols[1].FieldType.GetType()), true)
 	ids := []string{"3", "2", "2", "2", "4", "1", "NULL"}
 	names := []string{"d", "NULL", "c", "g", "b", "a", "e"}
 	ages := []string{"1", "2", "3", "3", "NULL", "5", "4"}

@@ -543,7 +543,8 @@ func (df *Diff) binSearch(ctx context.Context, targetSource source.Source, table
 		zap.Int64("count1", count1),
 		zap.Int64("count2", count2))
 
-	if !isEqual1 && !isEqual2 {
+	// If there is a count zero, we think the range is very small.
+	if (!isEqual1 && !isEqual2) || (count1 == 0 || count2 == 0) {
 		return tableRange, nil
 	} else if !isEqual1 {
 		c, err := df.binSearch(ctx, targetSource, tableRange1, count1, tableDiff, indexColumns)
