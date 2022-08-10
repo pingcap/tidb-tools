@@ -227,8 +227,8 @@ func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, che
 	return NewMySQLSources(ctx, tableDiffs, dbs, checkThreadCount, f)
 }
 
-func getAutoSnapshotPosition(dbConfig *dbutil.DBConfig, vars map[string]string) (string, string, error) {
-	tmpConn, err := dbutil.OpenDB(*dbConfig, vars)
+func getAutoSnapshotPosition(dbConfig *dbutil.DBConfig, vars []dbutil.DSNType) (string, string, error) {
+	tmpConn, err := dbutil.OpenDBWithDSN(*dbConfig, vars)
 	if err != nil {
 		return "", "", errors.Annotatef(err, "connecting to auto-position tidb_snapshot failed")
 	}
