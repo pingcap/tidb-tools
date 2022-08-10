@@ -27,12 +27,12 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	filter "github.com/pingcap/tidb-tools/pkg/table-filter"
-	router "github.com/pingcap/tidb-tools/pkg/table-router"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb/parser"
+	router "github.com/pingcap/tidb/util/table-router"
 	"github.com/stretchr/testify/require"
 
 	_ "github.com/go-sql-driver/mysql"
