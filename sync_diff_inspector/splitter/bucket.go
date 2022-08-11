@@ -211,6 +211,7 @@ func (s *BucketIterator) Close() {
 func (s *BucketIterator) splitChunkForBucket(ctx context.Context, firstBucketID, lastBucketID int, beginIndex int, bucketChunkCnt int, splitChunkCnt int, chunkRange *chunk.Range) {
 	s.wg.Add(1)
 	s.chunkPool.Apply(func() {
+		defer s.wg.Done()
 		chunks, err := splitRangeByRandom(s.dbConn, chunkRange, splitChunkCnt, s.table.Schema, s.table.Table, s.indexColumns, s.table.Range, s.table.Collation)
 		if err != nil {
 			select {
@@ -222,7 +223,6 @@ func (s *BucketIterator) splitChunkForBucket(ctx context.Context, firstBucketID,
 		chunk.InitChunks(chunks, chunk.Bucket, firstBucketID, lastBucketID, beginIndex, s.table.Collation, s.table.Range, bucketChunkCnt)
 		progress.UpdateTotal(s.progressID, len(chunks), false)
 		s.chunksCh <- chunks
-		s.wg.Done()
 	})
 }
 
