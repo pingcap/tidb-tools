@@ -31,6 +31,7 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"github.com/pingcap/tidb/parser"
 	router "github.com/pingcap/tidb/util/table-router"
 	"github.com/stretchr/testify/require"
@@ -165,7 +166,7 @@ func TestTiDBSource(t *testing.T) {
 
 	f, err := filter.Parse([]string{"source_test.*"})
 	require.NoError(t, err)
-	tidb, err := NewTiDBSource(ctx, tableDiffs, &config.DataSource{Conn: conn}, 1, f)
+	tidb, err := NewTiDBSource(ctx, tableDiffs, &config.DataSource{Conn: conn}, utils.NewWorkerPool(1, "bucketIter"), f)
 	require.NoError(t, err)
 
 	for n, tableCase := range tableCases {
@@ -179,7 +180,7 @@ func TestTiDBSource(t *testing.T) {
 	}
 
 	// Test ChunkIterator
-	iter, err := tidb.GetRangeIterator(ctx, tableCases[0].rangeInfo, &MockAnalyzer{})
+	iter, err := tidb.GetRangeIterator(ctx, tableCases[0].rangeInfo, &MockAnalyzer{}, 3)
 	require.NoError(t, err)
 	resRecords := [][]bool{
 		{false, false, false, false, false},
@@ -291,7 +292,7 @@ func TestFallbackToRandomIfRangeIsSet(t *testing.T) {
 		Range:  "id < 10", // This should prevent using BucketIterator
 	}
 
-	tidb, err := NewTiDBSource(ctx, []*common.TableDiff{table1}, &config.DataSource{Conn: conn}, 1, f)
+	tidb, err := NewTiDBSource(ctx, []*common.TableDiff{table1}, &config.DataSource{Conn: conn}, utils.NewWorkerPool(1, "bucketIter"), f)
 	require.NoError(t, err)
 
 	analyze := tidb.GetTableAnalyzer()
@@ -494,12 +495,12 @@ func TestMysqlRouter(t *testing.T) {
 	// random splitter
 	countRows := sqlmock.NewRows([]string{"Cnt"}).AddRow(0)
 	mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
-	rangeIter, err := mysql.GetRangeIterator(ctx, nil, mysql.GetTableAnalyzer())
+	rangeIter, err := mysql.GetRangeIterator(ctx, nil, mysql.GetTableAnalyzer(), 3)
 	rangeIter.Next(ctx)
 	require.NoError(t, err)
 	rangeIter.Close()
 
-	rangeIter, err = mysql.GetRangeIterator(ctx, tableCases[0].rangeInfo, mysql.GetTableAnalyzer())
+	rangeIter, err = mysql.GetRangeIterator(ctx, tableCases[0].rangeInfo, mysql.GetTableAnalyzer(), 3)
 	require.NoError(t, err)
 	rangeIter.Close()
 
@@ -596,7 +597,7 @@ func TestTiDBRouter(t *testing.T) {
 
 	f, err := filter.Parse([]string{"*.*"})
 	require.NoError(t, err)
-	tidb, err := NewTiDBSource(ctx, tableDiffs, ds, 1, f)
+	tidb, err := NewTiDBSource(ctx, tableDiffs, ds, utils.NewWorkerPool(1, "bucketIter"), f)
 	require.NoError(t, err)
 	infoRows := sqlmock.NewRows([]string{"Table", "Create Table"}).AddRow("test_t", "CREATE TABLE `source_test`.`test1` (`a` int, `b` varchar(24), `c` float, primary key(`a`, `b`))")
 	mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(infoRows)
