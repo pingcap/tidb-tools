@@ -212,7 +212,7 @@ func (s *BucketIterator) splitChunkForBucket(ctx context.Context, firstBucketID,
 	s.wg.Add(1)
 	s.chunkPool.Apply(func() {
 		defer s.wg.Done()
-		chunks, err := splitRangeByRandom(s.dbConn, chunkRange, splitChunkCnt, s.table.Schema, s.table.Table, s.indexColumns, s.table.Range, s.table.Collation)
+		chunks, err := splitRangeByRandom(ctx, s.dbConn, chunkRange, splitChunkCnt, s.table.Schema, s.table.Table, s.indexColumns, s.table.Range, s.table.Collation)
 		if err != nil {
 			select {
 			case <-ctx.Done():

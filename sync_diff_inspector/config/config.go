@@ -196,14 +196,6 @@ func (t *TaskConfig) Init(
 		return errors.Trace(err)
 	}
 
-	// Set default value when output is empty
-	if t.OutputDir == "" {
-		t.OutputDir = timestampOutputDir()
-		if err := os.RemoveAll(t.OutputDir); err != nil && !os.IsNotExist(err) {
-			log.Fatal("fail to remove the temp directory", zap.String("path", t.OutputDir), zap.String("error", err.Error()))
-		}
-	}
-
 	ok, err = pathExists(t.OutputDir)
 	if err != nil {
 		return errors.Trace(err)
@@ -376,7 +368,16 @@ func (c *Config) Parse(arguments []string) error {
 		return errors.Errorf("'%s' is an invalid flag", c.FlagSet.Arg(0))
 	}
 
+	// Set default value when output is empty
+	if c.Task.OutputDir == "" {
+		c.Task.OutputDir = timestampOutputDir()
+		if err := os.RemoveAll(c.Task.OutputDir); err != nil && !os.IsNotExist(err) {
+			log.Fatal("fail to remove the temp directory", zap.String("path", c.Task.OutputDir), zap.String("error", err.Error()))
+		}
+	}
+
 	c.SplitThreadCount = baseSplitThreadCount + c.CheckThreadCount/2
+
 	return nil
 }
 

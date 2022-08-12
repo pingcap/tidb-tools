@@ -135,7 +135,7 @@ func GetTableRowsQueryFormat(schema, table string, tableInfo *model.TableInfo, c
 	}
 	columns := strings.Join(columnNames, ", ")
 	if collation != "" {
-		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
+		collation = fmt.Sprintf(" COLLATE '%s'", collation)
 	}
 
 	for i, key := range orderKeys {
@@ -510,10 +510,10 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 
 	for _, column := range columns {
 		if data1, ok = map1[column.Name.O]; !ok {
-			return false, 0, errors.Errorf("upstream don't have key %s", key)
+			return false, 0, errors.Errorf("upstream don't have key %s", column.Name.O)
 		}
 		if data2, ok = map2[column.Name.O]; !ok {
-			return false, 0, errors.Errorf("downstream don't have key %s", key)
+			return false, 0, errors.Errorf("downstream don't have key %s", column.Name.O)
 		}
 		str1 = string(data1.Data)
 		str2 = string(data2.Data)
@@ -538,6 +538,7 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 		}
 
 		equal = false
+		key = column.Name.O
 		break
 
 	}
@@ -646,7 +647,7 @@ func SliceToMap(slice []string) map[string]interface{} {
 func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table string, indexColumns []*model.ColumnInfo, limitRange string, args []interface{}, count int64) (map[string]string, error) {
 	/*
 		example
-		mysql> select i_id, i_im_id, i_name from item where i_id > 0 order by i_id, i_im_id, i_name limit 5000,1;
+		mysql> select i_id, i_im_id, i_name from item where i_id > 0 order by i_id, i_im_id, i_name collate limit 5000,1;
 		+------+---------+-----------------+
 		| i_id | i_im_id | i_name          |
 		+------+---------+-----------------+
@@ -658,6 +659,8 @@ func GetApproximateMidBySize(ctx context.Context, db *sql.DB, schema, table stri
 	for _, col := range indexColumns {
 		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
 	}
+
+	// Note: add collation after order by will largely reduce the speed.
 	query := fmt.Sprintf("SELECT %s FROM %s WHERE %s ORDER BY %s LIMIT 1 OFFSET %d",
 		strings.Join(columnNames, ", "),
 		dbutil.TableName(schema, table),
@@ -748,6 +751,70 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 	}
 
 	return count.Int64, checksum.Int64, nil
+}
+
+// GetRandomValues returns some random values. Different from /pkg/dbutil.GetRandomValues, it returns multi-columns at the same time.
+func GetRandomValues(ctx context.Context, db *sql.DB, schema, table string, columns []*model.ColumnInfo, num int, limitRange string, limitArgs []interface{}, collation string) ([][]string, error) {
+	/*
+		example: there is one index consists of `id`, `a`, `b`.
+		mysql> SELECT `id`, `a`, `b` FROM (SELECT `id`, `a`, `b`, rand() rand_value FROM `test`.`test`  WHERE `id` COLLATE "latin1_bin" > 0 AND `id` COLLATE "latin1_bin" < 100 ORDER BY rand_value LIMIT 5) rand_tmp ORDER BY `id` COLLATE "latin1_bin";
+		+------+------+------+
+		| id   | a    | b    |
+		+------+------+------+
+		|    1 |    2 |    3 |
+		|    2 |    3 |    4 |
+		|    3 |    4 |    5 |
+		+------+------+------+
+	*/
+
+	if limitRange == "" {
+		limitRange = "TRUE"
+	}
+
+	if collation != "" {
+		collation = fmt.Sprintf(" COLLATE '%s'", collation)
+	}
+
+	columnNames := make([]string, 0, len(columns))
+	for _, col := range columns {
+		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
+	}
+
+	query := fmt.Sprintf("SELECT %[1]s FROM (SELECT %[1]s, rand() rand_value FROM %[2]s WHERE %[3]s ORDER BY rand_value LIMIT %[4]d)rand_tmp ORDER BY %[1]s%[5]s",
+		strings.Join(columnNames, ", "), dbutil.TableName(schema, table), limitRange, num, collation)
+	log.Debug("get random values", zap.String("sql", query), zap.Reflect("args", limitArgs))
+
+	rows, err := db.QueryContext(ctx, query, limitArgs...)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	defer rows.Close()
+
+	randomValues := make([][]string, 0, num)
+NEXTROW:
+	for rows.Next() {
+		colVals := make([][]byte, len(columns))
+		colValsI := make([]interface{}, len(colVals))
+		for i := range colValsI {
+			colValsI[i] = &colVals[i]
+		}
+		err = rows.Scan(colValsI...)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+
+		randomValue := make([]string, len(columns))
+
+		for i, col := range colVals {
+			if col == nil {
+				continue NEXTROW
+			}
+			randomValue[i] = string(col)
+		}
+		randomValues = append(randomValues, randomValue)
+	}
+
+	return randomValues, errors.Trace(rows.Err())
 }
 
 // ResetColumns removes index from `tableInfo.Indices`, whose columns appear in `columns`.

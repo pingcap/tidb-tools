@@ -67,11 +67,9 @@ type Diff struct {
 	// workSource is one of upstream/downstream by some policy in #pickSource.
 	workSource source.Source
 
-	sample           int
 	checkThreadCount int
 	splitThreadCount int
 	exportFixSQL     bool
-	useCheckpoint    bool
 	ignoreDataCheck  bool
 	sqlWg            sync.WaitGroup
 	checkpointWg     sync.WaitGroup
