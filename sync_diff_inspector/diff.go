@@ -68,6 +68,7 @@ type Diff struct {
 	workSource source.Source
 
 	checkThreadCount int
+	splitThreadCount int
 	exportFixSQL     bool
 	ignoreDataCheck  bool
 	sqlWg            sync.WaitGroup
@@ -86,6 +87,7 @@ type Diff struct {
 func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 	diff = &Diff{
 		checkThreadCount: cfg.CheckThreadCount,
+		splitThreadCount: cfg.SplitThreadCount,
 		exportFixSQL:     cfg.ExportFixSQL,
 		ignoreDataCheck:  cfg.CheckStructOnly,
 		sqlCh:            make(chan *ChunkDML, splitter.DefaultChannelBuffer),
@@ -364,7 +366,7 @@ func (df *Diff) pickSource(ctx context.Context) source.Source {
 }
 
 func (df *Diff) generateChunksIterator(ctx context.Context) (source.RangeIterator, error) {
-	return df.workSource.GetRangeIterator(ctx, df.startRange, df.workSource.GetTableAnalyzer())
+	return df.workSource.GetRangeIterator(ctx, df.startRange, df.workSource.GetTableAnalyzer(), df.splitThreadCount)
 }
 
 func (df *Diff) handleCheckpoints(ctx context.Context, stopCh chan struct{}) {

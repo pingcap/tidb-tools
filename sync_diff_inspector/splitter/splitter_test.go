@@ -687,7 +687,7 @@ func TestBucketSpliter(t *testing.T) {
 	createFakeResultForBucketSplit(mock, nil, nil)
 	createFakeResultForCount(mock, 64)
 	createFakeResultForRandom(mock, testCases[0].aRandomValues[stopJ:], testCases[0].bRandomValues[stopJ:])
-	iter, err = NewBucketIteratorWithCheckpoint(ctx, "", tableDiff, db, rangeInfo, 1)
+	iter, err = NewBucketIteratorWithCheckpoint(ctx, "", tableDiff, db, rangeInfo, utils.NewWorkerPool(1, "bucketIter"))
 	require.NoError(t, err)
 	chunk, err = iter.Next()
 	require.NoError(t, err)
