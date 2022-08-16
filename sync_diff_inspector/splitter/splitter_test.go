@@ -322,13 +322,14 @@ func TestRandomSpliter(t *testing.T) {
 		tableInfo, err := dbutil.GetTableInfoBySQL(testCase.createTableSQL, parser.New())
 		require.NoError(t, err)
 
-		info, needUnifiedTimeStamp := utils.ResetColumns(tableInfo, testCase.IgnoreColumns)
+		info, needUnifiedTimeStamp, hasUniqueColumn := utils.ResetColumns(tableInfo, testCase.IgnoreColumns)
 		tableDiff := &common.TableDiff{
 			Schema:              "test",
 			Table:               "test",
 			Info:                info,
 			IgnoreColumns:       testCase.IgnoreColumns,
 			NeedUnifiedTimeZone: needUnifiedTimeStamp,
+			HasUniqueColumn:     hasUniqueColumn,
 			Fields:              testCase.fields,
 			ChunkSize:           5,
 		}

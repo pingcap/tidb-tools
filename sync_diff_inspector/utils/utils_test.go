@@ -221,12 +221,25 @@ func TestBasicTableUtilOperation(t *testing.T) {
 	require.Equal(t, len(tableInfo.Columns), 5)
 	require.Equal(t, tableInfo.Indices[0].Columns[1].Name.O, "b")
 	require.Equal(t, tableInfo.Indices[0].Columns[1].Offset, 2)
-	info, hasTimeStampType := ResetColumns(tableInfo, []string{"c"})
+	info, hasTimeStampType, hasUniqueColumn := ResetColumns(tableInfo, []string{"c"})
 	require.True(t, hasTimeStampType)
+	require.True(t, hasUniqueColumn)
 	require.Equal(t, len(info.Indices), 1)
 	require.Equal(t, len(info.Columns), 4)
 	require.Equal(t, tableInfo.Indices[0].Columns[1].Name.O, "b")
 	require.Equal(t, tableInfo.Indices[0].Columns[1].Offset, 1)
+
+	createTableSQL = "create table `test`.`test`(`a` int, `c` float, `b` varchar(10), `d` datetime)"
+	tableInfo, err = dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
+	require.NoError(t, err)
+
+	require.Equal(t, len(tableInfo.Indices), 0)
+	require.Equal(t, len(tableInfo.Columns), 4)
+	info, hasTimeStampType, hasUniqueColumn = ResetColumns(tableInfo, []string{"c"})
+	require.False(t, hasTimeStampType)
+	require.False(t, hasUniqueColumn)
+	require.Equal(t, len(info.Indices), 0)
+	require.Equal(t, len(info.Columns), 3)
 }
 
 func TestGetCountAndCRC32Checksum(t *testing.T) {
@@ -241,12 +254,19 @@ func TestGetCountAndCRC32Checksum(t *testing.T) {
 	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
 	require.NoError(t, err)
 
-	mock.ExpectQuery("SELECT COUNT.*FROM `test_schema`\\.`test_table` WHERE \\[23 45\\].*").WithArgs("123", "234").WillReturnRows(sqlmock.NewRows([]string{"CNT", "CHECKSUM"}).AddRow(123, 456))
+	mock.ExpectQuery("SELECT COUNT(*) as CNT, BIT_XOR.*FROM `test_schema`\\.`test_table` WHERE \\[23 45\\].*").WithArgs("123", "234").WillReturnRows(sqlmock.NewRows([]string{"CNT", "CHECKSUM"}).AddRow(123, 456))
 
-	count, checksum, err := GetCountAndCRC32Checksum(ctx, conn, "test_schema", "test_table", tableInfo, "[23 45]", []interface{}{"123", "234"})
+	count, checksum, err := GetCountAndCRC32Checksum(ctx, conn, "test_schema", "test_table", tableInfo, true, "[23 45]", []interface{}{"123", "234"})
 	require.NoError(t, err)
 	require.Equal(t, count, int64(123))
 	require.Equal(t, checksum, int64(456))
+
+	mock.ExpectQuery("SELECT COUNT(*) as CNT, SUM.*FROM `test_schema`\\.`test_table` WHERE \\[23 45\\].*").WithArgs("123", "234").WillReturnRows(sqlmock.NewRows([]string{"CNT", "CHECKSUM"}).AddRow(456, 123))
+
+	count, checksum, err = GetCountAndCRC32Checksum(ctx, conn, "test_schema", "test_table", tableInfo, true, "[23 45]", []interface{}{"123", "234"})
+	require.NoError(t, err)
+	require.Equal(t, count, int64(456))
+	require.Equal(t, checksum, int64(123))
 }
 
 func TestGetApproximateMid(t *testing.T) {
@@ -331,23 +351,24 @@ func TestResetColumns(t *testing.T) {
 	createTableSQL1 := "CREATE TABLE `test`.`atest` (`a` int, `b` int, `c` int, `d` int, primary key(`a`))"
 	tableInfo1, err := dbutil.GetTableInfoBySQL(createTableSQL1, parser.New())
 	require.NoError(t, err)
-	tbInfo, hasTimeStampType := ResetColumns(tableInfo1, []string{"a"})
+	tbInfo, hasTimeStampType, hasUniqueColumn := ResetColumns(tableInfo1, []string{"a"})
 	require.Equal(t, len(tbInfo.Columns), 3)
 	require.Equal(t, len(tbInfo.Indices), 0)
 	require.Equal(t, tbInfo.Columns[2].Offset, 2)
 	require.False(t, hasTimeStampType)
+	require.False(t, hasUniqueColumn)
 
 	createTableSQL2 := "CREATE TABLE `test`.`atest` (`a` int, `b` int, `c` int, `d` int, primary key(`a`), index idx(`b`, `c`))"
 	tableInfo2, err := dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
 	require.NoError(t, err)
-	tbInfo, _ = ResetColumns(tableInfo2, []string{"a", "b"})
+	tbInfo, _, _ = ResetColumns(tableInfo2, []string{"a", "b"})
 	require.Equal(t, len(tbInfo.Columns), 2)
 	require.Equal(t, len(tbInfo.Indices), 0)
 
 	createTableSQL3 := "CREATE TABLE `test`.`atest` (`a` int, `b` int, `c` int, `d` int, primary key(`a`), index idx(`b`, `c`))"
 	tableInfo3, err := dbutil.GetTableInfoBySQL(createTableSQL3, parser.New())
 	require.NoError(t, err)
-	tbInfo, _ = ResetColumns(tableInfo3, []string{"b", "c"})
+	tbInfo, _, _ = ResetColumns(tableInfo3, []string{"b", "c"})
 	require.Equal(t, len(tbInfo.Columns), 2)
 	require.Equal(t, len(tbInfo.Indices), 1)
 }
