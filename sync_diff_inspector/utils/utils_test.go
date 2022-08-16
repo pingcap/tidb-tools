@@ -254,16 +254,16 @@ func TestGetCountAndCRC32Checksum(t *testing.T) {
 	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
 	require.NoError(t, err)
 
-	mock.ExpectQuery("SELECT COUNT(*) as CNT, BIT_XOR.*FROM `test_schema`\\.`test_table` WHERE \\[23 45\\].*").WithArgs("123", "234").WillReturnRows(sqlmock.NewRows([]string{"CNT", "CHECKSUM"}).AddRow(123, 456))
+	mock.ExpectQuery("SELECT COUNT\\(\\*\\) as CNT, BIT_XOR.*FROM `test_schema`\\.`test_table` WHERE \\[23 45\\].*").WithArgs("123", "234").WillReturnRows(sqlmock.NewRows([]string{"CNT", "CHECKSUM"}).AddRow(123, 456))
 
 	count, checksum, err := GetCountAndCRC32Checksum(ctx, conn, "test_schema", "test_table", tableInfo, true, "[23 45]", []interface{}{"123", "234"})
 	require.NoError(t, err)
 	require.Equal(t, count, int64(123))
 	require.Equal(t, checksum, int64(456))
 
-	mock.ExpectQuery("SELECT COUNT(*) as CNT, SUM.*FROM `test_schema`\\.`test_table` WHERE \\[23 45\\].*").WithArgs("123", "234").WillReturnRows(sqlmock.NewRows([]string{"CNT", "CHECKSUM"}).AddRow(456, 123))
+	mock.ExpectQuery("SELECT COUNT\\(\\*\\) as CNT, SUM.*FROM `test_schema`\\.`test_table` WHERE \\[23 45\\].*").WithArgs("123", "234").WillReturnRows(sqlmock.NewRows([]string{"CNT", "CHECKSUM"}).AddRow(456, 123))
 
-	count, checksum, err = GetCountAndCRC32Checksum(ctx, conn, "test_schema", "test_table", tableInfo, true, "[23 45]", []interface{}{"123", "234"})
+	count, checksum, err = GetCountAndCRC32Checksum(ctx, conn, "test_schema", "test_table", tableInfo, false, "[23 45]", []interface{}{"123", "234"})
 	require.NoError(t, err)
 	require.Equal(t, count, int64(456))
 	require.Equal(t, checksum, int64(123))
