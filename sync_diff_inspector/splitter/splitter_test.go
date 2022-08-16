@@ -15,6 +15,7 @@ package splitter
 
 import (
 	"context"
+	"database/sql/driver"
 	"fmt"
 	"sort"
 	"strconv"
@@ -42,15 +43,15 @@ func TestSplitRangeByRandom(t *testing.T) {
 		createTableSQL string
 		splitCount     int
 		originChunk    *chunk.Range
-		randomValues   [][]interface{}
+		randomValues   [][]string
 		expectResult   []chunkResult
 	}{
 		{
 			"create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))",
 			3,
 			chunk.NewChunkRange().CopyAndUpdate("a", "0", "10", true, true).CopyAndUpdate("b", "a", "z", true, true),
-			[][]interface{}{
-				{5, 7},
+			[][]string{
+				{"5", "7"},
 				{"g", "n"},
 			},
 			[]chunkResult{
@@ -66,10 +67,31 @@ func TestSplitRangeByRandom(t *testing.T) {
 				},
 			},
 		}, {
+			"create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`b`, `a`))",
+			3,
+			chunk.NewChunkRange().CopyAndUpdate("b", "a", "z", true, true).CopyAndUpdate("a", "0", "10", true, true),
+			[][]string{
+				{"g", "n"},
+				{"5", "7"},
+			},
+			[]chunkResult{
+				{
+					"((`b` > ?) OR (`b` = ? AND `a` > ?)) AND ((`b` < ?) OR (`b` = ? AND `a` <= ?))",
+					[]interface{}{"a", "a", "0", "g", "g", "5"},
+				}, {
+					"((`b` > ?) OR (`b` = ? AND `a` > ?)) AND ((`b` < ?) OR (`b` = ? AND `a` <= ?))",
+					[]interface{}{"g", "g", "5", "n", "n", "7"},
+				}, {
+					"((`b` > ?) OR (`b` = ? AND `a` > ?)) AND ((`b` < ?) OR (`b` = ? AND `a` <= ?))",
+					[]interface{}{"n", "n", "7", "z", "z", "10"},
+				},
+			},
+		},
+		{
 			"create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`b`))",
 			3,
 			chunk.NewChunkRange().CopyAndUpdate("b", "a", "z", true, true),
-			[][]interface{}{
+			[][]string{
 				{"g", "n"},
 			},
 			[]chunkResult{
@@ -88,7 +110,7 @@ func TestSplitRangeByRandom(t *testing.T) {
 			"create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`b`))",
 			2,
 			chunk.NewChunkRange().CopyAndUpdate("b", "a", "z", true, true),
-			[][]interface{}{
+			[][]string{
 				{"g"},
 			},
 			[]chunkResult{
@@ -104,7 +126,7 @@ func TestSplitRangeByRandom(t *testing.T) {
 			"create table `test`.`test`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`b`))",
 			3,
 			chunk.NewChunkRange().CopyAndUpdate("b", "a", "z", true, true),
-			[][]interface{}{
+			[][]string{
 				{},
 			},
 			[]chunkResult{
@@ -123,8 +145,7 @@ func TestSplitRangeByRandom(t *testing.T) {
 		splitCols, err := GetSplitFields(tableInfo, nil)
 		require.NoError(t, err)
 		createFakeResultForRandomSplit(mock, 0, testCase.randomValues)
-
-		chunks, err := splitRangeByRandom(db, testCase.originChunk, testCase.splitCount, "test", "test", splitCols, "", "")
+		chunks, err := splitRangeByRandom(context.Background(), db, testCase.originChunk, testCase.splitCount, "test", "test", splitCols, "", "")
 		require.NoError(t, err)
 		for j, chunk := range chunks {
 			chunkStr, args := chunk.ToString("")
@@ -144,7 +165,7 @@ func TestRandomSpliter(t *testing.T) {
 		count          int
 		fields         string
 		IgnoreColumns  []string
-		randomValues   [][]interface{}
+		randomValues   [][]string
 		expectResult   []chunkResult
 	}{
 		{
@@ -152,8 +173,8 @@ func TestRandomSpliter(t *testing.T) {
 			10,
 			"",
 			nil,
-			[][]interface{}{
-				{1, 2, 3, 4, 5},
+			[][]string{
+				{"1", "2", "3", "4", "5"},
 				{"a", "b", "c", "d", "e"},
 			},
 			[]chunkResult{
@@ -182,7 +203,7 @@ func TestRandomSpliter(t *testing.T) {
 			10,
 			"",
 			nil,
-			[][]interface{}{
+			[][]string{
 				{"a", "b", "c", "d", "e"},
 			},
 			[]chunkResult{
@@ -211,9 +232,9 @@ func TestRandomSpliter(t *testing.T) {
 			10,
 			"b,c",
 			nil,
-			[][]interface{}{
+			[][]string{
 				{"a", "b", "c", "d", "e"},
-				{1.1, 2.2, 3.3, 4.4, 5.5},
+				{"1.1", "2.2", "3.3", "4.4", "5.5"},
 			},
 			[]chunkResult{
 				{
@@ -241,7 +262,7 @@ func TestRandomSpliter(t *testing.T) {
 			10,
 			"",
 			[]string{"a"},
-			[][]interface{}{
+			[][]string{
 				{"a", "b", "c", "d", "e"},
 			},
 			[]chunkResult{
@@ -270,8 +291,8 @@ func TestRandomSpliter(t *testing.T) {
 			10,
 			"",
 			nil,
-			[][]interface{}{
-				{1, 2, 3, 4, 5},
+			[][]string{
+				{"1", "2", "3", "4", "5"},
 			},
 			[]chunkResult{
 				{
@@ -380,18 +401,27 @@ func TestRandomSpliter(t *testing.T) {
 
 }
 
-func createFakeResultForRandomSplit(mock sqlmock.Sqlmock, count int, randomValues [][]interface{}) {
+func createFakeResultForRandomSplit(mock sqlmock.Sqlmock, count int, randomValues [][]string) {
 	createFakeResultForCount(mock, count)
-
+	if randomValues == nil {
+		return
+	}
 	// generate fake result for get random value for column a
 	columns := []string{"a", "b", "c", "d", "e", "f"}
-	for i, randomVs := range randomValues {
-		randomRows := sqlmock.NewRows([]string{columns[i]})
-		for _, value := range randomVs {
-			randomRows.AddRow(value)
-		}
-		mock.ExpectQuery("ORDER BY rand_value").WillReturnRows(randomRows)
+	rowsNames := make([]string, 0, len(randomValues))
+	for i := 0; i < len(randomValues); i++ {
+		rowsNames = append(rowsNames, columns[i])
 	}
+	randomRows := sqlmock.NewRows(rowsNames)
+	for i := 0; i < len(randomValues[0]); i++ {
+		row := make([]driver.Value, 0, len(randomValues))
+		for j := 0; j < len(randomValues); j++ {
+			row = append(row, randomValues[j][i])
+		}
+		randomRows.AddRow(row...)
+	}
+	mock.ExpectQuery("ORDER BY rand_value").WillReturnRows(randomRows)
+
 }
 
 func TestBucketSpliter(t *testing.T) {
@@ -570,7 +600,8 @@ func TestBucketSpliter(t *testing.T) {
 		Info:   tableInfo,
 	}
 
-	for _, testCase := range testCases {
+	for i, testCase := range testCases {
+		fmt.Printf("%d", i)
 		createFakeResultForBucketSplit(mock, testCase.aRandomValues, testCase.bRandomValues)
 		tableDiff.ChunkSize = testCase.chunkSize
 		iter, err := NewBucketIterator(ctx, "", tableDiff, db)
@@ -656,7 +687,7 @@ func TestBucketSpliter(t *testing.T) {
 	createFakeResultForBucketSplit(mock, nil, nil)
 	createFakeResultForCount(mock, 64)
 	createFakeResultForRandom(mock, testCases[0].aRandomValues[stopJ:], testCases[0].bRandomValues[stopJ:])
-	iter, err = NewBucketIteratorWithCheckpoint(ctx, "", tableDiff, db, rangeInfo, 1)
+	iter, err = NewBucketIteratorWithCheckpoint(ctx, "", tableDiff, db, rangeInfo, utils.NewWorkerPool(1, "bucketIter"))
 	require.NoError(t, err)
 	chunk, err = iter.Next()
 	require.NoError(t, err)
@@ -698,13 +729,9 @@ func createFakeResultForCount(mock sqlmock.Sqlmock, count int) {
 
 func createFakeResultForRandom(mock sqlmock.Sqlmock, aRandomValues, bRandomValues []interface{}) {
 	for i := 0; i < len(aRandomValues); i++ {
-		aRandomRows := sqlmock.NewRows([]string{"a"})
-		aRandomRows.AddRow(aRandomValues[i])
+		aRandomRows := sqlmock.NewRows([]string{"a", "b"})
+		aRandomRows.AddRow(aRandomValues[i], bRandomValues[i])
 		mock.ExpectQuery("ORDER BY rand_value").WillReturnRows(aRandomRows)
-
-		bRandomRows := sqlmock.NewRows([]string{"b"})
-		bRandomRows.AddRow(bRandomValues[i])
-		mock.ExpectQuery("ORDER BY rand_value").WillReturnRows(bRandomRows)
 	}
 }
 
@@ -876,8 +903,8 @@ func TestChunkSize(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, randomIter.chunkSize, int64(50000))
 
-	createFakeResultForRandomSplit(mock, 1000000000, [][]interface{}{
-		{1, 2, 3, 4, 5},
+	createFakeResultForRandomSplit(mock, 1000000000, [][]string{
+		{"1", "2", "3", "4", "5"},
 		{"a", "b", "c", "d", "e"},
 	})
 	randomIter, err = NewRandomIterator(ctx, "", tableDiff, db)
