@@ -62,6 +62,9 @@ type TableDiff struct {
 	// the table has column timestamp, which need to reset time_zone.
 	NeedUnifiedTimeZone bool `json:"-"`
 
+	// the table has unique column, so it's ok to use bit_xor function.
+	HasUniqueColumn bool `json:"-"`
+
 	Collation string `json:"collation"`
 
 	ChunkSize int64 `json:"chunk-size"`

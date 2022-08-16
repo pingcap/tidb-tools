@@ -706,11 +706,17 @@ func GetTableSize(ctx context.Context, db *sql.DB, schemaName, tableName string)
 	return dataSize.Int64, nil
 }
 
+const (
+	BIT_XOR_QUERY = "SELECT COUNT(*) as CNT, BIT_XOR(CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED)) as CHECKSUM FROM %s WHERE %s;"
+	SUM_QUERY     = "SELECT COUNT(*) as CNT, SUM(CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED)) as CHECKSUM FROM %s WHERE %s;"
+)
+
 // GetCountAndCRC32Checksum returns checksum code and count of some data by given condition
-func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, int64, error) {
+func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, hasUniqueColumn bool, limitRange string, args []interface{}) (int64, int64, error) {
 	/*
 		calculate CRC32 checksum and count example:
 		mysql> select count(*) as CNT, SUM(CAST(CRC32(CONCAT_WS(',', id, name, age, CONCAT(ISNULL(id), ISNULL(name), ISNULL(age))))AS UNSIGNED)) as CHECKSUM from test.test where id > 0;
+		mysql> select count(*) as CNT, BIT_XOR(CAST(CRC32(CONCAT_WS(',', id, name, age, CONCAT(ISNULL(id), ISNULL(name), ISNULL(age))))AS UNSIGNED)) as CHECKSUM from test.test where id > 0;
 		+--------+------------+
 		|  CNT   |  CHECKSUM  |
 		+--------+------------+
@@ -732,9 +738,14 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 		columnNames = append(columnNames, name)
 		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", name))
 	}
-
-	query := fmt.Sprintf("SELECT COUNT(*) as CNT, SUM(CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED)) as CHECKSUM FROM %s WHERE %s;",
-		strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), dbutil.TableName(schemaName, tableName), limitRange)
+	var query string
+	if hasUniqueColumn {
+		query = fmt.Sprintf(BIT_XOR_QUERY,
+			strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), dbutil.TableName(schemaName, tableName), limitRange)
+	} else {
+		query = fmt.Sprintf(SUM_QUERY,
+			strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), dbutil.TableName(schemaName, tableName), limitRange)
+	}
 	log.Debug("count and checksum", zap.String("sql", query), zap.Reflect("args", args))
 
 	var count sql.NullInt64
@@ -821,11 +832,14 @@ NEXTROW:
 // And removes column from `tableInfo.Columns`, which appears in `columns`.
 // And initializes the offset of the column of each index to new `tableInfo.Columns`.
 //
-// Return the new tableInfo and the flag whether the columns have timestamp type.
-func ResetColumns(tableInfo *model.TableInfo, columns []string) (*model.TableInfo, bool) {
+// Return the new tableInfo and the flag shows whether the columns have timestamp type
+// and another flag shows whether the table has a unique column.
+func ResetColumns(tableInfo *model.TableInfo, columns []string) (*model.TableInfo, bool, bool) {
 	// Although columns is empty, need to initialize indices' offset mapping to column.
 
 	hasTimeStampType := false
+	hasUniqueColumn := uint(0)
+	uniqueFlag := mysql.UniqueFlag | mysql.UniqueKeyFlag | mysql.PriKeyFlag
 	// Remove all index from `tableInfo.Indices`, whose columns are involved of any column in `columns`.
 	removeColMap := SliceToMap(columns)
 	for i := 0; i < len(tableInfo.Indices); i++ {
@@ -855,6 +869,7 @@ func ResetColumns(tableInfo *model.TableInfo, columns []string) (*model.TableInf
 		col.Offset = i
 		colMap[col.Name.O] = i
 		hasTimeStampType = hasTimeStampType || (col.FieldType.GetType() == mysql.TypeTimestamp)
+		hasUniqueColumn = hasUniqueColumn | (col.FieldType.GetFlag() & uniqueFlag)
 	}
 
 	// Initialize the offset of the column of each index to new `tableInfo.Columns`.
@@ -869,7 +884,7 @@ func ResetColumns(tableInfo *model.TableInfo, columns []string) (*model.TableInf
 		}
 	}
 
-	return tableInfo, hasTimeStampType
+	return tableInfo, hasTimeStampType, hasUniqueColumn > 0
 }
 
 // UniqueID returns `schema:table`

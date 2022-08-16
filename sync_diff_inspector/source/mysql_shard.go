@@ -103,7 +103,7 @@ func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitte
 
 	for _, ms := range matchSources {
 		go func(ms *common.TableShardSource) {
-			count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info, chunk.Where, chunk.Args)
+			count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info, table.HasUniqueColumn, chunk.Where, chunk.Args)
 			infoCh <- &ChecksumInfo{
 				Checksum: checksum,
 				Count:    count,
@@ -126,7 +126,11 @@ func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitte
 			err = info.Err
 		}
 		totalCount += info.Count
-		totalChecksum ^= info.Checksum
+		if table.HasUniqueColumn {
+			totalChecksum ^= info.Checksum
+		} else {
+			totalChecksum += info.Checksum
+		}
 	}
 
 	cost := time.Since(beginTime)
@@ -231,7 +235,7 @@ func (s *MySQLSources) GetSourceStructInfo(ctx context.Context, tableIndex int) 
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		sourceTableInfo, _ = utils.ResetColumns(sourceTableInfo, tableDiff.IgnoreColumns)
+		sourceTableInfo, _, _ = utils.ResetColumns(sourceTableInfo, tableDiff.IgnoreColumns)
 		sourceTableInfos[i] = sourceTableInfo
 	}
 	return sourceTableInfos, nil

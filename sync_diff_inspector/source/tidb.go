@@ -123,7 +123,7 @@ func (s *TiDBSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter.
 	chunk := tableRange.GetChunk()
 
 	matchSource := getMatchSource(s.sourceTableMap, table)
-	count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, s.dbConn, matchSource.OriginSchema, matchSource.OriginTable, table.Info, chunk.Where, chunk.Args)
+	count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, s.dbConn, matchSource.OriginSchema, matchSource.OriginTable, table.Info, table.HasUniqueColumn, chunk.Where, chunk.Args)
 
 	cost := time.Since(beginTime)
 	return &ChecksumInfo{
@@ -147,7 +147,7 @@ func (s *TiDBSource) GetSourceStructInfo(ctx context.Context, tableIndex int) ([
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	tableInfos[0], _ = utils.ResetColumns(tableInfos[0], tableDiff.IgnoreColumns)
+	tableInfos[0], _, _ = utils.ResetColumns(tableInfos[0], tableDiff.IgnoreColumns)
 	return tableInfos, nil
 }
 

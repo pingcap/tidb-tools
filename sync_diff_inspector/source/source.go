@@ -123,16 +123,16 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 
 	tableDiffs := make([]*common.TableDiff, 0, len(tablesToBeCheck))
 	for _, tableConfig := range tablesToBeCheck {
-		newInfo, needUnifiedTimeZone := utils.ResetColumns(tableConfig.TargetTableInfo, tableConfig.IgnoreColumns)
+		newInfo, needUnifiedTimeZone, hasUniqueColumn := utils.ResetColumns(tableConfig.TargetTableInfo, tableConfig.IgnoreColumns)
 		tableDiffs = append(tableDiffs, &common.TableDiff{
-			Schema: tableConfig.Schema,
-			Table:  tableConfig.Table,
-			Info:   newInfo,
-			// TODO: field `IgnoreColumns` can be deleted.
+			Schema:              tableConfig.Schema,
+			Table:               tableConfig.Table,
+			Info:                newInfo,
 			IgnoreColumns:       tableConfig.IgnoreColumns,
 			Fields:              strings.Join(tableConfig.Fields, ","),
 			Range:               tableConfig.Range,
 			NeedUnifiedTimeZone: needUnifiedTimeZone,
+			HasUniqueColumn:     hasUniqueColumn,
 			Collation:           tableConfig.Collation,
 			ChunkSize:           tableConfig.ChunkSize,
 		})
