@@ -235,8 +235,8 @@ func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, con
 	return NewMySQLSources(ctx, tableDiffs, dbs, connCount, f)
 }
 
-func getAutoSnapshotPosition(dbConfig *dbutil.DBConfig, vars map[string]string) (string, string, error) {
-	tmpConn, err := dbutil.OpenDB(*dbConfig, vars)
+func getAutoSnapshotPosition(dbConfig *dbutil.DBConfig, vars []dbutil.DSNType) (string, string, error) {
+	tmpConn, err := dbutil.OpenDBWithDSN(*dbConfig, vars)
 	if err != nil {
 		return "", "", errors.Annotatef(err, "connecting to auto-position tidb_snapshot failed")
 	}
@@ -250,9 +250,16 @@ func getAutoSnapshotPosition(dbConfig *dbutil.DBConfig, vars map[string]string) 
 }
 
 func initDBConn(ctx context.Context, cfg *config.Config) error {
-	// Unified time zone
-	vars := map[string]string{
-		"time_zone": UnifiedTimeZone,
+	vars := []dbutil.DSNType{
+		// Unified time zone
+		dbutil.DSNStringType{
+			Key:   "time_zone",
+			Value: UnifiedTimeZone,
+		},
+		dbutil.DSNBoolType{
+			Key:   "interpolateParams",
+			Value: true,
+		},
 	}
 
 	// Fill in tidb_snapshot if it is set to AUTO
