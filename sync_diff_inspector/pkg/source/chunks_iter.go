@@ -19,11 +19,11 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/progress"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/chunk"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/progress"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/source/common"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/splitter"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/utils"
 )
 
 // ChunksIterator is used for single mysql/tidb source.

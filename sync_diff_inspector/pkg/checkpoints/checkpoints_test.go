@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/chunk"
 	"github.com/stretchr/testify/require"
 )
 

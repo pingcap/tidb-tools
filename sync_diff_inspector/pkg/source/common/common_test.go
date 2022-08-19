@@ -18,7 +18,7 @@ import (
 	"testing"
 
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/utils"
 	"github.com/pingcap/tidb/parser"
 	"github.com/stretchr/testify/require"
 )

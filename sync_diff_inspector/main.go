@@ -24,8 +24,8 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/utils"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/diff"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/config"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/diff"
 	flag "github.com/spf13/pflag"
 	"go.uber.org/zap"
 )

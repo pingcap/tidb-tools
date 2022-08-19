@@ -14,9 +14,9 @@ sed "s/\"127.0.0.1\"#MYSQL_HOST/\"${MYSQL_HOST}\"/g" ./config_base.toml | sed "s
 
 echo "================test bucket checkpoint================="
 echo "---------1. chunk is in the last of the bucket---------"
-export GO_FAILPOINTS="github.com/pingcap/tidb-tools/sync_diff_inspector/splitter/check-one-bucket=return();\
-github.com/pingcap/tidb-tools/sync_diff_inspector/splitter/print-chunk-info=return();\
-github.com/pingcap/tidb-tools/sync_diff_inspector/diff/wait-for-checkpoint=return()"
+export GO_FAILPOINTS="github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/splitter/check-one-bucket=return();\
+github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/splitter/print-chunk-info=return();\
+github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/diff/wait-for-checkpoint=return()"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/checkpoint_diff.output
 check_contains "check pass!!!" $OUT_DIR/sync_diff.log
 # Save the last chunk's info, 
@@ -42,7 +42,7 @@ bucket_index_right=$(($(echo ${last_chunk_index_array[1]} | awk -F '-' '{print $
 echo $bucket_index_right
 
 rm -f $OUT_DIR/sync_diff.log
-export GO_FAILPOINTS="github.com/pingcap/tidb-tools/sync_diff_inspector/splitter/print-chunk-info=return()"
+export GO_FAILPOINTS="github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/splitter/print-chunk-info=return()"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/checkpoint_diff.output
 first_chunk_info=$(grep 'print-chunk-info' $OUT_DIR/sync_diff.log | awk -F 'lowerBounds=' '{print $2}' | sed 's/[]["]//g' | sort -n | awk 'NR==1')
 echo $first_chunk_info | awk -F '=' '{print $1}' > $OUT_DIR/first_chunk_bound
@@ -56,10 +56,10 @@ check_contains_regex ".:${bucket_index_right}-.:0:." $OUT_DIR/first_chunk_index
 echo "--------2. chunk is in the middle of the bucket--------"
 rm -rf $OUT_DIR
 mkdir -p $OUT_DIR
-export GO_FAILPOINTS="github.com/pingcap/tidb-tools/sync_diff_inspector/splitter/check-one-bucket=return();\
-github.com/pingcap/tidb-tools/sync_diff_inspector/splitter/ignore-last-n-chunk-in-bucket=return(1);\
-github.com/pingcap/tidb-tools/sync_diff_inspector/splitter/print-chunk-info=return();\
-github.com/pingcap/tidb-tools/sync_diff_inspector/diff/wait-for-checkpoint=return()"
+export GO_FAILPOINTS="github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/splitter/check-one-bucket=return();\
+github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/splitter/ignore-last-n-chunk-in-bucket=return(1);\
+github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/splitter/print-chunk-info=return();\
+github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/diff/wait-for-checkpoint=return()"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/checkpoint_diff.output
 check_contains "check pass!!!" $OUT_DIR/sync_diff.log
 # Save the last chunk's info, 
@@ -86,7 +86,7 @@ bucket_index_right=$(echo ${last_chunk_index_array[1]} | awk -F '-' '{print $2}'
 echo "${bucket_index_left}-${bucket_index_right}"
 
 rm -f $OUT_DIR/sync_diff.log
-export GO_FAILPOINTS="github.com/pingcap/tidb-tools/sync_diff_inspector/splitter/print-chunk-info=return()"
+export GO_FAILPOINTS="github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/splitter/print-chunk-info=return()"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/checkpoint_diff.output
 first_chunk_info=$(grep 'print-chunk-info' $OUT_DIR/sync_diff.log | awk -F 'lowerBounds=' '{print $2}' | sed 's/[]["]//g' | sort -n | awk 'NR==1')
 echo $first_chunk_info | awk -F '=' '{print $1}' > $OUT_DIR/first_chunk_bound
@@ -104,9 +104,9 @@ echo "================test random checkpoint================="
 echo "--------------1. chunk is in the middle----------------"
 rm -rf $OUT_DIR
 mkdir -p $OUT_DIR
-export GO_FAILPOINTS="github.com/pingcap/tidb-tools/sync_diff_inspector/splitter/ignore-last-n-chunk-in-bucket=return(1);\
-github.com/pingcap/tidb-tools/sync_diff_inspector/splitter/print-chunk-info=return();\
-github.com/pingcap/tidb-tools/sync_diff_inspector/diff/wait-for-checkpoint=return()"
+export GO_FAILPOINTS="github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/splitter/ignore-last-n-chunk-in-bucket=return(1);\
+github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/splitter/print-chunk-info=return();\
+github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/diff/wait-for-checkpoint=return()"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/checkpoint_diff.output
 check_contains "check pass!!!" $OUT_DIR/sync_diff.log
 # Save the last chunk's info, 
@@ -129,7 +129,7 @@ done
 [[ $((${last_chunk_index_array[2]} + 2)) -eq ${last_chunk_index_array[3]} ]] || exit 1
 
 rm -f $OUT_DIR/sync_diff.log
-export GO_FAILPOINTS="github.com/pingcap/tidb-tools/sync_diff_inspector/splitter/print-chunk-info=return()"
+export GO_FAILPOINTS="github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/splitter/print-chunk-info=return()"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/checkpoint_diff.output
 first_chunk_info=$(grep 'print-chunk-info' $OUT_DIR/sync_diff.log | awk -F 'lowerBounds=' '{print $2}' | sed 's/[]["]//g' | sort -n | awk 'NR==1')
 echo $first_chunk_info | awk -F '=' '{print $1}' > $OUT_DIR/first_chunk_bound
@@ -147,7 +147,7 @@ echo "================test checkpoint continous================="
 # so data-check will be skipped
 mysql -uroot -h 127.0.0.1 -P 4000 -e "create table IF NOT EXISTS diff_test.ttt(a int, aa int, primary key(a), key(aa));"
 mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table IF NOT EXISTS diff_test.ttt(a int, b int, primary key(a), key(b));"
-export GO_FAILPOINTS="github.com/pingcap/tidb-tools/sync_diff_inspector/diff/wait-for-checkpoint=return()"
+export GO_FAILPOINTS="github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/diff/wait-for-checkpoint=return()"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/checkpoint_diff.output || true
 grep 'save checkpoint' $OUT_DIR/sync_diff.log | awk 'END {print}' > $OUT_DIR/checkpoint_info
 check_not_contains 'has-upper\":true' $OUT_DIR/checkpoint_info

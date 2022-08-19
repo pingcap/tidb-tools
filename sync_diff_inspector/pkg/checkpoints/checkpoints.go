@@ -20,10 +20,10 @@ import (
 	"os"
 	"sync"
 
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/report"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/config"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/report"
 
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/chunk"
 	"github.com/siddontang/go/ioutil2"
 
 	"github.com/pingcap/errors"

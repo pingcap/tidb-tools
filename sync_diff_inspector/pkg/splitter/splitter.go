@@ -16,8 +16,8 @@ package splitter
 import (
 	"fmt"
 
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/checkpoints"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/checkpoints"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/pkg/chunk"
 )
 
 const (
