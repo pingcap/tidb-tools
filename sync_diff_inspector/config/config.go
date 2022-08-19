@@ -21,6 +21,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -40,6 +41,8 @@ const (
 	LocalFilePerm os.FileMode = 0o644
 
 	LogFileName = "sync_diff.log"
+
+	baseSplitThreadCount = 3
 )
 
 // TableConfig is the config of table.
@@ -95,6 +98,18 @@ type DataSource struct {
 
 	Conn *sql.DB
 	// SourceType string `toml:"source-type" json:"source-type"`
+}
+
+// IsAutoSnapshot returns true if the tidb_snapshot is expected to automatically
+// be set from the syncpoint from the target TiDB instance.
+func (d *DataSource) IsAutoSnapshot() bool {
+	return strings.EqualFold(d.Snapshot, "auto")
+}
+
+// SetSnapshot changes the snapshot in configuration. This is typically
+// used with the auto-snapshot feature.
+func (d *DataSource) SetSnapshot(newSnapshot string) {
+	d.Snapshot = newSnapshot
 }
 
 func (d *DataSource) ToDBConfig() *dbutil.DBConfig {
@@ -179,14 +194,6 @@ func (t *TaskConfig) Init(
 	hash, err := t.ComputeConfigHash()
 	if err != nil {
 		return errors.Trace(err)
-	}
-
-	// Set default value when output is empty
-	if t.OutputDir == "" {
-		t.OutputDir = timestampOutputDir()
-		if err := os.RemoveAll(t.OutputDir); err != nil && !os.IsNotExist(err) {
-			log.Fatal("fail to remove the temp directory", zap.String("path", t.OutputDir), zap.String("error", err.Error()))
-		}
 	}
 
 	ok, err = pathExists(t.OutputDir)
@@ -277,6 +284,8 @@ type Config struct {
 	LogLevel string `toml:"-" json:"-"`
 	// how many goroutines are created to check data
 	CheckThreadCount int `toml:"check-thread-count" json:"check-thread-count"`
+	// how many goroutines are created to split chunk. A goroutine splits one table at a time.
+	SplitThreadCount int `toml:"-" json:"split-thread-count"`
 	// set true if want to compare rows
 	// set false won't compare rows.
 	ExportFixSQL bool `toml:"export-fix-sql" json:"export-fix-sql"`
@@ -316,7 +325,7 @@ func NewConfig() *Config {
 	fs.StringVarP(&cfg.Template, "template", "T", "", "<dm|norm> export a template config file in the current directory")
 	fs.StringVar(&cfg.DMAddr, "dm-addr", "", "the address of DM")
 	fs.StringVar(&cfg.DMTask, "dm-task", "", "identifier of dm task")
-	fs.IntVar(&cfg.CheckThreadCount, "check-thread-count", 1, "how many goroutines are created to check data")
+	fs.IntVar(&cfg.CheckThreadCount, "check-thread-count", 4, "how many goroutines are created to check data")
 	fs.BoolVar(&cfg.ExportFixSQL, "export-fix-sql", true, "set true if want to compare rows or set to false will only compare checksum")
 	fs.BoolVar(&cfg.CheckStructOnly, "check-struct-only", false, "ignore check table's data")
 
@@ -358,6 +367,16 @@ func (c *Config) Parse(arguments []string) error {
 	if len(c.FlagSet.Args()) != 0 {
 		return errors.Errorf("'%s' is an invalid flag", c.FlagSet.Arg(0))
 	}
+
+	// Set default value when output is empty
+	if c.Task.OutputDir == "" {
+		c.Task.OutputDir = timestampOutputDir()
+		if err := os.RemoveAll(c.Task.OutputDir); err != nil && !os.IsNotExist(err) {
+			log.Fatal("fail to remove the temp directory", zap.String("path", c.Task.OutputDir), zap.String("error", err.Error()))
+		}
+	}
+
+	c.SplitThreadCount = baseSplitThreadCount + c.CheckThreadCount/2
 
 	return nil
 }

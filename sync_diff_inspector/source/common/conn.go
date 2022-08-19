@@ -22,8 +22,8 @@ import (
 )
 
 // CreateDB creates sql.DB used for select data
-func CreateDB(ctx context.Context, dbConfig *dbutil.DBConfig, vars map[string]string, num int) (db *sql.DB, err error) {
-	db, err = dbutil.OpenDB(*dbConfig, vars)
+func CreateDB(ctx context.Context, dbConfig *dbutil.DBConfig, vars []dbutil.DSNType, num int) (db *sql.DB, err error) {
+	db, err = dbutil.OpenDBWithDSN(*dbConfig, vars)
 	if err != nil {
 		return nil, errors.Errorf("create db connections %s error %v", dbConfig.String(), err)
 	}

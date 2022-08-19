@@ -253,5 +253,7 @@ func generateLimitQueryTemplate(indexColumns []*model.ColumnInfo, table *common.
 	}
 	columns := strings.Join(fields, ", ")
 
+	// TODO: the limit splitter has not been used yet.
+	// once it is used, need to add `collation` after `ORDER BY`.
 	return fmt.Sprintf("SELECT %s FROM %s WHERE %%s ORDER BY %s LIMIT %d,1", columns, dbutil.TableName(table.Schema, table.Table), columns, chunkSize)
 }

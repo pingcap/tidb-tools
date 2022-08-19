@@ -45,8 +45,9 @@ const (
 const UnifiedTimeZone string = "+0:00"
 
 const (
-	ShieldDBName    = "_no__exists__db_"
-	ShieldTableName = "_no__exists__table_"
+	ShieldDBName      = "_no__exists__db_"
+	ShieldTableName   = "_no__exists__table_"
+	GetSyncPointQuery = "SELECT primary_ts, secondary_ts FROM tidb_cdc.syncpoint_v1 ORDER BY primary_ts DESC LIMIT 1"
 )
 
 type ChecksumInfo struct {
@@ -80,7 +81,7 @@ type Source interface {
 	// this is the mainly iterator across the whole sync diff.
 	// One source has one range iterator to produce the range to channel.
 	// there are many workers consume the range from the channel to compare.
-	GetRangeIterator(context.Context, *splitter.RangeInfo, TableAnalyzer) (RangeIterator, error)
+	GetRangeIterator(context.Context, *splitter.RangeInfo, TableAnalyzer, int) (RangeIterator, error)
 
 	// GetCountAndCrc32 gets the crc32 result and the count from given range.
 	GetCountAndCrc32(context.Context, *splitter.RangeInfo) *ChecksumInfo
@@ -196,18 +197,26 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 		tj := utils.UniqueID(tableDiffs[j].Schema, tableDiffs[j].Table)
 		return strings.Compare(ti, tj) > 0
 	})
-	upstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.CheckThreadCount, cfg.Task.TargetCheckTables, cfg.Task.SourceInstances...)
+
+	// If `bucket size` is much larger than `chunk size`,
+	// we need to split the bucket into some chunks, which wastes much time.
+	// So we use WorkPool to split buckets in parallel.
+	// Besides, bucketSpliters of each table use shared WorkPool
+	bucketSpliterPool := utils.NewWorkerPool(uint(cfg.CheckThreadCount), "bucketIter")
+	// for mysql_shard, it needs `cfg.CheckThreadCount` + `cfg.SplitThreadCount` at most, because it cannot use bucket.
+	mysqlConnCount := cfg.CheckThreadCount + cfg.SplitThreadCount
+	upstream, err = buildSourceFromCfg(ctx, tableDiffs, mysqlConnCount, bucketSpliterPool, cfg.Task.TargetCheckTables, cfg.Task.SourceInstances...)
 	if err != nil {
 		return nil, nil, errors.Annotate(err, "from upstream")
 	}
-	downstream, err = buildSourceFromCfg(ctx, tableDiffs, cfg.CheckThreadCount, cfg.Task.TargetCheckTables, cfg.Task.TargetInstance)
+	downstream, err = buildSourceFromCfg(ctx, tableDiffs, mysqlConnCount, bucketSpliterPool, cfg.Task.TargetCheckTables, cfg.Task.TargetInstance)
 	if err != nil {
 		return nil, nil, errors.Annotate(err, "from downstream")
 	}
 	return downstream, upstream, nil
 }
 
-func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, checkThreadCount int, f tableFilter.Filter, dbs ...*config.DataSource) (Source, error) {
+func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, connCount int, bucketSpliterPool *utils.WorkerPool, f tableFilter.Filter, dbs ...*config.DataSource) (Source, error) {
 	if len(dbs) < 1 {
 		return nil, errors.Errorf("no db config detected")
 	}
@@ -218,22 +227,62 @@ func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, che
 
 	if ok {
 		if len(dbs) == 1 {
-			return NewTiDBSource(ctx, tableDiffs, dbs[0], checkThreadCount, f)
+			return NewTiDBSource(ctx, tableDiffs, dbs[0], bucketSpliterPool, f)
 		} else {
 			log.Fatal("Don't support check table in multiple tidb instance, please specify one tidb instance.")
 		}
 	}
-	return NewMySQLSources(ctx, tableDiffs, dbs, checkThreadCount, f)
+	return NewMySQLSources(ctx, tableDiffs, dbs, connCount, f)
+}
+
+func getAutoSnapshotPosition(dbConfig *dbutil.DBConfig, vars []dbutil.DSNType) (string, string, error) {
+	tmpConn, err := dbutil.OpenDBWithDSN(*dbConfig, vars)
+	if err != nil {
+		return "", "", errors.Annotatef(err, "connecting to auto-position tidb_snapshot failed")
+	}
+	defer tmpConn.Close()
+	var primaryTs, secondaryTs string
+	err = tmpConn.QueryRow(GetSyncPointQuery).Scan(&primaryTs, &secondaryTs)
+	if err != nil {
+		return "", "", errors.Annotatef(err, "fetching auto-position tidb_snapshot failed")
+	}
+	return primaryTs, secondaryTs, nil
 }
 
 func initDBConn(ctx context.Context, cfg *config.Config) error {
-	// Unified time zone
-	vars := map[string]string{
-		"time_zone": UnifiedTimeZone,
+	vars := []dbutil.DSNType{
+		// Unified time zone
+		dbutil.DSNStringType{
+			Key:   "time_zone",
+			Value: UnifiedTimeZone,
+		},
+		dbutil.DSNBoolType{
+			Key:   "interpolateParams",
+			Value: true,
+		},
 	}
-	// we had 3 producers and `cfg.CheckThreadCount` consumer to use db connections.
-	// so the connection count need to be cfg.CheckThreadCount + 3.
-	targetConn, err := common.CreateDB(ctx, cfg.Task.TargetInstance.ToDBConfig(), vars, cfg.CheckThreadCount+3)
+
+	// Fill in tidb_snapshot if it is set to AUTO
+	// This is only supported when set to auto on both target/source.
+	if cfg.Task.TargetInstance.IsAutoSnapshot() {
+		if len(cfg.Task.SourceInstances) > 1 {
+			return errors.Errorf("'auto' snapshot only supports one tidb source")
+		}
+		if !cfg.Task.SourceInstances[0].IsAutoSnapshot() {
+			return errors.Errorf("'auto' snapshot should be set on both target and source")
+		}
+		tmpDBConfig := cfg.Task.TargetInstance.ToDBConfig()
+		tmpDBConfig.Snapshot = ""
+		primaryTs, secondaryTs, err := getAutoSnapshotPosition(tmpDBConfig, vars)
+		if err != nil {
+			return err
+		}
+		cfg.Task.TargetInstance.SetSnapshot(secondaryTs)
+		cfg.Task.SourceInstances[0].SetSnapshot(primaryTs)
+	}
+	// we had `cfg.SplitThreadCount` producers and `cfg.CheckThreadCount` consumer to use db connections maybe and `cfg.CheckThreadCount` splitter to split buckets.
+	// so the connection count need to be cfg.SplitThreadCount + cfg.CheckThreadCount + cfg.CheckThreadCount.
+	targetConn, err := common.CreateDB(ctx, cfg.Task.TargetInstance.ToDBConfig(), vars, cfg.SplitThreadCount+2*cfg.CheckThreadCount)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -241,8 +290,13 @@ func initDBConn(ctx context.Context, cfg *config.Config) error {
 	cfg.Task.TargetInstance.Conn = targetConn
 
 	for _, source := range cfg.Task.SourceInstances {
+		// If it is still set to AUTO it means it was not set on the target.
+		// We require it to be set to AUTO on both.
+		if source.IsAutoSnapshot() {
+			return errors.Errorf("'auto' snapshot should be set on both target and source")
+		}
 		// connect source db with target db time_zone
-		conn, err := common.CreateDB(ctx, source.ToDBConfig(), vars, cfg.CheckThreadCount+1)
+		conn, err := common.CreateDB(ctx, source.ToDBConfig(), vars, cfg.SplitThreadCount+2*cfg.CheckThreadCount)
 		if err != nil {
 			return errors.Trace(err)
 		}

@@ -31,23 +31,26 @@ type ChunksIterator struct {
 	ID            *chunk.ChunkID
 	tableAnalyzer TableAnalyzer
 
-	TableDiffs     []*common.TableDiff
-	nextTableIndex int
-	chunksCh       chan *splitter.RangeInfo
-	errCh          chan error
-	limit          int
+	TableDiffs       []*common.TableDiff
+	nextTableIndex   int
+	chunksCh         chan *splitter.RangeInfo
+	errCh            chan error
+	splitThreadCount int
 
 	cancel context.CancelFunc
 }
 
-func NewChunksIterator(ctx context.Context, analyzer TableAnalyzer, tableDiffs []*common.TableDiff, startRange *splitter.RangeInfo) (*ChunksIterator, error) {
+func NewChunksIterator(ctx context.Context, analyzer TableAnalyzer, tableDiffs []*common.TableDiff, startRange *splitter.RangeInfo, splitThreadCount int) (*ChunksIterator, error) {
 	ctxx, cancel := context.WithCancel(ctx)
 	iter := &ChunksIterator{
-		tableAnalyzer: analyzer,
-		TableDiffs:    tableDiffs,
-		chunksCh:      make(chan *splitter.RangeInfo, 64),
-		errCh:         make(chan error, len(tableDiffs)),
-		cancel:        cancel,
+		splitThreadCount: splitThreadCount,
+		tableAnalyzer:    analyzer,
+		TableDiffs:       tableDiffs,
+
+		// reserve 30 capacity for each goroutine on average
+		chunksCh: make(chan *splitter.RangeInfo, 30*splitThreadCount),
+		errCh:    make(chan error, len(tableDiffs)),
+		cancel:   cancel,
 	}
 	go iter.produceChunks(ctxx, startRange)
 	return iter, nil
@@ -55,7 +58,7 @@ func NewChunksIterator(ctx context.Context, analyzer TableAnalyzer, tableDiffs [
 
 func (t *ChunksIterator) produceChunks(ctx context.Context, startRange *splitter.RangeInfo) {
 	defer close(t.chunksCh)
-	pool := utils.NewWorkerPool(3, "chunks producer")
+	pool := utils.NewWorkerPool(uint(t.splitThreadCount), "chunks producer")
 	t.nextTableIndex = 0
 
 	// If chunkRange
@@ -175,10 +178,6 @@ func (t *ChunksIterator) Next(ctx context.Context) (*splitter.RangeInfo, error) 
 
 func (t *ChunksIterator) Close() {
 	t.cancel()
-}
-
-func (t *ChunksIterator) getCurTableIndex() int {
-	return t.nextTableIndex - 1
 }
 
 // TODO: getCurTableIndexID only used for binary search, should be optimized later.
