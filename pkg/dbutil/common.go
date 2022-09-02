@@ -110,6 +110,52 @@ func GetDBConfigFromEnv(schema string) DBConfig {
 	}
 }
 
+type DSNType interface {
+	DSNString() string
+}
+
+type DSNStringType struct {
+	Key   string
+	Value string
+}
+
+func (s DSNStringType) DSNString() string {
+	// key='val'. add single quote for better compatibility.
+	return fmt.Sprintf("&%s=%%27%s%%27", s.Key, url.QueryEscape(s.Value))
+}
+
+type DSNBoolType struct {
+	Key   string
+	Value bool
+}
+
+func (b DSNBoolType) DSNString() string {
+	return fmt.Sprintf("&%s=%t", b.Key, b.Value)
+}
+
+// OpenDB opens a mysql connection FD
+func OpenDBWithDSN(cfg DBConfig, vars []DSNType) (*sql.DB, error) {
+	var dbDSN string
+	if len(cfg.Snapshot) != 0 {
+		log.Info("create connection with snapshot", zap.String("snapshot", cfg.Snapshot))
+		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&tidb_snapshot=%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Snapshot)
+	} else {
+		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4", cfg.User, cfg.Password, cfg.Host, cfg.Port)
+	}
+
+	for _, dsnType := range vars {
+		dbDSN += dsnType.DSNString()
+	}
+
+	dbConn, err := sql.Open("mysql", dbDSN)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	err = dbConn.Ping()
+	return dbConn, errors.Trace(err)
+}
+
 // OpenDB opens a mysql connection FD
 func OpenDB(cfg DBConfig, vars map[string]string) (*sql.DB, error) {
 	var dbDSN string
