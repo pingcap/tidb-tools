@@ -446,7 +446,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 		if err != nil {
 			df.report.SetTableMeetError(schema, table, err)
 		}
-		isEqual = isEqual && isDataEqual
+		isEqual = isDataEqual
 	}
 	dml.node.State = state
 	id := rangeInfo.ChunkRange.Index
