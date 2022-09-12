@@ -551,8 +551,6 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 			if reflect.DeepEqual(v1, v2) {
 				continue
 			}
-			log.Error("v1", zap.Any("v1", v1))
-			log.Error("v2", zap.Any("v2", v2))
 		} else {
 			if (str1 == str2) && (data1.IsNull == data2.IsNull) {
 				continue
