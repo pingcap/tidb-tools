@@ -14,18 +14,21 @@
 package common
 
 import (
-	"context"
 	"database/sql"
 
 	"github.com/pingcap/errors"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
 )
 
 // CreateDB creates sql.DB used for select data
-func CreateDB(ctx context.Context, dbConfig *dbutil.DBConfig, vars []dbutil.DSNType, num int) (db *sql.DB, err error) {
-	db, err = dbutil.OpenDBWithDSN(*dbConfig, vars)
+func CreateDB(dsn string, num int) (db *sql.DB, err error) {
+	db, err = sql.Open("mysql", dsn)
 	if err != nil {
-		return nil, errors.Errorf("create db connections %s error %v", dbConfig.String(), err)
+		return nil, errors.Trace(err)
+	}
+
+	err = db.Ping()
+	if err != nil {
+		return nil, errors.Errorf("create db connections %s error %v", dsn, err)
 	}
 
 	// SetMaxOpenConns and SetMaxIdleConns for connection to avoid error like
@@ -34,18 +37,4 @@ func CreateDB(ctx context.Context, dbConfig *dbutil.DBConfig, vars []dbutil.DSNT
 	db.SetMaxIdleConns(num)
 
 	return db, nil
-}
-
-// CreateDBForCP creates sql.DB used for write data for checkpoint
-func CreateDBForCP(ctx context.Context, dbConfig dbutil.DBConfig) (cpDB *sql.DB, err error) {
-	// set snapshot to empty, this DB used for write checkpoint data
-	dbConfig.Snapshot = ""
-	cpDB, err = dbutil.OpenDB(dbConfig, nil)
-	if err != nil {
-		return nil, errors.Errorf("create db connections %+v error %v", dbConfig, err)
-	}
-	cpDB.SetMaxOpenConns(1)
-	cpDB.SetMaxIdleConns(1)
-
-	return cpDB, nil
 }

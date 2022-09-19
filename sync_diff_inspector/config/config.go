@@ -26,11 +26,14 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/go-sql-driver/mysql"
+	"github.com/google/uuid"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	filter "github.com/pingcap/tidb-tools/pkg/table-filter"
 	"github.com/pingcap/tidb/parser/model"
+	tidbutil "github.com/pingcap/tidb/util"
 	router "github.com/pingcap/tidb/util/table-router"
 	flag "github.com/spf13/pflag"
 	"go.uber.org/zap"
@@ -43,6 +46,8 @@ const (
 	LogFileName = "sync_diff.log"
 
 	baseSplitThreadCount = 3
+
+	UnifiedTimeZone string = "+0:00"
 )
 
 // TableConfig is the config of table.
@@ -83,6 +88,20 @@ func (t *TableConfig) Valid() bool {
 	return true
 }
 
+// TLS Security wrapper
+type Security struct {
+	TLSName string `json:"tls-name"`
+
+	CAPath   string `toml:"ca-path" json:"ca-path"`
+	CertPath string `toml:"cert-path" json:"cert-path"`
+	KeyPath  string `toml:"key-path" json:"key-path"`
+
+	// raw content
+	CABytes   string `toml:"ca-bytes" json:"ca-bytes"`
+	CertBytes string `toml:"cert-bytes" json:"cert-bytes"`
+	KeyBytes  string `toml:"key-bytes" json:"key-bytes"`
+}
+
 // DataSource represents the Source Config.
 type DataSource struct {
 	Host     string `toml:"host" json:"host"`
@@ -92,12 +111,13 @@ type DataSource struct {
 	SqlMode  string `toml:"sql-mode" json:"sql-mode"`
 	Snapshot string `toml:"snapshot" json:"snapshot"`
 
+	security *Security
+
 	RouteRules     []string `toml:"route-rules" json:"route-rules"`
 	Router         *router.Table
 	RouteTargetSet map[string]struct{} `json:"-"`
 
 	Conn *sql.DB
-	// SourceType string `toml:"source-type" json:"source-type"`
 }
 
 // IsAutoSnapshot returns true if the tidb_snapshot is expected to automatically
@@ -120,6 +140,47 @@ func (d *DataSource) ToDBConfig() *dbutil.DBConfig {
 		Password: d.Password,
 		Snapshot: d.Snapshot,
 	}
+}
+
+// register TLS config for driver
+func (d *DataSource) RegisterTLS() error {
+	sec := d.security
+	if sec == nil {
+		return nil
+	}
+	log.Info("register tls config")
+	tlsConfig, err := tidbutil.NewTLSConfig(
+		tidbutil.WithCAPath(sec.CAPath),
+		tidbutil.WithCertAndKeyPath(sec.CertPath, sec.KeyPath),
+		tidbutil.WithCAContent([]byte(sec.CABytes)),
+		tidbutil.WithCertAndKeyContent([]byte(sec.CertBytes), []byte(sec.KeyBytes)),
+	)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	if tlsConfig == nil {
+		return nil
+	}
+
+	sec.TLSName = "sync-diff-inspector-" + uuid.NewString()
+	err = mysql.RegisterTLSConfig(sec.TLSName, tlsConfig)
+	return errors.Trace(err)
+}
+
+func (d *DataSource) GetDSN() (dbDSN string) {
+	if len(d.Snapshot) > 0 && !d.IsAutoSnapshot() {
+		log.Info("create connection with snapshot", zap.String("snapshot", d.Snapshot))
+		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&time_zone=%s&tidb_snapshot=%s", d.User, d.Password, d.Host, d.Port, UnifiedTimeZone, d.Snapshot)
+	} else {
+		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&time_zone=%s", d.User, d.Password, d.Host, d.Port, UnifiedTimeZone)
+	}
+
+	if len(d.security.TLSName) > 0 {
+		dbDSN += "&tls=" + d.security.TLSName
+	}
+
+	return dbDSN
 }
 
 type TaskConfig struct {
@@ -158,6 +219,10 @@ func (t *TaskConfig) Init(
 			log.Error("not found source instance, please correct the config", zap.String("instance", si))
 			return errors.Errorf("not found source instance, please correct the config. instance is `%s`", si)
 		}
+		// try to register tls
+		if err := ds.RegisterTLS(); err != nil {
+			return errors.Trace(err)
+		}
 		dataSourceList = append(dataSourceList, ds)
 	}
 	t.SourceInstances = dataSourceList
@@ -166,6 +231,10 @@ func (t *TaskConfig) Init(
 	if !ok {
 		log.Error("not found target instance, please correct the config", zap.String("instance", t.Target))
 		return errors.Errorf("not found target instance, please correct the config. instance is `%s`", t.Target)
+	}
+	// try to register tls
+	if err := ts.RegisterTLS(); err != nil {
+		return errors.Trace(err)
 	}
 	t.TargetInstance = ts
 
