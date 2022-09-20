@@ -111,7 +111,7 @@ type DataSource struct {
 	SqlMode  string `toml:"sql-mode" json:"sql-mode"`
 	Snapshot string `toml:"snapshot" json:"snapshot"`
 
-	security *Security
+	Security Security `toml:"security" json:"security"`
 
 	RouteRules     []string `toml:"route-rules" json:"route-rules"`
 	Router         *router.Table
@@ -144,11 +144,8 @@ func (d *DataSource) ToDBConfig() *dbutil.DBConfig {
 
 // register TLS config for driver
 func (d *DataSource) RegisterTLS() error {
-	sec := d.security
-	if sec == nil {
-		return nil
-	}
-	log.Info("register tls config")
+	sec := &d.Security
+	log.Info("try to register tls config")
 	tlsConfig, err := tidbutil.NewTLSConfig(
 		tidbutil.WithCAPath(sec.CAPath),
 		tidbutil.WithCertAndKeyPath(sec.CertPath, sec.KeyPath),
@@ -163,6 +160,7 @@ func (d *DataSource) RegisterTLS() error {
 		return nil
 	}
 
+	log.Info("success to parse tls config")
 	sec.TLSName = "sync-diff-inspector-" + uuid.NewString()
 	err = mysql.RegisterTLSConfig(sec.TLSName, tlsConfig)
 	return errors.Trace(err)
@@ -171,13 +169,13 @@ func (d *DataSource) RegisterTLS() error {
 func (d *DataSource) GetDSN() (dbDSN string) {
 	if len(d.Snapshot) > 0 && !d.IsAutoSnapshot() {
 		log.Info("create connection with snapshot", zap.String("snapshot", d.Snapshot))
-		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&time_zone=%s&tidb_snapshot=%s", d.User, d.Password, d.Host, d.Port, UnifiedTimeZone, d.Snapshot)
+		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&time_zone=%%27%s%%27&tidb_snapshot=%s", d.User, d.Password, d.Host, d.Port, url.QueryEscape(UnifiedTimeZone), d.Snapshot)
 	} else {
-		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&time_zone=%s", d.User, d.Password, d.Host, d.Port, UnifiedTimeZone)
+		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&time_zone=%%27%s%%27", d.User, d.Password, d.Host, d.Port, url.QueryEscape(UnifiedTimeZone))
 	}
 
-	if len(d.security.TLSName) > 0 {
-		dbDSN += "&tls=" + d.security.TLSName
+	if len(d.Security.TLSName) > 0 {
+		dbDSN += "&tls=" + d.Security.TLSName
 	}
 
 	return dbDSN
