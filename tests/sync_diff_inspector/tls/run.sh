@@ -22,8 +22,9 @@ mysql -uroot_tls -h 127.0.0.1 -P 4000 --ssl-ca "$CA_PATH" --ssl-cert "$CERT_PATH
 
 echo "use sync_diff_inspector to compare data"
 # sync diff tidb-tidb
-sed 's/"ca-path"#CAPATH/"$CA_PATH"/g' config.toml > config_.toml
-sed 's/"cert-path"#CERTPATH/"$CERT_PATH"/g' config_.toml > config_.toml
-sed 's/"key-path"#KEYPATH/"$KEY_PATH"/g' config_.toml > config_.toml
+CA_PATH_REG=$(echo ${CA_PATH} | sed 's/\//\\\//g')
+CERT_PATH_REG=$(echo ${CERT_PATH} | sed 's/\//\\\//g')
+KEY_PATH_REG=$(echo ${KEY_PATH} | sed 's/\//\\\//g')
+sed "s/\"ca-path\"#CAPATH/\"${CA_PATH_REG}\"/g" config.toml | sed "s/\"cert-path\"#CERTPATH/\"${CERT_PATH_REG}\"/g" | sed "s/\"key-path\"#KEYPATH/\"${KEY_PATH_REG}\"/g" > config_.toml
 sync_diff_inspector --config=./config_.toml > $OUT_DIR/diff.output || (cat $OUT_DIR/diff.output && exit 1)
 check_contains "check pass!!!" $OUT_DIR/sync_diff.log
