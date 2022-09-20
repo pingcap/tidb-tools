@@ -3,9 +3,11 @@
 set -ex
 
 cd "$(dirname "$0")"
-CA_PATH=../../conf/root.crt
-CERT_PATH=../../conf/client.crt
-KEY_PATH=../../conf/client.key
+
+CONF_PATH=`cd ../../conf && pwd`
+CA_PATH="$CONF_PATH/root.crt"
+CERT_PATH="$CONF_PATH/client.crt"
+KEY_PATH="$CONF_PATH/client.key"
 OUT_DIR=/tmp/tidb_tools_test/sync_diff_inspector/output
 FIX_DIR=/tmp/tidb_tools_test/sync_diff_inspector/fixsql
 rm -rf $OUT_DIR
@@ -23,5 +25,5 @@ echo "use sync_diff_inspector to compare data"
 sed 's/"ca-path"#CAPATH/"$CA_PATH"/g' config.toml > config_.toml
 sed 's/"cert-path"#CERTPATH/"$CERT_PATH"/g' config_.toml > config_.toml
 sed 's/"key-path"#KEYPATH/"$KEY_PATH"/g' config_.toml > config_.toml
-sync_diff_inspector --config=./config_.toml > $OUT_DIR/diff.output
+sync_diff_inspector --config=./config_.toml > $OUT_DIR/diff.output || (cat $OUT_DIR/diff.output && exit 1)
 check_contains "check pass!!!" $OUT_DIR/sync_diff.log
