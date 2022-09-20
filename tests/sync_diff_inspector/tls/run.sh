@@ -5,7 +5,7 @@ set -ex
 cd "$(dirname "$0")"
 CA_PATH=../../conf/root.crt
 CERT_PATH=../../conf/client.crt
-KEY_PATH=../../conf/client.crt
+KEY_PATH=../../conf/client.key
 OUT_DIR=/tmp/tidb_tools_test/sync_diff_inspector/output
 FIX_DIR=/tmp/tidb_tools_test/sync_diff_inspector/fixsql
 rm -rf $OUT_DIR
