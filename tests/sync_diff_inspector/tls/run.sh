@@ -16,7 +16,7 @@ mkdir -p $FIX_DIR
 # create user for test tls
 mysql -uroot -h 127.0.0.1 -P 4000 -e "create user 'root_tls'@'%' identified by '' require X509;"
 mysql -uroot -h 127.0.0.1 -P 4000 -e "grant all privileges on *.* to 'root_tls'@'%';"
-mysql -uroot_tls -h 127.0.0.1 -P 4000 --ssl-ca "$CA_PATH" --ssl-cert "$CERT_PATH" --ssl-key "KEY_PATH"  -e "SHOW STATUS LIKE \"%Ssl%\";"
+mysql -uroot_tls -h 127.0.0.1 -P 4000 --ssl-ca "$CA_PATH" --ssl-cert "$CERT_PATH" --ssl-key "$KEY_PATH"  -e "SHOW STATUS LIKE \"%Ssl%\";"
 
 echo "use sync_diff_inspector to compare data"
 # sync diff tidb-tidb
