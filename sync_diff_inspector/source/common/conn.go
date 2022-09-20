@@ -15,6 +15,7 @@ package common
 
 import (
 	"database/sql"
+	"regexp"
 
 	"github.com/pingcap/errors"
 )
@@ -28,7 +29,11 @@ func CreateDB(dsn string, num int) (db *sql.DB, err error) {
 
 	err = db.Ping()
 	if err != nil {
-		return nil, errors.Errorf("create db connections %s error %v", dsn, err)
+		reg, err := regexp.Compile(":.*@tcp")
+		if reg == nil || err != nil {
+			return nil, errors.Errorf("create db connections (failed to replace password for dsn) error %v", err)
+		}
+		return nil, errors.Errorf("create db connections %s error %v", reg.ReplaceAllString(dsn, ":?@tcp"), err)
 	}
 
 	// SetMaxOpenConns and SetMaxIdleConns for connection to avoid error like
