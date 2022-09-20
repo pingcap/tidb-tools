@@ -68,8 +68,8 @@ EOF
     cat - > "$OUT_DIR/tidb-config.toml" <<EOF
 [security]
 ssl-ca = "$pwd/conf/root.crt"
-ssl-cert = "$pwd/conf/client.crt"
-ssl-key = "$pwd/conf/client.key"
+ssl-cert = "$pwd/conf/tidb.crt"
+ssl-key = "$pwd/conf/tidb.key"
 EOF
 
     echo "Starting TiDB..."
