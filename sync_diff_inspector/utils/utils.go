@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/pingcap/errors"
@@ -741,10 +742,23 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 
 	var count sql.NullInt64
 	var checksum sql.NullInt64
-	err := db.QueryRowContext(ctx, query, args...).Scan(&count, &checksum)
-	if err != nil {
-		log.Warn("execute checksum query fail", zap.String("query", query), zap.Reflect("args", args), zap.Error(err))
-		return -1, -1, errors.Trace(err)
+	var err error
+	for i := 0; i < dbutil.DefaultRetryTime; i++ {
+		err = db.QueryRowContext(ctx, query, args...).Scan(&count, &checksum)
+		if err != nil {
+			if dbutil.IsRetryableError(err) && i < dbutil.DefaultRetryTime-1 {
+				select {
+				case <-ctx.Done():
+					return -1, -1, errors.Trace(ctx.Err())
+				case <-time.After(10 * time.Millisecond):
+				}
+				log.Warn("execute checksum query timeout, retry...", zap.Int("retry count", i+1))
+				continue
+			}
+			log.Warn("execute checksum query fail", zap.String("query", query), zap.Reflect("args", args), zap.Error(err))
+			return -1, -1, errors.Trace(err)
+		}
+		break
 	}
 	if !count.Valid || !checksum.Valid {
 		// if don't have any data, the checksum will be `NULL`
