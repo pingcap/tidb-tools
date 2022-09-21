@@ -29,9 +29,9 @@ func CreateDB(dsn string, num int) (db *sql.DB, err error) {
 
 	err = db.Ping()
 	if err != nil {
-		reg, err := regexp.Compile(":.*@tcp")
-		if reg == nil || err != nil {
-			return nil, errors.Errorf("create db connections (failed to replace password for dsn) error %v", err)
+		reg, regErr := regexp.Compile(":.*@tcp")
+		if reg == nil || regErr != nil {
+			return nil, errors.Errorf("create db connections (failed to replace password for dsn) error %v", regErr)
 		}
 		return nil, errors.Errorf("create db connections %s error %v", reg.ReplaceAllString(dsn, ":?@tcp"), err)
 	}
