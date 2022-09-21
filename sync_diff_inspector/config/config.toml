@@ -20,17 +20,23 @@ check-struct-only = false
     port = 3306
     user = "root"
     password = ""
-    # mysql doesn't has snapshot config
+# MySQL doesn't has snapshot config
 
 [data-sources.tidb0]
     host = "127.0.0.1"
     port = 4000
     user = "root"
     password = ""
-    # remove comment if use tidb's snapshot data
+
+# Support tls connection
+    # security.ca-path = "..."
+	# security.cert-path = "..."
+	# security.key-path = "..."
+
+# Remove comment if use tidb's snapshot data
     # snapshot = "2016-10-08 16:45:26"
     # snapshot = "386902609362944000"
-    # When using TiCDC syncpoint source and target can be set to auto
+# When using TiCDC syncpoint source and target can be set to auto
     # snapshot = "auto"
 
 ######################### Task config #########################
@@ -52,10 +58,10 @@ check-struct-only = false
     # extra table config
     target-configs= ["config1"]
 
+######################### Tables config #########################
 # Optional
 [table-configs]
 [table-configs.config1]
-
 # tables need to use this specified config.
 # if use this config. target-tables should be a subset of #target-check-tables
 target-tables = ["schema*.table*", "test2.t2"]

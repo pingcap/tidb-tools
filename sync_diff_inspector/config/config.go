@@ -35,6 +35,7 @@ import (
 	"github.com/pingcap/tidb/parser/model"
 	tidbutil "github.com/pingcap/tidb/util"
 	router "github.com/pingcap/tidb/util/table-router"
+	dmconfig "github.com/pingcap/tiflow/dm/config"
 	flag "github.com/spf13/pflag"
 	"go.uber.org/zap"
 )
@@ -111,7 +112,7 @@ type DataSource struct {
 	SqlMode  string `toml:"sql-mode" json:"sql-mode"`
 	Snapshot string `toml:"snapshot" json:"snapshot"`
 
-	Security Security `toml:"security" json:"security"`
+	Security *Security `toml:"security" json:"security"`
 
 	RouteRules     []string `toml:"route-rules" json:"route-rules"`
 	Router         *router.Table
@@ -144,7 +145,10 @@ func (d *DataSource) ToDBConfig() *dbutil.DBConfig {
 
 // register TLS config for driver
 func (d *DataSource) RegisterTLS() error {
-	sec := &d.Security
+	if d.Security == nil {
+		return nil
+	}
+	sec := d.Security
 	log.Info("try to register tls config")
 	tlsConfig, err := tidbutil.NewTLSConfig(
 		tidbutil.WithCAPath(sec.CAPath),
@@ -174,7 +178,7 @@ func (d *DataSource) GetDSN() (dbDSN string) {
 		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&time_zone=%%27%s%%27", d.User, d.Password, d.Host, d.Port, url.QueryEscape(UnifiedTimeZone))
 	}
 
-	if len(d.Security.TLSName) > 0 {
+	if d.Security != nil && len(d.Security.TLSName) > 0 {
 		dbDSN += "&tls=" + d.Security.TLSName
 	}
 
@@ -468,6 +472,21 @@ func (c *Config) configFromFile(path string) error {
 	return nil
 }
 
+func parseTLSFromDMConfig(config *dmconfig.Security) *Security {
+	if config == nil {
+		return nil
+	}
+	return &Security{
+		CAPath:   config.SSLCA,
+		CertPath: config.SSLCert,
+		KeyPath:  config.SSLKey,
+
+		CABytes:   string(config.SSLCABytes),
+		CertBytes: string(config.SSLCertBytes),
+		KeyBytes:  string(config.SSLKEYBytes),
+	}
+}
+
 func (c *Config) adjustConfigByDMSubTasks() (err error) {
 	// DM's subtask config
 	subTaskCfgs, err := getDMTaskCfg(c.DMAddr, c.DMTask)
@@ -486,6 +505,7 @@ func (c *Config) adjustConfigByDMSubTasks() (err error) {
 		User:     subTaskCfgs[0].To.User,
 		Password: subTaskCfgs[0].To.Password,
 		SqlMode:  sqlMode,
+		Security: parseTLSFromDMConfig(subTaskCfgs[0].To.Security),
 	}
 	for _, subTaskCfg := range subTaskCfgs {
 		tableRouter, err := router.NewTableRouter(subTaskCfg.CaseSensitive, []*router.TableRule{})
@@ -506,6 +526,7 @@ func (c *Config) adjustConfigByDMSubTasks() (err error) {
 			User:     subTaskCfg.From.User,
 			Password: subTaskCfg.From.Password,
 			SqlMode:  sqlMode,
+			Security: parseTLSFromDMConfig(subTaskCfg.From.Security),
 			Router:   tableRouter,
 
 			RouteTargetSet: routeTargetSet,
