@@ -9,11 +9,8 @@ CA_PATH="$CONF_PATH/root.crt"
 CERT_PATH="$CONF_PATH/client.crt"
 KEY_PATH="$CONF_PATH/client.key"
 OUT_DIR=/tmp/tidb_tools_test/sync_diff_inspector/output
-FIX_DIR=/tmp/tidb_tools_test/sync_diff_inspector/fixsql
 rm -rf $OUT_DIR
-rm -rf $FIX_DIR
 mkdir -p $OUT_DIR
-mkdir -p $FIX_DIR
 
 # create user for test tls
 mysql -uroot -h 127.0.0.1 -P 4000 -e "create user 'root_tls'@'%' identified by '' require X509;"

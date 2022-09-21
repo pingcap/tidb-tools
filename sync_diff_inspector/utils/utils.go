@@ -536,7 +536,7 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 				continue
 			}
 		} else if column.FieldType.GetType() == mysql.TypeJSON {
-			if (str1 == str2) || (data1.IsNull == data2.IsNull) {
+			if (str1 == str2) || (data1.IsNull && data2.IsNull) {
 				continue
 			}
 			var v1, v2 any
