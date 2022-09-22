@@ -228,7 +228,7 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 			if ds.Router != nil {
 				targetSchema, targetTable, err = ds.Router.Route(schema, table)
 				if err != nil {
-					return nil, errors.Errorf("get route result for %s.%s failed, error %v", schema, table, err)
+					return nil, errors.Errorf("get route result for %s.%s failed, please check the rules of schema/table routes, error %v", schema, table, err)
 				}
 			}
 
