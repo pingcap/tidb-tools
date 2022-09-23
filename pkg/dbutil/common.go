@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -190,42 +189,6 @@ func CloseDB(db *sql.DB) error {
 	return errors.Trace(db.Close())
 }
 
-// addClusteredAnnotation add the `/*T![clustered_index] NONCLUSTERED */` for primary key of create table info
-// In the older version, the create table info hasn't `/*T![clustered_index] NONCLUSTERED */`,
-// which lead the issue https://github.com/pingcap/tidb-tools/issues/678
-//
-// Before Get Create Table Info:
-// mysql> SHOW CREATE TABLE `test`.`itest`;
-//
-//	+-------+--------------------------------------------------------------------+
-//	| Table | Create Table                                                                                                                              |
-//	+-------+--------------------------------------------------------------------+
-//	| itest | CREATE TABLE `itest` (
-//		`id` int(11) DEFAULT NULL,
-//		`name` varchar(24) DEFAULT NULL,
-//		PRIMARY KEY (`id`)
-//		) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin |
-//	+-------+--------------------------------------------------------------------+
-//
-// After Add the annotation:
-//
-//	+-------+--------------------------------------------------------------------+
-//	| Table | Create Table                                                                                                                              |
-//	+-------+--------------------------------------------------------------------+
-//	| itest | CREATE TABLE `itest` (
-//		`id` int(11) DEFAULT NULL,
-//		`name` varchar(24) DEFAULT NULL,
-//		PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */
-//		) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin |
-//	+-------+--------------------------------------------------------------------+
-func addClusteredAnnotationForPrimaryKey(raw string) (string, error) {
-	reg, regErr := regexp.Compile(`(PRIMARY\sKEY.*\))(\s*,?)\s*\n`)
-	if reg == nil || regErr != nil {
-		return raw, errors.Annotate(regErr, "failed to compile regex for add clustered annotation, err: %s")
-	}
-	return reg.ReplaceAllString(raw, "${1} /*T![clustered_index] NONCLUSTERED */${2}\n"), nil
-}
-
 // GetCreateTableSQL returns the create table statement.
 func GetCreateTableSQL(ctx context.Context, db QueryExecutor, schemaName string, tableName string) (string, error) {
 	/*
@@ -251,7 +214,7 @@ func GetCreateTableSQL(ctx context.Context, db QueryExecutor, schemaName string,
 		return "", errors.NotFoundf("table %s", tableName)
 	}
 
-	return addClusteredAnnotationForPrimaryKey(createTable.String)
+	return createTable.String, nil
 }
 
 // GetRowCount returns row count of the table.

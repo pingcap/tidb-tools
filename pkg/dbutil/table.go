@@ -16,6 +16,7 @@ package dbutil
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/pingcap/errors"
@@ -29,8 +30,84 @@ import (
 	"github.com/pingcap/tidb/util/collate"
 )
 
+const (
+	AnnotationClusteredReplaceString    = "${1} /*T![clustered_index] CLUSTERED */${2}\n"
+	AnnotationNonClusteredReplaceString = "${1} /*T![clustered_index] NONCLUSTERED */${2}\n"
+)
+
 func init() {
 	collate.SetNewCollationEnabledForTest(false)
+}
+
+// addClusteredAnnotation add the `/*T![clustered_index] NONCLUSTERED */` for primary key of create table info
+// In the older version, the create table info hasn't `/*T![clustered_index] NONCLUSTERED */`,
+// which lead the issue https://github.com/pingcap/tidb-tools/issues/678
+//
+// Before Get Create Table Info:
+// mysql> SHOW CREATE TABLE `test`.`itest`;
+//
+//	+-------+--------------------------------------------------------------------+
+//	| Table | Create Table                                                                                                                              |
+//	+-------+--------------------------------------------------------------------+
+//	| itest | CREATE TABLE `itest` (
+//		`id` int(11) DEFAULT NULL,
+//		`name` varchar(24) DEFAULT NULL,
+//		PRIMARY KEY (`id`)
+//		) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin |
+//	+-------+--------------------------------------------------------------------+
+//
+// After Add the annotation:
+//
+//	+-------+--------------------------------------------------------------------+
+//	| Table | Create Table                                                                                                                              |
+//	+-------+--------------------------------------------------------------------+
+//	| itest | CREATE TABLE `itest` (
+//		`id` int(11) DEFAULT NULL,
+//		`name` varchar(24) DEFAULT NULL,
+//		PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */
+//		) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin |
+//	+-------+--------------------------------------------------------------------+
+func addClusteredAnnotationForPrimaryKey(raw string, replace string) (string, error) {
+	reg, regErr := regexp.Compile(`(PRIMARY\sKEY.*\))(\s*,?)\s*\n`)
+	if reg == nil || regErr != nil {
+		return raw, errors.Annotate(regErr, "failed to compile regex for add clustered annotation, err: %s")
+	}
+	return reg.ReplaceAllString(raw, replace), nil
+}
+
+func isPKISHandle(ctx context.Context, db QueryExecutor, schemaName string, tableName string) bool {
+	query := fmt.Sprintf("SELECT _tidb_rowid FROM %s LIMIT 0;", TableName(schemaName, tableName))
+	_, err := db.QueryContext(ctx, query)
+	if err != nil && strings.Contains(err.Error(), "Unknown column") {
+		return true
+	}
+	return false
+}
+
+func GetTableInfoWithVersion(ctx context.Context, db QueryExecutor, schemaName string, tableName string, version string) (*model.TableInfo, error) {
+	createTableSQL, err := GetCreateTableSQL(ctx, db, schemaName, tableName)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	if strings.Contains(createTableSQL, "TiDB-v4") {
+		var replaceString string
+		if isPKISHandle(ctx, db, schemaName, tableName) {
+			replaceString = AnnotationClusteredReplaceString
+		} else {
+			replaceString = AnnotationNonClusteredReplaceString
+		}
+		createTableSQL, err = addClusteredAnnotationForPrimaryKey(createTableSQL, replaceString)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+	}
+
+	parser2, err := GetParserForDB(ctx, db)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return GetTableInfoBySQL(createTableSQL, parser2)
 }
 
 // GetTableInfo returns table information.

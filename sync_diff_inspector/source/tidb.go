@@ -88,6 +88,8 @@ type TiDBSource struct {
 	// bucketSpliterPool is the shared pool to produce chunks using bucket
 	bucketSpliterPool *utils.WorkerPool
 	dbConn            *sql.DB
+
+	version string
 }
 
 func (s *TiDBSource) GetTableAnalyzer() TableAnalyzer {
@@ -143,7 +145,7 @@ func (s *TiDBSource) GetSourceStructInfo(ctx context.Context, tableIndex int) ([
 	tableInfos := make([]*model.TableInfo, 1)
 	tableDiff := s.GetTables()[tableIndex]
 	source := getMatchSource(s.sourceTableMap, tableDiff)
-	tableInfos[0], err = dbutil.GetTableInfo(ctx, s.GetDB(), source.OriginSchema, source.OriginTable)
+	tableInfos[0], err = dbutil.GetTableInfoWithVersion(ctx, s.GetDB(), source.OriginSchema, source.OriginTable, s.version)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -261,12 +263,17 @@ func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *conf
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+	version, err := dbutil.GetDBVersion(ctx, ds.Conn)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
 	ts := &TiDBSource{
 		tableDiffs:        tableDiffs,
 		sourceTableMap:    sourceTableMap,
 		snapshot:          ds.Snapshot,
 		dbConn:            ds.Conn,
 		bucketSpliterPool: bucketSpliterPool,
+		version:           version,
 	}
 	return ts, nil
 }
