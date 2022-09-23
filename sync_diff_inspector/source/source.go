@@ -317,7 +317,7 @@ func initTables(ctx context.Context, cfg *config.Config) (cfgTables []*config.Ta
 	// will add default source information, don't worry, we will use table config's info replace this later.
 	// cfg.Tables.Schema => cfg.Tables.Tables => target/source Schema.Table
 	cfgTables = make([]*config.TableConfig, 0, len(TargetTablesList))
-	version, _ := dbutil.GetDBVersion(ctx, downStreamConn)
+	version := utils.TryToGetVersion(ctx, downStreamConn)
 	for _, tables := range TargetTablesList {
 		if cfg.Task.TargetCheckTables.MatchTable(tables.OriginSchema, tables.OriginTable) {
 			log.Debug("match target table", zap.String("table", dbutil.TableName(tables.OriginSchema, tables.OriginTable)))

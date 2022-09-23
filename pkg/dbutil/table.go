@@ -19,6 +19,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/coreos/go-semver/semver"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/parser"
@@ -84,13 +85,13 @@ func isPKISHandle(ctx context.Context, db QueryExecutor, schemaName string, tabl
 	return false
 }
 
-func GetTableInfoWithVersion(ctx context.Context, db QueryExecutor, schemaName string, tableName string, version string) (*model.TableInfo, error) {
+func GetTableInfoWithVersion(ctx context.Context, db QueryExecutor, schemaName string, tableName string, version *semver.Version) (*model.TableInfo, error) {
 	createTableSQL, err := GetCreateTableSQL(ctx, db, schemaName, tableName)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	if strings.Contains(version, "TiDB-v4") {
+	if version.Major <= 4 {
 		var replaceString string
 		if isPKISHandle(ctx, db, schemaName, tableName) {
 			replaceString = AnnotationClusteredReplaceString

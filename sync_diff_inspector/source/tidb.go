@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/coreos/go-semver/semver"
 	tableFilter "github.com/pingcap/tidb-tools/pkg/table-filter"
 
 	"github.com/pingcap/errors"
@@ -89,7 +90,7 @@ type TiDBSource struct {
 	bucketSpliterPool *utils.WorkerPool
 	dbConn            *sql.DB
 
-	version string
+	version *semver.Version
 }
 
 func (s *TiDBSource) GetTableAnalyzer() TableAnalyzer {
@@ -263,17 +264,13 @@ func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *conf
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	version, err := dbutil.GetDBVersion(ctx, ds.Conn)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
 	ts := &TiDBSource{
 		tableDiffs:        tableDiffs,
 		sourceTableMap:    sourceTableMap,
 		snapshot:          ds.Snapshot,
 		dbConn:            ds.Conn,
 		bucketSpliterPool: bucketSpliterPool,
-		version:           version,
+		version:           utils.TryToGetVersion(ctx, ds.Conn),
 	}
 	return ts, nil
 }
