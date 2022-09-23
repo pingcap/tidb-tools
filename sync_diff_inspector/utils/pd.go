@@ -183,6 +183,9 @@ func TryToGetVersion(ctx context.Context, db *sql.DB) *semver.Version {
 	if err != nil {
 		return nil
 	}
+	if !strings.Contains(strings.ToLower(versionStr), "tidb") {
+		return nil
+	}
 	version, err := parseVersion(versionStr)
 	if err != nil {
 		// It's OK when parse version failed

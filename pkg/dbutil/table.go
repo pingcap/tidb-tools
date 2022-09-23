@@ -91,7 +91,7 @@ func GetTableInfoWithVersion(ctx context.Context, db QueryExecutor, schemaName s
 		return nil, errors.Trace(err)
 	}
 
-	if version.Major <= 4 {
+	if version != nil && version.Major <= 4 {
 		var replaceString string
 		if isPKISHandle(ctx, db, schemaName, tableName) {
 			replaceString = AnnotationClusteredReplaceString
