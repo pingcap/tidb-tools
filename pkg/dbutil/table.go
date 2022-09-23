@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/parser/ast"
@@ -28,6 +29,7 @@ import (
 	"github.com/pingcap/tidb/types"
 	_ "github.com/pingcap/tidb/types/parser_driver" // for parser driver
 	"github.com/pingcap/tidb/util/collate"
+	"go.uber.org/zap"
 )
 
 const (
@@ -102,7 +104,7 @@ func GetTableInfoWithVersion(ctx context.Context, db QueryExecutor, schemaName s
 			return nil, errors.Trace(err)
 		}
 	}
-
+	log.Info("123", zap.String("123", createTableSQL), zap.String("version", version))
 	parser2, err := GetParserForDB(ctx, db)
 	if err != nil {
 		return nil, errors.Trace(err)
