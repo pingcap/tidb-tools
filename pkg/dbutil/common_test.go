@@ -247,3 +247,84 @@ func (s *testDBSuite) TestFormatTimeZoneOffset(c *C) {
 		c.Assert(k, Equals, offset)
 	}
 }
+
+func (s *testDBSuite) TestAddClusteredAnnotation(c *C) {
+	type testCase struct {
+		raw    string
+		expect string
+	}
+
+	cases := []testCase{
+		{
+			// for version > 5, nothing changed
+			raw: `
+CREATE TABLE t (
+	i int(11) NOT NULL AUTO_INCREMENT,
+	PRIMARY KEY (i) /*T![clustered_index] NONCLUSTERED */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin /*T! SHARD_ROW_ID_BITS=2 */
+`,
+			expect: `
+CREATE TABLE t (
+	i int(11) NOT NULL AUTO_INCREMENT,
+	PRIMARY KEY (i) /*T![clustered_index] NONCLUSTERED */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin /*T! SHARD_ROW_ID_BITS=2 */
+`,
+		},
+		{
+			// for version < 5, add the annotation
+			raw: `
+CREATE TABLE t (
+	i int(11) NOT NULL AUTO_INCREMENT,
+	PRIMARY KEY (i)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin /*T! SHARD_ROW_ID_BITS=2 */
+`,
+			expect: `
+CREATE TABLE t (
+	i int(11) NOT NULL AUTO_INCREMENT,
+	PRIMARY KEY (i) /*T![clustered_index] NONCLUSTERED */
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin /*T! SHARD_ROW_ID_BITS=2 */
+`,
+		},
+		{
+			// have comma need to be matched
+			raw: `
+CREATE TABLE t (
+	i int(11) NOT NULL AUTO_INCREMENT,
+	PRIMARY KEY (i),
+	KEY name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin /*T! SHARD_ROW_ID_BITS=2 */
+`,
+			expect: `
+CREATE TABLE t (
+	i int(11) NOT NULL AUTO_INCREMENT,
+	PRIMARY KEY (i) /*T![clustered_index] NONCLUSTERED */,
+	KEY name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin /*T! SHARD_ROW_ID_BITS=2 */
+`,
+		},
+		{
+			// somthing strange
+			raw: `
+CREATE TABLE t (
+	i int(11) NOT NULL AUTO_INCREMENT,
+	PRIMARY KEY (i, ` + "`" + `i)d` + "`" + `)) , 
+	KEY name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin /*T! SHARD_ROW_ID_BITS=2 */
+`,
+			expect: `
+CREATE TABLE t (
+	i int(11) NOT NULL AUTO_INCREMENT,
+	PRIMARY KEY (i, ` + "`" + `i)d` + "`" + `)) /*T![clustered_index] NONCLUSTERED */ ,
+	KEY name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin /*T! SHARD_ROW_ID_BITS=2 */
+`,
+		},
+	}
+
+	for i, ca := range cases {
+		c.Log(i)
+		res, err := addClusteredAnnotationForPrimaryKey(ca.raw)
+		c.Assert(err, IsNil)
+		c.Assert(res, Equals, ca.expect)
+	}
+}
