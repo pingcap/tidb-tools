@@ -170,6 +170,30 @@ func GetSpecifiedColumnValueAndClose(rows *sql.Rows, columnName string) ([]strin
 	return strs, errors.Trace(rows.Err())
 }
 
+// parse versino string to semver.Version
+func parseVersion(versionStr string) (*semver.Version, error) {
+	versionStr = tidbVersionRegex.FindString(versionStr)[1:]
+	versionStr = strings.TrimPrefix(versionStr, "v")
+	return semver.NewVersion(versionStr)
+}
+
+// It's OK to failed to get db version
+func TryToGetVersion(ctx context.Context, db *sql.DB) *semver.Version {
+	versionStr, err := dbutil.GetDBVersion(ctx, db)
+	if err != nil {
+		return nil
+	}
+	if !strings.Contains(strings.ToLower(versionStr), "tidb") {
+		return nil
+	}
+	version, err := parseVersion(versionStr)
+	if err != nil {
+		// It's OK when parse version failed
+		version = nil
+	}
+	return version
+}
+
 // StartGCSavepointUpdateService keeps GC safePoint stop moving forward.
 func StartGCSavepointUpdateService(ctx context.Context, pdCli pd.Client, db *sql.DB, snapshot string) error {
 	versionStr, err := selectVersion(db)
@@ -177,9 +201,7 @@ func StartGCSavepointUpdateService(ctx context.Context, pdCli pd.Client, db *sql
 		log.Info("detect version of tidb failed")
 		return nil
 	}
-	versionStr = tidbVersionRegex.FindString(versionStr)[1:]
-	versionStr = strings.TrimPrefix(versionStr, "v")
-	tidbVersion, err := semver.NewVersion(versionStr)
+	tidbVersion, err := parseVersion(versionStr)
 	if err != nil {
 		log.Info("parse version of tidb failed")
 		return nil

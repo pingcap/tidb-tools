@@ -113,7 +113,7 @@ func TestTiDBSource(t *testing.T) {
 		{
 			schema:         "source_test",
 			table:          "test1",
-			createTableSQL: "CREATE TABLE `source_test`.`test1` (`a` int, `b` varchar(24), `c` float, primary key(`a`, `b`))",
+			createTableSQL: "CREATE TABLE `source_test`.`test1` (`a` int, `b` varchar(24), `c` float, PRIMARY KEY(`a`)\n)",
 			rangeColumns:   []string{"a", "b"},
 			rangeLeft:      []string{"3", "b"},
 			rangeRight:     []string{"5", "f"},
@@ -129,7 +129,7 @@ func TestTiDBSource(t *testing.T) {
 		{
 			schema:         "source_test",
 			table:          "test2",
-			createTableSQL: "CREATE TABLE `source_test`.`test2` (`a` int, `b` varchar(24), `c` float, `d` datetime, primary key(`a`, `b`))",
+			createTableSQL: "CREATE TABLE `source_test`.`test2` (`a` int, `b` varchar(24), `c` float, `d` datetime, PRIMARY KEY(`a`)\n)",
 			rangeColumns:   []string{"a", "b"},
 			rangeLeft:      []string{"3", "b"},
 			rangeRight:     []string{"5", "f"},
@@ -140,13 +140,47 @@ func TestTiDBSource(t *testing.T) {
 
 	mock.ExpectQuery("SHOW DATABASES").WillReturnRows(sqlmock.NewRows([]string{"Database"}).AddRow("mysql").AddRow("source_test"))
 	mock.ExpectQuery("SHOW FULL TABLES*").WillReturnRows(sqlmock.NewRows([]string{"Table", "type"}).AddRow("test1", "base").AddRow("test2", "base"))
+	mock.ExpectQuery("SELECT version()*").WillReturnRows(sqlmock.NewRows([]string{"version()"}).AddRow("5.7.25-TiDB-v4.0.12"))
 
 	f, err := filter.Parse([]string{"source_test.*"})
 	require.NoError(t, err)
 	tidb, err := NewTiDBSource(ctx, tableDiffs, &config.DataSource{Conn: conn}, utils.NewWorkerPool(1, "bucketIter"), f)
 	require.NoError(t, err)
 
+	caseFn := []struct {
+		check func(sqlmock.Sqlmock, Source) (bool, error)
+	}{
+		{
+			check: func(mock sqlmock.Sqlmock, source Source) (bool, error) {
+				mock.ExpectQuery("SHOW CREATE TABLE*").WillReturnRows(sqlmock.NewRows([]string{"Table", "Create Table"}).AddRow(tableCases[0].table, tableCases[0].createTableSQL))
+				mock.ExpectQuery("SELECT _tidb_rowid FROM*").WillReturnRows(sqlmock.NewRows([]string{"_tidb_rowid"}))
+				mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'*").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
+				tableInfo, err := source.GetSourceStructInfo(ctx, 0)
+				if err != nil {
+					return false, err
+				}
+				return !tableInfo[0].PKIsHandle, nil
+			},
+		},
+		{
+			check: func(mock sqlmock.Sqlmock, source Source) (bool, error) {
+				mock.ExpectQuery("SHOW CREATE TABLE*").WillReturnRows(sqlmock.NewRows([]string{"Table", "Create Table"}).AddRow(tableCases[1].table, tableCases[1].createTableSQL))
+				mock.ExpectQuery("SELECT _tidb_rowid FROM*").WillReturnError(fmt.Errorf("ERROR 1054 (42S22): Unknown column '_tidb_rowid' in 'field list'"))
+				mock.ExpectQuery("SHOW VARIABLES LIKE 'sql_mode'*").WillReturnRows(sqlmock.NewRows([]string{"Variable_name", "Value"}).AddRow("sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"))
+				tableInfo, err := source.GetSourceStructInfo(ctx, 0)
+				if err != nil {
+					return false, err
+				}
+				return tableInfo[0].PKIsHandle, nil
+			},
+		},
+	}
+
 	for n, tableCase := range tableCases {
+		t.Log(n)
+		check, err := caseFn[n].check(mock, tidb)
+		require.NoError(t, err)
+		require.True(t, check)
 		require.Equal(t, n, tableCase.rangeInfo.GetTableIndex())
 		countRows := sqlmock.NewRows([]string{"CNT", "CHECKSUM"}).AddRow(123, 456)
 		mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
@@ -248,6 +282,7 @@ func TestFallbackToRandomIfRangeIsSet(t *testing.T) {
 		statsRows.AddRow("source_test", "test1", "PRIMARY", 1, (i+1)*64, (i+1)*64, 1,
 			fmt.Sprintf("(%d, %d)", i*64, i*12), fmt.Sprintf("(%d, %d)", (i+1)*64-1, (i+1)*12-1))
 	}
+	mock.ExpectQuery("SELECT version()*").WillReturnRows(sqlmock.NewRows([]string{"version()"}).AddRow("5.7.25-TiDB-v4.0.12"))
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT COUNT(1) cnt")).WillReturnRows(sqlmock.NewRows([]string{"cnt"}).AddRow(100))
 
 	f, err := filter.Parse([]string{"source_test.*"})
@@ -571,6 +606,7 @@ func TestTiDBRouter(t *testing.T) {
 	mock.ExpectQuery("SHOW FULL TABLES IN.*").WillReturnRows(tablesRows)
 	tablesRows = sqlmock.NewRows([]string{"Tables_in_test", "Table_type"}).AddRow("test2", "BASE TABLE")
 	mock.ExpectQuery("SHOW FULL TABLES IN.*").WillReturnRows(tablesRows)
+	mock.ExpectQuery("SELECT version()*").WillReturnRows(sqlmock.NewRows([]string{"version()"}).AddRow("5.7.25-TiDB-v4.0.12"))
 
 	f, err := filter.Parse([]string{"*.*"})
 	require.NoError(t, err)
