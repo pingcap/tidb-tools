@@ -446,7 +446,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 		if err != nil {
 			df.report.SetTableMeetError(schema, table, err)
 		}
-		isEqual = isEqual && isDataEqual
+		isEqual = isDataEqual
 	}
 	dml.node.State = state
 	id := rangeInfo.ChunkRange.Index
@@ -739,7 +739,7 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 				chunkRange := dml.node.ChunkRange
 				fixSQLFile.WriteString(fmt.Sprintf("-- table: %s.%s\n-- %s\n", tableDiff.Schema, tableDiff.Table, chunkRange.ToMeta()))
 				if tableDiff.NeedUnifiedTimeZone {
-					fixSQLFile.WriteString(fmt.Sprintf("set @@session.time_zone = \"%s\";\n", source.UnifiedTimeZone))
+					fixSQLFile.WriteString(fmt.Sprintf("set @@session.time_zone = \"%s\";\n", config.UnifiedTimeZone))
 				}
 				for _, sql := range dml.sqls {
 					_, err = fixSQLFile.WriteString(fmt.Sprintf("%s\n", sql))

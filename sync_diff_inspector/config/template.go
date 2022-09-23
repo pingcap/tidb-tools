@@ -68,7 +68,9 @@ check-struct-only = false
 	port = 4000
 	user = "root"
 	password = ""
-
+	# security.ca-path = "..."
+	# security.cert-path = "..."
+	# security.key-path = "..."
 	# snapshot = "386902609362944000"
 
 ########################### Routes ###########################

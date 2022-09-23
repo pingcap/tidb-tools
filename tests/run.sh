@@ -64,11 +64,20 @@ EOF
         -s "$OUT_DIR/tikv" &
     sleep 2
 
+    # support tls connection
+    cat - > "$OUT_DIR/tidb-config.toml" <<EOF
+[security]
+ssl-ca = "$pwd/conf/root.crt"
+ssl-cert = "$pwd/conf/tidb.crt"
+ssl-key = "$pwd/conf/tidb.key"
+EOF
+
     echo "Starting TiDB..."
     tidb-server \
         -P 4000 \
         --store tikv \
         --path 127.0.0.1:2379 \
+        --config "$OUT_DIR/tidb-config.toml" \
         --log-file "$OUT_DIR/tidb.log" &
 
     echo "Verifying TiDB is started..."
