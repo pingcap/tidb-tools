@@ -90,7 +90,7 @@ func GetTableInfoWithVersion(ctx context.Context, db QueryExecutor, schemaName s
 		return nil, errors.Trace(err)
 	}
 
-	if strings.Contains(createTableSQL, "TiDB-v4") {
+	if strings.Contains(version, "TiDB-v4") {
 		var replaceString string
 		if isPKISHandle(ctx, db, schemaName, tableName) {
 			replaceString = AnnotationClusteredReplaceString
