@@ -104,7 +104,6 @@ func GetTableInfoWithVersion(ctx context.Context, db QueryExecutor, schemaName s
 			return nil, errors.Trace(err)
 		}
 	}
-	log.Info("123", zap.String("123", createTableSQL), zap.String("version", version))
 	parser2, err := GetParserForDB(ctx, db)
 	if err != nil {
 		return nil, errors.Trace(err)
