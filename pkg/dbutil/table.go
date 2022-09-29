@@ -78,10 +78,11 @@ func addClusteredAnnotationForPrimaryKey(raw string, replace string) (string, er
 
 func isPKISHandle(ctx context.Context, db QueryExecutor, schemaName string, tableName string) bool {
 	query := fmt.Sprintf("SELECT _tidb_rowid FROM %s LIMIT 0;", TableName(schemaName, tableName))
-	_, err := db.QueryContext(ctx, query)
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil && strings.Contains(err.Error(), "Unknown column") {
 		return true
 	}
+	rows.Close()
 	return false
 }
 
