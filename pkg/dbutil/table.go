@@ -82,7 +82,9 @@ func isPKISHandle(ctx context.Context, db QueryExecutor, schemaName string, tabl
 	if err != nil && strings.Contains(err.Error(), "Unknown column") {
 		return true
 	}
-	rows.Close()
+	if rows != nil {
+		rows.Close()
+	}
 	return false
 }
 
