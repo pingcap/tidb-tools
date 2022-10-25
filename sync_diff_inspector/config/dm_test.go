@@ -19,6 +19,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"github.com/stretchr/testify/require"
 )
 
@@ -51,21 +52,21 @@ func TestGetDMTaskCfg(t *testing.T) {
 	require.True(t, equal(cfg.DataSources["target"], &DataSource{
 		Host:     dmTaskCfg[0].To.Host,
 		Port:     dmTaskCfg[0].To.Port,
-		Password: dmTaskCfg[0].To.Password,
+		Password: utils.SecretString(dmTaskCfg[0].To.Password),
 		User:     dmTaskCfg[0].To.User,
 	}))
 
 	require.True(t, equal(cfg.DataSources["mysql-replica-01"], &DataSource{
 		Host:     dmTaskCfg[0].From.Host,
 		Port:     dmTaskCfg[0].From.Port,
-		Password: dmTaskCfg[0].From.Password,
+		Password: utils.SecretString(dmTaskCfg[0].From.Password),
 		User:     dmTaskCfg[0].From.User,
 	}))
 
 	require.True(t, equal(cfg.DataSources["mysql-replica-02"], &DataSource{
 		Host:     dmTaskCfg[1].From.Host,
 		Port:     dmTaskCfg[1].From.Port,
-		Password: dmTaskCfg[1].From.Password,
+		Password: utils.SecretString(dmTaskCfg[1].From.Password),
 		User:     dmTaskCfg[1].From.User,
 	}))
 }

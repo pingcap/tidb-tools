@@ -14,6 +14,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"testing"
 
@@ -82,4 +83,29 @@ func TestError(t *testing.T) {
 	}
 	err := cfg.Init()
 	require.Contains(t, err.Error(), "not found source routes for rule 111, please correct the config")
+}
+
+func TestNoSecretLeak(t *testing.T) {
+	source := &DataSource{
+		Host:     "127.0.0.1",
+		Port:     5432,
+		User:     "postgres",
+		Password: "AVeryV#ryStr0ngP@ssw0rd",
+		SqlMode:  "MYSQL",
+		Snapshot: "2022/10/24",
+	}
+	cfg := &Config{}
+	cfg.DataSources = map[string]*DataSource{"pg-1": source}
+	require.NotContains(t, cfg.String(), "AVeryV#ryStr0ngP@ssw0rd", "%s", cfg.String())
+	sourceJSON := []byte(`
+		{
+			"host": "127.0.0.1",
+			"port": 5432,
+			"user": "postgres",
+			"password": "meow~~~"
+		}
+	`)
+	s := DataSource{}
+	json.Unmarshal(sourceJSON, &s)
+	require.Equal(t, string(s.Password), "meow~~~")
 }
