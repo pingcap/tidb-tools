@@ -139,7 +139,7 @@ func (d *DataSource) ToDBConfig() *dbutil.DBConfig {
 		Host:     d.Host,
 		Port:     d.Port,
 		User:     d.User,
-		Password: string(d.Password),
+		Password: d.Password.Plain(),
 		Snapshot: d.Snapshot,
 	}
 }
@@ -174,9 +174,9 @@ func (d *DataSource) RegisterTLS() error {
 func (d *DataSource) GetDSN() (dbDSN string) {
 	if len(d.Snapshot) > 0 && !d.IsAutoSnapshot() {
 		log.Info("create connection with snapshot", zap.String("snapshot", d.Snapshot))
-		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&time_zone=%%27%s%%27&tidb_snapshot=%s", d.User, d.Password, d.Host, d.Port, url.QueryEscape(UnifiedTimeZone), d.Snapshot)
+		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&time_zone=%%27%s%%27&tidb_snapshot=%s", d.User, d.Password.Plain(), d.Host, d.Port, url.QueryEscape(UnifiedTimeZone), d.Snapshot)
 	} else {
-		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&time_zone=%%27%s%%27", d.User, d.Password, d.Host, d.Port, url.QueryEscape(UnifiedTimeZone))
+		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&time_zone=%%27%s%%27", d.User, d.Password.Plain(), d.Host, d.Port, url.QueryEscape(UnifiedTimeZone))
 	}
 
 	if d.Security != nil && len(d.Security.TLSName) > 0 {
