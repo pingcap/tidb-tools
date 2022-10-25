@@ -32,6 +32,7 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	filter "github.com/pingcap/tidb-tools/pkg/table-filter"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"github.com/pingcap/tidb/parser/model"
 	tidbutil "github.com/pingcap/tidb/util"
 	router "github.com/pingcap/tidb/util/table-router"
@@ -105,12 +106,12 @@ type Security struct {
 
 // DataSource represents the Source Config.
 type DataSource struct {
-	Host     string `toml:"host" json:"host"`
-	Port     int    `toml:"port" json:"port"`
-	User     string `toml:"user" json:"user"`
-	Password string `toml:"password" json:"password"`
-	SqlMode  string `toml:"sql-mode" json:"sql-mode"`
-	Snapshot string `toml:"snapshot" json:"snapshot"`
+	Host     string             `toml:"host" json:"host"`
+	Port     int                `toml:"port" json:"port"`
+	User     string             `toml:"user" json:"user"`
+	Password utils.SecretString `toml:"password" json:"password"`
+	SqlMode  string             `toml:"sql-mode" json:"sql-mode"`
+	Snapshot string             `toml:"snapshot" json:"snapshot"`
 
 	Security *Security `toml:"security" json:"security"`
 
@@ -138,7 +139,7 @@ func (d *DataSource) ToDBConfig() *dbutil.DBConfig {
 		Host:     d.Host,
 		Port:     d.Port,
 		User:     d.User,
-		Password: d.Password,
+		Password: d.Password.Plain(),
 		Snapshot: d.Snapshot,
 	}
 }
@@ -173,9 +174,9 @@ func (d *DataSource) RegisterTLS() error {
 func (d *DataSource) GetDSN() (dbDSN string) {
 	if len(d.Snapshot) > 0 && !d.IsAutoSnapshot() {
 		log.Info("create connection with snapshot", zap.String("snapshot", d.Snapshot))
-		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&time_zone=%%27%s%%27&tidb_snapshot=%s", d.User, d.Password, d.Host, d.Port, url.QueryEscape(UnifiedTimeZone), d.Snapshot)
+		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&time_zone=%%27%s%%27&tidb_snapshot=%s", d.User, d.Password.Plain(), d.Host, d.Port, url.QueryEscape(UnifiedTimeZone), d.Snapshot)
 	} else {
-		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&time_zone=%%27%s%%27", d.User, d.Password, d.Host, d.Port, url.QueryEscape(UnifiedTimeZone))
+		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&time_zone=%%27%s%%27", d.User, d.Password.Plain(), d.Host, d.Port, url.QueryEscape(UnifiedTimeZone))
 	}
 
 	if d.Security != nil && len(d.Security.TLSName) > 0 {
@@ -455,7 +456,7 @@ func (c *Config) Parse(arguments []string) error {
 func (c *Config) String() string {
 	cfg, err := json.Marshal(c)
 	if err != nil {
-		return "<nil>"
+		return err.Error()
 	}
 	return string(cfg)
 }
@@ -503,7 +504,7 @@ func (c *Config) adjustConfigByDMSubTasks() (err error) {
 		Host:     subTaskCfgs[0].To.Host,
 		Port:     subTaskCfgs[0].To.Port,
 		User:     subTaskCfgs[0].To.User,
-		Password: subTaskCfgs[0].To.Password,
+		Password: utils.SecretString(subTaskCfgs[0].To.Password),
 		SqlMode:  sqlMode,
 		Security: parseTLSFromDMConfig(subTaskCfgs[0].To.Security),
 	}
@@ -524,7 +525,7 @@ func (c *Config) adjustConfigByDMSubTasks() (err error) {
 			Host:     subTaskCfg.From.Host,
 			Port:     subTaskCfg.From.Port,
 			User:     subTaskCfg.From.User,
-			Password: subTaskCfg.From.Password,
+			Password: utils.SecretString(subTaskCfg.From.Password),
 			SqlMode:  sqlMode,
 			Security: parseTLSFromDMConfig(subTaskCfg.From.Security),
 			Router:   tableRouter,

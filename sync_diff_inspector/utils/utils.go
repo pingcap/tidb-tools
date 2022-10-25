@@ -35,6 +35,23 @@ import (
 	"go.uber.org/zap"
 )
 
+// SecretString is a wrapper for sensitive strings like password,
+// which yields redacted string when being marshaled.
+type SecretString string
+
+func (s SecretString) MarshalJSON() ([]byte, error) {
+	return []byte(`"******"`), nil
+}
+
+func (s SecretString) String() string {
+	return "******"
+}
+
+// Plain unwraps the secret string.
+func (s SecretString) Plain() string {
+	return string(s)
+}
+
 // WorkerPool contains a pool of workers.
 // The number of workers in the channel represents how many goruntines
 // can be created to execute the task.
