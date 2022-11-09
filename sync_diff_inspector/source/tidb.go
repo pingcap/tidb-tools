@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/report"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
@@ -91,6 +92,10 @@ type TiDBSource struct {
 	dbConn            *sql.DB
 
 	version *semver.Version
+
+	// only for check
+	targetUniqueTableMap   map[string]struct{}
+	sourceTablesAfterRoute map[string]struct{}
 }
 
 func (s *TiDBSource) GetTableAnalyzer() TableAnalyzer {
@@ -139,6 +144,14 @@ func (s *TiDBSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter.
 
 func (s *TiDBSource) GetTables() []*common.TableDiff {
 	return s.tableDiffs
+}
+
+func (s *TiDBSource) UpdateTables(tableDiffs []*common.TableDiff) {
+	s.tableDiffs = tableDiffs
+}
+
+func (s *TiDBSource) CheckTablesMatched(report *report.Report) ([]*common.TableDiff, bool) {
+	return checkTableMatched(s.targetUniqueTableMap, s.sourceTablesAfterRoute, s.tableDiffs, report)
 }
 
 func (s *TiDBSource) GetSourceStructInfo(ctx context.Context, tableIndex int) ([]*model.TableInfo, error) {
@@ -194,7 +207,7 @@ func (s *TiDBSource) GetSnapshot() string {
 	return s.snapshot
 }
 
-func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource, f tableFilter.Filter) (map[string]*common.TableSource, error) {
+func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource, f tableFilter.Filter) (map[string]*common.TableSource, map[string]struct{}, map[string]struct{}, error) {
 	sourceTableMap := make(map[string]*common.TableSource)
 	log.Info("find router for tidb source")
 	// we should get the real table name
@@ -210,7 +223,7 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 	sourceSchemas, err := dbutil.GetSchemas(ctx, ds.Conn)
 
 	if err != nil {
-		return nil, errors.Annotatef(err, "get schemas from database")
+		return nil, nil, nil, errors.Annotatef(err, "get schemas from database")
 	}
 
 	for _, schema := range sourceSchemas {
@@ -220,7 +233,7 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 		}
 		allTables, err := dbutil.GetTables(ctx, ds.Conn, schema)
 		if err != nil {
-			return nil, errors.Annotatef(err, "get tables from %s", schema)
+			return nil, nil, nil, errors.Annotatef(err, "get tables from %s", schema)
 		}
 		allTablesMap[schema] = utils.SliceToMap(allTables)
 	}
@@ -231,7 +244,7 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 			if ds.Router != nil {
 				targetSchema, targetTable, err = ds.Router.Route(schema, table)
 				if err != nil {
-					return nil, errors.Errorf("get route result for %s.%s failed, error %v", schema, table, err)
+					return nil, nil, nil, errors.Errorf("get route result for %s.%s failed, error %v", schema, table, err)
 				}
 			}
 
@@ -253,14 +266,11 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 		}
 	}
 
-	if err = checkTableMatched(targetUniqueTableMap, sourceTablesAfterRoute); err != nil {
-		return nil, errors.Annotatef(err, "please make sure the filter is correct.")
-	}
-	return sourceTableMap, nil
+	return sourceTableMap, targetUniqueTableMap, sourceTablesAfterRoute, nil
 }
 
 func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource, bucketSpliterPool *utils.WorkerPool, f tableFilter.Filter) (Source, error) {
-	sourceTableMap, err := getSourceTableMap(ctx, tableDiffs, ds, f)
+	sourceTableMap, targetUniqueTableMap, sourceTablesAfterRoute, err := getSourceTableMap(ctx, tableDiffs, ds, f)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -271,6 +281,9 @@ func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *conf
 		dbConn:            ds.Conn,
 		bucketSpliterPool: bucketSpliterPool,
 		version:           utils.TryToGetVersion(ctx, ds.Conn),
+
+		targetUniqueTableMap:   targetUniqueTableMap,
+		sourceTablesAfterRoute: sourceTablesAfterRoute,
 	}
 	return ts, nil
 }

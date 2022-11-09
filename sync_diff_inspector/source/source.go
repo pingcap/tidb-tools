@@ -26,6 +26,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	tableFilter "github.com/pingcap/tidb-tools/pkg/table-filter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/report"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
@@ -92,6 +93,13 @@ type Source interface {
 
 	// GetTables represents the tableDiffs.
 	GetTables() []*common.TableDiff
+
+	// UpdateTables reset the tableDiffs.
+	UpdateTables([]*common.TableDiff)
+
+	// check the upstream's table whether some tables are not matched with that from tableDiffs.
+	// and return new tablediffs.
+	CheckTablesMatched(*report.Report) ([]*common.TableDiff, bool)
 
 	// GetSourceStructInfo get the source table info from a given target table
 	GetSourceStructInfo(context.Context, int) ([]*model.TableInfo, error)
@@ -374,21 +382,30 @@ type RangeIterator interface {
 	Close()
 }
 
-func checkTableMatched(targetMap map[string]struct{}, sourceMap map[string]struct{}) error {
+func checkTableMatched(targetMap map[string]struct{}, sourceMap map[string]struct{}, tableDiffs []*common.TableDiff, report *report.Report) ([]*common.TableDiff, bool) {
+	newTableDiffs := make([]*common.TableDiff, 0, len(tableDiffs))
+	passed := true
 	// check target exists but source not found
-	for tableDiff := range targetMap {
+	for _, tableDiff := range tableDiffs {
 		// target table have all passed in tableFilter
-		if _, ok := sourceMap[tableDiff]; !ok {
-			return errors.Errorf("the source has no table to be compared. target-table is `%s`", tableDiff)
+		tableName := utils.UniqueID(tableDiff.Schema, tableDiff.Table)
+		if _, ok := sourceMap[tableName]; !ok {
+			log.Warn("the source has no table to be compared", zap.String("target-table", tableName))
+			report.AddMissingTargetTable(tableName)
+			passed = false
+		} else {
+			newTableDiffs = append(newTableDiffs, tableDiff)
 		}
-	}
+	} //please make sure the filter is correct."
 	// check source exists but target not found
-	for tableDiff := range sourceMap {
+	for tableName := range sourceMap {
 		// need check source table have passd in tableFilter here
-		if _, ok := targetMap[tableDiff]; !ok {
-			return errors.Errorf("the target has no table to be compared. source-table is `%s`", tableDiff)
+		if _, ok := targetMap[tableName]; !ok {
+			log.Warn("the target has no table to be compared", zap.String("source-table", tableName))
+			report.AddMissingSourceTable(tableName)
+			passed = false
 		}
 	}
-	log.Info("table match check passed!!")
-	return nil
+
+	return newTableDiffs, passed
 }

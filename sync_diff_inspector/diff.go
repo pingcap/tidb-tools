@@ -141,6 +141,15 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 		return errors.Trace(err)
 	}
 
+	// check the upstream's table whether some tables are not matched with that from tableDiffs.
+	newDiffTables, passed := df.upstream.CheckTablesMatched(df.report)
+	if !passed {
+		df.upstream.UpdateTables(newDiffTables)
+		df.downstream.UpdateTables(newDiffTables)
+	} else {
+		log.Info("table match check passed!!")
+	}
+
 	df.workSource = df.pickSource(ctx)
 	df.FixSQLDir = cfg.Task.FixDir
 	df.CheckpointDir = cfg.Task.CheckpointDir

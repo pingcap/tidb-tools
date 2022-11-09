@@ -74,18 +74,24 @@ type ChunkResult struct {
 	RowsDelete int `json:"rows-delete"` // `RowsDelete` is the number of rows needed to delete
 }
 
+type MissingTables struct {
+	MissingTargetTables []string `json:"missing-target-tables"`
+	MissingSourceTables []string `json:"missing-source-tables"`
+}
+
 // Report saves the check results.
 type Report struct {
 	sync.RWMutex
-	Result       string                             `json:"-"`             // Result is pass or fail
-	PassNum      int32                              `json:"-"`             // The pass number of tables
-	FailedNum    int32                              `json:"-"`             // The failed number of tables
-	TableResults map[string]map[string]*TableResult `json:"table-results"` // TableResult saved the map of  `schema` => `table` => `tableResult`
-	StartTime    time.Time                          `json:"start-time"`
-	Duration     time.Duration                      `json:"time-duration"`
-	TotalSize    int64                              `json:"-"` // Total size of the checked tables
-	SourceConfig [][]byte                           `json:"-"`
-	TargetConfig []byte                             `json:"-"`
+	Result        string                             `json:"-"`             // Result is pass or fail
+	PassNum       int32                              `json:"-"`             // The pass number of tables
+	FailedNum     int32                              `json:"-"`             // The failed number of tables
+	TableResults  map[string]map[string]*TableResult `json:"table-results"` // TableResult saved the map of  `schema` => `table` => `tableResult`
+	StartTime     time.Time                          `json:"start-time"`
+	Duration      time.Duration                      `json:"time-duration"`
+	TotalSize     int64                              `json:"-"` // Total size of the checked tables
+	SourceConfig  [][]byte                           `json:"-"`
+	TargetConfig  []byte                             `json:"-"`
+	MissingTables MissingTables                      `json:"missing-tables"`
 
 	task *config.TaskConfig `json:"-"`
 }
@@ -220,6 +226,21 @@ func (r *Report) CommitSummary() error {
 		table.Render()
 		summaryFile.WriteString(tableString.String())
 	}
+
+	if len(r.MissingTables.MissingSourceTables) > 0 {
+		summaryFile.WriteString("\nWarn: some tables from source are skipped, because the target has no table to becompared with:")
+		for _, tableName := range r.MissingTables.MissingSourceTables {
+			summaryFile.WriteString(fmt.Sprintf("\n\t%s", tableName))
+		}
+	}
+
+	if len(r.MissingTables.MissingTargetTables) > 0 {
+		summaryFile.WriteString("\nWarn: some tables from target are skipped, because the source has no table to becompared with:")
+		for _, tableName := range r.MissingTables.MissingTargetTables {
+			summaryFile.WriteString(fmt.Sprintf("\n\t%s", tableName))
+		}
+	}
+
 	duration := r.Duration + time.Since(r.StartTime)
 	summaryFile.WriteString(fmt.Sprintf("\nTime Cost: %s\n", duration))
 	summaryFile.WriteString(fmt.Sprintf("Average Speed: %fMB/s\n", float64(r.TotalSize)/(1024.0*1024.0*duration.Seconds())))
@@ -261,6 +282,20 @@ func (r *Report) Print(w io.Writer) error {
 		}
 		summary.WriteString(fmt.Sprintf("You can view the comparision details through '%s/%s'\n", r.task.OutputDir, config.LogFileName))
 	}
+
+	if len(r.MissingTables.MissingSourceTables) > 0 {
+		summary.WriteString("\nWarn: some tables from source are skipped, because the target has no table to becompared with:")
+		for _, tableName := range r.MissingTables.MissingSourceTables {
+			summary.WriteString(fmt.Sprintf("\n\t%s", tableName))
+		}
+	}
+
+	if len(r.MissingTables.MissingTargetTables) > 0 {
+		summary.WriteString("\nWarn: some tables from target are skipped, because the source has no table to becompared with:")
+		for _, tableName := range r.MissingTables.MissingTargetTables {
+			summary.WriteString(fmt.Sprintf("\n\t%s", tableName))
+		}
+	}
 	fmt.Fprint(w, summary.String())
 	return nil
 }
@@ -271,7 +306,19 @@ func NewReport(task *config.TaskConfig) *Report {
 		TableResults: make(map[string]map[string]*TableResult),
 		Result:       Pass,
 		task:         task,
+		MissingTables: MissingTables{
+			MissingTargetTables: make([]string, 0),
+			MissingSourceTables: make([]string, 0),
+		},
 	}
+}
+
+func (r *Report) AddMissingTargetTable(table string) {
+	r.MissingTables.MissingTargetTables = append(r.MissingTables.MissingTargetTables, table)
+}
+
+func (r *Report) AddMissingSourceTable(table string) {
+	r.MissingTables.MissingSourceTables = append(r.MissingTables.MissingSourceTables, table)
 }
 
 func (r *Report) Init(tableDiffs []*common.TableDiff, sourceConfig [][]byte, targetConfig []byte) {

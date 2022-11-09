@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/pkg/filter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/report"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
@@ -62,6 +63,10 @@ type MySQLSources struct {
 	tableDiffs []*common.TableDiff
 
 	sourceTablesMap map[string][]*common.TableShardSource
+
+	// only for check
+	targetUniqueTableMap   map[string]struct{}
+	sourceTablesAfterRoute map[string]struct{}
 }
 
 func getMatchedSourcesForTable(sourceTablesMap map[string][]*common.TableShardSource, table *common.TableDiff) []*common.TableShardSource {
@@ -140,6 +145,14 @@ func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitte
 
 func (s *MySQLSources) GetTables() []*common.TableDiff {
 	return s.tableDiffs
+}
+
+func (s *MySQLSources) UpdateTables(tableDiffs []*common.TableDiff) {
+	s.tableDiffs = tableDiffs
+}
+
+func (s *MySQLSources) CheckTablesMatched(report *report.Report) ([]*common.TableDiff, bool) {
+	return checkTableMatched(s.targetUniqueTableMap, s.sourceTablesAfterRoute, s.tableDiffs, report)
 }
 
 func (s *MySQLSources) GenerateFixSQL(t DMLType, upstreamData, downstreamData map[string]*dbutil.ColumnData, tableIndex int) string {
@@ -355,13 +368,12 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 
 	}
 
-	if err := checkTableMatched(targetUniqueTableMap, sourceTablesAfterRoute); err != nil {
-		return nil, errors.Annotatef(err, "please make sure the filter is correct.")
-	}
-
 	mss := &MySQLSources{
 		tableDiffs:      tableDiffs,
 		sourceTablesMap: sourceTablesMap,
+
+		targetUniqueTableMap:   targetUniqueTableMap,
+		sourceTablesAfterRoute: sourceTablesAfterRoute,
 	}
 	return mss, nil
 }
