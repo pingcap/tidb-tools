@@ -95,7 +95,7 @@ type TiDBSource struct {
 
 	// only for check
 	targetUniqueTableMap   map[string]struct{}
-	sourceTablesAfterRoute map[string]struct{}
+	sourceTablesAfterRoute map[string][]string
 }
 
 func (s *TiDBSource) GetTableAnalyzer() TableAnalyzer {
@@ -207,7 +207,7 @@ func (s *TiDBSource) GetSnapshot() string {
 	return s.snapshot
 }
 
-func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource, f tableFilter.Filter) (map[string]*common.TableSource, map[string]struct{}, map[string]struct{}, error) {
+func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource, f tableFilter.Filter) (map[string]*common.TableSource, map[string]struct{}, map[string][]string, error) {
 	sourceTableMap := make(map[string]*common.TableSource)
 	log.Info("find router for tidb source")
 	// we should get the real table name
@@ -216,7 +216,7 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 	for _, tableDiff := range tableDiffs {
 		targetUniqueTableMap[utils.UniqueID(tableDiff.Schema, tableDiff.Table)] = struct{}{}
 	}
-	sourceTablesAfterRoute := make(map[string]struct{})
+	sourceTablesAfterRoute := make(map[string][]string)
 
 	// instance -> db -> table
 	allTablesMap := make(map[string]map[string]interface{})
@@ -251,7 +251,7 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 			uniqueId := utils.UniqueID(targetSchema, targetTable)
 			if f.MatchTable(targetSchema, targetTable) {
 				// if match the filter, we should respect it and check target has this table later.
-				sourceTablesAfterRoute[uniqueId] = struct{}{}
+				sourceTablesAfterRoute[uniqueId] = append(sourceTablesAfterRoute[uniqueId], utils.UniqueID(schema, table))
 			}
 			if _, ok := targetUniqueTableMap[uniqueId]; ok {
 				if _, ok := sourceTableMap[uniqueId]; ok {

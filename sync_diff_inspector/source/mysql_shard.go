@@ -66,7 +66,7 @@ type MySQLSources struct {
 
 	// only for check
 	targetUniqueTableMap   map[string]struct{}
-	sourceTablesAfterRoute map[string]struct{}
+	sourceTablesAfterRoute map[string][]string
 }
 
 func getMatchedSourcesForTable(sourceTablesMap map[string][]*common.TableShardSource, table *common.TableDiff) []*common.TableShardSource {
@@ -305,7 +305,7 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 	}
 
 	// only used for check
-	sourceTablesAfterRoute := make(map[string]struct{})
+	sourceTablesAfterRoute := make(map[string][]string)
 
 	for i, sourceDB := range ds {
 		sourceSchemas, err := dbutil.GetSchemas(ctx, sourceDB.Conn)
@@ -336,7 +336,7 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 				// get all tables from all source db instance
 				if f.MatchTable(targetSchema, targetTable) {
 					// if match the filter, we should respect it and check target has this table later.
-					sourceTablesAfterRoute[uniqueId] = struct{}{}
+					sourceTablesAfterRoute[uniqueId] = append(sourceTablesAfterRoute[uniqueId], utils.UniqueID(schema, table))
 				}
 				if _, ok := targetUniqueTableMap[uniqueId]; !ok {
 					continue

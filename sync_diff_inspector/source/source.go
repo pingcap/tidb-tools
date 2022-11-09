@@ -382,7 +382,7 @@ type RangeIterator interface {
 	Close()
 }
 
-func checkTableMatched(targetMap map[string]struct{}, sourceMap map[string]struct{}, tableDiffs []*common.TableDiff, report *report.Report) ([]*common.TableDiff, bool) {
+func checkTableMatched(targetMap map[string]struct{}, sourceMap map[string][]string, tableDiffs []*common.TableDiff, report *report.Report) ([]*common.TableDiff, bool) {
 	newTableDiffs := make([]*common.TableDiff, 0, len(tableDiffs))
 	passed := true
 	// check target exists but source not found
@@ -396,14 +396,16 @@ func checkTableMatched(targetMap map[string]struct{}, sourceMap map[string]struc
 		} else {
 			newTableDiffs = append(newTableDiffs, tableDiff)
 		}
-	} //please make sure the filter is correct."
+	}
 	// check source exists but target not found
-	for tableName := range sourceMap {
+	for tableName, sourceNames := range sourceMap {
 		// need check source table have passd in tableFilter here
 		if _, ok := targetMap[tableName]; !ok {
-			log.Warn("the target has no table to be compared", zap.String("source-table", tableName))
-			report.AddMissingSourceTable(tableName)
-			passed = false
+			for _, sourceName := range sourceNames {
+				log.Warn("the target has no table to be compared", zap.String("source-table", sourceName))
+				report.AddMissingSourceTable(sourceName)
+				passed = false
+			}
 		}
 	}
 

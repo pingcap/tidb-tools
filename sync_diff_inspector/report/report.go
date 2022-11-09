@@ -43,6 +43,7 @@ const (
 	// Fail means not all data or struct of tables are equal
 	Fail  = "fail"
 	Error = "error"
+	Warn  = "warn"
 )
 
 // ReportConfig stores the config information for the user
@@ -284,16 +285,16 @@ func (r *Report) Print(w io.Writer) error {
 	}
 
 	if len(r.MissingTables.MissingSourceTables) > 0 {
-		summary.WriteString("\nWarn: some tables from source are skipped, because the target has no table to becompared with:")
+		summary.WriteString("\nWarn: some tables from source are skipped, because the target has no table to becompared with:\n")
 		for _, tableName := range r.MissingTables.MissingSourceTables {
-			summary.WriteString(fmt.Sprintf("\n\t%s", tableName))
+			summary.WriteString(fmt.Sprintf("\t%s\n", tableName))
 		}
 	}
 
 	if len(r.MissingTables.MissingTargetTables) > 0 {
-		summary.WriteString("\nWarn: some tables from target are skipped, because the source has no table to becompared with:")
+		summary.WriteString("\nWarn: some tables from target are skipped, because the source has no table to becompared with:\n")
 		for _, tableName := range r.MissingTables.MissingTargetTables {
-			summary.WriteString(fmt.Sprintf("\n\t%s", tableName))
+			summary.WriteString(fmt.Sprintf("\t%s\n", tableName))
 		}
 	}
 	fmt.Fprint(w, summary.String())
@@ -314,10 +315,12 @@ func NewReport(task *config.TaskConfig) *Report {
 }
 
 func (r *Report) AddMissingTargetTable(table string) {
+	r.Result = Warn
 	r.MissingTables.MissingTargetTables = append(r.MissingTables.MissingTargetTables, table)
 }
 
 func (r *Report) AddMissingSourceTable(table string) {
+	r.Result = Warn
 	r.MissingTables.MissingSourceTables = append(r.MissingTables.MissingSourceTables, table)
 }
 
