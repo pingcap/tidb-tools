@@ -82,7 +82,7 @@ type Source interface {
 	GetRangeIterator(context.Context, *splitter.RangeInfo, TableAnalyzer, int) (RangeIterator, error)
 
 	// GetCountAndCrc32 gets the crc32 result and the count from given range.
-	GetCountAndCrc32(context.Context, *splitter.RangeInfo) *ChecksumInfo
+	GetCountAndCrc32(context.Context, *splitter.RangeInfo, string) *ChecksumInfo
 
 	// GetRowsIterator gets the row data iterator from given range.
 	GetRowsIterator(context.Context, *splitter.RangeInfo) (RowDataIterator, error)
