@@ -408,7 +408,7 @@ func NewConfig() *Config {
 	fs.BoolVar(&cfg.ExportFixSQL, "export-fix-sql", true, "set true if want to compare rows or set to false will only compare checksum")
 	fs.BoolVar(&cfg.CheckStructOnly, "check-struct-only", false, "ignore check table's data")
 
-	fs.StringVarP(&cfg.AggregateOp, "aggregate-op", "", "BIT_XOR", "aggregate operator, default value is `BIT_XOR`")
+	fs.StringVarP(&cfg.AggregateOp, "aggregate-op", "", AggregateOpBITXOR, "aggregate operator, default value is `BIT_XOR`")
 	_ = fs.MarkHidden("aggregate-op")
 	fs.SortFlags = false
 	return cfg
