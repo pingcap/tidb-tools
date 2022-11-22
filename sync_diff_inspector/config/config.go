@@ -182,7 +182,7 @@ func (d *DataSource) ToDriverConfig() *mysql.Config {
 	cfg.Net = "tcp"
 	cfg.Addr = net.JoinHostPort(d.Host, strconv.Itoa(d.Port))
 	cfg.Params["charset"] = "utf8mb4"
-	cfg.Params["interpolateParams"] = "true"
+	cfg.InterpolateParams = true
 	cfg.Params["time_zone"] = fmt.Sprintf("'%s'", UnifiedTimeZone)
 	if len(d.Snapshot) > 0 && !d.IsAutoSnapshot() {
 		log.Info("create connection with snapshot", zap.String("snapshot", d.Snapshot))
