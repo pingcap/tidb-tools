@@ -173,21 +173,6 @@ func (d *DataSource) RegisterTLS() error {
 	return errors.Trace(err)
 }
 
-func (d *DataSource) GetDSN() (dbDSN string) {
-	if len(d.Snapshot) > 0 && !d.IsAutoSnapshot() {
-		log.Info("create connection with snapshot", zap.String("snapshot", d.Snapshot))
-		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&time_zone=%%27%s%%27&tidb_snapshot=%s", d.User, d.Password.Plain(), d.Host, d.Port, url.QueryEscape(UnifiedTimeZone), d.Snapshot)
-	} else {
-		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&interpolateParams=true&time_zone=%%27%s%%27", d.User, d.Password.Plain(), d.Host, d.Port, url.QueryEscape(UnifiedTimeZone))
-	}
-
-	if d.Security != nil && len(d.Security.TLSName) > 0 {
-		dbDSN += "&tls=" + d.Security.TLSName
-	}
-
-	return dbDSN
-}
-
 func (d *DataSource) ToDriverConfig() *mysql.Config {
 	cfg := mysql.NewConfig()
 	cfg.Params = make(map[string]string)
