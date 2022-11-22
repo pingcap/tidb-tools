@@ -18,9 +18,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -184,6 +186,28 @@ func (d *DataSource) GetDSN() (dbDSN string) {
 	}
 
 	return dbDSN
+}
+
+func (d *DataSource) ToDriverConfig() *mysql.Config {
+	cfg := mysql.NewConfig()
+	cfg.Params = make(map[string]string)
+
+	cfg.User = d.User
+	cfg.Passwd = d.Password.Plain()
+	cfg.Net = "tcp"
+	cfg.Addr = net.JoinHostPort(d.Host, strconv.Itoa(d.Port))
+	cfg.Params["charset"] = "utf8mb4"
+	cfg.Params["interpolateParams"] = "true"
+	cfg.Params["time_zone"] = fmt.Sprintf("'%s'", UnifiedTimeZone)
+	if len(d.Snapshot) > 0 && !d.IsAutoSnapshot() {
+		log.Info("create connection with snapshot", zap.String("snapshot", d.Snapshot))
+		cfg.Params["tidb_snapshot"] = d.Snapshot
+	}
+	if d.Security != nil && len(d.Security.TLSName) > 0 {
+		cfg.TLSConfig = d.Security.TLSName
+	}
+
+	return cfg
 }
 
 type TaskConfig struct {
