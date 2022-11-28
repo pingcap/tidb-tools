@@ -46,7 +46,7 @@ func tryConnectMySQL(cfg *mysql.Config) (*sql.DB, error) {
 // ConnectMySQL creates sql.DB used for select data
 func ConnectMySQL(cfg *mysql.Config, num int) (db *sql.DB, err error) {
 	defer func() {
-		if err != nil && db != nil {
+		if err == nil && db != nil {
 			// SetMaxOpenConns and SetMaxIdleConns for connection to avoid error like
 			// `dial tcp 10.26.2.1:3306: connect: cannot assign requested address`
 			db.SetMaxOpenConns(num)
