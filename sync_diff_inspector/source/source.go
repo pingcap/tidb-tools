@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -233,8 +234,8 @@ func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, con
 	return NewMySQLSources(ctx, tableDiffs, dbs, connCount, f)
 }
 
-func getAutoSnapshotPosition(dsn string) (string, string, error) {
-	tmpConn, err := common.CreateDB(dsn, 2)
+func getAutoSnapshotPosition(cfg *mysql.Config) (string, string, error) {
+	tmpConn, err := common.ConnectMySQL(cfg, 2)
 	if err != nil {
 		return "", "", errors.Annotatef(err, "connecting to auto-position tidb_snapshot failed")
 	}
@@ -257,7 +258,7 @@ func initDBConn(ctx context.Context, cfg *config.Config) error {
 		if !cfg.Task.SourceInstances[0].IsAutoSnapshot() {
 			return errors.Errorf("'auto' snapshot should be set on both target and source")
 		}
-		primaryTs, secondaryTs, err := getAutoSnapshotPosition(cfg.Task.TargetInstance.GetDSN())
+		primaryTs, secondaryTs, err := getAutoSnapshotPosition(cfg.Task.TargetInstance.ToDriverConfig())
 		if err != nil {
 			return err
 		}
@@ -266,7 +267,7 @@ func initDBConn(ctx context.Context, cfg *config.Config) error {
 	}
 	// we had `cfg.SplitThreadCount` producers and `cfg.CheckThreadCount` consumer to use db connections maybe and `cfg.CheckThreadCount` splitter to split buckets.
 	// so the connection count need to be cfg.SplitThreadCount + cfg.CheckThreadCount + cfg.CheckThreadCount.
-	targetConn, err := common.CreateDB(cfg.Task.TargetInstance.GetDSN(), cfg.SplitThreadCount+2*cfg.CheckThreadCount)
+	targetConn, err := common.ConnectMySQL(cfg.Task.TargetInstance.ToDriverConfig(), cfg.SplitThreadCount+2*cfg.CheckThreadCount)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -280,7 +281,7 @@ func initDBConn(ctx context.Context, cfg *config.Config) error {
 			return errors.Errorf("'auto' snapshot should be set on both target and source")
 		}
 		// connect source db with target db time_zone
-		conn, err := common.CreateDB(source.GetDSN(), cfg.SplitThreadCount+2*cfg.CheckThreadCount)
+		conn, err := common.ConnectMySQL(source.ToDriverConfig(), cfg.SplitThreadCount+2*cfg.CheckThreadCount)
 		if err != nil {
 			return errors.Trace(err)
 		}
