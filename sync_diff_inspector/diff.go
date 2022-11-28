@@ -81,18 +81,21 @@ type Diff struct {
 	cp         *checkpoints.Checkpoint
 	startRange *splitter.RangeInfo
 	report     *report.Report
+
+	checksumAggregateOp string
 }
 
 // NewDiff returns a Diff instance.
 func NewDiff(ctx context.Context, cfg *config.Config) (diff *Diff, err error) {
 	diff = &Diff{
-		checkThreadCount: cfg.CheckThreadCount,
-		splitThreadCount: cfg.SplitThreadCount,
-		exportFixSQL:     cfg.ExportFixSQL,
-		ignoreDataCheck:  cfg.CheckStructOnly,
-		sqlCh:            make(chan *ChunkDML, splitter.DefaultChannelBuffer),
-		cp:               new(checkpoints.Checkpoint),
-		report:           report.NewReport(&cfg.Task),
+		checkThreadCount:    cfg.CheckThreadCount,
+		splitThreadCount:    cfg.SplitThreadCount,
+		exportFixSQL:        cfg.ExportFixSQL,
+		ignoreDataCheck:     cfg.CheckStructOnly,
+		sqlCh:               make(chan *ChunkDML, splitter.DefaultChannelBuffer),
+		cp:                  new(checkpoints.Checkpoint),
+		report:              report.NewReport(&cfg.Task),
+		checksumAggregateOp: cfg.AggregateOp,
 	}
 	if err = diff.init(ctx, cfg); err != nil {
 		diff.Close()
@@ -573,9 +576,9 @@ func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *spli
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		upstreamInfo = df.upstream.GetCountAndCrc32(ctx, tableRange)
+		upstreamInfo = df.upstream.GetCountAndCrc32(ctx, tableRange, df.checksumAggregateOp)
 	}()
-	downstreamInfo = df.downstream.GetCountAndCrc32(ctx, tableRange)
+	downstreamInfo = df.downstream.GetCountAndCrc32(ctx, tableRange, df.checksumAggregateOp)
 	wg.Wait()
 
 	if upstreamInfo.Err != nil {

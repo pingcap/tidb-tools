@@ -54,6 +54,11 @@ const (
 	UnifiedTimeZone string = "+0:00"
 )
 
+const (
+	AggregateOpBITXOR = "BIT_XOR"
+	AggregateOpSUM    = "SUM"
+)
+
 // TableConfig is the config of table.
 type TableConfig struct {
 	// table's filter to tell us which table should adapt to this config.
@@ -372,6 +377,8 @@ type Config struct {
 	ExportFixSQL bool `toml:"export-fix-sql" json:"export-fix-sql"`
 	// only check table struct without table data.
 	CheckStructOnly bool `toml:"check-struct-only" json:"check-struct-only"`
+	// aggregate operator, default value is `SUM`
+	AggregateOp string `toml:"aggregate-op"`
 	// DMAddr is dm-master's address, the format should like "http://127.0.0.1:8261"
 	DMAddr string `toml:"dm-addr" json:"dm-addr"`
 	// DMTask string `toml:"dm-task" json:"dm-task"`
@@ -410,6 +417,8 @@ func NewConfig() *Config {
 	fs.BoolVar(&cfg.ExportFixSQL, "export-fix-sql", true, "set true if want to compare rows or set to false will only compare checksum")
 	fs.BoolVar(&cfg.CheckStructOnly, "check-struct-only", false, "ignore check table's data")
 
+	fs.StringVarP(&cfg.AggregateOp, "aggregate-op", "", AggregateOpSUM, "aggregate operator, default value is `SUM`")
+	_ = fs.MarkHidden("aggregate-op")
 	fs.SortFlags = false
 	return cfg
 }
@@ -591,9 +600,21 @@ func (c *Config) Init() (err error) {
 	return nil
 }
 
+func checkAggregateOp(op string) bool {
+	switch op {
+	case AggregateOpBITXOR, AggregateOpSUM:
+		return true
+	}
+	return false
+}
+
 func (c *Config) CheckConfig() bool {
 	if c.CheckThreadCount <= 0 {
 		log.Error("check-thread-count must greater than 0!")
+		return false
+	}
+	if !checkAggregateOp(c.AggregateOp) {
+		log.Error("illegal aggregate operator. please select one from [BIT_XOR|SUM]")
 		return false
 	}
 	if len(c.DMAddr) != 0 {
