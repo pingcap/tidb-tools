@@ -129,6 +129,8 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 			log.Fatal("failed to check structure difference", zap.Error(err))
 			return false
 		}
+	} else {
+		log.Info("Check table data only, skip struct check")
 	}
 	if !cfg.CheckStructOnly {
 		err = d.Equal(ctx)
@@ -138,7 +140,7 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 			return false
 		}
 	} else {
-		fmt.Printf("Check table struct only, skip data check\n")
+		log.Info("Check table struct only, skip data check")
 	}
 	return d.PrintSummary(ctx)
 }
