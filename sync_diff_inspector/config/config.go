@@ -373,7 +373,7 @@ type Config struct {
 	// only check table struct without table data.
 	CheckStructOnly bool `toml:"check-struct-only" json:"check-struct-only"`
 	// experimental feature: only check table data without table struct
-	CheckDataOnly bool `toml:"-" json:"-"`
+	CheckDataOnly bool `toml:"check-data-only" json:"-"`
 	// DMAddr is dm-master's address, the format should like "http://127.0.0.1:8261"
 	DMAddr string `toml:"dm-addr" json:"dm-addr"`
 	// DMTask string `toml:"dm-task" json:"dm-task"`

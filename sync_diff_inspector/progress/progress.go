@@ -352,7 +352,7 @@ func (tpp *TableProgressPrinter) flush(stateIsChanged bool) {
 					tpp.progressTableNums++
 					tp.state ^= TABLE_STATE_COMPARING | TABLE_STATE_PRESTART
 				case TABLE_STATE_RESULT_FAIL_STRUCTURE_PASS:
-					fixStr = fmt.Sprintf("%sComparing the table structure of `%s` ... pass\n", fixStr, tp.name)
+					fixStr = fmt.Sprintf("%sComparing the table structure of `%s` ... skip\n", fixStr, tp.name)
 					dynStr = fmt.Sprintf("%sComparing the table data of `%s` ...\n", dynStr, tp.name)
 					tpp.lines++
 					tpp.progressTableNums++
