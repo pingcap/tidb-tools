@@ -24,12 +24,12 @@ import (
 
 func TestProgress(t *testing.T) {
 	p := NewTableProgressPrinter(4, 0)
-	p.RegisterTable("1", true, true)
+	p.RegisterTable("1", true, true, 0)
 	p.StartTable("1", 50, true)
-	p.RegisterTable("2", true, false)
+	p.RegisterTable("2", true, false, 0)
 	p.StartTable("2", 2, true)
 	p.Inc("2")
-	p.RegisterTable("3", false, false)
+	p.RegisterTable("3", false, false, 0)
 	p.StartTable("3", 1, false)
 	p.Inc("2")
 	p.Inc("3")
@@ -55,9 +55,9 @@ func TestProgress(t *testing.T) {
 
 func TestTableError(t *testing.T) {
 	p := NewTableProgressPrinter(4, 0)
-	p.RegisterTable("1", true, true)
+	p.RegisterTable("1", true, true, 0)
 	p.StartTable("1", 50, true)
-	p.RegisterTable("2", true, true)
+	p.RegisterTable("2", true, true, 0)
 	p.StartTable("2", 1, true)
 	p.Inc("2")
 	buffer := new(bytes.Buffer)
@@ -80,9 +80,9 @@ func TestTableError(t *testing.T) {
 
 func TestAllSuccess(t *testing.T) {
 	Init(2, 0)
-	RegisterTable("1", false, false)
+	RegisterTable("1", false, false, 0)
 	StartTable("1", 1, true)
-	RegisterTable("2", false, false)
+	RegisterTable("2", false, false, 0)
 	StartTable("2", 1, true)
 	Inc("1")
 	Inc("2")

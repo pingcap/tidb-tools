@@ -23,7 +23,9 @@ rm -rf $OUT_DIR/*
 
 echo "update data to make it different, and data should not be equal"
 mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table diff_test.t2 (a int, b int, primary key(a));"
+mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "insert into diff_test.t2 values (1,1);"
 mysql -uroot -h 127.0.0.1 -P 4000 -e "create table diff_test.t3 (a int, b int, primary key(a));"
+mysql -uroot -h 127.0.0.1 -P 4000 -e "insert into diff_test.t3 values (1,1);"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/table_skip_diff.output || true
 check_contains "check failed" $OUT_DIR/sync_diff.log
 rm -rf $OUT_DIR/*

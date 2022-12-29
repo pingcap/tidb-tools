@@ -18,7 +18,7 @@ check-struct-only = false
     host = "127.0.0.1"#MYSQL_HOST
     port = 3306#MYSQL_PORT
     user = "root"
-    password = "123456"
+    password = ""
     # remove comment if use tidb's snapshot data
     # snapshot = "2016-10-08 16:45:26"
 

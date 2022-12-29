@@ -103,45 +103,44 @@ func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitte
 		return &ChecksumInfo{
 			Count: 0,
 		}
-	} else {
-		matchSources := getMatchedSourcesForTable(s.sourceTablesMap, table)
-		infoCh := make(chan *ChecksumInfo, len(s.sourceTablesMap))
+	}
+	matchSources := getMatchedSourcesForTable(s.sourceTablesMap, table)
+	infoCh := make(chan *ChecksumInfo, len(s.sourceTablesMap))
 
-		for _, ms := range matchSources {
-			go func(ms *common.TableShardSource) {
-				count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info, chunk.Where, chunk.Args)
-				infoCh <- &ChecksumInfo{
-					Checksum: checksum,
-					Count:    count,
-					Err:      err,
-				}
-			}(ms)
-		}
-		defer close(infoCh)
-
-		var (
-			err           error
-			totalCount    int64
-			totalChecksum int64
-		)
-
-		for range matchSources {
-			info := <-infoCh
-			// catch the first error
-			if err == nil && info.Err != nil {
-				err = info.Err
+	for _, ms := range matchSources {
+		go func(ms *common.TableShardSource) {
+			count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info, chunk.Where, chunk.Args)
+			infoCh <- &ChecksumInfo{
+				Checksum: checksum,
+				Count:    count,
+				Err:      err,
 			}
-			totalCount += info.Count
-			totalChecksum ^= info.Checksum
-		}
+		}(ms)
+	}
+	defer close(infoCh)
 
-		cost := time.Since(beginTime)
-		return &ChecksumInfo{
-			Checksum: totalChecksum,
-			Count:    totalCount,
-			Err:      err,
-			Cost:     cost,
+	var (
+		err           error
+		totalCount    int64
+		totalChecksum int64
+	)
+
+	for range matchSources {
+		info := <-infoCh
+		// catch the first error
+		if err == nil && info.Err != nil {
+			err = info.Err
 		}
+		totalCount += info.Count
+		totalChecksum ^= info.Checksum
+	}
+
+	cost := time.Since(beginTime)
+	return &ChecksumInfo{
+		Checksum: totalChecksum,
+		Count:    totalCount,
+		Err:      err,
+		Cost:     cost,
 	}
 }
 
