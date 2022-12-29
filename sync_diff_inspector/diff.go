@@ -297,12 +297,19 @@ func (df *Diff) StructEqual(ctx context.Context) error {
 		tableIndex = df.startRange.ChunkRange.Index.TableIndex
 	}
 	for ; tableIndex < len(tables); tableIndex++ {
-		isEqual, isSkip, err := df.compareStruct(ctx, tableIndex)
-		if err != nil {
-			return errors.Trace(err)
+		var isEqual, isSkip bool
+		isAllExist := tables[tableIndex].NeedSkippedTable
+		if isAllExist == 0 {
+			var err error
+			isEqual, isSkip, err = df.compareStruct(ctx, tableIndex)
+			if err != nil {
+				return errors.Trace(err)
+			}
+		} else {
+			isEqual, isSkip = false, true
 		}
-		progress.RegisterTable(dbutil.TableName(tables[tableIndex].Schema, tables[tableIndex].Table), !isEqual, isSkip)
-		df.report.SetTableStructCheckResult(tables[tableIndex].Schema, tables[tableIndex].Table, isEqual, isSkip)
+		progress.RegisterTable(dbutil.TableName(tables[tableIndex].Schema, tables[tableIndex].Table), !isEqual, isSkip, isAllExist)
+		df.report.SetTableStructCheckResult(tables[tableIndex].Schema, tables[tableIndex].Table, isEqual, isSkip, isAllExist)
 	}
 	return nil
 }
@@ -411,12 +418,28 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 		node: rangeInfo.ToNode(),
 	}
 	defer func() { df.sqlCh <- dml }()
-	if rangeInfo.ChunkRange.Type == chunk.Empty {
-		dml.node.State = checkpoints.IgnoreState
-		return true
-	}
 	tableDiff := df.downstream.GetTables()[rangeInfo.GetTableIndex()]
 	schema, table := tableDiff.Schema, tableDiff.Table
+	id := rangeInfo.ChunkRange.Index
+	if rangeInfo.ChunkRange.Type == chunk.Empty {
+		dml.node.State = checkpoints.IgnoreState
+		// for table only exists upstream
+		if tableDiff.NeedSkippedTable == -1 {
+			upCount, _ := dbutil.GetRowCount(ctx, df.upstream.GetDB(), schema, table, "", nil)
+			isEqual := false
+			df.report.SetTableDataCheckResult(schema, table, false, int(upCount), 0, upCount, 0, id)
+			return isEqual
+		}
+		// for table only exists downstream
+		if tableDiff.NeedSkippedTable == 1 {
+			downCount, _ := dbutil.GetRowCount(ctx, df.downstream.GetDB(), schema, table, "", nil)
+			isEqual := false
+			df.report.SetTableDataCheckResult(schema, table, isEqual, 0, int(downCount), 0, downCount, id)
+			return isEqual
+		}
+		return true
+	}
+
 	var state string = checkpoints.SuccessState
 
 	isEqual, upCount, downCount, err := df.compareChecksumAndGetCount(ctx, rangeInfo)
@@ -447,7 +470,6 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 		isEqual = isDataEqual
 	}
 	dml.node.State = state
-	id := rangeInfo.ChunkRange.Index
 	df.report.SetTableDataCheckResult(schema, table, isEqual, dml.rowAdd, dml.rowDelete, upCount, downCount, id)
 	return isEqual
 }

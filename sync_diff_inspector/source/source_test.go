@@ -910,20 +910,32 @@ func TestInitTables(t *testing.T) {
 }
 
 func TestCheckTableMatched(t *testing.T) {
+	var tableDiffs []*common.TableDiff
+	tableDiffs = append(tableDiffs, &common.TableDiff{
+		Schema: "test",
+		Table:  "t1",
+	})
+	tableDiffs = append(tableDiffs, &common.TableDiff{
+		Schema: "test",
+		Table:  "t2",
+	})
+
 	tmap := make(map[string]struct{})
 	smap := make(map[string]struct{})
 
-	tmap["1"] = struct{}{}
-	tmap["2"] = struct{}{}
+	smap["`test`.`t1`"] = struct{}{}
+	smap["`test`.`t2`"] = struct{}{}
 
-	smap["1"] = struct{}{}
-	smap["2"] = struct{}{}
-	require.NoError(t, checkTableMatched(tmap, smap))
+	tmap["`test`.`t1`"] = struct{}{}
+	tmap["`test`.`t2`"] = struct{}{}
 
-	delete(smap, "1")
-	require.Contains(t, checkTableMatched(tmap, smap).Error(), "the source has no table to be compared. target-table")
+	tables := checkTableMatched(tableDiffs, tmap, smap)
+	require.Equal(t, 0, tables[0].NeedSkippedTable)
+	require.Equal(t, 0, tables[1].NeedSkippedTable)
 
-	delete(tmap, "1")
-	smap["1"] = struct{}{}
-	require.Contains(t, checkTableMatched(tmap, smap).Error(), "the target has no table to be compared. source-table")
+	delete(smap, "`test`.`t2`")
+	smap["`test`.`t3`"] = struct{}{}
+	tables = checkTableMatched(tableDiffs, tmap, smap)
+	require.Equal(t, 1, tables[1].NeedSkippedTable)
+	require.Equal(t, -1, tables[2].NeedSkippedTable)
 }

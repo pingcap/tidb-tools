@@ -127,7 +127,7 @@ func (tpp *TableProgressPrinter) UpdateTotal(name string, total int, stopUpdate 
 	}
 }
 
-func (tpp *TableProgressPrinter) RegisterTable(name string, isFailed bool, isDone bool) {
+func (tpp *TableProgressPrinter) RegisterTable(name string, isFailed bool, isDone bool, isAllExist int) {
 	var state table_state_t
 	if isFailed {
 		if isDone {
@@ -410,9 +410,9 @@ func UpdateTotal(name string, total int, stopUpdate bool) {
 	}
 }
 
-func RegisterTable(name string, isFailed bool, isDone bool) {
+func RegisterTable(name string, isFailed bool, isDone bool, isAllExist int) {
 	if progress_ != nil {
-		progress_.RegisterTable(name, isFailed, isDone)
+		progress_.RegisterTable(name, isFailed, isDone, isAllExist)
 	}
 }
 

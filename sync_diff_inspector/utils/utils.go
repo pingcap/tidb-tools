@@ -909,7 +909,7 @@ func ResetColumns(tableInfo *model.TableInfo, columns []string) (*model.TableInf
 	return tableInfo, hasTimeStampType
 }
 
-// UniqueID returns `schema:table`
+// UniqueID returns `schema`.`table`
 func UniqueID(schema string, table string) string {
 	// QuoteSchema quotes a full table name
 	return fmt.Sprintf("`%s`.`%s`", EscapeName(schema), EscapeName(table))

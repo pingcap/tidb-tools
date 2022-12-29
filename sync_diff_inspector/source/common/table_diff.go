@@ -65,4 +65,9 @@ type TableDiff struct {
 	Collation string `json:"collation"`
 
 	ChunkSize int64 `json:"chunk-size"`
+
+	// NeedSkippedTable = 1: the table only exists downstream,
+	// NeedSkippedTable = -1: the table only exists upstream,
+	// NeedSkippedTable = 0: the table exists both upstream and downstream.
+	NeedSkippedTable int `json:"-"`
 }

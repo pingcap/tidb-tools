@@ -98,43 +98,50 @@ func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitte
 	table := s.tableDiffs[tableRange.GetTableIndex()]
 	chunk := tableRange.GetChunk()
 
-	matchSources := getMatchedSourcesForTable(s.sourceTablesMap, table)
-	infoCh := make(chan *ChecksumInfo, len(s.sourceTablesMap))
-
-	for _, ms := range matchSources {
-		go func(ms *common.TableShardSource) {
-			count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info, chunk.Where, chunk.Args)
-			infoCh <- &ChecksumInfo{
-				Checksum: checksum,
-				Count:    count,
-				Err:      err,
-			}
-		}(ms)
-	}
-	defer close(infoCh)
-
-	var (
-		err           error
-		totalCount    int64
-		totalChecksum int64
-	)
-
-	for range matchSources {
-		info := <-infoCh
-		// catch the first error
-		if err == nil && info.Err != nil {
-			err = info.Err
+	// for tables that do not exist upstream or downstream
+	if table.NeedSkippedTable != 0 {
+		return &ChecksumInfo{
+			Count: 0,
 		}
-		totalCount += info.Count
-		totalChecksum ^= info.Checksum
-	}
+	} else {
+		matchSources := getMatchedSourcesForTable(s.sourceTablesMap, table)
+		infoCh := make(chan *ChecksumInfo, len(s.sourceTablesMap))
 
-	cost := time.Since(beginTime)
-	return &ChecksumInfo{
-		Checksum: totalChecksum,
-		Count:    totalCount,
-		Err:      err,
-		Cost:     cost,
+		for _, ms := range matchSources {
+			go func(ms *common.TableShardSource) {
+				count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info, chunk.Where, chunk.Args)
+				infoCh <- &ChecksumInfo{
+					Checksum: checksum,
+					Count:    count,
+					Err:      err,
+				}
+			}(ms)
+		}
+		defer close(infoCh)
+
+		var (
+			err           error
+			totalCount    int64
+			totalChecksum int64
+		)
+
+		for range matchSources {
+			info := <-infoCh
+			// catch the first error
+			if err == nil && info.Err != nil {
+				err = info.Err
+			}
+			totalCount += info.Count
+			totalChecksum ^= info.Checksum
+		}
+
+		cost := time.Since(beginTime)
+		return &ChecksumInfo{
+			Checksum: totalChecksum,
+			Count:    totalCount,
+			Err:      err,
+			Cost:     cost,
+		}
 	}
 }
 
@@ -162,6 +169,10 @@ func (s *MySQLSources) GetRowsIterator(ctx context.Context, tableRange *splitter
 	sourceRows := make(map[int]*sql.Rows)
 
 	table := s.tableDiffs[tableRange.GetTableIndex()]
+	// for tables that do not exist upstream or downstream
+	if table.NeedSkippedTable != 0 {
+		return nil, nil
+	}
 	matchSources := getMatchedSourcesForTable(s.sourceTablesMap, table)
 
 	var rowsQuery string
@@ -223,6 +234,10 @@ func (s *MySQLSources) GetSnapshot() string {
 
 func (s *MySQLSources) GetSourceStructInfo(ctx context.Context, tableIndex int) ([]*model.TableInfo, error) {
 	tableDiff := s.GetTables()[tableIndex]
+	// for tables that do not exist upstream or downstream
+	if tableDiff.NeedSkippedTable != 0 {
+		return nil, nil
+	}
 	tableSources := getMatchedSourcesForTable(s.sourceTablesMap, tableDiff)
 	sourceTableInfos := make([]*model.TableInfo, len(tableSources))
 	for i, tableSource := range tableSources {
@@ -355,9 +370,7 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 
 	}
 
-	if err := checkTableMatched(targetUniqueTableMap, sourceTablesAfterRoute); err != nil {
-		return nil, errors.Annotatef(err, "please make sure the filter is correct.")
-	}
+	tableDiffs = checkTableMatched(tableDiffs, targetUniqueTableMap, sourceTablesAfterRoute)
 
 	mss := &MySQLSources{
 		tableDiffs:      tableDiffs,

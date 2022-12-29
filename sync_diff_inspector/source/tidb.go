@@ -194,7 +194,7 @@ func (s *TiDBSource) GetSnapshot() string {
 	return s.snapshot
 }
 
-func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource, f tableFilter.Filter) (map[string]*common.TableSource, error) {
+func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource, bucketSpliterPool *utils.WorkerPool, f tableFilter.Filter) (Source, error) {
 	sourceTableMap := make(map[string]*common.TableSource)
 	log.Info("find router for tidb source")
 	// we should get the real table name
@@ -253,17 +253,8 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 		}
 	}
 
-	if err = checkTableMatched(targetUniqueTableMap, sourceTablesAfterRoute); err != nil {
-		return nil, errors.Annotatef(err, "please make sure the filter is correct.")
-	}
-	return sourceTableMap, nil
-}
+	tableDiffs = checkTableMatched(tableDiffs, targetUniqueTableMap, sourceTablesAfterRoute)
 
-func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource, bucketSpliterPool *utils.WorkerPool, f tableFilter.Filter) (Source, error) {
-	sourceTableMap, err := getSourceTableMap(ctx, tableDiffs, ds, f)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
 	ts := &TiDBSource{
 		tableDiffs:        tableDiffs,
 		sourceTableMap:    sourceTableMap,

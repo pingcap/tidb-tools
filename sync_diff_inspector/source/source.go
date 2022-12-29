@@ -208,7 +208,7 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 	if err != nil {
 		return nil, nil, errors.Annotate(err, "from upstream")
 	}
-	downstream, err = buildSourceFromCfg(ctx, tableDiffs, mysqlConnCount, bucketSpliterPool, cfg.Task.TargetCheckTables, cfg.Task.TargetInstance)
+	downstream, err = buildSourceFromCfg(ctx, upstream.GetTables(), mysqlConnCount, bucketSpliterPool, cfg.Task.TargetCheckTables, cfg.Task.TargetInstance)
 	if err != nil {
 		return nil, nil, errors.Annotate(err, "from downstream")
 	}
@@ -375,21 +375,42 @@ type RangeIterator interface {
 	Close()
 }
 
-func checkTableMatched(targetMap map[string]struct{}, sourceMap map[string]struct{}) error {
+func checkTableMatched(tableDiffs []*common.TableDiff, targetMap map[string]struct{}, sourceMap map[string]struct{}) []*common.TableDiff {
 	// check target exists but source not found
 	for tableDiff := range targetMap {
 		// target table have all passed in tableFilter
 		if _, ok := sourceMap[tableDiff]; !ok {
-			return errors.Errorf("the source has no table to be compared. target-table is `%s`", tableDiff)
+			index := getIndexByUniqueID(tableDiffs, tableDiff)
+			if tableDiffs[index].NeedSkippedTable == 0 {
+				tableDiffs[index].NeedSkippedTable = 1
+				log.Info("the source has no table to be compared", zap.String("target-table", tableDiff))
+			}
 		}
 	}
 	// check source exists but target not found
 	for tableDiff := range sourceMap {
 		// need check source table have passd in tableFilter here
 		if _, ok := targetMap[tableDiff]; !ok {
-			return errors.Errorf("the target has no table to be compared. source-table is `%s`", tableDiff)
+			slice := strings.Split(strings.Replace(tableDiff, "`", "", -1), ".")
+			tableDiffs = append(tableDiffs, &common.TableDiff{
+				Schema:           slice[0],
+				Table:            slice[1],
+				NeedSkippedTable: -1,
+			})
+			log.Info("the target has no table to be compared", zap.String("source-table", tableDiff))
 		}
 	}
-	log.Info("table match check passed!!")
-	return nil
+	log.Info("table match check finished")
+	return tableDiffs
+}
+
+// Get the index of table in tableDiffs by uniqueID:`schema`.`table`
+func getIndexByUniqueID(tableDiffs []*common.TableDiff, uniqueID string) int {
+	for i := 0; i < len(tableDiffs); i++ {
+		tableUniqueID := utils.UniqueID(tableDiffs[i].Schema, tableDiffs[i].Table)
+		if tableUniqueID == uniqueID {
+			return i
+		}
+	}
+	return 0
 }
