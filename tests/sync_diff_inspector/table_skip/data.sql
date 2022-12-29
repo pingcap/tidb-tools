@@ -1,4 +1,4 @@
-drop database if exit diff_test;
+drop database if exists diff_test;
 create database diff_test;
 create table diff_test.t0 (a int, b int, primary key(a));
 create table diff_test.t1 (a int, b int, primary key(a));

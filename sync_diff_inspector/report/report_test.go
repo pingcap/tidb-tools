@@ -390,7 +390,9 @@ func TestCommitSummary(t *testing.T) {
 	createTableSQL3 := "create table `xtest`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
 	tableInfo3, err := dbutil.GetTableInfoBySQL(createTableSQL3, parser.New())
 	require.NoError(t, err)
-
+	createTableSQL4 := "create table `xtest`.`tb1`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
+	tableInfo4, err := dbutil.GetTableInfoBySQL(createTableSQL4, parser.New())
+	require.NoError(t, err)
 	tableDiffs := []*common.TableDiff{
 		{
 			Schema:    "test",
@@ -411,6 +413,16 @@ func TestCommitSummary(t *testing.T) {
 			Schema:    "ytest",
 			Table:     "tbl",
 			Info:      tableInfo3,
+			Collation: "[123]",
+		}, {
+			Schema:    "xtest",
+			Table:     "tb1",
+			Info:      tableInfo4,
+			Collation: "[123]",
+		}, {
+			Schema:    "xtest",
+			Table:     "tb2",
+			Info:      tableInfo4,
 			Collation: "[123]",
 		},
 	}
@@ -450,13 +462,19 @@ func TestCommitSummary(t *testing.T) {
 	report.SetTableStructCheckResult("xtest", "tbl", false, false, 0)
 	report.SetTableDataCheckResult("xtest", "tbl", false, 100, 200, 600, 700, &chunk.ChunkID{0, 0, 0, 3, 10})
 
+	report.SetTableStructCheckResult("xtest", "tb1", false, true, 1)
+	report.SetTableDataCheckResult("xtest", "tb1", false, 0, 200, 0, 200, &chunk.ChunkID{0, 0, 0, 4, 10})
+
+	report.SetTableStructCheckResult("xtest", "tb2", false, true, -1)
+	report.SetTableDataCheckResult("xtest", "tb2", false, 100, 0, 100, 0, &chunk.ChunkID{0, 0, 0, 5, 10})
+
 	err = report.CommitSummary()
 	require.NoError(t, err)
 	filename := path.Join(outputDir, "summary.txt")
 	file, err := os.Open(filename)
 	require.NoError(t, err)
 
-	p := make([]byte, 1024)
+	p := make([]byte, 2048)
 	file.Read(p)
 	str := string(p)
 	require.Contains(t, str, "Summary\n\n\n\n"+
@@ -487,6 +505,10 @@ func TestCommitSummary(t *testing.T) {
 		"| `atest`.`tbl` | succeed | true               | +100/-200      |     500 |       600 |\n")
 	require.Contains(t, str,
 		"| `xtest`.`tbl` | succeed | false              | +100/-200      |     600 |       700 |\n")
+	require.Contains(t, str,
+		"| `xtest`.`tb1` | skipped | false              | +0/-200        |       0 |       200 |\n")
+	require.Contains(t, str,
+		"| `xtest`.`tb2` | skipped | false              | +100/-0        |     100 |         0 |\n")
 
 	file.Close()
 	err = os.Remove(filename)
