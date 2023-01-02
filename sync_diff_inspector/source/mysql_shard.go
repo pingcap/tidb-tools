@@ -296,7 +296,7 @@ func (ms *MultiSourceRowsIterator) Close() {
 	}
 }
 
-func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*config.DataSource, threadCount int, f tableFilter.Filter) (Source, error) {
+func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*config.DataSource, threadCount int, f tableFilter.Filter, skipNonExistingTable bool) (Source, error) {
 	sourceTablesMap := make(map[string][]*common.TableShardSource)
 	// we should get the real table name
 	// and real table row query from sourceDB.
@@ -369,7 +369,10 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 
 	}
 
-	tableDiffs = checkTableMatched(tableDiffs, targetUniqueTableMap, sourceTablesAfterRoute)
+	tableDiffs, err := checkTableMatched(tableDiffs, targetUniqueTableMap, sourceTablesAfterRoute, skipNonExistingTable)
+	if err != nil {
+		return nil, errors.Annotatef(err, "please make sure the filter is correct.")
+	}
 
 	mss := &MySQLSources{
 		tableDiffs:      tableDiffs,

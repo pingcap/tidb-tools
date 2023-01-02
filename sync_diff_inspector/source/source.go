@@ -204,18 +204,18 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 	bucketSpliterPool := utils.NewWorkerPool(uint(cfg.CheckThreadCount), "bucketIter")
 	// for mysql_shard, it needs `cfg.CheckThreadCount` + `cfg.SplitThreadCount` at most, because it cannot use bucket.
 	mysqlConnCount := cfg.CheckThreadCount + cfg.SplitThreadCount
-	upstream, err = buildSourceFromCfg(ctx, tableDiffs, mysqlConnCount, bucketSpliterPool, cfg.Task.TargetCheckTables, cfg.Task.SourceInstances...)
+	upstream, err = buildSourceFromCfg(ctx, tableDiffs, mysqlConnCount, bucketSpliterPool, cfg.SkipNonExistingTable, cfg.Task.TargetCheckTables, cfg.Task.SourceInstances...)
 	if err != nil {
 		return nil, nil, errors.Annotate(err, "from upstream")
 	}
-	downstream, err = buildSourceFromCfg(ctx, upstream.GetTables(), mysqlConnCount, bucketSpliterPool, cfg.Task.TargetCheckTables, cfg.Task.TargetInstance)
+	downstream, err = buildSourceFromCfg(ctx, upstream.GetTables(), mysqlConnCount, bucketSpliterPool, cfg.SkipNonExistingTable, cfg.Task.TargetCheckTables, cfg.Task.TargetInstance)
 	if err != nil {
 		return nil, nil, errors.Annotate(err, "from downstream")
 	}
 	return downstream, upstream, nil
 }
 
-func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, connCount int, bucketSpliterPool *utils.WorkerPool, f tableFilter.Filter, dbs ...*config.DataSource) (Source, error) {
+func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, connCount int, bucketSpliterPool *utils.WorkerPool, skipNonExistingTable bool, f tableFilter.Filter, dbs ...*config.DataSource) (Source, error) {
 	if len(dbs) < 1 {
 		return nil, errors.Errorf("no db config detected")
 	}
@@ -226,12 +226,12 @@ func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, con
 
 	if ok {
 		if len(dbs) == 1 {
-			return NewTiDBSource(ctx, tableDiffs, dbs[0], bucketSpliterPool, f)
+			return NewTiDBSource(ctx, tableDiffs, dbs[0], bucketSpliterPool, f, skipNonExistingTable)
 		} else {
 			log.Fatal("Don't support check table in multiple tidb instance, please specify one tidb instance.")
 		}
 	}
-	return NewMySQLSources(ctx, tableDiffs, dbs, connCount, f)
+	return NewMySQLSources(ctx, tableDiffs, dbs, connCount, f, skipNonExistingTable)
 }
 
 func getAutoSnapshotPosition(cfg *mysql.Config) (string, string, error) {
@@ -375,11 +375,14 @@ type RangeIterator interface {
 	Close()
 }
 
-func checkTableMatched(tableDiffs []*common.TableDiff, targetMap map[string]struct{}, sourceMap map[string]struct{}) []*common.TableDiff {
+func checkTableMatched(tableDiffs []*common.TableDiff, targetMap map[string]struct{}, sourceMap map[string]struct{}, skipNonExistingTable bool) ([]*common.TableDiff, error) {
 	// check target exists but source not found
 	for tableDiff := range targetMap {
 		// target table have all passed in tableFilter
 		if _, ok := sourceMap[tableDiff]; !ok {
+			if !skipNonExistingTable {
+				return tableDiffs, errors.Errorf("the source has no table to be compared. target-table is `%s`", tableDiff)
+			}
 			index := getIndexByUniqueID(tableDiffs, tableDiff)
 			if tableDiffs[index].NeedSkippedTable == 0 {
 				tableDiffs[index].NeedSkippedTable = 1
@@ -391,6 +394,9 @@ func checkTableMatched(tableDiffs []*common.TableDiff, targetMap map[string]stru
 	for tableDiff := range sourceMap {
 		// need check source table have passd in tableFilter here
 		if _, ok := targetMap[tableDiff]; !ok {
+			if !skipNonExistingTable {
+				return tableDiffs, errors.Errorf("the target has no table to be compared. source-table is `%s`", tableDiff)
+			}
 			slice := strings.Split(strings.Replace(tableDiff, "`", "", -1), ".")
 			tableDiffs = append(tableDiffs, &common.TableDiff{
 				Schema:           slice[0],
@@ -401,7 +407,7 @@ func checkTableMatched(tableDiffs []*common.TableDiff, targetMap map[string]stru
 		}
 	}
 	log.Info("table match check finished")
-	return tableDiffs
+	return tableDiffs, nil
 }
 
 // Get the index of table in tableDiffs by uniqueID:`schema`.`table`

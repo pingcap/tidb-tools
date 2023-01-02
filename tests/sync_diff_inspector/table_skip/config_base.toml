@@ -12,6 +12,9 @@ export-fix-sql = true
 # ignore check table's data
 check-struct-only = false
 
+# skip validation for tables that don't exist upstream or downstream
+skip-non-existing-table = true
+
 ######################### Databases config #########################
 [data-sources]
 [data-sources.mysql1]
