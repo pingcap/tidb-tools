@@ -383,7 +383,7 @@ func checkTableMatched(tableDiffs []*common.TableDiff, targetMap map[string]stru
 			if !skipNonExistingTable {
 				return tableDiffs, errors.Errorf("the source has no table to be compared. target-table is `%s`", tableDiff)
 			}
-			index := getIndexByUniqueID(tableDiffs, tableDiff)
+			index := getIndexMapForTable(tableDiffs, tableDiff)[tableDiff]
 			if tableDiffs[index].NeedSkippedTable == 0 {
 				tableDiffs[index].NeedSkippedTable = 1
 				log.Info("the source has no table to be compared", zap.String("target-table", tableDiff))
@@ -411,12 +411,13 @@ func checkTableMatched(tableDiffs []*common.TableDiff, targetMap map[string]stru
 }
 
 // Get the index of table in tableDiffs by uniqueID:`schema`.`table`
-func getIndexByUniqueID(tableDiffs []*common.TableDiff, uniqueID string) int {
+func getIndexMapForTable(tableDiffs []*common.TableDiff, uniqueID string) map[string]int {
+	tableIndexMap := make(map[string]int)
 	for i := 0; i < len(tableDiffs); i++ {
 		tableUniqueID := utils.UniqueID(tableDiffs[i].Schema, tableDiffs[i].Table)
 		if tableUniqueID == uniqueID {
-			return i
+			tableIndexMap[uniqueID] = i
 		}
 	}
-	return 0
+	return tableIndexMap
 }

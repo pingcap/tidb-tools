@@ -139,7 +139,8 @@ func TestReport(t *testing.T) {
 	require.Contains(t, info, "The data of `atest`.`atbl` is not equal\n")
 	require.Contains(t, info, "The structure of `ctest`.`atbl` is not equal, and data-check is skipped\n")
 	require.Contains(t, info, "\n"+
-		"The rest of tables are all equal.\n"+
+		"The rest of tables are all equal.\n\n"+
+		"A total of 0 tables have been compared, 0 tables finished, 0 tables failed, 0 tables skipped.\n"+
 		"The patch file has been generated in \n\t'output_dir/123456/fix-on-tidb1/'\n"+
 		"You can view the comparision details through 'output_dir/sync_diff.log'\n")
 }

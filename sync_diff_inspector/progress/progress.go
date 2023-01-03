@@ -54,6 +54,8 @@ const (
 	TABLE_STATE_RESULT_DIFFERENT               table_state_t = 0x80
 	TABLE_STATE_HEAD                           table_state_t = 0xff
 	TABLE_STATE_RESULT_MASK                    table_state_t = 0xf0
+	TABLE_STATE_NOT_EXSIT_UPSTREAM             table_state_t = 0x100
+	TABLE_STATE_NOT_EXSIT_DOWNSTREAM           table_state_t = 0x200
 )
 
 type TableProgress struct {
@@ -131,7 +133,13 @@ func (tpp *TableProgressPrinter) RegisterTable(name string, isFailed bool, isDon
 	var state table_state_t
 	if isFailed {
 		if isDone {
-			state = TABLE_STATE_RESULT_FAIL_STRUCTURE_DONE | TABLE_STATE_REGISTER
+			if isAllExist == 1 {
+				state = TABLE_STATE_NOT_EXSIT_UPSTREAM | TABLE_STATE_REGISTER
+			} else if isAllExist == -1 {
+				state = TABLE_STATE_NOT_EXSIT_DOWNSTREAM | TABLE_STATE_REGISTER
+			} else {
+				state = TABLE_STATE_RESULT_FAIL_STRUCTURE_DONE | TABLE_STATE_REGISTER
+			}
 		} else {
 			state = TABLE_STATE_RESULT_FAIL_STRUCTURE_CONTINUE | TABLE_STATE_REGISTER
 		}
@@ -181,6 +189,7 @@ func (tpp *TableProgressPrinter) PrintSummary() {
 			tpp.tableNums,
 		)
 	} else {
+		SkippedNum := 0
 		for p := tpp.tableFailList.Front(); p != nil; p = p.Next() {
 			tp := p.Value.(*TableProgress)
 			if tp.state&(TABLE_STATE_RESULT_FAIL_STRUCTURE_DONE|TABLE_STATE_RESULT_FAIL_STRUCTURE_CONTINUE) != 0 {
@@ -189,10 +198,18 @@ func (tpp *TableProgressPrinter) PrintSummary() {
 			if tp.state&(TABLE_STATE_RESULT_DIFFERENT) != 0 {
 				fixStr = fmt.Sprintf("%sThe data of `%s` is not equal.\n", fixStr, tp.name)
 			}
+			if tp.state&(TABLE_STATE_NOT_EXSIT_DOWNSTREAM) != 0 {
+				fixStr = fmt.Sprintf("%sThe data of `%s` does not exist in downstream database.\n", fixStr, tp.name)
+				SkippedNum++
+			}
+			if tp.state&(TABLE_STATE_NOT_EXSIT_UPSTREAM) != 0 {
+				fixStr = fmt.Sprintf("%sThe data of `%s` does not exist in upstream database.\n", fixStr, tp.name)
+				SkippedNum++
+			}
 		}
 		fixStr = fmt.Sprintf(
-			"%s\nThe rest of the tables are all equal.\nThe patch file has been generated to './output_dir/patch.sql'\nYou can view the comparison details through './output_dir/sync_diff_inspector.log'\n",
-			fixStr,
+			"%s\nThe rest of the tables are all equal.\nA total of %d tables have been compared, %d tables finished, %d tables failed, %d tables skipped.\nThe patch file has been generated to './output_dir/patch.sql'\nYou can view the comparison details through './output_dir/sync_diff_inspector.log'\n",
+			fixStr, tpp.tableNums, tpp.tableNums-tpp.tableFailList.Len(), tpp.tableFailList.Len()-SkippedNum, SkippedNum,
 		)
 	}
 
@@ -330,13 +347,22 @@ func (tpp *TableProgressPrinter) flush(stateIsChanged bool) {
 			// 5. structure is different and data is different
 			switch tp.state & 0xf {
 			case TABLE_STATE_PRESTART:
-				switch tp.state & TABLE_STATE_RESULT_MASK {
+				switch tp.state & 0xff0 {
 				case TABLE_STATE_RESULT_OK:
 					fixStr = fmt.Sprintf("%sComparing the table structure of `%s` ... equivalent\n", fixStr, tp.name)
 					dynStr = fmt.Sprintf("%sComparing the table data of `%s` ...\n", dynStr, tp.name)
 					tpp.lines++
 					tpp.progressTableNums++
 					tp.state = TABLE_STATE_COMPARING
+				case TABLE_STATE_NOT_EXSIT_UPSTREAM:
+					fallthrough
+				case TABLE_STATE_NOT_EXSIT_DOWNSTREAM:
+					dynStr = fmt.Sprintf("%sComparing the table data of `%s` ...skipped\n", dynStr, tp.name)
+					tpp.tableFailList.PushBack(tp)
+					preNode := p.Prev()
+					tpp.tableList.Remove(p)
+					p = preNode
+					tpp.finishTableNums++
 				case TABLE_STATE_RESULT_FAIL_STRUCTURE_DONE:
 					fixStr = fmt.Sprintf("%sComparing the table structure of `%s` ... failure\n", fixStr, tp.name)
 					tpp.tableFailList.PushBack(tp)

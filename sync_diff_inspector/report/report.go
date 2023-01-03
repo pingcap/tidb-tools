@@ -42,6 +42,7 @@ const (
 	Pass = "pass"
 	// Fail means not all data or struct of tables are equal
 	Fail  = "fail"
+	Skip  = "skip"
 	Error = "error"
 )
 
@@ -80,6 +81,7 @@ type Report struct {
 	Result       string                             `json:"-"`             // Result is pass or fail
 	PassNum      int32                              `json:"-"`             // The pass number of tables
 	FailedNum    int32                              `json:"-"`             // The failed number of tables
+	SkippedNum   int32                              `json:"-"`             // Theskippeded number of tables
 	TableResults map[string]map[string]*TableResult `json:"table-results"` // TableResult saved the map of  `schema` => `table` => `tableResult`
 	StartTime    time.Time                          `json:"start-time"`
 	Duration     time.Duration                      `json:"time-duration"`
@@ -159,8 +161,7 @@ func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB) {
 	for schema, tableMap := range r.TableResults {
 		for table := range tableMap {
 			size, err := utils.GetTableSize(ctx, db, schema, table)
-			tableSkipped := r.TableResults[schema][table].TableSkipped
-			if (size == 0 || err != nil) && tableSkipped == 0 {
+			if size == 0 || err != nil {
 				log.Warn("fail to get the correct size of table, if you want to get the correct size, please analyze the corresponding tables", zap.String("table", dbutil.TableName(schema, table)), zap.Error(err))
 			} else {
 				r.TotalSize += size
@@ -171,11 +172,13 @@ func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB) {
 
 // CommitSummary commit summary info
 func (r *Report) CommitSummary() error {
-	passNum, failedNum := int32(0), int32(0)
+	passNum, failedNum, skippedNum := int32(0), int32(0), int32(0)
 	for _, tableMap := range r.TableResults {
 		for _, result := range tableMap {
 			if result.StructEqual && result.DataEqual {
 				passNum++
+			} else if result.TableSkipped != 0 {
+				skippedNum++
 			} else {
 				failedNum++
 			}
@@ -183,6 +186,7 @@ func (r *Report) CommitSummary() error {
 	}
 	r.PassNum = passNum
 	r.FailedNum = failedNum
+	r.SkippedNum = skippedNum
 	summaryPath := filepath.Join(r.task.OutputDir, "summary.txt")
 	summaryFile, err := os.Create(summaryPath)
 	if err != nil {
@@ -213,11 +217,11 @@ func (r *Report) CommitSummary() error {
 		summaryFile.WriteString(tableString.String())
 		summaryFile.WriteString("\n\n")
 	}
-	if r.Result == Fail {
+	if r.Result == Fail || r.Result == Skip {
 		summaryFile.WriteString("The following tables contains inconsistent data\n\n")
 		tableString := &strings.Builder{}
 		table := tablewriter.NewWriter(tableString)
-		table.SetHeader([]string{"Table", "RESULT", "Structure equality", "Data diff rows", "UpCount", "DownCount"})
+		table.SetHeader([]string{"Table", "Result", "Structure equality", "Data diff rows", "UpCount", "DownCount"})
 		diffRows := r.getDiffRows()
 		for _, v := range diffRows {
 			table.Append(v)
@@ -234,25 +238,33 @@ func (r *Report) CommitSummary() error {
 func (r *Report) Print(w io.Writer) error {
 	var summary strings.Builder
 	if r.Result == Pass {
-		summary.WriteString(fmt.Sprintf("A total of %d table have been compared and all are equal.\n", r.FailedNum+r.PassNum))
+		summary.WriteString(fmt.Sprintf("A total of %d table have been compared and all are equal.\n", r.FailedNum+r.PassNum+r.SkippedNum))
 		summary.WriteString(fmt.Sprintf("You can view the comparision details through '%s/%s'\n", r.task.OutputDir, config.LogFileName))
-	} else if r.Result == Fail {
+	} else if r.Result == Skip || r.Result == Fail {
 		for schema, tableMap := range r.TableResults {
 			for table, result := range tableMap {
 				if !result.StructEqual {
 					if result.DataSkip {
-						summary.WriteString(fmt.Sprintf("The structure of %s is not equal, and data-check is skipped\n", dbutil.TableName(schema, table)))
+						if result.TableSkipped == 1 {
+							summary.WriteString(fmt.Sprintf("The data of %s does not exist in upstream database\n", dbutil.TableName(schema, table)))
+						} else if result.TableSkipped == -1 {
+							summary.WriteString(fmt.Sprintf("The data of %s does not exist in downstream database\n", dbutil.TableName(schema, table)))
+						} else {
+							summary.WriteString(fmt.Sprintf("The structure of %s is not equal, and data-check is skipped\n", dbutil.TableName(schema, table)))
+						}
 					} else {
 						summary.WriteString(fmt.Sprintf("The structure of %s is not equal\n", dbutil.TableName(schema, table)))
 					}
 				}
-				if !result.DataEqual {
+				if !result.DataEqual && result.TableSkipped == 0 {
 					summary.WriteString(fmt.Sprintf("The data of %s is not equal\n", dbutil.TableName(schema, table)))
 				}
 			}
 		}
 		summary.WriteString("\n")
 		summary.WriteString("The rest of tables are all equal.\n")
+		summary.WriteString("\n")
+		summary.WriteString(fmt.Sprintf("A total of %d tables have been compared, %d tables finished, %d tables failed, %d tables skipped.\n", r.FailedNum+r.PassNum+r.SkippedNum, r.PassNum, r.FailedNum, r.SkippedNum))
 		summary.WriteString(fmt.Sprintf("The patch file has been generated in \n\t'%s/'\n", r.task.FixDir))
 		summary.WriteString(fmt.Sprintf("You can view the comparision details through '%s/%s'\n", r.task.OutputDir, config.LogFileName))
 	} else {
@@ -310,6 +322,9 @@ func (r *Report) SetTableStructCheckResult(schema, table string, equal bool, ski
 	if !equal && r.Result != Error {
 		r.Result = Fail
 	}
+	if exist != 0 && r.Result != Error {
+		r.Result = Skip
+	}
 }
 
 // SetTableDataCheckResult sets the data check result for table.
@@ -335,6 +350,9 @@ func (r *Report) SetTableDataCheckResult(schema, table string, equal bool, rowsA
 	}
 	if !equal && r.Result != Error {
 		r.Result = Fail
+	}
+	if result.TableSkipped != 0 && r.Result != Error {
+		r.Result = Skip
 	}
 }
 

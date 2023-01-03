@@ -109,7 +109,7 @@ func (df *Diff) PrintSummary(ctx context.Context) bool {
 		log.Fatal("failed to commit report", zap.Error(err))
 	}
 	df.report.Print(os.Stdout)
-	return df.report.Result == report.Pass
+	return df.report.Result == report.Pass || df.report.Result == report.Skip
 }
 
 func (df *Diff) Close() {
@@ -423,19 +423,12 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 	id := rangeInfo.ChunkRange.Index
 	if rangeInfo.ChunkRange.Type == chunk.Empty {
 		dml.node.State = checkpoints.IgnoreState
-		// for table only exists upstream
-		if tableDiff.NeedSkippedTable == -1 {
+		// for tables that only exist upstream or downstream
+		if tableDiff.NeedSkippedTable != 0 {
 			upCount, _ := dbutil.GetRowCount(ctx, df.upstream.GetDB(), schema, table, "", nil)
-			isEqual := false
-			df.report.SetTableDataCheckResult(schema, table, false, int(upCount), 0, upCount, 0, id)
-			return isEqual
-		}
-		// for table only exists downstream
-		if tableDiff.NeedSkippedTable == 1 {
 			downCount, _ := dbutil.GetRowCount(ctx, df.downstream.GetDB(), schema, table, "", nil)
-			isEqual := false
-			df.report.SetTableDataCheckResult(schema, table, isEqual, 0, int(downCount), 0, downCount, id)
-			return isEqual
+			df.report.SetTableDataCheckResult(schema, table, false, int(upCount), int(downCount), upCount, downCount, id)
+			return false
 		}
 		return true
 	}

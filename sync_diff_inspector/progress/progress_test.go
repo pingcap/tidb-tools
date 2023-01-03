@@ -24,7 +24,7 @@ import (
 
 func TestProgress(t *testing.T) {
 	p := NewTableProgressPrinter(4, 0)
-	p.RegisterTable("1", true, true, 0)
+	p.RegisterTable("1", true, true, 1)
 	p.StartTable("1", 50, true)
 	p.RegisterTable("2", true, false, 0)
 	p.StartTable("2", 2, true)
@@ -47,8 +47,8 @@ func TestProgress(t *testing.T) {
 	require.Equal(
 		t,
 		buffer.String(),
-		"\x1b[1A\x1b[J\nSummary:\n\nThe structure of `1` is not equal.\nThe structure of `2` is not equal.\nThe data of `4` is not equal.\n"+
-			"\nThe rest of the tables are all equal.\nThe patch file has been generated to './output_dir/patch.sql'\n"+
+		"\x1b[1A\x1b[J\nSummary:\n\nThe data of `1` does not exist in upstream database.\nThe structure of `2` is not equal.\nThe data of `4` is not equal.\n"+
+			"\nThe rest of the tables are all equal.\nA total of 4 tables have been compared, 1 tables finished, 2 tables failed, 1 tables skipped.\nThe patch file has been generated to './output_dir/patch.sql'\n"+
 			"You can view the comparison details through './output_dir/sync_diff_inspector.log'\n\n",
 	)
 }
