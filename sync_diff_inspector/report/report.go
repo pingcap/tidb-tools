@@ -42,7 +42,6 @@ const (
 	Pass = "pass"
 	// Fail means not all data or struct of tables are equal
 	Fail  = "fail"
-	Skip  = "skip"
 	Error = "error"
 )
 
@@ -133,7 +132,7 @@ func (r *Report) getDiffRows() [][]string {
 			}
 			diffRow := make([]string, 0)
 			diffRow = append(diffRow, dbutil.TableName(schema, table))
-			if result.TableSkipped != 0 {
+			if !AllTableExist(result) {
 				diffRow = append(diffRow, "skipped")
 			} else {
 				diffRow = append(diffRow, "succeed")
@@ -177,7 +176,7 @@ func (r *Report) CommitSummary() error {
 		for _, result := range tableMap {
 			if result.StructEqual && result.DataEqual {
 				passNum++
-			} else if result.TableSkipped != 0 {
+			} else if !AllTableExist(result) {
 				skippedNum++
 			} else {
 				failedNum++
@@ -217,7 +216,7 @@ func (r *Report) CommitSummary() error {
 		summaryFile.WriteString(tableString.String())
 		summaryFile.WriteString("\n\n")
 	}
-	if r.Result == Fail || r.Result == Skip {
+	if r.Result == Fail || r.SkippedNum != 0 {
 		summaryFile.WriteString("The following tables contains inconsistent data\n\n")
 		tableString := &strings.Builder{}
 		table := tablewriter.NewWriter(tableString)
@@ -237,17 +236,17 @@ func (r *Report) CommitSummary() error {
 
 func (r *Report) Print(w io.Writer) error {
 	var summary strings.Builder
-	if r.Result == Pass {
+	if r.Result == Pass && r.SkippedNum == 0 {
 		summary.WriteString(fmt.Sprintf("A total of %d table have been compared and all are equal.\n", r.FailedNum+r.PassNum+r.SkippedNum))
 		summary.WriteString(fmt.Sprintf("You can view the comparision details through '%s/%s'\n", r.task.OutputDir, config.LogFileName))
-	} else if r.Result == Skip || r.Result == Fail {
+	} else if r.Result == Fail || r.SkippedNum != 0 {
 		for schema, tableMap := range r.TableResults {
 			for table, result := range tableMap {
 				if !result.StructEqual {
 					if result.DataSkip {
-						if result.TableSkipped == 1 {
+						if UpstreamTableLack(result) {
 							summary.WriteString(fmt.Sprintf("The data of %s does not exist in upstream database\n", dbutil.TableName(schema, table)))
-						} else if result.TableSkipped == -1 {
+						} else if DownstreamTableLack(result) {
 							summary.WriteString(fmt.Sprintf("The data of %s does not exist in downstream database\n", dbutil.TableName(schema, table)))
 						} else {
 							summary.WriteString(fmt.Sprintf("The structure of %s is not equal, and data-check is skipped\n", dbutil.TableName(schema, table)))
@@ -256,7 +255,7 @@ func (r *Report) Print(w io.Writer) error {
 						summary.WriteString(fmt.Sprintf("The structure of %s is not equal\n", dbutil.TableName(schema, table)))
 					}
 				}
-				if !result.DataEqual && result.TableSkipped == 0 {
+				if !result.DataEqual && AllTableExist(result) {
 					summary.WriteString(fmt.Sprintf("The data of %s is not equal\n", dbutil.TableName(schema, table)))
 				}
 			}
@@ -319,11 +318,8 @@ func (r *Report) SetTableStructCheckResult(schema, table string, equal bool, ski
 	tableResult.StructEqual = equal
 	tableResult.DataSkip = skip
 	tableResult.TableSkipped = exist
-	if !equal && r.Result != Error {
+	if !equal && AllTableExist(tableResult) && r.Result != Error {
 		r.Result = Fail
-	}
-	if exist != 0 && r.Result != Error {
-		r.Result = Skip
 	}
 }
 
@@ -344,15 +340,12 @@ func (r *Report) SetTableDataCheckResult(schema, table string, equal bool, rowsA
 		}
 		result.ChunkMap[id.ToString()].RowsAdd += rowsAdd
 		result.ChunkMap[id.ToString()].RowsDelete += rowsDelete
-		if r.Result != Error {
+		if r.Result != Error && AllTableExist(result) {
 			r.Result = Fail
 		}
 	}
-	if !equal && r.Result != Error {
+	if !equal && AllTableExist(result) && r.Result != Error {
 		r.Result = Fail
-	}
-	if result.TableSkipped != 0 && r.Result != Error {
-		r.Result = Skip
 	}
 }
 
@@ -422,4 +415,25 @@ func (r *Report) GetSnapshot(chunkID *chunk.ChunkID, schema, table string) (*Rep
 
 		task: task,
 	}, nil
+}
+
+func AllTableExist(result *TableResult) bool {
+	if result.TableSkipped == common.AllTableExistFlag {
+		return true
+	}
+	return false
+}
+
+func UpstreamTableLack(result *TableResult) bool {
+	if result.TableSkipped == common.UpstreamTableLackFlag {
+		return true
+	}
+	return false
+}
+
+func DownstreamTableLack(result *TableResult) bool {
+	if result.TableSkipped == common.DownstreamTableLackFlag {
+		return true
+	}
+	return false
 }

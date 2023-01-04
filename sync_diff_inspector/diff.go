@@ -109,7 +109,7 @@ func (df *Diff) PrintSummary(ctx context.Context) bool {
 		log.Fatal("failed to commit report", zap.Error(err))
 	}
 	df.report.Print(os.Stdout)
-	return df.report.Result == report.Pass || df.report.Result == report.Skip
+	return df.report.Result == report.Pass
 }
 
 func (df *Diff) Close() {
@@ -298,8 +298,8 @@ func (df *Diff) StructEqual(ctx context.Context) error {
 	}
 	for ; tableIndex < len(tables); tableIndex++ {
 		var isEqual, isSkip bool
-		isAllExist := tables[tableIndex].NeedSkippedTable
-		if isAllExist == 0 {
+		isAllTableExist := tables[tableIndex].NeedSkippedTable
+		if source.AllTableExist(tables[tableIndex]) {
 			var err error
 			isEqual, isSkip, err = df.compareStruct(ctx, tableIndex)
 			if err != nil {
@@ -308,8 +308,8 @@ func (df *Diff) StructEqual(ctx context.Context) error {
 		} else {
 			isEqual, isSkip = false, true
 		}
-		progress.RegisterTable(dbutil.TableName(tables[tableIndex].Schema, tables[tableIndex].Table), !isEqual, isSkip, isAllExist)
-		df.report.SetTableStructCheckResult(tables[tableIndex].Schema, tables[tableIndex].Table, isEqual, isSkip, isAllExist)
+		progress.RegisterTable(dbutil.TableName(tables[tableIndex].Schema, tables[tableIndex].Table), !isEqual, isSkip, isAllTableExist)
+		df.report.SetTableStructCheckResult(tables[tableIndex].Schema, tables[tableIndex].Table, isEqual, isSkip, isAllTableExist)
 	}
 	return nil
 }
@@ -423,8 +423,8 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 	id := rangeInfo.ChunkRange.Index
 	if rangeInfo.ChunkRange.Type == chunk.Empty {
 		dml.node.State = checkpoints.IgnoreState
-		// for tables that only exist upstream or downstream
-		if tableDiff.NeedSkippedTable != 0 {
+		// for tables that don't exist upstream or downstream
+		if !source.AllTableExist(tableDiff) {
 			upCount, _ := dbutil.GetRowCount(ctx, df.upstream.GetDB(), schema, table, "", nil)
 			downCount, _ := dbutil.GetRowCount(ctx, df.downstream.GetDB(), schema, table, "", nil)
 			df.report.SetTableDataCheckResult(schema, table, false, int(upCount), int(downCount), upCount, downCount, id)

@@ -20,6 +20,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 )
 
 type TableProgressPrinter struct {
@@ -53,7 +55,7 @@ const (
 	TABLE_STATE_RESULT_FAIL_STRUCTURE_PASS     table_state_t = 0x40
 	TABLE_STATE_RESULT_DIFFERENT               table_state_t = 0x80
 	TABLE_STATE_HEAD                           table_state_t = 0xff
-	TABLE_STATE_RESULT_MASK                    table_state_t = 0xf0
+	TABLE_STATE_RESULT_MASK                    table_state_t = 0xff0
 	TABLE_STATE_NOT_EXSIT_UPSTREAM             table_state_t = 0x100
 	TABLE_STATE_NOT_EXSIT_DOWNSTREAM           table_state_t = 0x200
 )
@@ -129,13 +131,13 @@ func (tpp *TableProgressPrinter) UpdateTotal(name string, total int, stopUpdate 
 	}
 }
 
-func (tpp *TableProgressPrinter) RegisterTable(name string, isFailed bool, isDone bool, isAllExist int) {
+func (tpp *TableProgressPrinter) RegisterTable(name string, isFailed bool, isDone bool, isExist int) {
 	var state table_state_t
 	if isFailed {
 		if isDone {
-			if isAllExist == 1 {
+			if isExist == common.DownstreamTableLackFlag {
 				state = TABLE_STATE_NOT_EXSIT_UPSTREAM | TABLE_STATE_REGISTER
-			} else if isAllExist == -1 {
+			} else if isExist == common.UpstreamTableLackFlag {
 				state = TABLE_STATE_NOT_EXSIT_DOWNSTREAM | TABLE_STATE_REGISTER
 			} else {
 				state = TABLE_STATE_RESULT_FAIL_STRUCTURE_DONE | TABLE_STATE_REGISTER
@@ -347,16 +349,14 @@ func (tpp *TableProgressPrinter) flush(stateIsChanged bool) {
 			// 5. structure is different and data is different
 			switch tp.state & 0xf {
 			case TABLE_STATE_PRESTART:
-				switch tp.state & 0xff0 {
+				switch tp.state & TABLE_STATE_RESULT_MASK {
 				case TABLE_STATE_RESULT_OK:
 					fixStr = fmt.Sprintf("%sComparing the table structure of `%s` ... equivalent\n", fixStr, tp.name)
 					dynStr = fmt.Sprintf("%sComparing the table data of `%s` ...\n", dynStr, tp.name)
 					tpp.lines++
 					tpp.progressTableNums++
 					tp.state = TABLE_STATE_COMPARING
-				case TABLE_STATE_NOT_EXSIT_UPSTREAM:
-					fallthrough
-				case TABLE_STATE_NOT_EXSIT_DOWNSTREAM:
+				case TABLE_STATE_NOT_EXSIT_UPSTREAM, TABLE_STATE_NOT_EXSIT_DOWNSTREAM:
 					dynStr = fmt.Sprintf("%sComparing the table data of `%s` ...skipped\n", dynStr, tp.name)
 					tpp.tableFailList.PushBack(tp)
 					preNode := p.Prev()
@@ -436,9 +436,9 @@ func UpdateTotal(name string, total int, stopUpdate bool) {
 	}
 }
 
-func RegisterTable(name string, isFailed bool, isDone bool, isAllExist int) {
+func RegisterTable(name string, isFailed bool, isDone bool, isExist int) {
 	if progress_ != nil {
-		progress_.RegisterTable(name, isFailed, isDone, isAllExist)
+		progress_.RegisterTable(name, isFailed, isDone, isExist)
 	}
 }
 

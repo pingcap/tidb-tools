@@ -71,3 +71,9 @@ type TableDiff struct {
 	// NeedSkippedTable = 0: the table exists both upstream and downstream.
 	NeedSkippedTable int `json:"-"`
 }
+
+const (
+	AllTableExistFlag       = 0
+	UpstreamTableLackFlag   = -1
+	DownstreamTableLackFlag = 1
+)

@@ -103,7 +103,7 @@ func (t *ChunksIterator) produceChunks(ctx context.Context, startRange *splitter
 	for ; t.nextTableIndex < len(t.TableDiffs); t.nextTableIndex++ {
 		curTableIndex := t.nextTableIndex
 		// skip data-check, but still need to send a empty chunk to make checkpoint continuous
-		if t.TableDiffs[curTableIndex].IgnoreDataCheck || t.TableDiffs[curTableIndex].NeedSkippedTable != 0 {
+		if t.TableDiffs[curTableIndex].IgnoreDataCheck || !AllTableExist(t.TableDiffs[curTableIndex]) {
 			pool.Apply(func() {
 				table := t.TableDiffs[curTableIndex]
 				progressID := dbutil.TableName(table.Schema, table.Table)

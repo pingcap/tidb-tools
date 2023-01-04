@@ -99,7 +99,7 @@ func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitte
 	chunk := tableRange.GetChunk()
 
 	// for tables that do not exist upstream or downstream
-	if table.NeedSkippedTable != 0 {
+	if !AllTableExist(table) {
 		return &ChecksumInfo{
 			Count: 0,
 		}
@@ -169,7 +169,7 @@ func (s *MySQLSources) GetRowsIterator(ctx context.Context, tableRange *splitter
 
 	table := s.tableDiffs[tableRange.GetTableIndex()]
 	// for tables that do not exist upstream or downstream
-	if table.NeedSkippedTable != 0 {
+	if !AllTableExist(table) {
 		return nil, nil
 	}
 	matchSources := getMatchedSourcesForTable(s.sourceTablesMap, table)
@@ -234,7 +234,7 @@ func (s *MySQLSources) GetSnapshot() string {
 func (s *MySQLSources) GetSourceStructInfo(ctx context.Context, tableIndex int) ([]*model.TableInfo, error) {
 	tableDiff := s.GetTables()[tableIndex]
 	// for tables that do not exist upstream or downstream
-	if tableDiff.NeedSkippedTable != 0 {
+	if !AllTableExist(tableDiff) {
 		return nil, nil
 	}
 	tableSources := getMatchedSourcesForTable(s.sourceTablesMap, tableDiff)
