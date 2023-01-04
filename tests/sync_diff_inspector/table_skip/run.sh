@@ -39,9 +39,9 @@ echo "make some table structure not equal"
 mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table diff_test.t4 (a int, b int, c int,primary key(a));"
 mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "insert into diff_test.t4 values (1,1,1);"
 mysql -uroot -h 127.0.0.1 -P 4000 -e "create table diff_test.t4 (a int, b int, primary key(a));"
-sync_diff_inspector --config=./config.toml #> $OUT_DIR/table_skip_diff.output || true
+sync_diff_inspector --config=./config.toml > $OUT_DIR/table_skip_diff.output || true
 check_contains "check failed" $OUT_DIR/sync_diff.log
 cat $OUT_DIR/summary.txt
 rm -rf $OUT_DIR/*
 
-echo "table_config test passed"
+echo "table_skip test passed"

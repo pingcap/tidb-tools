@@ -74,6 +74,6 @@ type TableDiff struct {
 
 const (
 	AllTableExistFlag       = 0
-	UpstreamTableLackFlag   = -1
-	DownstreamTableLackFlag = 1
+	DownstreamTableLackFlag = -1
+	UpstreamTableLackFlag   = 1
 )
