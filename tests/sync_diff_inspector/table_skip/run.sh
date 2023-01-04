@@ -41,6 +41,7 @@ mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "insert into diff_test.t4 valu
 mysql -uroot -h 127.0.0.1 -P 4000 -e "create table diff_test.t4 (a int, b int, primary key(a));"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/table_skip_diff.output || true
 check_contains "check failed" $OUT_DIR/sync_diff.log
+check_contains "A total of 5 tables have been compared, 1 tables finished, 2 tables failed, 2 tables skipped" $OUT_DIR/table_skip_diff.output
 cat $OUT_DIR/summary.txt
 rm -rf $OUT_DIR/*
 

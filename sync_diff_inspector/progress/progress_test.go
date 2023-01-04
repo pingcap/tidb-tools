@@ -59,6 +59,9 @@ func TestTableError(t *testing.T) {
 	p.StartTable("1", 50, true)
 	p.RegisterTable("2", true, true, 0)
 	p.StartTable("2", 1, true)
+	p.RegisterTable("3", true, true, -1)
+	p.StartTable("3", 1, true)
+
 	p.Inc("2")
 	buffer := new(bytes.Buffer)
 	p.SetOutput(buffer)
@@ -73,6 +76,9 @@ func TestTableError(t *testing.T) {
 			"\x1b[2A\x1b[JComparing the table structure of `2` ... failure\n"+
 			"_____________________________________________________________________________\n"+
 			"Progress [==============================>------------------------------] 50% 0/0\n"+
+			"\x1b[2A\x1b[JComparing the table data of `3` ...skipped\n"+
+			"_____________________________________________________________________________\n"+
+			"Progress [=============================================>---------------] 75% 0/1\n"+
 			"\x1b[1A\x1b[J\nError in comparison process:\n[aaa]\n\n"+
 			"You can view the comparison details through './output_dir/sync_diff_inspector.log'\n",
 	)

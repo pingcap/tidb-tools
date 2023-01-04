@@ -70,6 +70,12 @@ func TestReport(t *testing.T) {
 			Info:      tableInfo2,
 			Collation: "[123]",
 		},
+		{
+			Schema:    "dtest",
+			Table:     "atbl",
+			Info:      tableInfo2,
+			Collation: "[123]",
+		},
 	}
 	configs := []*ReportConfig{
 		{
@@ -118,19 +124,21 @@ func TestReport(t *testing.T) {
 	require.True(t, result.DataEqual)
 	require.True(t, result.StructEqual)
 
-	require.Equal(t, new_report.getSortedTables(), [][]string{{"`atest`.`atbl`", "0", "0"}, {"`ctest`.`atbl`", "0", "0"}, {"`test`.`tbl`", "222", "222"}})
+	require.Equal(t, new_report.getSortedTables(), [][]string{{"`atest`.`atbl`", "0", "0"}, {"`ctest`.`atbl`", "0", "0"}, {"`dtest`.`atbl`", "0", "0"}, {"`test`.`tbl`", "222", "222"}})
 	require.Equal(t, new_report.getDiffRows(), [][]string{})
 
 	new_report.SetTableStructCheckResult("atest", "atbl", true, false, 0)
 	new_report.SetTableDataCheckResult("atest", "atbl", false, 111, 222, 333, 333, &chunk.ChunkID{1, 1, 1, 1, 2})
-	require.Equal(t, new_report.getSortedTables(), [][]string{{"`ctest`.`atbl`", "0", "0"}, {"`test`.`tbl`", "222", "222"}})
+	require.Equal(t, new_report.getSortedTables(), [][]string{{"`ctest`.`atbl`", "0", "0"}, {"`dtest`.`atbl`", "0", "0"}, {"`test`.`tbl`", "222", "222"}})
 	require.Equal(t, new_report.getDiffRows(), [][]string{{"`atest`.`atbl`", "succeed", "true", "+111/-222", "333", "333"}})
 
 	new_report.SetTableStructCheckResult("atest", "atbl", false, false, 0)
-	require.Equal(t, new_report.getSortedTables(), [][]string{{"`ctest`.`atbl`", "0", "0"}, {"`test`.`tbl`", "222", "222"}})
+	require.Equal(t, new_report.getSortedTables(), [][]string{{"`ctest`.`atbl`", "0", "0"}, {"`dtest`.`atbl`", "0", "0"}, {"`test`.`tbl`", "222", "222"}})
 	require.Equal(t, new_report.getDiffRows(), [][]string{{"`atest`.`atbl`", "succeed", "false", "+111/-222", "333", "333"}})
 
 	new_report.SetTableStructCheckResult("ctest", "atbl", false, true, 0)
+
+	new_report.SetTableStructCheckResult("dtest", "atbl", false, true, -1)
 
 	buf := new(bytes.Buffer)
 	new_report.Print(buf)
@@ -138,6 +146,7 @@ func TestReport(t *testing.T) {
 	require.Contains(t, info, "The structure of `atest`.`atbl` is not equal\n")
 	require.Contains(t, info, "The data of `atest`.`atbl` is not equal\n")
 	require.Contains(t, info, "The structure of `ctest`.`atbl` is not equal, and data-check is skipped\n")
+	require.Contains(t, info, "The data of `dtest`.`atbl` does not exist in downstream database\n")
 	require.Contains(t, info, "\n"+
 		"The rest of tables are all equal.\n\n"+
 		"A total of 0 tables have been compared, 0 tables finished, 0 tables failed, 0 tables skipped.\n"+
