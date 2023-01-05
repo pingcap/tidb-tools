@@ -80,7 +80,7 @@ type Report struct {
 	Result       string                             `json:"-"`             // Result is pass or fail
 	PassNum      int32                              `json:"-"`             // The pass number of tables
 	FailedNum    int32                              `json:"-"`             // The failed number of tables
-	SkippedNum   int32                              `json:"-"`             // Theskippeded number of tables
+	SkippedNum   int32                              `json:"-"`             // The skipped number of tables
 	TableResults map[string]map[string]*TableResult `json:"table-results"` // TableResult saved the map of  `schema` => `table` => `tableResult`
 	StartTime    time.Time                          `json:"start-time"`
 	Duration     time.Duration                      `json:"time-duration"`

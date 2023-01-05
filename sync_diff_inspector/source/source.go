@@ -376,6 +376,7 @@ type RangeIterator interface {
 }
 
 func checkTableMatched(tableDiffs []*common.TableDiff, targetMap map[string]struct{}, sourceMap map[string]struct{}, skipNonExistingTable bool) ([]*common.TableDiff, error) {
+	tableIndexMap := getIndexMapForTable(tableDiffs)
 	// check target exists but source not found
 	for tableDiff := range targetMap {
 		// target table have all passed in tableFilter
@@ -383,7 +384,7 @@ func checkTableMatched(tableDiffs []*common.TableDiff, targetMap map[string]stru
 			if !skipNonExistingTable {
 				return tableDiffs, errors.Errorf("the source has no table to be compared. target-table is `%s`", tableDiff)
 			}
-			index := getIndexMapForTable(tableDiffs, tableDiff)[tableDiff]
+			index := tableIndexMap[tableDiff]
 			if tableDiffs[index].NeedSkippedTable == 0 {
 				tableDiffs[index].NeedSkippedTable = common.UpstreamTableLackFlag
 				log.Info("the source has no table to be compared", zap.String("target-table", tableDiff))
@@ -410,14 +411,11 @@ func checkTableMatched(tableDiffs []*common.TableDiff, targetMap map[string]stru
 	return tableDiffs, nil
 }
 
-// Get the index of table in tableDiffs by uniqueID:`schema`.`table`
-func getIndexMapForTable(tableDiffs []*common.TableDiff, uniqueID string) map[string]int {
+func getIndexMapForTable(tableDiffs []*common.TableDiff) map[string]int {
 	tableIndexMap := make(map[string]int)
 	for i := 0; i < len(tableDiffs); i++ {
 		tableUniqueID := utils.UniqueID(tableDiffs[i].Schema, tableDiffs[i].Table)
-		if tableUniqueID == uniqueID {
-			tableIndexMap[uniqueID] = i
-		}
+		tableIndexMap[tableUniqueID] = i
 	}
 	return tableIndexMap
 }
