@@ -421,8 +421,5 @@ func getIndexMapForTable(tableDiffs []*common.TableDiff) map[string]int {
 }
 
 func AllTableExist(tableDiffs *common.TableDiff) bool {
-	if tableDiffs.NeedSkippedTable == common.AllTableExistFlag {
-		return true
-	}
-	return false
+	return tableDiffs.NeedSkippedTable == common.AllTableExistFlag
 }

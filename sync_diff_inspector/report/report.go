@@ -56,16 +56,16 @@ type ReportConfig struct {
 
 // TableResult saves the check result for every table.
 type TableResult struct {
-	Schema       string                  `json:"schema"`
-	Table        string                  `json:"table"`
-	StructEqual  bool                    `json:"struct-equal"`
-	DataSkip     bool                    `json:"data-skip"`
-	DataEqual    bool                    `json:"data-equal"`
-	MeetError    error                   `json:"-"`
-	ChunkMap     map[string]*ChunkResult `json:"chunk-result"` // `ChunkMap` stores the `ChunkResult` of each chunk of the table
-	UpCount      int64                   `json:"up-count"`     // `UpCount` is the number of rows in the table from upstream
-	DownCount    int64                   `json:"down-count"`   // `DownCount` is the number of rows in the table from downstream
-	TableSkipped int                     `json:"table-skipped"`
+	Schema      string                  `json:"schema"`
+	Table       string                  `json:"table"`
+	StructEqual bool                    `json:"struct-equal"`
+	DataSkip    bool                    `json:"data-skip"`
+	DataEqual   bool                    `json:"data-equal"`
+	MeetError   error                   `json:"-"`
+	ChunkMap    map[string]*ChunkResult `json:"chunk-result"` // `ChunkMap` stores the `ChunkResult` of each chunk of the table
+	UpCount     int64                   `json:"up-count"`     // `UpCount` is the number of rows in the table from upstream
+	DownCount   int64                   `json:"down-count"`   // `DownCount` is the number of rows in the table from downstream
+	TableLack   int                     `json:"table-lack"`
 }
 
 // ChunkResult save the necessarily information to provide summary information
@@ -317,7 +317,7 @@ func (r *Report) SetTableStructCheckResult(schema, table string, equal bool, ski
 	tableResult := r.TableResults[schema][table]
 	tableResult.StructEqual = equal
 	tableResult.DataSkip = skip
-	tableResult.TableSkipped = exist
+	tableResult.TableLack = exist
 	if !equal && AllTableExist(tableResult) && r.Result != Error {
 		r.Result = Fail
 	}
@@ -418,22 +418,13 @@ func (r *Report) GetSnapshot(chunkID *chunk.ChunkID, schema, table string) (*Rep
 }
 
 func AllTableExist(result *TableResult) bool {
-	if result.TableSkipped == common.AllTableExistFlag {
-		return true
-	}
-	return false
+	return result.TableLack == common.AllTableExistFlag
 }
 
 func UpstreamTableLack(result *TableResult) bool {
-	if result.TableSkipped == common.UpstreamTableLackFlag {
-		return true
-	}
-	return false
+	return result.TableLack == common.UpstreamTableLackFlag
 }
 
 func DownstreamTableLack(result *TableResult) bool {
-	if result.TableSkipped == common.DownstreamTableLackFlag {
-		return true
-	}
-	return false
+	return result.TableLack == common.DownstreamTableLackFlag
 }

@@ -19,17 +19,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/stretchr/testify/require"
 )
 
 func TestProgress(t *testing.T) {
-	p := NewTableProgressPrinter(4, 0)
-	p.RegisterTable("1", true, true, 1)
+	p := NewTableProgressPrinter(6, 0)
+	p.RegisterTable("1", true, true, common.AllTableExistFlag)
 	p.StartTable("1", 50, true)
-	p.RegisterTable("2", true, false, 0)
+	p.RegisterTable("2", true, false, common.AllTableExistFlag)
 	p.StartTable("2", 2, true)
 	p.Inc("2")
-	p.RegisterTable("3", false, false, 0)
+	p.RegisterTable("3", false, false, common.AllTableExistFlag)
 	p.StartTable("3", 1, false)
 	p.Inc("2")
 	p.Inc("3")
@@ -39,6 +40,10 @@ func TestProgress(t *testing.T) {
 	p.FailTable("4")
 	p.Inc("3")
 	p.Inc("4")
+	p.RegisterTable("5", true, true, common.UpstreamTableLackFlag)
+	p.StartTable("5", 1, true)
+	p.RegisterTable("6", true, true, common.DownstreamTableLackFlag)
+	p.StartTable("6", 1, true)
 	time.Sleep(500 * time.Millisecond)
 	p.Close()
 	buffer := new(bytes.Buffer)
@@ -47,19 +52,19 @@ func TestProgress(t *testing.T) {
 	require.Equal(
 		t,
 		buffer.String(),
-		"\x1b[1A\x1b[J\nSummary:\n\nThe data of `1` does not exist in upstream database.\nThe structure of `2` is not equal.\nThe data of `4` is not equal.\n"+
-			"\nThe rest of the tables are all equal.\nA total of 4 tables have been compared, 1 tables finished, 2 tables failed, 1 tables skipped.\nThe patch file has been generated to './output_dir/patch.sql'\n"+
+		"\x1b[1A\x1b[J\nSummary:\n\nThe structure of `1` is not equal.\nThe structure of `2` is not equal.\nThe data of `4` is not equal.\nThe data of `5` does not exist in upstream database.\nThe data of `6` does not exist in downstream database.\n"+
+			"\nThe rest of the tables are all equal.\nA total of 6 tables have been compared, 1 tables finished, 3 tables failed, 2 tables skipped.\nThe patch file has been generated to './output_dir/patch.sql'\n"+
 			"You can view the comparison details through './output_dir/sync_diff_inspector.log'\n\n",
 	)
 }
 
 func TestTableError(t *testing.T) {
 	p := NewTableProgressPrinter(4, 0)
-	p.RegisterTable("1", true, true, 0)
+	p.RegisterTable("1", true, true, common.AllTableExistFlag)
 	p.StartTable("1", 50, true)
-	p.RegisterTable("2", true, true, 0)
+	p.RegisterTable("2", true, true, common.AllTableExistFlag)
 	p.StartTable("2", 1, true)
-	p.RegisterTable("3", true, true, -1)
+	p.RegisterTable("3", true, true, common.DownstreamTableLackFlag)
 	p.StartTable("3", 1, true)
 
 	p.Inc("2")
@@ -86,9 +91,9 @@ func TestTableError(t *testing.T) {
 
 func TestAllSuccess(t *testing.T) {
 	Init(2, 0)
-	RegisterTable("1", false, false, 0)
+	RegisterTable("1", false, false, common.AllTableExistFlag)
 	StartTable("1", 1, true)
-	RegisterTable("2", false, false, 0)
+	RegisterTable("2", false, false, common.AllTableExistFlag)
 	StartTable("2", 1, true)
 	Inc("1")
 	Inc("2")

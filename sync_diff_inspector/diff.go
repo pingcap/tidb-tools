@@ -297,16 +297,13 @@ func (df *Diff) StructEqual(ctx context.Context) error {
 		tableIndex = df.startRange.ChunkRange.Index.TableIndex
 	}
 	for ; tableIndex < len(tables); tableIndex++ {
-		var isEqual, isSkip bool
-		isAllTableExist := tables[tableIndex].NeedSkippedTable
+		isEqual, isSkip, isAllTableExist := false, true, tables[tableIndex].NeedSkippedTable
 		if source.AllTableExist(tables[tableIndex]) {
 			var err error
 			isEqual, isSkip, err = df.compareStruct(ctx, tableIndex)
 			if err != nil {
 				return errors.Trace(err)
 			}
-		} else {
-			isEqual, isSkip = false, true
 		}
 		progress.RegisterTable(dbutil.TableName(tables[tableIndex].Schema, tables[tableIndex].Table), !isEqual, isSkip, isAllTableExist)
 		df.report.SetTableStructCheckResult(tables[tableIndex].Schema, tables[tableIndex].Table, isEqual, isSkip, isAllTableExist)
