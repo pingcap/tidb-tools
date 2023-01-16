@@ -152,7 +152,7 @@ func getTableInfoBySQL(ctx sessionctx.Context, createTableSQL string, parser2 *p
 
 	s, ok := stmt.(*ast.CreateTableStmt)
 	if ok {
-		table, err := ddl.BuildSessionTemporaryTableInfo(ctx, nil, s, mysql.DefaultCharset, "", nil)
+		table, err := ddl.BuildTableInfoWithStmt(ctx, s, mysql.DefaultCharset, "", nil)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
