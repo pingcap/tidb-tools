@@ -18,17 +18,21 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/coreos/go-semver/semver"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/parser/mysql"
 	"github.com/pingcap/tidb/ddl"
 	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/parser/model"
 	_ "github.com/pingcap/tidb/planner/core" // to setup expression.EvalAstExpr. See: https://github.com/pingcap/tidb/blob/a94cff903cd1e7f3b050db782da84273ef5592f4/planner/core/optimizer.go#L202
+	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/types"
 	_ "github.com/pingcap/tidb/types/parser_driver" // for parser driver
 	"github.com/pingcap/tidb/util/collate"
+	"github.com/pingcap/tidb/util/mock"
 )
 
 const (
@@ -110,7 +114,11 @@ func GetTableInfoWithVersion(ctx context.Context, db QueryExecutor, schemaName s
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	return GetTableInfoBySQL(createTableSQL, parser2)
+	sctx := mock.NewContext()
+	// unify the timezone to UTC +0:00
+	sctx.GetSessionVars().TimeZone = time.UTC
+	sctx.GetSessionVars().StrictSQLMode = false
+	return GetTableInfoBySQLWithSessionContext(sctx, createTableSQL, parser2)
 }
 
 // GetTableInfo returns table information.
@@ -128,7 +136,16 @@ func GetTableInfo(ctx context.Context, db QueryExecutor, schemaName string, tabl
 }
 
 // GetTableInfoBySQL returns table information by given create table sql.
+func GetTableInfoBySQLWithSessionContext(ctx sessionctx.Context, createTableSQL string, parser2 *parser.Parser) (table *model.TableInfo, err error) {
+	return getTableInfoBySQL(ctx, createTableSQL, parser2)
+}
+
+// GetTableInfoBySQL returns table information by given create table sql.
 func GetTableInfoBySQL(createTableSQL string, parser2 *parser.Parser) (table *model.TableInfo, err error) {
+	return getTableInfoBySQL(mock.NewContext(), createTableSQL, parser2)
+}
+
+func getTableInfoBySQL(ctx sessionctx.Context, createTableSQL string, parser2 *parser.Parser) (table *model.TableInfo, err error) {
 	stmt, err := parser2.ParseOneStmt(createTableSQL, "", "")
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -136,7 +153,7 @@ func GetTableInfoBySQL(createTableSQL string, parser2 *parser.Parser) (table *mo
 
 	s, ok := stmt.(*ast.CreateTableStmt)
 	if ok {
-		table, err := ddl.BuildTableInfoFromAST(s)
+		table, err := ddl.BuildTableInfoWithStmt(ctx, s, mysql.DefaultCharset, "", nil)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
