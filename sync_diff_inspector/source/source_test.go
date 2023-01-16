@@ -29,6 +29,7 @@ import (
 	filter "github.com/pingcap/tidb-tools/pkg/table-filter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
+	"github.com/pingcap/tidb-tools/sync_diff_inspector/report"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
@@ -911,19 +912,42 @@ func TestInitTables(t *testing.T) {
 
 func TestCheckTableMatched(t *testing.T) {
 	tmap := make(map[string]struct{})
-	smap := make(map[string]struct{})
+	smap := make(map[string][]string)
 
-	tmap["1"] = struct{}{}
-	tmap["2"] = struct{}{}
+	tmap["`1`.`1`"] = struct{}{}
+	tmap["`2`.`2`"] = struct{}{}
 
-	smap["1"] = struct{}{}
-	smap["2"] = struct{}{}
-	require.NoError(t, checkTableMatched(tmap, smap))
+	smap["`1`.`1`"] = []string{"1", "`1`.`1`"}
+	smap["`2`.`2`"] = []string{"2"}
 
-	delete(smap, "1")
-	require.Contains(t, checkTableMatched(tmap, smap).Error(), "the source has no table to be compared. target-table")
+	r := report.NewReport(nil)
+	tableDiff := []*common.TableDiff{
+		{Schema: "1", Table: "1"},
+		{Schema: "2", Table: "2"},
+	}
+	newTableDiff, passed := checkTableMatched(tmap, smap, tableDiff, r)
+	require.True(t, passed)
+	require.Equal(t, len(newTableDiff), 2)
+	require.Equal(t, len(r.MissingTables.MissingSourceTables), 0)
+	require.Equal(t, len(r.MissingTables.MissingTargetTables), 0)
 
-	delete(tmap, "1")
-	smap["1"] = struct{}{}
-	require.Contains(t, checkTableMatched(tmap, smap).Error(), "the target has no table to be compared. source-table")
+	r = report.NewReport(nil)
+	delete(smap, "`1`.`1`")
+	newTableDiff, passed = checkTableMatched(tmap, smap, tableDiff, r)
+	require.False(t, passed)
+	require.Equal(t, len(newTableDiff), 1)
+	require.Equal(t, len(r.MissingTables.MissingSourceTables), 0)
+	require.Equal(t, len(r.MissingTables.MissingTargetTables), 1)
+
+	tableDiff = []*common.TableDiff{
+		{Schema: "2", Table: "2"},
+	}
+	r = report.NewReport(nil)
+	delete(tmap, "`1`.`1`")
+	smap["`1`.`1`"] = []string{"1", "`1`.`1`"}
+	newTableDiff, passed = checkTableMatched(tmap, smap, tableDiff, r)
+	require.False(t, passed)
+	require.Equal(t, len(newTableDiff), 1)
+	require.Equal(t, len(r.MissingTables.MissingSourceTables), 2)
+	require.Equal(t, len(r.MissingTables.MissingTargetTables), 0)
 }
