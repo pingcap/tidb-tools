@@ -135,11 +135,12 @@ func (tpp *TableProgressPrinter) RegisterTable(name string, isFailed bool, isDon
 	var state table_state_t
 	if isFailed {
 		if isDone {
-			if isExist == common.UpstreamTableLackFlag {
+			switch isExist {
+			case common.UpstreamTableLackFlag:
 				state = TABLE_STATE_NOT_EXSIT_UPSTREAM | TABLE_STATE_REGISTER
-			} else if isExist == common.DownstreamTableLackFlag {
+			case common.DownstreamTableLackFlag:
 				state = TABLE_STATE_NOT_EXSIT_DOWNSTREAM | TABLE_STATE_REGISTER
-			} else {
+			default:
 				state = TABLE_STATE_RESULT_FAIL_STRUCTURE_DONE | TABLE_STATE_REGISTER
 			}
 		} else {
