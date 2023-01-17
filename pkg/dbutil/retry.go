@@ -27,6 +27,7 @@ var (
 		"Information schema is out of date",
 		"Information schema is changed",
 		"context deadline exceeded",
+		"exceeding the deadline",
 	}
 )
 
