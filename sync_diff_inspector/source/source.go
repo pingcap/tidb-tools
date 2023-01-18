@@ -385,8 +385,8 @@ func checkTableMatched(tableDiffs []*common.TableDiff, targetMap map[string]stru
 				return tableDiffs, errors.Errorf("the source has no table to be compared. target-table is `%s`", tableDiff)
 			}
 			index := tableIndexMap[tableDiff]
-			if tableDiffs[index].NeedSkippedTable == 0 {
-				tableDiffs[index].NeedSkippedTable = common.UpstreamTableLackFlag
+			if tableDiffs[index].TableLack == 0 {
+				tableDiffs[index].TableLack = common.UpstreamTableLackFlag
 				log.Info("the source has no table to be compared", zap.String("target-table", tableDiff))
 			}
 		}
@@ -400,9 +400,9 @@ func checkTableMatched(tableDiffs []*common.TableDiff, targetMap map[string]stru
 			}
 			slice := strings.Split(strings.Replace(tableDiff, "`", "", -1), ".")
 			tableDiffs = append(tableDiffs, &common.TableDiff{
-				Schema:           slice[0],
-				Table:            slice[1],
-				NeedSkippedTable: common.DownstreamTableLackFlag,
+				Schema:    slice[0],
+				Table:     slice[1],
+				TableLack: common.DownstreamTableLackFlag,
 			})
 			log.Info("the target has no table to be compared", zap.String("source-table", tableDiff))
 		}
@@ -418,8 +418,4 @@ func getIndexMapForTable(tableDiffs []*common.TableDiff) map[string]int {
 		tableIndexMap[tableUniqueID] = i
 	}
 	return tableIndexMap
-}
-
-func AllTableExist(tableDiffs *common.TableDiff) bool {
-	return tableDiffs.NeedSkippedTable == common.AllTableExistFlag
 }

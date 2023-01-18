@@ -942,7 +942,7 @@ func TestCheckTableMatched(t *testing.T) {
 
 	tables, err = checkTableMatched(tableDiffs, tmap, smap, true)
 	require.NoError(t, err)
-	require.Equal(t, 0, tables[0].NeedSkippedTable)
-	require.Equal(t, 1, tables[1].NeedSkippedTable)
-	require.Equal(t, -1, tables[2].NeedSkippedTable)
+	require.Equal(t, 0, tables[0].TableLack)
+	require.Equal(t, 1, tables[1].TableLack)
+	require.Equal(t, -1, tables[2].TableLack)
 }

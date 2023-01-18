@@ -69,7 +69,7 @@ func getMatchedSourcesForTable(sourceTablesMap map[string][]*common.TableShardSo
 		log.Fatal("unreachable, source tables map shouldn't be nil.")
 	}
 	matchSources, ok := sourceTablesMap[utils.UniqueID(table.Schema, table.Table)]
-	if !ok {
+	if !ok && common.AllTableExist(table.TableLack) {
 		log.Fatal("unreachable, no match source tables in mysql shard source.")
 	}
 	return matchSources
@@ -97,42 +97,44 @@ func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitte
 	beginTime := time.Now()
 	table := s.tableDiffs[tableRange.GetTableIndex()]
 	chunk := tableRange.GetChunk()
-
-	// for tables that do not exist upstream or downstream
-	if !AllTableExist(table) {
-		return &ChecksumInfo{
-			Count: 0,
-		}
-	}
-	matchSources := getMatchedSourcesForTable(s.sourceTablesMap, table)
-	infoCh := make(chan *ChecksumInfo, len(s.sourceTablesMap))
-
-	for _, ms := range matchSources {
-		go func(ms *common.TableShardSource) {
-			count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info, chunk.Where, chunk.Args)
-			infoCh <- &ChecksumInfo{
-				Checksum: checksum,
-				Count:    count,
-				Err:      err,
-			}
-		}(ms)
-	}
-	defer close(infoCh)
-
 	var (
 		err           error
 		totalCount    int64
 		totalChecksum int64
 	)
+	matchSources := getMatchedSourcesForTable(s.sourceTablesMap, table)
 
-	for range matchSources {
-		info := <-infoCh
-		// catch the first error
-		if err == nil && info.Err != nil {
-			err = info.Err
+	if common.AllTableExist(table.TableLack) {
+		infoCh := make(chan *ChecksumInfo, len(s.sourceTablesMap))
+		for _, ms := range matchSources {
+			go func(ms *common.TableShardSource) {
+				count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info, chunk.Where, chunk.Args)
+				infoCh <- &ChecksumInfo{
+					Checksum: checksum,
+					Count:    count,
+					Err:      err,
+				}
+			}(ms)
 		}
-		totalCount += info.Count
-		totalChecksum ^= info.Checksum
+		defer close(infoCh)
+
+		for range matchSources {
+			info := <-infoCh
+			// catch the first error
+			if err == nil && info.Err != nil {
+				err = info.Err
+			}
+			totalCount += info.Count
+			totalChecksum ^= info.Checksum
+		}
+	} else {
+		var count int64
+		if matchSources != nil {
+			for _, ms := range matchSources {
+				count, err = dbutil.GetRowCount(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, "", nil)
+				totalCount += count
+			}
+		}
 	}
 
 	cost := time.Since(beginTime)
@@ -169,7 +171,7 @@ func (s *MySQLSources) GetRowsIterator(ctx context.Context, tableRange *splitter
 
 	table := s.tableDiffs[tableRange.GetTableIndex()]
 	// for tables that do not exist upstream or downstream
-	if !AllTableExist(table) {
+	if !common.AllTableExist(table.TableLack) {
 		return nil, nil
 	}
 	matchSources := getMatchedSourcesForTable(s.sourceTablesMap, table)
@@ -234,7 +236,7 @@ func (s *MySQLSources) GetSnapshot() string {
 func (s *MySQLSources) GetSourceStructInfo(ctx context.Context, tableIndex int) ([]*model.TableInfo, error) {
 	tableDiff := s.GetTables()[tableIndex]
 	// for tables that do not exist upstream or downstream
-	if !AllTableExist(tableDiff) {
+	if !common.AllTableExist(tableDiff.TableLack) {
 		return nil, nil
 	}
 	tableSources := getMatchedSourcesForTable(s.sourceTablesMap, tableDiff)
@@ -334,12 +336,14 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 					}
 				}
 				uniqueId := utils.UniqueID(targetSchema, targetTable)
+				var isMatched bool
 				// get all tables from all source db instance
 				if f.MatchTable(targetSchema, targetTable) {
 					// if match the filter, we should respect it and check target has this table later.
 					sourceTablesAfterRoute[uniqueId] = struct{}{}
+					isMatched = true
 				}
-				if _, ok := targetUniqueTableMap[uniqueId]; !ok {
+				if _, ok := targetUniqueTableMap[uniqueId]; !ok && !(isMatched && skipNonExistingTable) {
 					continue
 				}
 				maxSourceRouteTableCount[uniqueId]++

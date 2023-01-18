@@ -132,7 +132,7 @@ func (r *Report) getDiffRows() [][]string {
 			}
 			diffRow := make([]string, 0)
 			diffRow = append(diffRow, dbutil.TableName(schema, table))
-			if !AllTableExist(result) {
+			if !common.AllTableExist(result.TableLack) {
 				diffRow = append(diffRow, "skipped")
 			} else {
 				diffRow = append(diffRow, "succeed")
@@ -176,7 +176,7 @@ func (r *Report) CommitSummary() error {
 		for _, result := range tableMap {
 			if result.StructEqual && result.DataEqual {
 				passNum++
-			} else if !AllTableExist(result) {
+			} else if !common.AllTableExist(result.TableLack) {
 				skippedNum++
 			} else {
 				failedNum++
@@ -244,18 +244,19 @@ func (r *Report) Print(w io.Writer) error {
 			for table, result := range tableMap {
 				if !result.StructEqual {
 					if result.DataSkip {
-						if UpstreamTableLack(result) {
+						switch result.TableLack {
+						case common.UpstreamTableLackFlag:
 							summary.WriteString(fmt.Sprintf("The data of %s does not exist in upstream database\n", dbutil.TableName(schema, table)))
-						} else if DownstreamTableLack(result) {
+						case common.DownstreamTableLackFlag:
 							summary.WriteString(fmt.Sprintf("The data of %s does not exist in downstream database\n", dbutil.TableName(schema, table)))
-						} else {
+						default:
 							summary.WriteString(fmt.Sprintf("The structure of %s is not equal, and data-check is skipped\n", dbutil.TableName(schema, table)))
 						}
 					} else {
 						summary.WriteString(fmt.Sprintf("The structure of %s is not equal\n", dbutil.TableName(schema, table)))
 					}
 				}
-				if !result.DataEqual && AllTableExist(result) {
+				if !result.DataEqual && common.AllTableExist(result.TableLack) {
 					summary.WriteString(fmt.Sprintf("The data of %s is not equal\n", dbutil.TableName(schema, table)))
 				}
 			}
@@ -318,7 +319,7 @@ func (r *Report) SetTableStructCheckResult(schema, table string, equal bool, ski
 	tableResult.StructEqual = equal
 	tableResult.DataSkip = skip
 	tableResult.TableLack = exist
-	if !equal && AllTableExist(tableResult) && r.Result != Error {
+	if !equal && common.AllTableExist(tableResult.TableLack) && r.Result != Error {
 		r.Result = Fail
 	}
 }
@@ -340,11 +341,11 @@ func (r *Report) SetTableDataCheckResult(schema, table string, equal bool, rowsA
 		}
 		result.ChunkMap[id.ToString()].RowsAdd += rowsAdd
 		result.ChunkMap[id.ToString()].RowsDelete += rowsDelete
-		if r.Result != Error && AllTableExist(result) {
+		if r.Result != Error && common.AllTableExist(result.TableLack) {
 			r.Result = Fail
 		}
 	}
-	if !equal && AllTableExist(result) && r.Result != Error {
+	if !equal && common.AllTableExist(result.TableLack) && r.Result != Error {
 		r.Result = Fail
 	}
 }
@@ -415,16 +416,4 @@ func (r *Report) GetSnapshot(chunkID *chunk.ChunkID, schema, table string) (*Rep
 
 		task: task,
 	}, nil
-}
-
-func AllTableExist(result *TableResult) bool {
-	return result.TableLack == common.AllTableExistFlag
-}
-
-func UpstreamTableLack(result *TableResult) bool {
-	return result.TableLack == common.UpstreamTableLackFlag
-}
-
-func DownstreamTableLack(result *TableResult) bool {
-	return result.TableLack == common.DownstreamTableLackFlag
 }

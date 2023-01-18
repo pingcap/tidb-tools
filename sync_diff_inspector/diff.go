@@ -297,8 +297,8 @@ func (df *Diff) StructEqual(ctx context.Context) error {
 		tableIndex = df.startRange.ChunkRange.Index.TableIndex
 	}
 	for ; tableIndex < len(tables); tableIndex++ {
-		isEqual, isSkip, isAllTableExist := false, true, tables[tableIndex].NeedSkippedTable
-		if source.AllTableExist(tables[tableIndex]) {
+		isEqual, isSkip, isAllTableExist := false, true, tables[tableIndex].TableLack
+		if common.AllTableExist(tables[tableIndex].TableLack) {
 			var err error
 			isEqual, isSkip, err = df.compareStruct(ctx, tableIndex)
 			if err != nil {
@@ -421,9 +421,9 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 	if rangeInfo.ChunkRange.Type == chunk.Empty {
 		dml.node.State = checkpoints.IgnoreState
 		// for tables that don't exist upstream or downstream
-		if !source.AllTableExist(tableDiff) {
-			upCount, _ := dbutil.GetRowCount(ctx, df.upstream.GetDB(), schema, table, "", nil)
-			downCount, _ := dbutil.GetRowCount(ctx, df.downstream.GetDB(), schema, table, "", nil)
+		if !common.AllTableExist(tableDiff.TableLack) {
+			upCount := df.upstream.GetCountAndCrc32(ctx, rangeInfo).Count
+			downCount := df.downstream.GetCountAndCrc32(ctx, rangeInfo).Count
 			df.report.SetTableDataCheckResult(schema, table, false, int(upCount), int(downCount), upCount, downCount, id)
 			return false
 		}

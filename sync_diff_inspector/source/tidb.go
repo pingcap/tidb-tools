@@ -124,9 +124,20 @@ func (s *TiDBSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter.
 	beginTime := time.Now()
 	table := s.tableDiffs[tableRange.GetTableIndex()]
 	chunk := tableRange.GetChunk()
+	var (
+		checksum int64
+		count    int64
+		err      error
+	)
 
 	matchSource := getMatchSource(s.sourceTableMap, table)
-	count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, s.dbConn, matchSource.OriginSchema, matchSource.OriginTable, table.Info, chunk.Where, chunk.Args)
+	if common.AllTableExist(table.TableLack) {
+		count, checksum, err = utils.GetCountAndCRC32Checksum(ctx, s.dbConn, matchSource.OriginSchema, matchSource.OriginTable, table.Info, chunk.Where, chunk.Args)
+	} else {
+		if matchSource != nil {
+			count, err = dbutil.GetRowCount(ctx, s.dbConn, matchSource.OriginSchema, matchSource.OriginTable, "", nil)
+		}
+	}
 
 	cost := time.Since(beginTime)
 	return &ChecksumInfo{
@@ -236,11 +247,13 @@ func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *conf
 			}
 
 			uniqueId := utils.UniqueID(targetSchema, targetTable)
+			var isMatched bool
 			if f.MatchTable(targetSchema, targetTable) {
 				// if match the filter, we should respect it and check target has this table later.
 				sourceTablesAfterRoute[uniqueId] = struct{}{}
+				isMatched = true
 			}
-			if _, ok := targetUniqueTableMap[uniqueId]; ok {
+			if _, ok := targetUniqueTableMap[uniqueId]; ok || (isMatched && skipNonExistingTable) {
 				if _, ok := sourceTableMap[uniqueId]; ok {
 					log.Error("TiDB source don't support compare multiple source tables with one downstream table," +
 						" if this happening when diff on same instance is fine. otherwise we are not guarantee this diff result is right")

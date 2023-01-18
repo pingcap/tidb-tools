@@ -66,10 +66,10 @@ type TableDiff struct {
 
 	ChunkSize int64 `json:"chunk-size"`
 
-	// NeedSkippedTable = 1: the table only exists downstream,
-	// NeedSkippedTable = -1: the table only exists upstream,
-	// NeedSkippedTable = 0: the table exists both upstream and downstream.
-	NeedSkippedTable int `json:"-"`
+	// TableLack = 1: the table only exists downstream,
+	// TableLack = -1: the table only exists upstream,
+	// TableLack = 0: the table exists both upstream and downstream.
+	TableLack int `json:"-"`
 }
 
 const (
@@ -77,3 +77,7 @@ const (
 	DownstreamTableLackFlag = -1
 	UpstreamTableLackFlag   = 1
 )
+
+func AllTableExist(tableLack int) bool {
+	return tableLack == AllTableExistFlag
+}
