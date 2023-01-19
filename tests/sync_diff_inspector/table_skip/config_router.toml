@@ -56,7 +56,7 @@ target-schema = "diff_test"
 target-table = "t4"
 ######################### Task config #########################
 [task]
-    output-dir = "./output"
+    output-dir = "/tmp/tidb_tools_test/sync_diff_inspector/output"
 
     source-instances = ["mysql1", "mysql2"]
 
