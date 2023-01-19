@@ -55,8 +55,7 @@ cat $OUT_DIR/summary.txt
 rm -rf $OUT_DIR/*
 
 echo "test router case"
-sed "s/\"127.0.0.1\"#MYSQL_HOST/\"${MYSQL_HOST}\"/g" ./config_router.toml | sed "s/3306#MYSQL_PORT/${MYSQL_PORT}/g" > ./config.toml
-sync_diff_inspector --config=./config.toml > $OUT_DIR/table_skip_diff.output || true
+sync_diff_inspector --config=./config_router.toml > $OUT_DIR/table_skip_diff.output || true
 check_contains "check failed" $OUT_DIR/sync_diff.log
 check_contains "| \`diff_test\`.\`t5\` | skipped | false              | +3/-0          |       3 |         0 |" $OUT_DIR/summary.txt
 check_contains "The data of \`diff_test\`.\`t5\` does not exist in downstream database" $OUT_DIR/table_skip_diff.output
