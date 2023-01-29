@@ -97,44 +97,36 @@ func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitte
 	beginTime := time.Now()
 	table := s.tableDiffs[tableRange.GetTableIndex()]
 	chunk := tableRange.GetChunk()
+
+	matchSources := getMatchedSourcesForTable(s.sourceTablesMap, table)
+	infoCh := make(chan *ChecksumInfo, len(s.sourceTablesMap))
+
+	for _, ms := range matchSources {
+		go func(ms *common.TableShardSource) {
+			count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info, chunk.Where, chunk.Args)
+			infoCh <- &ChecksumInfo{
+				Checksum: checksum,
+				Count:    count,
+				Err:      err,
+			}
+		}(ms)
+	}
+	defer close(infoCh)
+
 	var (
 		err           error
 		totalCount    int64
 		totalChecksum int64
 	)
-	matchSources := getMatchedSourcesForTable(s.sourceTablesMap, table)
 
-	if common.AllTableExist(table.TableLack) {
-		infoCh := make(chan *ChecksumInfo, len(s.sourceTablesMap))
-		for _, ms := range matchSources {
-			go func(ms *common.TableShardSource) {
-				count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info, chunk.Where, chunk.Args)
-				infoCh <- &ChecksumInfo{
-					Checksum: checksum,
-					Count:    count,
-					Err:      err,
-				}
-			}(ms)
+	for range matchSources {
+		info := <-infoCh
+		// catch the first error
+		if err == nil && info.Err != nil {
+			err = info.Err
 		}
-		defer close(infoCh)
-
-		for range matchSources {
-			info := <-infoCh
-			// catch the first error
-			if err == nil && info.Err != nil {
-				err = info.Err
-			}
-			totalCount += info.Count
-			totalChecksum ^= info.Checksum
-		}
-	} else {
-		var count int64
-		if matchSources != nil {
-			for _, ms := range matchSources {
-				count, err = dbutil.GetRowCount(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, "", nil)
-				totalCount += count
-			}
-		}
+		totalCount += info.Count
+		totalChecksum ^= info.Checksum
 	}
 
 	cost := time.Since(beginTime)
@@ -144,6 +136,20 @@ func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitte
 		Err:      err,
 		Cost:     cost,
 	}
+}
+
+func (s *MySQLSources) GetCountForLackTable(ctx context.Context, tableRange *splitter.RangeInfo) int64 {
+	table := s.tableDiffs[tableRange.GetTableIndex()]
+	var totalCount int64
+
+	matchSources := getMatchedSourcesForTable(s.sourceTablesMap, table)
+	if matchSources != nil {
+		for _, ms := range matchSources {
+			count, _ := dbutil.GetRowCount(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, "", nil)
+			totalCount += count
+		}
+	}
+	return totalCount
 }
 
 func (s *MySQLSources) GetTables() []*common.TableDiff {
@@ -336,12 +342,10 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 					}
 				}
 				uniqueId := utils.UniqueID(targetSchema, targetTable)
-				var isMatched bool
-				// get all tables from all source db instance
-				if f.MatchTable(targetSchema, targetTable) {
+				isMatched := f.MatchTable(targetSchema, targetTable)
+				if isMatched {
 					// if match the filter, we should respect it and check target has this table later.
 					sourceTablesAfterRoute[uniqueId] = struct{}{}
-					isMatched = true
 				}
 				if _, ok := targetUniqueTableMap[uniqueId]; !ok && !(isMatched && skipNonExistingTable) {
 					continue

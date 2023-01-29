@@ -124,20 +124,8 @@ func (s *TiDBSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter.
 	beginTime := time.Now()
 	table := s.tableDiffs[tableRange.GetTableIndex()]
 	chunk := tableRange.GetChunk()
-	var (
-		checksum int64
-		count    int64
-		err      error
-	)
-
 	matchSource := getMatchSource(s.sourceTableMap, table)
-	if common.AllTableExist(table.TableLack) {
-		count, checksum, err = utils.GetCountAndCRC32Checksum(ctx, s.dbConn, matchSource.OriginSchema, matchSource.OriginTable, table.Info, chunk.Where, chunk.Args)
-	} else {
-		if matchSource != nil {
-			count, err = dbutil.GetRowCount(ctx, s.dbConn, matchSource.OriginSchema, matchSource.OriginTable, "", nil)
-		}
-	}
+	count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, s.dbConn, matchSource.OriginSchema, matchSource.OriginTable, table.Info, chunk.Where, chunk.Args)
 
 	cost := time.Since(beginTime)
 	return &ChecksumInfo{
@@ -146,6 +134,16 @@ func (s *TiDBSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter.
 		Err:      err,
 		Cost:     cost,
 	}
+}
+
+func (s *TiDBSource) GetCountForLackTable(ctx context.Context, tableRange *splitter.RangeInfo) int64 {
+	table := s.tableDiffs[tableRange.GetTableIndex()]
+	matchSource := getMatchSource(s.sourceTableMap, table)
+	if matchSource != nil {
+		count, _ := dbutil.GetRowCount(ctx, s.dbConn, matchSource.OriginSchema, matchSource.OriginTable, "", nil)
+		return count
+	}
+	return 0
 }
 
 func (s *TiDBSource) GetTables() []*common.TableDiff {
@@ -247,11 +245,10 @@ func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *conf
 			}
 
 			uniqueId := utils.UniqueID(targetSchema, targetTable)
-			var isMatched bool
-			if f.MatchTable(targetSchema, targetTable) {
+			isMatched := f.MatchTable(targetSchema, targetTable)
+			if isMatched {
 				// if match the filter, we should respect it and check target has this table later.
 				sourceTablesAfterRoute[uniqueId] = struct{}{}
-				isMatched = true
 			}
 			if _, ok := targetUniqueTableMap[uniqueId]; ok || (isMatched && skipNonExistingTable) {
 				if _, ok := sourceTableMap[uniqueId]; ok {

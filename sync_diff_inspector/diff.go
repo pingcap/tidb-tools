@@ -298,7 +298,7 @@ func (df *Diff) StructEqual(ctx context.Context) error {
 	}
 	for ; tableIndex < len(tables); tableIndex++ {
 		isEqual, isSkip, isAllTableExist := false, true, tables[tableIndex].TableLack
-		if common.AllTableExist(tables[tableIndex].TableLack) {
+		if common.AllTableExist(isAllTableExist) {
 			var err error
 			isEqual, isSkip, err = df.compareStruct(ctx, tableIndex)
 			if err != nil {
@@ -422,8 +422,8 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 		dml.node.State = checkpoints.IgnoreState
 		// for tables that don't exist upstream or downstream
 		if !common.AllTableExist(tableDiff.TableLack) {
-			upCount := df.upstream.GetCountAndCrc32(ctx, rangeInfo).Count
-			downCount := df.downstream.GetCountAndCrc32(ctx, rangeInfo).Count
+			upCount := df.upstream.GetCountForLackTable(ctx, rangeInfo)
+			downCount := df.downstream.GetCountForLackTable(ctx, rangeInfo)
 			df.report.SetTableDataCheckResult(schema, table, false, int(upCount), int(downCount), upCount, downCount, id)
 			return false
 		}

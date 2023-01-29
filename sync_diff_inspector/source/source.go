@@ -85,6 +85,9 @@ type Source interface {
 	// GetCountAndCrc32 gets the crc32 result and the count from given range.
 	GetCountAndCrc32(context.Context, *splitter.RangeInfo) *ChecksumInfo
 
+	// GetCountForLackTable gets the count for tables that don't exist upstream or downstream.
+	GetCountForLackTable(context.Context, *splitter.RangeInfo) int64
+
 	// GetRowsIterator gets the row data iterator from given range.
 	GetRowsIterator(context.Context, *splitter.RangeInfo) (RowDataIterator, error)
 
