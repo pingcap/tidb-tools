@@ -69,7 +69,7 @@ func getMatchedSourcesForTable(sourceTablesMap map[string][]*common.TableShardSo
 		log.Fatal("unreachable, source tables map shouldn't be nil.")
 	}
 	matchSources, ok := sourceTablesMap[utils.UniqueID(table.Schema, table.Table)]
-	if !ok {
+	if !ok && common.AllTableExist(table.TableLack) {
 		log.Fatal("unreachable, no match source tables in mysql shard source.")
 	}
 	return matchSources
@@ -138,6 +138,20 @@ func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitte
 	}
 }
 
+func (s *MySQLSources) GetCountForLackTable(ctx context.Context, tableRange *splitter.RangeInfo) int64 {
+	table := s.tableDiffs[tableRange.GetTableIndex()]
+	var totalCount int64
+
+	matchSources := getMatchedSourcesForTable(s.sourceTablesMap, table)
+	if matchSources != nil {
+		for _, ms := range matchSources {
+			count, _ := dbutil.GetRowCount(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, "", nil)
+			totalCount += count
+		}
+	}
+	return totalCount
+}
+
 func (s *MySQLSources) GetTables() []*common.TableDiff {
 	return s.tableDiffs
 }
@@ -162,6 +176,10 @@ func (s *MySQLSources) GetRowsIterator(ctx context.Context, tableRange *splitter
 	sourceRows := make(map[int]*sql.Rows)
 
 	table := s.tableDiffs[tableRange.GetTableIndex()]
+	// for tables that do not exist upstream or downstream
+	if !common.AllTableExist(table.TableLack) {
+		return nil, nil
+	}
 	matchSources := getMatchedSourcesForTable(s.sourceTablesMap, table)
 
 	var rowsQuery string
@@ -223,6 +241,10 @@ func (s *MySQLSources) GetSnapshot() string {
 
 func (s *MySQLSources) GetSourceStructInfo(ctx context.Context, tableIndex int) ([]*model.TableInfo, error) {
 	tableDiff := s.GetTables()[tableIndex]
+	// for tables that do not exist upstream or downstream
+	if !common.AllTableExist(tableDiff.TableLack) {
+		return nil, nil
+	}
 	tableSources := getMatchedSourcesForTable(s.sourceTablesMap, tableDiff)
 	sourceTableInfos := make([]*model.TableInfo, len(tableSources))
 	for i, tableSource := range tableSources {
@@ -282,7 +304,7 @@ func (ms *MultiSourceRowsIterator) Close() {
 	}
 }
 
-func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*config.DataSource, threadCount int, f tableFilter.Filter) (Source, error) {
+func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*config.DataSource, threadCount int, f tableFilter.Filter, skipNonExistingTable bool) (Source, error) {
 	sourceTablesMap := make(map[string][]*common.TableShardSource)
 	// we should get the real table name
 	// and real table row query from sourceDB.
@@ -320,12 +342,12 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 					}
 				}
 				uniqueId := utils.UniqueID(targetSchema, targetTable)
-				// get all tables from all source db instance
-				if f.MatchTable(targetSchema, targetTable) {
+				isMatched := f.MatchTable(targetSchema, targetTable)
+				if isMatched {
 					// if match the filter, we should respect it and check target has this table later.
 					sourceTablesAfterRoute[uniqueId] = struct{}{}
 				}
-				if _, ok := targetUniqueTableMap[uniqueId]; !ok {
+				if _, ok := targetUniqueTableMap[uniqueId]; !ok && !(isMatched && skipNonExistingTable) {
 					continue
 				}
 				maxSourceRouteTableCount[uniqueId]++
@@ -355,7 +377,8 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 
 	}
 
-	if err := checkTableMatched(targetUniqueTableMap, sourceTablesAfterRoute); err != nil {
+	tableDiffs, err := checkTableMatched(tableDiffs, targetUniqueTableMap, sourceTablesAfterRoute, skipNonExistingTable)
+	if err != nil {
 		return nil, errors.Annotatef(err, "please make sure the filter is correct.")
 	}
 

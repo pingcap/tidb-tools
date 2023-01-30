@@ -65,7 +65,7 @@ type TableResult struct {
 	ChunkMap    map[string]*ChunkResult `json:"chunk-result"` // `ChunkMap` stores the `ChunkResult` of each chunk of the table
 	UpCount     int64                   `json:"up-count"`     // `UpCount` is the number of rows in the table from upstream
 	DownCount   int64                   `json:"down-count"`   // `DownCount` is the number of rows in the table from downstream
-
+	TableLack   int                     `json:"table-lack"`
 }
 
 // ChunkResult save the necessarily information to provide summary information
@@ -80,6 +80,7 @@ type Report struct {
 	Result       string                             `json:"-"`             // Result is pass or fail
 	PassNum      int32                              `json:"-"`             // The pass number of tables
 	FailedNum    int32                              `json:"-"`             // The failed number of tables
+	SkippedNum   int32                              `json:"-"`             // The skipped number of tables
 	TableResults map[string]map[string]*TableResult `json:"table-results"` // TableResult saved the map of  `schema` => `table` => `tableResult`
 	StartTime    time.Time                          `json:"start-time"`
 	Duration     time.Duration                      `json:"time-duration"`
@@ -131,6 +132,11 @@ func (r *Report) getDiffRows() [][]string {
 			}
 			diffRow := make([]string, 0)
 			diffRow = append(diffRow, dbutil.TableName(schema, table))
+			if !common.AllTableExist(result.TableLack) {
+				diffRow = append(diffRow, "skipped")
+			} else {
+				diffRow = append(diffRow, "succeed")
+			}
 			if !result.StructEqual {
 				diffRow = append(diffRow, "false")
 			} else {
@@ -154,7 +160,6 @@ func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB) {
 	for schema, tableMap := range r.TableResults {
 		for table := range tableMap {
 			size, err := utils.GetTableSize(ctx, db, schema, table)
-
 			if size == 0 || err != nil {
 				log.Warn("fail to get the correct size of table, if you want to get the correct size, please analyze the corresponding tables", zap.String("table", dbutil.TableName(schema, table)), zap.Error(err))
 			} else {
@@ -166,11 +171,13 @@ func (r *Report) CalculateTotalSize(ctx context.Context, db *sql.DB) {
 
 // CommitSummary commit summary info
 func (r *Report) CommitSummary() error {
-	passNum, failedNum := int32(0), int32(0)
+	passNum, failedNum, skippedNum := int32(0), int32(0), int32(0)
 	for _, tableMap := range r.TableResults {
 		for _, result := range tableMap {
 			if result.StructEqual && result.DataEqual {
 				passNum++
+			} else if !common.AllTableExist(result.TableLack) {
+				skippedNum++
 			} else {
 				failedNum++
 			}
@@ -178,6 +185,7 @@ func (r *Report) CommitSummary() error {
 	}
 	r.PassNum = passNum
 	r.FailedNum = failedNum
+	r.SkippedNum = skippedNum
 	summaryPath := filepath.Join(r.task.OutputDir, "summary.txt")
 	summaryFile, err := os.Create(summaryPath)
 	if err != nil {
@@ -208,11 +216,11 @@ func (r *Report) CommitSummary() error {
 		summaryFile.WriteString(tableString.String())
 		summaryFile.WriteString("\n\n")
 	}
-	if r.Result == Fail {
+	if r.Result == Fail || r.SkippedNum != 0 {
 		summaryFile.WriteString("The following tables contains inconsistent data\n\n")
 		tableString := &strings.Builder{}
 		table := tablewriter.NewWriter(tableString)
-		table.SetHeader([]string{"Table", "Structure equality", "Data diff rows", "UpCount", "DownCount"})
+		table.SetHeader([]string{"Table", "Result", "Structure equality", "Data diff rows", "UpCount", "DownCount"})
 		diffRows := r.getDiffRows()
 		for _, v := range diffRows {
 			table.Append(v)
@@ -228,26 +236,35 @@ func (r *Report) CommitSummary() error {
 
 func (r *Report) Print(w io.Writer) error {
 	var summary strings.Builder
-	if r.Result == Pass {
-		summary.WriteString(fmt.Sprintf("A total of %d table have been compared and all are equal.\n", r.FailedNum+r.PassNum))
+	if r.Result == Pass && r.SkippedNum == 0 {
+		summary.WriteString(fmt.Sprintf("A total of %d table have been compared and all are equal.\n", r.FailedNum+r.PassNum+r.SkippedNum))
 		summary.WriteString(fmt.Sprintf("You can view the comparision details through '%s/%s'\n", r.task.OutputDir, config.LogFileName))
-	} else if r.Result == Fail {
+	} else if r.Result == Fail || r.SkippedNum != 0 {
 		for schema, tableMap := range r.TableResults {
 			for table, result := range tableMap {
 				if !result.StructEqual {
 					if result.DataSkip {
-						summary.WriteString(fmt.Sprintf("The structure of %s is not equal, and data-check is skipped\n", dbutil.TableName(schema, table)))
+						switch result.TableLack {
+						case common.UpstreamTableLackFlag:
+							summary.WriteString(fmt.Sprintf("The data of %s does not exist in upstream database\n", dbutil.TableName(schema, table)))
+						case common.DownstreamTableLackFlag:
+							summary.WriteString(fmt.Sprintf("The data of %s does not exist in downstream database\n", dbutil.TableName(schema, table)))
+						default:
+							summary.WriteString(fmt.Sprintf("The structure of %s is not equal, and data-check is skipped\n", dbutil.TableName(schema, table)))
+						}
 					} else {
 						summary.WriteString(fmt.Sprintf("The structure of %s is not equal\n", dbutil.TableName(schema, table)))
 					}
 				}
-				if !result.DataEqual {
+				if !result.DataEqual && common.AllTableExist(result.TableLack) {
 					summary.WriteString(fmt.Sprintf("The data of %s is not equal\n", dbutil.TableName(schema, table)))
 				}
 			}
 		}
 		summary.WriteString("\n")
 		summary.WriteString("The rest of tables are all equal.\n")
+		summary.WriteString("\n")
+		summary.WriteString(fmt.Sprintf("A total of %d tables have been compared, %d tables finished, %d tables failed, %d tables skipped.\n", r.FailedNum+r.PassNum+r.SkippedNum, r.PassNum, r.FailedNum, r.SkippedNum))
 		summary.WriteString(fmt.Sprintf("The patch file has been generated in \n\t'%s/'\n", r.task.FixDir))
 		summary.WriteString(fmt.Sprintf("You can view the comparision details through '%s/%s'\n", r.task.OutputDir, config.LogFileName))
 	} else {
@@ -295,13 +312,14 @@ func (r *Report) Init(tableDiffs []*common.TableDiff, sourceConfig [][]byte, tar
 }
 
 // SetTableStructCheckResult sets the struct check result for table.
-func (r *Report) SetTableStructCheckResult(schema, table string, equal bool, skip bool) {
+func (r *Report) SetTableStructCheckResult(schema, table string, equal bool, skip bool, exist int) {
 	r.Lock()
 	defer r.Unlock()
 	tableResult := r.TableResults[schema][table]
 	tableResult.StructEqual = equal
 	tableResult.DataSkip = skip
-	if !equal && r.Result != Error {
+	tableResult.TableLack = exist
+	if !equal && common.AllTableExist(tableResult.TableLack) && r.Result != Error {
 		r.Result = Fail
 	}
 }
@@ -323,11 +341,11 @@ func (r *Report) SetTableDataCheckResult(schema, table string, equal bool, rowsA
 		}
 		result.ChunkMap[id.ToString()].RowsAdd += rowsAdd
 		result.ChunkMap[id.ToString()].RowsDelete += rowsDelete
-		if r.Result != Error {
+		if r.Result != Error && common.AllTableExist(result.TableLack) {
 			r.Result = Fail
 		}
 	}
-	if !equal && r.Result != Error {
+	if !equal && common.AllTableExist(result.TableLack) && r.Result != Error {
 		r.Result = Fail
 	}
 }

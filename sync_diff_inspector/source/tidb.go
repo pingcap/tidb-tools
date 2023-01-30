@@ -137,6 +137,16 @@ func (s *TiDBSource) GetCountAndCrc32(ctx context.Context, tableRange *splitter.
 	}
 }
 
+func (s *TiDBSource) GetCountForLackTable(ctx context.Context, tableRange *splitter.RangeInfo) int64 {
+	table := s.tableDiffs[tableRange.GetTableIndex()]
+	matchSource := getMatchSource(s.sourceTableMap, table)
+	if matchSource != nil {
+		count, _ := dbutil.GetRowCount(ctx, s.dbConn, matchSource.OriginSchema, matchSource.OriginTable, "", nil)
+		return count
+	}
+	return 0
+}
+
 func (s *TiDBSource) GetTables() []*common.TableDiff {
 	return s.tableDiffs
 }
@@ -194,7 +204,7 @@ func (s *TiDBSource) GetSnapshot() string {
 	return s.snapshot
 }
 
-func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource, f tableFilter.Filter) (map[string]*common.TableSource, error) {
+func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource, bucketSpliterPool *utils.WorkerPool, f tableFilter.Filter, skipNonExistingTable bool) (Source, error) {
 	sourceTableMap := make(map[string]*common.TableSource)
 	log.Info("find router for tidb source")
 	// we should get the real table name
@@ -236,11 +246,12 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 			}
 
 			uniqueId := utils.UniqueID(targetSchema, targetTable)
-			if f.MatchTable(targetSchema, targetTable) {
+			isMatched := f.MatchTable(targetSchema, targetTable)
+			if isMatched {
 				// if match the filter, we should respect it and check target has this table later.
 				sourceTablesAfterRoute[uniqueId] = struct{}{}
 			}
-			if _, ok := targetUniqueTableMap[uniqueId]; ok {
+			if _, ok := targetUniqueTableMap[uniqueId]; ok || (isMatched && skipNonExistingTable) {
 				if _, ok := sourceTableMap[uniqueId]; ok {
 					log.Error("TiDB source don't support compare multiple source tables with one downstream table," +
 						" if this happening when diff on same instance is fine. otherwise we are not guarantee this diff result is right")
@@ -253,16 +264,9 @@ func getSourceTableMap(ctx context.Context, tableDiffs []*common.TableDiff, ds *
 		}
 	}
 
-	if err = checkTableMatched(targetUniqueTableMap, sourceTablesAfterRoute); err != nil {
-		return nil, errors.Annotatef(err, "please make sure the filter is correct.")
-	}
-	return sourceTableMap, nil
-}
-
-func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *config.DataSource, bucketSpliterPool *utils.WorkerPool, f tableFilter.Filter) (Source, error) {
-	sourceTableMap, err := getSourceTableMap(ctx, tableDiffs, ds, f)
+	tableDiffs, err = checkTableMatched(tableDiffs, targetUniqueTableMap, sourceTablesAfterRoute, skipNonExistingTable)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.Annotatef(err, "please make sure the filter is correct.")
 	}
 	ts := &TiDBSource{
 		tableDiffs:        tableDiffs,

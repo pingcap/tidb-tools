@@ -70,6 +70,12 @@ func TestReport(t *testing.T) {
 			Info:      tableInfo2,
 			Collation: "[123]",
 		},
+		{
+			Schema:    "dtest",
+			Table:     "atbl",
+			Info:      tableInfo2,
+			Collation: "[123]",
+		},
 	}
 	configs := []*ReportConfig{
 		{
@@ -104,7 +110,7 @@ func TestReport(t *testing.T) {
 	report.CalculateTotalSize(ctx, db)
 
 	// Test Table Report
-	report.SetTableStructCheckResult("test", "tbl", true, false)
+	report.SetTableStructCheckResult("test", "tbl", true, false, common.AllTableExistFlag)
 	report.SetTableDataCheckResult("test", "tbl", true, 100, 200, 222, 222, &chunk.ChunkID{1, 1, 1, 1, 2})
 	report.SetTableMeetError("test", "tbl", errors.New("eeee"))
 
@@ -118,19 +124,21 @@ func TestReport(t *testing.T) {
 	require.True(t, result.DataEqual)
 	require.True(t, result.StructEqual)
 
-	require.Equal(t, new_report.getSortedTables(), [][]string{{"`atest`.`atbl`", "0", "0"}, {"`ctest`.`atbl`", "0", "0"}, {"`test`.`tbl`", "222", "222"}})
+	require.Equal(t, new_report.getSortedTables(), [][]string{{"`atest`.`atbl`", "0", "0"}, {"`ctest`.`atbl`", "0", "0"}, {"`dtest`.`atbl`", "0", "0"}, {"`test`.`tbl`", "222", "222"}})
 	require.Equal(t, new_report.getDiffRows(), [][]string{})
 
-	new_report.SetTableStructCheckResult("atest", "atbl", true, false)
+	new_report.SetTableStructCheckResult("atest", "atbl", true, false, common.AllTableExistFlag)
 	new_report.SetTableDataCheckResult("atest", "atbl", false, 111, 222, 333, 333, &chunk.ChunkID{1, 1, 1, 1, 2})
-	require.Equal(t, new_report.getSortedTables(), [][]string{{"`ctest`.`atbl`", "0", "0"}, {"`test`.`tbl`", "222", "222"}})
-	require.Equal(t, new_report.getDiffRows(), [][]string{{"`atest`.`atbl`", "true", "+111/-222", "333", "333"}})
+	require.Equal(t, new_report.getSortedTables(), [][]string{{"`ctest`.`atbl`", "0", "0"}, {"`dtest`.`atbl`", "0", "0"}, {"`test`.`tbl`", "222", "222"}})
+	require.Equal(t, new_report.getDiffRows(), [][]string{{"`atest`.`atbl`", "succeed", "true", "+111/-222", "333", "333"}})
 
-	new_report.SetTableStructCheckResult("atest", "atbl", false, false)
-	require.Equal(t, new_report.getSortedTables(), [][]string{{"`ctest`.`atbl`", "0", "0"}, {"`test`.`tbl`", "222", "222"}})
-	require.Equal(t, new_report.getDiffRows(), [][]string{{"`atest`.`atbl`", "false", "+111/-222", "333", "333"}})
+	new_report.SetTableStructCheckResult("atest", "atbl", false, false, common.AllTableExistFlag)
+	require.Equal(t, new_report.getSortedTables(), [][]string{{"`ctest`.`atbl`", "0", "0"}, {"`dtest`.`atbl`", "0", "0"}, {"`test`.`tbl`", "222", "222"}})
+	require.Equal(t, new_report.getDiffRows(), [][]string{{"`atest`.`atbl`", "succeed", "false", "+111/-222", "333", "333"}})
 
-	new_report.SetTableStructCheckResult("ctest", "atbl", false, true)
+	new_report.SetTableStructCheckResult("ctest", "atbl", false, true, common.AllTableExistFlag)
+
+	new_report.SetTableStructCheckResult("dtest", "atbl", false, true, common.DownstreamTableLackFlag)
 
 	buf := new(bytes.Buffer)
 	new_report.Print(buf)
@@ -138,8 +146,10 @@ func TestReport(t *testing.T) {
 	require.Contains(t, info, "The structure of `atest`.`atbl` is not equal\n")
 	require.Contains(t, info, "The data of `atest`.`atbl` is not equal\n")
 	require.Contains(t, info, "The structure of `ctest`.`atbl` is not equal, and data-check is skipped\n")
+	require.Contains(t, info, "The data of `dtest`.`atbl` does not exist in downstream database\n")
 	require.Contains(t, info, "\n"+
-		"The rest of tables are all equal.\n"+
+		"The rest of tables are all equal.\n\n"+
+		"A total of 0 tables have been compared, 0 tables finished, 0 tables failed, 0 tables skipped.\n"+
 		"The patch file has been generated in \n\t'output_dir/123456/fix-on-tidb1/'\n"+
 		"You can view the comparision details through 'output_dir/sync_diff.log'\n")
 }
@@ -245,7 +255,7 @@ func TestPrint(t *testing.T) {
 
 	var buf *bytes.Buffer
 	// All Pass
-	report.SetTableStructCheckResult("test", "tbl", true, false)
+	report.SetTableStructCheckResult("test", "tbl", true, false, common.AllTableExistFlag)
 	report.SetTableDataCheckResult("test", "tbl", true, 0, 0, 22, 22, &chunk.ChunkID{0, 0, 0, 0, 1})
 	buf = new(bytes.Buffer)
 	report.Print(buf)
@@ -254,7 +264,7 @@ func TestPrint(t *testing.T) {
 
 	// Error
 	report.SetTableMeetError("test", "tbl1", errors.New("123"))
-	report.SetTableStructCheckResult("test", "tbl1", false, false)
+	report.SetTableStructCheckResult("test", "tbl1", false, false, common.AllTableExistFlag)
 	buf = new(bytes.Buffer)
 	report.Print(buf)
 	require.Equal(t, buf.String(), "Error in comparison process:\n"+
@@ -319,17 +329,17 @@ func TestGetSnapshot(t *testing.T) {
 	}
 	report.Init(tableDiffs, configsBytes[:2], configsBytes[2])
 
-	report.SetTableStructCheckResult("test", "tbl", true, false)
+	report.SetTableStructCheckResult("test", "tbl", true, false, common.AllTableExistFlag)
 	report.SetTableDataCheckResult("test", "tbl", false, 100, 100, 200, 300, &chunk.ChunkID{0, 0, 0, 1, 10})
 	report.SetTableDataCheckResult("test", "tbl", true, 0, 0, 300, 300, &chunk.ChunkID{0, 0, 0, 3, 10})
 	report.SetTableDataCheckResult("test", "tbl", false, 200, 200, 400, 500, &chunk.ChunkID{0, 0, 0, 3, 10})
 
-	report.SetTableStructCheckResult("atest", "tbl", true, false)
+	report.SetTableStructCheckResult("atest", "tbl", true, false, common.AllTableExistFlag)
 	report.SetTableDataCheckResult("atest", "tbl", false, 100, 100, 500, 600, &chunk.ChunkID{0, 0, 0, 0, 10})
 	report.SetTableDataCheckResult("atest", "tbl", true, 0, 0, 600, 600, &chunk.ChunkID{0, 0, 0, 3, 10})
 	report.SetTableDataCheckResult("atest", "tbl", false, 200, 200, 700, 800, &chunk.ChunkID{0, 0, 0, 3, 10})
 
-	report.SetTableStructCheckResult("xtest", "tbl", true, false)
+	report.SetTableStructCheckResult("xtest", "tbl", true, false, common.AllTableExistFlag)
 	report.SetTableDataCheckResult("xtest", "tbl", false, 100, 100, 800, 900, &chunk.ChunkID{0, 0, 0, 0, 10})
 	report.SetTableDataCheckResult("xtest", "tbl", true, 0, 0, 900, 900, &chunk.ChunkID{0, 0, 0, 1, 10})
 	report.SetTableDataCheckResult("xtest", "tbl", false, 200, 200, 1000, 1100, &chunk.ChunkID{0, 0, 0, 3, 10})
@@ -390,7 +400,9 @@ func TestCommitSummary(t *testing.T) {
 	createTableSQL3 := "create table `xtest`.`tbl`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
 	tableInfo3, err := dbutil.GetTableInfoBySQL(createTableSQL3, parser.New())
 	require.NoError(t, err)
-
+	createTableSQL4 := "create table `xtest`.`tb1`(`a` int, `b` varchar(10), `c` float, `d` datetime, primary key(`a`, `b`))"
+	tableInfo4, err := dbutil.GetTableInfoBySQL(createTableSQL4, parser.New())
+	require.NoError(t, err)
 	tableDiffs := []*common.TableDiff{
 		{
 			Schema:    "test",
@@ -411,6 +423,16 @@ func TestCommitSummary(t *testing.T) {
 			Schema:    "ytest",
 			Table:     "tbl",
 			Info:      tableInfo3,
+			Collation: "[123]",
+		}, {
+			Schema:    "xtest",
+			Table:     "tb1",
+			Info:      tableInfo4,
+			Collation: "[123]",
+		}, {
+			Schema:    "xtest",
+			Table:     "tb2",
+			Info:      tableInfo4,
 			Collation: "[123]",
 		},
 	}
@@ -441,14 +463,20 @@ func TestCommitSummary(t *testing.T) {
 	}
 	report.Init(tableDiffs, configsBytes[:2], configsBytes[2])
 
-	report.SetTableStructCheckResult("test", "tbl", true, false)
+	report.SetTableStructCheckResult("test", "tbl", true, false, common.AllTableExistFlag)
 	report.SetTableDataCheckResult("test", "tbl", true, 100, 200, 400, 400, &chunk.ChunkID{0, 0, 0, 1, 10})
 
-	report.SetTableStructCheckResult("atest", "tbl", true, false)
+	report.SetTableStructCheckResult("atest", "tbl", true, false, common.AllTableExistFlag)
 	report.SetTableDataCheckResult("atest", "tbl", false, 100, 200, 500, 600, &chunk.ChunkID{0, 0, 0, 2, 10})
 
-	report.SetTableStructCheckResult("xtest", "tbl", false, false)
+	report.SetTableStructCheckResult("xtest", "tbl", false, false, common.AllTableExistFlag)
 	report.SetTableDataCheckResult("xtest", "tbl", false, 100, 200, 600, 700, &chunk.ChunkID{0, 0, 0, 3, 10})
+
+	report.SetTableStructCheckResult("xtest", "tb1", false, true, common.UpstreamTableLackFlag)
+	report.SetTableDataCheckResult("xtest", "tb1", false, 0, 200, 0, 200, &chunk.ChunkID{0, 0, 0, 4, 10})
+
+	report.SetTableStructCheckResult("xtest", "tb2", false, true, common.DownstreamTableLackFlag)
+	report.SetTableDataCheckResult("xtest", "tb2", false, 100, 0, 100, 0, &chunk.ChunkID{0, 0, 0, 5, 10})
 
 	err = report.CommitSummary()
 	require.NoError(t, err)
@@ -456,7 +484,7 @@ func TestCommitSummary(t *testing.T) {
 	file, err := os.Open(filename)
 	require.NoError(t, err)
 
-	p := make([]byte, 1024)
+	p := make([]byte, 2048)
 	file.Read(p)
 	str := string(p)
 	require.Contains(t, str, "Summary\n\n\n\n"+
@@ -480,13 +508,17 @@ func TestCommitSummary(t *testing.T) {
 		"| `ytest`.`tbl` |       0 |         0 |\n"+
 		"+---------------+---------+-----------+\n\n\n"+
 		"The following tables contains inconsistent data\n\n"+
-		"+---------------+--------------------+----------------+---------+-----------+\n"+
-		"|     TABLE     | STRUCTURE EQUALITY | DATA DIFF ROWS | UPCOUNT | DOWNCOUNT |\n"+
-		"+---------------+--------------------+----------------+---------+-----------+\n")
+		"+---------------+---------+--------------------+----------------+---------+-----------+\n"+
+		"|     TABLE     | RESULT  | STRUCTURE EQUALITY | DATA DIFF ROWS | UPCOUNT | DOWNCOUNT |\n"+
+		"+---------------+---------+--------------------+----------------+---------+-----------+\n")
 	require.Contains(t, str,
-		"| `atest`.`tbl` | true               | +100/-200      |     500 |       600 |\n")
+		"| `atest`.`tbl` | succeed | true               | +100/-200      |     500 |       600 |\n")
 	require.Contains(t, str,
-		"| `xtest`.`tbl` | false              | +100/-200      |     600 |       700 |\n")
+		"| `xtest`.`tbl` | succeed | false              | +100/-200      |     600 |       700 |\n")
+	require.Contains(t, str,
+		"| `xtest`.`tb1` | skipped | false              | +0/-200        |       0 |       200 |\n")
+	require.Contains(t, str,
+		"| `xtest`.`tb2` | skipped | false              | +100/-0        |     100 |         0 |\n")
 
 	file.Close()
 	err = os.Remove(filename)

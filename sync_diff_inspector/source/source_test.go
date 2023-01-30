@@ -144,7 +144,7 @@ func TestTiDBSource(t *testing.T) {
 
 	f, err := filter.Parse([]string{"source_test.*"})
 	require.NoError(t, err)
-	tidb, err := NewTiDBSource(ctx, tableDiffs, &config.DataSource{Conn: conn}, utils.NewWorkerPool(1, "bucketIter"), f)
+	tidb, err := NewTiDBSource(ctx, tableDiffs, &config.DataSource{Conn: conn}, utils.NewWorkerPool(1, "bucketIter"), f, false)
 	require.NoError(t, err)
 
 	caseFn := []struct {
@@ -304,7 +304,7 @@ func TestFallbackToRandomIfRangeIsSet(t *testing.T) {
 		Range:  "id < 10", // This should prevent using BucketIterator
 	}
 
-	tidb, err := NewTiDBSource(ctx, []*common.TableDiff{table1}, &config.DataSource{Conn: conn}, utils.NewWorkerPool(1, "bucketIter"), f)
+	tidb, err := NewTiDBSource(ctx, []*common.TableDiff{table1}, &config.DataSource{Conn: conn}, utils.NewWorkerPool(1, "bucketIter"), f, false)
 	require.NoError(t, err)
 
 	analyze := tidb.GetTableAnalyzer()
@@ -374,7 +374,7 @@ func TestMysqlShardSources(t *testing.T) {
 
 	f, err := filter.Parse([]string{"source_test.*"})
 	require.NoError(t, err)
-	shard, err := NewMySQLSources(ctx, tableDiffs, cs, 4, f)
+	shard, err := NewMySQLSources(ctx, tableDiffs, cs, 4, f, false)
 	require.NoError(t, err)
 
 	for i := 0; i < len(dbs); i++ {
@@ -501,7 +501,7 @@ func TestMysqlRouter(t *testing.T) {
 
 	f, err := filter.Parse([]string{"*.*"})
 	require.NoError(t, err)
-	mysql, err := NewMySQLSources(ctx, tableDiffs, []*config.DataSource{ds}, 4, f)
+	mysql, err := NewMySQLSources(ctx, tableDiffs, []*config.DataSource{ds}, 4, f, false)
 	require.NoError(t, err)
 
 	// random splitter
@@ -610,7 +610,7 @@ func TestTiDBRouter(t *testing.T) {
 
 	f, err := filter.Parse([]string{"*.*"})
 	require.NoError(t, err)
-	tidb, err := NewTiDBSource(ctx, tableDiffs, ds, utils.NewWorkerPool(1, "bucketIter"), f)
+	tidb, err := NewTiDBSource(ctx, tableDiffs, ds, utils.NewWorkerPool(1, "bucketIter"), f, false)
 	require.NoError(t, err)
 	infoRows := sqlmock.NewRows([]string{"Table", "Create Table"}).AddRow("test_t", "CREATE TABLE `source_test`.`test1` (`a` int, `b` varchar(24), `c` float, primary key(`a`, `b`))")
 	mock.ExpectQuery("SHOW CREATE TABLE.*").WillReturnRows(infoRows)
@@ -910,20 +910,39 @@ func TestInitTables(t *testing.T) {
 }
 
 func TestCheckTableMatched(t *testing.T) {
+	var tableDiffs []*common.TableDiff
+	tableDiffs = append(tableDiffs, &common.TableDiff{
+		Schema: "test",
+		Table:  "t1",
+	})
+	tableDiffs = append(tableDiffs, &common.TableDiff{
+		Schema: "test",
+		Table:  "t2",
+	})
+
 	tmap := make(map[string]struct{})
 	smap := make(map[string]struct{})
 
-	tmap["1"] = struct{}{}
-	tmap["2"] = struct{}{}
+	smap["`test`.`t1`"] = struct{}{}
+	smap["`test`.`t2`"] = struct{}{}
 
-	smap["1"] = struct{}{}
-	smap["2"] = struct{}{}
-	require.NoError(t, checkTableMatched(tmap, smap))
+	tmap["`test`.`t1`"] = struct{}{}
+	tmap["`test`.`t2`"] = struct{}{}
 
-	delete(smap, "1")
-	require.Contains(t, checkTableMatched(tmap, smap).Error(), "the source has no table to be compared. target-table")
+	tables, err := checkTableMatched(tableDiffs, tmap, smap, false)
+	require.NoError(t, err)
 
-	delete(tmap, "1")
-	smap["1"] = struct{}{}
-	require.Contains(t, checkTableMatched(tmap, smap).Error(), "the target has no table to be compared. source-table")
+	smap["`test`.`t3`"] = struct{}{}
+	tables, err = checkTableMatched(tableDiffs, tmap, smap, false)
+	require.Contains(t, err.Error(), "the target has no table to be compared. source-table is ``test`.`t3``")
+
+	delete(smap, "`test`.`t2`")
+	tables, err = checkTableMatched(tableDiffs, tmap, smap, false)
+	require.Contains(t, err.Error(), "the source has no table to be compared. target-table is ``test`.`t2``")
+
+	tables, err = checkTableMatched(tableDiffs, tmap, smap, true)
+	require.NoError(t, err)
+	require.Equal(t, 0, tables[0].TableLack)
+	require.Equal(t, 1, tables[1].TableLack)
+	require.Equal(t, -1, tables[2].TableLack)
 }

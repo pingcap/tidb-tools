@@ -65,4 +65,19 @@ type TableDiff struct {
 	Collation string `json:"collation"`
 
 	ChunkSize int64 `json:"chunk-size"`
+
+	// TableLack = 1: the table only exists downstream,
+	// TableLack = -1: the table only exists upstream,
+	// TableLack = 0: the table exists both upstream and downstream.
+	TableLack int `json:"-"`
+}
+
+const (
+	AllTableExistFlag       = 0
+	DownstreamTableLackFlag = -1
+	UpstreamTableLackFlag   = 1
+)
+
+func AllTableExist(tableLack int) bool {
+	return tableLack == AllTableExistFlag
 }

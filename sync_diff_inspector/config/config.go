@@ -374,6 +374,8 @@ type Config struct {
 	CheckStructOnly bool `toml:"check-struct-only" json:"check-struct-only"`
 	// experimental feature: only check table data without table struct
 	CheckDataOnly bool `toml:"check-data-only" json:"-"`
+	// skip validation for tables that don't exist upstream or downstream
+	SkipNonExistingTable bool `toml:"skip-non-existing-table" json:"-"`
 	// DMAddr is dm-master's address, the format should like "http://127.0.0.1:8261"
 	DMAddr string `toml:"dm-addr" json:"dm-addr"`
 	// DMTask string `toml:"dm-task" json:"dm-task"`
@@ -411,6 +413,7 @@ func NewConfig() *Config {
 	fs.IntVar(&cfg.CheckThreadCount, "check-thread-count", 4, "how many goroutines are created to check data")
 	fs.BoolVar(&cfg.ExportFixSQL, "export-fix-sql", true, "set true if want to compare rows or set to false will only compare checksum")
 	fs.BoolVar(&cfg.CheckStructOnly, "check-struct-only", false, "ignore check table's data")
+	fs.BoolVar(&cfg.SkipNonExistingTable, "skip-non-existing-table", false, "skip validation for tables that don't exist upstream or downstream")
 	fs.BoolVar(&cfg.CheckDataOnly, "check-data-only", false, "ignore check table's struct")
 
 	_ = fs.MarkHidden("check-data-only")
