@@ -46,4 +46,4 @@ skip-non-existing-table = true
     target-instance = "tidb"
 
     # tables need to check.
-    target-check-tables = ["diff_test.t*"]
+    target-check-tables = ["skip_test.t*"]

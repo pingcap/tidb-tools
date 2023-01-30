@@ -28,7 +28,7 @@ skip-non-existing-table = true
     user = "root"
     password = ""
 
-    route-rules = ["rule2","rule3"]
+    route-rules = ["rule2"]
 
 [data-sources.tidb0]
     host = "127.0.0.1"
@@ -38,22 +38,17 @@ skip-non-existing-table = true
 
 ########################### Routes ###########################
 [routes.rule1]
-schema-pattern = "diff_test"        # Matches the schema name of the data source. Supports the wildcards "*" and "?"
+schema-pattern = "skip_test"        # Matches the schema name of the data source. Supports the wildcards "*" and "?"
 table-pattern = "t[1-2]"  # Matches the table name of the data source. Supports the wildcards "*" and "?"
-target-schema = "diff_test"         # The name of the schema in the target database
+target-schema = "skip_test"         # The name of the schema in the target database
 target-table = "t5"       # The name of the target table
 
 [routes.rule2]
-schema-pattern = "diff_test"
+schema-pattern = "skip_test"
 table-pattern = "t0"
-target-schema = "diff_test"
+target-schema = "skip_test"
 target-table = "t5"
 
-[routes.rule3]
-schema-pattern = "diff_test"
-table-pattern = "t4"
-target-schema = "diff_test"
-target-table = "t4"
 ######################### Task config #########################
 [task]
     output-dir = "/tmp/tidb_tools_test/sync_diff_inspector/output"
@@ -63,4 +58,4 @@ target-table = "t4"
     target-instance = "tidb0"
 
     # The tables of downstream databases to be compared. Each table needs to contain the schema name and the table name, separated by '.'
-    target-check-tables = ["diff_test.t5","diff_test.t4"]
+    target-check-tables = ["skip_test.t5"]

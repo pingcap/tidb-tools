@@ -188,10 +188,6 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 		}
 	}
 
-	if len(tableDiffs) == 0 {
-		return nil, nil, errors.Errorf("no table need to be compared")
-	}
-
 	// Sort TableDiff is important!
 	// because we compare table one by one.
 	sort.Slice(tableDiffs, func(i, j int) bool {
@@ -210,6 +206,9 @@ func NewSources(ctx context.Context, cfg *config.Config) (downstream Source, ups
 	upstream, err = buildSourceFromCfg(ctx, tableDiffs, mysqlConnCount, bucketSpliterPool, cfg.SkipNonExistingTable, cfg.Task.TargetCheckTables, cfg.Task.SourceInstances...)
 	if err != nil {
 		return nil, nil, errors.Annotate(err, "from upstream")
+	}
+	if len(upstream.GetTables()) == 0 {
+		return nil, nil, errors.Errorf("no table need to be compared")
 	}
 	downstream, err = buildSourceFromCfg(ctx, upstream.GetTables(), mysqlConnCount, bucketSpliterPool, cfg.SkipNonExistingTable, cfg.Task.TargetCheckTables, cfg.Task.TargetInstance)
 	if err != nil {
