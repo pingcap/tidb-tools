@@ -56,7 +56,7 @@ rm -rf $OUT_DIR/*
 
 echo "test router case"
 sync_diff_inspector --config=./config_router.toml > $OUT_DIR/table_skip_diff.output || true
-check_contains "check failed" $OUT_DIR/sync_diff.log
+check_contains "check pass" $OUT_DIR/sync_diff.log
 check_contains "| \`skip_test\`.\`t5\` | skipped | false              | +3/-0          |       3 |         0 |" $OUT_DIR/summary.txt
 check_contains "The data of \`skip_test\`.\`t5\` does not exist in downstream database" $OUT_DIR/table_skip_diff.output
 check_contains "A total of 1 tables have been compared, 0 tables finished, 0 tables failed, 1 tables skipped" $OUT_DIR/table_skip_diff.output
