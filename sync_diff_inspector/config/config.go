@@ -501,7 +501,7 @@ func parseTLSFromDMConfig(config *dmconfig.Security) *Security {
 
 		CABytes:   string(config.SSLCABytes),
 		CertBytes: string(config.SSLCertBytes),
-		KeyBytes:  string(config.SSLKEYBytes),
+		KeyBytes:  string(config.SSLKeyBytes),
 	}
 }
 
