@@ -138,11 +138,18 @@ func TestBasicTableUtilOperation(t *testing.T) {
 		"c": {Data: []byte(""), IsNull: true},
 		"d": {Data: []byte("sdf"), IsNull: false},
 	}
+	data9 := map[string]*dbutil.ColumnData{
+		"a": {Data: []byte("1"), IsNull: false},
+		"b": {Data: []byte("a"), IsNull: false},
+		"c": {Data: []byte("0"), IsNull: false},
+		"d": {Data: []byte("sdf"), IsNull: false},
+	}
 
 	columns := tableInfo.Columns
 
 	require.Equal(t, GenerateReplaceDML(data1, tableInfo, "schema"), "REPLACE INTO `schema`.`test`(`a`,`b`,`c`,`d`) VALUES (1,'a',1.22,'sdf');")
 	require.Equal(t, GenerateDeleteDML(data8, tableInfo, "schema"), "DELETE FROM `schema`.`test` WHERE `a` = 1 AND `b` = 'a' AND `c` is NULL AND `d` = 'sdf' LIMIT 1;")
+	require.Equal(t, GenerateDeleteDML(data9, tableInfo, "schema"), "DELETE FROM `schema`.`test` WHERE `a` = 1 AND `b` = 'a' AND `c` = 0 AND `d` = 'sdf' LIMIT 1;")
 	require.Equal(t, GenerateReplaceDMLWithAnnotation(data1, data2, tableInfo, "schema"),
 		"/*\n"+
 			"  DIFF COLUMNS ╏ `B` ╏ `C`   \n"+
@@ -224,6 +231,11 @@ func TestBasicTableUtilOperation(t *testing.T) {
 	require.False(t, equal)
 
 	equal, cmp, err = CompareData(data8, data1, orderKeyCols, columns)
+	require.NoError(t, err)
+	require.Equal(t, cmp, int32(0))
+	require.False(t, equal)
+
+	equal, cmp, err = CompareData(data8, data9, orderKeyCols, columns)
 	require.NoError(t, err)
 	require.Equal(t, cmp, int32(0))
 	require.False(t, equal)
