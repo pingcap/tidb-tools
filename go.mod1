@@ -239,4 +239,4 @@ replace github.com/golang/lint => golang.org/x/lint v0.0.0-20190930215403-162171
 // Suppress 'ambiguous imports' error caused by that old tikv/pd also provides `tikv/pd/client`
 replace github.com/tikv/pd => github.com/tikv/pd v0.0.0-20220218061340-602217e4455a
 
-go 1.19
+go 1.20
