@@ -143,15 +143,7 @@ func GetTableRowsQueryFormat(schema, table string, tableInfo *model.TableInfo, c
 
 	columnNames := make([]string, 0, len(tableInfo.Columns))
 	for _, col := range tableInfo.Columns {
-		name := dbutil.ColumnName(col.Name.O)
-		// When col value is 0, the result is NULL.
-		// But we can use ISNULL to distinguish between null and 0.
-		if col.FieldType.GetType() == mysql.TypeFloat {
-			name = fmt.Sprintf("round(%s, 5-floor(log10(abs(%s)))) as %s", name, name, name)
-		} else if col.FieldType.GetType() == mysql.TypeDouble {
-			name = fmt.Sprintf("round(%s, 14-floor(log10(abs(%s)))) as %s", name, name, name)
-		}
-		columnNames = append(columnNames, name)
+		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
 	}
 	columns := strings.Join(columnNames, ", ")
 	if collation != "" {
@@ -539,18 +531,21 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 		str1 = string(data1.Data)
 		str2 = string(data2.Data)
 		if column.FieldType.GetType() == mysql.TypeFloat || column.FieldType.GetType() == mysql.TypeDouble {
-			if data1.IsNull == data2.IsNull && data1.IsNull {
+			if data1.IsNull && data2.IsNull {
 				continue
-			}
-
-			num1, err1 := strconv.ParseFloat(str1, 64)
-			num2, err2 := strconv.ParseFloat(str2, 64)
-			if err1 != nil || err2 != nil {
-				err = errors.Errorf("convert %s, %s to float failed, err1: %v, err2: %v", str1, str2, err1, err2)
-				return
-			}
-			if math.Abs(num1-num2) <= 1e-6 {
-				continue
+			} else if !data1.IsNull && !data2.IsNull {
+				num1, err1 := strconv.ParseFloat(str1, 64)
+				num2, err2 := strconv.ParseFloat(str2, 64)
+				if err1 != nil || err2 != nil {
+					err = errors.Errorf("convert %s, %s to float failed, err1: %v, err2: %v", str1, str2, err1, err2)
+					return
+				}
+				if math.Abs(num1-num2) <= 1e-6 {
+					continue
+				}
+			} else {
+				equal = false
+				break
 			}
 		} else if column.FieldType.GetType() == mysql.TypeJSON {
 			if (str1 == str2) || (data1.IsNull && data2.IsNull) {
