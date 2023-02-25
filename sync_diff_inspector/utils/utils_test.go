@@ -229,7 +229,7 @@ func TestBasicTableUtilOperation(t *testing.T) {
 	require.Equal(t, tableInfo.Indices[0].Columns[1].Offset, 1)
 }
 
-func TestGetCountAndCRC32Checksum(t *testing.T) {
+func TestGetCountAndMD5ChecksumChecksum(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
@@ -241,12 +241,13 @@ func TestGetCountAndCRC32Checksum(t *testing.T) {
 	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
 	require.NoError(t, err)
 
-	mock.ExpectQuery("SELECT COUNT.*FROM `test_schema`\\.`test_table` WHERE \\[23 45\\].*").WithArgs("123", "234").WillReturnRows(sqlmock.NewRows([]string{"CNT", "CHECKSUM"}).AddRow(123, 456))
+	mock.ExpectQuery("SELECT COUNT.*FROM `test_schema`\\.`test_table` WHERE \\[23 45\\].*").WithArgs("123", "234").WillReturnRows(sqlmock.NewRows([]string{"CNT", "LMD5", "RMD5"}).AddRow(123, 456, 789))
 
-	count, checksum, err := GetCountAndCRC32Checksum(ctx, conn, "test_schema", "test_table", tableInfo, "[23 45]", []interface{}{"123", "234"})
+	count, lmd5, rmd5, err := GetCountAndMD5Checksum(ctx, conn, "test_schema", "test_table", tableInfo, "[23 45]", []interface{}{"123", "234"})
 	require.NoError(t, err)
 	require.Equal(t, count, int64(123))
-	require.Equal(t, checksum, int64(456))
+	require.Equal(t, lmd5, uint64(0x1c8))
+	require.Equal(t, rmd5, uint64(0x315))
 }
 
 func TestGetApproximateMid(t *testing.T) {
