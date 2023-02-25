@@ -50,7 +50,7 @@ const (
 )
 
 type ChecksumInfo struct {
-	Checksum int64
+	Checksum string
 	Count    int64
 	Err      error
 	Cost     time.Duration
@@ -82,8 +82,8 @@ type Source interface {
 	// there are many workers consume the range from the channel to compare.
 	GetRangeIterator(context.Context, *splitter.RangeInfo, TableAnalyzer, int) (RangeIterator, error)
 
-	// GetCountAndCrc32 gets the crc32 result and the count from given range.
-	GetCountAndCrc32(context.Context, *splitter.RangeInfo) *ChecksumInfo
+	// GetCountAndMD5 gets the crc32 result and the count from given range.
+	GetCountAndMD5(context.Context, *splitter.RangeInfo) *ChecksumInfo
 
 	// GetCountForLackTable gets the count for tables that don't exist upstream or downstream.
 	GetCountForLackTable(context.Context, *splitter.RangeInfo) int64
