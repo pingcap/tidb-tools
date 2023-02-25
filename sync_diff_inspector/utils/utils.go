@@ -543,9 +543,6 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 				if math.Abs(num1-num2) <= 1e-6 {
 					continue
 				}
-			} else {
-				equal = false
-				break
 			}
 		} else if column.FieldType.GetType() == mysql.TypeJSON {
 			if (str1 == str2) || (data1.IsNull && data2.IsNull) {
