@@ -84,7 +84,7 @@ func TestBasicTableUtilOperation(t *testing.T) {
 	require.NoError(t, err)
 
 	query, orderKeyCols := GetTableRowsQueryFormat("test", "test", tableInfo, "123")
-	require.Equal(t, query, "SELECT /*!40001 SQL_NO_CACHE */ `a`, `b`, round(`c`, 5-floor(log10(abs(`c`)))) as `c`, `d` FROM `test`.`test` WHERE %s ORDER BY `a`,`b` COLLATE '123'")
+	require.Equal(t, query, "SELECT /*!40001 SQL_NO_CACHE */ `a`, `b`, `c`, `d` FROM `test`.`test` WHERE %s ORDER BY `a`,`b` COLLATE '123'")
 	expectName := []string{"a", "b"}
 	for i, col := range orderKeyCols {
 		require.Equal(t, col.Name.O, expectName[i])
@@ -126,17 +126,30 @@ func TestBasicTableUtilOperation(t *testing.T) {
 		"c": {Data: []byte("0.2221"), IsNull: false},
 		"d": {Data: []byte("asdf"), IsNull: false},
 	}
-
 	data7 := map[string]*dbutil.ColumnData{
 		"a": {Data: []byte("1"), IsNull: true},
 		"b": {Data: []byte("a"), IsNull: false},
 		"c": {Data: []byte("0.2221"), IsNull: false},
 		"d": {Data: []byte("asdf"), IsNull: false},
 	}
+	data8 := map[string]*dbutil.ColumnData{
+		"a": {Data: []byte("1"), IsNull: false},
+		"b": {Data: []byte("a"), IsNull: false},
+		"c": {Data: []byte(""), IsNull: true},
+		"d": {Data: []byte("sdf"), IsNull: false},
+	}
+	data9 := map[string]*dbutil.ColumnData{
+		"a": {Data: []byte("1"), IsNull: false},
+		"b": {Data: []byte("a"), IsNull: false},
+		"c": {Data: []byte("0"), IsNull: false},
+		"d": {Data: []byte("sdf"), IsNull: false},
+	}
 
 	columns := tableInfo.Columns
 
 	require.Equal(t, GenerateReplaceDML(data1, tableInfo, "schema"), "REPLACE INTO `schema`.`test`(`a`,`b`,`c`,`d`) VALUES (1,'a',1.22,'sdf');")
+	require.Equal(t, GenerateDeleteDML(data8, tableInfo, "schema"), "DELETE FROM `schema`.`test` WHERE `a` = 1 AND `b` = 'a' AND `c` is NULL AND `d` = 'sdf' LIMIT 1;")
+	require.Equal(t, GenerateDeleteDML(data9, tableInfo, "schema"), "DELETE FROM `schema`.`test` WHERE `a` = 1 AND `b` = 'a' AND `c` = 0 AND `d` = 'sdf' LIMIT 1;")
 	require.Equal(t, GenerateReplaceDMLWithAnnotation(data1, data2, tableInfo, "schema"),
 		"/*\n"+
 			"  DIFF COLUMNS ╏ `B` ╏ `C`   \n"+
@@ -211,6 +224,21 @@ func TestBasicTableUtilOperation(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, cmp, int32(0))
 	require.True(t, equal)
+
+	equal, cmp, err = CompareData(data1, data8, orderKeyCols, columns)
+	require.NoError(t, err)
+	require.Equal(t, cmp, int32(0))
+	require.False(t, equal)
+
+	equal, cmp, err = CompareData(data8, data1, orderKeyCols, columns)
+	require.NoError(t, err)
+	require.Equal(t, cmp, int32(0))
+	require.False(t, equal)
+
+	equal, cmp, err = CompareData(data8, data9, orderKeyCols, columns)
+	require.NoError(t, err)
+	require.Equal(t, cmp, int32(0))
+	require.False(t, equal)
 
 	// Test ignore columns
 	createTableSQL = "create table `test`.`test`(`a` int, `c` float, `b` varchar(10), `d` datetime, `e` timestamp, primary key(`a`, `b`), key(`c`, `d`))"
