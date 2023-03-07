@@ -31,3 +31,13 @@ func IsTimeTypeAndNeedDecode(tp byte) bool {
 	}
 	return false
 }
+
+// IsBLOBType returns true if tp is Blob type
+func IsBLOBType(tp byte) bool {
+	switch tp {
+	case mysql.TypeTinyBlob, mysql.TypeMediumBlob, mysql.TypeBlob, mysql.TypeLongBlob:
+		return true
+	}
+
+	return false
+}
