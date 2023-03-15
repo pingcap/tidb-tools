@@ -555,10 +555,11 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 		str1 = string(data1.Data)
 		str2 = string(data2.Data)
 		if data1.IsNull && data2.IsNull {
+			continue
+		} else if !data1.IsNull && !data2.IsNull {
 			if str1 == str2 {
 				continue
 			}
-		} else if !data1.IsNull && !data2.IsNull {
 			switch column.FieldType.GetType() {
 			case mysql.TypeFloat, mysql.TypeDouble:
 				num1, err1 := strconv.ParseFloat(str1, 64)
@@ -585,10 +586,6 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 				}
 			case mysql.TypeTinyBlob, mysql.TypeMediumBlob, mysql.TypeBlob, mysql.TypeLongBlob:
 				if fmt.Sprintf("%x", data1.Data) == fmt.Sprintf("%x", data2.Data) {
-					continue
-				}
-			default:
-				if str1 == str2 {
 					continue
 				}
 			}
