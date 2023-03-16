@@ -743,18 +743,6 @@ func GetTableSize(ctx context.Context, db *sql.DB, schemaName, tableName string)
 	return dataSize.Int64, nil
 }
 
-func getNonHiddenColumns(columns []*model.ColumnInfo) []*model.ColumnInfo {
-	nonHiddenColumns := make([]*model.ColumnInfo, 0, len(columns))
-	for _, col := range columns {
-		if col.Hidden {
-			continue
-		}
-		nonHiddenColumns = append(nonHiddenColumns, col)
-	}
-
-	return nonHiddenColumns
-}
-
 // GetCountAndCRC32Checksum returns checksum code and count of some data by given condition
 func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, int64, error) {
 	/*
@@ -770,8 +758,10 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 	columnNames := make([]string, 0, len(tbInfo.Columns))
 	columnIsNull := make([]string, 0, len(tbInfo.Columns))
 	log.Debug("table columns", zap.Any("columns", tbInfo.Columns))
-	columns := getNonHiddenColumns(tbInfo.Columns)
-	for _, col := range columns {
+	for _, col := range tbInfo.Columns {
+		if col.Hidden {
+			continue
+		}
 		name := dbutil.ColumnName(col.Name.O)
 		// When col value is 0, the result is NULL.
 		// But we can use ISNULL to distinguish between null and 0.
