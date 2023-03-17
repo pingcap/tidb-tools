@@ -143,7 +143,11 @@ func GetTableRowsQueryFormat(schema, table string, tableInfo *model.TableInfo, c
 
 	columnNames := make([]string, 0, len(tableInfo.Columns))
 	for _, col := range tableInfo.Columns {
-		name := dbutil.ColumnName(col.Name.O)
+		if col.Hidden {
+			continue
+		}
+
+		name := dbutil.ColumnName(col.GeneratedExprString)
 		// When col value is 0, the result is NULL.
 		// But we can use ISNULL to distinguish between null and 0.
 		if col.FieldType.GetType() == mysql.TypeFloat {
@@ -758,7 +762,11 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 	columnNames := make([]string, 0, len(tbInfo.Columns))
 	columnIsNull := make([]string, 0, len(tbInfo.Columns))
 	for _, col := range tbInfo.Columns {
-		name := dbutil.ColumnName(col.Name.O)
+		if col.Hidden {
+			continue
+		}
+
+		name := dbutil.ColumnName(col.GeneratedExprString)
 		// When col value is 0, the result is NULL.
 		// But we can use ISNULL to distinguish between null and 0.
 		if col.FieldType.GetType() == mysql.TypeFloat {
