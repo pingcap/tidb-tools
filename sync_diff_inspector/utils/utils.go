@@ -147,7 +147,7 @@ func GetTableRowsQueryFormat(schema, table string, tableInfo *model.TableInfo, c
 			continue
 		}
 
-		name := dbutil.ColumnName(col.GeneratedExprString)
+		name := dbutil.ColumnName(col.Name.O)
 		// When col value is 0, the result is NULL.
 		// But we can use ISNULL to distinguish between null and 0.
 		if col.FieldType.GetType() == mysql.TypeFloat {
@@ -766,7 +766,7 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 			continue
 		}
 
-		name := dbutil.ColumnName(col.GeneratedExprString)
+		name := dbutil.ColumnName(col.Name.O)
 		// When col value is 0, the result is NULL.
 		// But we can use ISNULL to distinguish between null and 0.
 		if col.FieldType.GetType() == mysql.TypeFloat {
@@ -900,6 +900,11 @@ func ResetColumns(tableInfo *model.TableInfo, columns []string) (*model.TableInf
 		col.Offset = i
 		colMap[col.Name.O] = i
 		hasTimeStampType = hasTimeStampType || (col.FieldType.GetType() == mysql.TypeTimestamp)
+
+		// ignore hidden column
+		if col.Hidden {
+			tableInfo.Columns[i].Name.O = col.GeneratedExprString
+		}
 	}
 
 	// Initialize the offset of the column of each index to new `tableInfo.Columns`.
