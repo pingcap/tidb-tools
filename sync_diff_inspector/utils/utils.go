@@ -822,11 +822,7 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schema, table string, colu
 
 	columnNames := make([]string, 0, len(columns))
 	for _, col := range columns {
-		if col.Hidden {
-			columnNames = append(columnNames, col.GeneratedExprString)
-		} else {
-			columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
-		}
+		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
 	}
 
 	query := fmt.Sprintf("SELECT %[1]s FROM (SELECT %[1]s, rand() rand_value FROM %[2]s WHERE %[3]s ORDER BY rand_value LIMIT %[4]d)rand_tmp ORDER BY %[1]s%[5]s",
