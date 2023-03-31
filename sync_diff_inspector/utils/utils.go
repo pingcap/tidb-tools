@@ -822,7 +822,11 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schema, table string, colu
 
 	columnNames := make([]string, 0, len(columns))
 	for _, col := range columns {
-		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
+		if col.Hidden {
+			columnNames = append(columnNames, col.GeneratedExprString)
+		} else {
+			columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
+		}
 	}
 
 	query := fmt.Sprintf("SELECT %[1]s FROM (SELECT %[1]s, rand() rand_value FROM %[2]s WHERE %[3]s ORDER BY rand_value LIMIT %[4]d)rand_tmp ORDER BY %[1]s%[5]s",
@@ -900,11 +904,6 @@ func ResetColumns(tableInfo *model.TableInfo, columns []string) (*model.TableInf
 		col.Offset = i
 		colMap[col.Name.O] = i
 		hasTimeStampType = hasTimeStampType || (col.FieldType.GetType() == mysql.TypeTimestamp)
-
-		// ignore hidden column
-		if col.Hidden {
-			tableInfo.Columns[i].Name.O = col.GeneratedExprString
-		}
 	}
 
 	// Initialize the offset of the column of each index to new `tableInfo.Columns`.
