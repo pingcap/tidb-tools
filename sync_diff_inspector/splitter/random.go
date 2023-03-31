@@ -203,7 +203,7 @@ func GetSplitFields(table *model.TableInfo, splitFields []string) ([]*model.Colu
 
 	for _, col := range table.Columns {
 		if !col.Hidden {
-			return []*model.ColumnInfo{table.Columns[0]}, nil
+			return []*model.ColumnInfo{col}, nil
 		}
 	}
 	return nil, errors.NotFoundf("not found column")
