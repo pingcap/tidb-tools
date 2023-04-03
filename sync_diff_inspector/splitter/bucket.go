@@ -152,6 +152,7 @@ func (s *BucketIterator) init(ctx context.Context, startRange *RangeInfo) error 
 		indices = dbutil.FindAllIndex(s.table.Info)
 	}
 
+NEXTINDEX:
 	for _, index := range indices {
 		if index == nil {
 			continue
@@ -170,6 +171,13 @@ func (s *BucketIterator) init(ctx context.Context, startRange *RangeInfo) error 
 		if !fields.MatchesIndex(index) {
 			// We are enforcing user configured "index-fields" settings.
 			continue
+		}
+
+		// skip the index that has expression column
+		for _, col := range indexColumns {
+			if col.Hidden {
+				continue NEXTINDEX
+			}
 		}
 
 		bucket, ok := buckets[index.Name.O]

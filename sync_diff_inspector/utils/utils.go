@@ -900,11 +900,6 @@ func ResetColumns(tableInfo *model.TableInfo, columns []string) (*model.TableInf
 		col.Offset = i
 		colMap[col.Name.O] = i
 		hasTimeStampType = hasTimeStampType || (col.FieldType.GetType() == mysql.TypeTimestamp)
-
-		// ignore hidden column
-		if col.Hidden {
-			tableInfo.Columns[i].Name.O = col.GeneratedExprString
-		}
 	}
 
 	// Initialize the offset of the column of each index to new `tableInfo.Columns`.
