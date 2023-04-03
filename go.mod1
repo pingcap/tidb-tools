@@ -14,12 +14,12 @@ require (
 	github.com/pingcap/log v1.1.1-0.20221116035753-734d527bc87c
 	github.com/pingcap/tidb v1.1.0-beta.0.20230317053715-5aceb2e525f6
 	github.com/pingcap/tidb/parser v0.0.0-20230317053715-5aceb2e525f6
-	github.com/pingcap/tiflow v0.0.0-20221101092800-9a104eaa0033
+	github.com/pingcap/tiflow v0.0.0-20230403075857-97664e66e63c
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.2
 	github.com/tikv/pd/client v0.0.0-20230309025512-47cd76ae5d67
-	go.etcd.io/etcd/client/v3 v3.5.2
+	go.etcd.io/etcd/client/v3 v3.5.4
 	go.etcd.io/etcd/tests/v3 v3.5.2
 	go.uber.org/atomic v1.10.0
 	go.uber.org/zap v1.24.0
@@ -37,6 +37,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/internal v0.8.1 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v0.2.0 // indirect
 	github.com/DataDog/zstd v1.4.6-0.20210211175136-c6db21d202f4 // indirect
+	github.com/KimMachineGun/automemlimit v0.2.4 // indirect
 	github.com/Masterminds/semver v1.5.0 // indirect
 	github.com/Shopify/sarama v1.36.0 // indirect
 	github.com/VividCortex/ewma v1.2.0 // indirect
@@ -46,15 +47,18 @@ require (
 	github.com/aws/aws-sdk-go v1.44.48 // indirect
 	github.com/benbjohnson/clock v1.3.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/blacktear23/go-proxyprotocol v1.0.5 // indirect
 	github.com/carlmjohnson/flagext v0.21.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/cheggaaa/pb/v3 v3.0.8 // indirect
+	github.com/cilium/ebpf v0.4.0 // indirect
 	github.com/cloudfoundry/gosigar v1.3.6 // indirect
 	github.com/cockroachdb/errors v1.8.1 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20190617123548-eb05cc24525f // indirect
 	github.com/cockroachdb/pebble v0.0.0-20220415182917-06c9d3be25b3 // indirect
 	github.com/cockroachdb/redact v1.0.8 // indirect
 	github.com/cockroachdb/sentry-go v0.6.1-cockroachdb.2 // indirect
+	github.com/containerd/cgroups v1.0.4 // indirect
 	github.com/coocood/bbloom v0.0.0-20190830030839-58deb6228d64 // indirect
 	github.com/coocood/freecache v1.2.1 // indirect
 	github.com/coocood/rtutil v0.0.0-20190304133409-c84515f646f2 // indirect
@@ -80,15 +84,16 @@ require (
 	github.com/getkin/kin-openapi v0.80.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
-	github.com/gin-gonic/gin v1.7.4 // indirect
-	github.com/go-mysql-org/go-mysql v1.6.1-0.20220718092400-c855c26b37bd // indirect
+	github.com/gin-gonic/gin v1.8.1 // indirect
+	github.com/go-mysql-org/go-mysql v1.6.1-0.20221223014230-81966e15b9c5 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/swag v0.21.1 // indirect
 	github.com/go-playground/locales v0.14.0 // indirect
 	github.com/go-playground/universal-translator v0.18.0 // indirect
-	github.com/go-playground/validator/v10 v10.9.0 // indirect
+	github.com/go-playground/validator/v10 v10.10.0 // indirect
 	github.com/goccy/go-json v0.9.11 // indirect
+	github.com/godbus/dbus/v5 v5.0.4 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/glog v1.0.0 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
@@ -144,12 +149,15 @@ require (
 	github.com/ncw/directio v1.0.5 // indirect
 	github.com/ngaut/pools v0.0.0-20180318154953-b7bc8c42aac7 // indirect
 	github.com/ngaut/sync2 v0.0.0-20141008032647-7a24ed77b2ef // indirect
+	github.com/opencontainers/runtime-spec v1.0.2 // indirect
 	github.com/opentracing/basictracer-go v1.1.0 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
+	github.com/pelletier/go-toml/v2 v2.0.1 // indirect
 	github.com/petermattis/goid v0.0.0-20211229010228-4d14c490ee36 // indirect
 	github.com/phayes/freeport v0.0.0-20180830031419-95f893ade6f2 // indirect
 	github.com/pierrec/lz4/v4 v4.1.15 // indirect
 	github.com/pingcap/badger v1.5.1-0.20230103063557-828f39b09b6d // indirect
+	github.com/pingcap/fn v0.0.0-20200306044125-d5540d389059 // indirect
 	github.com/pingcap/goleveldb v0.0.0-20191226122134-f82aafb29989 // indirect
 	github.com/pingcap/sysutil v0.0.0-20220114020952-ea68d2dbf5b4 // indirect
 	github.com/pingcap/tipb v0.0.0-20230310043643-5362260ee6f7 // indirect
@@ -164,10 +172,12 @@ require (
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20220927061507-ef77025ab5aa // indirect
 	github.com/rivo/uniseg v0.4.3 // indirect
-	github.com/rogpeppe/go-internal v1.8.0 // indirect
+	github.com/rogpeppe/go-internal v1.9.0 // indirect
 	github.com/sasha-s/go-deadlock v0.2.0 // indirect
 	github.com/shirou/gopsutil/v3 v3.23.1 // indirect
 	github.com/shopspring/decimal v1.3.0 // indirect
+	github.com/shurcooL/httpfs v0.0.0-20190707220628-8d4bc4ba7749 // indirect
+	github.com/shurcooL/vfsgen v0.0.0-20200824052919-0d455de96546 // indirect
 	github.com/siddontang/go-log v0.0.0-20180807004314-8d05993dda07 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
 	github.com/soheilhy/cmux v0.1.5 // indirect
@@ -175,6 +185,7 @@ require (
 	github.com/spkg/bom v1.0.0 // indirect
 	github.com/stathat/consistent v1.0.0 // indirect
 	github.com/stretchr/objx v0.5.0 // indirect
+	github.com/tiancaiamao/appdash v0.0.0-20181126055449-889f96f722a2 // indirect
 	github.com/tiancaiamao/gp v0.0.0-20221230034425-4025bc8a4d4a // indirect
 	github.com/tikv/client-go/v2 v2.0.7-0.20230313133219-c9119d02cef7 // indirect
 	github.com/tklauser/go-sysconf v0.3.11 // indirect
@@ -183,18 +194,18 @@ require (
 	github.com/twmb/murmur3 v1.1.6 // indirect
 	github.com/uber/jaeger-client-go v2.30.0+incompatible // indirect
 	github.com/uber/jaeger-lib v2.4.1+incompatible // indirect
-	github.com/ugorji/go/codec v1.2.6 // indirect
+	github.com/ugorji/go/codec v1.2.7 // indirect
 	github.com/vbauerster/mpb/v7 v7.5.3 // indirect
 	github.com/wangjohn/quickselect v0.0.0-20161129230411-ed8402a42d5f // indirect
-	github.com/xdg/scram v1.0.3 // indirect
+	github.com/xdg/scram v1.0.5 // indirect
 	github.com/xdg/stringprep v1.0.3 // indirect
 	github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2 // indirect
 	github.com/xitongsys/parquet-go v1.6.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	go.etcd.io/bbolt v1.3.6 // indirect
-	go.etcd.io/etcd/api/v3 v3.5.2 // indirect
-	go.etcd.io/etcd/client/pkg/v3 v3.5.2 // indirect
-	go.etcd.io/etcd/client/v2 v2.305.2 // indirect
+	go.etcd.io/etcd/api/v3 v3.5.4 // indirect
+	go.etcd.io/etcd/client/pkg/v3 v3.5.4 // indirect
+	go.etcd.io/etcd/client/v2 v2.305.4 // indirect
 	go.etcd.io/etcd/pkg/v3 v3.5.2 // indirect
 	go.etcd.io/etcd/raft/v3 v3.5.2 // indirect
 	go.etcd.io/etcd/server/v3 v3.5.2 // indirect
@@ -231,11 +242,12 @@ require (
 	gorm.io/gorm v1.23.8 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 	sourcegraph.com/sourcegraph/appdash v0.0.0-20190731080439-ebfcffb1b5c0 // indirect
+	sourcegraph.com/sourcegraph/appdash-data v0.0.0-20151005221446-73f23eafcf67 // indirect
 )
 
 replace github.com/golang/lint => golang.org/x/lint v0.0.0-20190930215403-16217165b5de
 
 // Suppress 'ambiguous imports' error caused by that old tikv/pd also provides `tikv/pd/client`
-replace github.com/tikv/pd => github.com/tikv/pd v0.0.0-20220218061340-602217e4455a
+replace github.com/tikv/pd => github.com/tikv/pd v1.1.0-beta.0.20230203015356-248b3f0be132
 
 go 1.19
