@@ -143,6 +143,10 @@ func GetTableRowsQueryFormat(schema, table string, tableInfo *model.TableInfo, c
 
 	columnNames := make([]string, 0, len(tableInfo.Columns))
 	for _, col := range tableInfo.Columns {
+		if col.Hidden {
+			continue
+		}
+
 		name := dbutil.ColumnName(col.Name.O)
 		// When col value is 0, the result is NULL.
 		// But we can use ISNULL to distinguish between null and 0.
