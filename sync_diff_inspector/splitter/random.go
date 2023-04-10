@@ -166,7 +166,6 @@ func (s *RandomIterator) Close() {
 
 // GetSplitFields returns fields to split chunks, order by pk, uk, index, columns.
 func GetSplitFields(table *model.TableInfo, splitFields []string) ([]*model.ColumnInfo, error) {
-	cols := make([]*model.ColumnInfo, 0, len(table.Columns))
 	colsMap := make(map[string]*model.ColumnInfo)
 
 	splitCols := make([]*model.ColumnInfo, 0, 2)
@@ -190,6 +189,7 @@ func GetSplitFields(table *model.TableInfo, splitFields []string) ([]*model.Colu
 	if len(indices) != 0 {
 	NEXTINDEX:
 		for _, idx := range indices {
+			cols := make([]*model.ColumnInfo, 0, len(table.Columns))
 			for _, icol := range idx.Columns {
 				col := colsMap[icol.Name.O]
 				if col.Hidden {
