@@ -1,5 +1,7 @@
 module github.com/pingcap/tidb-tools
 
+go 1.19
+
 require (
 	github.com/BurntSushi/toml v1.2.1
 	github.com/DATA-DOG/go-sqlmock v1.5.0
@@ -244,10 +246,3 @@ require (
 	sourcegraph.com/sourcegraph/appdash v0.0.0-20190731080439-ebfcffb1b5c0 // indirect
 	sourcegraph.com/sourcegraph/appdash-data v0.0.0-20151005221446-73f23eafcf67 // indirect
 )
-
-replace github.com/golang/lint => golang.org/x/lint v0.0.0-20190930215403-16217165b5de
-
-// Suppress 'ambiguous imports' error caused by that old tikv/pd also provides `tikv/pd/client`
-replace github.com/tikv/pd => github.com/tikv/pd v1.1.0-beta.0.20230203015356-248b3f0be132
-
-go 1.19
