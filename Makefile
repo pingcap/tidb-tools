@@ -31,29 +31,24 @@ define run_unit_test
 	@make failpoint-enable
 	@export log_level=error; \
 	$(GOTEST) -cover $(1) \
-	|| { @make failpoint-disable; exit 1; }
+	|| { make failpoint-disable; exit 1; }
 	@make failpoint-disable
 endef
 
-build: prepare version check importer sync_diff_inspector ddl_checker finish
+build: version check importer sync_diff_inspector ddl_checker
 
 
 failpoint-enable: tools
-	tools/bin/failpoint-ctl enable
+	bin/failpoint-ctl enable
 
 failpoint-disable: tools
-	tools/bin/failpoint-ctl disable
+	bin/failpoint-ctl disable
 
 tools:
-	@echo "install tools..."
-	@cd tools && make
+	@ls bin/failpoint-ctl || { echo "failpoint-ctl not found, installing..."; GOBIN=$$(pwd)/bin go install github.com/pingcap/failpoint/failpoint-ctl@v0.0.0-20220801062533-2eaa32854a6c; }
 
 version:
 	$(GO) version
-
-prepare:
-	cp go.mod1 go.mod
-	cp go.sum1 go.sum
 
 importer:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/importer ./importer
@@ -71,7 +66,7 @@ test: version
 	rm -rf /tmp/output
 	$(call run_unit_test,$(PACKAGES))
 
-integration_test: prepare failpoint-enable importer sync_diff_inspector ddl_checker failpoint-disable finish
+integration_test: failpoint-enable importer sync_diff_inspector ddl_checker failpoint-disable
 	@which bin/tidb-server
 	@which bin/tikv-server
 	@which bin/pd-server
@@ -93,15 +88,7 @@ check: fmt
 	#@echo "golint"
 	#@ golint ./... 2>&1 | grep -vE '\.pb\.go' | grep -vE 'vendor' | awk '{print} END{if(NR>0) {exit 1}}'
 
-tidy:
-	cp go.mod1 go.mod
-	cp go.sum1 go.sum
+tidy:	
 	@$(GO) mod tidy
-	cp go.mod go.mod1
-	cp go.sum go.sum1
 
-clean: prepare tidy finish
-
-finish:
-	cp go.mod go.mod1
-	cp go.sum go.sum1
+clean: tidy
