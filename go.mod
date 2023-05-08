@@ -1,5 +1,7 @@
 module github.com/pingcap/tidb-tools
 
+go 1.19
+
 require (
 	github.com/BurntSushi/toml v1.2.1
 	github.com/DATA-DOG/go-sqlmock v1.5.0
@@ -10,11 +12,11 @@ require (
 	github.com/pingcap/check v0.0.0-20211026125417-57bd13f7b5f0
 	github.com/pingcap/errors v0.11.5-0.20221009092201-b66cddb77c32
 	github.com/pingcap/failpoint v0.0.0-20220801062533-2eaa32854a6c
-	github.com/pingcap/kvproto v0.0.0-20230228041042-1e9aca94bab6
+	github.com/pingcap/kvproto v0.0.0-20230312142449-01623096c924
 	github.com/pingcap/log v1.1.1-0.20221116035753-734d527bc87c
-	github.com/pingcap/tidb v1.1.0-beta.0.20230310043312-53f15f6ed774
-	github.com/pingcap/tidb/parser v0.0.0-20230310043312-53f15f6ed774
-	github.com/pingcap/tiflow v0.0.0-20230322131442-4e0d18c1cb34
+	github.com/pingcap/tidb v1.1.0-beta.0.20230317053715-5aceb2e525f6
+	github.com/pingcap/tidb/parser v0.0.0-20230317053715-5aceb2e525f6
+	github.com/pingcap/tiflow v0.0.0-20230403075857-97664e66e63c
 	github.com/siddontang/go v0.0.0-20180604090527-bdc77568d726
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.2
@@ -160,7 +162,7 @@ require (
 	github.com/pingcap/fn v0.0.0-20200306044125-d5540d389059 // indirect
 	github.com/pingcap/goleveldb v0.0.0-20191226122134-f82aafb29989 // indirect
 	github.com/pingcap/sysutil v0.0.0-20220114020952-ea68d2dbf5b4 // indirect
-	github.com/pingcap/tipb v0.0.0-20230119054146-c6b7a5a1623b // indirect
+	github.com/pingcap/tipb v0.0.0-20230310043643-5362260ee6f7 // indirect
 	github.com/pkg/browser v0.0.0-20180916011732-0a3d74bf9ce4 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
@@ -187,7 +189,7 @@ require (
 	github.com/stretchr/objx v0.5.0 // indirect
 	github.com/tiancaiamao/appdash v0.0.0-20181126055449-889f96f722a2 // indirect
 	github.com/tiancaiamao/gp v0.0.0-20221230034425-4025bc8a4d4a // indirect
-	github.com/tikv/client-go/v2 v2.0.7-0.20230309100832-f555fdd2c9d8 // indirect
+	github.com/tikv/client-go/v2 v2.0.7-0.20230313133219-c9119d02cef7 // indirect
 	github.com/tklauser/go-sysconf v0.3.11 // indirect
 	github.com/tklauser/numcpus v0.6.0 // indirect
 	github.com/tmc/grpc-websocket-proxy v0.0.0-20201229170055-e5319fda7802 // indirect
@@ -221,16 +223,16 @@ require (
 	go.opentelemetry.io/otel/trace v0.20.0 // indirect
 	go.opentelemetry.io/proto/otlp v0.7.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
-	golang.org/x/crypto v0.6.0 // indirect
+	golang.org/x/crypto v0.7.0 // indirect
 	golang.org/x/exp v0.0.0-20221023144134-a1e5550cf13e // indirect
-	golang.org/x/net v0.7.0 // indirect
-	golang.org/x/oauth2 v0.5.0 // indirect
+	golang.org/x/net v0.8.0 // indirect
+	golang.org/x/oauth2 v0.6.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect
-	golang.org/x/sys v0.5.0 // indirect
-	golang.org/x/term v0.5.0 // indirect
+	golang.org/x/sys v0.6.0 // indirect
+	golang.org/x/term v0.6.0 // indirect
 	golang.org/x/text v0.8.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
-	golang.org/x/tools v0.6.0 // indirect
+	golang.org/x/tools v0.7.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/api v0.106.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
@@ -244,10 +246,3 @@ require (
 	sourcegraph.com/sourcegraph/appdash v0.0.0-20190731080439-ebfcffb1b5c0 // indirect
 	sourcegraph.com/sourcegraph/appdash-data v0.0.0-20151005221446-73f23eafcf67 // indirect
 )
-
-replace github.com/golang/lint => golang.org/x/lint v0.0.0-20190930215403-16217165b5de
-
-// Suppress 'ambiguous imports' error caused by that old tikv/pd also provides `tikv/pd/client`
-replace github.com/tikv/pd => github.com/tikv/pd v1.1.0-beta.0.20230203015356-248b3f0be132
-
-go 1.19

@@ -3,7 +3,5 @@
 .DS_Store
 */.idea
 deps.sh
-/go.sum
-/go.mod
 .idea/
 sync_diff_inspector/config/output/*
