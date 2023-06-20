@@ -38,6 +38,7 @@ rm -rf $OUT_DIR/*
 mysql -uroot -h 127.0.0.1 -P 4000 -e "analyze table diff_test.test"
 # run the explain SQL to load the stats after analyze
 mysql -uroot -h 127.0.0.1 -P 4000 -e "explain select * from diff_test.test where aa > 1"
+mysql -uroot -h 127.0.0.1 -P 4000 -e "explain select * from diff_test.test where \`table\` > 1"
 mysql -uroot -h 127.0.0.1 -P 4000 -e "show stats_buckets"
 sync_diff_inspector --config=./config_base_tidb.toml > $OUT_DIR/diff.output
 check_contains "check pass!!!" $OUT_DIR/sync_diff.log
