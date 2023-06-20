@@ -188,7 +188,11 @@ func GenerateReplaceDML(data map[string]*dbutil.ColumnData, table *model.TableIn
 		}
 
 		if NeedQuotes(col.FieldType.GetType()) {
-			values = append(values, fmt.Sprintf("'%s'", strings.Replace(string(data[col.Name.O].Data), "'", "\\'", -1)))
+			if dbutil.IsBLOBType(col.FieldType.GetType()) {
+				values = append(values, fmt.Sprintf("x'%x'", data[col.Name.O].Data))
+			} else {
+				values = append(values, fmt.Sprintf("'%s'", strings.Replace(string(data[col.Name.O].Data), "'", "\\'", -1)))
+			}
 		} else {
 			values = append(values, string(data[col.Name.O].Data))
 		}
@@ -221,7 +225,11 @@ func GenerateReplaceDMLWithAnnotation(source, target map[string]*dbutil.ColumnDa
 			value1 = "NULL"
 		} else {
 			if NeedQuotes(col.FieldType.GetType()) {
-				value1 = fmt.Sprintf("'%s'", strings.Replace(string(data1.Data), "'", "\\'", -1))
+				if dbutil.IsBLOBType(col.FieldType.GetType()) {
+					value1 = fmt.Sprintf("x'%x'", data1.Data)
+				} else {
+					value1 = fmt.Sprintf("'%s'", strings.Replace(string(data1.Data), "'", "\\'", -1))
+				}
 			} else {
 				value1 = string(data1.Data)
 			}
@@ -242,7 +250,11 @@ func GenerateReplaceDMLWithAnnotation(source, target map[string]*dbutil.ColumnDa
 			values2 = append(values2, "NULL")
 		} else {
 			if NeedQuotes(col.FieldType.GetType()) {
-				values2 = append(values2, fmt.Sprintf("'%s'", strings.Replace(string(data2.Data), "'", "\\'", -1)))
+				if dbutil.IsBLOBType(col.FieldType.GetType()) {
+					values2 = append(values2, fmt.Sprintf("x'%x'", data1.Data))
+				} else {
+					values2 = append(values2, fmt.Sprintf("'%s'", strings.Replace(string(data2.Data), "'", "\\'", -1)))
+				}
 			} else {
 				values2 = append(values2, string(data2.Data))
 			}
@@ -278,7 +290,11 @@ func GenerateDeleteDML(data map[string]*dbutil.ColumnData, table *model.TableInf
 		}
 
 		if NeedQuotes(col.FieldType.GetType()) {
-			kvs = append(kvs, fmt.Sprintf("%s = '%s'", dbutil.ColumnName(col.Name.O), strings.Replace(string(data[col.Name.O].Data), "'", "\\'", -1)))
+			if dbutil.IsBLOBType(col.FieldType.GetType()) {
+				kvs = append(kvs, fmt.Sprintf("%s = x'%x'", dbutil.ColumnName(col.Name.O), data[col.Name.O].Data))
+			} else {
+				kvs = append(kvs, fmt.Sprintf("%s = '%s'", dbutil.ColumnName(col.Name.O), strings.Replace(string(data[col.Name.O].Data), "'", "\\'", -1)))
+			}
 		} else {
 			kvs = append(kvs, fmt.Sprintf("%s = %s", dbutil.ColumnName(col.Name.O), string(data[col.Name.O].Data)))
 		}
@@ -542,10 +558,14 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 		}
 		str1 = string(data1.Data)
 		str2 = string(data2.Data)
-		if column.FieldType.GetType() == mysql.TypeFloat || column.FieldType.GetType() == mysql.TypeDouble {
-			if data1.IsNull && data2.IsNull {
+		if data1.IsNull && data2.IsNull {
+			continue
+		} else if !data1.IsNull && !data2.IsNull {
+			if str1 == str2 {
 				continue
-			} else if !data1.IsNull && !data2.IsNull {
+			}
+			switch column.FieldType.GetType() {
+			case mysql.TypeFloat, mysql.TypeDouble:
 				num1, err1 := strconv.ParseFloat(str1, 64)
 				num2, err2 := strconv.ParseFloat(str2, 64)
 				if err1 != nil || err2 != nil {
@@ -555,26 +575,23 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 				if math.Abs(num1-num2) <= 1e-6 {
 					continue
 				}
-			}
-		} else if column.FieldType.GetType() == mysql.TypeJSON {
-			if (str1 == str2) || (data1.IsNull && data2.IsNull) {
-				continue
-			}
-			var v1, v2 any
-			err := json.Unmarshal(data1.Data, &v1)
-			if err != nil {
-				return false, 0, errors.Errorf("unmarshal json %s failed, error %v", str1, err)
-			}
-			err = json.Unmarshal(data2.Data, &v2)
-			if err != nil {
-				return false, 0, errors.Errorf("unmarshal json %s failed, error %v", str2, err)
-			}
-			if reflect.DeepEqual(v1, v2) {
-				continue
-			}
-		} else {
-			if (str1 == str2) && (data1.IsNull == data2.IsNull) {
-				continue
+			case mysql.TypeJSON:
+				var v1, v2 any
+				err := json.Unmarshal(data1.Data, &v1)
+				if err != nil {
+					return false, 0, errors.Errorf("unmarshal json %s failed, error %v", str1, err)
+				}
+				err = json.Unmarshal(data2.Data, &v2)
+				if err != nil {
+					return false, 0, errors.Errorf("unmarshal json %s failed, error %v", str2, err)
+				}
+				if reflect.DeepEqual(v1, v2) {
+					continue
+				}
+			case mysql.TypeTinyBlob, mysql.TypeMediumBlob, mysql.TypeBlob, mysql.TypeLongBlob:
+				if fmt.Sprintf("%x", data1.Data) == fmt.Sprintf("%x", data2.Data) {
+					continue
+				}
 			}
 		}
 
@@ -601,6 +618,10 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 		if NeedQuotes(col.FieldType.GetType()) {
 			strData1 := string(data1.Data)
 			strData2 := string(data2.Data)
+			if dbutil.IsBLOBType(col.FieldType.GetType()) {
+				strData1 = fmt.Sprintf("%x", data1.Data)
+				strData2 = fmt.Sprintf("%x", data2.Data)
+			}
 
 			if len(strData1) == len(strData2) && strData1 == strData2 {
 				continue
