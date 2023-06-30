@@ -24,7 +24,7 @@ import (
 // ActionType indicates how to handle matched items
 type ActionType string
 
-//  show that how to handle rules
+// show that how to handle rules
 const (
 	Ignore ActionType = "Ignore"
 	Do     ActionType = "Do"

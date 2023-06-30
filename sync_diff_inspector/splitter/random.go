@@ -200,10 +200,11 @@ func GetSplitFields(table *model.TableInfo, splitFields []string) ([]*model.Colu
 // splitRangeByRandom splits a chunk to multiple chunks by random
 // Notice: If the `count <= 1`, it will skip splitting and return `chunk` as a slice directly.
 // TODO: This function will get random row for each cols individually.
-//		For example, for a table' schema which is `create table tbl(a int, b int, primary key(a, b));`,
-//		there are 3 rows(`[a: 2, b: 2]`, `[a: 3, b: 5]`, `[a: 4, b: 4]`) in the table.
-//		and finally this function might generate `[a:2,b:2]` and `[a:3,b:4]` (from `a` get random value 2,4, `b` get random value 2,4) as split points, which means
-//		chunk whose range is (`a:2,b:2`, `a:3,b:4`], so we get a empty chunk.
+//
+//	For example, for a table' schema which is `create table tbl(a int, b int, primary key(a, b));`,
+//	there are 3 rows(`[a: 2, b: 2]`, `[a: 3, b: 5]`, `[a: 4, b: 4]`) in the table.
+//	and finally this function might generate `[a:2,b:2]` and `[a:3,b:4]` (from `a` get random value 2,4, `b` get random value 2,4) as split points, which means
+//	chunk whose range is (`a:2,b:2`, `a:3,b:4`], so we get a empty chunk.
 func splitRangeByRandom(db *sql.DB, chunk *chunk.Range, count int, schema string, table string, columns []*model.ColumnInfo, limits, collation string) (chunks []*chunk.Range, err error) {
 	if count <= 1 {
 		chunks = append(chunks, chunk)

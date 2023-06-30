@@ -429,7 +429,8 @@ func (c *Range) CopyAndUpdate(column, lower, upper string, updateLower, updateUp
 }
 
 // Notice: chunk may contain not only one bucket, which can be expressed as a range [3, 5],
-// 		And `lastBucketID` means the `5` and `firstBucketID` means the `3`.
+//
+//	And `lastBucketID` means the `5` and `firstBucketID` means the `3`.
 func InitChunks(chunks []*Range, t ChunkType, firstBucketID, lastBucketID int, index int, collation, limits string, chunkCnt int) {
 	if chunks == nil {
 		return

@@ -117,7 +117,8 @@ func GetColumnsFromIndex(index *model.IndexInfo, tableInfo *model.TableInfo) []*
 }
 
 // GetTableRowsQueryFormat returns a rowsQuerySQL template for the specific table.
-//  e.g. SELECT /*!40001 SQL_NO_CACHE */ `a`, `b` FROM `schema`.`table` WHERE %s ORDER BY `a`.
+//
+//	e.g. SELECT /*!40001 SQL_NO_CACHE */ `a`, `b` FROM `schema`.`table` WHERE %s ORDER BY `a`.
 func GetTableRowsQueryFormat(schema, table string, tableInfo *model.TableInfo, collation string) (string, []*model.ColumnInfo) {
 	orderKeys, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
 
@@ -322,8 +323,9 @@ func sameProperties(c1, c2 *model.ColumnInfo) bool {
 
 // CompareStruct compare tables' columns and indices from upstream and downstream.
 // There are 2 return values:
-// 	isEqual	: result of comparing tables' columns and indices
-// 	isPanic	: the differences of tables' struct can not be ignored. Need to skip data comparing.
+//
+//	isEqual	: result of comparing tables' columns and indices
+//	isPanic	: the differences of tables' struct can not be ignored. Need to skip data comparing.
 func CompareStruct(upstreamTableInfos []*model.TableInfo, downstreamTableInfo *model.TableInfo) (isEqual bool, isPanic bool) {
 	// compare columns
 	for _, upstreamTableInfo := range upstreamTableInfos {
@@ -481,9 +483,9 @@ func NeedQuotes(tp byte) bool {
 // CompareData compare two row datas.
 // equal = true: map1 = map2
 // equal = false:
-// 		1. cmp = 0: map1 and map2 have the same orderkeycolumns, but other columns are in difference.
-//		2. cmp = -1: map1 < map2 (by comparing the orderkeycolumns)
-// 		3. cmp = 1: map1 > map2
+//  1. cmp = 0: map1 and map2 have the same orderkeycolumns, but other columns are in difference.
+//  2. cmp = -1: map1 < map2 (by comparing the orderkeycolumns)
+//  3. cmp = 1: map1 > map2
 func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns []*model.ColumnInfo) (equal bool, cmp int32, err error) {
 	var (
 		data1, data2 *dbutil.ColumnData
@@ -811,7 +813,7 @@ func UniqueID(schema string, table string) string {
 	return fmt.Sprintf("`%s`.`%s`", EscapeName(schema), EscapeName(table))
 }
 
-// EscapeName replaces all "`" in name with "``"
+// EscapeName replaces all "`" in name with "“"
 func EscapeName(name string) string {
 	return strings.Replace(name, "`", "``", -1)
 }
