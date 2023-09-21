@@ -26,3 +26,9 @@ mysql -uroot -h 127.0.0.1 -P 4000 -e "insert into json_test.test values (5, '{\"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/json_diff.output || true
 check_contains "check failed" $OUT_DIR/sync_diff.log
 rm -rf $OUT_DIR/*
+
+echo "update data to make it different, and downstream json data is NULL"
+mysql -uroot -h 127.0.0.1 -P 4000 -e "replace into json_test.test values (5, NULL);"
+sync_diff_inspector --config=./config.toml > $OUT_DIR/json_diff.output || true
+check_contains "check failed" $OUT_DIR/sync_diff.log
+rm -rf $OUT_DIR/*

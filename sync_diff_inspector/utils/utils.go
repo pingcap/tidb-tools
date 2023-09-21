@@ -560,17 +560,19 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 			if (str1 == str2) || (data1.IsNull && data2.IsNull) {
 				continue
 			}
-			var v1, v2 any
-			err := json.Unmarshal(data1.Data, &v1)
-			if err != nil {
-				return false, 0, errors.Errorf("unmarshal json %s failed, error %v", str1, err)
-			}
-			err = json.Unmarshal(data2.Data, &v2)
-			if err != nil {
-				return false, 0, errors.Errorf("unmarshal json %s failed, error %v", str2, err)
-			}
-			if reflect.DeepEqual(v1, v2) {
-				continue
+			if !data1.IsNull && !data2.IsNull {
+				var v1, v2 any
+				err := json.Unmarshal(data1.Data, &v1)
+				if err != nil {
+					return false, 0, errors.Errorf("unmarshal json %s failed, error %v", str1, err)
+				}
+				err = json.Unmarshal(data2.Data, &v2)
+				if err != nil {
+					return false, 0, errors.Errorf("unmarshal json %s failed, error %v", str2, err)
+				}
+				if reflect.DeepEqual(v1, v2) {
+					continue
+				}
 			}
 		} else {
 			if (str1 == str2) && (data1.IsNull == data2.IsNull) {
