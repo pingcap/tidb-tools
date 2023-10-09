@@ -334,7 +334,7 @@ func (b *BinlogEvent) Filter(schema, table string, event EventType, rawQuery str
 
 			matched := binlogEventRule.sqlRegularExp.FindStringIndex(rawQuery) != nil
 			if matched {
-				// Ignore has second priority
+				// Ignore has highest priority
 				if binlogEventRule.Action == Ignore {
 					return Ignore, nil
 				}
