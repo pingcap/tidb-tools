@@ -166,7 +166,6 @@ func (s *RandomIterator) Close() {
 
 // GetSplitFields returns fields to split chunks, order by pk, uk, index, columns.
 func GetSplitFields(table *model.TableInfo, splitFields []string) ([]*model.ColumnInfo, error) {
-	cols := make([]*model.ColumnInfo, 0, len(table.Columns))
 	colsMap := make(map[string]*model.ColumnInfo)
 
 	splitCols := make([]*model.ColumnInfo, 0, 2)
@@ -188,13 +187,26 @@ func GetSplitFields(table *model.TableInfo, splitFields []string) ([]*model.Colu
 	}
 	indices := dbutil.FindAllIndex(table)
 	if len(indices) != 0 {
-		for _, col := range indices[0].Columns {
-			cols = append(cols, colsMap[col.Name.O])
+	NEXTINDEX:
+		for _, idx := range indices {
+			cols := make([]*model.ColumnInfo, 0, len(table.Columns))
+			for _, icol := range idx.Columns {
+				col := colsMap[icol.Name.O]
+				if col.Hidden {
+					continue NEXTINDEX
+				}
+				cols = append(cols, col)
+			}
+			return cols, nil
 		}
-		return cols, nil
 	}
 
-	return []*model.ColumnInfo{table.Columns[0]}, nil
+	for _, col := range table.Columns {
+		if !col.Hidden {
+			return []*model.ColumnInfo{col}, nil
+		}
+	}
+	return nil, errors.NotFoundf("not found column")
 }
 
 // splitRangeByRandom splits a chunk to multiple chunks by random

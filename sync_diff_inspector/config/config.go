@@ -38,7 +38,7 @@ import (
 	"github.com/pingcap/tidb/parser/model"
 	tidbutil "github.com/pingcap/tidb/util"
 	router "github.com/pingcap/tidb/util/table-router"
-	dmconfig "github.com/pingcap/tiflow/dm/config"
+	"github.com/pingcap/tiflow/dm/config/security"
 	flag "github.com/spf13/pflag"
 	"go.uber.org/zap"
 )
@@ -490,7 +490,7 @@ func (c *Config) configFromFile(path string) error {
 	return nil
 }
 
-func parseTLSFromDMConfig(config *dmconfig.Security) *Security {
+func parseTLSFromDMConfig(config *security.Security) *Security {
 	if config == nil {
 		return nil
 	}

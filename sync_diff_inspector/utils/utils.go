@@ -143,6 +143,10 @@ func GetTableRowsQueryFormat(schema, table string, tableInfo *model.TableInfo, c
 
 	columnNames := make([]string, 0, len(tableInfo.Columns))
 	for _, col := range tableInfo.Columns {
+		if col.Hidden {
+			continue
+		}
+
 		name := dbutil.ColumnName(col.Name.O)
 		// When col value is 0, the result is NULL.
 		// But we can use ISNULL to distinguish between null and 0.
@@ -556,17 +560,19 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 			if (str1 == str2) || (data1.IsNull && data2.IsNull) {
 				continue
 			}
-			var v1, v2 any
-			err := json.Unmarshal(data1.Data, &v1)
-			if err != nil {
-				return false, 0, errors.Errorf("unmarshal json %s failed, error %v", str1, err)
-			}
-			err = json.Unmarshal(data2.Data, &v2)
-			if err != nil {
-				return false, 0, errors.Errorf("unmarshal json %s failed, error %v", str2, err)
-			}
-			if reflect.DeepEqual(v1, v2) {
-				continue
+			if !data1.IsNull && !data2.IsNull {
+				var v1, v2 any
+				err := json.Unmarshal(data1.Data, &v1)
+				if err != nil {
+					return false, 0, errors.Errorf("unmarshal json %s failed, error %v", str1, err)
+				}
+				err = json.Unmarshal(data2.Data, &v2)
+				if err != nil {
+					return false, 0, errors.Errorf("unmarshal json %s failed, error %v", str2, err)
+				}
+				if reflect.DeepEqual(v1, v2) {
+					continue
+				}
 			}
 		} else {
 			if (str1 == str2) && (data1.IsNull == data2.IsNull) {
@@ -757,7 +763,11 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 	*/
 	columnNames := make([]string, 0, len(tbInfo.Columns))
 	columnIsNull := make([]string, 0, len(tbInfo.Columns))
+	log.Debug("table columns", zap.Any("columns", tbInfo.Columns))
 	for _, col := range tbInfo.Columns {
+		if col.Hidden {
+			continue
+		}
 		name := dbutil.ColumnName(col.Name.O)
 		// When col value is 0, the result is NULL.
 		// But we can use ISNULL to distinguish between null and 0.
