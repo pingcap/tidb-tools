@@ -363,7 +363,7 @@ func (b *BinlogEvent) matchEvent(tp, event EventType, rules []EventType) bool {
 			return false
 		}
 
-		if tp == ddl {
+		if tp == ddl || tp == incompatibleDDL {
 			if rule == AllDDL {
 				return true
 			}
