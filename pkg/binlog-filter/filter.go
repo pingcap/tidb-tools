@@ -28,6 +28,7 @@ type ActionType string
 const (
 	Ignore ActionType = "Ignore"
 	Do     ActionType = "Do"
+	Error  ActionType = "Error"
 )
 
 // EventType is DML/DDL Event type
@@ -35,8 +36,9 @@ type EventType string
 
 // show DML/DDL Events
 const (
-	ddl EventType = "ddl"
-	dml EventType = "dml"
+	ddl             EventType = "ddl"
+	dml             EventType = "dml"
+	incompatibleDDL EventType = "incompatible DDL"
 
 	// it indicates all dml/ddl events in rule
 	AllEvent EventType = "all"
@@ -75,6 +77,28 @@ const (
 	TruncateTablePartition EventType = "truncate table partition"
 	// if need, add more	AlertTableOption     = "alert table option"
 
+	IncompatibleDDLChanges EventType = "incompatible ddl changes"
+	ValueRangeDecrease     EventType = "value range decrease"
+	PrecisionDecrease      EventType = "precision decrease"
+	ModifyColumn           EventType = "modify column"
+	Rename                 EventType = "rename"
+	Drop                   EventType = "drop"
+	Truncate               EventType = "truncate"
+	ModifyPK               EventType = "modify pk"
+	ModifyUK               EventType = "modify uk"
+	ModifyDefaultValue     EventType = "modify default value"
+	ModifyConstraint       EventType = "modify constaints"
+	ModifyColumnsOrder     EventType = "modify columns order"
+	ModifyCharset          EventType = "modify charset"
+	ModifyCollation        EventType = "modify collation"
+	RemoveAutoIncrement    EventType = "remove auto increment"
+	ModifyStorageEngine    EventType = "modify storage engine"
+	ReorganizePartion      EventType = "reorganize partition"
+	RebuildPartition       EventType = "rebuild partition"
+	CoalescePartition      EventType = "coalesce partition"
+	SplitPartition         EventType = "split partition"
+	ExchangePartition      EventType = "exchange partition"
+
 	// NullEvent is used to represents unsupported ddl event type when we
 	// convert a ast.StmtNode or a string to EventType.
 	NullEvent EventType = ""
@@ -108,6 +132,27 @@ func ClassifyEvent(event EventType) (EventType, error) {
 		return ddl, nil
 	case NullEvent:
 		return NullEvent, nil
+	case ValueRangeDecrease,
+		PrecisionDecrease,
+		ModifyColumn,
+		Rename,
+		Drop,
+		Truncate,
+		ModifyPK,
+		ModifyUK,
+		ModifyDefaultValue,
+		ModifyConstraint,
+		ModifyColumnsOrder,
+		ModifyCharset,
+		ModifyCollation,
+		RemoveAutoIncrement,
+		ModifyStorageEngine,
+		ReorganizePartion,
+		RebuildPartition,
+		CoalescePartition,
+		SplitPartition,
+		ExchangePartition:
+		return incompatibleDDL, nil
 	default:
 		return NullEvent, errors.NotValidf("event type %s", event)
 	}
@@ -140,7 +185,7 @@ func (b *BinlogEventRule) Valid() error {
 		b.sqlRegularExp = reg
 	}
 
-	if b.Action != Do && b.Action != Ignore {
+	if b.Action != Do && b.Action != Ignore && b.Action != Error {
 		return errors.Errorf("action of binlog event rule %+v should not be empty", b)
 	}
 
@@ -267,10 +312,13 @@ func (b *BinlogEvent) Filter(schema, table string, event EventType, rawQuery str
 		if tp != NullEvent {
 			matched := b.matchEvent(tp, event, binlogEventRule.Events)
 
-			// ignore has highest priority
 			if matched {
+				// ignore has highest priority
 				if binlogEventRule.Action == Ignore {
 					return Ignore, nil
+				}
+				if binlogEventRule.Action == Error {
+					return Error, nil
 				}
 			} else {
 				if binlogEventRule.Action == Do {
@@ -286,10 +334,13 @@ func (b *BinlogEvent) Filter(schema, table string, event EventType, rawQuery str
 			}
 
 			matched := binlogEventRule.sqlRegularExp.FindStringIndex(rawQuery) != nil
-			// ignore has highest priority
 			if matched {
+				// Ignore has highest priority
 				if binlogEventRule.Action == Ignore {
 					return Ignore, nil
+				}
+				if binlogEventRule.Action == Error {
+					return Error, nil
 				}
 			} else {
 				if binlogEventRule.Action == Do {
@@ -329,6 +380,12 @@ func (b *BinlogEvent) matchEvent(tp, event EventType, rules []EventType) bool {
 
 			if rule == NoneDML {
 				return false
+			}
+		}
+
+		if tp == incompatibleDDL {
+			if rule == IncompatibleDDLChanges {
+				return true
 			}
 		}
 

@@ -81,7 +81,29 @@ func toEventType(es string) (EventType, error) {
 		AlterTable,
 		AddTablePartition,
 		DropTablePartition,
-		TruncateTablePartition:
+		TruncateTablePartition,
+
+		IncompatibleDDLChanges,
+		ValueRangeDecrease,
+		PrecisionDecrease,
+		ModifyColumn,
+		Rename,
+		Drop,
+		Truncate,
+		ModifyPK,
+		ModifyUK,
+		ModifyDefaultValue,
+		ModifyConstraint,
+		ModifyColumnsOrder,
+		ModifyCharset,
+		ModifyCollation,
+		RemoveAutoIncrement,
+		ModifyStorageEngine,
+		ReorganizePartion,
+		RebuildPartition,
+		CoalescePartition,
+		SplitPartition,
+		ExchangePartition:
 		return event, nil
 	case CreateSchema: // alias of CreateDatabase
 		return CreateDatabase, nil
