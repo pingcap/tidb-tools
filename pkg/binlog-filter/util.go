@@ -83,6 +83,7 @@ func toEventType(es string) (EventType, error) {
 		DropTablePartition,
 		TruncateTablePartition,
 
+		IncompatibleDDLChanges,
 		ValueRangeDecrease,
 		PrecisionDecrease,
 		ModifyColumn,
