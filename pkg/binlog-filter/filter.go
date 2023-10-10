@@ -77,26 +77,27 @@ const (
 	TruncateTablePartition EventType = "truncate table partition"
 	// if need, add more	AlertTableOption     = "alert table option"
 
-	ValueRangeDecrease  EventType = "value range decrease"
-	PrecisionDecrease   EventType = "precision decrease"
-	ModifyColumn        EventType = "modify column"
-	Rename              EventType = "rename"
-	Drop                EventType = "drop"
-	Truncate            EventType = "truncate"
-	ModifyPK            EventType = "modify pk"
-	ModifyUK            EventType = "modify uk"
-	ModifyDefaultValue  EventType = "modify default value"
-	ModifyConstraint    EventType = "modify constaints"
-	ModifyColumnsOrder  EventType = "modify columns order"
-	ModifyCharset       EventType = "modify charset"
-	ModifyCollation     EventType = "modify collation"
-	RemoveAutoIncrement EventType = "remove auto increment"
-	ModifyStorageEngine EventType = "modify storage engine"
-	ReorganizePartion   EventType = "reorganize partition"
-	RebuildPartition    EventType = "rebuild partition"
-	CoalescePartition   EventType = "coalesce partition"
-	SplitPartition      EventType = "split partition"
-	ExchangePartition   EventType = "exchange partition"
+	IncompatibleDDLChanges EventType = "incompatible ddl changes"
+	ValueRangeDecrease     EventType = "value range decrease"
+	PrecisionDecrease      EventType = "precision decrease"
+	ModifyColumn           EventType = "modify column"
+	Rename                 EventType = "rename"
+	Drop                   EventType = "drop"
+	Truncate               EventType = "truncate"
+	ModifyPK               EventType = "modify pk"
+	ModifyUK               EventType = "modify uk"
+	ModifyDefaultValue     EventType = "modify default value"
+	ModifyConstraint       EventType = "modify constaints"
+	ModifyColumnsOrder     EventType = "modify columns order"
+	ModifyCharset          EventType = "modify charset"
+	ModifyCollation        EventType = "modify collation"
+	RemoveAutoIncrement    EventType = "remove auto increment"
+	ModifyStorageEngine    EventType = "modify storage engine"
+	ReorganizePartion      EventType = "reorganize partition"
+	RebuildPartition       EventType = "rebuild partition"
+	CoalescePartition      EventType = "coalesce partition"
+	SplitPartition         EventType = "split partition"
+	ExchangePartition      EventType = "exchange partition"
 
 	// NullEvent is used to represents unsupported ddl event type when we
 	// convert a ast.StmtNode or a string to EventType.
@@ -379,6 +380,12 @@ func (b *BinlogEvent) matchEvent(tp, event EventType, rules []EventType) bool {
 
 			if rule == NoneDML {
 				return false
+			}
+		}
+
+		if tp == incompatibleDDL {
+			if rule == IncompatibleDDLChanges {
+				return true
 			}
 		}
 
