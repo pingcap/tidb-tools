@@ -84,8 +84,8 @@ const (
 	RenameColumn           EventType = "rename column"
 	RenameIndex            EventType = "rename index"
 	DropColumn             EventType = "drop column"
-	DropPrimaryKey                 EventType = "drop primary key"
-	DropUniqueKey                 EventType = "drop unique key"
+	DropPrimaryKey         EventType = "drop primary key"
+	DropUniqueKey          EventType = "drop unique key"
 	ModifyDefaultValue     EventType = "modify default value"
 	ModifyConstraint       EventType = "modify constaints"
 	ModifyColumnsOrder     EventType = "modify columns order"
@@ -130,8 +130,8 @@ func ClassifyEvent(event EventType) (EventType, error) {
 		RenameColumn,
 		RenameIndex,
 		DropColumn,
-		DropPK,
-		DropUK,
+		DropPrimaryKey,
+		DropUniqueKey,
 		ModifyDefaultValue,
 		ModifyConstraint,
 		ModifyColumnsOrder,
