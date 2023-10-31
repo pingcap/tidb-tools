@@ -81,11 +81,11 @@ const (
 	ValueRangeDecrease     EventType = "value range decrease"
 	PrecisionDecrease      EventType = "precision decrease"
 	ModifyColumn           EventType = "modify column"
-	Rename                 EventType = "rename"
-	Drop                   EventType = "drop"
-	Truncate               EventType = "truncate"
-	ModifyPK               EventType = "modify pk"
-	ModifyUK               EventType = "modify uk"
+	RenameColumn           EventType = "rename column"
+	RenameIndex            EventType = "rename index"
+	DropColumn             EventType = "drop column"
+	DropPrimaryKey         EventType = "drop primary key"
+	DropUniqueKey          EventType = "drop unique key"
 	ModifyDefaultValue     EventType = "modify default value"
 	ModifyConstraint       EventType = "modify constaints"
 	ModifyColumnsOrder     EventType = "modify columns order"
@@ -93,11 +93,11 @@ const (
 	ModifyCollation        EventType = "modify collation"
 	RemoveAutoIncrement    EventType = "remove auto increment"
 	ModifyStorageEngine    EventType = "modify storage engine"
-	ReorganizePartion      EventType = "reorganize partition"
-	RebuildPartition       EventType = "rebuild partition"
-	CoalescePartition      EventType = "coalesce partition"
-	SplitPartition         EventType = "split partition"
-	ExchangePartition      EventType = "exchange partition"
+	ReorganizePartion      EventType = "reorganize table partition"
+	RebuildPartition       EventType = "rebuild table partition"
+	CoalescePartition      EventType = "coalesce table partition"
+	SplitPartition         EventType = "split table partition"
+	ExchangePartition      EventType = "exchange table partition"
 
 	// NullEvent is used to represents unsupported ddl event type when we
 	// convert a ast.StmtNode or a string to EventType.
@@ -112,34 +112,26 @@ func ClassifyEvent(event EventType) (EventType, error) {
 		DeleteEvent:
 		return dml, nil
 	case CreateDatabase,
-		DropDatabase,
 		AlterDatabase,
 		AlterSchema,
 		CreateTable,
-		DropTable,
-		TruncateTable,
-		RenameTable,
 		CreateIndex,
-		DropIndex,
 		CreateView,
 		DropView,
 		AlterTable,
 		CreateSchema,
-		DropSchema,
-		AddTablePartition,
-		DropTablePartition,
-		TruncateTablePartition:
+		AddTablePartition:
 		return ddl, nil
 	case NullEvent:
 		return NullEvent, nil
 	case ValueRangeDecrease,
 		PrecisionDecrease,
 		ModifyColumn,
-		Rename,
-		Drop,
-		Truncate,
-		ModifyPK,
-		ModifyUK,
+		RenameColumn,
+		RenameIndex,
+		DropColumn,
+		DropPrimaryKey,
+		DropUniqueKey,
 		ModifyDefaultValue,
 		ModifyConstraint,
 		ModifyColumnsOrder,
@@ -151,7 +143,16 @@ func ClassifyEvent(event EventType) (EventType, error) {
 		RebuildPartition,
 		CoalescePartition,
 		SplitPartition,
-		ExchangePartition:
+		ExchangePartition,
+
+		DropDatabase,
+		DropTable,
+		DropIndex,
+		RenameTable,
+		TruncateTable,
+		DropSchema,
+		DropTablePartition,
+		TruncateTablePartition:
 		return incompatibleDDL, nil
 	default:
 		return NullEvent, errors.NotValidf("event type %s", event)
