@@ -1,7 +1,7 @@
 package dbutil
 
 import (
-	"github.com/pingcap/tidb/parser/mysql"
+	"github.com/pingcap/tidb/pkg/parser/mysql"
 )
 
 // IsNumberType returns true if tp is number type

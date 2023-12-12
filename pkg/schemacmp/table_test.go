@@ -19,15 +19,15 @@ import (
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/errors"
-	"github.com/pingcap/tidb/ddl"
-	"github.com/pingcap/tidb/parser"
-	"github.com/pingcap/tidb/parser/ast"
-	"github.com/pingcap/tidb/parser/model"
-	"github.com/pingcap/tidb/parser/mysql"
-	"github.com/pingcap/tidb/util/mock"
+	"github.com/pingcap/tidb/pkg/ddl"
+	"github.com/pingcap/tidb/pkg/parser"
+	"github.com/pingcap/tidb/pkg/parser/ast"
+	"github.com/pingcap/tidb/pkg/parser/model"
+	"github.com/pingcap/tidb/pkg/parser/mysql"
+	"github.com/pingcap/tidb/pkg/util/mock"
 
 	// initialize expression.EvalAsAst
-	_ "github.com/pingcap/tidb/planner"
+	_ "github.com/pingcap/tidb/pkg/planner"
 
 	"github.com/pingcap/tidb-tools/pkg/schemacmp"
 	. "github.com/pingcap/tidb-tools/pkg/schemacmp"

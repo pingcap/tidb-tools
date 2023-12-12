@@ -26,7 +26,7 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
-	"github.com/pingcap/tidb/parser/charset"
+	"github.com/pingcap/tidb/pkg/parser/charset"
 	flag "github.com/spf13/pflag"
 	"go.uber.org/zap"
 )

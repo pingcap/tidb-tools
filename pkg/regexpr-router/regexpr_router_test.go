@@ -19,7 +19,7 @@ import (
 
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/filter"
-	router "github.com/pingcap/tidb/util/table-router"
+	router "github.com/pingcap/tidb/pkg/util/table-router"
 )
 
 var _ = Suite(&testRouteSuite{})

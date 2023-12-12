@@ -26,7 +26,7 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
-	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/pkg/parser"
 	"github.com/stretchr/testify/require"
 )
 
