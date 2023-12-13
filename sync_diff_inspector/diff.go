@@ -39,8 +39,8 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
-	tidbconfig "github.com/pingcap/tidb/config"
-	"github.com/pingcap/tidb/parser/model"
+	tidbconfig "github.com/pingcap/tidb/pkg/config"
+	"github.com/pingcap/tidb/pkg/parser/model"
 	"github.com/siddontang/go/ioutil2"
 	"go.uber.org/zap"
 )

@@ -27,13 +27,13 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
-	"github.com/pingcap/tidb/infoschema"
-	"github.com/pingcap/tidb/parser"
-	"github.com/pingcap/tidb/parser/model"
-	tmysql "github.com/pingcap/tidb/parser/mysql"
-	"github.com/pingcap/tidb/sessionctx/stmtctx"
-	"github.com/pingcap/tidb/types"
-	"github.com/pingcap/tidb/util/dbterror"
+	"github.com/pingcap/tidb/pkg/infoschema"
+	"github.com/pingcap/tidb/pkg/parser"
+	"github.com/pingcap/tidb/pkg/parser/model"
+	tmysql "github.com/pingcap/tidb/pkg/parser/mysql"
+	"github.com/pingcap/tidb/pkg/types"
+	contextutil "github.com/pingcap/tidb/pkg/util/context"
+	"github.com/pingcap/tidb/pkg/util/dbterror"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/tidb-tools/pkg/utils"
@@ -596,8 +596,8 @@ func AnalyzeValuesFromBuckets(valueString string, cols []*model.ColumnInfo) ([]s
 	for i, col := range cols {
 		if IsTimeTypeAndNeedDecode(col.GetType()) {
 			// check if values[i] is already a time string
-			sc := &stmtctx.StatementContext{TimeZone: time.UTC}
-			_, err := types.ParseTime(sc, values[i], col.GetType(), types.MinFsp, nil)
+			typeCtx := types.NewContext(types.StrictFlags.WithIgnoreZeroInDate(true), time.UTC, contextutil.IgnoreWarn)
+			_, err := types.ParseTime(typeCtx, values[i], col.GetType(), types.MinFsp)
 			if err == nil {
 				continue
 			}

@@ -19,7 +19,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	. "github.com/pingcap/check"
-	"github.com/pingcap/tidb/errno"
+	"github.com/pingcap/tidb/pkg/errno"
 )
 
 var _ = Suite(&testRetrySuite{})

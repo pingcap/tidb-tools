@@ -19,7 +19,7 @@ import (
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pingcap/tidb/parser"
+	"github.com/pingcap/tidb/pkg/parser"
 )
 
 var _ = Suite(&testSpliterSuite{})
