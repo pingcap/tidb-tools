@@ -18,7 +18,9 @@ import (
 	"strings"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	selector "github.com/pingcap/tidb-tools/pkg/table-rule-selector"
+	"go.uber.org/zap"
 )
 
 // ActionType indicates how to handle matched items
@@ -216,7 +218,7 @@ func NewBinlogEvent(caseSensitive bool, rules []*BinlogEventRule) (*BinlogEvent,
 
 	for _, rule := range rules {
 		if err := b.AddRule(rule); err != nil {
-			return nil, errors.Annotatef(err, "initial rule %+v in binlog event filter", rule)
+			log.Error("invalid binlog event rule", zap.Error(err))
 		}
 	}
 
