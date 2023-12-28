@@ -34,6 +34,7 @@ func (t *testFilterSuite) TestFilter(c *C) {
 		{"Test_1_*", "abc*", []EventType{DeleteEvent, InsertEvent, CreateIndex, DropIndex, DropView}, []string{"^DROP\\s+PROCEDURE", "^CREATE\\s+PROCEDURE"}, nil, Ignore},
 		{"xxx_*", "abc_*", []EventType{AllDML, NoneDDL}, nil, nil, Ignore},
 		{"yyy_*", "abc_*", []EventType{EventType("ALL DML")}, nil, nil, Do},
+		{"Test_1_*", "abc*", []EventType{"wrong event"}, []string{"^DROP\\s+PROCEDURE", "^CREATE\\s+PROCEDURE"}, nil, Ignore},
 	}
 
 	cases := []struct {
@@ -77,6 +78,7 @@ func (t *testFilterSuite) TestFilter(c *C) {
 	rules[0].Events = []EventType{}
 	rules[1].Action = Do
 	rules[2].Events = []EventType{"ALL DDL"}
+	rules = rules[:3]
 	for _, rule := range rules {
 		err = filter.UpdateRule(rule)
 		c.Assert(err, IsNil)
