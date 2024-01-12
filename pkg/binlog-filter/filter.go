@@ -18,7 +18,9 @@ import (
 	"strings"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/log"
 	selector "github.com/pingcap/tidb-tools/pkg/table-rule-selector"
+	"go.uber.org/zap"
 )
 
 // ActionType indicates how to handle matched items
@@ -28,6 +30,7 @@ type ActionType string
 const (
 	Ignore ActionType = "Ignore"
 	Do     ActionType = "Do"
+	Error  ActionType = "Error"
 )
 
 // EventType is DML/DDL Event type
@@ -35,8 +38,9 @@ type EventType string
 
 // show DML/DDL Events
 const (
-	ddl EventType = "ddl"
-	dml EventType = "dml"
+	ddl             EventType = "ddl"
+	dml             EventType = "dml"
+	incompatibleDDL EventType = "incompatible DDL"
 
 	// it indicates all dml/ddl events in rule
 	AllEvent EventType = "all"
@@ -75,6 +79,28 @@ const (
 	TruncateTablePartition EventType = "truncate table partition"
 	// if need, add more	AlertTableOption     = "alert table option"
 
+	IncompatibleDDLChanges EventType = "incompatible ddl changes"
+	ValueRangeDecrease     EventType = "value range decrease"
+	PrecisionDecrease      EventType = "precision decrease"
+	ModifyColumn           EventType = "modify column"
+	RenameColumn           EventType = "rename column"
+	RenameIndex            EventType = "rename index"
+	DropColumn             EventType = "drop column"
+	DropPrimaryKey         EventType = "drop primary key"
+	DropUniqueKey          EventType = "drop unique key"
+	ModifyDefaultValue     EventType = "modify default value"
+	ModifyConstraint       EventType = "modify constaints"
+	ModifyColumnsOrder     EventType = "modify columns order"
+	ModifyCharset          EventType = "modify charset"
+	ModifyCollation        EventType = "modify collation"
+	RemoveAutoIncrement    EventType = "remove auto increment"
+	ModifyStorageEngine    EventType = "modify storage engine"
+	ReorganizePartion      EventType = "reorganize table partition"
+	RebuildPartition       EventType = "rebuild table partition"
+	CoalescePartition      EventType = "coalesce table partition"
+	SplitPartition         EventType = "split table partition"
+	ExchangePartition      EventType = "exchange table partition"
+
 	// NullEvent is used to represents unsupported ddl event type when we
 	// convert a ast.StmtNode or a string to EventType.
 	NullEvent EventType = ""
@@ -88,26 +114,48 @@ func ClassifyEvent(event EventType) (EventType, error) {
 		DeleteEvent:
 		return dml, nil
 	case CreateDatabase,
-		DropDatabase,
 		AlterDatabase,
 		AlterSchema,
 		CreateTable,
-		DropTable,
-		TruncateTable,
-		RenameTable,
 		CreateIndex,
-		DropIndex,
 		CreateView,
 		DropView,
 		AlterTable,
 		CreateSchema,
-		DropSchema,
-		AddTablePartition,
-		DropTablePartition,
-		TruncateTablePartition:
+		AddTablePartition:
 		return ddl, nil
 	case NullEvent:
 		return NullEvent, nil
+	case ValueRangeDecrease,
+		PrecisionDecrease,
+		ModifyColumn,
+		RenameColumn,
+		RenameIndex,
+		DropColumn,
+		DropPrimaryKey,
+		DropUniqueKey,
+		ModifyDefaultValue,
+		ModifyConstraint,
+		ModifyColumnsOrder,
+		ModifyCharset,
+		ModifyCollation,
+		RemoveAutoIncrement,
+		ModifyStorageEngine,
+		ReorganizePartion,
+		RebuildPartition,
+		CoalescePartition,
+		SplitPartition,
+		ExchangePartition,
+
+		DropDatabase,
+		DropTable,
+		DropIndex,
+		RenameTable,
+		TruncateTable,
+		DropSchema,
+		DropTablePartition,
+		TruncateTablePartition:
+		return incompatibleDDL, nil
 	default:
 		return NullEvent, errors.NotValidf("event type %s", event)
 	}
@@ -140,7 +188,7 @@ func (b *BinlogEventRule) Valid() error {
 		b.sqlRegularExp = reg
 	}
 
-	if b.Action != Do && b.Action != Ignore {
+	if b.Action != Do && b.Action != Ignore && b.Action != Error {
 		return errors.Errorf("action of binlog event rule %+v should not be empty", b)
 	}
 
@@ -170,7 +218,7 @@ func NewBinlogEvent(caseSensitive bool, rules []*BinlogEventRule) (*BinlogEvent,
 
 	for _, rule := range rules {
 		if err := b.AddRule(rule); err != nil {
-			return nil, errors.Annotatef(err, "initial rule %+v in binlog event filter", rule)
+			log.Error("invalid binlog event rule", zap.Error(err))
 		}
 	}
 
@@ -267,10 +315,13 @@ func (b *BinlogEvent) Filter(schema, table string, event EventType, rawQuery str
 		if tp != NullEvent {
 			matched := b.matchEvent(tp, event, binlogEventRule.Events)
 
-			// ignore has highest priority
 			if matched {
+				// ignore has highest priority
 				if binlogEventRule.Action == Ignore {
 					return Ignore, nil
+				}
+				if binlogEventRule.Action == Error {
+					return Error, nil
 				}
 			} else {
 				if binlogEventRule.Action == Do {
@@ -286,10 +337,13 @@ func (b *BinlogEvent) Filter(schema, table string, event EventType, rawQuery str
 			}
 
 			matched := binlogEventRule.sqlRegularExp.FindStringIndex(rawQuery) != nil
-			// ignore has highest priority
 			if matched {
+				// Ignore has highest priority
 				if binlogEventRule.Action == Ignore {
 					return Ignore, nil
+				}
+				if binlogEventRule.Action == Error {
+					return Error, nil
 				}
 			} else {
 				if binlogEventRule.Action == Do {
@@ -312,7 +366,7 @@ func (b *BinlogEvent) matchEvent(tp, event EventType, rules []EventType) bool {
 			return false
 		}
 
-		if tp == ddl {
+		if tp == ddl || tp == incompatibleDDL {
 			if rule == AllDDL {
 				return true
 			}
@@ -329,6 +383,12 @@ func (b *BinlogEvent) matchEvent(tp, event EventType, rules []EventType) bool {
 
 			if rule == NoneDML {
 				return false
+			}
+		}
+
+		if tp == incompatibleDDL {
+			if rule == IncompatibleDDLChanges {
+				return true
 			}
 		}
 

@@ -26,7 +26,7 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
-	"github.com/pingcap/tidb/parser/charset"
+	"github.com/pingcap/tidb/pkg/parser/charset"
 	flag "github.com/spf13/pflag"
 	"go.uber.org/zap"
 )
@@ -39,7 +39,7 @@ func init() {
 		Maxlen:           2,
 	}
 	charset.AddCharset(c)
-	for _, coll := range charset.GetCollations() {
+	for _, coll := range charset.GetSupportedCollations() {
 		if strings.EqualFold(coll.CharsetName, c.Name) {
 			charset.AddCollation(coll)
 		}

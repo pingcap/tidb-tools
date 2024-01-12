@@ -20,7 +20,7 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
-	tmysql "github.com/pingcap/tidb/parser/mysql"
+	tmysql "github.com/pingcap/tidb/pkg/parser/mysql"
 )
 
 func tryConnectMySQL(cfg *mysql.Config) (*sql.DB, error) {

@@ -34,6 +34,7 @@ func (t *testFilterSuite) TestFilter(c *C) {
 		{"Test_1_*", "abc*", []EventType{DeleteEvent, InsertEvent, CreateIndex, DropIndex, DropView}, []string{"^DROP\\s+PROCEDURE", "^CREATE\\s+PROCEDURE"}, nil, Ignore},
 		{"xxx_*", "abc_*", []EventType{AllDML, NoneDDL}, nil, nil, Ignore},
 		{"yyy_*", "abc_*", []EventType{EventType("ALL DML")}, nil, nil, Do},
+		{"Test_1_*", "abc*", []EventType{"wrong event"}, []string{"^DROP\\s+PROCEDURE", "^CREATE\\s+PROCEDURE"}, nil, Ignore},
 	}
 
 	cases := []struct {
@@ -77,6 +78,7 @@ func (t *testFilterSuite) TestFilter(c *C) {
 	rules[0].Events = []EventType{}
 	rules[1].Action = Do
 	rules[2].Events = []EventType{"ALL DDL"}
+	rules = rules[:3]
 	for _, rule := range rules {
 		err = filter.UpdateRule(rule)
 		c.Assert(err, IsNil)
@@ -302,21 +304,21 @@ func (t *testFilterSuite) TestClassifyEvent(c *C) {
 		// ddl
 		{CreateDatabase, ddl, nil},
 		{CreateSchema, ddl, nil},
-		{DropDatabase, ddl, nil},
-		{DropSchema, ddl, nil},
+		{DropDatabase, incompatibleDDL, nil},
+		{DropSchema, incompatibleDDL, nil},
 		{AlterSchema, ddl, nil},
 		{CreateTable, ddl, nil},
-		{DropTable, ddl, nil},
-		{TruncateTable, ddl, nil},
-		{RenameTable, ddl, nil},
+		{DropTable, incompatibleDDL, nil},
+		{TruncateTable, incompatibleDDL, nil},
+		{RenameTable, incompatibleDDL, nil},
 		{CreateIndex, ddl, nil},
-		{DropIndex, ddl, nil},
+		{DropIndex, incompatibleDDL, nil},
 		{CreateView, ddl, nil},
 		{DropView, ddl, nil},
 		{AlterTable, ddl, nil},
 		{AddTablePartition, ddl, nil},
-		{DropTablePartition, ddl, nil},
-		{TruncateTablePartition, ddl, nil},
+		{DropTablePartition, incompatibleDDL, nil},
+		{TruncateTablePartition, incompatibleDDL, nil},
 		{"create", NullEvent, errors.NotValidf("event type %s", "create")},
 		{EventType("xxx"), NullEvent, errors.NotValidf("event type %s", "xxx")},
 		{EventType("I don't know"), NullEvent, errors.NotValidf("event type %s", "I don't know")},

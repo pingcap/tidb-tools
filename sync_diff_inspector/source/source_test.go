@@ -32,8 +32,8 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
-	"github.com/pingcap/tidb/parser"
-	router "github.com/pingcap/tidb/util/table-router"
+	"github.com/pingcap/tidb/pkg/parser"
+	router "github.com/pingcap/tidb/pkg/util/table-router"
 	"github.com/stretchr/testify/require"
 
 	_ "github.com/go-sql-driver/mysql"

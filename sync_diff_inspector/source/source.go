@@ -30,8 +30,8 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
-	"github.com/pingcap/tidb/parser/model"
-	router "github.com/pingcap/tidb/util/table-router"
+	"github.com/pingcap/tidb/pkg/parser/model"
+	router "github.com/pingcap/tidb/pkg/util/table-router"
 	"go.uber.org/zap"
 )
 

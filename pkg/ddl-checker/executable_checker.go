@@ -19,17 +19,18 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
-	"github.com/pingcap/tidb/parser"
-	"github.com/pingcap/tidb/parser/ast"
-	"github.com/pingcap/tidb/session"
-	"github.com/pingcap/tidb/store/mockstore"
-	"github.com/pingcap/tidb/util/logutil"
+	"github.com/pingcap/tidb/pkg/parser"
+	"github.com/pingcap/tidb/pkg/parser/ast"
+	"github.com/pingcap/tidb/pkg/session"
+	"github.com/pingcap/tidb/pkg/session/types"
+	"github.com/pingcap/tidb/pkg/store/mockstore"
+	"github.com/pingcap/tidb/pkg/util/logutil"
 	"go.uber.org/atomic"
 )
 
 // ExecutableChecker is a part of TiDB to check the sql's executability
 type ExecutableChecker struct {
-	session  session.Session
+	session  types.Session
 	parser   *parser.Parser
 	isClosed *atomic.Bool
 }

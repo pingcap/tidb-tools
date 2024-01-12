@@ -17,7 +17,7 @@ import (
 	"strings"
 
 	"github.com/pingcap/errors"
-	"github.com/pingcap/tidb/parser/ast"
+	"github.com/pingcap/tidb/pkg/parser/ast"
 )
 
 // AstToDDLEvent returns filter.DDLEvent
@@ -81,7 +81,29 @@ func toEventType(es string) (EventType, error) {
 		AlterTable,
 		AddTablePartition,
 		DropTablePartition,
-		TruncateTablePartition:
+		TruncateTablePartition,
+
+		IncompatibleDDLChanges,
+		ValueRangeDecrease,
+		PrecisionDecrease,
+		ModifyColumn,
+		RenameColumn,
+		RenameIndex,
+		DropColumn,
+		DropPrimaryKey,
+		DropUniqueKey,
+		ModifyDefaultValue,
+		ModifyConstraint,
+		ModifyColumnsOrder,
+		ModifyCharset,
+		ModifyCollation,
+		RemoveAutoIncrement,
+		ModifyStorageEngine,
+		ReorganizePartion,
+		RebuildPartition,
+		CoalescePartition,
+		SplitPartition,
+		ExchangePartition:
 		return event, nil
 	case CreateSchema: // alias of CreateDatabase
 		return CreateDatabase, nil
