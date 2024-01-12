@@ -21,7 +21,7 @@ importer -t "create table diff_test.test(a int, aa int, b varchar(10), c float, 
 mysql -uroot -h 127.0.0.1 -P 4000 -e "alter table diff_test.test change column a \`table\` int"
 
 echo "dump data and then load to tidb and mysql"
-mydumper --host 127.0.0.1 --port 4000 --user root --outputdir $BASE_DIR/dump_diff -B diff_test -T test
+dumpling --host 127.0.0.1 --port 4000 --user root -o $BASE_DIR/dump_diff -B diff_test -T "diff_test.test"
 loader -h 127.0.0.1 -P 4001 -u root -d $BASE_DIR/dump_diff
 mysql -h ${MYSQL_HOST} -P ${MYSQL_PORT} -u root -e "create database if not exists tidb_loader"
 loader -h ${MYSQL_HOST} -P ${MYSQL_PORT} -u root -d $BASE_DIR/dump_diff

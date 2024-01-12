@@ -18,6 +18,7 @@ import (
 	"os"
 	"testing"
 
+	router "github.com/pingcap/tidb/util/table-router"
 	"github.com/stretchr/testify/require"
 )
 
@@ -109,4 +110,17 @@ func TestNoSecretLeak(t *testing.T) {
 	s := DataSource{}
 	json.Unmarshal(sourceJSON, &s)
 	require.Equal(t, string(s.Password), "meow~~~")
+}
+
+func TestXxx(t *testing.T) {
+	router, err := router.NewTableRouter(false, []*router.TableRule{
+		{
+			SchemaPattern: "schema1\\(9|2\\)",
+			TargetSchema:  "schema5",
+		},
+	})
+	require.NoError(t, err)
+	ts, tt, err := router.Route("schema1|", "table1")
+	require.NoError(t, err)
+	require.Equal(t, ts, tt)
 }
