@@ -1,5 +1,7 @@
 ## importer
 
+Deprecated: The code has been moved to https://github.com/pingcap/tidb/tree/master/cmd/importer
+
 importer is a tool for generating and inserting datas to database which is compatible with MySQL protocol, like MySQL, TiDB.
 
 ## How to use

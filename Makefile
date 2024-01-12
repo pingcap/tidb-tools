@@ -66,7 +66,7 @@ test: version
 	rm -rf /tmp/output
 	$(call run_unit_test,$(PACKAGES))
 
-integration_test: failpoint-enable importer sync_diff_inspector ddl_checker failpoint-disable
+integration_test: failpoint-enable sync_diff_inspector ddl_checker failpoint-disable
 	@which bin/tidb-server
 	@which bin/tikv-server
 	@which bin/pd-server
