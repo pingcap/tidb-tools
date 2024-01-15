@@ -71,7 +71,7 @@ integration_test: failpoint-enable importer sync_diff_inspector ddl_checker fail
 	@which bin/tikv-server
 	@which bin/pd-server
 	@which bin/sync_diff_inspector
-	@which bin/mydumper
+	@which bin/dumpling
 	@which bin/loader
 	@which bin/importer
 	tests/run.sh
