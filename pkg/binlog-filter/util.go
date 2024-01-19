@@ -99,11 +99,26 @@ func toEventType(es string) (EventType, error) {
 		ModifyCollation,
 		RemoveAutoIncrement,
 		ModifyStorageEngine,
-		ReorganizePartion,
+		ReorganizePartition,
 		RebuildPartition,
 		CoalescePartition,
 		SplitPartition,
-		ExchangePartition:
+		ExchangePartition,
+
+		ModifySchemaCharsetAndCollate,
+		ModifyTableCharsetAndCollate,
+		ModifyTableComment,
+		RecoverTable,
+		AlterTablePartitioning,
+		RemovePartitioning,
+		AddColumn,
+		SetDefaultValue,
+		RebaseAutoID,
+		AddPrimaryKey,
+		AlterIndexVisibility,
+		AlterTTLInfo,
+		AlterTTLRemove,
+		MultiSchemaChange:
 		return event, nil
 	case CreateSchema: // alias of CreateDatabase
 		return CreateDatabase, nil
