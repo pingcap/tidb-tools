@@ -106,7 +106,7 @@ const (
 	ModifyTableComment            EventType = "modify table comment"
 	RecoverTable                  EventType = "recover table"
 	AlterTablePartitioning        EventType = "alter table partitioning"
-	RemovePartitioning            EventType = "remove partitioning"
+	RemovePartitioning            EventType = "remove table partitioning"
 	AddColumn                     EventType = "add column"
 	SetDefaultValue               EventType = "set default value"
 	RebaseAutoID                  EventType = "rebase auto_increment ID"
