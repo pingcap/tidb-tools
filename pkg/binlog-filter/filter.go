@@ -169,7 +169,22 @@ func ClassifyEvent(event EventType) (EventType, error) {
 		TruncateTable,
 		DropSchema,
 		DropTablePartition,
-		TruncateTablePartition:
+		TruncateTablePartition,
+
+		ModifySchemaCharsetAndCollate,
+		ModifyTableCharsetAndCollate,
+		ModifyTableComment,
+		RecoverTable,
+		AlterTablePartitioning,
+		RemovePartitioning,
+		AddColumn,
+		SetDefaultValue,
+		RebaseAutoID,
+		AddPrimaryKey,
+		AlterIndexVisibility,
+		AlterTTLInfo,
+		AlterTTLRemove,
+		MultiSchemaChange:
 		return incompatibleDDL, nil
 	default:
 		return NullEvent, errors.NotValidf("event type %s", event)
