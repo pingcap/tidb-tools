@@ -117,6 +117,8 @@ func GetTableInfoWithVersion(ctx context.Context, db QueryExecutor, schemaName s
 	sctx := mock.NewContext()
 	// unify the timezone to UTC +0:00
 	sctx.GetSessionVars().TimeZone = time.UTC
+	sctx.GetSessionVars().SQLMode = mysql.DelSQLMode(sctx.GetSessionVars().SQLMode, mysql.ModeStrictTransTables)
+	sctx.GetSessionVars().SQLMode = mysql.DelSQLMode(sctx.GetSessionVars().SQLMode, mysql.ModeStrictAllTables)
 	return GetTableInfoBySQLWithSessionContext(sctx, createTableSQL, parser2)
 }
 
