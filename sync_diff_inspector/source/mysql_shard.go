@@ -338,7 +338,7 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 				if sourceDB.Router != nil {
 					targetSchema, targetTable, err = sourceDB.Router.Route(schema, table)
 					if err != nil {
-						return nil, errors.Errorf("get route result for %d source %s.%s failed, error %v", i, schema, table, err)
+						return nil, errors.Errorf("get route result for %d source %s.%s failed, please check the rules of schema/table routes, error %v", i, schema, table, err)
 					}
 				}
 				uniqueId := utils.UniqueID(targetSchema, targetTable)
