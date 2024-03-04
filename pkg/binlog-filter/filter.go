@@ -109,7 +109,7 @@ const (
 	RemovePartitioning            EventType = "remove table partitioning"
 	AddColumn                     EventType = "add column"
 	SetDefaultValue               EventType = "set default value"
-	RebaseAutoID                  EventType = "rebase auto_increment ID"
+	RebaseAutoID                  EventType = "rebase auto id"
 	AddPrimaryKey                 EventType = "add primary key"
 	AlterIndexVisibility          EventType = "alter index visibility"
 	AlterTTLInfo                  EventType = "alter ttl info"
