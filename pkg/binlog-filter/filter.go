@@ -248,7 +248,7 @@ func NewBinlogEvent(caseSensitive bool, rules []*BinlogEventRule) (*BinlogEvent,
 
 	for _, rule := range rules {
 		if err := b.AddRule(rule); err != nil {
-			log.Error("invalid binlog event rule", zap.Error(err))
+			log.Error("invalid binlog event rule", zap.Any("rule", rule), zap.Error(err))
 		}
 	}
 
