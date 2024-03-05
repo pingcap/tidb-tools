@@ -109,7 +109,7 @@ const (
 	RemovePartitioning            EventType = "remove table partitioning"
 	AddColumn                     EventType = "add column"
 	SetDefaultValue               EventType = "set default value"
-	RebaseAutoID                  EventType = "rebase auto_increment ID"
+	RebaseAutoID                  EventType = "rebase auto id"
 	AddPrimaryKey                 EventType = "add primary key"
 	AlterIndexVisibility          EventType = "alter index visibility"
 	AlterTTLInfo                  EventType = "alter ttl info"
@@ -248,7 +248,7 @@ func NewBinlogEvent(caseSensitive bool, rules []*BinlogEventRule) (*BinlogEvent,
 
 	for _, rule := range rules {
 		if err := b.AddRule(rule); err != nil {
-			log.Error("invalid binlog event rule", zap.Error(err))
+			log.Error("invalid binlog event rule", zap.Any("rule", rule), zap.Error(err))
 		}
 	}
 
