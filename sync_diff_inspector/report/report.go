@@ -238,7 +238,7 @@ func (r *Report) Print(w io.Writer) error {
 	var summary strings.Builder
 	if r.Result == Pass && r.SkippedNum == 0 {
 		summary.WriteString(fmt.Sprintf("A total of %d table have been compared and all are equal.\n", r.FailedNum+r.PassNum+r.SkippedNum))
-		summary.WriteString(fmt.Sprintf("You can view the comparision details through '%s/%s'\n", r.task.OutputDir, config.LogFileName))
+		summary.WriteString(fmt.Sprintf("You can view the comparison details through '%s/%s'\n", r.task.OutputDir, config.LogFileName))
 	} else if r.Result == Fail || r.SkippedNum != 0 {
 		for schema, tableMap := range r.TableResults {
 			for table, result := range tableMap {
@@ -266,7 +266,7 @@ func (r *Report) Print(w io.Writer) error {
 		summary.WriteString("\n")
 		summary.WriteString(fmt.Sprintf("A total of %d tables have been compared, %d tables finished, %d tables failed, %d tables skipped.\n", r.FailedNum+r.PassNum+r.SkippedNum, r.PassNum, r.FailedNum, r.SkippedNum))
 		summary.WriteString(fmt.Sprintf("The patch file has been generated in \n\t'%s/'\n", r.task.FixDir))
-		summary.WriteString(fmt.Sprintf("You can view the comparision details through '%s/%s'\n", r.task.OutputDir, config.LogFileName))
+		summary.WriteString(fmt.Sprintf("You can view the comparison details through '%s/%s'\n", r.task.OutputDir, config.LogFileName))
 	} else {
 		summary.WriteString("Error in comparison process:\n")
 		for schema, tableMap := range r.TableResults {
@@ -276,7 +276,7 @@ func (r *Report) Print(w io.Writer) error {
 				}
 			}
 		}
-		summary.WriteString(fmt.Sprintf("You can view the comparision details through '%s/%s'\n", r.task.OutputDir, config.LogFileName))
+		summary.WriteString(fmt.Sprintf("You can view the comparison details through '%s/%s'\n", r.task.OutputDir, config.LogFileName))
 	}
 	fmt.Fprint(w, summary.String())
 	return nil
