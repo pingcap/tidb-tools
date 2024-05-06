@@ -505,10 +505,15 @@ func TestMysqlRouter(t *testing.T) {
 	require.NoError(t, err)
 
 	// random splitter
+	// query 1: SELECT COUNT(1) cnt FROM `source_test`.`test2`
 	countRows := sqlmock.NewRows([]string{"Cnt"}).AddRow(0)
 	mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
+	// query 2: SELECT COUNT(1) cnt FROM `source_test_t`.`test_t`
+	countRows = sqlmock.NewRows([]string{"Cnt"}).AddRow(0)
+	mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
 	rangeIter, err := mysql.GetRangeIterator(ctx, nil, mysql.GetTableAnalyzer(), 3)
-	rangeIter.Next(ctx)
+	require.NoError(t, err)
+	_, err = rangeIter.Next(ctx)
 	require.NoError(t, err)
 	rangeIter.Close()
 
