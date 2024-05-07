@@ -663,26 +663,26 @@ func TestCompareBlob(t *testing.T) {
 
 	columns := tableInfo.Columns
 
-  cases := []struct {
-    data1 map[string]*dbutil.ColumnData
-    dataOthers []map[string]*dbutil.ColumnData
-  } {
-    {data1, []map[string]*dbutil.ColumnData{data2, data3}},
-    {data2, []map[string]*dbutil.ColumnData{data1, data3}},
-    {data3, []map[string]*dbutil.ColumnData{data1, data2}},
-  }
+	cases := []struct {
+		data1      map[string]*dbutil.ColumnData
+		dataOthers []map[string]*dbutil.ColumnData
+	}{
+		{data1, []map[string]*dbutil.ColumnData{data2, data3}},
+		{data2, []map[string]*dbutil.ColumnData{data1, data3}},
+		{data3, []map[string]*dbutil.ColumnData{data1, data2}},
+	}
 
-  for _, c := range cases {
-    equal, cmp, err := CompareData(c.data1, c.data1, orderKeyCols, columns)
-    require.NoError(t, err)
-    require.Equal(t, cmp, int32(0))
-    require.True(t, equal)
+	for _, c := range cases {
+		equal, cmp, err := CompareData(c.data1, c.data1, orderKeyCols, columns)
+		require.NoError(t, err)
+		require.Equal(t, cmp, int32(0))
+		require.True(t, equal)
 
-    for _, data := range c.dataOthers {
-      equal, cmp, err = CompareData(c.data1, data, orderKeyCols, columns)
-      require.NoError(t, err)
-      require.Equal(t, cmp, int32(0))
-      require.False(t, equal)
-    }
-  }
+		for _, data := range c.dataOthers {
+			equal, cmp, err = CompareData(c.data1, data, orderKeyCols, columns)
+			require.NoError(t, err)
+			require.Equal(t, cmp, int32(0))
+			require.False(t, equal)
+		}
+	}
 }
