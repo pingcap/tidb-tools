@@ -18,7 +18,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strconv"
 	"time"
 
 	tableFilter "github.com/pingcap/tidb-tools/pkg/table-filter"
@@ -100,33 +99,24 @@ func (s *MySQLSources) GetCountAndMd5(ctx context.Context, tableRange *splitter.
 	chunk := tableRange.GetChunk()
 
 	matchSources := getMatchedSourcesForTable(s.sourceTablesMap, table)
-
-	type checksumInfo struct {
-		LMd5  uint64
-		RMd5  uint64
-		Count int64
-		Err   error
-	}
-	infoCh := make(chan *checksumInfo, len(s.sourceTablesMap))
+	infoCh := make(chan *ChecksumInfo, len(s.sourceTablesMap))
 
 	for _, ms := range matchSources {
 		go func(ms *common.TableShardSource) {
-			count, lmd5, rmd5, err := utils.GetCountAndMd5Checksum(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info, chunk.Where, chunk.Args)
-			infoCh <- &checksumInfo{
-				LMd5:  lmd5,
-				RMd5:  rmd5,
-				Count: count,
-				Err:   err,
+			count, checksum, err := utils.GetCountAndMd5Checksum(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info, chunk.Where, chunk.Args)
+			infoCh <- &ChecksumInfo{
+				Checksum: checksum,
+				Count:    count,
+				Err:      err,
 			}
 		}(ms)
 	}
 	defer close(infoCh)
 
 	var (
-		err        error
-		totalCount int64
-		totalLeft  uint64
-		totalRight uint64
+		err           error
+		totalCount    int64
+		totalChecksum uint64
 	)
 
 	for range matchSources {
@@ -136,11 +126,9 @@ func (s *MySQLSources) GetCountAndMd5(ctx context.Context, tableRange *splitter.
 			err = info.Err
 		}
 		totalCount += info.Count
-		totalLeft ^= info.LMd5
-		totalRight ^= info.RMd5
+		totalChecksum ^= info.Checksum
 	}
 
-	totalChecksum := strconv.FormatUint(totalLeft, 16) + strconv.FormatUint(totalRight, 16)
 	cost := time.Since(beginTime)
 	return &ChecksumInfo{
 		Checksum: totalChecksum,

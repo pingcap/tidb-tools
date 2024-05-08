@@ -50,7 +50,7 @@ const (
 )
 
 type ChecksumInfo struct {
-	Checksum string
+	Checksum uint64
 	Count    int64
 	Err      error
 	Cost     time.Duration
