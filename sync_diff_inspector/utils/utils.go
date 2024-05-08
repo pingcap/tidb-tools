@@ -779,7 +779,11 @@ func GetCountAndMd5Checksum(ctx context.Context, db *sql.DB, schemaName, tableNa
 	*/
 	columnNames := make([]string, 0, len(tbInfo.Columns))
 	columnIsNull := make([]string, 0, len(tbInfo.Columns))
+	log.Debug("table columns", zap.Any("columns", tbInfo.Columns))
 	for _, col := range tbInfo.Columns {
+		if col.Hidden {
+			continue
+		}
 		name := dbutil.ColumnName(col.Name.O)
 		// When col value is 0, the result is NULL.
 		// But we can use ISNULL to distinguish between null and 0.
