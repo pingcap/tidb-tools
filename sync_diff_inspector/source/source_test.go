@@ -390,7 +390,7 @@ func TestMysqlShardSources(t *testing.T) {
 
 	for n, tableCase := range tableCases {
 		require.Equal(t, n, tableCase.rangeInfo.GetTableIndex())
-		var resChecksum int64 = 0
+		var resChecksum uint64 = 0
 		for i := 0; i < len(dbs); i++ {
 			resChecksum = resChecksum + 1<<i
 			countRows := sqlmock.NewRows([]string{"CNT", "LMD5", "RMD5"}).AddRow(1, 1<<i, 1<<i)
