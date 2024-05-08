@@ -614,3 +614,75 @@ func TestCompareStruct(t *testing.T) {
 	require.Equal(t, tableInfo.Indices[0].Name.O, "c")
 
 }
+
+func TestGenerateSQLBlob(t *testing.T) {
+	rowsData := map[string]*dbutil.ColumnData{
+		"id": {Data: []byte("1"), IsNull: false},
+		"b":  {Data: []byte("foo"), IsNull: false},
+	}
+
+	cases := []struct {
+		createTableSql string
+	}{
+		{createTableSql: "CREATE TABLE `diff_test`.`atest` (`id` int primary key, `b` tinyblob)"},
+		{createTableSql: "CREATE TABLE `diff_test`.`atest` (`id` int primary key, `b` blob)"},
+		{createTableSql: "CREATE TABLE `diff_test`.`atest` (`id` int primary key, `b` mediumblob)"},
+		{createTableSql: "CREATE TABLE `diff_test`.`atest` (`id` int primary key, `b` longblob)"},
+	}
+
+	for _, c := range cases {
+		tableInfo, err := dbutil.GetTableInfoBySQL(c.createTableSql, parser.New())
+		require.NoError(t, err)
+
+		replaceSQL := GenerateReplaceDML(rowsData, tableInfo, "diff_test")
+		deleteSQL := GenerateDeleteDML(rowsData, tableInfo, "diff_test")
+		require.Equal(t, replaceSQL, "REPLACE INTO `diff_test`.`atest`(`id`,`b`) VALUES (1,x'666f6f');")
+		require.Equal(t, deleteSQL, "DELETE FROM `diff_test`.`atest` WHERE `id` = 1 AND `b` = x'666f6f' LIMIT 1;")
+	}
+}
+
+func TestCompareBlob(t *testing.T) {
+	createTableSQL := "create table `test`.`test`(`a` int primary key, `b` blob)"
+	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
+	require.NoError(t, err)
+
+	_, orderKeyCols := GetTableRowsQueryFormat("test", "test", tableInfo, "123")
+
+	data1 := map[string]*dbutil.ColumnData{
+		"a": {Data: []byte("1"), IsNull: false},
+		"b": {Data: []byte{0xff, 0xfe}, IsNull: false},
+	}
+	data2 := map[string]*dbutil.ColumnData{
+		"a": {Data: []byte("1"), IsNull: false},
+		"b": {Data: []byte{0xfe, 0xff}, IsNull: false},
+	}
+	data3 := map[string]*dbutil.ColumnData{
+		"a": {Data: []byte("1"), IsNull: false},
+		"b": {Data: []byte("foobar"), IsNull: false},
+	}
+
+	columns := tableInfo.Columns
+
+	cases := []struct {
+		data1      map[string]*dbutil.ColumnData
+		dataOthers []map[string]*dbutil.ColumnData
+	}{
+		{data1, []map[string]*dbutil.ColumnData{data2, data3}},
+		{data2, []map[string]*dbutil.ColumnData{data1, data3}},
+		{data3, []map[string]*dbutil.ColumnData{data1, data2}},
+	}
+
+	for _, c := range cases {
+		equal, cmp, err := CompareData(c.data1, c.data1, orderKeyCols, columns)
+		require.NoError(t, err)
+		require.Equal(t, cmp, int32(0))
+		require.True(t, equal)
+
+		for _, data := range c.dataOthers {
+			equal, cmp, err = CompareData(c.data1, data, orderKeyCols, columns)
+			require.NoError(t, err)
+			require.Equal(t, cmp, int32(0))
+			require.False(t, equal)
+		}
+	}
+}
