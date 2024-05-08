@@ -769,12 +769,12 @@ func GetTableSize(ctx context.Context, db *sql.DB, schemaName, tableName string)
 func GetCountAndMd5Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, uint64, error) {
 	/*
 		calculate MD5 checksum and count example:
-		mysql> SELECT COUNT(*) as CNT, BIT_XOR(CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', `id`, `name`, CONCAT(ISNULL(`id`), ISNULL(`name`)))), 1, 16), 16, 10) AS UNSIGNED)) LMD5, BIT_XOR(CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', `id`, `name`, CONCAT(ISNULL(`id`), ISNULL(`name`)))), 17, 16), 16, 10) AS UNSIGNED)) RMD5 FROM `a`.`t`;
-		+--------+--------------------------------------------+
-		|  CNT   |      LMD5           |          RMD5        |
-		+--------+--------------------------------------------+
-		| 100000 | 3462532621352132810 | 17515372630935707780 |
-		+--------+--------------------------------------------+
+		mysql> SELECT COUNT(*) as CNT, BIT_XOR(CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', `id`, `name`, CONCAT(ISNULL(`id`), ISNULL(`name`)))), 1, 16), 16, 10) AS UNSIGNED) ^ CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', `id`, `name`, CONCAT(ISNULL(`id`), ISNULL(`name`)))), 17, 16), 16, 10) AS UNSIGNED)) as CHECKSUM FROM `a`.`t`;
+		+--------+----------------------
+		|  CNT   | CHECKSUM            |
+		+--------+----------------------
+		| 100000 | 3462532621352132810 |
+		+--------+----------------------
 		1 row in set (0.46 sec)
 	*/
 	columnNames := make([]string, 0, len(tbInfo.Columns))
