@@ -750,7 +750,7 @@ func GetTableSize(ctx context.Context, db *sql.DB, schemaName, tableName string)
 }
 
 // GetCountAndMd5Checksum returns checksum code and count of some data by given condition
-func GetCountAndMd5Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, string, error) {
+func GetCountAndMd5Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, uint64, uint64, error) {
 	/*
 		calculate MD5 checksum and count example:
 		mysql> SELECT COUNT(*) as CNT, BIT_XOR(CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', `id`, `name`, CONCAT(ISNULL(`id`), ISNULL(`name`)))), 1, 16), 16, 10) AS UNSIGNED)) LMD5, BIT_XOR(CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', `id`, `name`, CONCAT(ISNULL(`id`), ISNULL(`name`)))), 17, 16), 16, 10) AS UNSIGNED)) RMD5 FROM `a`.`t`;
@@ -788,10 +788,9 @@ func GetCountAndMd5Checksum(ctx context.Context, db *sql.DB, schemaName, tableNa
 	err := db.QueryRowContext(ctx, query, args...).Scan(&count, &lmd5, &rmd5)
 	if err != nil {
 		log.Warn("execute checksum query fail", zap.String("query", query), zap.Reflect("args", args), zap.Error(err))
-		return -1, "", errors.Trace(err)
+		return -1, 0, 0, errors.Trace(err)
 	}
-	totalChecksum := strconv.FormatUint(lmd5, 16) + strconv.FormatUint(rmd5, 16)
-	return count, totalChecksum, nil
+	return count, lmd5, rmd5, nil
 }
 
 // GetRandomValues returns some random values. Different from /pkg/dbutil.GetRandomValues, it returns multi-columns at the same time.

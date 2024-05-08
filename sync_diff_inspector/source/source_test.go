@@ -390,7 +390,9 @@ func TestMysqlShardSources(t *testing.T) {
 
 	for n, tableCase := range tableCases {
 		require.Equal(t, n, tableCase.rangeInfo.GetTableIndex())
+		resChecksum := uint64(0)
 		for i := 0; i < len(dbs); i++ {
+			resChecksum = resChecksum + 1<<i
 			countRows := sqlmock.NewRows([]string{"CNT", "LMD5", "RMD5"}).AddRow(1, 1<<i, 1<<i)
 			mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
 		}
@@ -398,7 +400,7 @@ func TestMysqlShardSources(t *testing.T) {
 		checksum := shard.GetCountAndMd5(ctx, tableCase.rangeInfo)
 		require.NoError(t, checksum.Err)
 		require.Equal(t, checksum.Count, int64(len(dbs)))
-		require.Equal(t, checksum.Checksum, "11224488")
+		require.Equal(t, checksum.Checksum, strconv.FormatUint(resChecksum, 16)+strconv.FormatUint(resChecksum, 16))
 	}
 
 	// Test RowIterator
