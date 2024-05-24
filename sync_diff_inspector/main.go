@@ -60,7 +60,7 @@ func main() {
 	}
 
 	if cfg.PrintVersion {
-		fmt.Print(utils.GetRawInfo("sync_diff_inspector v2.0"))
+		fmt.Print(utils.GetRawInfo("sync_diff_inspector"))
 		return
 	}
 
