@@ -51,10 +51,10 @@ func TestProgress(t *testing.T) {
 	p.PrintSummary()
 	require.Equal(
 		t,
-		buffer.String(),
-		"\x1b[1A\x1b[J\nSummary:\n\nThe structure of `1` is not equal.\nThe structure of `2` is not equal.\nThe data of `4` is not equal.\nThe data of `5` does not exist in upstream database.\nThe data of `6` does not exist in downstream database.\n"+
+		"\x1b[1A\x1b[J\nSummary:\n\nThe structure of 1 is not equal.\nThe structure of 2 is not equal.\nThe data of 4 is not equal.\nThe data of 5 does not exist in upstream database.\nThe data of 6 does not exist in downstream database.\n"+
 			"\nThe rest of the tables are all equal.\nA total of 6 tables have been compared, 1 tables finished, 3 tables failed, 2 tables skipped.\nThe patch file has been generated to './output_dir/patch.sql'\n"+
 			"You can view the comparison details through './output_dir/sync_diff_inspector.log'\n\n",
+		buffer.String(),
 	)
 }
 
@@ -74,18 +74,18 @@ func TestTableError(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 	require.Equal(
 		t,
-		buffer.String(),
-		"\x1b[0A\x1b[JComparing the table structure of `1` ... failure\n"+
+		"\x1b[0A\x1b[JComparing the table structure of 1 ... failure\n"+
 			"_____________________________________________________________________________\n"+
 			"Progress [===============>---------------------------------------------] 25% 0/0\n"+
-			"\x1b[2A\x1b[JComparing the table structure of `2` ... failure\n"+
+			"\x1b[2A\x1b[JComparing the table structure of 2 ... failure\n"+
 			"_____________________________________________________________________________\n"+
 			"Progress [==============================>------------------------------] 50% 0/0\n"+
-			"\x1b[2A\x1b[JComparing the table data of `3` ...skipped\n"+
+			"\x1b[2A\x1b[JComparing the table data of 3 ...skipped\n"+
 			"_____________________________________________________________________________\n"+
 			"Progress [=============================================>---------------] 75% 0/1\n"+
 			"\x1b[1A\x1b[J\nError in comparison process:\n[aaa]\n\n"+
 			"You can view the comparison details through './output_dir/sync_diff_inspector.log'\n",
+		buffer.String(),
 	)
 }
 
