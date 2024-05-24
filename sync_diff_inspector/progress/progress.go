@@ -196,17 +196,17 @@ func (tpp *TableProgressPrinter) PrintSummary() {
 		for p := tpp.tableFailList.Front(); p != nil; p = p.Next() {
 			tp := p.Value.(*TableProgress)
 			if tp.state&(TABLE_STATE_RESULT_FAIL_STRUCTURE_DONE|TABLE_STATE_RESULT_FAIL_STRUCTURE_CONTINUE) != 0 {
-				fixStr = fmt.Sprintf("%sThe structure of `%s` is not equal.\n", fixStr, tp.name)
+				fixStr = fmt.Sprintf("%sThe structure of %s is not equal.\n", fixStr, tp.name)
 			}
 			if tp.state&(TABLE_STATE_RESULT_DIFFERENT) != 0 {
-				fixStr = fmt.Sprintf("%sThe data of `%s` is not equal.\n", fixStr, tp.name)
+				fixStr = fmt.Sprintf("%sThe data of %s is not equal.\n", fixStr, tp.name)
 			}
 			if tp.state&(TABLE_STATE_NOT_EXSIT_DOWNSTREAM) != 0 {
-				fixStr = fmt.Sprintf("%sThe data of `%s` does not exist in downstream database.\n", fixStr, tp.name)
+				fixStr = fmt.Sprintf("%sThe data of %s does not exist in downstream database.\n", fixStr, tp.name)
 				SkippedNum++
 			}
 			if tp.state&(TABLE_STATE_NOT_EXSIT_UPSTREAM) != 0 {
-				fixStr = fmt.Sprintf("%sThe data of `%s` does not exist in upstream database.\n", fixStr, tp.name)
+				fixStr = fmt.Sprintf("%sThe data of %s does not exist in upstream database.\n", fixStr, tp.name)
 				SkippedNum++
 			}
 		}
@@ -352,20 +352,20 @@ func (tpp *TableProgressPrinter) flush(stateIsChanged bool) {
 			case TABLE_STATE_PRESTART:
 				switch tp.state & TABLE_STATE_RESULT_MASK {
 				case TABLE_STATE_RESULT_OK:
-					fixStr = fmt.Sprintf("%sComparing the table structure of `%s` ... equivalent\n", fixStr, tp.name)
-					dynStr = fmt.Sprintf("%sComparing the table data of `%s` ...\n", dynStr, tp.name)
+					fixStr = fmt.Sprintf("%sComparing the table structure of %s ... equivalent\n", fixStr, tp.name)
+					dynStr = fmt.Sprintf("%sComparing the table data of %s ...\n", dynStr, tp.name)
 					tpp.lines++
 					tpp.progressTableNums++
 					tp.state = TABLE_STATE_COMPARING
 				case TABLE_STATE_NOT_EXSIT_UPSTREAM, TABLE_STATE_NOT_EXSIT_DOWNSTREAM:
-					dynStr = fmt.Sprintf("%sComparing the table data of `%s` ...skipped\n", dynStr, tp.name)
+					dynStr = fmt.Sprintf("%sComparing the table data of %s ...skipped\n", dynStr, tp.name)
 					tpp.tableFailList.PushBack(tp)
 					preNode := p.Prev()
 					tpp.tableList.Remove(p)
 					p = preNode
 					tpp.finishTableNums++
 				case TABLE_STATE_RESULT_FAIL_STRUCTURE_DONE:
-					fixStr = fmt.Sprintf("%sComparing the table structure of `%s` ... failure\n", fixStr, tp.name)
+					fixStr = fmt.Sprintf("%sComparing the table structure of %s ... failure\n", fixStr, tp.name)
 					tpp.tableFailList.PushBack(tp)
 					// we have empty node as list head, so p is not nil
 					preNode := p.Prev()
@@ -373,26 +373,26 @@ func (tpp *TableProgressPrinter) flush(stateIsChanged bool) {
 					p = preNode
 					tpp.finishTableNums++
 				case TABLE_STATE_RESULT_FAIL_STRUCTURE_CONTINUE:
-					fixStr = fmt.Sprintf("%sComparing the table structure of `%s` ... failure\n", fixStr, tp.name)
-					dynStr = fmt.Sprintf("%sComparing the table data of `%s` ...\n", dynStr, tp.name)
+					fixStr = fmt.Sprintf("%sComparing the table structure of %s ... failure\n", fixStr, tp.name)
+					dynStr = fmt.Sprintf("%sComparing the table data of %s ...\n", dynStr, tp.name)
 					tpp.lines++
 					tpp.progressTableNums++
 					tp.state ^= TABLE_STATE_COMPARING | TABLE_STATE_PRESTART
 				case TABLE_STATE_RESULT_FAIL_STRUCTURE_PASS:
-					fixStr = fmt.Sprintf("%sComparing the table structure of `%s` ... skip\n", fixStr, tp.name)
-					dynStr = fmt.Sprintf("%sComparing the table data of `%s` ...\n", dynStr, tp.name)
+					fixStr = fmt.Sprintf("%sComparing the table structure of %s ... skip\n", fixStr, tp.name)
+					dynStr = fmt.Sprintf("%sComparing the table data of %s ...\n", dynStr, tp.name)
 					tpp.lines++
 					tpp.progressTableNums++
 					tp.state ^= TABLE_STATE_COMPARING | TABLE_STATE_PRESTART
 				}
 			case TABLE_STATE_COMPARING:
-				dynStr = fmt.Sprintf("%sComparing the table data of `%s` ...\n", dynStr, tp.name)
+				dynStr = fmt.Sprintf("%sComparing the table data of %s ...\n", dynStr, tp.name)
 				tpp.lines++
 			case TABLE_STATE_FINISH:
 				if tp.state&TABLE_STATE_RESULT_DIFFERENT == 0 {
-					fixStr = fmt.Sprintf("%sComparing the table data of `%s` ... equivalent\n", fixStr, tp.name)
+					fixStr = fmt.Sprintf("%sComparing the table data of %s ... equivalent\n", fixStr, tp.name)
 				} else {
-					fixStr = fmt.Sprintf("%sComparing the table data of `%s` ... failure\n", fixStr, tp.name)
+					fixStr = fmt.Sprintf("%sComparing the table data of %s ... failure\n", fixStr, tp.name)
 				}
 				if tp.state&TABLE_STATE_RESULT_MASK != 0 {
 					tpp.tableFailList.PushBack(tp)
