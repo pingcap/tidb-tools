@@ -391,7 +391,7 @@ type Config struct {
 	// config file
 	ConfigFile string
 
-	// export a template config file in the current directory
+	// export a template config file
 	Template string `toml:"-" json:"-"`
 
 	// print version if set true
@@ -407,7 +407,7 @@ func NewConfig() *Config {
 	fs.BoolVarP(&cfg.PrintVersion, "version", "V", false, "print version of sync_diff_inspector")
 	fs.StringVarP(&cfg.LogLevel, "log-level", "L", "info", "log level: debug, info, warn, error, fatal")
 	fs.StringVarP(&cfg.ConfigFile, "config", "C", "", "Config file")
-	fs.StringVarP(&cfg.Template, "template", "T", "", "<dm|norm> export a template config file in the current directory")
+	fs.StringVarP(&cfg.Template, "template", "T", "", "<dm|norm> export a template config file")
 	fs.StringVar(&cfg.DMAddr, "dm-addr", "", "the address of DM")
 	fs.StringVar(&cfg.DMTask, "dm-task", "", "identifier of dm task")
 	fs.IntVar(&cfg.CheckThreadCount, "check-thread-count", 4, "how many goroutines are created to check data")
