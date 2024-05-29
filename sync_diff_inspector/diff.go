@@ -775,6 +775,7 @@ func (df *Diff) removeSQLFiles(checkPointId *chunk.ChunkID) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
+		defer os.RemoveAll(folderPath)
 	}
 
 	err := filepath.Walk(df.FixSQLDir, func(path string, f fs.FileInfo, err error) error {
