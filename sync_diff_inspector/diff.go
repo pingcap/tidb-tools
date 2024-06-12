@@ -583,9 +583,9 @@ func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *spli
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		upstreamInfo = df.upstream.GetCountAndCrc32(ctx, tableRange)
+		upstreamInfo = df.upstream.GetCountAndMd5(ctx, tableRange)
 	}()
-	downstreamInfo = df.downstream.GetCountAndCrc32(ctx, tableRange)
+	downstreamInfo = df.downstream.GetCountAndMd5(ctx, tableRange)
 	wg.Wait()
 
 	if upstreamInfo.Err != nil {
@@ -601,7 +601,7 @@ func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *spli
 	if upstreamInfo.Count == downstreamInfo.Count && upstreamInfo.Checksum == downstreamInfo.Checksum {
 		return true, upstreamInfo.Count, downstreamInfo.Count, nil
 	}
-	log.Debug("checksum failed", zap.Any("chunk id", tableRange.ChunkRange.Index), zap.String("table", df.workSource.GetTables()[tableRange.GetTableIndex()].Table), zap.Int64("upstream chunk size", upstreamInfo.Count), zap.Int64("downstream chunk size", downstreamInfo.Count), zap.Int64("upstream checksum", upstreamInfo.Checksum), zap.Int64("downstream checksum", downstreamInfo.Checksum))
+	log.Debug("checksum doesn't match", zap.Any("chunk id", tableRange.ChunkRange.Index), zap.String("table", df.workSource.GetTables()[tableRange.GetTableIndex()].Table), zap.Int64("upstream chunk size", upstreamInfo.Count), zap.Int64("downstream chunk size", downstreamInfo.Count), zap.Uint64("upstream checksum", upstreamInfo.Checksum), zap.Uint64("downstream checksum", downstreamInfo.Checksum))
 	return false, upstreamInfo.Count, downstreamInfo.Count, nil
 }
 

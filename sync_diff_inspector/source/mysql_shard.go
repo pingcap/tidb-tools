@@ -93,7 +93,7 @@ func (s *MySQLSources) Close() {
 	}
 }
 
-func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitter.RangeInfo) *ChecksumInfo {
+func (s *MySQLSources) GetCountAndMd5(ctx context.Context, tableRange *splitter.RangeInfo) *ChecksumInfo {
 	beginTime := time.Now()
 	table := s.tableDiffs[tableRange.GetTableIndex()]
 	chunk := tableRange.GetChunk()
@@ -103,7 +103,7 @@ func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitte
 
 	for _, ms := range matchSources {
 		go func(ms *common.TableShardSource) {
-			count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info, chunk.Where, chunk.Args)
+			count, checksum, err := utils.GetCountAndMd5Checksum(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info, chunk.Where, chunk.Args)
 			infoCh <- &ChecksumInfo{
 				Checksum: checksum,
 				Count:    count,
@@ -116,7 +116,7 @@ func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitte
 	var (
 		err           error
 		totalCount    int64
-		totalChecksum int64
+		totalChecksum uint64
 	)
 
 	for range matchSources {

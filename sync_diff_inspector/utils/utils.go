@@ -765,16 +765,16 @@ func GetTableSize(ctx context.Context, db *sql.DB, schemaName, tableName string)
 	return dataSize.Int64, nil
 }
 
-// GetCountAndCRC32Checksum returns checksum code and count of some data by given condition
-func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, int64, error) {
+// GetCountAndMd5Checksum returns checksum code and count of some data by given condition
+func GetCountAndMd5Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, uint64, error) {
 	/*
-		calculate CRC32 checksum and count example:
-		mysql> select count(*) as CNT, BIT_XOR(CAST(CRC32(CONCAT_WS(',', id, name, age, CONCAT(ISNULL(id), ISNULL(name), ISNULL(age))))AS UNSIGNED)) as CHECKSUM from test.test where id > 0;
-		+--------+------------+
-		|  CNT   |  CHECKSUM  |
-		+--------+------------+
-		| 100000 | 1128664311 |
-		+--------+------------+
+		calculate MD5 checksum and count example:
+		mysql> SELECT COUNT(*) as CNT, BIT_XOR(CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', `id`, `name`, CONCAT(ISNULL(`id`), ISNULL(`name`)))), 1, 16), 16, 10) AS UNSIGNED) ^ CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', `id`, `name`, CONCAT(ISNULL(`id`), ISNULL(`name`)))), 17, 16), 16, 10) AS UNSIGNED)) as CHECKSUM FROM `a`.`t`;
+		+--------+----------------------
+		|  CNT   | CHECKSUM            |
+		+--------+----------------------
+		| 100000 | 3462532621352132810 |
+		+--------+----------------------
 		1 row in set (0.46 sec)
 	*/
 	columnNames := make([]string, 0, len(tbInfo.Columns))
@@ -796,24 +796,23 @@ func GetCountAndCRC32Checksum(ctx context.Context, db *sql.DB, schemaName, table
 		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", name))
 	}
 
-	query := fmt.Sprintf("SELECT COUNT(*) as CNT, BIT_XOR(CAST(CRC32(CONCAT_WS(',', %s, CONCAT(%s)))AS UNSIGNED)) as CHECKSUM FROM %s WHERE %s;",
-		strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), dbutil.TableName(schemaName, tableName), limitRange)
+	query := fmt.Sprintf("SELECT COUNT(*) as CNT, BIT_XOR(CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', %s, CONCAT(%s))), 1, 16), 16, 10) AS UNSIGNED) ^ CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', %s, CONCAT(%s))), 17, 16), 16, 10) AS UNSIGNED)) as CHECKSUM FROM %s WHERE %s;",
+		strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), dbutil.TableName(schemaName, tableName), limitRange)
 	log.Debug("count and checksum", zap.String("sql", query), zap.Reflect("args", args))
 
 	var count sql.NullInt64
-	var checksum sql.NullInt64
+	var checksum uint64
 	err := db.QueryRowContext(ctx, query, args...).Scan(&count, &checksum)
 	if err != nil {
 		log.Warn("execute checksum query fail", zap.String("query", query), zap.Reflect("args", args), zap.Error(err))
-		return -1, -1, errors.Trace(err)
+		return -1, 0, errors.Trace(err)
 	}
-	if !count.Valid || !checksum.Valid {
+	if !count.Valid {
 		// if don't have any data, the checksum will be `NULL`
-		log.Warn("get empty count or checksum", zap.String("sql", query), zap.Reflect("args", args))
+		log.Warn("get empty count", zap.String("sql", query), zap.Reflect("args", args))
 		return 0, 0, nil
 	}
-
-	return count.Int64, checksum.Int64, nil
+	return count.Int64, checksum, nil
 }
 
 // GetRandomValues returns some random values. Different from /pkg/dbutil.GetRandomValues, it returns multi-columns at the same time.
