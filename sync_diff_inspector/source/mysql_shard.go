@@ -18,6 +18,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
 	"time"
 
 	tableFilter "github.com/pingcap/tidb-tools/pkg/table-filter"
@@ -93,42 +94,50 @@ func (s *MySQLSources) Close() {
 	}
 }
 
-func (s *MySQLSources) GetCountAndCrc32(ctx context.Context, tableRange *splitter.RangeInfo) *ChecksumInfo {
+func (s *MySQLSources) GetCountAndMD5(ctx context.Context, tableRange *splitter.RangeInfo) *ChecksumInfo {
 	beginTime := time.Now()
 	table := s.tableDiffs[tableRange.GetTableIndex()]
 	chunk := tableRange.GetChunk()
 
 	matchSources := getMatchedSourcesForTable(s.sourceTablesMap, table)
-	infoCh := make(chan *ChecksumInfo, len(s.sourceTablesMap))
-
+	type checksumInfo struct {
+		lMD5  uint64
+		rMD5  uint64
+		count int64
+		err   error
+	}
+	infoCh := make(chan *checksumInfo, len(s.sourceTablesMap))
 	for _, ms := range matchSources {
 		go func(ms *common.TableShardSource) {
-			count, checksum, err := utils.GetCountAndCRC32Checksum(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info, chunk.Where, chunk.Args)
-			infoCh <- &ChecksumInfo{
-				Checksum: checksum,
-				Count:    count,
-				Err:      err,
+			count, lmd5, rmd5, err := utils.GetCountAndMD5Checksum(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info, chunk.Where, chunk.Args)
+			infoCh <- &checksumInfo{
+				lMD5:  lmd5,
+				rMD5:  rmd5,
+				count: count,
+				err:   err,
 			}
 		}(ms)
 	}
 	defer close(infoCh)
 
 	var (
-		err           error
-		totalCount    int64
-		totalChecksum int64
+		err        error
+		totalCount int64
+		totalLMD5  uint64
+		totalRMD5  uint64
 	)
 
 	for range matchSources {
 		info := <-infoCh
 		// catch the first error
-		if err == nil && info.Err != nil {
-			err = info.Err
+		if err == nil && info.err != nil {
+			err = info.err
 		}
-		totalCount += info.Count
-		totalChecksum ^= info.Checksum
+		totalCount += info.count
+		totalLMD5 ^= info.lMD5
+		totalRMD5 ^= info.rMD5
 	}
-
+	totalChecksum := strconv.FormatUint(totalLMD5, 16) + strconv.FormatUint(totalRMD5, 16)
 	cost := time.Since(beginTime)
 	return &ChecksumInfo{
 		Checksum: totalChecksum,
