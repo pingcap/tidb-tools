@@ -113,7 +113,7 @@ func TestTiDBSource(t *testing.T) {
 		{
 			schema:         "source_test",
 			table:          "test1",
-			createTableSQL: "CREATE TABLE `source_test`.`test1` (`a` int, `b` varchar(24), `c` float, `d` binary(2), PRIMARY KEY(`a`)\n)",
+			createTableSQL: "CREATE TABLE `source_test`.`test1` (`a` int, `b` varchar(24), `c` float, `d` binary(1), PRIMARY KEY(`a`)\n)",
 			rangeColumns:   []string{"a", "b"},
 			rangeLeft:      []string{"3", "b"},
 			rangeRight:     []string{"5", "f"},
