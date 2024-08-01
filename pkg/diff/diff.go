@@ -103,7 +103,7 @@ type TableDiff struct {
 
 	wg sync.WaitGroup
 
-	configHash []byte
+	configHash string
 
 	CpDB *sql.DB `json:"-"`
 
@@ -120,9 +120,8 @@ func (t *TableDiff) setConfigHash() error {
 		return errors.Trace(err)
 	}
 
-	s := sha256.Sum256(jsonBytes)
-	t.configHash = s[:]
-	log.Debug("sync-diff-inspector config", zap.ByteString("config", jsonBytes), zap.ByteString("hash", t.configHash))
+	t.configHash = fmt.Sprintf("%x", sha256.Sum256(jsonBytes))
+	log.Debug("sync-diff-inspector config", zap.ByteString("config", jsonBytes), zap.String("hash", t.configHash))
 
 	return nil
 }

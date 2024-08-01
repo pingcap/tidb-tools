@@ -219,7 +219,7 @@ func getTableSummary(ctx context.Context, db *sql.DB, schema, table string) (tot
 }
 
 // initTableSummary initials a table's summary info in table `summary`
-func initTableSummary(ctx context.Context, db *sql.DB, schema, table string, configHash []byte) error {
+func initTableSummary(ctx context.Context, db *sql.DB, schema, table, configHash string) error {
 	sql := fmt.Sprintf("REPLACE INTO `%s`.`%s`(`schema`, `table`, `state`, `config_hash`) VALUES(?, ?, ?, ?)", checkpointSchemaName, summaryTableName)
 	err := dbutil.ExecSQLWithRetry(ctx, db, sql, schema, table, notCheckedState, configHash)
 	if err != nil {
@@ -362,7 +362,7 @@ func dropCheckpoint(ctx context.Context, db *sql.DB) error {
 }
 
 // loadFromCheckPoint returns true if we should use the history checkpoint
-func loadFromCheckPoint(ctx context.Context, db *sql.DB, schema, table string, configHash []byte) (bool, error) {
+func loadFromCheckPoint(ctx context.Context, db *sql.DB, schema, table, configHash string) (bool, error) {
 	query := fmt.Sprintf("SELECT `state`, `config_hash` FROM `%s`.`%s` WHERE `schema` = ? AND `table` = ? LIMIT 1;", checkpointSchemaName, summaryTableName)
 	rows, err := db.QueryContext(ctx, query, schema, table)
 	if err != nil {
