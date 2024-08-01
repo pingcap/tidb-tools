@@ -55,19 +55,8 @@ func ShowMySQLVariable(ctx context.Context, db QueryExecutor, variable string) (
 
 // ShowGrants queries privileges for a mysql user.
 // For mysql 8.0, if user has granted roles, ShowGrants also extract privilege from roles.
-func ShowGrants(ctx context.Context, db QueryExecutor, user, host string) ([]string, error) {
-	if host == "" {
-		host = "%"
-	}
-
-	var query string
-	if user == "" {
-		// for current user.
-		query = "SHOW GRANTS"
-	} else {
-		query = fmt.Sprintf("SHOW GRANTS FOR '%s'@'%s'", user, host)
-	}
-
+func ShowGrants(ctx context.Context, db QueryExecutor) ([]string, error) {
+	query := "SHOW GRANTS"
 	readGrantsFunc := func() ([]string, error) {
 		rows, err := db.QueryContext(ctx, query)
 		if err != nil {
