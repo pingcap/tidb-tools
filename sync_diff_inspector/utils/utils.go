@@ -1045,5 +1045,6 @@ func IsRangeTrivial(rangeCond string) bool {
 }
 
 func IsBinaryColumn(col *model.ColumnInfo) bool {
-	return col.GetType() == mysql.TypeString && mysql.HasBinaryFlag(col.GetFlag())
+	// varbinary or binary
+	return (col.GetType() == mysql.TypeVarchar || col.GetType() == mysql.TypeString) && mysql.HasBinaryFlag(col.GetFlag())
 }
