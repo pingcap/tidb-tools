@@ -156,37 +156,6 @@ func initChunks(ctx context.Context, db *sql.DB, instanceID, schema, table strin
 	return nil
 }
 
-// getChunk gets chunk info from table `chunk` by chunkID
-func getChunk(ctx context.Context, db *sql.DB, instanceID, schema, table string, chunkID int) (*ChunkRange, error) {
-	query := fmt.Sprintf("SELECT `chunk_str` FROM `%s`.`%s` WHERE `instance_id` = ? AND `schema` = ? AND `table` = ? AND `chunk_id` = ? limit 1", checkpointSchemaName, chunkTableName)
-	rows, err := db.QueryContext(ctx, query, instanceID, schema, table, chunkID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		fields, err1 := dbutil.ScanRow(rows)
-		if err1 != nil {
-			return nil, errors.Trace(err1)
-		}
-
-		chunkStr := fields["chunk_str"].Data
-		chunk := new(ChunkRange)
-		err := json.Unmarshal(chunkStr, &chunk)
-		if err != nil {
-			return nil, err
-		}
-		return chunk, nil
-	}
-
-	if rows.Err() != nil {
-		return nil, errors.Trace(rows.Err())
-	}
-
-	return nil, errors.NotFoundf("instanceID %d, schema %s, table %s, chunk %d", instanceID, schema, table, chunkID)
-}
-
 // loadChunks loads chunk info from table `chunk`
 func loadChunks(ctx context.Context, db *sql.DB, instanceID, schema, table string) ([]*ChunkRange, error) {
 	chunks := make([]*ChunkRange, 0, 100)

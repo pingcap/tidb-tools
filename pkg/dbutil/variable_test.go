@@ -22,7 +22,7 @@ func (*testDBSuite) TestShowGrants(c *C) {
 	}
 	mock.ExpectQuery("SHOW GRANTS").WillReturnRows(rows)
 
-	grants, err := ShowGrants(ctx, db, "", "")
+	grants, err := ShowGrants(ctx, db)
 	c.Assert(err, IsNil)
 	c.Assert(grants, DeepEquals, mockGrants)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
@@ -54,7 +54,7 @@ func (*testDBSuite) TestShowGrantsWithRoles(c *C) {
 	}
 	mock.ExpectQuery("SHOW GRANTS").WillReturnRows(rows2)
 
-	grants, err := ShowGrants(ctx, db, "", "")
+	grants, err := ShowGrants(ctx, db)
 	c.Assert(err, IsNil)
 	c.Assert(grants, DeepEquals, mockGrantsWithRoles)
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
@@ -92,7 +92,7 @@ func (*testDBSuite) TestShowGrantsPasswordMasked(c *C) {
 		rows.AddRow(ca.original)
 		mock.ExpectQuery("SHOW GRANTS").WillReturnRows(rows)
 
-		grants, err := ShowGrants(ctx, db, "", "")
+		grants, err := ShowGrants(ctx, db)
 		c.Assert(err, IsNil)
 		c.Assert(grants, HasLen, 1)
 		c.Assert(grants[0], DeepEquals, ca.expected)

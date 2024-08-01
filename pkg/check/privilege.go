@@ -69,7 +69,7 @@ func (pc *SourceDumpPrivilegeChecker) Check(ctx context.Context) *Result {
 		Extra: fmt.Sprintf("address of db instance - %s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
 	}
 
-	grants, err := dbutil.ShowGrants(ctx, pc.db, "", "")
+	grants, err := dbutil.ShowGrants(ctx, pc.db)
 	if err != nil {
 		markCheckError(result, err)
 		return result
@@ -107,7 +107,7 @@ func (pc *SourceReplicatePrivilegeChecker) Check(ctx context.Context) *Result {
 		Extra: fmt.Sprintf("address of db instance - %s:%d", pc.dbinfo.Host, pc.dbinfo.Port),
 	}
 
-	grants, err := dbutil.ShowGrants(ctx, pc.db, "", "")
+	grants, err := dbutil.ShowGrants(ctx, pc.db)
 	if err != nil {
 		markCheckError(result, err)
 		return result

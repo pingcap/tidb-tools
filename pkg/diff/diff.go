@@ -16,7 +16,7 @@ package diff
 import (
 	"container/heap"
 	"context"
-	"crypto/md5"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -120,7 +120,7 @@ func (t *TableDiff) setConfigHash() error {
 		return errors.Trace(err)
 	}
 
-	t.configHash = fmt.Sprintf("%x", md5.Sum(jsonBytes))
+	t.configHash = fmt.Sprintf("%x", sha256.Sum256(jsonBytes))
 	log.Debug("sync-diff-inspector config", zap.ByteString("config", jsonBytes), zap.String("hash", t.configHash))
 
 	return nil

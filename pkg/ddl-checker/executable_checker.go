@@ -15,10 +15,10 @@ package checker
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
+	"github.com/pingcap/tidb/pkg/lightning/common"
 	"github.com/pingcap/tidb/pkg/parser"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/session"
@@ -70,13 +70,6 @@ func (ec *ExecutableChecker) Execute(context context.Context, sql string) error 
 	return nil
 }
 
-// IsTableExist returns whether the table with the specified name exists
-func (ec *ExecutableChecker) IsTableExist(context *context.Context, tableName string) bool {
-	_, err := ec.session.Execute(*context,
-		fmt.Sprintf("select 0 from `%s` limit 1", tableName))
-	return err == nil
-}
-
 // CreateTable creates a new table with the specified sql
 func (ec *ExecutableChecker) CreateTable(context context.Context, sql string) error {
 	err := ec.Execute(context, sql)
@@ -88,7 +81,7 @@ func (ec *ExecutableChecker) CreateTable(context context.Context, sql string) er
 
 // DropTable drops the the specified table
 func (ec *ExecutableChecker) DropTable(context context.Context, tableName string) error {
-	err := ec.Execute(context, fmt.Sprintf("drop table if exists `%s`", tableName))
+	err := ec.Execute(context, common.SprintfWithIdentifiers("drop table if exists %s", tableName))
 	if err != nil {
 		return errors.Trace(err)
 	}

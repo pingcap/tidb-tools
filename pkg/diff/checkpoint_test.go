@@ -71,11 +71,6 @@ func (s *testCheckpointSuite) testSaveAndLoadChunk(c *C, db *sql.DB) {
 	err := saveChunk(context.Background(), db, chunk.ID, "target", "test", "checkpoint", "", chunk)
 	c.Assert(err, IsNil)
 
-	newChunk, err := getChunk(context.Background(), db, "target", "test", "checkpoint", chunk.ID)
-	c.Assert(err, IsNil)
-	newChunk.updateColumnOffset()
-	c.Assert(newChunk, DeepEquals, chunk)
-
 	chunks, err := loadChunks(context.Background(), db, "target", "test", "checkpoint")
 	c.Assert(err, IsNil)
 	c.Assert(chunks, HasLen, 1)
