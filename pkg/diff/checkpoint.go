@@ -219,7 +219,7 @@ func getTableSummary(ctx context.Context, db *sql.DB, schema, table string) (tot
 }
 
 // initTableSummary initials a table's summary info in table `summary`
-func initTableSummary(ctx context.Context, db *sql.DB, schema, table string, configHash string) error {
+func initTableSummary(ctx context.Context, db *sql.DB, schema, table string, configHash []byte) error {
 	sql := fmt.Sprintf("REPLACE INTO `%s`.`%s`(`schema`, `table`, `state`, `config_hash`) VALUES(?, ?, ?, ?)", checkpointSchemaName, summaryTableName)
 	err := dbutil.ExecSQLWithRetry(ctx, db, sql, schema, table, notCheckedState, configHash)
 	if err != nil {
@@ -292,7 +292,7 @@ func createCheckpointTable(ctx context.Context, db *sql.DB) error {
 			"`check_failed_num` int not null default 0," +
 			"`check_ignore_num` int not null default 0," +
 			"`state` enum('not_checked', 'checking', 'success', 'failed') DEFAULT 'not_checked'," +
-			"`config_hash` varchar(50)," +
+			"`config_hash` varchar(100)," +
 			"`update_time` datetime ON UPDATE CURRENT_TIMESTAMP," +
 			"PRIMARY KEY(`schema`, `table`));"
 
@@ -362,7 +362,7 @@ func dropCheckpoint(ctx context.Context, db *sql.DB) error {
 }
 
 // loadFromCheckPoint returns true if we should use the history checkpoint
-func loadFromCheckPoint(ctx context.Context, db *sql.DB, schema, table, configHash string) (bool, error) {
+func loadFromCheckPoint(ctx context.Context, db *sql.DB, schema, table string, configHash []byte) (bool, error) {
 	query := fmt.Sprintf("SELECT `state`, `config_hash` FROM `%s`.`%s` WHERE `schema` = ? AND `table` = ? LIMIT 1;", checkpointSchemaName, summaryTableName)
 	rows, err := db.QueryContext(ctx, query, schema, table)
 	if err != nil {
@@ -379,7 +379,7 @@ func loadFromCheckPoint(ctx context.Context, db *sql.DB, schema, table, configHa
 		}
 
 		if cfgHash.Valid {
-			if configHash != cfgHash.String {
+			if string(configHash) != cfgHash.String {
 				return false, nil
 			}
 		}

@@ -48,7 +48,7 @@ func (s *testCheckpointSuite) testInitAndGetSummary(c *C, db *sql.DB) {
 	c.Log(err)
 	c.Assert(err, ErrorMatches, "*not found*")
 
-	err = initTableSummary(context.Background(), db, "test", "checkpoint", "123")
+	err = initTableSummary(context.Background(), db, "test", "checkpoint", []byte("123"))
 	c.Assert(err, IsNil)
 
 	total, successNum, failedNum, ignoreNum, state, err := getTableSummary(context.Background(), db, "test", "checkpoint")
@@ -101,17 +101,17 @@ func (s *testUtilSuite) TestloadFromCheckPoint(c *C) {
 
 	rows := sqlmock.NewRows([]string{"state", "config_hash"}).AddRow("success", "123")
 	mock.ExpectQuery("SELECT").WillReturnRows(rows)
-	useCheckpoint, err := loadFromCheckPoint(context.Background(), db, "test", "test", "123")
+	useCheckpoint, err := loadFromCheckPoint(context.Background(), db, "test", "test", []byte("123"))
 	c.Assert(useCheckpoint, Equals, false)
 
 	rows = sqlmock.NewRows([]string{"state", "config_hash"}).AddRow("success", "123")
 	mock.ExpectQuery("SELECT").WillReturnRows(rows)
-	useCheckpoint, err = loadFromCheckPoint(context.Background(), db, "test", "test", "456")
+	useCheckpoint, err = loadFromCheckPoint(context.Background(), db, "test", "test", []byte("456"))
 	c.Assert(useCheckpoint, Equals, false)
 
 	rows = sqlmock.NewRows([]string{"state", "config_hash"}).AddRow("failed", "123")
 	mock.ExpectQuery("SELECT").WillReturnRows(rows)
-	useCheckpoint, err = loadFromCheckPoint(context.Background(), db, "test", "test", "123")
+	useCheckpoint, err = loadFromCheckPoint(context.Background(), db, "test", "test", []byte("123"))
 	c.Assert(useCheckpoint, Equals, true)
 }
 
