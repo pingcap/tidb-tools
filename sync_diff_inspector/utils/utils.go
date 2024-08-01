@@ -188,7 +188,7 @@ func GenerateReplaceDML(data map[string]*dbutil.ColumnData, table *model.TableIn
 		}
 
 		if NeedQuotes(col.FieldType.GetType()) {
-			if dbutil.IsBlobType(col.FieldType.GetType()) {
+			if dbutil.IsBlobType(col.FieldType.GetType()) || IsBinaryColumn(col) {
 				values = append(values, fmt.Sprintf("x'%x'", data[col.Name.O].Data))
 			} else {
 				values = append(values, fmt.Sprintf("'%s'", strings.Replace(string(data[col.Name.O].Data), "'", "\\'", -1)))
@@ -225,7 +225,7 @@ func GenerateReplaceDMLWithAnnotation(source, target map[string]*dbutil.ColumnDa
 			value1 = "NULL"
 		} else {
 			if NeedQuotes(col.FieldType.GetType()) {
-				if dbutil.IsBlobType(col.FieldType.GetType()) {
+				if dbutil.IsBlobType(col.FieldType.GetType()) || IsBinaryColumn(col) {
 					value1 = fmt.Sprintf("x'%x'", data1.Data)
 				} else {
 					value1 = fmt.Sprintf("'%s'", strings.Replace(string(data1.Data), "'", "\\'", -1))
@@ -250,7 +250,7 @@ func GenerateReplaceDMLWithAnnotation(source, target map[string]*dbutil.ColumnDa
 			values2 = append(values2, "NULL")
 		} else {
 			if NeedQuotes(col.FieldType.GetType()) {
-				if dbutil.IsBlobType(col.FieldType.GetType()) {
+				if dbutil.IsBlobType(col.FieldType.GetType()) || IsBinaryColumn(col) {
 					values2 = append(values2, fmt.Sprintf("x'%x'", data1.Data))
 				} else {
 					values2 = append(values2, fmt.Sprintf("'%s'", strings.Replace(string(data2.Data), "'", "\\'", -1)))
@@ -290,7 +290,7 @@ func GenerateDeleteDML(data map[string]*dbutil.ColumnData, table *model.TableInf
 		}
 
 		if NeedQuotes(col.FieldType.GetType()) {
-			if dbutil.IsBlobType(col.FieldType.GetType()) {
+			if dbutil.IsBlobType(col.FieldType.GetType()) || IsBinaryColumn(col) {
 				kvs = append(kvs, fmt.Sprintf("%s = x'%x'", dbutil.ColumnName(col.Name.O), data[col.Name.O].Data))
 			} else {
 				kvs = append(kvs, fmt.Sprintf("%s = '%s'", dbutil.ColumnName(col.Name.O), strings.Replace(string(data[col.Name.O].Data), "'", "\\'", -1)))
@@ -1042,4 +1042,9 @@ func IsRangeTrivial(rangeCond string) bool {
 		return true
 	}
 	return strings.ToLower(rangeCond) == "true"
+}
+
+func IsBinaryColumn(col *model.ColumnInfo) bool {
+	// varbinary or binary
+	return (col.GetType() == mysql.TypeVarchar || col.GetType() == mysql.TypeString) && mysql.HasBinaryFlag(col.GetFlag())
 }

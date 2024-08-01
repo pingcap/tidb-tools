@@ -113,17 +113,17 @@ func TestTiDBSource(t *testing.T) {
 		{
 			schema:         "source_test",
 			table:          "test1",
-			createTableSQL: "CREATE TABLE `source_test`.`test1` (`a` int, `b` varchar(24), `c` float, PRIMARY KEY(`a`)\n)",
+			createTableSQL: "CREATE TABLE `source_test`.`test1` (`a` int, `b` varchar(24), `c` float, `d` binary(1), `e` varbinary(1), PRIMARY KEY(`a`)\n)",
 			rangeColumns:   []string{"a", "b"},
 			rangeLeft:      []string{"3", "b"},
 			rangeRight:     []string{"5", "f"},
 			rowQuery:       "SELECT",
-			rowColumns:     []string{"a", "b", "c"},
+			rowColumns:     []string{"a", "b", "c", "d", "e"},
 			rows: [][]driver.Value{
-				{"1", "a", "1.2"},
-				{"2", "b", "3.4"},
-				{"3", "c", "5.6"},
-				{"4", "d", "6.7"},
+				{"1", "a", "1.2", []byte{0xaa}, []byte{0xaa}},
+				{"2", "b", "3.4", []byte{0xbb}, []byte{0xbb}},
+				{"3", "c", "5.6", []byte{0xcc}, []byte{0xcc}},
+				{"4", "d", "6.7", []byte{0xdd}, []byte{0xdd}},
 			},
 		},
 		{
@@ -234,7 +234,9 @@ func TestTiDBSource(t *testing.T) {
 		}
 		for j, value := range tableCase.rows[row] {
 			require.Equal(t, columns[tableCase.rowColumns[j]].IsNull, false)
-			require.Equal(t, columns[tableCase.rowColumns[j]].Data, []byte(value.(string)))
+			if _, ok := value.(string); ok {
+				require.Equal(t, columns[tableCase.rowColumns[j]].Data, []byte(value.(string)))
+			}
 		}
 		if row == 0 {
 			firstRow = columns
@@ -243,18 +245,18 @@ func TestTiDBSource(t *testing.T) {
 		}
 		row++
 	}
-	require.Equal(t, tidb.GenerateFixSQL(Insert, firstRow, secondRow, 0), "REPLACE INTO `source_test`.`test1`(`a`,`b`,`c`) VALUES (1,'a',1.2);")
-	require.Equal(t, tidb.GenerateFixSQL(Delete, firstRow, secondRow, 0), "DELETE FROM `source_test`.`test1` WHERE `a` = 2 AND `b` = 'b' AND `c` = 3.4 LIMIT 1;")
+	require.Equal(t, tidb.GenerateFixSQL(Insert, firstRow, secondRow, 0), "REPLACE INTO `source_test`.`test1`(`a`,`b`,`c`,`d`,`e`) VALUES (1,'a',1.2,x'aa',x'aa');")
+	require.Equal(t, tidb.GenerateFixSQL(Delete, firstRow, secondRow, 0), "DELETE FROM `source_test`.`test1` WHERE `a` = 2 AND `b` = 'b' AND `c` = 3.4 AND `d` = x'bb' AND `e` = x'bb' LIMIT 1;")
 	require.Equal(t, tidb.GenerateFixSQL(Replace, firstRow, secondRow, 0),
 		"/*\n"+
-			"  DIFF COLUMNS ╏ `A` ╏ `B` ╏ `C`  \n"+
-			"╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╍\n"+
-			"  source data  ╏ 1   ╏ 'a' ╏ 1.2  \n"+
-			"╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╍\n"+
-			"  target data  ╏ 2   ╏ 'b' ╏ 3.4  \n"+
-			"╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╍\n"+
+			"  DIFF COLUMNS ╏ `A` ╏ `B` ╏ `C` ╏  `D`  ╏  `E`   \n"+
+			"╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╍╍╋╍╍╍╍╍╍╍╍\n"+
+			"  source data  ╏ 1   ╏ 'a' ╏ 1.2 ╏ x'aa' ╏ x'aa'  \n"+
+			"╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╍╍╋╍╍╍╍╍╍╍╍\n"+
+			"  target data  ╏ 2   ╏ 'b' ╏ 3.4 ╏ x'aa' ╏ x'aa'  \n"+
+			"╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╍╍╋╍╍╍╍╍╍╍╍\n"+
 			"*/\n"+
-			"REPLACE INTO `source_test`.`test1`(`a`,`b`,`c`) VALUES (1,'a',1.2);")
+			"REPLACE INTO `source_test`.`test1`(`a`,`b`,`c`,`d`,`e`) VALUES (1,'a',1.2,x'aa',x'aa');")
 
 	rowIter.Close()
 
