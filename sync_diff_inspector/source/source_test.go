@@ -184,10 +184,10 @@ func TestTiDBSource(t *testing.T) {
 		require.Equal(t, n, tableCase.rangeInfo.GetTableIndex())
 		countRows := sqlmock.NewRows([]string{"CNT", "CHECKSUM"}).AddRow(123, 456)
 		mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
-		checksum := tidb.GetCountAndCrc32(ctx, tableCase.rangeInfo)
+		checksum := tidb.GetCountAndMd5(ctx, tableCase.rangeInfo)
 		require.NoError(t, checksum.Err)
 		require.Equal(t, checksum.Count, int64(123))
-		require.Equal(t, checksum.Checksum, int64(456))
+		require.Equal(t, checksum.Checksum, uint64(456))
 	}
 
 	// Test ChunkIterator
@@ -392,14 +392,14 @@ func TestMysqlShardSources(t *testing.T) {
 
 	for n, tableCase := range tableCases {
 		require.Equal(t, n, tableCase.rangeInfo.GetTableIndex())
-		var resChecksum int64 = 0
+		var resChecksum uint64 = 0
 		for i := 0; i < len(dbs); i++ {
 			resChecksum = resChecksum + 1<<i
 			countRows := sqlmock.NewRows([]string{"CNT", "CHECKSUM"}).AddRow(1, 1<<i)
 			mock.ExpectQuery("SELECT COUNT.*").WillReturnRows(countRows)
 		}
 
-		checksum := shard.GetCountAndCrc32(ctx, tableCase.rangeInfo)
+		checksum := shard.GetCountAndMd5(ctx, tableCase.rangeInfo)
 		require.NoError(t, checksum.Err)
 		require.Equal(t, checksum.Count, int64(len(dbs)))
 		require.Equal(t, checksum.Checksum, resChecksum)
