@@ -394,5 +394,5 @@ func (*testDiffSuite) TestConfigHash(c *C) {
 	tbDiff.Range = "b < 10"
 	tbDiff.setConfigHash()
 	hash3 := tbDiff.configHash
-	c.Assert(hash1 == hash3, Equals, false)
+	c.Assert(hash1, Not(Equals), hash3)
 }

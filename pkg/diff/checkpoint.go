@@ -156,37 +156,6 @@ func initChunks(ctx context.Context, db *sql.DB, instanceID, schema, table strin
 	return nil
 }
 
-// getChunk gets chunk info from table `chunk` by chunkID
-func getChunk(ctx context.Context, db *sql.DB, instanceID, schema, table string, chunkID int) (*ChunkRange, error) {
-	query := fmt.Sprintf("SELECT `chunk_str` FROM `%s`.`%s` WHERE `instance_id` = ? AND `schema` = ? AND `table` = ? AND `chunk_id` = ? limit 1", checkpointSchemaName, chunkTableName)
-	rows, err := db.QueryContext(ctx, query, instanceID, schema, table, chunkID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		fields, err1 := dbutil.ScanRow(rows)
-		if err1 != nil {
-			return nil, errors.Trace(err1)
-		}
-
-		chunkStr := fields["chunk_str"].Data
-		chunk := new(ChunkRange)
-		err := json.Unmarshal(chunkStr, &chunk)
-		if err != nil {
-			return nil, err
-		}
-		return chunk, nil
-	}
-
-	if rows.Err() != nil {
-		return nil, errors.Trace(rows.Err())
-	}
-
-	return nil, errors.NotFoundf("instanceID %d, schema %s, table %s, chunk %d", instanceID, schema, table, chunkID)
-}
-
 // loadChunks loads chunk info from table `chunk`
 func loadChunks(ctx context.Context, db *sql.DB, instanceID, schema, table string) ([]*ChunkRange, error) {
 	chunks := make([]*ChunkRange, 0, 100)
@@ -250,7 +219,7 @@ func getTableSummary(ctx context.Context, db *sql.DB, schema, table string) (tot
 }
 
 // initTableSummary initials a table's summary info in table `summary`
-func initTableSummary(ctx context.Context, db *sql.DB, schema, table string, configHash string) error {
+func initTableSummary(ctx context.Context, db *sql.DB, schema, table, configHash string) error {
 	sql := fmt.Sprintf("REPLACE INTO `%s`.`%s`(`schema`, `table`, `state`, `config_hash`) VALUES(?, ?, ?, ?)", checkpointSchemaName, summaryTableName)
 	err := dbutil.ExecSQLWithRetry(ctx, db, sql, schema, table, notCheckedState, configHash)
 	if err != nil {
@@ -323,7 +292,7 @@ func createCheckpointTable(ctx context.Context, db *sql.DB) error {
 			"`check_failed_num` int not null default 0," +
 			"`check_ignore_num` int not null default 0," +
 			"`state` enum('not_checked', 'checking', 'success', 'failed') DEFAULT 'not_checked'," +
-			"`config_hash` varchar(50)," +
+			"`config_hash` varchar(100)," +
 			"`update_time` datetime ON UPDATE CURRENT_TIMESTAMP," +
 			"PRIMARY KEY(`schema`, `table`));"
 
@@ -410,7 +379,7 @@ func loadFromCheckPoint(ctx context.Context, db *sql.DB, schema, table, configHa
 		}
 
 		if cfgHash.Valid {
-			if configHash != cfgHash.String {
+			if string(configHash) != cfgHash.String {
 				return false, nil
 			}
 		}

@@ -151,7 +151,7 @@ func TestReport(t *testing.T) {
 		"The rest of tables are all equal.\n\n"+
 		"A total of 0 tables have been compared, 0 tables finished, 0 tables failed, 0 tables skipped.\n"+
 		"The patch file has been generated in \n\t'output_dir/123456/fix-on-tidb1/'\n"+
-		"You can view the comparision details through 'output_dir/sync_diff.log'\n")
+		"You can view the comparison details through 'output_dir/sync_diff.log'\n")
 }
 
 func TestCalculateTotal(t *testing.T) {
@@ -260,7 +260,7 @@ func TestPrint(t *testing.T) {
 	buf = new(bytes.Buffer)
 	report.Print(buf)
 	require.Equal(t, buf.String(), "A total of 0 table have been compared and all are equal.\n"+
-		"You can view the comparision details through 'output_dir/sync_diff.log'\n")
+		"You can view the comparison details through 'output_dir/sync_diff.log'\n")
 
 	// Error
 	report.SetTableMeetError("test", "tbl1", errors.New("123"))
@@ -269,7 +269,7 @@ func TestPrint(t *testing.T) {
 	report.Print(buf)
 	require.Equal(t, buf.String(), "Error in comparison process:\n"+
 		"123 error occured in `test`.`tbl1`\n"+
-		"You can view the comparision details through 'output_dir/sync_diff.log'\n")
+		"You can view the comparison details through 'output_dir/sync_diff.log'\n")
 }
 
 func TestGetSnapshot(t *testing.T) {

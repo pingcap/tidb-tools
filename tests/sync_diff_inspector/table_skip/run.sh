@@ -27,8 +27,8 @@ mysql -uroot -h 127.0.0.1 -P 4000 -e "create table skip_test.t3 (a int, b int, p
 mysql -uroot -h 127.0.0.1 -P 4000 -e "insert into skip_test.t3 values (1,1);"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/table_skip_diff.output || true
 check_contains "check pass" $OUT_DIR/sync_diff.log
-check_contains "Comparing the table data of \`\`skip_test\`.\`t2\`\` ...skipped" $OUT_DIR/table_skip_diff.output
-check_contains "Comparing the table data of \`\`skip_test\`.\`t3\`\` ...skipped" $OUT_DIR/table_skip_diff.output
+check_contains "Comparing the table data of \`skip_test\`.\`t2\` ...skipped" $OUT_DIR/table_skip_diff.output
+check_contains "Comparing the table data of \`skip_test\`.\`t3\` ...skipped" $OUT_DIR/table_skip_diff.output
 check_contains "The data of \`skip_test\`.\`t2\` does not exist in downstream database" $OUT_DIR/table_skip_diff.output
 check_contains "The data of \`skip_test\`.\`t3\` does not exist in upstream database" $OUT_DIR/table_skip_diff.output
 check_contains "|      TABLE       | RESULT  | STRUCTURE EQUALITY | DATA DIFF ROWS | UPCOUNT | DOWNCOUNT |" $OUT_DIR/summary.txt
