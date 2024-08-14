@@ -108,12 +108,13 @@ type Security struct {
 
 // DataSource represents the Source Config.
 type DataSource struct {
-	Host     string             `toml:"host" json:"host"`
-	Port     int                `toml:"port" json:"port"`
-	User     string             `toml:"user" json:"user"`
-	Password utils.SecretString `toml:"password" json:"password"`
-	SqlMode  string             `toml:"sql-mode" json:"sql-mode"`
-	Snapshot string             `toml:"snapshot" json:"snapshot"`
+	Host             string             `toml:"host" json:"host"`
+	Port             int                `toml:"port" json:"port"`
+	User             string             `toml:"user" json:"user"`
+	Password         utils.SecretString `toml:"password" json:"password"`
+	SqlMode          string             `toml:"sql-mode" json:"sql-mode"`
+	Snapshot         string             `toml:"snapshot" json:"snapshot"`
+	MaxExecutionTime int                `toml:"max-execution-time" json:"max-execution-time"`
 
 	Security *Security `toml:"security" json:"security"`
 
@@ -138,11 +139,12 @@ func (d *DataSource) SetSnapshot(newSnapshot string) {
 
 func (d *DataSource) ToDBConfig() *dbutil.DBConfig {
 	return &dbutil.DBConfig{
-		Host:     d.Host,
-		Port:     d.Port,
-		User:     d.User,
-		Password: d.Password.Plain(),
-		Snapshot: d.Snapshot,
+		Host:             d.Host,
+		Port:             d.Port,
+		User:             d.User,
+		Password:         d.Password.Plain(),
+		Snapshot:         d.Snapshot,
+		MaxExecutionTime: d.MaxExecutionTime,
 	}
 }
 
@@ -190,6 +192,11 @@ func (d *DataSource) ToDriverConfig() *mysql.Config {
 	}
 	if d.Security != nil && len(d.Security.TLSName) > 0 {
 		cfg.TLSConfig = d.Security.TLSName
+	}
+	// 0 indicates unset and max_execution_time=0 is unlimited
+	// in that case we don't set the max_execution_time at session level
+	if d.MaxExecutionTime > 0 {
+		cfg.Params["max_execution_time"] = strconv.Itoa(d.MaxExecutionTime)
 	}
 
 	return cfg

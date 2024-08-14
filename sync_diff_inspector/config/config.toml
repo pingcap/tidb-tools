@@ -27,6 +27,7 @@ check-struct-only = false
     port = 4000
     user = "root"
     password = ""
+    max-execution-time = 5
 
 # Support tls connection
     # security.ca-path = "..."
