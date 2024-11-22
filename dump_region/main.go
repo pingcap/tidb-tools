@@ -56,7 +56,7 @@ type keyRange struct {
 func main() {
 	flag.Parse()
 	if *printVersion {
-		fmt.Printf(utils.GetRawInfo("dump_region"))
+		fmt.Println(utils.GetRawInfo("dump_region"))
 		return
 	}
 
