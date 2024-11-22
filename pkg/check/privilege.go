@@ -143,7 +143,11 @@ func verifyPrivileges(result *Result, grants []string, expectedGrants map[mysql.
 		// get username and hostname
 		node, err := parser.New().ParseOneStmt(grant, "", "")
 		if err != nil {
-			result.Errors = append(result.Errors, NewError(errors.Annotatef(err, "grant %s, grant after replace %s", grants[i], grant).Error()))
+			result.Errors = append(result.Errors,
+				NewError("%s",
+					errors.Annotatef(err, "grant %s, grant after replace %s", grants[i], grant).Error(),
+				),
+			)
 			return
 		}
 		grantStmt, ok := node.(*ast.GrantStmt)
