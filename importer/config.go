@@ -70,7 +70,7 @@ func (c *Config) Parse(arguments []string) error {
 	}
 
 	if c.printVersion {
-		fmt.Printf(utils.GetRawInfo("importer"))
+		fmt.Println(utils.GetRawInfo("importer"))
 		return flag.ErrHelp
 	}
 
