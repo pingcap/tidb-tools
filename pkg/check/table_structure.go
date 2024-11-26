@@ -127,13 +127,13 @@ func (c *TablesChecker) Check(ctx context.Context) *Result {
 				if len(r.State) == 0 {
 					r.State = StateWarning
 				}
-				e := NewError(tableMsg + option.errMessage)
+				e := NewError("%s", tableMsg+option.errMessage)
 				e.Severity = StateWarning
 				e.Instruction = option.instruction
 				r.Errors = append(r.Errors, e)
 			case StateFailure:
 				r.State = StateFailure
-				e := NewError(tableMsg + option.errMessage)
+				e := NewError("%s", tableMsg+option.errMessage)
 				e.Instruction = option.instruction
 				r.Errors = append(r.Errors, e)
 			}
