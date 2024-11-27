@@ -14,9 +14,16 @@ mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} < ./data.sql
 mysql -uroot -h 127.0.0.1 -P 4000 < ./data.sql
 
 sed "s/\"127.0.0.1\"#MYSQL_HOST/\"${MYSQL_HOST}\"/g" ./config_base.toml | sed "s/3306#MYSQL_PORT/${MYSQL_PORT}/g" > ./config.toml
+cat config.toml | sed 's/export-fix-sql = true/export-fix-sql = false/' > config_nofix.toml
+diff config.toml config_nofix.toml
 
 echo "compare json tables, check result should be pass"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/json_diff.output
+check_contains "check pass!!!" $OUT_DIR/sync_diff.log
+rm -rf $OUT_DIR/*
+
+echo "compare json tables without fixsql, check result should be pass"
+sync_diff_inspector --config=./config_nofix.toml > $OUT_DIR/json_diff.output
 check_contains "check pass!!!" $OUT_DIR/sync_diff.log
 rm -rf $OUT_DIR/*
 

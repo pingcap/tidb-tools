@@ -437,7 +437,7 @@ func (df *Diff) consume(ctx context.Context, rangeInfo *splitter.RangeInfo) bool
 		// If an error occurs during the checksum phase, skip the data compare phase.
 		state = checkpoints.FailedState
 		df.report.SetTableMeetError(schema, table, err)
-	} else if !isEqual && df.exportFixSQL {
+	} else if !isEqual {
 		state = checkpoints.FailedState
 		// if the chunk's checksum differ, try to do binary check
 		info := rangeInfo
@@ -641,11 +641,15 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 		if lastUpstreamData == nil {
 			// don't have source data, so all the targetRows's data is redundant, should be deleted
 			for lastDownstreamData != nil {
-				sql := df.downstream.GenerateFixSQL(source.Delete, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
 				rowsDelete++
-				log.Debug("[delete]", zap.String("sql", sql))
+				if df.exportFixSQL {
+					sql := df.downstream.GenerateFixSQL(
+						source.Delete, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex(),
+					)
+					log.Debug("[delete]", zap.String("sql", sql))
 
-				dml.sqls = append(dml.sqls, sql)
+					dml.sqls = append(dml.sqls, sql)
+				}
 				equal = false
 				lastDownstreamData, err = downstreamRowsIterator.Next()
 				if err != nil {
@@ -658,11 +662,13 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 		if lastDownstreamData == nil {
 			// target lack some data, should insert the last source datas
 			for lastUpstreamData != nil {
-				sql := df.downstream.GenerateFixSQL(source.Insert, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
 				rowsAdd++
-				log.Debug("[insert]", zap.String("sql", sql))
+				if df.exportFixSQL {
+					sql := df.downstream.GenerateFixSQL(source.Insert, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
+					log.Debug("[insert]", zap.String("sql", sql))
 
-				dml.sqls = append(dml.sqls, sql)
+					dml.sqls = append(dml.sqls, sql)
+				}
 				equal = false
 
 				lastUpstreamData, err = upstreamRowsIterator.Next()
@@ -689,22 +695,34 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 		switch cmp {
 		case 1:
 			// delete
-			sql = df.downstream.GenerateFixSQL(source.Delete, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
 			rowsDelete++
-			log.Debug("[delete]", zap.String("sql", sql))
+			if df.exportFixSQL {
+				sql = df.downstream.GenerateFixSQL(
+					source.Delete, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex(),
+				)
+				log.Debug("[delete]", zap.String("sql", sql))
+			}
 			lastDownstreamData = nil
 		case -1:
 			// insert
-			sql = df.downstream.GenerateFixSQL(source.Insert, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
 			rowsAdd++
-			log.Debug("[insert]", zap.String("sql", sql))
+			if df.exportFixSQL {
+				sql = df.downstream.GenerateFixSQL(
+					source.Insert, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex(),
+				)
+				log.Debug("[insert]", zap.String("sql", sql))
+			}
 			lastUpstreamData = nil
 		case 0:
 			// update
-			sql = df.downstream.GenerateFixSQL(source.Replace, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex())
 			rowsAdd++
 			rowsDelete++
-			log.Debug("[update]", zap.String("sql", sql))
+			if df.exportFixSQL {
+				sql = df.downstream.GenerateFixSQL(
+					source.Replace, lastUpstreamData, lastDownstreamData, rangeInfo.GetTableIndex(),
+				)
+				log.Debug("[update]", zap.String("sql", sql))
+			}
 			lastUpstreamData = nil
 			lastDownstreamData = nil
 		}
