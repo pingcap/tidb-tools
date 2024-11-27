@@ -601,7 +601,13 @@ func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *spli
 	if upstreamInfo.Count == downstreamInfo.Count && upstreamInfo.Checksum == downstreamInfo.Checksum {
 		return true, upstreamInfo.Count, downstreamInfo.Count, nil
 	}
-	log.Debug("checksum doesn't match", zap.Any("chunk id", tableRange.ChunkRange.Index), zap.String("table", df.workSource.GetTables()[tableRange.GetTableIndex()].Table), zap.Int64("upstream chunk size", upstreamInfo.Count), zap.Int64("downstream chunk size", downstreamInfo.Count), zap.Uint64("upstream checksum", upstreamInfo.Checksum), zap.Uint64("downstream checksum", downstreamInfo.Checksum))
+	log.Debug("checksum doesn't match, need to compare rows",
+		zap.Any("chunk id", tableRange.ChunkRange.Index),
+		zap.String("table", df.workSource.GetTables()[tableRange.GetTableIndex()].Table),
+		zap.Int64("upstream chunk size", upstreamInfo.Count),
+		zap.Int64("downstream chunk size", downstreamInfo.Count),
+		zap.Uint64("upstream checksum", upstreamInfo.Checksum),
+		zap.Uint64("downstream checksum", downstreamInfo.Checksum))
 	return false, upstreamInfo.Count, downstreamInfo.Count, nil
 }
 
@@ -713,6 +719,13 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 	}
 	dml.rowAdd = rowsAdd
 	dml.rowDelete = rowsDelete
+
+	log.Debug("compareRows",
+		zap.Bool("equal", equal),
+		zap.Int("rowsAdd", rowsAdd),
+		zap.Int("rowsDelete", rowsDelete),
+		zap.Any("chunk id", rangeInfo.ChunkRange.Index),
+		zap.String("table", df.workSource.GetTables()[rangeInfo.GetTableIndex()].Table))
 	return equal, nil
 }
 
