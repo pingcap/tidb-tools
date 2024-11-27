@@ -27,7 +27,7 @@ require (
 	go.etcd.io/etcd/tests/v3 v3.5.12
 	go.uber.org/atomic v1.11.0
 	go.uber.org/zap v1.27.0
-	google.golang.org/grpc v1.64.0
+	google.golang.org/grpc v1.64.1
 )
 
 require (
