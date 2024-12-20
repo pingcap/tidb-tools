@@ -21,6 +21,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -322,6 +323,17 @@ func (df *Diff) compareStruct(ctx context.Context, tableIndex int) (isEqual bool
 	return isEqual, isSkip, nil
 }
 
+func verifySnap(latestSnap []string) bool {
+	if len(latestSnap) != 1 {
+		return false
+	}
+	val, err := strconv.ParseInt(latestSnap[0], 10, 64)
+	if err != nil {
+		return false
+	}
+	return val != 0
+}
+
 func (df *Diff) startGCKeeperForTiDB(ctx context.Context, db *sql.DB, snap string) {
 	pdCli, _ := utils.GetPDClientForGC(ctx, db)
 	if pdCli != nil {
@@ -332,7 +344,7 @@ func (df *Diff) startGCKeeperForTiDB(ctx context.Context, db *sql.DB, snap strin
 			return
 		}
 
-		if len(latestSnap) == 1 {
+		if verifySnap(latestSnap) {
 			if len(snap) == 0 {
 				snap = latestSnap[0]
 			}
