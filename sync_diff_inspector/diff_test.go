@@ -22,10 +22,10 @@ import (
 
 func TestGetSnapshot(t *testing.T) {
 	cases := []struct {
-		latestSnapshot     []string
-		snapshot           string
-		expected           string
-		snapshotRows       string
+		latestSnapshot []string
+		snapshot       string
+		expected       string
+		snapshotRows   string
 	}{
 		{
 			latestSnapshot: []string{},
@@ -59,17 +59,17 @@ func TestGetSnapshot(t *testing.T) {
 		},
 		{
 			// 2017-10-07 16:45:26
-			latestSnapshot:     []string{"395146933305344000"},
-			snapshot:           "2017-10-08 16:45:26",
-			expected:           "395146933305344000",
-			snapshotRows:       "1507452326",
+			latestSnapshot: []string{"395146933305344000"},
+			snapshot:       "2017-10-08 16:45:26",
+			expected:       "395146933305344000",
+			snapshotRows:   "1507452326",
 		},
 		{
 			// 2017-10-07 16:45:26
-			latestSnapshot:     []string{"395146933305344000"},
-			snapshot:           "2017-10-06 16:45:26",
-			expected:           "2017-10-06 16:45:26",
-			snapshotRows:       "1507279526",
+			latestSnapshot: []string{"395146933305344000"},
+			snapshot:       "2017-10-06 16:45:26",
+			expected:       "2017-10-06 16:45:26",
+			snapshotRows:   "1507279526",
 		},
 		{
 			latestSnapshot: []string{"1"},
@@ -78,16 +78,16 @@ func TestGetSnapshot(t *testing.T) {
 			snapshotRows:   "1507279526",
 		},
 		{
-			latestSnapshot:     []string{"395146933305344000"},
-			snapshot:           "1",
-			expected:           "1",
+			latestSnapshot: []string{"395146933305344000"},
+			snapshot:       "1",
+			expected:       "1",
 		},
 		{
 			// 2090-11-19 22:07:45
-			latestSnapshot:     []string{"1000022649077760000"},
-			snapshot:           "2090-11-18 22:07:45",
-			expected:           "2090-11-18 22:07:45",
-			snapshotRows: "3814697265",
+			latestSnapshot: []string{"1000022649077760000"},
+			snapshot:       "2090-11-18 22:07:45",
+			expected:       "2090-11-18 22:07:45",
+			snapshotRows:   "3814697265",
 		},
 	}
 
