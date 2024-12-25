@@ -25,7 +25,6 @@ func TestGetSnapshot(t *testing.T) {
 		latestSnapshot     []string
 		snapshot           string
 		expected           string
-		latestSnapshotRows string
 		snapshotRows       string
 	}{
 		{
@@ -59,36 +58,36 @@ func TestGetSnapshot(t *testing.T) {
 			expected:       "6",
 		},
 		{
-			latestSnapshot:     []string{"2016-10-08 16:45:26"},
+			// 2017-10-07 16:45:26
+			latestSnapshot:     []string{"395146933305344000"},
 			snapshot:           "2017-10-08 16:45:26",
-			expected:           "2016-10-08 16:45:26",
-			latestSnapshotRows: "1475916326",
+			expected:           "395146933305344000",
 			snapshotRows:       "1507452326",
 		},
 		{
-			latestSnapshot:     []string{"2017-10-08 16:45:26"},
-			snapshot:           "2016-10-08 16:45:26",
-			expected:           "2016-10-08 16:45:26",
-			latestSnapshotRows: "1507452326",
-			snapshotRows:       "1475916326",
+			// 2017-10-07 16:45:26
+			latestSnapshot:     []string{"395146933305344000"},
+			snapshot:           "2017-10-06 16:45:26",
+			expected:           "2017-10-06 16:45:26",
+			snapshotRows:       "1507279526",
 		},
 		{
 			latestSnapshot: []string{"1"},
-			snapshot:       "2016-10-08 16:45:26",
+			snapshot:       "2017-10-06 16:45:26",
 			expected:       "1",
-			snapshotRows:   "1475916326",
+			snapshotRows:   "1507279526",
 		},
 		{
-			latestSnapshot:     []string{"2017-10-08 16:45:26"},
+			latestSnapshot:     []string{"395146933305344000"},
 			snapshot:           "1",
 			expected:           "1",
-			latestSnapshotRows: "1507452326",
 		},
 		{
-			latestSnapshot:     []string{"3814697265"},
-			snapshot:           "2090-11-18 22:07:45.62",
-			expected:           "3814697265",
-			latestSnapshotRows: "3814697266.625",
+			// 2090-11-19 22:07:45
+			latestSnapshot:     []string{"1000022649077760000"},
+			snapshot:           "2090-11-18 22:07:45",
+			expected:           "2090-11-18 22:07:45",
+			snapshotRows: "3814697265",
 		},
 	}
 
@@ -96,15 +95,13 @@ func TestGetSnapshot(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	for _, cs := range cases {
-		if len(cs.latestSnapshotRows) > 0 {
-			dataRows := sqlmock.NewRows([]string{""}).AddRow(cs.latestSnapshotRows)
-			mock.ExpectQuery("SELECT unix_timestamp(?)").WillReturnRows(dataRows)
-			dataRows = sqlmock.NewRows([]string{""}).AddRow(cs.snapshotRows)
+	for i, cs := range cases {
+		if len(cs.snapshotRows) > 0 {
+			dataRows := sqlmock.NewRows([]string{""}).AddRow(cs.snapshotRows)
 			mock.ExpectQuery("SELECT unix_timestamp(?)").WillReturnRows(dataRows)
 		}
 		val := GetSnapshot(cs.latestSnapshot, cs.snapshot, conn)
-		require.Equal(t, cs.expected, val)
+		require.Equal(t, cs.expected, val, "case %d", i)
 	}
 
 }
