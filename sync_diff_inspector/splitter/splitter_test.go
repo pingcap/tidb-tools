@@ -142,7 +142,7 @@ func TestSplitRangeByRandom(t *testing.T) {
 		tableInfo, err := dbutil.GetTableInfoBySQL(testCase.createTableSQL, parser.New())
 		require.NoError(t, err)
 
-		splitCols, err := GetSplitFields(tableInfo, nil)
+		splitCols, _, err := GetSplitFields(tableInfo, nil)
 		require.NoError(t, err)
 		createFakeResultForRandomSplit(mock, 0, testCase.randomValues)
 		chunks, err := splitRangeByRandom(context.Background(), db, testCase.originChunk, testCase.splitCount, "test", "test", splitCols, "", "")

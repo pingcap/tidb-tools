@@ -47,7 +47,7 @@ func indexFieldsFromConfigString(strFields string, tableInfo *model.TableInfo) (
 		splitFieldArr[i] = strings.TrimSpace(splitFieldArr[i])
 	}
 
-	fields, err := GetSplitFields(tableInfo, splitFieldArr)
+	fields, _, err := GetSplitFields(tableInfo, splitFieldArr)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
