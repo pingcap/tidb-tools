@@ -766,7 +766,15 @@ func GetTableSize(ctx context.Context, db *sql.DB, schemaName, tableName string)
 }
 
 // GetCountAndMd5Checksum returns checksum code and count of some data by given condition
-func GetCountAndMd5Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, uint64, error) {
+func GetCountAndMd5Checksum(
+	ctx context.Context,
+	db *sql.DB,
+	schemaName, tableName string,
+	tbInfo *model.TableInfo,
+	limitRange string,
+	indexHint string,
+	args []interface{},
+) (int64, uint64, error) {
 	/*
 		calculate MD5 checksum and count example:
 		mysql> SELECT COUNT(*) as CNT, BIT_XOR(CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', `id`, `name`, CONCAT(ISNULL(`id`), ISNULL(`name`)))), 1, 16), 16, 10) AS UNSIGNED) ^ CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', `id`, `name`, CONCAT(ISNULL(`id`), ISNULL(`name`)))), 17, 16), 16, 10) AS UNSIGNED)) as CHECKSUM FROM `a`.`t`;
@@ -796,19 +804,34 @@ func GetCountAndMd5Checksum(ctx context.Context, db *sql.DB, schemaName, tableNa
 		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", name))
 	}
 
-	query := fmt.Sprintf("SELECT COUNT(*) as CNT, BIT_XOR(CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', %s, CONCAT(%s))), 1, 16), 16, 10) AS UNSIGNED) ^ CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', %s, CONCAT(%s))), 17, 16), 16, 10) AS UNSIGNED)) as CHECKSUM FROM %s WHERE %s;",
-		strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), dbutil.TableName(schemaName, tableName), limitRange)
+	query := fmt.Sprintf(`SELECT
+			COUNT(*) as CNT,
+			BIT_XOR(CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', %s, CONCAT(%s))), 1, 16), 16, 10) AS UNSIGNED) ^
+			CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', %s, CONCAT(%s))), 17, 16), 16, 10) AS UNSIGNED)) as CHECKSUM
+		FROM %s %s WHERE %s`,
+		strings.Join(columnNames, ", "),
+		strings.Join(columnIsNull, ", "),
+		strings.Join(columnNames, ", "),
+		strings.Join(columnIsNull, ", "),
+		dbutil.TableName(schemaName, tableName),
+		indexHint,
+		limitRange,
+	)
 	log.Debug("count and checksum", zap.String("sql", query), zap.Reflect("args", args))
 
 	var count sql.NullInt64
 	var checksum uint64
 	err := db.QueryRowContext(ctx, query, args...).Scan(&count, &checksum)
 	if err != nil {
-		log.Warn("execute checksum query fail", zap.String("query", query), zap.Reflect("args", args), zap.Error(err))
+		log.Warn("execute checksum query fail",
+			zap.String("query", query),
+			zap.Reflect("args", args),
+			zap.Error(err),
+		)
 		return -1, 0, errors.Trace(err)
 	}
 	if !count.Valid {
-		// if don't have any data, the checksum will be `NULL`
+		// If there are no data, the checksum will be `NULL`
 		log.Warn("get empty count", zap.String("sql", query), zap.Reflect("args", args))
 		return 0, 0, nil
 	}

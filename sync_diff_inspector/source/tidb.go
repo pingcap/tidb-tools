@@ -126,7 +126,9 @@ func (s *TiDBSource) GetCountAndMd5(ctx context.Context, tableRange *splitter.Ra
 	chunk := tableRange.GetChunk()
 
 	matchSource := getMatchSource(s.sourceTableMap, table)
-	count, checksum, err := utils.GetCountAndMd5Checksum(ctx, s.dbConn, matchSource.OriginSchema, matchSource.OriginTable, table.Info, chunk.Where, chunk.Args)
+	count, checksum, err := utils.GetCountAndMd5Checksum(
+		ctx, s.dbConn, matchSource.OriginSchema, matchSource.OriginTable, table.Info,
+		chunk.Where, chunk.IndexHint, chunk.Args)
 
 	cost := time.Since(beginTime)
 	return &ChecksumInfo{
