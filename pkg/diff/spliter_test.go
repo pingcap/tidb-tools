@@ -482,7 +482,7 @@ func TestBucketSpliterHint(t *testing.T) {
 			Info:   tableInfo,
 		}
 
-		createFakeResultForRangeHint(mock, tc.indexCount)
+		createFakeResultForBucketIterator(mock, tc.indexCount)
 
 		iter, err := splitter.NewBucketIteratorWithCheckpoint(ctx, "", tableDiff, db, nil, utils.NewWorkerPool(1, "bucketIter"))
 		require.NoError(t, err)
@@ -492,7 +492,57 @@ func TestBucketSpliterHint(t *testing.T) {
 	}
 }
 
-func createFakeResultForRangeHint(mock sqlmock.Sqlmock, indexCount int) {
+func TestRandomSpliterHint(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	ctx := context.Background()
+
+	testCases := []struct {
+		tableSQL     string
+		expectedHint string
+	}{
+		{
+			"create table `test`.`test`(`a` int, `b` int, `c` int, primary key(`a`, `b`), unique key i1(`c`))",
+			"force index(PRIMARY)",
+		},
+		{
+			"create table `test`.`test`(`a` int, `b` int, `c` int, unique key i1(`c`), key i2(`b`))",
+			"force index(i1)",
+		},
+		{
+			"create table `test`.`test`(`a` int, `b` int, `c` int, key i2(`b`))",
+			"force index(i2)",
+		},
+		{
+			"create table `test`.`test`(`a` int, `b` int, `c` int)",
+			"",
+		},
+	}
+
+	for _, tc := range testCases {
+		tableInfo, err := dbutil.GetTableInfoBySQL(tc.tableSQL, parser.New())
+		require.NoError(t, err)
+
+		for _, tableRange := range []string{"", "c > 100"} {
+			tableDiff := &common.TableDiff{
+				Schema: "test",
+				Table:  "test",
+				Info:   tableInfo,
+				Range:  tableRange,
+			}
+
+			mock.ExpectQuery("SELECT COUNT*").WillReturnRows(sqlmock.NewRows([]string{"CNT"}).AddRow("320"))
+
+			iter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, "", tableDiff, db, nil)
+			require.NoError(t, err)
+			chunk, err := iter.Next()
+			require.NoError(t, err)
+			require.Equal(t, strings.ToLower(tc.expectedHint), strings.ToLower(chunk.IndexHint))
+		}
+	}
+}
+
+func createFakeResultForBucketIterator(mock sqlmock.Sqlmock, indexCount int) {
 	/*
 		+---------+------------+-------------+----------+-----------+-------+---------+-------------+-------------+
 		| Db_name | Table_name | Column_name | Is_index | Bucket_id | Count | Repeats | Lower_Bound | Upper_Bound |
@@ -504,10 +554,6 @@ func createFakeResultForRangeHint(mock sqlmock.Sqlmock, indexCount int) {
 		| test    | test       | PRIMARY     |        1 |         4 |   320 |       1 | (256, 48)   | (319, 59)   |
 		+---------+------------+-------------+----------+-----------+-------+---------+-------------+-------------+
 	*/
-	for i := 0; i < indexCount; i++ {
-		mock.ExpectQuery("SELECT COUNT\\(DISTINCT *").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("5"))
-	}
-
 	statsRows := sqlmock.NewRows([]string{"Db_name", "Table_name", "Column_name", "Is_index", "Bucket_id", "Count", "Repeats", "Lower_Bound", "Upper_Bound"})
 	for _, indexName := range []string{"PRIMARY", "i1", "i2", "i3", "i4"} {
 		for i := 0; i < 5; i++ {
@@ -515,6 +561,10 @@ func createFakeResultForRangeHint(mock sqlmock.Sqlmock, indexCount int) {
 		}
 	}
 	mock.ExpectQuery("SHOW STATS_BUCKETS").WillReturnRows(statsRows)
+
+	for i := 0; i < indexCount; i++ {
+		mock.ExpectQuery("SELECT COUNT\\(DISTINCT *").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("5"))
+	}
 }
 
 func createFakeResultForBucketSplit(mock sqlmock.Sqlmock, aRandomValues, bRandomValues []interface{}) {
