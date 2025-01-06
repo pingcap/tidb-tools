@@ -14,15 +14,11 @@
 package splitter
 
 import (
-	"context"
-	"database/sql"
 	"sort"
 	"strings"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
-	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"github.com/pingcap/tidb/pkg/meta/model"
 	"go.uber.org/zap"
@@ -35,21 +31,18 @@ type indexFields struct {
 	empty     bool
 }
 
-func indexFieldsFromConfigString(strFields string, tableInfo *model.TableInfo, enableEmpty bool) (*indexFields, error) {
+func indexFieldsFromConfigString(strFields string, tableInfo *model.TableInfo) (*indexFields, error) {
+	if len(strFields) == 0 {
+		// Empty option
+		return &indexFields{empty: true}, nil
+	}
+
 	if tableInfo == nil {
 		log.Panic("parsing index fields with empty tableInfo",
 			zap.String("index-fields", strFields))
 	}
 
-	if len(strFields) == 0 && enableEmpty {
-		// Empty option
-		return &indexFields{empty: true}, nil
-	}
-
-	var splitFieldArr []string
-	if len(strFields) > 0 {
-		splitFieldArr = strings.Split(strFields, ",")
-	}
+	splitFieldArr := strings.Split(strFields, ",")
 	for i := range splitFieldArr {
 		splitFieldArr[i] = strings.TrimSpace(splitFieldArr[i])
 	}
@@ -115,26 +108,4 @@ func sortColsInPlace(cols []*model.ColumnInfo) {
 	sort.SliceStable(cols, func(i, j int) bool {
 		return cols[i].ID < cols[j].ID
 	})
-}
-
-func getFieldsAndIndex(table *common.TableDiff, dbConn *sql.DB, enableEmpty bool) (
-	*indexFields, []*model.IndexInfo, error,
-) {
-	fields, err := indexFieldsFromConfigString(table.Fields, table.Info, enableEmpty)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var indices []*model.IndexInfo
-	if fields.IsEmpty() {
-		indices, err = utils.GetBetterIndex(context.Background(), dbConn, table.Schema, table.Table, table.Info)
-		if err != nil {
-			return nil, nil, errors.Trace(err)
-		}
-	} else {
-		// There are user configured "index-fields", so we will try to match from all indices.
-		indices = dbutil.FindAllIndex(table.Info)
-	}
-
-	return fields, indices, nil
 }

@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
@@ -45,11 +46,22 @@ func NewRandomIterator(ctx context.Context, progressID string, table *common.Tab
 
 func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, startRange *RangeInfo) (*RandomIterator, error) {
 	// get the chunk count by data count and chunk size
-	fields, indices, err := getFieldsAndIndex(table, dbConn, true)
+	var splitFieldArr []string
+	if len(table.Fields) != 0 {
+		splitFieldArr = strings.Split(table.Fields, ",")
+	}
+
+	for i := range splitFieldArr {
+		splitFieldArr[i] = strings.TrimSpace(splitFieldArr[i])
+	}
+
+	fields, err := GetSplitFields(table.Info, splitFieldArr)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
+	iFields := &indexFields{cols: fields, tableInfo: table.Info}
+	var indices = dbutil.FindAllIndex(table.Info)
 	indexName := ""
 NEXTINDEX:
 	for _, index := range indices {
@@ -67,7 +79,7 @@ NEXTINDEX:
 			continue
 		}
 
-		if !fields.MatchesIndex(index) {
+		if !iFields.MatchesIndex(index) {
 			// We are enforcing user configured "index-fields" settings.
 			continue
 		}
@@ -143,7 +155,7 @@ NEXTINDEX:
 		bucketChunkCnt = chunkCnt
 	}
 
-	chunks, err := splitRangeByRandom(ctx, dbConn, chunkRange, chunkCnt, table.Schema, table.Table, fields.cols, table.Range, table.Collation)
+	chunks, err := splitRangeByRandom(ctx, dbConn, chunkRange, chunkCnt, table.Schema, table.Table, iFields.cols, table.Range, table.Collation)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
