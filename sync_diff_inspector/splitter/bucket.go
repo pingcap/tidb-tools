@@ -132,7 +132,7 @@ func (s *BucketIterator) Next() (*chunk.Range, error) {
 }
 
 func (s *BucketIterator) init(ctx context.Context, startRange *RangeInfo) error {
-	fields, err := indexFieldsFromConfigString(s.table.Fields, s.table.Info)
+	fields, indices, err := getFieldsAndIndex(s.table, s.dbConn, true)
 	if err != nil {
 		return err
 	}
@@ -141,17 +141,6 @@ func (s *BucketIterator) init(ctx context.Context, startRange *RangeInfo) error 
 	buckets, err := dbutil.GetBucketsInfo(ctx, s.dbConn, s.table.Schema, s.table.Table, s.table.Info)
 	if err != nil {
 		return errors.Trace(err)
-	}
-
-	var indices []*model.IndexInfo
-	if fields.IsEmpty() {
-		indices, err = utils.GetBetterIndex(context.Background(), s.dbConn, s.table.Schema, s.table.Table, s.table.Info)
-		if err != nil {
-			return errors.Trace(err)
-		}
-	} else {
-		// There are user configured "index-fields", so we will try to match from all indices.
-		indices = dbutil.FindAllIndex(s.table.Info)
 	}
 
 NEXTINDEX:

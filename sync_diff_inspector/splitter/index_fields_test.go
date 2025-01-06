@@ -33,7 +33,7 @@ func TestIndexFieldsSimple(t *testing.T) {
 	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL1, parser.New())
 	require.NoError(t, err)
 
-	fields, err := indexFieldsFromConfigString("k", tableInfo)
+	fields, err := indexFieldsFromConfigString("k", tableInfo, true)
 	require.NoError(t, err)
 	require.False(t, fields.IsEmpty())
 	require.Len(t, fields.Cols(), 1)
@@ -64,7 +64,7 @@ func TestIndexFieldsComposite(t *testing.T) {
 	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL1, parser.New())
 	require.NoError(t, err)
 
-	fields, err := indexFieldsFromConfigString("id, k", tableInfo)
+	fields, err := indexFieldsFromConfigString("id, k", tableInfo, true)
 	require.NoError(t, err)
 	require.False(t, fields.IsEmpty())
 	require.Len(t, fields.Cols(), 2)
@@ -95,7 +95,7 @@ func TestIndexFieldsEmpty(t *testing.T) {
 	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL1, parser.New())
 	require.NoError(t, err)
 
-	fields, err := indexFieldsFromConfigString("", tableInfo)
+	fields, err := indexFieldsFromConfigString("", tableInfo, true)
 	require.NoError(t, err)
 	require.True(t, fields.IsEmpty())
 

@@ -17,8 +17,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"slices"
-	"strings"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
@@ -47,18 +45,43 @@ func NewRandomIterator(ctx context.Context, progressID string, table *common.Tab
 
 func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB, startRange *RangeInfo) (*RandomIterator, error) {
 	// get the chunk count by data count and chunk size
-	var splitFieldArr []string
-	if len(table.Fields) != 0 {
-		splitFieldArr = strings.Split(table.Fields, ",")
-	}
-
-	for i := range splitFieldArr {
-		splitFieldArr[i] = strings.TrimSpace(splitFieldArr[i])
-	}
-
-	fields, indexName, err := GetSplitFields(table.Info, splitFieldArr)
+	fields, indices, err := getFieldsAndIndex(table, dbConn, true)
 	if err != nil {
 		return nil, errors.Trace(err)
+	}
+
+	indexName := ""
+NEXTINDEX:
+	for _, index := range indices {
+		if index == nil {
+			continue
+		}
+		if startRange != nil && startRange.IndexID != index.ID {
+			continue
+		}
+
+		indexColumns := utils.GetColumnsFromIndex(index, table.Info)
+
+		if len(indexColumns) < len(index.Columns) {
+			// some column in index is ignored.
+			continue
+		}
+
+		if !fields.MatchesIndex(index) {
+			// We are enforcing user configured "index-fields" settings.
+			continue
+		}
+
+		// skip the index that has expression column
+		for _, col := range indexColumns {
+			if col.Hidden {
+				continue NEXTINDEX
+			}
+		}
+
+		// Found the index, use it as index hint.
+		indexName = index.Name.O
+		break
 	}
 
 	chunkRange := chunk.NewChunkRange()
@@ -120,7 +143,7 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 		bucketChunkCnt = chunkCnt
 	}
 
-	chunks, err := splitRangeByRandom(ctx, dbConn, chunkRange, chunkCnt, table.Schema, table.Table, fields, table.Range, table.Collation)
+	chunks, err := splitRangeByRandom(ctx, dbConn, chunkRange, chunkCnt, table.Schema, table.Table, fields.cols, table.Range, table.Collation)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -169,21 +192,21 @@ func (s *RandomIterator) Close() {
 
 // GetSplitFields returns fields to split chunks, order by pk, uk, index, columns.
 // Return the columns, corresponding index name and error
-func GetSplitFields(table *model.TableInfo, splitFields []string) ([]*model.ColumnInfo, string, error) {
+func GetSplitFields(table *model.TableInfo, splitFields []string) ([]*model.ColumnInfo, error) {
 	colsMap := make(map[string]*model.ColumnInfo)
 
 	splitCols := make([]*model.ColumnInfo, 0, 2)
 	for _, splitField := range splitFields {
 		col := dbutil.FindColumnByName(table.Columns, splitField)
 		if col == nil {
-			return nil, "", errors.NotFoundf("column %s in table %s", splitField, table.Name)
+			return nil, errors.NotFoundf("column %s in table %s", splitField, table.Name)
 
 		}
 		splitCols = append(splitCols, col)
 	}
 
 	if len(splitCols) != 0 {
-		return splitCols, "", nil
+		return splitCols, nil
 	}
 
 	for _, col := range table.Columns {
@@ -192,34 +215,25 @@ func GetSplitFields(table *model.TableInfo, splitFields []string) ([]*model.Colu
 
 	// First try to get column from index
 	indices := dbutil.FindAllIndex(table)
-	slices.SortFunc(indices, func(i1, i2 *model.IndexInfo) int {
-		if i1.Primary {
-			return -1
-		}
-		if i2.Primary {
-			return 1
-		}
-		if i1.Unique {
-			return -1
-		}
-		if i2.Unique {
-			return -1
-		}
-		return 0
-	})
+NEXTINDEX:
 	for _, idx := range indices {
-		icol := idx.Columns[0]
-		if col, ok := colsMap[icol.Name.O]; ok && !col.Hidden {
-			return []*model.ColumnInfo{col}, idx.Name.L, nil
+		cols := make([]*model.ColumnInfo, 0, len(table.Columns))
+		for _, icol := range idx.Columns {
+			col := colsMap[icol.Name.O]
+			if col.Hidden {
+				continue NEXTINDEX
+			}
+			cols = append(cols, col)
 		}
+		return cols, nil
 	}
 
 	for _, col := range table.Columns {
 		if !col.Hidden {
-			return []*model.ColumnInfo{col}, "", nil
+			return []*model.ColumnInfo{col}, nil
 		}
 	}
-	return nil, "", errors.NotFoundf("not found column")
+	return nil, errors.NotFoundf("not found column")
 }
 
 // splitRangeByRandom splits a chunk to multiple chunks by random
