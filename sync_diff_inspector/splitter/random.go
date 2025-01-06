@@ -97,7 +97,9 @@ NEXTINDEX:
 	}
 
 	chunkRange := chunk.NewChunkRange()
-	chunkRange.IndexHint = fmt.Sprintf("force index(%s)", indexName)
+	if len(indexName) > 0 {
+		chunkRange.IndexHint = fmt.Sprintf("force index(%s)", indexName)
+	}
 
 	beginIndex := 0
 	bucketChunkCnt := 0
