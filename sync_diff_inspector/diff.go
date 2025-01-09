@@ -609,6 +609,7 @@ func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *spli
 	if downstreamInfo.Err != nil {
 		log.Warn("failed to compare downstream checksum")
 		return false, -1, -1, errors.Trace(downstreamInfo.Err)
+
 	}
 
 	if upstreamInfo.Count == downstreamInfo.Count && upstreamInfo.Checksum == downstreamInfo.Checksum {

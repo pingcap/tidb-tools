@@ -247,7 +247,6 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 		latestCount              int64
 		err                      error
 	)
-
 	firstBucket := 0
 	if startRange != nil {
 		c := startRange.GetChunk()

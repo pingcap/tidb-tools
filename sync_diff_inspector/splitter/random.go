@@ -223,7 +223,6 @@ func GetSplitFields(table *model.TableInfo, splitFields []string) ([]*model.Colu
 	for _, col := range table.Columns {
 		colsMap[col.Name.O] = col
 	}
-
 	indices := dbutil.FindAllIndex(table)
 	if len(indices) != 0 {
 	NEXTINDEX:
