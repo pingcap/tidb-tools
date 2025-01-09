@@ -458,17 +458,17 @@ func TestBucketSpliterHint(t *testing.T) {
 		{
 			"create table `test`.`test`(`a` int, `b` int, `c` int, primary key(`a`, `b`), unique key i1(`c`))",
 			0,
-			"force index(PRIMARY)",
+			"PRIMARY",
 		},
 		{
 			"create table `test`.`test`(`a` int, `b` int, `c` int, unique key i1(`c`))",
 			0,
-			"force index(i1)",
+			"i1",
 		},
 		{
 			"create table `test`.`test`(`a` int, `b` int, `c` int, key i2(`b`))",
 			1,
-			"force index(i2)",
+			"i2",
 		},
 	}
 
@@ -503,15 +503,15 @@ func TestRandomSpliterHint(t *testing.T) {
 	}{
 		{
 			"create table `test`.`test`(`a` int, `b` int, `c` int, primary key(`a`, `b`), unique key i1(`c`))",
-			"force index(PRIMARY)",
+			"PRIMARY",
 		},
 		{
 			"create table `test`.`test`(`a` int, `b` int, `c` int, unique key i1(`c`), key i2(`b`))",
-			"force index(i1)",
+			"i1",
 		},
 		{
 			"create table `test`.`test`(`a` int, `b` int, `c` int, key i2(`b`))",
-			"force index(i2)",
+			"i2",
 		},
 		{
 			"create table `test`.`test`(`a` int, `b` int, `c` int)",

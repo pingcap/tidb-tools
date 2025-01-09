@@ -16,7 +16,6 @@ package splitter
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"sync"
 
 	"github.com/pingcap/errors"
@@ -245,13 +244,10 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 	}()
 	var (
 		lowerValues, upperValues []string
-		indexHint                string
 		latestCount              int64
 		err                      error
 	)
-	if len(s.indexName) > 0 {
-		indexHint = fmt.Sprintf("force index(%s)", s.indexName)
-	}
+
 	firstBucket := 0
 	if startRange != nil {
 		c := startRange.GetChunk()
@@ -285,7 +281,7 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 		leftCnt := c.Index.ChunkCnt - c.Index.ChunkIndex - 1
 		if leftCnt > 0 {
 			chunkRange := chunk.NewChunkRange()
-			chunkRange.IndexHint = indexHint
+			chunkRange.IndexHint = s.indexName
 
 			for i, column := range s.indexColumns {
 				chunkRange.Update(column.Name.O, "", nextUpperValues[i], false, true)
@@ -318,7 +314,7 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 		}
 
 		chunkRange := chunk.NewChunkRange()
-		chunkRange.IndexHint = indexHint
+		chunkRange.IndexHint = s.indexName
 		for j, column := range s.indexColumns {
 			var lowerValue, upperValue string
 			if len(lowerValues) > 0 {
@@ -356,7 +352,7 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 
 	// merge the rest keys into one chunk
 	chunkRange := chunk.NewChunkRange()
-	chunkRange.IndexHint = indexHint
+	chunkRange.IndexHint = s.indexName
 	if len(lowerValues) > 0 {
 		for j, column := range s.indexColumns {
 			chunkRange.Update(column.Name.O, lowerValues[j], "", true, false)

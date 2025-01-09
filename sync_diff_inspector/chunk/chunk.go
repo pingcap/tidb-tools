@@ -147,9 +147,11 @@ type Range struct {
 	IsFirst bool      `json:"is-first"`
 	IsLast  bool      `json:"is-last"`
 
-	Where     string        `json:"where"`
-	Args      []interface{} `json:"args"`
-	IndexHint string        `json:"index-hint"`
+	Where string        `json:"where"`
+	Args  []interface{} `json:"args"`
+
+	// IndexHint is the index for the checksum query hint, it's only used in TiDB source.
+	IndexHint string `json:"index-hint"`
 
 	columnOffset map[string]int
 }

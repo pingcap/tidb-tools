@@ -804,17 +804,17 @@ func GetCountAndMd5Checksum(
 		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", name))
 	}
 
-	query := fmt.Sprintf(`SELECT
+	query := fmt.Sprintf(`SELECT %s 
 			COUNT(*) as CNT,
 			BIT_XOR(CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', %s, CONCAT(%s))), 1, 16), 16, 10) AS UNSIGNED) ^
 			CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', %s, CONCAT(%s))), 17, 16), 16, 10) AS UNSIGNED)) as CHECKSUM
-		FROM %s %s WHERE %s`,
+		FROM %s WHERE %s`,
+		indexHint,
 		strings.Join(columnNames, ", "),
 		strings.Join(columnIsNull, ", "),
 		strings.Join(columnNames, ", "),
 		strings.Join(columnIsNull, ", "),
 		dbutil.TableName(schemaName, tableName),
-		indexHint,
 		limitRange,
 	)
 	log.Debug("count and checksum", zap.String("sql", query), zap.Reflect("args", args))

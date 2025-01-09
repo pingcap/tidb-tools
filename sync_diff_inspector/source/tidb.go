@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/coreos/go-semver/semver"
@@ -126,9 +127,18 @@ func (s *TiDBSource) GetCountAndMd5(ctx context.Context, tableRange *splitter.Ra
 	chunk := tableRange.GetChunk()
 
 	matchSource := getMatchSource(s.sourceTableMap, table)
+
+	indexHint := ""
+	if chunk.IndexHint != "" {
+		indexHint = fmt.Sprintf("/*+ USE_INDEX(`%s`.`%s`, `%s`) */",
+			matchSource.OriginSchema, matchSource.OriginTable,
+			strings.Replace(chunk.IndexHint, "`", "``", -1),
+		)
+	}
+
 	count, checksum, err := utils.GetCountAndMd5Checksum(
 		ctx, s.dbConn, matchSource.OriginSchema, matchSource.OriginTable, table.Info,
-		chunk.Where, chunk.IndexHint, chunk.Args)
+		chunk.Where, indexHint, chunk.Args)
 
 	cost := time.Since(beginTime)
 	return &ChecksumInfo{
