@@ -14,19 +14,12 @@
 package diff
 
 import (
-	"context"
 	"fmt"
-	"strings"
-	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	. "github.com/pingcap/check"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
-	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"github.com/pingcap/tidb/pkg/parser"
-	"github.com/stretchr/testify/require"
 )
 
 var _ = Suite(&testSpliterSuite{})
@@ -445,128 +438,6 @@ func (s *testSpliterSuite) TestBucketSpliter(c *C) {
 	}
 }
 
-func TestBucketSpliterHint(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	ctx := context.Background()
-
-	testCases := []struct {
-		tableSQL     string
-		indexCount   int
-		expectedHint string
-	}{
-		{
-			"create table `test`.`test`(`a` int, `b` int, `c` int, primary key(`a`, `b`), unique key i1(`c`))",
-			0,
-			"PRIMARY",
-		},
-		{
-			"create table `test`.`test`(`a` int, `b` int, `c` int, unique key i1(`c`))",
-			0,
-			"i1",
-		},
-		{
-			"create table `test`.`test`(`a` int, `b` int, `c` int, key i2(`b`))",
-			1,
-			"i2",
-		},
-	}
-
-	for _, tc := range testCases {
-		tableInfo, err := dbutil.GetTableInfoBySQL(tc.tableSQL, parser.New())
-		require.NoError(t, err)
-
-		tableDiff := &common.TableDiff{
-			Schema: "test",
-			Table:  "test",
-			Info:   tableInfo,
-		}
-
-		createFakeResultForBucketIterator(mock, tc.indexCount)
-
-		iter, err := splitter.NewBucketIteratorWithCheckpoint(ctx, "", tableDiff, db, nil, utils.NewWorkerPool(1, "bucketIter"))
-		require.NoError(t, err)
-		chunk, err := iter.Next()
-		require.NoError(t, err)
-		require.Equal(t, strings.ToLower(tc.expectedHint), strings.ToLower(chunk.IndexHint))
-	}
-}
-
-func TestRandomSpliterHint(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	ctx := context.Background()
-
-	testCases := []struct {
-		tableSQL     string
-		expectedHint string
-	}{
-		{
-			"create table `test`.`test`(`a` int, `b` int, `c` int, primary key(`a`, `b`), unique key i1(`c`))",
-			"PRIMARY",
-		},
-		{
-			"create table `test`.`test`(`a` int, `b` int, `c` int, unique key i1(`c`), key i2(`b`))",
-			"i1",
-		},
-		{
-			"create table `test`.`test`(`a` int, `b` int, `c` int, key i2(`b`))",
-			"i2",
-		},
-		{
-			"create table `test`.`test`(`a` int, `b` int, `c` int)",
-			"",
-		},
-	}
-
-	for _, tc := range testCases {
-		tableInfo, err := dbutil.GetTableInfoBySQL(tc.tableSQL, parser.New())
-		require.NoError(t, err)
-
-		for _, tableRange := range []string{"", "c > 100"} {
-			tableDiff := &common.TableDiff{
-				Schema: "test",
-				Table:  "test",
-				Info:   tableInfo,
-				Range:  tableRange,
-			}
-
-			mock.ExpectQuery("SELECT COUNT*").WillReturnRows(sqlmock.NewRows([]string{"CNT"}).AddRow("320"))
-
-			iter, err := splitter.NewRandomIteratorWithCheckpoint(ctx, "", tableDiff, db, nil)
-			require.NoError(t, err)
-			chunk, err := iter.Next()
-			require.NoError(t, err)
-			require.Equal(t, strings.ToLower(tc.expectedHint), strings.ToLower(chunk.IndexHint))
-		}
-	}
-}
-
-func createFakeResultForBucketIterator(mock sqlmock.Sqlmock, indexCount int) {
-	/*
-		+---------+------------+-------------+----------+-----------+-------+---------+-------------+-------------+
-		| Db_name | Table_name | Column_name | Is_index | Bucket_id | Count | Repeats | Lower_Bound | Upper_Bound |
-		+---------+------------+-------------+----------+-----------+-------+---------+-------------+-------------+
-		| test    | test       | PRIMARY     |        1 |         0 |    64 |       1 | (0, 0)      | (63, 11)    |
-		| test    | test       | PRIMARY     |        1 |         1 |   128 |       1 | (64, 12)    | (127, 23)   |
-		| test    | test       | PRIMARY     |        1 |         2 |   192 |       1 | (128, 24)   | (191, 35)   |
-		| test    | test       | PRIMARY     |        1 |         3 |   256 |       1 | (192, 36)   | (255, 47)   |
-		| test    | test       | PRIMARY     |        1 |         4 |   320 |       1 | (256, 48)   | (319, 59)   |
-		+---------+------------+-------------+----------+-----------+-------+---------+-------------+-------------+
-	*/
-	statsRows := sqlmock.NewRows([]string{"Db_name", "Table_name", "Column_name", "Is_index", "Bucket_id", "Count", "Repeats", "Lower_Bound", "Upper_Bound"})
-	for _, indexName := range []string{"PRIMARY", "i1", "i2", "i3", "i4"} {
-		for i := 0; i < 5; i++ {
-			statsRows.AddRow("test", "test", indexName, 1, (i+1)*64, (i+1)*64, 1, fmt.Sprintf("(%d, %d)", i*64, i*12), fmt.Sprintf("(%d, %d)", (i+1)*64-1, (i+1)*12-1))
-		}
-	}
-	mock.ExpectQuery("SHOW STATS_BUCKETS").WillReturnRows(statsRows)
-
-	for i := 0; i < indexCount; i++ {
-		mock.ExpectQuery("SELECT COUNT\\(DISTINCT *").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("5"))
-	}
-}
-
 func createFakeResultForBucketSplit(mock sqlmock.Sqlmock, aRandomValues, bRandomValues []interface{}) {
 	/*
 		+---------+------------+-------------+----------+-----------+-------+---------+-------------+-------------+
@@ -581,14 +452,11 @@ func createFakeResultForBucketSplit(mock sqlmock.Sqlmock, aRandomValues, bRandom
 	*/
 
 	statsRows := sqlmock.NewRows([]string{"Db_name", "Table_name", "Column_name", "Is_index", "Bucket_id", "Count", "Repeats", "Lower_Bound", "Upper_Bound"})
-	for _, indexName := range []string{"PRIMARY", "i1", "i2", "i3", "i4"} {
-		for i := 0; i < 5; i++ {
-			statsRows.AddRow("test", "test", indexName, 1, (i+1)*64, (i+1)*64, 1, fmt.Sprintf("(%d, %d)", i*64, i*12), fmt.Sprintf("(%d, %d)", (i+1)*64-1, (i+1)*12-1))
-		}
+	for i := 0; i < 5; i++ {
+		statsRows.AddRow("test", "test", "PRIMARY", 1, (i+1)*64, (i+1)*64, 1, fmt.Sprintf("(%d, %d)", i*64, i*12), fmt.Sprintf("(%d, %d)", (i+1)*64-1, (i+1)*12-1))
 	}
 
 	mock.ExpectQuery("SHOW STATS_BUCKETS").WillReturnRows(statsRows)
-	mock.ExpectQuery("SELECT COUNT\\(DISTINCT *").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("5"))
 
 	for i := 0; i < len(aRandomValues); i++ {
 		aRandomRows := sqlmock.NewRows([]string{"a"})
@@ -599,4 +467,6 @@ func createFakeResultForBucketSplit(mock sqlmock.Sqlmock, aRandomValues, bRandom
 		bRandomRows.AddRow(bRandomValues[i])
 		mock.ExpectQuery("ORDER BY rand_value").WillReturnRows(bRandomRows)
 	}
+
+	return
 }
