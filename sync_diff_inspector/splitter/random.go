@@ -60,7 +60,45 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 		return nil, errors.Trace(err)
 	}
 
+	iFields := &indexFields{cols: fields, tableInfo: table.Info}
+	var indices = dbutil.FindAllIndex(table.Info)
+	indexName := ""
+NEXTINDEX:
+	for _, index := range indices {
+		if index == nil {
+			continue
+		}
+		if startRange != nil && startRange.IndexID != index.ID {
+			continue
+		}
+
+		indexColumns := utils.GetColumnsFromIndex(index, table.Info)
+
+		if len(indexColumns) < len(index.Columns) {
+			// some column in index is ignored.
+			continue
+		}
+
+		if !iFields.MatchesIndex(index) {
+			// We are enforcing user configured "index-fields" settings.
+			continue
+		}
+
+		// skip the index that has expression column
+		for _, col := range indexColumns {
+			if col.Hidden {
+				continue NEXTINDEX
+			}
+		}
+
+		// Found the index, use it as index hint.
+		indexName = index.Name.O
+		break
+	}
+
 	chunkRange := chunk.NewChunkRange()
+	chunkRange.IndexHint = indexName
+
 	beginIndex := 0
 	bucketChunkCnt := 0
 	chunkCnt := 0
@@ -117,7 +155,7 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 		bucketChunkCnt = chunkCnt
 	}
 
-	chunks, err := splitRangeByRandom(ctx, dbConn, chunkRange, chunkCnt, table.Schema, table.Table, fields, table.Range, table.Collation)
+	chunks, err := splitRangeByRandom(ctx, dbConn, chunkRange, chunkCnt, table.Schema, table.Table, iFields.cols, table.Range, table.Collation)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
