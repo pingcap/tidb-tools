@@ -60,9 +60,10 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 		return nil, errors.Trace(err)
 	}
 
+	chunkRange := chunk.NewChunkRange()
+
 	iFields := &indexFields{cols: fields, tableInfo: table.Info}
 	var indices = dbutil.FindAllIndex(table.Info)
-	indexName := ""
 NEXTINDEX:
 	for _, index := range indices {
 		if index == nil {
@@ -92,12 +93,10 @@ NEXTINDEX:
 		}
 
 		// Found the index, use it as index hint.
-		indexName = index.Name.O
+		chunkRange.IndexHint = index.Name.O
+		chunkRange.IndexColumns = indexColumns
 		break
 	}
-
-	chunkRange := chunk.NewChunkRange()
-	chunkRange.IndexHint = indexName
 
 	beginIndex := 0
 	bucketChunkCnt := 0

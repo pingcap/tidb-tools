@@ -1066,3 +1066,15 @@ func IsBinaryColumn(col *model.ColumnInfo) bool {
 	// varbinary or binary
 	return (col.GetType() == mysql.TypeVarchar || col.GetType() == mysql.TypeString) && mysql.HasBinaryFlag(col.GetFlag())
 }
+
+func IsSameIndex(index *model.IndexInfo, columns []*model.ColumnInfo) bool {
+	if len(index.Columns) != len(columns) {
+		return false
+	}
+	for i, col := range index.Columns {
+		if col.Name.L != columns[i].Name.L {
+			return false
+		}
+	}
+	return true
+}

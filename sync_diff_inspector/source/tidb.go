@@ -17,7 +17,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/coreos/go-semver/semver"
@@ -130,10 +129,19 @@ func (s *TiDBSource) GetCountAndMd5(ctx context.Context, tableRange *splitter.Ra
 
 	indexHint := ""
 	if chunk.IndexHint != "" {
-		indexHint = fmt.Sprintf("/*+ USE_INDEX(`%s`.`%s`, `%s`) */",
-			matchSource.OriginSchema, matchSource.OriginTable,
-			strings.Replace(chunk.IndexHint, "`", "``", -1),
-		)
+		// Handle the case that index columns of upstream and downstream are the same, but the index names are different.
+		if tableInfos, err := s.GetSourceStructInfo(ctx, tableRange.GetTableIndex()); err == nil {
+			for _, index := range tableInfos[0].Indices {
+				if utils.IsSameIndex(index, chunk.IndexColumns) {
+					indexHint = fmt.Sprintf("/*+ USE_INDEX(`%s`.`%s`, `%s`) */",
+						matchSource.OriginSchema,
+						matchSource.OriginTable,
+						index.Name.L,
+					)
+					break
+				}
+			}
+		}
 	}
 
 	count, checksum, err := utils.GetCountAndMd5Checksum(

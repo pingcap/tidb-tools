@@ -22,6 +22,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb/pkg/meta/model"
 	"go.uber.org/zap"
 )
 
@@ -151,7 +152,8 @@ type Range struct {
 	Args  []interface{} `json:"args"`
 
 	// IndexHint is the index for the checksum query hint, it's only used in TiDB source.
-	IndexHint string `json:"index-hint"`
+	IndexHint    string              `json:"index-hint"`
+	IndexColumns []*model.ColumnInfo `json:"-"`
 
 	columnOffset map[string]int
 }

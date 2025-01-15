@@ -281,6 +281,7 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 		if leftCnt > 0 {
 			chunkRange := chunk.NewChunkRange()
 			chunkRange.IndexHint = s.indexName
+			chunkRange.IndexColumns = s.indexColumns
 
 			for i, column := range s.indexColumns {
 				chunkRange.Update(column.Name.O, "", nextUpperValues[i], false, true)
@@ -314,6 +315,8 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 
 		chunkRange := chunk.NewChunkRange()
 		chunkRange.IndexHint = s.indexName
+		chunkRange.IndexColumns = s.indexColumns
+
 		for j, column := range s.indexColumns {
 			var lowerValue, upperValue string
 			if len(lowerValues) > 0 {
@@ -352,6 +355,8 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 	// merge the rest keys into one chunk
 	chunkRange := chunk.NewChunkRange()
 	chunkRange.IndexHint = s.indexName
+	chunkRange.IndexColumns = s.indexColumns
+
 	if len(lowerValues) > 0 {
 		for j, column := range s.indexColumns {
 			chunkRange.Update(column.Name.O, lowerValues[j], "", true, false)
