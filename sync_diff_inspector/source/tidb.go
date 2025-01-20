@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/coreos/go-semver/semver"
@@ -82,15 +83,58 @@ func (s *TiDBRowsIterator) Next() (map[string]*dbutil.ColumnData, error) {
 	return nil, nil
 }
 
+type hintMode int
+
+const (
+	// hintNone does nothing
+	hintNone hintMode = iota
+	// hintSQL indicates using SQL hints to force index scan
+	hintSQL
+	// hintSessionVar indicates using session variable to force index scan
+	hintSessionVar
+)
+
+// String implements the fmt.Stringer interface.
+func (m hintMode) String() string {
+	switch m {
+	case hintNone:
+		return "None"
+	case hintSQL:
+		return "HintSQL"
+	case hintSessionVar:
+		return "HintSessionVar"
+	default:
+		panic(fmt.Sprintf("invalid hint mode '%d'", m))
+	}
+}
+
 type TiDBSource struct {
 	tableDiffs     []*common.TableDiff
 	sourceTableMap map[string]*common.TableSource
 	snapshot       string
+	mode           hintMode
 	// bucketSpliterPool is the shared pool to produce chunks using bucket
 	bucketSpliterPool *utils.WorkerPool
 	dbConn            *sql.DB
 
 	version *semver.Version
+}
+
+// SetHintMode parses the string value to the hintMode.
+func (s *TiDBSource) SetHintMode(ss string) error {
+	switch strings.ToLower(ss) {
+	case "", "none":
+		s.mode = hintNone
+	case "sql":
+		s.mode = hintSQL
+	case "sessionvar":
+		s.mode = hintSessionVar
+	default:
+		return errors.Errorf("invalid hint mode '%s', please choose valid option between ['', 'sql', 'session']", ss)
+	}
+
+	log.Info("get hint mode", zap.String("hint mode", s.mode.String()))
+	return nil
 }
 
 func (s *TiDBSource) GetTableAnalyzer() TableAnalyzer {
@@ -127,8 +171,15 @@ func (s *TiDBSource) GetCountAndMd5(ctx context.Context, tableRange *splitter.Ra
 
 	matchSource := getMatchSource(s.sourceTableMap, table)
 
+	conn, err := s.dbConn.Conn(ctx)
+	if err != nil {
+		return &ChecksumInfo{
+			Err: err,
+		}
+	}
+
 	indexHint := ""
-	if chunk.IndexHint != "" {
+	if s.mode == hintSQL && len(chunk.IndexColumns) > 0 {
 		// Handle the case that index columns of upstream and downstream are the same, but the index names are different.
 		if tableInfos, err := s.GetSourceStructInfo(ctx, tableRange.GetTableIndex()); err == nil {
 			for _, index := range tableInfos[0].Indices {
@@ -142,10 +193,12 @@ func (s *TiDBSource) GetCountAndMd5(ctx context.Context, tableRange *splitter.Ra
 				}
 			}
 		}
+	} else if s.mode == hintSessionVar {
+		conn.ExecContext(ctx, "set session tidb_opt_prefer_range_scan = 1")
 	}
 
 	count, checksum, err := utils.GetCountAndMd5Checksum(
-		ctx, s.dbConn, matchSource.OriginSchema, matchSource.OriginTable, table.Info,
+		ctx, conn, matchSource.OriginSchema, matchSource.OriginTable, table.Info,
 		chunk.Where, indexHint, chunk.Args)
 
 	cost := time.Since(beginTime)

@@ -64,6 +64,11 @@ type MySQLSources struct {
 	sourceTablesMap map[string][]*common.TableShardSource
 }
 
+// SetHintMode does nothing for MySQL source
+func (*MySQLSources) SetHintMode(string) error {
+	return nil
+}
+
 func getMatchedSourcesForTable(sourceTablesMap map[string][]*common.TableShardSource, table *common.TableDiff) []*common.TableShardSource {
 	if sourceTablesMap == nil {
 		log.Fatal("unreachable, source tables map shouldn't be nil.")
@@ -103,8 +108,15 @@ func (s *MySQLSources) GetCountAndMd5(ctx context.Context, tableRange *splitter.
 
 	for _, ms := range matchSources {
 		go func(ms *common.TableShardSource) {
+			conn, err := ms.DBConn.Conn(ctx)
+			if err != nil {
+				infoCh <- &ChecksumInfo{
+					Err: err,
+				}
+				return
+			}
 			count, checksum, err := utils.GetCountAndMd5Checksum(
-				ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info,
+				ctx, conn, ms.OriginSchema, ms.OriginTable, table.Info,
 				chunk.Where, "", chunk.Args)
 			infoCh <- &ChecksumInfo{
 				Checksum: checksum,

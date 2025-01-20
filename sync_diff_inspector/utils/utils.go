@@ -768,7 +768,7 @@ func GetTableSize(ctx context.Context, db *sql.DB, schemaName, tableName string)
 // GetCountAndMd5Checksum returns checksum code and count of some data by given condition
 func GetCountAndMd5Checksum(
 	ctx context.Context,
-	db *sql.DB,
+	conn *sql.Conn,
 	schemaName, tableName string,
 	tbInfo *model.TableInfo,
 	limitRange string,
@@ -817,7 +817,7 @@ func GetCountAndMd5Checksum(
 
 	var count sql.NullInt64
 	var checksum uint64
-	err := db.QueryRowContext(ctx, query, args...).Scan(&count, &checksum)
+	err := conn.QueryRowContext(ctx, query, args...).Scan(&count, &checksum)
 	if err != nil {
 		log.Warn("execute checksum query fail",
 			zap.String("query", query),

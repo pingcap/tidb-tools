@@ -152,7 +152,8 @@ type Range struct {
 	Args  []interface{} `json:"args"`
 
 	// IndexHint is the index for the checksum query hint, it's only used in TiDB source.
-	IndexHint    string              `json:"index-hint"`
+	IndexHint string `json:"index-hint"`
+	// IndexColumns is the columns used to split chunks.
 	IndexColumns []*model.ColumnInfo `json:"-"`
 
 	columnOffset map[string]int
@@ -392,6 +393,7 @@ func (c *Range) Update(column, lower, upper string, updateLower, updateUpper boo
 func (c *Range) Copy() *Range {
 	newChunk := NewChunkRange()
 	newChunk.IndexHint = c.IndexHint
+	newChunk.IndexColumns = c.IndexColumns
 	for _, bound := range c.Bounds {
 		newChunk.addBound(&Bound{
 			Column:   bound.Column,
@@ -408,6 +410,7 @@ func (c *Range) Copy() *Range {
 func (c *Range) Clone() *Range {
 	newChunk := NewChunkRange()
 	newChunk.IndexHint = c.IndexHint
+	newChunk.IndexColumns = c.IndexColumns
 	for _, bound := range c.Bounds {
 		newChunk.addBound(&Bound{
 			Column:   bound.Column,

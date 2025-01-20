@@ -261,9 +261,9 @@ func TestGetCountAndMd5Checksum(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	conn, mock, err := sqlmock.New()
+	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer conn.Close()
+	defer db.Close()
 
 	createTableSQL := "create table `test`.`test`(`a` int, `c` float, `b` varchar(10), `d` datetime, primary key(`a`, `b`), key(`c`, `d`))"
 	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
@@ -271,6 +271,8 @@ func TestGetCountAndMd5Checksum(t *testing.T) {
 
 	mock.ExpectQuery("SELECT COUNT.*FROM `test_schema`\\.`test_table` WHERE \\[23 45\\].*").WithArgs("123", "234").WillReturnRows(sqlmock.NewRows([]string{"CNT", "CHECKSUM"}).AddRow(123, 456))
 
+	conn, err := db.Conn(ctx)
+	require.NoError(t, err)
 	count, checksum, err := GetCountAndMd5Checksum(ctx, conn, "test_schema", "test_table", tableInfo, "[23 45]", "", []interface{}{"123", "234"})
 	require.NoError(t, err)
 	require.Equal(t, count, int64(123))
