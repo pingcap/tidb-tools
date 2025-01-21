@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/coreos/go-semver/semver"
@@ -82,15 +83,58 @@ func (s *TiDBRowsIterator) Next() (map[string]*dbutil.ColumnData, error) {
 	return nil, nil
 }
 
+type hintMode int
+
+const (
+	// hintNone does nothing
+	hintNone hintMode = iota
+	// hintSQL indicates using SQL hints to force index scan
+	hintSQL
+	// hintSessionVar indicates using session variable to force index scan
+	hintSessionVar
+)
+
+// String implements the fmt.Stringer interface.
+func (m hintMode) String() string {
+	switch m {
+	case hintNone:
+		return "None"
+	case hintSQL:
+		return "HintSQL"
+	case hintSessionVar:
+		return "HintSessionVar"
+	default:
+		panic(fmt.Sprintf("invalid hint mode '%d'", m))
+	}
+}
+
 type TiDBSource struct {
 	tableDiffs     []*common.TableDiff
 	sourceTableMap map[string]*common.TableSource
 	snapshot       string
+	mode           hintMode
 	// bucketSpliterPool is the shared pool to produce chunks using bucket
 	bucketSpliterPool *utils.WorkerPool
 	dbConn            *sql.DB
 
 	version *semver.Version
+}
+
+// SetHintMode parses the string value to the hintMode.
+func (s *TiDBSource) SetHintMode(ss string) error {
+	switch strings.ToLower(ss) {
+	case "", "none":
+		s.mode = hintNone
+	case "sql":
+		s.mode = hintSQL
+	case "sessionvar":
+		s.mode = hintSessionVar
+	default:
+		return errors.Errorf("invalid hint mode '%s', please choose valid option between ['', 'sql', 'session']", ss)
+	}
+
+	log.Info("get hint mode", zap.String("hint mode", s.mode.String()))
+	return nil
 }
 
 func (s *TiDBSource) GetTableAnalyzer() TableAnalyzer {
@@ -126,7 +170,42 @@ func (s *TiDBSource) GetCountAndMd5(ctx context.Context, tableRange *splitter.Ra
 	chunk := tableRange.GetChunk()
 
 	matchSource := getMatchSource(s.sourceTableMap, table)
-	count, checksum, err := utils.GetCountAndMd5Checksum(ctx, s.dbConn, matchSource.OriginSchema, matchSource.OriginTable, table.Info, chunk.Where, chunk.Args)
+
+	conn, err := s.dbConn.Conn(ctx)
+	if err != nil {
+		return &ChecksumInfo{
+			Err: err,
+		}
+	}
+	defer conn.Close()
+
+	indexHint := ""
+	if s.mode == hintSQL && len(chunk.IndexColumns) > 0 {
+		// Since the index name is extracted from one data source,
+		// while another data source may have an index with same columns but a different index name,
+		// we use the index columns to get the actual index name here.
+		// For example:
+		// 	Upstream:   idx1(c1, c2)
+		// 	Downstream: idx2(c1, c2)
+		if tableInfos, err := s.GetSourceStructInfo(ctx, tableRange.GetTableIndex()); err == nil {
+			for _, index := range dbutil.FindAllIndex(tableInfos[0]) {
+				if utils.IsSameIndex(index, chunk.IndexColumns) {
+					indexHint = fmt.Sprintf("/*+ USE_INDEX(`%s`.`%s`, `%s`) */",
+						matchSource.OriginSchema,
+						matchSource.OriginTable,
+						index.Name.L,
+					)
+					break
+				}
+			}
+		}
+	} else if s.mode == hintSessionVar {
+		conn.ExecContext(ctx, "set session tidb_opt_prefer_range_scan = 1")
+	}
+
+	count, checksum, err := utils.GetCountAndMd5Checksum(
+		ctx, conn, matchSource.OriginSchema, matchSource.OriginTable, table.Info,
+		chunk.Where, indexHint, chunk.Args)
 
 	cost := time.Since(beginTime)
 	return &ChecksumInfo{

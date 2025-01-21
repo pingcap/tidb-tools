@@ -72,6 +72,9 @@ type TableAnalyzer interface {
 }
 
 type Source interface {
+	// SetHintMode set the hint mode
+	SetHintMode(string) error
+
 	// GetTableAnalyzer pick the proper analyzer for different source.
 	// the implement of this function is different in mysql/tidb.
 	GetTableAnalyzer() TableAnalyzer

@@ -135,6 +135,9 @@ func (df *Diff) init(ctx context.Context, cfg *config.Config) (err error) {
 	setTiDBCfg()
 
 	df.downstream, df.upstream, err = source.NewSources(ctx, cfg)
+	df.downstream.SetHintMode(cfg.HintMode)
+	df.upstream.SetHintMode(cfg.HintMode)
+
 	if err != nil {
 		return errors.Trace(err)
 	}
