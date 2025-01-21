@@ -177,6 +177,7 @@ func (s *TiDBSource) GetCountAndMd5(ctx context.Context, tableRange *splitter.Ra
 			Err: err,
 		}
 	}
+	defer conn.Close()
 
 	indexHint := ""
 	if s.mode == hintSQL && len(chunk.IndexColumns) > 0 {

@@ -115,6 +115,7 @@ func (s *MySQLSources) GetCountAndMd5(ctx context.Context, tableRange *splitter.
 				}
 				return
 			}
+			defer conn.Close()
 			count, checksum, err := utils.GetCountAndMd5Checksum(
 				ctx, conn, ms.OriginSchema, ms.OriginTable, table.Info,
 				chunk.Where, "", chunk.Args)
