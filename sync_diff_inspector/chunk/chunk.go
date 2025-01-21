@@ -151,9 +151,9 @@ type Range struct {
 	Where string        `json:"where"`
 	Args  []interface{} `json:"args"`
 
-	// IndexHint is the index for the checksum query hint, it's only used in TiDB source.
+	// IndexHint is the index found in chunk splitting, it's only used for test.
 	IndexHint string `json:"index-hint"`
-	// IndexColumns is the columns used to split chunks.
+	// IndexColumns is the columns used to split chunks, and it's used to find index hint in checksum query.
 	IndexColumns []*model.ColumnInfo `json:"-"`
 
 	columnOffset map[string]int

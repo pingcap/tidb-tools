@@ -180,9 +180,14 @@ func (s *TiDBSource) GetCountAndMd5(ctx context.Context, tableRange *splitter.Ra
 
 	indexHint := ""
 	if s.mode == hintSQL && len(chunk.IndexColumns) > 0 {
-		// Handle the case that index columns of upstream and downstream are the same, but the index names are different.
+		// Since the index name is extracted from one data source,
+		// while another data source may have an index with same columns but a different index name,
+		// we use the index columns to get the actual index name here.
+		// For example:
+		// 	Upstream:   idx1(c1, c2)
+		// 	Downstream: idx2(c1, c2)
 		if tableInfos, err := s.GetSourceStructInfo(ctx, tableRange.GetTableIndex()); err == nil {
-			for _, index := range tableInfos[0].Indices {
+			for _, index := range dbutil.FindAllIndex(tableInfos[0]) {
 				if utils.IsSameIndex(index, chunk.IndexColumns) {
 					indexHint = fmt.Sprintf("/*+ USE_INDEX(`%s`.`%s`, `%s`) */",
 						matchSource.OriginSchema,
