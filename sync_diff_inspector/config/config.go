@@ -114,7 +114,7 @@ type DataSource struct {
 	Password         utils.SecretString `toml:"password" json:"password"`
 	SqlMode          string             `toml:"sql-mode" json:"sql-mode"`
 	Snapshot         string             `toml:"snapshot" json:"snapshot"`
-	MaxExecutionTime int                `toml:"max-execution-time" json:"max-execution-time"`
+	MaxExecutionTime int                `toml:"max-execution-time" json:"max-execution-time,omitempty"`
 
 	Security *Security `toml:"security" json:"security"`
 
