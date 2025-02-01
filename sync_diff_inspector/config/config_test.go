@@ -34,6 +34,7 @@ func TestParseConfig(t *testing.T) {
 	require.Nil(t, cfg.Parse([]string{"--config", "config.toml"}))
 	require.Nil(t, cfg.Init())
 	require.Nil(t, cfg.Task.Init(cfg.DataSources, cfg.TableConfigs))
+	require.Equal(t, cfg.Task.TargetInstance.MaxExecutionTime, 5)
 
 	require.Nil(t, cfg.Parse([]string{"--config", "config_sharding.toml"}))
 	// we change the config from config.toml to config_sharding.toml

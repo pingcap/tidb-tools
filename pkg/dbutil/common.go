@@ -73,7 +73,8 @@ type DBConfig struct {
 
 	Schema string `toml:"schema" json:"schema"`
 
-	Snapshot string `toml:"snapshot" json:"snapshot"`
+	Snapshot         string `toml:"snapshot" json:"snapshot"`
+	MaxExecutionTime int    `toml:"max-execution-time" json:"max-execution-time"`
 }
 
 // String returns native format of database configuration
