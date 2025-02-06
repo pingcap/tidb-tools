@@ -4,11 +4,8 @@ set -ex
 
 cd "$(dirname "$0")"
 OUT_DIR=/tmp/tidb_tools_test/sync_diff_inspector/output
-FIX_DIR=/tmp/tidb_tools_test/sync_diff_inspector/fixsql
 rm -rf $OUT_DIR
-rm -rf $FIX_DIR
 mkdir -p $OUT_DIR
-mkdir -p $FIX_DIR
 
 for port in 4000 4001; do
   mysql -uroot -h 127.0.0.1 -P $port -e "create database if not exists fix_sql_test;"
@@ -24,7 +21,7 @@ sync_diff_inspector --config=./config.toml > $OUT_DIR/fix_sql_test.output || tru
 check_contains "check failed!!!" $OUT_DIR/sync_diff.log
 
 echo "applying fix SQL"
-cat $FIX_DIR/fix-on-tidb/*.sql | mysql -uroot -h127.0.0.1 -P 4000
+cat $OUT_DIR/fix-on-tidb/*.sql | mysql -uroot -h127.0.0.1 -P 4000
 rm -rf $OUT_DIR/*
 
 echo "check result should be pass after applying fix SQL"
