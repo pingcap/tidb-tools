@@ -20,7 +20,7 @@ mysql -uroot -h 127.0.0.1 -P 4000 -e "insert into fix_sql_test.fix_table values 
 mysql -uroot -h 127.0.0.1 -P 4001 -e "insert into fix_sql_test.fix_table values (1, '\t\nb\\\\\\'');"
 
 echo "check result should be failed"
-sync_diff_inspector --config=./config.toml > $OUT_DIR/fix_sql_test.output
+sync_diff_inspector --config=./config.toml > $OUT_DIR/fix_sql_test.output || true
 check_contains "check failed!!!" $OUT_DIR/sync_diff.log
 
 echo "applying fix SQL"
