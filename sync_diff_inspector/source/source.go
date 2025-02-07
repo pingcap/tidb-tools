@@ -271,12 +271,12 @@ func initDBConn(ctx context.Context, cfg *config.Config) error {
 	// so the connection count need to be cfg.SplitThreadCount + cfg.CheckThreadCount + cfg.CheckThreadCount.
 	targetConn, err := common.ConnectMySQL(cfg.Task.TargetInstance.ToDriverConfig(), cfg.SplitThreadCount+2*cfg.CheckThreadCount)
 	if err != nil {
-		return errors.Trace(err)
+		return errors.Trace(errors.Annotatef(err, "data source %s connect MySQL client failed", cfg.Task.Target))
 	}
 
 	cfg.Task.TargetInstance.Conn = targetConn
 
-	for _, source := range cfg.Task.SourceInstances {
+	for sourceIdx, source := range cfg.Task.SourceInstances {
 		// If it is still set to AUTO it means it was not set on the target.
 		// We require it to be set to AUTO on both.
 		if source.IsAutoSnapshot() {
@@ -285,7 +285,7 @@ func initDBConn(ctx context.Context, cfg *config.Config) error {
 		// connect source db with target db time_zone
 		conn, err := common.ConnectMySQL(source.ToDriverConfig(), cfg.SplitThreadCount+2*cfg.CheckThreadCount)
 		if err != nil {
-			return errors.Trace(err)
+			return errors.Trace(errors.Annotatef(err, "data source %s connect MySQL client failed", cfg.Task.Source[sourceIdx]))
 		}
 		source.Conn = conn
 	}
