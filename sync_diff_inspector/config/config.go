@@ -254,8 +254,8 @@ func (t *TaskConfig) Init(
 		if scname != "" {
 			sc, ok := sessionConfigs[scname]
 			if !ok {
-				log.Error("not found session config", zap.String("config", scname))
-				return errors.Errorf("not found session config. config is `%s`", scname)
+				log.Error("session config not found", zap.String("config", scname))
+				return errors.Errorf("session config not found. config is `%s`", scname)
 			}
 			ds.SessionConfig = sc
 		}
@@ -278,8 +278,8 @@ func (t *TaskConfig) Init(
 		scname := t.TargetInstance.SessionConfigName
 		sc, ok := sessionConfigs[scname]
 		if !ok {
-			log.Error("not found session config", zap.String("config", scname))
-			return errors.Errorf("not found session config. config is `%s`", scname)
+			log.Error("session config not found", zap.String("config", scname))
+			return errors.Errorf("session config not found. config is `%s`", scname)
 		}
 		t.TargetInstance.SessionConfig = sc
 	}
