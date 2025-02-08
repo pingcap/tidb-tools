@@ -1,5 +1,7 @@
 # sync-diff-inspector
 
+Deprecated: The code has been moved to https://github.com/pingcap/tiflow/tree/master/sync_diff_inspector
+
 sync-diff-inspector is a tool for comparing two database's data.
 
 ## How to use
