@@ -347,12 +347,12 @@ func TestGenerateSQLs(t *testing.T) {
 	require.Equal(t, replaceSQL, "REPLACE INTO `diff_test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (NULL,NULL,'2018-01-01 00:00:00','10:10:10',11.1111);")
 	require.Equal(t, deleteSQL, "DELETE FROM `diff_test`.`atest` WHERE `id` is NULL AND `name` is NULL AND `birthday` = '2018-01-01 00:00:00' AND `update_time` = '10:10:10' AND `money` = 11.1111 LIMIT 1;")
 
-	// test value with "'"
-	rowsData["name"] = &dbutil.ColumnData{Data: []byte("a'a"), IsNull: false}
+	// test value with special characters
+	rowsData["name"] = &dbutil.ColumnData{Data: []byte("\b\"\n\\1'`"), IsNull: false}
 	replaceSQL = GenerateReplaceDML(rowsData, tableInfo, "diff_test")
 	deleteSQL = GenerateDeleteDML(rowsData, tableInfo, "diff_test")
-	require.Equal(t, replaceSQL, "REPLACE INTO `diff_test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (NULL,'a\\'a','2018-01-01 00:00:00','10:10:10',11.1111);")
-	require.Equal(t, deleteSQL, "DELETE FROM `diff_test`.`atest` WHERE `id` is NULL AND `name` = 'a\\'a' AND `birthday` = '2018-01-01 00:00:00' AND `update_time` = '10:10:10' AND `money` = 11.1111 LIMIT 1;")
+	require.Equal(t, replaceSQL, "REPLACE INTO `diff_test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (NULL,'\b\"\n\\\\1\\'`','2018-01-01 00:00:00','10:10:10',11.1111);")
+	require.Equal(t, deleteSQL, "DELETE FROM `diff_test`.`atest` WHERE `id` is NULL AND `name` = '\b\"\n\\\\1\\'`' AND `birthday` = '2018-01-01 00:00:00' AND `update_time` = '10:10:10' AND `money` = 11.1111 LIMIT 1;")
 }
 
 func TestResetColumns(t *testing.T) {
