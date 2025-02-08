@@ -108,13 +108,12 @@ type Security struct {
 
 // DataSource represents the Source Config.
 type DataSource struct {
-	Host              string             `toml:"host" json:"host"`
-	Port              int                `toml:"port" json:"port"`
-	User              string             `toml:"user" json:"user"`
-	Password          utils.SecretString `toml:"password" json:"password"`
-	SqlMode           string             `toml:"sql-mode" json:"sql-mode"`
-	Snapshot          string             `toml:"snapshot" json:"snapshot"`
-	SessionConfigName string             `toml:"session-config" json:"session-config"`
+	Host     string             `toml:"host" json:"host"`
+	Port     int                `toml:"port" json:"port"`
+	User     string             `toml:"user" json:"user"`
+	Password utils.SecretString `toml:"password" json:"password"`
+	SqlMode  string             `toml:"sql-mode" json:"sql-mode"`
+	Snapshot string             `toml:"snapshot" json:"snapshot"`
 
 	Security *Security `toml:"security" json:"security"`
 
@@ -123,7 +122,7 @@ type DataSource struct {
 	RouteTargetSet map[string]struct{} `json:"-"`
 
 	Conn          *sql.DB
-	SessionConfig *SessionConfig `json:"-"`
+	SessionConfig SessionConfig `toml:"session" json:"session"`
 }
 
 // IsAutoSnapshot returns true if the tidb_snapshot is expected to automatically
@@ -194,17 +193,14 @@ func (d *DataSource) ToDriverConfig() *mysql.Config {
 		cfg.TLSConfig = d.Security.TLSName
 	}
 
-	if d.SessionConfig != nil {
-		for param, value := range *d.SessionConfig {
-			switch v := value.(type) {
-			case string:
-				cfg.Params[param] = "\"" + v + "\""
-			default:
-				cfg.Params[param] = fmt.Sprintf("%v", v)
-			}
+	for param, value := range d.SessionConfig {
+		switch v := value.(type) {
+		case string:
+			cfg.Params[param] = "\"" + v + "\""
+		default:
+			cfg.Params[param] = fmt.Sprintf("%v", v)
 		}
 	}
-
 	return cfg
 }
 
@@ -235,7 +231,6 @@ type TaskConfig struct {
 func (t *TaskConfig) Init(
 	dataSources map[string]*DataSource,
 	tableConfigs map[string]*TableConfig,
-	sessionConfigs map[string]*SessionConfig,
 ) (err error) {
 	// Parse Source/Target
 	dataSourceList := make([]*DataSource, 0, len(t.Source))
@@ -248,16 +243,6 @@ func (t *TaskConfig) Init(
 		// try to register tls
 		if err := ds.RegisterTLS(); err != nil {
 			return errors.Trace(err)
-		}
-		// Check session config
-		scname := ds.SessionConfigName
-		if scname != "" {
-			sc, ok := sessionConfigs[scname]
-			if !ok {
-				log.Error("session config not found", zap.String("config", scname))
-				return errors.Errorf("session config not found. config is `%s`", scname)
-			}
-			ds.SessionConfig = sc
 		}
 		dataSourceList = append(dataSourceList, ds)
 	}
@@ -273,16 +258,6 @@ func (t *TaskConfig) Init(
 		return errors.Trace(err)
 	}
 	t.TargetInstance = ts
-
-	if ts.SessionConfigName != "" {
-		scname := t.TargetInstance.SessionConfigName
-		sc, ok := sessionConfigs[scname]
-		if !ok {
-			log.Error("session config not found", zap.String("config", scname))
-			return errors.Errorf("session config not found. config is `%s`", scname)
-		}
-		t.TargetInstance.SessionConfig = sc
-	}
 
 	t.TargetCheckTables, err = filter.Parse(t.CheckTables)
 	if err != nil {
@@ -423,8 +398,6 @@ type Config struct {
 	Routes map[string]*router.TableRule `toml:"routes" json:"routes"`
 
 	TableConfigs map[string]*TableConfig `toml:"table-configs" json:"table-configs"`
-
-	SessionConfigs map[string]*SessionConfig `toml:"session-configs" json:"session-configs"`
 
 	Task TaskConfig `toml:"task" json:"task"`
 	// config file
@@ -606,7 +579,7 @@ func (c *Config) Init() (err error) {
 		if err != nil {
 			return errors.Annotate(err, "failed to init Task")
 		}
-		err = c.Task.Init(c.DataSources, c.TableConfigs, c.SessionConfigs)
+		err = c.Task.Init(c.DataSources, c.TableConfigs)
 		if err != nil {
 			return errors.Annotate(err, "failed to init Task")
 		}
@@ -631,7 +604,7 @@ func (c *Config) Init() (err error) {
 		}
 	}
 
-	err = c.Task.Init(c.DataSources, c.TableConfigs, c.SessionConfigs)
+	err = c.Task.Init(c.DataSources, c.TableConfigs)
 	if err != nil {
 		return errors.Annotate(err, "failed to init Task")
 	}

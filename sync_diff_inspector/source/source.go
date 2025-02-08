@@ -16,6 +16,7 @@ package source
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -271,7 +272,10 @@ func initDBConn(ctx context.Context, cfg *config.Config) error {
 	// so the connection count need to be cfg.SplitThreadCount + cfg.CheckThreadCount + cfg.CheckThreadCount.
 	targetConn, err := common.ConnectMySQL(cfg.Task.TargetInstance.ToDriverConfig(), cfg.SplitThreadCount+2*cfg.CheckThreadCount)
 	if err != nil {
-		return errors.Trace(errors.Annotatef(err, "data source %s connect MySQL client failed", cfg.Task.Target))
+		log.Error(fmt.Sprintf("failed to configure session for data source '%s'", cfg.Task.Target),
+			zap.String("error", err.Error()),
+		)
+		return errors.Trace(err)
 	}
 
 	cfg.Task.TargetInstance.Conn = targetConn
@@ -285,7 +289,10 @@ func initDBConn(ctx context.Context, cfg *config.Config) error {
 		// connect source db with target db time_zone
 		conn, err := common.ConnectMySQL(source.ToDriverConfig(), cfg.SplitThreadCount+2*cfg.CheckThreadCount)
 		if err != nil {
-			return errors.Trace(errors.Annotatef(err, "data source %s connect MySQL client failed", cfg.Task.Source[sourceIdx]))
+			log.Error(fmt.Sprintf("failed to configure session for data source '%s'", cfg.Task.Source[sourceIdx]),
+				zap.String("error", err.Error()),
+			)
+			return errors.Trace(err)
 		}
 		source.Conn = conn
 	}
