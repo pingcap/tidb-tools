@@ -238,7 +238,7 @@ func buildSourceFromCfg(ctx context.Context, tableDiffs []*common.TableDiff, con
 }
 
 func getAutoSnapshotPosition(cfg *mysql.Config) (string, string, error) {
-	tmpConn, err := common.ConnectMySQL(cfg, 2)
+	tmpConn, err := common.ConnectMySQL(nil, cfg, 2)
 	if err != nil {
 		return "", "", errors.Annotatef(err, "connecting to auto-position tidb_snapshot failed")
 	}
@@ -270,7 +270,11 @@ func initDBConn(ctx context.Context, cfg *config.Config) error {
 	}
 	// we had `cfg.SplitThreadCount` producers and `cfg.CheckThreadCount` consumer to use db connections maybe and `cfg.CheckThreadCount` splitter to split buckets.
 	// so the connection count need to be cfg.SplitThreadCount + cfg.CheckThreadCount + cfg.CheckThreadCount.
-	targetConn, err := common.ConnectMySQL(cfg.Task.TargetInstance.ToDriverConfig(), cfg.SplitThreadCount+2*cfg.CheckThreadCount)
+	targetConn, err := common.ConnectMySQL(
+		&cfg.Task.TargetInstance.SessionConfig,
+		cfg.Task.TargetInstance.ToDriverConfig(),
+		cfg.SplitThreadCount+2*cfg.CheckThreadCount,
+	)
 	if err != nil {
 		log.Error(fmt.Sprintf("failed to configure session for data source '%s'", cfg.Task.Target),
 			zap.String("error", err.Error()),
@@ -287,7 +291,11 @@ func initDBConn(ctx context.Context, cfg *config.Config) error {
 			return errors.Errorf("'auto' snapshot should be set on both target and source")
 		}
 		// connect source db with target db time_zone
-		conn, err := common.ConnectMySQL(source.ToDriverConfig(), cfg.SplitThreadCount+2*cfg.CheckThreadCount)
+		conn, err := common.ConnectMySQL(
+			&source.SessionConfig,
+			source.ToDriverConfig(),
+			cfg.SplitThreadCount+2*cfg.CheckThreadCount,
+		)
 		if err != nil {
 			log.Error(fmt.Sprintf("failed to configure session for data source '%s'", cfg.Task.Source[sourceIdx]),
 				zap.String("error", err.Error()),
