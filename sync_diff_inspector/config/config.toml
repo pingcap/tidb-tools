@@ -20,7 +20,8 @@ check-struct-only = false
     port = 3306
     user = "root"
     password = ""
-    session-config = "mysql_config"
+    session.max_execution_time = "3600"
+    session.net_read_timeout = "60"
 # MySQL doesn't has snapshot config
 
 [data-sources.tidb0]
@@ -28,7 +29,8 @@ check-struct-only = false
     port = 4000
     user = "root"
     password = ""
-    session-config = "tidb_config"
+    session.tidb_opt_prefer_range_scan = "ON"
+    session.max_execution_time = "86400" 
 
 # Support tls connection
     # security.ca-path = "..."
@@ -73,14 +75,3 @@ index-fields = [""]
 ignore-columns = ["",""]
 chunk-size = 0
 collation = ""
-
-######################### Session config #########################
-# Optional
-[session-configs.mysql_config]
-max_execution_time = 3600
-optimizer_switch = "index_merge=on,batched_key_access=off"
-net_read_timeout = 60
-
-[session-configs.tidb_config]
-tidb_opt_prefer_range_scan = "ON"
-max_execution_time = 86400
