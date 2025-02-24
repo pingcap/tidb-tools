@@ -64,11 +64,6 @@ type MySQLSources struct {
 	sourceTablesMap map[string][]*common.TableShardSource
 }
 
-// SetHintMode does nothing for MySQL source
-func (*MySQLSources) SetHintMode(string) error {
-	return nil
-}
-
 func getMatchedSourcesForTable(sourceTablesMap map[string][]*common.TableShardSource, table *common.TableDiff) []*common.TableShardSource {
 	if sourceTablesMap == nil {
 		log.Fatal("unreachable, source tables map shouldn't be nil.")

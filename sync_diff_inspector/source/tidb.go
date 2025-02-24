@@ -83,36 +83,11 @@ func (s *TiDBRowsIterator) Next() (map[string]*dbutil.ColumnData, error) {
 	return nil, nil
 }
 
-type hintMode int
-
-const (
-	// hintNone does nothing
-	hintNone hintMode = iota
-	// hintSQL indicates using SQL hints to force index scan
-	hintSQL
-	// hintSessionVar indicates using session variable to force index scan
-	hintSessionVar
-)
-
-// String implements the fmt.Stringer interface.
-func (m hintMode) String() string {
-	switch m {
-	case hintNone:
-		return "None"
-	case hintSQL:
-		return "HintSQL"
-	case hintSessionVar:
-		return "HintSessionVar"
-	default:
-		panic(fmt.Sprintf("invalid hint mode '%d'", m))
-	}
-}
-
 type TiDBSource struct {
 	tableDiffs     []*common.TableDiff
 	sourceTableMap map[string]*common.TableSource
 	snapshot       string
-	mode           hintMode
+	sqlHint        string
 	// bucketSpliterPool is the shared pool to produce chunks using bucket
 	bucketSpliterPool *utils.WorkerPool
 	dbConn            *sql.DB
@@ -122,18 +97,7 @@ type TiDBSource struct {
 
 // SetHintMode parses the string value to the hintMode.
 func (s *TiDBSource) SetHintMode(ss string) error {
-	switch strings.ToLower(ss) {
-	case "", "none":
-		s.mode = hintNone
-	case "sql":
-		s.mode = hintSQL
-	case "sessionvar":
-		s.mode = hintSessionVar
-	default:
-		return errors.Errorf("invalid hint mode '%s', please choose valid option between ['', 'sql', 'session']", ss)
-	}
-
-	log.Info("get hint mode", zap.String("hint mode", s.mode.String()))
+	s.sqlHint = strings.ToLower(ss)
 	return nil
 }
 
@@ -180,7 +144,7 @@ func (s *TiDBSource) GetCountAndMd5(ctx context.Context, tableRange *splitter.Ra
 	defer conn.Close()
 
 	indexHint := ""
-	if s.mode == hintSQL && len(chunk.IndexColumns) > 0 {
+	if s.sqlHint == "auto" && len(chunk.IndexColumns) > 0 {
 		// Since the index name is extracted from one data source,
 		// while another data source may have an index with same columns but a different index name,
 		// we use the index columns to get the actual index name here.
@@ -199,8 +163,6 @@ func (s *TiDBSource) GetCountAndMd5(ctx context.Context, tableRange *splitter.Ra
 				}
 			}
 		}
-	} else if s.mode == hintSessionVar {
-		conn.ExecContext(ctx, "set session tidb_opt_prefer_range_scan = 1")
 	}
 
 	count, checksum, err := utils.GetCountAndMd5Checksum(
@@ -354,6 +316,8 @@ func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *conf
 		dbConn:            ds.Conn,
 		bucketSpliterPool: bucketSpliterPool,
 		version:           utils.TryToGetVersion(ctx, ds.Conn),
+		sqlHint:           ds.SQLHintUseIndex,
 	}
+
 	return ts, nil
 }

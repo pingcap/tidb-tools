@@ -108,12 +108,13 @@ type Security struct {
 
 // DataSource represents the Source Config.
 type DataSource struct {
-	Host     string             `toml:"host" json:"host"`
-	Port     int                `toml:"port" json:"port"`
-	User     string             `toml:"user" json:"user"`
-	Password utils.SecretString `toml:"password" json:"password"`
-	SqlMode  string             `toml:"sql-mode" json:"sql-mode"`
-	Snapshot string             `toml:"snapshot" json:"snapshot"`
+	Host            string             `toml:"host" json:"host"`
+	Port            int                `toml:"port" json:"port"`
+	User            string             `toml:"user" json:"user"`
+	Password        utils.SecretString `toml:"password" json:"password"`
+	SqlMode         string             `toml:"sql-mode" json:"sql-mode"`
+	Snapshot        string             `toml:"snapshot" json:"snapshot"`
+	SQLHintUseIndex string             `toml:"sql-hint-use-index" json:"sql-hint-use-index"`
 
 	Security *Security `toml:"security" json:"security"`
 
@@ -374,8 +375,6 @@ type Config struct {
 	CheckStructOnly bool `toml:"check-struct-only" json:"check-struct-only"`
 	// experimental feature: only check table data without table struct
 	CheckDataOnly bool `toml:"check-data-only" json:"-"`
-	// the mode of hint
-	HintMode string `toml:"hint-mode" json:"hint-mode"`
 	// skip validation for tables that don't exist upstream or downstream
 	SkipNonExistingTable bool `toml:"skip-non-existing-table" json:"-"`
 	// DMAddr is dm-master's address, the format should like "http://127.0.0.1:8261"
