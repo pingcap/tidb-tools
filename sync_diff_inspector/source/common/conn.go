@@ -52,7 +52,7 @@ func verifyParams(db *sql.DB, sessionCfg *config.SessionConfig) error {
 		return nil
 	}
 	for param, value := range *sessionCfg {
-		res, err := db.Query(fmt.Sprintf("show session variables like '%s'", param))
+		res, err := db.Query("show session variables like ?", param)
 		if err != nil {
 			return err
 		}
@@ -63,7 +63,7 @@ func verifyParams(db *sql.DB, sessionCfg *config.SessionConfig) error {
 			if err := res.Scan(&paramName, &actual); err != nil {
 				return err
 			}
-			expected := fmt.Sprintf("%v", value)
+			expected := fmt.Sprint(value)
 			if actual != expected {
 				log.Warn("The session variable was set, but the database returned a different value",
 					zap.String("variable", param),

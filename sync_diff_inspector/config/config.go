@@ -196,9 +196,9 @@ func (d *DataSource) ToDriverConfig() *mysql.Config {
 	for param, value := range d.SessionConfig {
 		switch v := value.(type) {
 		case string:
-			cfg.Params[param] = "\"" + v + "\""
+			cfg.Params[param] = "'" + strings.ReplaceAll(v, "'", "''") + "'"
 		default:
-			cfg.Params[param] = fmt.Sprintf("%v", v)
+			cfg.Params[param] = fmt.Sprint(v)
 		}
 	}
 	return cfg

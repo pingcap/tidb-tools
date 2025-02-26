@@ -16,7 +16,6 @@ package source
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -276,9 +275,7 @@ func initDBConn(ctx context.Context, cfg *config.Config) error {
 		cfg.SplitThreadCount+2*cfg.CheckThreadCount,
 	)
 	if err != nil {
-		log.Error(fmt.Sprintf("failed to configure session for data source '%s'", cfg.Task.Target),
-			zap.String("error", err.Error()),
-		)
+		log.Error("failed to configure session", zap.String("data-source", cfg.Task.Target), zap.Error(err))
 		return errors.Trace(err)
 	}
 
@@ -297,9 +294,7 @@ func initDBConn(ctx context.Context, cfg *config.Config) error {
 			cfg.SplitThreadCount+2*cfg.CheckThreadCount,
 		)
 		if err != nil {
-			log.Error(fmt.Sprintf("failed to configure session for data source '%s'", cfg.Task.Source[sourceIdx]),
-				zap.String("error", err.Error()),
-			)
+			log.Error("failed to configure session", zap.String("data-source", cfg.Task.Source[sourceIdx]), zap.Error(err))
 			return errors.Trace(err)
 		}
 		source.Conn = conn
