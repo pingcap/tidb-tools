@@ -122,7 +122,7 @@ func TestChunkToString(t *testing.T) {
 		require.Equal(t, arg, expectArgs[i])
 	}
 
-	require.Equal(t, chunk.String(), `{"index":null,"type":0,"bounds":[{"column":"a","lower":"1","upper":"2","has-lower":true,"has-upper":true},{"column":"b","lower":"3","upper":"4","has-lower":true,"has-upper":true},{"column":"c","lower":"5","upper":"6","has-lower":true,"has-upper":true}],"is-first":false,"is-last":false,"where":"","args":null,"index-hint":""}`)
+	require.Equal(t, chunk.String(), `{"index":null,"type":0,"bounds":[{"column":"a","lower":"1","upper":"2","has-lower":true,"has-upper":true},{"column":"b","lower":"3","upper":"4","has-lower":true,"has-upper":true},{"column":"c","lower":"5","upper":"6","has-lower":true,"has-upper":true}],"is-first":false,"is-last":false,"where":"","args":null}`)
 	require.Equal(t, chunk.ToMeta(), "range in sequence: (1,3,5) < (a,b,c) <= (2,4,6)")
 
 	// upper
@@ -157,7 +157,7 @@ func TestChunkToString(t *testing.T) {
 		require.Equal(t, arg, expectArgs[i])
 	}
 
-	require.Equal(t, chunk.String(), `{"index":null,"type":0,"bounds":[{"column":"a","lower":"1","upper":"2","has-lower":false,"has-upper":true},{"column":"b","lower":"3","upper":"4","has-lower":false,"has-upper":true},{"column":"c","lower":"5","upper":"6","has-lower":false,"has-upper":true}],"is-first":false,"is-last":false,"where":"","args":null,"index-hint":""}`)
+	require.Equal(t, chunk.String(), `{"index":null,"type":0,"bounds":[{"column":"a","lower":"1","upper":"2","has-lower":false,"has-upper":true},{"column":"b","lower":"3","upper":"4","has-lower":false,"has-upper":true},{"column":"c","lower":"5","upper":"6","has-lower":false,"has-upper":true}],"is-first":false,"is-last":false,"where":"","args":null}`)
 	require.Equal(t, chunk.ToMeta(), "range in sequence: (a,b,c) <= (2,4,6)")
 
 	// lower
@@ -199,7 +199,7 @@ func TestChunkToString(t *testing.T) {
 		require.Equal(t, arg, expectArgs[i])
 	}
 
-	require.Equal(t, chunk.String(), `{"index":null,"type":0,"bounds":[{"column":"a","lower":"1","upper":"2","has-lower":true,"has-upper":false},{"column":"b","lower":"3","upper":"4","has-lower":true,"has-upper":false},{"column":"c","lower":"5","upper":"6","has-lower":true,"has-upper":false}],"is-first":false,"is-last":false,"where":"","args":null,"index-hint":""}`)
+	require.Equal(t, chunk.String(), `{"index":null,"type":0,"bounds":[{"column":"a","lower":"1","upper":"2","has-lower":true,"has-upper":false},{"column":"b","lower":"3","upper":"4","has-lower":true,"has-upper":false},{"column":"c","lower":"5","upper":"6","has-lower":true,"has-upper":false}],"is-first":false,"is-last":false,"where":"","args":null}`)
 	require.Equal(t, chunk.ToMeta(), "range in sequence: (1,3,5) < (a,b,c)")
 
 	// none
@@ -232,7 +232,7 @@ func TestChunkToString(t *testing.T) {
 	for i, arg := range args {
 		require.Equal(t, arg, expectArgs[i])
 	}
-	require.Equal(t, chunk.String(), `{"index":null,"type":0,"bounds":[{"column":"a","lower":"1","upper":"2","has-lower":false,"has-upper":false},{"column":"b","lower":"3","upper":"4","has-lower":false,"has-upper":false},{"column":"c","lower":"5","upper":"6","has-lower":false,"has-upper":false}],"is-first":false,"is-last":false,"where":"","args":null,"index-hint":""}`)
+	require.Equal(t, chunk.String(), `{"index":null,"type":0,"bounds":[{"column":"a","lower":"1","upper":"2","has-lower":false,"has-upper":false},{"column":"b","lower":"3","upper":"4","has-lower":false,"has-upper":false},{"column":"c","lower":"5","upper":"6","has-lower":false,"has-upper":false}],"is-first":false,"is-last":false,"where":"","args":null}`)
 	require.Equal(t, chunk.ToMeta(), "range in sequence: Full")
 
 	// same & lower & upper
@@ -274,7 +274,7 @@ func TestChunkToString(t *testing.T) {
 		require.Equal(t, arg, expectArgs[i])
 	}
 
-	require.Equal(t, chunk.String(), `{"index":null,"type":0,"bounds":[{"column":"a","lower":"1","upper":"1","has-lower":true,"has-upper":true},{"column":"b","lower":"3","upper":"4","has-lower":true,"has-upper":true},{"column":"c","lower":"5","upper":"5","has-lower":true,"has-upper":true}],"is-first":false,"is-last":false,"where":"","args":null,"index-hint":""}`)
+	require.Equal(t, chunk.String(), `{"index":null,"type":0,"bounds":[{"column":"a","lower":"1","upper":"1","has-lower":true,"has-upper":true},{"column":"b","lower":"3","upper":"4","has-lower":true,"has-upper":true},{"column":"c","lower":"5","upper":"5","has-lower":true,"has-upper":true}],"is-first":false,"is-last":false,"where":"","args":null}`)
 	require.Equal(t, chunk.ToMeta(), "range in sequence: (1,3,5) < (a,b,c) <= (1,4,5)")
 
 	// same & upper
@@ -309,7 +309,7 @@ func TestChunkToString(t *testing.T) {
 		require.Equal(t, arg, expectArgs[i])
 	}
 
-	require.Equal(t, chunk.String(), `{"index":null,"type":0,"bounds":[{"column":"a","lower":"2","upper":"2","has-lower":false,"has-upper":true},{"column":"b","lower":"3","upper":"4","has-lower":false,"has-upper":true},{"column":"c","lower":"5","upper":"6","has-lower":false,"has-upper":true}],"is-first":false,"is-last":false,"where":"","args":null,"index-hint":""}`)
+	require.Equal(t, chunk.String(), `{"index":null,"type":0,"bounds":[{"column":"a","lower":"2","upper":"2","has-lower":false,"has-upper":true},{"column":"b","lower":"3","upper":"4","has-lower":false,"has-upper":true},{"column":"c","lower":"5","upper":"6","has-lower":false,"has-upper":true}],"is-first":false,"is-last":false,"where":"","args":null}`)
 	require.Equal(t, chunk.ToMeta(), "range in sequence: (a,b,c) <= (2,4,6)")
 
 	// same & lower
@@ -351,7 +351,7 @@ func TestChunkToString(t *testing.T) {
 		require.Equal(t, arg, expectArgs[i])
 	}
 
-	require.Equal(t, chunk.String(), `{"index":null,"type":0,"bounds":[{"column":"a","lower":"1","upper":"1","has-lower":true,"has-upper":false},{"column":"b","lower":"3","upper":"4","has-lower":true,"has-upper":false},{"column":"c","lower":"5","upper":"6","has-lower":true,"has-upper":false}],"is-first":false,"is-last":false,"where":"","args":null,"index-hint":""}`)
+	require.Equal(t, chunk.String(), `{"index":null,"type":0,"bounds":[{"column":"a","lower":"1","upper":"1","has-lower":true,"has-upper":false},{"column":"b","lower":"3","upper":"4","has-lower":true,"has-upper":false},{"column":"c","lower":"5","upper":"6","has-lower":true,"has-upper":false}],"is-first":false,"is-last":false,"where":"","args":null}`)
 	require.Equal(t, chunk.ToMeta(), "range in sequence: (1,3,5) < (a,b,c)")
 
 	// same & none
@@ -384,7 +384,7 @@ func TestChunkToString(t *testing.T) {
 	for i, arg := range args {
 		require.Equal(t, arg, expectArgs[i])
 	}
-	require.Equal(t, chunk.String(), `{"index":null,"type":0,"bounds":[{"column":"a","lower":"1","upper":"1","has-lower":false,"has-upper":false},{"column":"b","lower":"3","upper":"4","has-lower":false,"has-upper":false},{"column":"c","lower":"5","upper":"6","has-lower":false,"has-upper":false}],"is-first":false,"is-last":false,"where":"","args":null,"index-hint":""}`)
+	require.Equal(t, chunk.String(), `{"index":null,"type":0,"bounds":[{"column":"a","lower":"1","upper":"1","has-lower":false,"has-upper":false},{"column":"b","lower":"3","upper":"4","has-lower":false,"has-upper":false},{"column":"c","lower":"5","upper":"6","has-lower":false,"has-upper":false}],"is-first":false,"is-last":false,"where":"","args":null}`)
 	require.Equal(t, chunk.ToMeta(), "range in sequence: Full")
 
 	// all equal
@@ -417,7 +417,7 @@ func TestChunkToString(t *testing.T) {
 	for i, arg := range args {
 		require.Equal(t, arg, expectArgs[i])
 	}
-	require.Equal(t, chunk.String(), `{"index":null,"type":0,"bounds":[{"column":"a","lower":"1","upper":"1","has-lower":true,"has-upper":true},{"column":"b","lower":"3","upper":"3","has-lower":true,"has-upper":true},{"column":"c","lower":"6","upper":"6","has-lower":true,"has-upper":true}],"is-first":false,"is-last":false,"where":"","args":null,"index-hint":""}`)
+	require.Equal(t, chunk.String(), `{"index":null,"type":0,"bounds":[{"column":"a","lower":"1","upper":"1","has-lower":true,"has-upper":true},{"column":"b","lower":"3","upper":"3","has-lower":true,"has-upper":true},{"column":"c","lower":"6","upper":"6","has-lower":true,"has-upper":true}],"is-first":false,"is-last":false,"where":"","args":null}`)
 	require.Equal(t, chunk.ToMeta(), "range in sequence: (1,3,6) < (a,b,c) <= (1,3,6)")
 
 }

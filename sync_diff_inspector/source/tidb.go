@@ -17,7 +17,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/coreos/go-semver/semver"
@@ -93,12 +92,6 @@ type TiDBSource struct {
 	dbConn            *sql.DB
 
 	version *semver.Version
-}
-
-// SetHintMode parses the string value to the hintMode.
-func (s *TiDBSource) SetHintMode(ss string) error {
-	s.sqlHint = strings.ToLower(ss)
-	return nil
 }
 
 func (s *TiDBSource) GetTableAnalyzer() TableAnalyzer {
@@ -309,6 +302,5 @@ func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *conf
 		version:           utils.TryToGetVersion(ctx, ds.Conn),
 		sqlHint:           ds.SQLHintUseIndex,
 	}
-
 	return ts, nil
 }

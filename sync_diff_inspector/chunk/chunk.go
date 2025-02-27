@@ -151,8 +151,8 @@ type Range struct {
 	Where string        `json:"where"`
 	Args  []interface{} `json:"args"`
 
-	// IndexHint is the index found in chunk splitting, it's only used for test.
-	IndexHint string `json:"index-hint"`
+	// IndexHint is the index found in chunk splitting, it's only used in test to verify the result.
+	IndexHint string `json:"-"`
 	// IndexColumns is the columns used to split chunks, and it's used to find index hint in checksum query.
 	IndexColumns []*model.ColumnInfo `json:"-"`
 
