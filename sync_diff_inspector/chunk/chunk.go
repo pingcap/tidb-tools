@@ -151,8 +151,9 @@ type Range struct {
 	Where string        `json:"where"`
 	Args  []interface{} `json:"args"`
 
-	// IndexColumnNames is the columns used to split chunks, and it's used to find index hint in checksum query.
-	IndexColumnNames []model.CIStr `json:"index-column-names"`
+	// IndexColumnNames store column names of index splitting chunks.
+	// It's used to find index name and generate index hint in checksum query.
+	IndexColumnNames []model.CIStr `json:"index-column-names,omitempty"`
 
 	columnOffset map[string]int
 }

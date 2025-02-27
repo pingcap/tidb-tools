@@ -131,7 +131,7 @@ func (s *TiDBSource) GetCountAndMd5(ctx context.Context, tableRange *splitter.Ra
 	if s.sqlHint == "auto" && len(chunk.IndexColumnNames) > 0 {
 		// Since the index name is extracted from one data source,
 		// while another data source may have an index with same columns and different index name, which can pass the struct check,
-		// here we use the index columns to check the index again.
+		// here we use the index column names to check the index again.
 		//
 		// For example:
 		// 	Upstream:   idx1(c1, c2)
