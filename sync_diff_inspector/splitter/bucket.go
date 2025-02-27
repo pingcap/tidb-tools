@@ -48,7 +48,6 @@ type BucketIterator struct {
 	errCh      chan error
 	cancel     context.CancelFunc
 	indexID    int64
-	indexName  string
 	progressID string
 
 	dbConn *sql.DB
@@ -193,7 +192,6 @@ NEXTINDEX:
 		s.buckets = bucket
 		s.indexColumns = indexColumns
 		s.indexID = index.ID
-		s.indexName = index.Name.L
 		break
 	}
 
@@ -314,7 +312,6 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 
 		chunkRange := chunk.NewChunkRange()
 		chunkRange.IndexColumnNames = utils.GetColumnNames(s.indexColumns)
-
 		for j, column := range s.indexColumns {
 			var lowerValue, upperValue string
 			if len(lowerValues) > 0 {
@@ -353,7 +350,6 @@ func (s *BucketIterator) produceChunks(ctx context.Context, startRange *RangeInf
 	// merge the rest keys into one chunk
 	chunkRange := chunk.NewChunkRange()
 	chunkRange.IndexColumnNames = utils.GetColumnNames(s.indexColumns)
-
 	if len(lowerValues) > 0 {
 		for j, column := range s.indexColumns {
 			chunkRange.Update(column.Name.O, lowerValues[j], "", true, false)
