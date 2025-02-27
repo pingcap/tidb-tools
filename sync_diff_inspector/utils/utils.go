@@ -31,6 +31,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb/pkg/meta/model"
+	pmodel "github.com/pingcap/tidb/pkg/parser/model"
 	"github.com/pingcap/tidb/pkg/parser/mysql"
 	"go.uber.org/zap"
 )
@@ -1057,14 +1058,23 @@ func IsBinaryColumn(col *model.ColumnInfo) bool {
 
 // IsIndexMatchingColumns checks if the given index matches the provided columns.
 // It uses the number of columns and their names to do the check.
-func IsIndexMatchingColumns(index *model.IndexInfo, columns []*model.ColumnInfo) bool {
-	if len(index.Columns) != len(columns) {
+func IsIndexMatchingColumns(index *model.IndexInfo, columnNames []pmodel.CIStr) bool {
+	if len(index.Columns) != len(columnNames) {
 		return false
 	}
 	for i, col := range index.Columns {
-		if col.Name.L != columns[i].Name.L {
+		if col.Name.L != columnNames[i].L {
 			return false
 		}
 	}
 	return true
+}
+
+// GetColumnNames extract column names from column infos
+func GetColumnNames(columns []*model.ColumnInfo) []pmodel.CIStr {
+	columnNames := make([]pmodel.CIStr, 0, len(columns))
+	for _, c := range columns {
+		columnNames = append(columnNames, c.Name)
+	}
+	return columnNames
 }

@@ -92,9 +92,8 @@ NEXTINDEX:
 			}
 		}
 
-		// Found the index, use it as index hint.
-		chunkRange.IndexHint = index.Name.O
-		chunkRange.IndexColumns = indexColumns
+		// Found the index, store column names
+		chunkRange.IndexColumnNames = utils.GetColumnNames(indexColumns)
 		break
 	}
 

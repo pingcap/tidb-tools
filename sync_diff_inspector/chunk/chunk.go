@@ -22,7 +22,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
-	"github.com/pingcap/tidb/pkg/meta/model"
+	"github.com/pingcap/tidb/pkg/parser/model"
 	"go.uber.org/zap"
 )
 
@@ -151,10 +151,8 @@ type Range struct {
 	Where string        `json:"where"`
 	Args  []interface{} `json:"args"`
 
-	// IndexHint is the index found in chunk splitting, it's only used in test to verify the result.
-	IndexHint string `json:"-"`
-	// IndexColumns is the columns used to split chunks, and it's used to find index hint in checksum query.
-	IndexColumns []*model.ColumnInfo `json:"-"`
+	// IndexColumnNames is the columns used to split chunks, and it's used to find index hint in checksum query.
+	IndexColumnNames []model.CIStr `json:"index-column-names"`
 
 	columnOffset map[string]int
 }
@@ -392,8 +390,7 @@ func (c *Range) Update(column, lower, upper string, updateLower, updateUpper boo
 
 func (c *Range) Copy() *Range {
 	newChunk := NewChunkRange()
-	newChunk.IndexHint = c.IndexHint
-	newChunk.IndexColumns = c.IndexColumns
+	newChunk.IndexColumnNames = c.IndexColumnNames
 	for _, bound := range c.Bounds {
 		newChunk.addBound(&Bound{
 			Column:   bound.Column,
@@ -409,8 +406,7 @@ func (c *Range) Copy() *Range {
 
 func (c *Range) Clone() *Range {
 	newChunk := NewChunkRange()
-	newChunk.IndexHint = c.IndexHint
-	newChunk.IndexColumns = c.IndexColumns
+	newChunk.IndexColumnNames = c.IndexColumnNames
 	for _, bound := range c.Bounds {
 		newChunk.addBound(&Bound{
 			Column:   bound.Column,

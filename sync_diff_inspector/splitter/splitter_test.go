@@ -942,24 +942,24 @@ func TestBucketSpliterHint(t *testing.T) {
 	ctx := context.Background()
 
 	testCases := []struct {
-		tableSQL     string
-		indexCount   int
-		expectedHint string
+		tableSQL      string
+		indexCount    int
+		expectColumns []string
 	}{
 		{
 			"create table `test`.`test`(`a` int, `b` int, `c` int, primary key(`a`, `b`), unique key i1(`c`))",
 			0,
-			"PRIMARY",
+			[]string{"a", "b"},
 		},
 		{
 			"create table `test`.`test`(`a` int, `b` int, `c` int, unique key i1(`c`))",
 			0,
-			"i1",
+			[]string{"c"},
 		},
 		{
 			"create table `test`.`test`(`a` int, `b` int, `c` int, key i2(`b`))",
 			1,
-			"i2",
+			[]string{"b"},
 		},
 	}
 
@@ -979,7 +979,10 @@ func TestBucketSpliterHint(t *testing.T) {
 		require.NoError(t, err)
 		chunk, err := iter.Next()
 		require.NoError(t, err)
-		require.Equal(t, strings.ToLower(tc.expectedHint), strings.ToLower(chunk.IndexHint))
+		require.Equal(t, len(tc.expectColumns), len(chunk.IndexColumnNames))
+		for i, s := range chunk.IndexColumnNames {
+			require.Equal(t, strings.ToLower(tc.expectColumns[i]), s.L)
+		}
 	}
 }
 
@@ -989,24 +992,24 @@ func TestRandomSpliterHint(t *testing.T) {
 	ctx := context.Background()
 
 	testCases := []struct {
-		tableSQL     string
-		expectedHint string
+		tableSQL      string
+		expectColumns []string
 	}{
 		{
 			"create table `test`.`test`(`a` int, `b` int, `c` int, primary key(`a`, `b`), unique key i1(`c`))",
-			"PRIMARY",
+			[]string{"a", "b"},
 		},
 		{
 			"create table `test`.`test`(`a` int, `b` int, `c` int, unique key i1(`c`), key i2(`b`))",
-			"i1",
+			[]string{"c"},
 		},
 		{
 			"create table `test`.`test`(`a` int, `b` int, `c` int, key i2(`b`))",
-			"i2",
+			[]string{"b"},
 		},
 		{
 			"create table `test`.`test`(`a` int, `b` int, `c` int)",
-			"",
+			[]string{},
 		},
 	}
 
@@ -1028,7 +1031,14 @@ func TestRandomSpliterHint(t *testing.T) {
 			require.NoError(t, err)
 			chunk, err := iter.Next()
 			require.NoError(t, err)
-			require.Equal(t, strings.ToLower(tc.expectedHint), strings.ToLower(chunk.IndexHint))
+			require.Equal(t, len(tc.expectColumns), len(chunk.IndexColumnNames))
+			for i, s := range chunk.IndexColumnNames {
+				require.Equal(t, strings.ToLower(tc.expectColumns[i]), s.L)
+			}
+			require.Equal(t, len(tc.expectColumns), len(chunk.IndexColumnNames))
+			for i, s := range chunk.IndexColumnNames {
+				require.Equal(t, strings.ToLower(tc.expectColumns[i]), s.L)
+			}
 		}
 	}
 }

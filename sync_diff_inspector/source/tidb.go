@@ -128,7 +128,7 @@ func (s *TiDBSource) GetCountAndMd5(ctx context.Context, tableRange *splitter.Ra
 
 	matchSource := getMatchSource(s.sourceTableMap, table)
 	indexHint := ""
-	if s.sqlHint == "auto" && len(chunk.IndexColumns) > 0 {
+	if s.sqlHint == "auto" && len(chunk.IndexColumnNames) > 0 {
 		// Since the index name is extracted from one data source,
 		// while another data source may have an index with same columns and different index name, which can pass the struct check,
 		// here we use the index columns to check the index again.
@@ -138,7 +138,7 @@ func (s *TiDBSource) GetCountAndMd5(ctx context.Context, tableRange *splitter.Ra
 		// 	Downstream: idx2(c1, c2)
 		if tableInfos, err := s.GetSourceStructInfo(ctx, tableRange.GetTableIndex()); err == nil {
 			for _, index := range dbutil.FindAllIndex(tableInfos[0]) {
-				if utils.IsIndexMatchingColumns(index, chunk.IndexColumns) {
+				if utils.IsIndexMatchingColumns(index, chunk.IndexColumnNames) {
 					indexHint = fmt.Sprintf("/*+ USE_INDEX(`%s`.`%s`, `%s`) */",
 						matchSource.OriginSchema,
 						matchSource.OriginTable,
