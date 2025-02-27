@@ -40,9 +40,9 @@ func TestConnect(t *testing.T) {
 		User:     "root",
 		Password: utils.SecretString(plainPsw),
 	}
-	_, err := ConnectMySQL(dataSource.ToDriverConfig(), 2)
+	_, err := ConnectMySQL(nil, dataSource.ToDriverConfig(), 2)
 	require.NoError(t, err)
 	dataSource.Password = utils.SecretString(base64.StdEncoding.EncodeToString([]byte(plainPsw)))
-	_, err = ConnectMySQL(dataSource.ToDriverConfig(), 2)
+	_, err = ConnectMySQL(nil, dataSource.ToDriverConfig(), 2)
 	require.NoError(t, err)
 }
