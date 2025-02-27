@@ -103,17 +103,7 @@ func (s *MySQLSources) GetCountAndMd5(ctx context.Context, tableRange *splitter.
 
 	for _, ms := range matchSources {
 		go func(ms *common.TableShardSource) {
-			conn, err := ms.DBConn.Conn(ctx)
-			if err != nil {
-				infoCh <- &ChecksumInfo{
-					Err: err,
-				}
-				return
-			}
-			defer conn.Close()
-			count, checksum, err := utils.GetCountAndMd5Checksum(
-				ctx, conn, ms.OriginSchema, ms.OriginTable, table.Info,
-				chunk.Where, "", chunk.Args)
+			count, checksum, err := utils.GetCountAndMd5Checksum(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info, chunk.Where, "", chunk.Args)
 			infoCh <- &ChecksumInfo{
 				Checksum: checksum,
 				Count:    count,

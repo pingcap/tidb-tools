@@ -134,15 +134,6 @@ func (s *TiDBSource) GetCountAndMd5(ctx context.Context, tableRange *splitter.Ra
 	chunk := tableRange.GetChunk()
 
 	matchSource := getMatchSource(s.sourceTableMap, table)
-
-	conn, err := s.dbConn.Conn(ctx)
-	if err != nil {
-		return &ChecksumInfo{
-			Err: err,
-		}
-	}
-	defer conn.Close()
-
 	indexHint := ""
 	if s.sqlHint == "auto" && len(chunk.IndexColumns) > 0 {
 		// Since the index name is extracted from one data source,
@@ -166,7 +157,7 @@ func (s *TiDBSource) GetCountAndMd5(ctx context.Context, tableRange *splitter.Ra
 	}
 
 	count, checksum, err := utils.GetCountAndMd5Checksum(
-		ctx, conn, matchSource.OriginSchema, matchSource.OriginTable, table.Info,
+		ctx, s.dbConn, matchSource.OriginSchema, matchSource.OriginTable, table.Info,
 		chunk.Where, indexHint, chunk.Args)
 
 	cost := time.Since(beginTime)
