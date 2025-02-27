@@ -1055,7 +1055,9 @@ func IsBinaryColumn(col *model.ColumnInfo) bool {
 	return (col.GetType() == mysql.TypeVarchar || col.GetType() == mysql.TypeString) && mysql.HasBinaryFlag(col.GetFlag())
 }
 
-func IsSameIndex(index *model.IndexInfo, columns []*model.ColumnInfo) bool {
+// IsIndexMatchingColumns checks if the given index matches the provided columns.
+// It uses the number of columns and their names to do the check.
+func IsIndexMatchingColumns(index *model.IndexInfo, columns []*model.ColumnInfo) bool {
 	if len(index.Columns) != len(columns) {
 		return false
 	}
