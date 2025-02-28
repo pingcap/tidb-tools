@@ -143,7 +143,7 @@ func (s *TiDBSource) GetCountAndMd5(ctx context.Context, tableRange *splitter.Ra
 					indexHint = fmt.Sprintf("/*+ USE_INDEX(`%s`.`%s`, `%s`) */",
 						matchSource.OriginSchema,
 						matchSource.OriginTable,
-						index.Name.L,
+						dbutil.ColumnName(index.Name.O),
 					)
 					break
 				}

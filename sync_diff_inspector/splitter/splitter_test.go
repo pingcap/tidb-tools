@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"github.com/pingcap/tidb/pkg/parser"
+	"github.com/pingcap/tidb/pkg/parser/model"
 	"github.com/stretchr/testify/require"
 )
 
@@ -943,22 +944,22 @@ func TestBucketSpliterHint(t *testing.T) {
 	testCases := []struct {
 		tableSQL      string
 		indexCount    int
-		expectColumns []string
+		expectColumns []model.CIStr
 	}{
 		{
 			"create table `test`.`test`(`a` int, `b` int, `c` int, primary key(`a`, `b`), unique key i1(`c`))",
 			0,
-			[]string{"a", "b"},
+			[]model.CIStr{model.NewCIStr("a"), model.NewCIStr("b")},
 		},
 		{
 			"create table `test`.`test`(`a` int, `b` int, `c` int, unique key i1(`c`))",
 			0,
-			[]string{"c"},
+			[]model.CIStr{model.NewCIStr("c")},
 		},
 		{
 			"create table `test`.`test`(`a` int, `b` int, `c` int, key i2(`b`))",
 			1,
-			[]string{"b"},
+			[]model.CIStr{model.NewCIStr("b")},
 		},
 	}
 
@@ -978,10 +979,7 @@ func TestBucketSpliterHint(t *testing.T) {
 		require.NoError(t, err)
 		chunk, err := iter.Next()
 		require.NoError(t, err)
-		require.Equal(t, len(tc.expectColumns), len(chunk.IndexColumnNames))
-		for i, s := range chunk.IndexColumnNames {
-			require.Equal(t, tc.expectColumns[i], s.L)
-		}
+		require.Equal(t, tc.expectColumns, chunk.IndexColumnNames)
 	}
 }
 
@@ -992,23 +990,23 @@ func TestRandomSpliterHint(t *testing.T) {
 
 	testCases := []struct {
 		tableSQL      string
-		expectColumns []string
+		expectColumns []model.CIStr
 	}{
 		{
 			"create table `test`.`test`(`a` int, `b` int, `c` int, primary key(`a`, `b`), unique key i1(`c`))",
-			[]string{"a", "b"},
+			[]model.CIStr{model.NewCIStr("a"), model.NewCIStr("b")},
 		},
 		{
 			"create table `test`.`test`(`a` int, `b` int, `c` int, unique key i1(`c`), key i2(`b`))",
-			[]string{"c"},
+			[]model.CIStr{model.NewCIStr("c")},
 		},
 		{
 			"create table `test`.`test`(`a` int, `b` int, `c` int, key i2(`b`))",
-			[]string{"b"},
+			[]model.CIStr{model.NewCIStr("b")},
 		},
 		{
 			"create table `test`.`test`(`a` int, `b` int, `c` int)",
-			[]string{},
+			[]model.CIStr{},
 		},
 	}
 
@@ -1034,10 +1032,7 @@ func TestRandomSpliterHint(t *testing.T) {
 			for i, s := range chunk.IndexColumnNames {
 				require.Equal(t, tc.expectColumns[i], s.L)
 			}
-			require.Equal(t, len(tc.expectColumns), len(chunk.IndexColumnNames))
-			for i, s := range chunk.IndexColumnNames {
-				require.Equal(t, tc.expectColumns[i], s.L)
-			}
+			require.Equal(t, tc.expectColumns, chunk.IndexColumnNames)
 		}
 	}
 }
