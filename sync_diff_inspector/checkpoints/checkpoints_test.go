@@ -122,5 +122,4 @@ func TestLoadChunk(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, node.GetID().Compare(id), 0)
 	require.Equal(t, node.ChunkRange.IndexColumnNames, testColNames)
-	require.Equal(t, len(node.ChunkRange.IndexColumnNames), len(testColNames))
 }
