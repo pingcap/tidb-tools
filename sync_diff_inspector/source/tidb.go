@@ -129,14 +129,13 @@ func (s *TiDBSource) GetCountAndMd5(ctx context.Context, tableRange *splitter.Ra
 	matchSource := getMatchSource(s.sourceTableMap, table)
 	indexHint := ""
 	if s.sqlHint == "auto" && len(chunk.IndexColumnNames) > 0 {
-		// Since the index name is extracted from one data source,
-		// while another data source may have an index with same columns and different index name, which can pass the struct check,
-		// here we use the index column names to find the match index name again.
-		//
-		// For example:
-		//     Upstream:   idx1(c1, c2)
-		// 	   Downstream: idx2(c1, c2)
-		// Here we will store [c1, c2] from idx1 in the chunk, and use them to get idx2 as index hint.
+		// If sqlHint is set to "auto" and there are index column names in the chunk,
+		// we attempt to find a matching index in the source table to use as an index hint.
+		// This is necessary because the index name might differ between the source and target tables,
+		// even if the index columns are the same. For example:
+		// 		Source: idx1(c1, c2)
+		// 		Target: idx2(c1, c2)
+		// In this case, we use the column names [c1, c2] from idx1 to find the corresponding index name (idx2) in the source table.
 		if tableInfos, err := s.GetSourceStructInfo(ctx, tableRange.GetTableIndex()); err == nil {
 			for _, index := range dbutil.FindAllIndex(tableInfos[0]) {
 				if utils.IsIndexMatchingColumns(index, chunk.IndexColumnNames) {
