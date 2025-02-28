@@ -62,6 +62,8 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 
 	chunkRange := chunk.NewChunkRange()
 
+	// Below logic is modified from BucketIterator
+	// It's used to find the index which can match the split fields in RandomIterator.
 	iFields := &indexFields{cols: fields, tableInfo: table.Info}
 	var indices = dbutil.FindAllIndex(table.Info)
 NEXTINDEX:
@@ -153,7 +155,7 @@ NEXTINDEX:
 		bucketChunkCnt = chunkCnt
 	}
 
-	chunks, err := splitRangeByRandom(ctx, dbConn, chunkRange, chunkCnt, table.Schema, table.Table, iFields.cols, table.Range, table.Collation)
+	chunks, err := splitRangeByRandom(ctx, dbConn, chunkRange, chunkCnt, table.Schema, table.Table, fields, table.Range, table.Collation)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

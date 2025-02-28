@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
-	"strings"
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
@@ -981,7 +980,7 @@ func TestBucketSpliterHint(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, len(tc.expectColumns), len(chunk.IndexColumnNames))
 		for i, s := range chunk.IndexColumnNames {
-			require.Equal(t, strings.ToLower(tc.expectColumns[i]), s.L)
+			require.Equal(t, tc.expectColumns[i], s.L)
 		}
 	}
 }
@@ -1033,11 +1032,11 @@ func TestRandomSpliterHint(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, len(tc.expectColumns), len(chunk.IndexColumnNames))
 			for i, s := range chunk.IndexColumnNames {
-				require.Equal(t, strings.ToLower(tc.expectColumns[i]), s.L)
+				require.Equal(t, tc.expectColumns[i], s.L)
 			}
 			require.Equal(t, len(tc.expectColumns), len(chunk.IndexColumnNames))
 			for i, s := range chunk.IndexColumnNames {
-				require.Equal(t, strings.ToLower(tc.expectColumns[i]), s.L)
+				require.Equal(t, tc.expectColumns[i], s.L)
 			}
 		}
 	}
