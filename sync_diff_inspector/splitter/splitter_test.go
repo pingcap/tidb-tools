@@ -1006,7 +1006,7 @@ func TestRandomSpliterHint(t *testing.T) {
 		},
 		{
 			"create table `test`.`test`(`a` int, `b` int, `c` int)",
-			[]model.CIStr{},
+			nil,
 		},
 	}
 
@@ -1028,10 +1028,6 @@ func TestRandomSpliterHint(t *testing.T) {
 			require.NoError(t, err)
 			chunk, err := iter.Next()
 			require.NoError(t, err)
-			require.Equal(t, len(tc.expectColumns), len(chunk.IndexColumnNames))
-			for i, s := range chunk.IndexColumnNames {
-				require.Equal(t, tc.expectColumns[i], s.L)
-			}
 			require.Equal(t, tc.expectColumns, chunk.IndexColumnNames)
 		}
 	}
