@@ -139,9 +139,8 @@ func (s *TiDBSource) GetCountAndMd5(ctx context.Context, tableRange *splitter.Ra
 		if tableInfos, err := s.GetSourceStructInfo(ctx, tableRange.GetTableIndex()); err == nil {
 			for _, index := range dbutil.FindAllIndex(tableInfos[0]) {
 				if utils.IsIndexMatchingColumns(index, chunk.IndexColumnNames) {
-					indexHint = fmt.Sprintf("/*+ USE_INDEX(`%s`.`%s`, `%s`) */",
-						matchSource.OriginSchema,
-						matchSource.OriginTable,
+					indexHint = fmt.Sprintf("/*+ USE_INDEX(%s, %s) */",
+						dbutil.TableName(matchSource.OriginSchema, matchSource.OriginTable),
 						dbutil.ColumnName(index.Name.O),
 					)
 					break
