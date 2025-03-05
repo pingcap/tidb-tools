@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
+	"github.com/pingcap/tidb/pkg/parser/model"
 	"github.com/stretchr/testify/require"
 )
 
@@ -56,6 +57,7 @@ func TestSaveChunk(t *testing.T) {
 							HasUpper: i != rounds,
 						},
 					},
+					IndexColumnNames: []model.CIStr{model.NewCIStr("col1"), model.NewCIStr("col2")},
 				},
 
 				State: SuccessState,
@@ -83,6 +85,7 @@ func TestLoadChunk(t *testing.T) {
 	ctx := context.Background()
 	rounds := 100
 	wg := &sync.WaitGroup{}
+	testColNames := []model.CIStr{model.NewCIStr("col1"), model.NewCIStr("col2")}
 	for i := 0; i < rounds; i++ {
 		wg.Add(1)
 		go func(i int) {
@@ -103,6 +106,7 @@ func TestLoadChunk(t *testing.T) {
 						ChunkIndex:       i % 10,
 						ChunkCnt:         10,
 					},
+					IndexColumnNames: testColNames,
 				},
 			}
 			checker.Insert(node)
@@ -117,4 +121,5 @@ func TestLoadChunk(t *testing.T) {
 	node, _, err := checker.LoadChunk("TestLoadChunk")
 	require.NoError(t, err)
 	require.Equal(t, node.GetID().Compare(id), 0)
+	require.Equal(t, node.ChunkRange.IndexColumnNames, testColNames)
 }
