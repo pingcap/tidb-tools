@@ -528,7 +528,7 @@ func TestCompareStruct(t *testing.T) {
 
 	var isEqual bool
 	var isPanic bool
-	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo}, tableInfo)
+	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo}, tableInfo, false)
 	require.True(t, isEqual)
 	require.False(t, isPanic)
 
@@ -537,7 +537,7 @@ func TestCompareStruct(t *testing.T) {
 	tableInfo2, err := dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
 	require.NoError(t, err)
 
-	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo)
+	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo, false)
 	require.False(t, isEqual)
 	require.True(t, isPanic)
 
@@ -546,7 +546,7 @@ func TestCompareStruct(t *testing.T) {
 	tableInfo2, err = dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
 	require.NoError(t, err)
 
-	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo)
+	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo, false)
 	require.False(t, isEqual)
 	require.True(t, isPanic)
 
@@ -555,7 +555,7 @@ func TestCompareStruct(t *testing.T) {
 	tableInfo2, err = dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
 	require.NoError(t, err)
 
-	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo)
+	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo, false)
 	require.True(t, isEqual)
 	require.False(t, isPanic)
 
@@ -563,7 +563,7 @@ func TestCompareStruct(t *testing.T) {
 	tableInfo2, err = dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
 	require.NoError(t, err)
 
-	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo)
+	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo, false)
 	require.True(t, isEqual)
 	require.False(t, isPanic)
 
@@ -572,7 +572,7 @@ func TestCompareStruct(t *testing.T) {
 	tableInfo2, err = dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
 	require.NoError(t, err)
 
-	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo)
+	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo, false)
 	require.False(t, isEqual)
 	require.True(t, isPanic)
 
@@ -581,7 +581,7 @@ func TestCompareStruct(t *testing.T) {
 	tableInfo2, err = dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
 	require.NoError(t, err)
 
-	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo)
+	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo, false)
 	require.False(t, isEqual)
 	require.True(t, isPanic)
 
@@ -592,7 +592,7 @@ func TestCompareStruct(t *testing.T) {
 	tableInfo2, err = dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
 	require.NoError(t, err)
 
-	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo)
+	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo, false)
 	require.False(t, isEqual)
 	require.False(t, isPanic)
 	require.Equal(t, len(tableInfo.Indices), 1)
@@ -607,7 +607,7 @@ func TestCompareStruct(t *testing.T) {
 	tableInfo2, err = dbutil.GetTableInfoBySQL(createTableSQL2, parser.New())
 	require.NoError(t, err)
 
-	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo)
+	isEqual, isPanic = CompareStruct([]*model.TableInfo{tableInfo, tableInfo2}, tableInfo, false)
 	require.False(t, isEqual)
 	require.False(t, isPanic)
 	require.Equal(t, len(tableInfo.Indices), 1)
