@@ -31,6 +31,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb/pkg/meta/model"
+	pmodel "github.com/pingcap/tidb/pkg/parser/model"
 	"github.com/pingcap/tidb/pkg/parser/mysql"
 	"go.uber.org/zap"
 )
@@ -774,7 +775,7 @@ func GetTableSize(ctx context.Context, db *sql.DB, schemaName, tableName string)
 }
 
 // GetCountAndMd5Checksum returns checksum code and count of some data by given condition
-func GetCountAndMd5Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, uint64, error) {
+func GetCountAndMd5Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, indexHint string, args []interface{}) (int64, uint64, error) {
 	/*
 		calculate MD5 checksum and count example:
 		mysql> SELECT COUNT(*) as CNT, BIT_XOR(CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', `id`, `name`, CONCAT(ISNULL(`id`), ISNULL(`name`)))), 1, 16), 16, 10) AS UNSIGNED) ^ CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', `id`, `name`, CONCAT(ISNULL(`id`), ISNULL(`name`)))), 17, 16), 16, 10) AS UNSIGNED)) as CHECKSUM FROM `a`.`t`;
@@ -804,8 +805,15 @@ func GetCountAndMd5Checksum(ctx context.Context, db *sql.DB, schemaName, tableNa
 		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", name))
 	}
 
-	query := fmt.Sprintf("SELECT COUNT(*) as CNT, BIT_XOR(CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', %s, CONCAT(%s))), 1, 16), 16, 10) AS UNSIGNED) ^ CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', %s, CONCAT(%s))), 17, 16), 16, 10) AS UNSIGNED)) as CHECKSUM FROM %s WHERE %s;",
-		strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), strings.Join(columnNames, ", "), strings.Join(columnIsNull, ", "), dbutil.TableName(schemaName, tableName), limitRange)
+	query := fmt.Sprintf("SELECT %s COUNT(*) as CNT, BIT_XOR(CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', %s, CONCAT(%s))), 1, 16), 16, 10) AS UNSIGNED) ^ CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', %s, CONCAT(%s))), 17, 16), 16, 10) AS UNSIGNED)) as CHECKSUM FROM %s WHERE %s;",
+		indexHint,
+		strings.Join(columnNames, ", "),
+		strings.Join(columnIsNull, ", "),
+		strings.Join(columnNames, ", "),
+		strings.Join(columnIsNull, ", "),
+		dbutil.TableName(schemaName, tableName),
+		limitRange,
+	)
 	log.Debug("count and checksum", zap.String("sql", query), zap.Reflect("args", args))
 
 	var count sql.NullInt64
@@ -1054,4 +1062,27 @@ func IsRangeTrivial(rangeCond string) bool {
 func IsBinaryColumn(col *model.ColumnInfo) bool {
 	// varbinary or binary
 	return (col.GetType() == mysql.TypeVarchar || col.GetType() == mysql.TypeString) && mysql.HasBinaryFlag(col.GetFlag())
+}
+
+// IsIndexMatchingColumns checks if the given index matches the provided columns.
+// It uses the number of columns and their names to do the check.
+func IsIndexMatchingColumns(index *model.IndexInfo, columnNames []pmodel.CIStr) bool {
+	if len(index.Columns) != len(columnNames) {
+		return false
+	}
+	for i, col := range index.Columns {
+		if col.Name.L != columnNames[i].L {
+			return false
+		}
+	}
+	return true
+}
+
+// GetColumnNames extract column names from column infos
+func GetColumnNames(columns []*model.ColumnInfo) []pmodel.CIStr {
+	columnNames := make([]pmodel.CIStr, 0, len(columns))
+	for _, c := range columns {
+		columnNames = append(columnNames, c.Name)
+	}
+	return columnNames
 }
