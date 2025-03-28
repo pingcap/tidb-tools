@@ -24,7 +24,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/pkg/meta/model"
 	"github.com/pingcap/tidb/pkg/parser/charset"
-	"github.com/pingcap/tidb/pkg/parser/model"
+	pmodel "github.com/pingcap/tidb/pkg/parser/model"
 	"go.uber.org/zap"
 )
 
@@ -155,7 +155,7 @@ type Range struct {
 
 	// IndexColumnNames store column names of index splitting chunks.
 	// It's used to find index name and generate index hint in checksum query.
-	IndexColumnNames []model.CIStr `json:"index-column-names,omitempty"`
+	IndexColumnNames []pmodel.CIStr `json:"index-column-names,omitempty"`
 
 	// Filled during runtime
 	columnOffset map[string]int   `json:"-"`
