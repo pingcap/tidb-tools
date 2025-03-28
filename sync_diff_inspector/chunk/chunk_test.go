@@ -77,7 +77,7 @@ func TestChunkUpdate(t *testing.T) {
 		"a": 1,
 		"b": 0,
 	}
-	chunkRange := NewChunkRangeOffset(columnOffset)
+	chunkRange := NewChunkRangeOffset(columnOffset, nil)
 	chunkRange.Update("a", "1", "2", true, true)
 	chunkRange.Update("b", "3", "4", true, true)
 	require.Equal(t, chunkRange.ToMeta(), "range in sequence: (3,1) < (b,a) <= (4,2)")
