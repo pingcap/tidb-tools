@@ -642,7 +642,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 	equal := true
 
 	tableInfo := df.workSource.GetTables()[rangeInfo.GetTableIndex()].Info
-	_, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
+	orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
 	for {
 		if lastUpstreamData == nil {
 			lastUpstreamData, err = upstreamRowsIterator.Next()

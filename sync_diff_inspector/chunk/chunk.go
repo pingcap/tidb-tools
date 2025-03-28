@@ -22,6 +22,8 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
+	"github.com/pingcap/tidb/pkg/meta/model"
+	"github.com/pingcap/tidb/pkg/parser/charset"
 	"go.uber.org/zap"
 )
 
@@ -150,7 +152,30 @@ type Range struct {
 	Where string        `json:"where"`
 	Args  []interface{} `json:"args"`
 
-	columnOffset map[string]int
+	// Filled during runtime
+	columnOffset map[string]int   `json:"-"`
+	tableInfo    *model.TableInfo `json:"-"`
+}
+
+func (r *Range) buildColumnName(colName string, collation string) string {
+	nameWithCollate := dbutil.ColumnName(colName)
+
+	// In test, we may not have table info
+	if r.tableInfo == nil {
+		return fmt.Sprintf("%s COLLATE '%s'", nameWithCollate, collation)
+	}
+
+	// It's ok to do some brute force search.
+	for _, col := range r.tableInfo.Columns {
+		if col.Name.L == strings.ToLower(colName) {
+			if col.FieldType.GetCharset() != charset.CharsetBin {
+				nameWithCollate = fmt.Sprintf("%s COLLATE '%s'", nameWithCollate, collation)
+			}
+			break
+		}
+	}
+
+	return nameWithCollate
 }
 
 func (r *Range) IsFirstChunkForBucket() bool {
@@ -162,16 +187,19 @@ func (r *Range) IsLastChunkForBucket() bool {
 }
 
 // NewChunkRange return a Range.
-func NewChunkRange() *Range {
+// tableInfo is used to check charset of column when build SQL.
+func NewChunkRange(tableInfo *model.TableInfo) *Range {
 	return &Range{
 		Bounds:       make([]*Bound, 0, 2),
 		columnOffset: make(map[string]int),
 		Index:        &ChunkID{},
+		tableInfo:    tableInfo,
 	}
 }
 
 // NewChunkRangeOffset return a Range in sequence
-func NewChunkRangeOffset(columnOffset map[string]int) *Range {
+// tableInfo is used to check charset of column when build SQL.
+func NewChunkRangeOffset(columnOffset map[string]int, tableInfo *model.TableInfo) *Range {
 	bounds := make([]*Bound, len(columnOffset))
 	for column, offset := range columnOffset {
 		bounds[offset] = &Bound{
@@ -183,6 +211,7 @@ func NewChunkRangeOffset(columnOffset map[string]int) *Range {
 	return &Range{
 		Bounds:       bounds,
 		columnOffset: columnOffset,
+		tableInfo:    tableInfo,
 	}
 }
 
@@ -224,10 +253,6 @@ func (c *Range) String() string {
 }
 
 func (c *Range) ToString(collation string) (string, []interface{}) {
-	if collation != "" {
-		collation = fmt.Sprintf(" COLLATE '%s'", collation)
-	}
-
 	/* for example:
 	there is a bucket in TiDB, and the lowerbound and upperbound are (A, B1, C1), (A, B2, C2), and the columns are `a`, `b` and `c`,
 	this bucket's data range is (a = A) AND (b > B1 or (b == B1 and c > C1)) AND (b < B2 or (b == B2 and c <= C2))
@@ -275,25 +300,26 @@ func (c *Range) ToString(collation string) (string, []interface{}) {
 
 		if bound.HasLower {
 			if len(preConditionForLower) > 0 {
-				lowerCondition = append(lowerCondition, fmt.Sprintf("(%s AND %s%s %s ?)", strings.Join(preConditionForLower, " AND "), dbutil.ColumnName(bound.Column), collation, lowerSymbol))
+				lowerCondition = append(lowerCondition, fmt.Sprintf("(%s AND %s %s ?)", strings.Join(preConditionForLower, " AND "), c.buildColumnName(bound.Column, collation), lowerSymbol))
 				lowerArgs = append(append(lowerArgs, preConditionArgsForLower...), bound.Lower)
 			} else {
-				lowerCondition = append(lowerCondition, fmt.Sprintf("(%s%s %s ?)", dbutil.ColumnName(bound.Column), collation, lowerSymbol))
+				lowerCondition = append(lowerCondition, fmt.Sprintf("(%s %s ?)", c.buildColumnName(bound.Column, collation), lowerSymbol))
+
 				lowerArgs = append(lowerArgs, bound.Lower)
 			}
-			preConditionForLower = append(preConditionForLower, fmt.Sprintf("%s%s = ?", dbutil.ColumnName(bound.Column), collation))
+			preConditionForLower = append(preConditionForLower, fmt.Sprintf("%s = ?", c.buildColumnName(bound.Column, collation)))
 			preConditionArgsForLower = append(preConditionArgsForLower, bound.Lower)
 		}
 
 		if bound.HasUpper {
 			if len(preConditionForUpper) > 0 {
-				upperCondition = append(upperCondition, fmt.Sprintf("(%s AND %s%s %s ?)", strings.Join(preConditionForUpper, " AND "), dbutil.ColumnName(bound.Column), collation, upperSymbol))
+				upperCondition = append(upperCondition, fmt.Sprintf("(%s AND %s %s ?)", strings.Join(preConditionForUpper, " AND "), c.buildColumnName(bound.Column, collation), upperSymbol))
 				upperArgs = append(append(upperArgs, preConditionArgsForUpper...), bound.Upper)
 			} else {
-				upperCondition = append(upperCondition, fmt.Sprintf("(%s%s %s ?)", dbutil.ColumnName(bound.Column), collation, upperSymbol))
+				upperCondition = append(upperCondition, fmt.Sprintf("(%s %s ?)", c.buildColumnName(bound.Column, collation), upperSymbol))
 				upperArgs = append(upperArgs, bound.Upper)
 			}
-			preConditionForUpper = append(preConditionForUpper, fmt.Sprintf("%s%s = ?", dbutil.ColumnName(bound.Column), collation))
+			preConditionForUpper = append(preConditionForUpper, fmt.Sprintf("%s = ?", c.buildColumnName(bound.Column, collation)))
 			preConditionArgsForUpper = append(preConditionArgsForUpper, bound.Upper)
 		}
 	}
@@ -385,7 +411,7 @@ func (c *Range) Update(column, lower, upper string, updateLower, updateUpper boo
 }
 
 func (c *Range) Copy() *Range {
-	newChunk := NewChunkRange()
+	newChunk := NewChunkRange(c.tableInfo)
 	for _, bound := range c.Bounds {
 		newChunk.addBound(&Bound{
 			Column:   bound.Column,
@@ -400,7 +426,7 @@ func (c *Range) Copy() *Range {
 }
 
 func (c *Range) Clone() *Range {
-	newChunk := NewChunkRange()
+	newChunk := NewChunkRange(c.tableInfo)
 	for _, bound := range c.Bounds {
 		newChunk.addBound(&Bound{
 			Column:   bound.Column,

@@ -60,7 +60,7 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 		return nil, errors.Trace(err)
 	}
 
-	chunkRange := chunk.NewChunkRange()
+	chunkRange := chunk.NewChunkRange(table.Info)
 	beginIndex := 0
 	bucketChunkCnt := 0
 	chunkCnt := 0

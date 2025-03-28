@@ -31,6 +31,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
 	"github.com/pingcap/tidb/pkg/meta/model"
+	"github.com/pingcap/tidb/pkg/parser/charset"
 	"github.com/pingcap/tidb/pkg/parser/mysql"
 	"go.uber.org/zap"
 )
@@ -139,7 +140,7 @@ func GetColumnsFromIndex(index *model.IndexInfo, tableInfo *model.TableInfo) []*
 //
 //	e.g. SELECT /*!40001 SQL_NO_CACHE */ `a`, `b` FROM `schema`.`table` WHERE %s ORDER BY `a`.
 func GetTableRowsQueryFormat(schema, table string, tableInfo *model.TableInfo, collation string) (string, []*model.ColumnInfo) {
-	orderKeys, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
+	orderByCols := dbutil.SelectUniqueOrderKey(tableInfo)
 
 	columnNames := make([]string, 0, len(tableInfo.Columns))
 	for _, col := range tableInfo.Columns {
@@ -157,19 +158,12 @@ func GetTableRowsQueryFormat(schema, table string, tableInfo *model.TableInfo, c
 		}
 		columnNames = append(columnNames, name)
 	}
+
 	columns := strings.Join(columnNames, ", ")
-	if collation != "" {
-		collation = fmt.Sprintf(" COLLATE '%s'", collation)
-	}
+	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ %s FROM %s WHERE %%s ORDER BY %s",
+		columns, dbutil.TableName(schema, table), BuildOrderByClause(orderByCols, collation))
 
-	for i, key := range orderKeys {
-		orderKeys[i] = dbutil.ColumnName(key)
-	}
-
-	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ %s FROM %s WHERE %%s ORDER BY %s%s",
-		columns, dbutil.TableName(schema, table), strings.Join(orderKeys, ","), collation)
-
-	return query, orderKeyCols
+	return query, orderByCols
 }
 
 // escapeString escapes special characters in the given string
@@ -774,7 +768,7 @@ func GetTableSize(ctx context.Context, db *sql.DB, schemaName, tableName string)
 }
 
 // GetCountAndMd5Checksum returns checksum code and count of some data by given condition
-func GetCountAndMd5Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []interface{}) (int64, uint64, error) {
+func GetCountAndMd5Checksum(ctx context.Context, db *sql.DB, schemaName, tableName string, tbInfo *model.TableInfo, limitRange string, args []any) (int64, uint64, error) {
 	/*
 		calculate MD5 checksum and count example:
 		mysql> SELECT COUNT(*) as CNT, BIT_XOR(CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', `id`, `name`, CONCAT(ISNULL(`id`), ISNULL(`name`)))), 1, 16), 16, 10) AS UNSIGNED) ^ CAST(CONV(SUBSTRING(MD5(CONCAT_WS(',', `id`, `name`, CONCAT(ISNULL(`id`), ISNULL(`name`)))), 17, 16), 16, 10) AS UNSIGNED)) as CHECKSUM FROM `a`.`t`;
@@ -824,7 +818,11 @@ func GetCountAndMd5Checksum(ctx context.Context, db *sql.DB, schemaName, tableNa
 }
 
 // GetRandomValues returns some random values. Different from /pkg/dbutil.GetRandomValues, it returns multi-columns at the same time.
-func GetRandomValues(ctx context.Context, db *sql.DB, schema, table string, columns []*model.ColumnInfo, num int, limitRange string, limitArgs []interface{}, collation string) ([][]string, error) {
+func GetRandomValues(
+	ctx context.Context,
+	db *sql.DB, schema, table string, columns []*model.ColumnInfo,
+	num int, limitRange string, limitArgs []any, collation string,
+) ([][]string, error) {
 	/*
 		example: there is one index consists of `id`, `a`, `b`.
 		mysql> SELECT `id`, `a`, `b` FROM (SELECT `id`, `a`, `b`, rand() rand_value FROM `test`.`test`  WHERE `id` COLLATE "latin1_bin" > 0 AND `id` COLLATE "latin1_bin" < 100 ORDER BY rand_value LIMIT 5) rand_tmp ORDER BY `id` COLLATE "latin1_bin";
@@ -841,17 +839,13 @@ func GetRandomValues(ctx context.Context, db *sql.DB, schema, table string, colu
 		limitRange = "TRUE"
 	}
 
-	if collation != "" {
-		collation = fmt.Sprintf(" COLLATE '%s'", collation)
-	}
-
 	columnNames := make([]string, 0, len(columns))
 	for _, col := range columns {
 		columnNames = append(columnNames, dbutil.ColumnName(col.Name.O))
 	}
 
-	query := fmt.Sprintf("SELECT %[1]s FROM (SELECT %[1]s, rand() rand_value FROM %[2]s WHERE %[3]s ORDER BY rand_value LIMIT %[4]d)rand_tmp ORDER BY %[1]s%[5]s",
-		strings.Join(columnNames, ", "), dbutil.TableName(schema, table), limitRange, num, collation)
+	query := fmt.Sprintf("SELECT %[1]s FROM (SELECT %[1]s, rand() rand_value FROM %[2]s WHERE %[3]s ORDER BY rand_value LIMIT %[4]d)rand_tmp ORDER BY %[5]s",
+		strings.Join(columnNames, ", "), dbutil.TableName(schema, table), limitRange, num, BuildOrderByClause(columns, collation))
 	log.Debug("get random values", zap.String("sql", query), zap.Reflect("args", limitArgs))
 
 	rows, err := db.QueryContext(ctx, query, limitArgs...)
@@ -1054,4 +1048,17 @@ func IsRangeTrivial(rangeCond string) bool {
 func IsBinaryColumn(col *model.ColumnInfo) bool {
 	// varbinary or binary
 	return (col.GetType() == mysql.TypeVarchar || col.GetType() == mysql.TypeString) && mysql.HasBinaryFlag(col.GetFlag())
+}
+
+func BuildOrderByClause(cols []*model.ColumnInfo, collation string) string {
+	orderByFields := make([]string, len(cols))
+	for i, ordreByCol := range cols {
+		column_name := dbutil.ColumnName(ordreByCol.Name.O)
+		if collation != "" && cols[i].FieldType.GetCharset() != charset.CharsetBin {
+			column_name = fmt.Sprintf("%s COLLATE '%s'", column_name, collation)
+		}
+		orderByFields[i] = column_name
+	}
+
+	return strings.Join(orderByFields, ",")
 }

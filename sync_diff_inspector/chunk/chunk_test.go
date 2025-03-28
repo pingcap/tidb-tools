@@ -482,7 +482,7 @@ func TestChunkInit(t *testing.T) {
 }
 
 func TestChunkCopyAndUpdate(t *testing.T) {
-	chunk := NewChunkRange()
+	chunk := NewChunkRange(nil)
 	chunk.Update("a", "1", "2", true, true)
 	chunk.Update("a", "2", "3", true, true)
 	chunk.Update("a", "324", "5435", false, false)
@@ -603,7 +603,7 @@ func TestChunkID(t *testing.T) {
 }
 
 func TestChunkIndex(t *testing.T) {
-	chunkRange := NewChunkRange()
+	chunkRange := NewChunkRange(nil)
 	chunkRange.Index.ChunkIndex = 0
 	chunkRange.Index.ChunkCnt = 3
 	require.True(t, chunkRange.IsFirstChunkForBucket())
