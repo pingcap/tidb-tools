@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/pkg/meta/model"
 	"github.com/pingcap/tidb/pkg/parser/charset"
+	"github.com/pingcap/tidb/pkg/parser/model"
 	"go.uber.org/zap"
 )
 
@@ -151,6 +152,10 @@ type Range struct {
 
 	Where string        `json:"where"`
 	Args  []interface{} `json:"args"`
+
+	// IndexColumnNames store column names of index splitting chunks.
+	// It's used to find index name and generate index hint in checksum query.
+	IndexColumnNames []model.CIStr `json:"index-column-names,omitempty"`
 
 	// Filled during runtime
 	columnOffset map[string]int   `json:"-"`
@@ -412,6 +417,7 @@ func (c *Range) Update(column, lower, upper string, updateLower, updateUpper boo
 
 func (c *Range) Copy() *Range {
 	newChunk := NewChunkRange(c.tableInfo)
+	newChunk.IndexColumnNames = c.IndexColumnNames
 	for _, bound := range c.Bounds {
 		newChunk.addBound(&Bound{
 			Column:   bound.Column,
@@ -427,6 +433,7 @@ func (c *Range) Copy() *Range {
 
 func (c *Range) Clone() *Range {
 	newChunk := NewChunkRange(c.tableInfo)
+	newChunk.IndexColumnNames = c.IndexColumnNames
 	for _, bound := range c.Bounds {
 		newChunk.addBound(&Bound{
 			Column:   bound.Column,
