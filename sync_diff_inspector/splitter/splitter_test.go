@@ -844,7 +844,7 @@ func createFakeResultForLimitSplit(mock sqlmock.Sqlmock, aValues []string, bValu
 
 func TestRangeInfo(t *testing.T) {
 	rangeInfo := &RangeInfo{
-		ChunkRange: chunk.NewChunkRange(nil),
+		ChunkRange: chunk.NewChunkRange(chunk.GenFakeTableInfo("a")),
 		IndexID:    2,
 		ProgressID: "324312",
 	}

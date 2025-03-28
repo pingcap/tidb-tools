@@ -25,6 +25,8 @@ import (
 	"github.com/pingcap/tidb/pkg/meta/model"
 	"github.com/pingcap/tidb/pkg/parser/charset"
 	pmodel "github.com/pingcap/tidb/pkg/parser/model"
+	"github.com/pingcap/tidb/pkg/parser/mysql"
+	"github.com/pingcap/tidb/pkg/types"
 	"go.uber.org/zap"
 )
 
@@ -150,8 +152,8 @@ type Range struct {
 	IsFirst bool      `json:"is-first"`
 	IsLast  bool      `json:"is-last"`
 
-	Where string        `json:"where"`
-	Args  []interface{} `json:"args"`
+	Where string `json:"where"`
+	Args  []any  `json:"args"`
 
 	// IndexColumnNames store column names of index splitting chunks.
 	// It's used to find index name and generate index hint in checksum query.
@@ -164,14 +166,18 @@ type Range struct {
 
 func (r *Range) buildColumnName(colName string, collation string) string {
 	nameWithCollate := dbutil.ColumnName(colName)
+	if collation == "" {
+		return nameWithCollate
+	}
 
 	// In test, we may not have table info
-	if r.tableInfo == nil {
-		return fmt.Sprintf("%s COLLATE '%s'", nameWithCollate, collation)
+	var columns []*model.ColumnInfo
+	if r.tableInfo != nil {
+		columns = r.tableInfo.Columns
 	}
 
 	// It's ok to do some brute force search.
-	for _, col := range r.tableInfo.Columns {
+	for _, col := range columns {
 		if col.Name.L == strings.ToLower(colName) {
 			if col.FieldType.GetCharset() != charset.CharsetBin {
 				nameWithCollate = fmt.Sprintf("%s COLLATE '%s'", nameWithCollate, collation)
@@ -257,7 +263,7 @@ func (c *Range) String() string {
 	return string(chunkBytes)
 }
 
-func (c *Range) ToString(collation string) (string, []interface{}) {
+func (c *Range) ToString(collation string) (string, []any) {
 	/* for example:
 	there is a bucket in TiDB, and the lowerbound and upperbound are (A, B1, C1), (A, B2, C2), and the columns are `a`, `b` and `c`,
 	this bucket's data range is (a = A) AND (b > B1 or (b == B1 and c > C1)) AND (b < B2 or (b == B2 and c <= C2))
@@ -266,14 +272,14 @@ func (c *Range) ToString(collation string) (string, []interface{}) {
 	sameCondition := make([]string, 0, 1)
 	lowerCondition := make([]string, 0, 1)
 	upperCondition := make([]string, 0, 1)
-	sameArgs := make([]interface{}, 0, 1)
-	lowerArgs := make([]interface{}, 0, 1)
-	upperArgs := make([]interface{}, 0, 1)
+	sameArgs := make([]any, 0, 1)
+	lowerArgs := make([]any, 0, 1)
+	upperArgs := make([]any, 0, 1)
 
 	preConditionForLower := make([]string, 0, 1)
 	preConditionForUpper := make([]string, 0, 1)
-	preConditionArgsForLower := make([]interface{}, 0, 1)
-	preConditionArgsForUpper := make([]interface{}, 0, 1)
+	preConditionArgsForLower := make([]any, 0, 1)
+	preConditionArgsForUpper := make([]any, 0, 1)
 
 	i := 0
 	for ; i < len(c.Bounds); i++ {
@@ -286,7 +292,7 @@ func (c *Range) ToString(collation string) (string, []interface{}) {
 			break
 		}
 
-		sameCondition = append(sameCondition, fmt.Sprintf("%s%s = ?", dbutil.ColumnName(bound.Column), collation))
+		sameCondition = append(sameCondition, fmt.Sprintf("%s = ?", c.buildColumnName(bound.Column, collation)))
 		sameArgs = append(sameArgs, bound.Lower)
 	}
 
@@ -494,4 +500,23 @@ func InitChunk(chunk *Range, t ChunkType, firstBucketID, lastBucketID int, colla
 		ChunkCnt:         1,
 	}
 	chunk.Type = t
+}
+
+// GenFakeTableInfo is used to generate fake table info in unit test
+// export for test
+func GenFakeTableInfo(cols ...string) *model.TableInfo {
+	tp := types.NewFieldType(mysql.TypeLong)
+	tp.SetCharset(charset.CharsetGBK)
+
+	info := &model.TableInfo{}
+	for _, name := range cols {
+		info.Columns = append(info.Columns,
+			&model.ColumnInfo{
+				FieldType: *tp,
+				Name:      pmodel.NewCIStr(name),
+			},
+		)
+	}
+
+	return info
 }
