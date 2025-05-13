@@ -65,6 +65,8 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 	// Below logic is modified from BucketIterator
 	// It's used to find the index which can match the split fields in RandomIterator.
 	iFields := &indexFields{cols: fields, tableInfo: table.Info}
+	// The cols needs to be sorted first for comparison in MatchesIndex method below
+	sortColsInPlace(iFields.cols)
 	var indices = dbutil.FindAllIndex(table.Info)
 NEXTINDEX:
 	for _, index := range indices {
