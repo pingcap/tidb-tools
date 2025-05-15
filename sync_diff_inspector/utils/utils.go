@@ -34,6 +34,8 @@ import (
 	"github.com/pingcap/tidb/pkg/parser/charset"
 	pmodel "github.com/pingcap/tidb/pkg/parser/model"
 	"github.com/pingcap/tidb/pkg/parser/mysql"
+	"github.com/pingcap/tidb/pkg/types"
+	"github.com/pingcap/tidb/pkg/util/collate"
 	"go.uber.org/zap"
 )
 
@@ -531,13 +533,21 @@ func NeedQuotes(tp byte) bool {
 //
 // If a case-insensitive collation is specified in the row iterator,
 // the cmp comparison should also be performed in a case-insensitive manner.
-func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns []*model.ColumnInfo, ci bool) (equal bool, cmp int32, err error) {
+func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns []*model.ColumnInfo, collation string) (equal bool, cmp int32, err error) {
 	var (
 		data1, data2 *dbutil.ColumnData
 		str1, str2   string
 		key          string
 		ok           bool
 	)
+
+	if collation == "" {
+		collation = "binary"
+	}
+	collator := collate.GetCollator(collation)
+
+	// For string comparison, ctx is not used, so just create a dummy context.
+	dummyCtx := types.Context{}
 
 	equal = true
 
@@ -623,21 +633,15 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 		}
 
 		if NeedQuotes(col.FieldType.GetType()) {
-			strData1 := string(data1.Data)
-			strData2 := string(data2.Data)
-			if ci {
-				strData1 = strings.ToLower(strData1)
-				strData2 = strings.ToLower(strData2)
+			strData1 := types.NewCollationStringDatum(string(data1.Data), collation)
+			strData2 := types.NewCollationStringDatum(string(data2.Data), collation)
+			cmp, err := strData1.Compare(dummyCtx, &strData2, collator)
+			if err != nil {
+				return false, 0, errors.Trace(err)
 			}
 
-			if len(strData1) == len(strData2) && strData1 == strData2 {
+			if cmp == 0 {
 				continue
-			}
-
-			if strData1 < strData2 {
-				cmp = -1
-			} else {
-				cmp = 1
 			}
 			break
 		} else if data1.IsNull || data2.IsNull {
