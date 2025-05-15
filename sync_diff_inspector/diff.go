@@ -626,6 +626,12 @@ func (df *Diff) compareChecksumAndGetCount(ctx context.Context, tableRange *spli
 }
 
 func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, dml *ChunkDML) (bool, error) {
+	collation := df.upstream.GetTables()[rangeInfo.GetTableIndex()].Collation
+	ci := false
+	if collation != "" && strings.Contains(strings.ToLower(collation), "ci") {
+		ci = true
+	}
+
 	rowsAdd, rowsDelete := 0, 0
 	upstreamRowsIterator, err := df.upstream.GetRowsIterator(ctx, rangeInfo)
 	if err != nil {
@@ -699,7 +705,7 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 			break
 		}
 
-		eq, cmp, err := utils.CompareData(lastUpstreamData, lastDownstreamData, orderKeyCols, tableInfo.Columns)
+		eq, cmp, err := utils.CompareData(lastUpstreamData, lastDownstreamData, orderKeyCols, tableInfo.Columns, ci)
 		if err != nil {
 			return false, errors.Trace(err)
 		}

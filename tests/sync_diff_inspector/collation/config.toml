@@ -43,7 +43,7 @@ check-struct-only = false
     target-instance = "tidb"
 
     # tables need to check.
-	target-check-tables = ["expression_test.diff"]
+	target-check-tables = ["collation_test.t"]
 
 	target-configs = ["config1"]
 
@@ -51,9 +51,4 @@ check-struct-only = false
 [table-configs.config1]
     target-tables = ["collation_test.t"]
     range = "TRUE"
-    chunk-size = 1
-    target-configs = ['cfg1']
-
-[table-configs.cfg1]
-    target-tables = ['*.*']
     collation = 'utf8mb4_general_ci'

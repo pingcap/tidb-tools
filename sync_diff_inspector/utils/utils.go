@@ -522,13 +522,16 @@ func NeedQuotes(tp byte) bool {
 	return !(dbutil.IsNumberType(tp) || dbutil.IsFloatType(tp))
 }
 
-// CompareData compare two row datas.
-// equal = true: map1 = map2
+// CompareData compares two rows of data.
+// equal = true: map1 = map2.
 // equal = false:
-//  1. cmp = 0: map1 and map2 have the same orderkeycolumns, but other columns are in difference.
-//  2. cmp = -1: map1 < map2 (by comparing the orderkeycolumns)
-//  3. cmp = 1: map1 > map2
-func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns []*model.ColumnInfo) (equal bool, cmp int32, err error) {
+//  1. cmp = 0: map1 and map2 have identical order key columns, but other columns differ.
+//  2. cmp = -1: map1 is less than map2 (based on order key columns).
+//  3. cmp = 1: map1 is greater than map2 (based on order key columns).
+//
+// If a case-insensitive collation is specified in the row iterator,
+// the cmp comparison should also be performed in a case-insensitive manner.
+func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns []*model.ColumnInfo, ci bool) (equal bool, cmp int32, err error) {
 	var (
 		data1, data2 *dbutil.ColumnData
 		str1, str2   string
@@ -622,6 +625,10 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 		if NeedQuotes(col.FieldType.GetType()) {
 			strData1 := string(data1.Data)
 			strData2 := string(data2.Data)
+			if ci {
+				strData1 = strings.ToLower(strData1)
+				strData2 = strings.ToLower(strData2)
+			}
 
 			if len(strData1) == len(strData2) && strData1 == strData2 {
 				continue
