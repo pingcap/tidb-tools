@@ -20,5 +20,5 @@ mysql -uroot -h 127.0.0.1 -P 4001 -e "insert into collation_test.t values ('a', 
 
 echo "check should return two different rows"
 sync_diff_inspector --config=./config.toml > $OUT_DIR/expression_diff.output || true
-check_contains "+2/-2" $OUT_DIR/sync_diff.log
+check_contains "+2/-2" $OUT_DIR/summary.txt
 rm -rf $OUT_DIR/*
