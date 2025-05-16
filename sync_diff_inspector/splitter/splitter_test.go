@@ -997,6 +997,10 @@ func TestRandomSpliterHint(t *testing.T) {
 			[]model.CIStr{model.NewCIStr("a"), model.NewCIStr("b")},
 		},
 		{
+			"create table `test`.`test`(`a` int, `b` int, `c` int, primary key(`b`, `a`), unique key i1(`c`))",
+			[]model.CIStr{model.NewCIStr("b"), model.NewCIStr("a")},
+		},
+		{
 			"create table `test`.`test`(`a` int, `b` int, `c` int, unique key i1(`c`), key i2(`b`))",
 			[]model.CIStr{model.NewCIStr("c")},
 		},
