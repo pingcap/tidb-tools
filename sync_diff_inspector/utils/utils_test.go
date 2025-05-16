@@ -675,13 +675,13 @@ func TestCompareBlob(t *testing.T) {
 	for _, c := range cases {
 		equal, cmp, err := CompareData(c.data1, c.data1, orderKeyCols, columns, "")
 		require.NoError(t, err)
-		require.Equal(t, cmp, int32(0))
+		require.EqualValues(t, cmp, 0)
 		require.True(t, equal)
 
 		for _, data := range c.dataOthers {
 			equal, cmp, err = CompareData(c.data1, data, orderKeyCols, columns, "")
 			require.NoError(t, err)
-			require.Equal(t, cmp, int32(0))
+			require.EqualValues(t, cmp, 0)
 			require.False(t, equal)
 		}
 	}
