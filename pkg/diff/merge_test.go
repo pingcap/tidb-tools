@@ -30,7 +30,7 @@ func (s *testMergerSuite) TestMerge(c *C) {
 	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
 	c.Assert(err, IsNil)
 
-	_, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
+	orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
 	ids := []string{"3", "2", "2", "4", "1", "NULL"}
 	names := []string{"d", "NULL", "c", "b", "a", "e"}
 	ages := []string{"1", "2", "3", "NULL", "5", "4"}

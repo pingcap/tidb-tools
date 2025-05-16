@@ -973,7 +973,7 @@ func compareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols []*model
 
 func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableInfo *model.TableInfo, where string,
 	args []interface{}, collation string) (*sql.Rows, []*model.ColumnInfo, error) {
-	orderKeys, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
+	orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
 
 	columnNames := make([]string, 0, len(tableInfo.Columns))
 	for _, col := range tableInfo.Columns {
@@ -985,8 +985,9 @@ func getChunkRows(ctx context.Context, db *sql.DB, schema, table string, tableIn
 		collation = fmt.Sprintf(" COLLATE \"%s\"", collation)
 	}
 
-	for i, key := range orderKeys {
-		orderKeys[i] = dbutil.ColumnName(key)
+	orderKeys := make([]string, len(orderKeyCols))
+	for i, col := range orderKeyCols {
+		orderKeys[i] = dbutil.ColumnName(col.Name.O)
 	}
 
 	query := fmt.Sprintf("SELECT /*!40001 SQL_NO_CACHE */ %s FROM %s WHERE %s ORDER BY %s%s",
