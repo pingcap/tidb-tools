@@ -30,6 +30,7 @@ import (
 	"github.com/pingcap/tidb/pkg/parser/mysql"
 	_ "github.com/pingcap/tidb/pkg/planner/core" // to setup expression.EvalAstExpr. See: https://github.com/pingcap/tidb/blob/a94cff903cd1e7f3b050db782da84273ef5592f4/planner/core/optimizer.go#L202
 	"github.com/pingcap/tidb/pkg/sessionctx"
+	"github.com/pingcap/tidb/pkg/sessionctx/variable"
 	"github.com/pingcap/tidb/pkg/types"
 	_ "github.com/pingcap/tidb/pkg/types/parser_driver" // for parser driver
 	"github.com/pingcap/tidb/pkg/util/collate"
@@ -43,6 +44,9 @@ const (
 
 func init() {
 	collate.SetNewCollationEnabledForTest(false)
+
+	// Enable constraint check
+	variable.EnableCheckConstraint.Store(true)
 }
 
 // addClusteredAnnotation add the `/*T![clustered_index] NONCLUSTERED */` for primary key of create table info
