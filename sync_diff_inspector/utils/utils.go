@@ -533,7 +533,7 @@ func NeedQuotes(tp byte) bool {
 //
 // If a case-insensitive collation is specified in the row iterator,
 // the cmp comparison should also be performed in a case-insensitive manner.
-func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns []*model.ColumnInfo, collation string) (equal bool, cmp int32, err error) {
+func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns []*model.ColumnInfo, collation string) (equal bool, cmp int, err error) {
 	var (
 		data1, data2 *dbutil.ColumnData
 		str1, str2   string
@@ -635,7 +635,7 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 		if NeedQuotes(col.FieldType.GetType()) {
 			strData1 := types.NewCollationStringDatum(string(data1.Data), collation)
 			strData2 := types.NewCollationStringDatum(string(data2.Data), collation)
-			cmp, err := strData1.Compare(dummyCtx, &strData2, collator)
+			cmp, err = strData1.Compare(dummyCtx, &strData2, collator)
 			if err != nil {
 				return false, 0, errors.Trace(err)
 			}

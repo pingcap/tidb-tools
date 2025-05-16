@@ -165,79 +165,79 @@ func TestBasicTableUtilOperation(t *testing.T) {
 	// same
 	equal, cmp, err := CompareData(data1, data1, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(0))
+	require.EqualValues(t, cmp, 0)
 	require.True(t, equal)
 
 	// orderkey same but other column different
 	equal, cmp, err = CompareData(data1, data3, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(-1))
+	require.EqualValues(t, cmp, -1)
 	require.False(t, equal)
 
 	equal, cmp, err = CompareData(data3, data1, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(1))
+	require.EqualValues(t, cmp, 1)
 	require.False(t, equal)
 
 	// orderKey different
 	equal, cmp, err = CompareData(data1, data2, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(-1))
+	require.EqualValues(t, cmp, -1)
 	require.False(t, equal)
 
 	equal, cmp, err = CompareData(data2, data1, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(1))
+	require.EqualValues(t, cmp, 1)
 	require.False(t, equal)
 
 	equal, cmp, err = CompareData(data4, data1, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(0))
+	require.EqualValues(t, cmp, 0)
 	require.False(t, equal)
 
 	equal, cmp, err = CompareData(data1, data4, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(0))
+	require.EqualValues(t, cmp, 0)
 	require.False(t, equal)
 
 	equal, cmp, err = CompareData(data5, data4, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(1))
+	require.EqualValues(t, cmp, 1)
 	require.False(t, equal)
 
 	equal, cmp, err = CompareData(data4, data5, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(-1))
+	require.EqualValues(t, cmp, -1)
 	require.False(t, equal)
 
 	equal, cmp, err = CompareData(data4, data6, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(1))
+	require.EqualValues(t, cmp, 1)
 	require.False(t, equal)
 
 	equal, cmp, err = CompareData(data6, data4, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(-1))
+	require.EqualValues(t, cmp, -1)
 	require.False(t, equal)
 
 	equal, cmp, err = CompareData(data6, data7, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(0))
+	require.EqualValues(t, cmp, 0)
 	require.True(t, equal)
 
 	equal, cmp, err = CompareData(data1, data8, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(0))
+	require.EqualValues(t, cmp, 0)
 	require.False(t, equal)
 
 	equal, cmp, err = CompareData(data8, data1, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(0))
+	require.EqualValues(t, cmp, 0)
 	require.False(t, equal)
 
 	equal, cmp, err = CompareData(data8, data9, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(0))
+	require.EqualValues(t, cmp, 0)
 	require.False(t, equal)
 
 	// Test ignore columns
