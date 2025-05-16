@@ -33,6 +33,7 @@ import (
 	"github.com/pingcap/tidb/pkg/meta/model"
 	pmodel "github.com/pingcap/tidb/pkg/parser/model"
 	"github.com/pingcap/tidb/pkg/parser/mysql"
+	"github.com/pingcap/tidb/pkg/parser/types"
 	"go.uber.org/zap"
 )
 
@@ -136,6 +137,27 @@ func GetColumnsFromIndex(index *model.IndexInfo, tableInfo *model.TableInfo) []*
 	return indexColumns
 }
 
+// formatColumn gets the SQL expression to format the column for comparison.
+//
+// Normally it would just return `name`, but for floating-point types it would
+// round the result to 6 (single) or 15 (double) digits.
+// See <https://github.com/pingcap/tidb-tools/pull/700#discussion_r1122787571>
+// for details.
+func formatColumn(name string, fieldType *types.FieldType) string {
+	var k, epsilon string
+	switch fieldType.GetType() {
+	case mysql.TypeFloat:
+		k = "5"
+		epsilon = "1e-45"
+	case mysql.TypeDouble:
+		k = "14"
+		epsilon = "5e-324"
+	default:
+		return name
+	}
+	return fmt.Sprintf("round(%[1]s, %[2]s-floor(log10(greatest(abs(%[1]s), %[3]s))))", name, k, epsilon)
+}
+
 // GetTableRowsQueryFormat returns a rowsQuerySQL template for the specific table.
 //
 //	e.g. SELECT /*!40001 SQL_NO_CACHE */ `a`, `b` FROM `schema`.`table` WHERE %s ORDER BY `a`.
@@ -149,14 +171,11 @@ func GetTableRowsQueryFormat(schema, table string, tableInfo *model.TableInfo, c
 		}
 
 		name := dbutil.ColumnName(col.Name.O)
-		// When col value is 0, the result is NULL.
-		// But we can use ISNULL to distinguish between null and 0.
-		if col.FieldType.GetType() == mysql.TypeFloat {
-			name = fmt.Sprintf("round(%s, 5-floor(log10(abs(%s)))) as %s", name, name, name)
-		} else if col.FieldType.GetType() == mysql.TypeDouble {
-			name = fmt.Sprintf("round(%s, 14-floor(log10(abs(%s)))) as %s", name, name, name)
+		expr := formatColumn(name, &col.FieldType)
+		if expr != name {
+			expr += " as " + name
 		}
-		columnNames = append(columnNames, name)
+		columnNames = append(columnNames, expr)
 	}
 	columns := strings.Join(columnNames, ", ")
 	if collation != "" {
@@ -794,13 +813,7 @@ func GetCountAndMd5Checksum(ctx context.Context, db *sql.DB, schemaName, tableNa
 			continue
 		}
 		name := dbutil.ColumnName(col.Name.O)
-		// When col value is 0, the result is NULL.
-		// But we can use ISNULL to distinguish between null and 0.
-		if col.FieldType.GetType() == mysql.TypeFloat {
-			name = fmt.Sprintf("round(%s, 5-floor(log10(abs(%s))))", name, name)
-		} else if col.FieldType.GetType() == mysql.TypeDouble {
-			name = fmt.Sprintf("round(%s, 14-floor(log10(abs(%s))))", name, name)
-		}
+		name = formatColumn(name, &col.FieldType)
 		columnNames = append(columnNames, name)
 		columnIsNull = append(columnIsNull, fmt.Sprintf("ISNULL(%s)", name))
 	}
