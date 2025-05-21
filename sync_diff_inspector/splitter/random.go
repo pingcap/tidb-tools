@@ -60,7 +60,7 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 		return nil, errors.Trace(err)
 	}
 
-	chunkRange := chunk.NewChunkRange()
+	chunkRange := chunk.NewChunkRange(table.Info)
 
 	// Below logic is modified from BucketIterator
 	// It's used to find the index which can match the split fields in RandomIterator.

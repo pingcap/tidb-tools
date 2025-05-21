@@ -32,7 +32,6 @@ import (
 	"github.com/pingcap/tidb/pkg/sessionctx"
 	"github.com/pingcap/tidb/pkg/types"
 	_ "github.com/pingcap/tidb/pkg/types/parser_driver" // for parser driver
-	"github.com/pingcap/tidb/pkg/util/collate"
 	"github.com/pingcap/tidb/pkg/util/mock"
 )
 
@@ -40,10 +39,6 @@ const (
 	AnnotationClusteredReplaceString    = "${1} /*T![clustered_index] CLUSTERED */${2}\n"
 	AnnotationNonClusteredReplaceString = "${1} /*T![clustered_index] NONCLUSTERED */${2}\n"
 )
-
-func init() {
-	collate.SetNewCollationEnabledForTest(false)
-}
 
 // addClusteredAnnotation add the `/*T![clustered_index] NONCLUSTERED */` for primary key of create table info
 // In the older version, the create table info hasn't `/*T![clustered_index] NONCLUSTERED */`,

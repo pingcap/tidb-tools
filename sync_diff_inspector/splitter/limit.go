@@ -87,7 +87,7 @@ func NewLimitIteratorWithCheckpoint(ctx context.Context, progressID string, tabl
 		}
 
 		if startRange != nil {
-			tagChunk = chunk.NewChunkRange()
+			tagChunk = chunk.NewChunkRange(table.Info)
 			bounds := startRange.ChunkRange.Bounds
 			if len(bounds) != len(indexColumns) {
 				log.Warn("checkpoint node columns are not equal to selected index columns, skip checkpoint.")
@@ -102,7 +102,7 @@ func NewLimitIteratorWithCheckpoint(ctx context.Context, progressID string, tabl
 			beginBucketID = startRange.ChunkRange.Index.BucketIndexRight + 1
 
 		} else {
-			tagChunk = chunk.NewChunkRangeOffset(columnOffset)
+			tagChunk = chunk.NewChunkRangeOffset(columnOffset, table.Info)
 		}
 
 		break
@@ -209,7 +209,7 @@ func (lmt *LimitIterator) produceChunks(ctx context.Context, bucketID int) {
 			return
 		}
 
-		newTagChunk := chunk.NewChunkRangeOffset(lmt.columnOffset)
+		newTagChunk := chunk.NewChunkRangeOffset(lmt.columnOffset, lmt.table.Info)
 		for column, data := range dataMap {
 			newTagChunk.Update(column, string(data.Data), "", !data.IsNull, false)
 			chunkRange.Update(column, "", string(data.Data), false, !data.IsNull)
