@@ -157,39 +157,29 @@ func FindAllColumnWithIndex(tableInfo *model.TableInfo) []*model.ColumnInfo {
 }
 
 // SelectUniqueOrderKey returns some columns for order by condition.
-func SelectUniqueOrderKey(tbInfo *model.TableInfo) ([]string, []*model.ColumnInfo) {
-	keys := make([]string, 0, 2)
+func SelectUniqueOrderKey(tbInfo *model.TableInfo) []*model.ColumnInfo {
 	keyCols := make([]*model.ColumnInfo, 0, 2)
 
 	for _, index := range tbInfo.Indices {
 		if index.Primary {
-			keys = keys[:0]
 			keyCols = keyCols[:0]
 			for _, indexCol := range index.Columns {
-				keys = append(keys, indexCol.Name.O)
 				keyCols = append(keyCols, tbInfo.Columns[indexCol.Offset])
 			}
 			break
 		}
 		if index.Unique {
-			keys = keys[:0]
 			keyCols = keyCols[:0]
 			for _, indexCol := range index.Columns {
-				keys = append(keys, indexCol.Name.O)
 				keyCols = append(keyCols, tbInfo.Columns[indexCol.Offset])
 			}
 		}
 	}
 
-	if len(keys) != 0 {
-		return keys, keyCols
+	if len(keyCols) != 0 {
+		return keyCols
 	}
 
 	// no primary key or unique found, use all fields as order by key
-	for _, col := range tbInfo.Columns {
-		keys = append(keys, col.Name.O)
-		keyCols = append(keyCols, col)
-	}
-
-	return keys, keyCols
+	return tbInfo.Columns
 }

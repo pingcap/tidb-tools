@@ -28,7 +28,7 @@ func TestRowData(t *testing.T) {
 	tableInfo, err := dbutil.GetTableInfoBySQL(createTableSQL, parser.New())
 	require.NoError(t, err)
 
-	_, orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
+	orderKeyCols := dbutil.SelectUniqueOrderKey(tableInfo)
 	require.Equal(t, utils.NeedQuotes(orderKeyCols[1].FieldType.GetType()), true)
 	ids := []string{"3", "2", "2", "2", "4", "1", "NULL"}
 	names := []string{"d", "NULL", "c", "g", "b", "a", "e"}
