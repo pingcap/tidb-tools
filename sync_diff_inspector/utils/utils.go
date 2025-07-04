@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode/utf8"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/pingcap/errors"
@@ -887,12 +888,25 @@ NEXTROW:
 			if col == nil {
 				continue NEXTROW
 			}
-			randomValue[i] = string(col)
+			randomValue[i] = TruncateInvalidUTF8(string(col))
 		}
 		randomValues = append(randomValues, randomValue)
 	}
 
 	return randomValues, errors.Trace(rows.Err())
+}
+
+// TruncateInvalidUTF8 truncates the string to the last valid UTF-8 character.
+// If the string is valid UTF-8, it returns the original string.
+func TruncateInvalidUTF8(s string) string {
+	for i := 0; i < len(s); {
+		r, size := utf8.DecodeRuneInString(s[i:])
+		if r == utf8.RuneError && size == 1 {
+			return s[:i]
+		}
+		i += size
+	}
+	return s
 }
 
 // ResetColumns removes index from `tableInfo.Indices`, whose columns appear in `columns`.
