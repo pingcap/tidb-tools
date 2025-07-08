@@ -294,7 +294,9 @@ func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *conf
 		return nil, errors.Annotatef(err, "please make sure the filter is correct.")
 	}
 
-	dbutil.EnableNewCollationIfNeeded(ctx, ds.Conn)
+	if err := dbutil.EnableNewCollationIfNeeded(ctx, ds.Conn); err != nil {
+		return nil, err
+	}
 
 	ts := &TiDBSource{
 		tableDiffs:        tableDiffs,

@@ -41,6 +41,7 @@ import (
 )
 
 func init() {
+	// disable new collation by default to pass table struct parsing
 	collate.SetNewCollationEnabledForTest(false)
 }
 
@@ -950,7 +951,7 @@ func GetParserForDB(ctx context.Context, db QueryExecutor) (*parser.Parser, erro
 // EnableNewCollationIfNeeded checks the `new_collations_enabled_on_first_bootstrap` config and enable new collation if needed.
 // If any TiDB instance doesn't support new collation, we will use binary collation for data compaarison.
 func EnableNewCollationIfNeeded(ctx context.Context, conn *sql.DB) error {
-	rows, err := conn.QueryContext(ctx, `show config where name = "new_collations_enabled_on_first_bootstrap`)
+	rows, err := conn.QueryContext(ctx, `show config where name = "new_collations_enabled_on_first_bootstrap"`)
 	if err != nil {
 		return errors.Annotatef(err, "get new_collations_enabled_on_first_bootstrap")
 	}
@@ -964,11 +965,12 @@ func EnableNewCollationIfNeeded(ctx context.Context, conn *sql.DB) error {
 			return errors.Trace(err1)
 		}
 		value := string(fields["Value"].Data)
-		if strings.ToLower(value) == "false" {
+		if strings.EqualFold(value, "false") {
 			enabled = false
 		}
 	}
 
+	log.Info("get new_collations_enabled_on_first_bootstrap for TiDB", zap.Bool("value", enabled))
 	if enabled {
 		collate.SetNewCollationEnabledForTest(true)
 	}
@@ -979,12 +981,9 @@ func EnableNewCollationIfNeeded(ctx context.Context, conn *sql.DB) error {
 // GetCollator returns a collator for the specified collation.
 // If new collation is not enabled, it returns a binary collator.
 func GetCollator(collation string) collate.Collator {
-	if collation == "" {
-		collation = "binary"
+	if collation == "" || !collate.NewCollationEnabled() {
+		return collate.GetBinaryCollator()
 	}
 
-	if collate.NewCollationEnabled() {
-		return collate.GetCollator(collation)
-	}
-	return collate.GetBinaryCollator()
+	return collate.GetCollator(collation)
 }
