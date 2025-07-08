@@ -32,12 +32,17 @@ import (
 	"github.com/pingcap/tidb/pkg/parser"
 	tmysql "github.com/pingcap/tidb/pkg/parser/mysql"
 	"github.com/pingcap/tidb/pkg/types"
+	"github.com/pingcap/tidb/pkg/util/collate"
 	contextutil "github.com/pingcap/tidb/pkg/util/context"
 	"github.com/pingcap/tidb/pkg/util/dbterror"
 	"go.uber.org/zap"
 
 	"github.com/pingcap/tidb-tools/pkg/utils"
 )
+
+func init() {
+	collate.SetNewCollationEnabledForTest(false)
+}
 
 const (
 	// DefaultRetryTime is the default retry time to execute sql
@@ -940,4 +945,46 @@ func GetParserForDB(ctx context.Context, db QueryExecutor) (*parser.Parser, erro
 	parser2 := parser.New()
 	parser2.SetSQLMode(mode)
 	return parser2, nil
+}
+
+// EnableNewCollationIfNeeded checks the `new_collations_enabled_on_first_bootstrap` config and enable new collation if needed.
+// If any TiDB instance doesn't support new collation, we will use binary collation for data compaarison.
+func EnableNewCollationIfNeeded(ctx context.Context, conn *sql.DB) error {
+	rows, err := conn.QueryContext(ctx, `show config where name = "new_collations_enabled_on_first_bootstrap`)
+	if err != nil {
+		return errors.Annotatef(err, "get new_collations_enabled_on_first_bootstrap")
+	}
+	//nolint: errcheck
+	defer rows.Close()
+
+	enabled := true
+	for rows.Next() {
+		fields, err1 := ScanRow(rows)
+		if err1 != nil {
+			return errors.Trace(err1)
+		}
+		value := string(fields["Value"].Data)
+		if strings.ToLower(value) == "false" {
+			enabled = false
+		}
+	}
+
+	if enabled {
+		collate.SetNewCollationEnabledForTest(true)
+	}
+
+	return nil
+}
+
+// GetCollator returns a collator for the specified collation.
+// If new collation is not enabled, it returns a binary collator.
+func GetCollator(collation string) collate.Collator {
+	if collation == "" {
+		collation = "binary"
+	}
+
+	if collate.NewCollationEnabled() {
+		return collate.GetCollator(collation)
+	}
+	return collate.GetBinaryCollator()
 }
