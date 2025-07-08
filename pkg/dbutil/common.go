@@ -964,8 +964,13 @@ func EnableNewCollationIfNeeded(ctx context.Context, conn *sql.DB) error {
 		if err1 != nil {
 			return errors.Trace(err1)
 		}
-		value := string(fields["Value"].Data)
-		if strings.EqualFold(value, "false") {
+
+		f, ok := fields["Value"]
+		if !ok {
+			return errors.Errorf("Value field not found in show config, maybe TiDB has changed the output of `show config`")
+		}
+
+		if strings.EqualFold(string(f.Data), "false") {
 			enabled = false
 		}
 	}
