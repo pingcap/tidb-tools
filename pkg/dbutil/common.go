@@ -949,7 +949,7 @@ func GetParserForDB(ctx context.Context, db QueryExecutor) (*parser.Parser, erro
 }
 
 // EnableNewCollationIfNeeded checks the `new_collations_enabled_on_first_bootstrap` config and enable new collation if needed.
-// If any TiDB instance doesn't support new collation, we will use binary collation for data compaarison.
+// If any TiDB instance doesn't support new collation, we will use binary collation for data comparison.
 func EnableNewCollationIfNeeded(ctx context.Context, conn *sql.DB) error {
 	rows, err := conn.QueryContext(ctx, `show config where name = "new_collations_enabled_on_first_bootstrap"`)
 	if err != nil {
