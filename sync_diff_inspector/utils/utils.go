@@ -35,6 +35,7 @@ import (
 	pmodel "github.com/pingcap/tidb/pkg/parser/model"
 	"github.com/pingcap/tidb/pkg/parser/mysql"
 	"github.com/pingcap/tidb/pkg/types"
+	"github.com/pingcap/tidb/pkg/util/collate"
 	"go.uber.org/zap"
 )
 
@@ -540,7 +541,10 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 		ok           bool
 	)
 
-	collator := dbutil.GetCollator(collation)
+	if collation == "" {
+		collation = "binary"
+	}
+	collator := collate.GetCollator(collation)
 
 	// For string comparison, ctx is not used, so just create a dummy context.
 	dummyCtx := types.Context{}

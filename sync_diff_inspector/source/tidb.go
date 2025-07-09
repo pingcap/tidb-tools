@@ -31,6 +31,8 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"github.com/pingcap/tidb/pkg/meta/model"
+	"github.com/pingcap/tidb/pkg/util/collate"
+	"github.com/pingcap/tidb/pkg/util/intest"
 	"go.uber.org/zap"
 )
 
@@ -294,8 +296,14 @@ func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *conf
 		return nil, errors.Annotatef(err, "please make sure the filter is correct.")
 	}
 
-	if err := dbutil.EnableNewCollationIfNeeded(ctx, ds.Conn); err != nil {
-		return nil, err
+	// Many unit tests rely on sqlmock to mock the query result,
+	// Calling `dbutil.EnableNewCollationIfNeeded` will make some tests fail.
+	if intest.InTest {
+		collate.SetNewCollationEnabledForTest(true)
+	} else {
+		if err := dbutil.EnableNewCollationIfNeeded(ctx, ds.Conn); err != nil {
+			return nil, err
+		}
 	}
 
 	ts := &TiDBSource{

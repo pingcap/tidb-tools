@@ -982,13 +982,3 @@ func EnableNewCollationIfNeeded(ctx context.Context, conn *sql.DB) error {
 
 	return nil
 }
-
-// GetCollator returns a collator for the specified collation.
-// If new collation is not enabled, it returns a binary collator.
-func GetCollator(collation string) collate.Collator {
-	if collation == "" || !collate.NewCollationEnabled() {
-		return collate.GetBinaryCollator()
-	}
-
-	return collate.GetCollator(collation)
-}
