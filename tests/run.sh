@@ -99,7 +99,7 @@ EOF
     echo "Starting TiDB without new collation..."
     tidb-server \
         -P 4002 \
-        --path=$OUT_DIR/tidb \
+        --path=$OUT_DIR/tidb2 \
         --status=30080 \
         --config "$OUT_DIR/tidb-disable-collation-config.toml" \
         --log-file "$OUT_DIR/tidb2.log" \
