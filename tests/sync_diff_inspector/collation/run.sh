@@ -13,6 +13,7 @@ mkdir -p $FIX_DIR
 mysql -uroot -h 127.0.0.1 -P 4000 -e "create database if not exists collation_test;"
 mysql -uroot -h 127.0.0.1 -P 4001 -e "create database if not exists collation_test;"
 mysql -uroot -h 127.0.0.1 -P 4002 -e "create database if not exists collation_test;"
+mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create database if not exists collation_test;"
 
 echo "Test1: collation with different ci"
 mysql -uroot -h 127.0.0.1 -P 4000 -e "create table collation_test.t (a varchar(16) collate utf8mb4_general_ci, b int, primary key(a, b));"
@@ -37,8 +38,8 @@ check_contains "+3/-3" $OUT_DIR/summary.txt
 rm -rf $OUT_DIR/*
 
 echo "Test3: use collation not in new-collations"
-mysql -uroot -h 127.0.0.1 -P 4000 -e "create table collation_test.t3 (id int PRIMARY KEY, name varchar(20) COLLATE utf8mb4_0900_as_cs);"
-mysql -uroot -h 127.0.0.1 -P 4000 -e "insert into collation_test.t3 values (1, 'a'), (2, 'b');"
+mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table collation_test.t3 (id int PRIMARY KEY, name varchar(20) COLLATE utf8mb4_0900_as_cs);"
+mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "insert into collation_test.t3 values (1, 'a'), (2, 'b');"
 mysql -uroot -h 127.0.0.1 -P 4002 -e "create table collation_test.t3 (id int PRIMARY KEY, name varchar(20) COLLATE utf8mb4_0900_as_cs);"
 mysql -uroot -h 127.0.0.1 -P 4002 -e "insert into collation_test.t3 values (1, 'a'), (2, 'b');"
 
