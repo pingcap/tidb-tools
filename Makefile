@@ -57,7 +57,7 @@ dump_region:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/dump_region ./dump_region
 
 sync_diff_inspector:
-	$(GO) build -ldflags '$(LDFLAGS)' -gcflags="all=-N -l" -o bin/sync_diff_inspector ./sync_diff_inspector
+	$(GO) build -ldflags '$(LDFLAGS)' -o bin/sync_diff_inspector ./sync_diff_inspector
 
 ddl_checker:
 	$(GO) build -ldflags '$(LDFLAGS)' -o bin/ddl_checker ./ddl_checker
