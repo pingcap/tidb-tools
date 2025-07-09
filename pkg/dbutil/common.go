@@ -40,11 +40,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/utils"
 )
 
-func init() {
-	// disable new collation by default to pass table struct parsing
-	collate.SetNewCollationEnabledForTest(false)
-}
-
 const (
 	// DefaultRetryTime is the default retry time to execute sql
 	DefaultRetryTime = 10

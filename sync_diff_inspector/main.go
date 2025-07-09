@@ -25,9 +25,14 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
+	"github.com/pingcap/tidb/pkg/util/collate"
 	flag "github.com/spf13/pflag"
 	"go.uber.org/zap"
 )
+
+func init() {
+	collate.SetNewCollationEnabledForTest(false)
+}
 
 func main() {
 	cfg := config.NewConfig()
