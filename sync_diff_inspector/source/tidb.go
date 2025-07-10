@@ -293,7 +293,6 @@ func NewTiDBSource(ctx context.Context, tableDiffs []*common.TableDiff, ds *conf
 	if err != nil {
 		return nil, errors.Annotatef(err, "please make sure the filter is correct.")
 	}
-
 	ts := &TiDBSource{
 		tableDiffs:        tableDiffs,
 		sourceTableMap:    sourceTableMap,
