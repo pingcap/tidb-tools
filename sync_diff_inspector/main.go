@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -26,24 +25,13 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/utils"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/config"
-	"github.com/pingcap/tidb/pkg/parser/charset"
+	"github.com/pingcap/tidb/pkg/util/collate"
 	flag "github.com/spf13/pflag"
 	"go.uber.org/zap"
 )
 
 func init() {
-	c := &charset.Charset{
-		Name:             "gbk",
-		DefaultCollation: "gbk_chinese_ci",
-		Collations:       map[string]*charset.Collation{},
-		Maxlen:           2,
-	}
-	charset.AddCharset(c)
-	for _, coll := range charset.GetSupportedCollations() {
-		if strings.EqualFold(coll.CharsetName, c.Name) {
-			charset.AddCollation(coll)
-		}
-	}
+	collate.SetNewCollationEnabledForTest(false)
 }
 
 func main() {
@@ -135,6 +123,9 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 		log.Info("Check table data only, skip struct check")
 	}
 	if !cfg.CheckStructOnly {
+		// Only enable new collation for data comparison.
+		collate.SetNewCollationEnabledForTest(true)
+
 		err = d.Equal(ctx)
 		if err != nil {
 			fmt.Printf("An error occured while comparing table data: %s, please check log info in %s for full details\n",
