@@ -32,7 +32,6 @@ import (
 	"github.com/pingcap/tidb/pkg/parser"
 	tmysql "github.com/pingcap/tidb/pkg/parser/mysql"
 	"github.com/pingcap/tidb/pkg/types"
-	"github.com/pingcap/tidb/pkg/util/collate"
 	contextutil "github.com/pingcap/tidb/pkg/util/context"
 	"github.com/pingcap/tidb/pkg/util/dbterror"
 	"go.uber.org/zap"
@@ -941,39 +940,4 @@ func GetParserForDB(ctx context.Context, db QueryExecutor) (*parser.Parser, erro
 	parser2 := parser.New()
 	parser2.SetSQLMode(mode)
 	return parser2, nil
-}
-
-// EnableNewCollationIfNeeded checks the `new_collations_enabled_on_first_bootstrap` config and enable new collation if needed.
-// If any TiDB instance doesn't support new collation, we will use binary collation for data comparison.
-func EnableNewCollationIfNeeded(ctx context.Context, conn *sql.DB) error {
-	rows, err := conn.QueryContext(ctx, `show config where name = "new_collations_enabled_on_first_bootstrap"`)
-	if err != nil {
-		return errors.Annotatef(err, "get new_collations_enabled_on_first_bootstrap")
-	}
-	//nolint: errcheck
-	defer rows.Close()
-
-	enabled := true
-	for rows.Next() {
-		fields, err1 := ScanRow(rows)
-		if err1 != nil {
-			return errors.Trace(err1)
-		}
-
-		f, ok := fields["Value"]
-		if !ok {
-			return errors.Errorf("Value field not found in show config, maybe TiDB has changed the output of `show config`")
-		}
-
-		if strings.EqualFold(string(f.Data), "false") {
-			enabled = false
-		}
-	}
-
-	log.Info("get new_collations_enabled_on_first_bootstrap for TiDB", zap.Bool("value", enabled))
-	if enabled {
-		collate.SetNewCollationEnabledForTest(true)
-	}
-
-	return nil
 }

@@ -123,6 +123,9 @@ func checkSyncState(ctx context.Context, cfg *config.Config) bool {
 		log.Info("Check table data only, skip struct check")
 	}
 	if !cfg.CheckStructOnly {
+		// Only enable new collation for data comparison.
+		collate.SetNewCollationEnabledForTest(true)
+
 		err = d.Equal(ctx)
 		if err != nil {
 			fmt.Printf("An error occured while comparing table data: %s, please check log info in %s for full details\n",
