@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"testing"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -180,7 +181,11 @@ func (d *DataSource) RegisterTLS() error {
 	}
 
 	log.Info("success to parse tls config")
-	sec.TLSName = "sync-diff-inspector-" + uuid.NewString()
+	if testing.Testing() {
+		sec.TLSName = "sync-diff-inspector-test-dummy"
+	} else {
+		sec.TLSName = "sync-diff-inspector-" + uuid.NewString()
+	}
 	err = mysql.RegisterTLSConfig(sec.TLSName, tlsConfig)
 	return errors.Trace(err)
 }
