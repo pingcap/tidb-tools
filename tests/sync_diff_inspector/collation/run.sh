@@ -46,3 +46,29 @@ mysql -uroot -h 127.0.0.1 -P 4002 -e "insert into collation_test.t3 values (1, '
 echo "check should pass"
 sync_diff_inspector --config=./config3.toml > $OUT_DIR/expression_diff.output
 rm -rf $OUT_DIR/*
+
+echo "Test4: MySQL shards with collation"
+mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table collation_test.shard0 (name varchar(20) COLLATE utf8mb4_general_ci, UNIQUE KEY i(name));"
+mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "insert into collation_test.shard0 values ('a'), ('C');"
+mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table collation_test.shard1 (name varchar(20) COLLATE utf8mb4_general_ci, UNIQUE KEY i(name));"
+mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "insert into collation_test.shard1 values ('B'), ('d');"
+mysql -uroot -h 127.0.0.1 -P 4001 -e "create table collation_test.shards (name varchar(20) COLLATE utf8mb4_general_ci, UNIQUE KEY i(name));"
+mysql -uroot -h 127.0.0.1 -P 4001 -e "insert into collation_test.shards values ('a'), ('e'), ('B'), ('C'), ('d');"
+
+echo "check should return one superfluous rows"
+sync_diff_inspector --config=./config1.toml > $OUT_DIR/expression_diff.output || true
+check_contains "+0/-1" $OUT_DIR/summary.txt
+rm -rf $OUT_DIR/*
+
+echo "Test5: MySQL shards with collation"
+mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table collation_test.shard2 (name varchar(20), UNIQUE KEY i(name));"
+mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "insert into collation_test.shard2 values ('a'), ('C');"
+mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table collation_test.shard3 (name varchar(20), UNIQUE KEY i(name));"
+mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "insert into collation_test.shard3 values ('B'), ('d');"
+mysql -uroot -h 127.0.0.1 -P 4001 -e "create table collation_test.shards2 (name varchar(20), UNIQUE KEY i(name));"
+mysql -uroot -h 127.0.0.1 -P 4001 -e "insert into collation_test.shards2 values ('a'), ('e'), ('B'), ('C'), ('d');"
+
+echo "check should return one superfluous rows"
+sync_diff_inspector --config=./config1.toml > $OUT_DIR/expression_diff.output || true
+check_contains "+0/-1" $OUT_DIR/summary.txt
+rm -rf $OUT_DIR/*
