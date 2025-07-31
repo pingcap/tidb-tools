@@ -94,12 +94,12 @@ func (s *MySQLSources) Close() {
 	}
 }
 
-func getCollatorsForTable(table *common.TableDiff) []collate.Collator {
-	collators := make([]collate.Collator, 0, len(table.Info.Columns))
+func getCollatorsForTable(table *common.TableDiff, orderByCols []*model.ColumnInfo) []collate.Collator {
+	collators := make([]collate.Collator, 0, len(orderByCols))
 
 	// If collation is set in the config, use it.
 	// Otherwise, use the default collator for each column.
-	for _, col := range table.Info.Columns {
+	for _, col := range orderByCols {
 		var collation string
 		if table.Collation != "" {
 			collation = table.Collation
@@ -108,8 +108,7 @@ func getCollatorsForTable(table *common.TableDiff) []collate.Collator {
 		} else {
 			collation = table.Info.Collate
 		}
-		collator := collate.GetCollator(collation)
-		collators = append(collators, collator)
+		collators = append(collators, collate.GetCollator(collation))
 	}
 
 	return collators
@@ -219,7 +218,7 @@ func (s *MySQLSources) GetRowsIterator(ctx context.Context, tableRange *splitter
 	sourceRowDatas := &common.RowDatas{
 		Rows:         make([]common.RowData, 0, len(sourceRows)),
 		OrderKeyCols: orderKeyCols,
-		Collators:    getCollatorsForTable(table),
+		Collators:    getCollatorsForTable(table, orderKeyCols),
 	}
 	heap.Init(sourceRowDatas)
 	// first push one row from all the sources into heap
