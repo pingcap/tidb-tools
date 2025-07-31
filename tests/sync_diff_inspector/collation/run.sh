@@ -52,8 +52,8 @@ mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table collation_test.s
 mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "insert into collation_test.shard0 values ('a'), ('C');"
 mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table collation_test.shard1 (name varchar(20) COLLATE utf8mb4_general_ci, UNIQUE KEY i(name));"
 mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "insert into collation_test.shard1 values ('B'), ('d');"
-mysql -uroot -h 127.0.0.1 -P 4001 -e "create table collation_test.shards (name varchar(20) COLLATE utf8mb4_general_ci, UNIQUE KEY i(name));"
-mysql -uroot -h 127.0.0.1 -P 4001 -e "insert into collation_test.shards values ('a'), ('e'), ('B'), ('C'), ('d');"
+mysql -uroot -h 127.0.0.1 -P 4000 -e "create table collation_test.shards (name varchar(20) COLLATE utf8mb4_general_ci, UNIQUE KEY i(name));"
+mysql -uroot -h 127.0.0.1 -P 4000 -e "insert into collation_test.shards values ('a'), ('e'), ('B'), ('C'), ('d');"
 
 echo "check should return one superfluous rows"
 sync_diff_inspector --config=./config_shard.toml > $OUT_DIR/expression_diff.output || true
@@ -65,8 +65,8 @@ mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table collation_test.s
 mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "insert into collation_test.shard2 values (1, 'a'), (2, 'C');"
 mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table collation_test.shard3 (id int, name varchar(20), UNIQUE KEY i(name));"
 mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "insert into collation_test.shard3 values (3, 'B'), (4, 'd');"
-mysql -uroot -h 127.0.0.1 -P 4001 -e "create table collation_test.shards2 (id int, name varchar(20), UNIQUE KEY i(name));"
-mysql -uroot -h 127.0.0.1 -P 4001 -e "insert into collation_test.shards2 values (1, 'a'), (5, 'e'), (3, 'B'), (2, 'C'), (4, 'd');"
+mysql -uroot -h 127.0.0.1 -P 4000 -e "create table collation_test.shards2 (id int, name varchar(20), UNIQUE KEY i(name));"
+mysql -uroot -h 127.0.0.1 -P 4000 -e "insert into collation_test.shards2 values (1, 'a'), (5, 'e'), (3, 'B'), (2, 'C'), (4, 'd');"
 
 echo "check should return one superfluous rows"
 sync_diff_inspector --config=./config_shard2.toml > $OUT_DIR/expression_diff.output || true
