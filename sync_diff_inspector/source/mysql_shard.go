@@ -31,7 +31,6 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/splitter"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"github.com/pingcap/tidb/pkg/meta/model"
-	"github.com/pingcap/tidb/pkg/util/collate"
 	"go.uber.org/zap"
 )
 
@@ -92,26 +91,6 @@ func (s *MySQLSources) Close() {
 			db.DBConn.Close()
 		}
 	}
-}
-
-func getCollatorsForTable(table *common.TableDiff, orderByCols []*model.ColumnInfo) []collate.Collator {
-	collators := make([]collate.Collator, 0, len(orderByCols))
-
-	// If collation is set in the config, use it.
-	// Otherwise, use the default collator for each column.
-	for _, col := range orderByCols {
-		var collation string
-		if table.Collation != "" {
-			collation = table.Collation
-		} else if col.FieldType.GetCollate() != "" {
-			collation = col.FieldType.GetCollate()
-		} else {
-			collation = table.Info.Collate
-		}
-		collators = append(collators, collate.GetCollator(collation))
-	}
-
-	return collators
 }
 
 func (s *MySQLSources) GetCountAndMd5(ctx context.Context, tableRange *splitter.RangeInfo) *ChecksumInfo {
@@ -218,7 +197,7 @@ func (s *MySQLSources) GetRowsIterator(ctx context.Context, tableRange *splitter
 	sourceRowDatas := &common.RowDatas{
 		Rows:         make([]common.RowData, 0, len(sourceRows)),
 		OrderKeyCols: orderKeyCols,
-		Collators:    getCollatorsForTable(table, orderKeyCols),
+		Collators:    common.GetCollatorsForTable(table, orderKeyCols),
 	}
 	heap.Init(sourceRowDatas)
 	// first push one row from all the sources into heap
