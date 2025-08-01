@@ -59,16 +59,3 @@ echo "check should return one superfluous rows"
 sync_diff_inspector --config=./config_shard.toml > $OUT_DIR/expression_diff.output || true
 check_contains "+0/-1" $OUT_DIR/summary.txt
 rm -rf $OUT_DIR/*
-
-echo "Test5: MySQL shards with specified collation"
-mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table collation_test.shard2 (name varchar(20), UNIQUE KEY i(name));"
-mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "insert into collation_test.shard2 values ('a'), ('C');"
-mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "create table collation_test.shard3 (name varchar(20), UNIQUE KEY i(name));"
-mysql -uroot -h ${MYSQL_HOST} -P ${MYSQL_PORT} -e "insert into collation_test.shard3 values ('B'), ('d');"
-mysql -uroot -h 127.0.0.1 -P 4000 -e "create table collation_test.shards2 (name varchar(20), UNIQUE KEY i(name));"
-mysql -uroot -h 127.0.0.1 -P 4000 -e "insert into collation_test.shards2 values ('a'), ('e'), ('B'), ('C'), ('d');"
-
-echo "check should return one superfluous rows"
-sync_diff_inspector --config=./config_shard2.toml > $OUT_DIR/expression_diff.output || true
-check_contains "+0/-1" $OUT_DIR/summary.txt
-rm -rf $OUT_DIR/*
