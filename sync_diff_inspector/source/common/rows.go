@@ -20,6 +20,8 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
 	"github.com/pingcap/tidb/pkg/meta/model"
+	"github.com/pingcap/tidb/pkg/types"
+	"github.com/pingcap/tidb/pkg/util/collate"
 	"go.uber.org/zap"
 )
 
@@ -32,11 +34,13 @@ type RowData struct {
 type RowDatas struct {
 	Rows         []RowData
 	OrderKeyCols []*model.ColumnInfo
+	Collators    []collate.Collator
+	Ctx          types.Context
 }
 
 func (r RowDatas) Len() int { return len(r.Rows) }
 func (r RowDatas) Less(i, j int) bool {
-	for _, col := range r.OrderKeyCols {
+	for idx, col := range r.OrderKeyCols {
 		col1, ok := r.Rows[i].Data[col.Name.O]
 		if !ok {
 			log.Fatal("data don't have column", zap.String("column", col.Name.O), zap.Reflect("data", r.Rows[i].Data))
@@ -59,10 +63,14 @@ func (r RowDatas) Less(i, j int) bool {
 		strData2 := string(col2.Data)
 
 		if utils.NeedQuotes(col.FieldType.GetType()) {
-			if strData1 == strData2 {
+			strData1 := types.NewCollationStringDatum(strData1, "")
+			strData2 := types.NewCollationStringDatum(strData2, "")
+			cmp, _ := strData1.Compare(r.Ctx, &strData2, r.Collators[idx])
+
+			if cmp == 0 {
 				continue
 			}
-			return strData1 < strData2
+			return cmp < 0
 		}
 
 		num1, err1 := strconv.ParseFloat(strData1, 64)
