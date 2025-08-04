@@ -26,6 +26,7 @@ import (
 	"github.com/pingcap/tidb/pkg/tablecodec"
 	"github.com/pingcap/tidb/pkg/util/codec"
 	pd "github.com/tikv/pd/client"
+	"github.com/tikv/pd/client/pkg/caller"
 )
 
 var (
@@ -65,7 +66,7 @@ func main() {
 	}
 
 	// TODO: support tsl
-	client, err := pd.NewClient([]string{*pdAddr}, pd.SecurityOption{
+	client, err := pd.NewClient(caller.Component("tidb-tools-dump-region"), []string{*pdAddr}, pd.SecurityOption{
 		CAPath:   "",
 		CertPath: "",
 		KeyPath:  "",

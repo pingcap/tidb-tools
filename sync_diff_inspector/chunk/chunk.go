@@ -23,8 +23,8 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/pkg/meta/model"
+	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/parser/charset"
-	pmodel "github.com/pingcap/tidb/pkg/parser/model"
 	"github.com/pingcap/tidb/pkg/parser/mysql"
 	"github.com/pingcap/tidb/pkg/types"
 	"go.uber.org/zap"
@@ -157,7 +157,7 @@ type Range struct {
 
 	// IndexColumnNames store column names of index splitting chunks.
 	// It's used to find index name and generate index hint in checksum query.
-	IndexColumnNames []pmodel.CIStr `json:"index-column-names,omitempty"`
+	IndexColumnNames []ast.CIStr `json:"index-column-names,omitempty"`
 
 	// Filled during runtime
 	columnOffset map[string]int   `json:"-"`
@@ -513,7 +513,7 @@ func GenFakeTableInfo(cols ...string) *model.TableInfo {
 		info.Columns = append(info.Columns,
 			&model.ColumnInfo{
 				FieldType: *tp,
-				Name:      pmodel.NewCIStr(name),
+				Name:      ast.NewCIStr(name),
 			},
 		)
 	}

@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/chunk"
-	"github.com/pingcap/tidb/pkg/parser/model"
+	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/stretchr/testify/require"
 )
 
@@ -57,7 +57,7 @@ func TestSaveChunk(t *testing.T) {
 							HasUpper: i != rounds,
 						},
 					},
-					IndexColumnNames: []model.CIStr{model.NewCIStr("col1"), model.NewCIStr("col2")},
+					IndexColumnNames: []ast.CIStr{ast.NewCIStr("col1"), ast.NewCIStr("col2")},
 				},
 
 				State: SuccessState,
@@ -85,7 +85,7 @@ func TestLoadChunk(t *testing.T) {
 	ctx := context.Background()
 	rounds := 100
 	wg := &sync.WaitGroup{}
-	testColNames := []model.CIStr{model.NewCIStr("col1"), model.NewCIStr("col2")}
+	testColNames := []ast.CIStr{ast.NewCIStr("col1"), ast.NewCIStr("col2")}
 	for i := 0; i < rounds; i++ {
 		wg.Add(1)
 		go func(i int) {
