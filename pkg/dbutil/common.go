@@ -508,76 +508,49 @@ type Bucket struct {
 	UpperBound string
 }
 
-// GetBucketsInfo SHOW STATS_BUCKETS in TiDB.
+// GetBucketsInfo select from stats_buckets in TiDB.
 func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string, tableInfo *model.TableInfo) (map[string][]Bucket, error) {
-	/*
-		example in tidb:
-		mysql> SHOW STATS_BUCKETS WHERE db_name= "test" AND table_name="testa";
-		+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
-		| Db_name | Table_name | Partition_name | Column_name | Is_index | Bucket_id | Count | Repeats | Lower_Bound         | Upper_Bound         |
-		+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
-		| test    | testa      |                | PRIMARY     |        1 |         0 |    64 |       1 | 1846693550524203008 | 1846838686059069440 |
-		| test    | testa      |                | PRIMARY     |        1 |         1 |   128 |       1 | 1846840885082324992 | 1847056389361369088 |
-		+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
-	*/
 	buckets := make(map[string][]Bucket)
-	query := "SHOW STATS_BUCKETS WHERE db_name= ? AND table_name= ?;"
+	query := "select hist_id,is_index,bucket_id,count,lower_bound,upper_bound from stats_buckets where table_id = ?;"
 	log.Debug("GetBucketsInfo", zap.String("sql", query), zap.String("schema", schema), zap.String("table", table))
 
-	rows, err := db.QueryContext(ctx, query, schema, table)
+	rows, err := db.QueryContext(ctx, query, tableInfo.ID)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	defer rows.Close()
 
-	cols, err := rows.Columns()
-	if err != nil {
-		return nil, errors.Trace(err)
+	indices := FindAllIndex(tableInfo)
+	indexMap := make(map[int64]string)
+	for _, index := range indices {
+		indexMap[index.ID] = index.Name.O
 	}
 
 	for rows.Next() {
-		var dbName, tableName, partitionName, columnName, lowerBound, upperBound sql.NullString
-		var isIndex, bucketID, count, repeats, ndv sql.NullInt64
-
-		// add partiton_name in new version
-		switch len(cols) {
-		case 9:
-			err = rows.Scan(&dbName, &tableName, &columnName, &isIndex, &bucketID, &count, &repeats, &lowerBound, &upperBound)
-		case 10:
-			err = rows.Scan(&dbName, &tableName, &partitionName, &columnName, &isIndex, &bucketID, &count, &repeats, &lowerBound, &upperBound)
-		case 11:
-			err = rows.Scan(&dbName, &tableName, &partitionName, &columnName, &isIndex, &bucketID, &count, &repeats, &lowerBound, &upperBound, &ndv)
-		default:
-			return nil, errors.New("Unknown struct for buckets info")
-		}
+		var histID, isIndex, bucketID, count sql.NullInt64
+		var lowerBound, upperBound sql.NullString
+		err := rows.Scan(&histID, &isIndex, &bucketID, &count, &lowerBound, &upperBound)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 
-		if _, ok := buckets[columnName.String]; !ok {
-			buckets[columnName.String] = make([]Bucket, 0, 100)
-		}
-		buckets[columnName.String] = append(buckets[columnName.String], Bucket{
+		bucket := Bucket{
 			Count:      count.Int64,
 			LowerBound: lowerBound.String,
 			UpperBound: upperBound.String,
-		})
-	}
+		}
 
-	// when primary key is int type, the columnName will be column's name, not `PRIMARY`, check and transform here.
-	indices := FindAllIndex(tableInfo)
-	for _, index := range indices {
-		if index.Name.O != "PRIMARY" {
-			continue
+		var bucketKey string
+		if isIndex.Int64 == 1 {
+			bucketKey = indexMap[histID.Int64]
+		} else {
+			bucketKey = tableInfo.Columns[histID.Int64].Name.O
 		}
-		_, ok := buckets[index.Name.O]
-		if !ok && len(index.Columns) == 1 {
-			if _, ok := buckets[index.Columns[0].Name.O]; !ok {
-				return nil, errors.NotFoundf("primary key on %s in buckets info", index.Columns[0].Name.O)
-			}
-			buckets[index.Name.O] = buckets[index.Columns[0].Name.O]
-			delete(buckets, index.Columns[0].Name.O)
+
+		if _, ok := buckets[bucketKey]; !ok {
+			buckets[bucketKey] = make([]Bucket, 0, 100)
 		}
+		buckets[bucketKey] = append(buckets[bucketKey], bucket)
 	}
 
 	return buckets, errors.Trace(rows.Err())
