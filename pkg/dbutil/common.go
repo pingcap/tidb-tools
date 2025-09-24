@@ -526,6 +526,11 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 		indexMap[index.ID] = index.Name.O
 	}
 
+	columnMap := make(map[int64]string)
+	for _, col := range tableInfo.Columns {
+		columnMap[col.ID] = col.Name.O
+	}
+
 	for rows.Next() {
 		var histID, isIndex, bucketID, count sql.NullInt64
 		var lowerBound, upperBound sql.NullString
@@ -544,7 +549,7 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 		if isIndex.Int64 == 1 {
 			bucketKey = indexMap[histID.Int64]
 		} else {
-			bucketKey = tableInfo.Columns[histID.Int64].Name.O
+			bucketKey = columnMap[histID.Int64]
 		}
 
 		if _, ok := buckets[bucketKey]; !ok {
