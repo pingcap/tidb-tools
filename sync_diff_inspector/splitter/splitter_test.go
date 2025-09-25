@@ -1039,23 +1039,27 @@ func TestRandomSpliterHint(t *testing.T) {
 
 func createFakeResultForBucketIterator(mock sqlmock.Sqlmock, indexCount int) {
 	/*
-		+---------+------------+-------------+----------+-----------+-------+---------+-------------+-------------+
-		| Db_name | Table_name | Column_name | Is_index | Bucket_id | Count | Repeats | Lower_Bound | Upper_Bound |
-		+---------+------------+-------------+----------+-----------+-------+---------+-------------+-------------+
-		| test    | test       | PRIMARY     |        1 |         0 |    64 |       1 | (0, 0)      | (63, 11)    |
-		| test    | test       | PRIMARY     |        1 |         1 |   128 |       1 | (64, 12)    | (127, 23)   |
-		| test    | test       | PRIMARY     |        1 |         2 |   192 |       1 | (128, 24)   | (191, 35)   |
-		| test    | test       | PRIMARY     |        1 |         3 |   256 |       1 | (192, 36)   | (255, 47)   |
-		| test    | test       | PRIMARY     |        1 |         4 |   320 |       1 | (256, 48)   | (319, 59)   |
-		+---------+------------+-------------+----------+-----------+-------+---------+-------------+-------------+
+		Updated to match new SELECT query format:
+		select hist_id,is_index,bucket_id,count,lower_bound,upper_bound from stats_buckets where table_id = ?;
+
+		+---------+----------+-----------+-------+-------------+-------------+
+		| hist_id | is_index | bucket_id | count | lower_bound | upper_bound |
+		+---------+----------+-----------+-------+-------------+-------------+
+		| 1       |        1 |         0 |    64 | (0, 0)      | (63, 11)    |
+		| 1       |        1 |         1 |   128 | (64, 12)    | (127, 23)   |
+		| 1       |        1 |         2 |   192 | (128, 24)   | (191, 35)   |
+		| 1       |        1 |         3 |   256 | (192, 36)   | (255, 47)   |
+		| 1       |        1 |         4 |   320 | (256, 48)   | (319, 59)   |
+		+---------+----------+-----------+-------+-------------+-------------+
 	*/
-	statsRows := sqlmock.NewRows([]string{"Db_name", "Table_name", "Column_name", "Is_index", "Bucket_id", "Count", "Repeats", "Lower_Bound", "Upper_Bound"})
-	for _, indexName := range []string{"PRIMARY", "i1", "i2", "i3", "i4"} {
-		for i := 0; i < 5; i++ {
-			statsRows.AddRow("test", "test", indexName, 1, (i+1)*64, (i+1)*64, 1, fmt.Sprintf("(%d, %d)", i*64, i*12), fmt.Sprintf("(%d, %d)", (i+1)*64-1, (i+1)*12-1))
+	statsRows := sqlmock.NewRows([]string{"hist_id", "is_index", "bucket_id", "count", "lower_bound", "upper_bound"})
+	for i := range []string{"PRIMARY", "i1", "i2", "i3", "i4"} {
+		histID := int64(i + 1) // hist_id starts from 1
+		for j := 0; j < 5; j++ {
+			statsRows.AddRow(histID, 1, j, (j+1)*64, fmt.Sprintf("(%d, %d)", j*64, j*12), fmt.Sprintf("(%d, %d)", (j+1)*64-1, (j+1)*12-1))
 		}
 	}
-	mock.ExpectQuery("SHOW STATS_BUCKETS").WillReturnRows(statsRows)
+	mock.ExpectQuery("select hist_id,is_index,bucket_id,count,lower_bound,upper_bound from stats_buckets where table_id = \\?").WillReturnRows(statsRows)
 
 	for i := 0; i < indexCount; i++ {
 		mock.ExpectQuery("SELECT COUNT\\(DISTINCT *").WillReturnRows(sqlmock.NewRows([]string{"SEL"}).AddRow("5"))
