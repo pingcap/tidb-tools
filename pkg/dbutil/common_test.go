@@ -353,16 +353,7 @@ func (*testDBSuite) TestGetBucketsInfoEmptyResult(c *C) {
 		Columns: []*model.ColumnInfo{
 			{ID: 1, Name: pmodel.NewCIStr("id"), Offset: 0},
 		},
-		Indices: []*model.IndexInfo{
-			{
-				ID:   1,
-				Name: pmodel.NewCIStr("PRIMARY"),
-				Columns: []*model.IndexColumn{
-					{Name: pmodel.NewCIStr("id"), Offset: 0},
-				},
-				Primary: true,
-			},
-		},
+		Indices: []*model.IndexInfo{},
 	}
 
 	// Mock empty result

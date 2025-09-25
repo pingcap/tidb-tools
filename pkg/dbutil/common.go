@@ -558,6 +558,21 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 		buckets[bucketKey] = append(buckets[bucketKey], bucket)
 	}
 
+	// when primary key is int type, the columnName will be column's name, not `PRIMARY`, check and transform here.
+	for _, index := range indices {
+		if index.Name.O != "PRIMARY" {
+			continue
+		}
+		_, ok := buckets[index.Name.O]
+		if !ok && len(index.Columns) == 1 {
+			if _, ok := buckets[index.Columns[0].Name.O]; !ok {
+				return nil, errors.NotFoundf("primary key on %s in buckets info", index.Columns[0].Name.O)
+			}
+			buckets[index.Name.O] = buckets[index.Columns[0].Name.O]
+			delete(buckets, index.Columns[0].Name.O)
+		}
+	}
+
 	return buckets, errors.Trace(rows.Err())
 }
 
