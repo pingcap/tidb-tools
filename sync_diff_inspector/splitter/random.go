@@ -60,7 +60,44 @@ func NewRandomIteratorWithCheckpoint(ctx context.Context, progressID string, tab
 		return nil, errors.Trace(err)
 	}
 
-	chunkRange := chunk.NewChunkRange()
+	chunkRange := chunk.NewChunkRange(table.Info)
+
+	// Below logic is modified from BucketIterator
+	// It's used to find the index which can match the split fields in RandomIterator.
+	fieldNames := utils.GetColumnNames(fields)
+	var indices = dbutil.FindAllIndex(table.Info)
+NEXTINDEX:
+	for _, index := range indices {
+		if index == nil {
+			continue
+		}
+		if startRange != nil && startRange.IndexID != index.ID {
+			continue
+		}
+
+		indexColumns := utils.GetColumnsFromIndex(index, table.Info)
+
+		if len(indexColumns) < len(index.Columns) {
+			// some column in index is ignored.
+			continue
+		}
+
+		if !utils.IsIndexMatchingColumns(index, fieldNames) {
+			continue
+		}
+
+		// skip the index that has expression column
+		for _, col := range indexColumns {
+			if col.Hidden {
+				continue NEXTINDEX
+			}
+		}
+
+		// Found the index, store column names
+		chunkRange.IndexColumnNames = utils.GetColumnNames(indexColumns)
+		break
+	}
+
 	beginIndex := 0
 	bucketChunkCnt := 0
 	chunkCnt := 0

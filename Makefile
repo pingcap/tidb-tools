@@ -30,7 +30,7 @@ define run_unit_test
 	@echo "running unit test for packages:" $(1)
 	@make failpoint-enable
 	@export log_level=error; \
-	$(GOTEST) -cover $(1) \
+	$(GOTEST) --tags=intest -cover $(1) \
 	|| { make failpoint-disable; exit 1; }
 	@make failpoint-disable
 endef

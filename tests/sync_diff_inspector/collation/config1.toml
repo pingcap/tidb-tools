@@ -2,7 +2,6 @@
 
 ######################### Global config #########################
 
-
 # how many goroutines are created to check data
 check-thread-count = 4
 
@@ -28,8 +27,6 @@ check-struct-only = false
     port = 4000
     user = "root"
     password = ""
-    session.tidb_opt_prefer_range_scan = "ON"
-    session.max_execution_time = 86400
     # remove comment if use tidb's snapshot data
     # snapshot = "2016-10-08 16:45:26"
 
@@ -46,17 +43,12 @@ check-struct-only = false
     target-instance = "tidb"
 
     # tables need to check.
-    target-check-tables = ["diff_test.test"]
+	target-check-tables = ["collation_test.t"]
 
-    # extra table config
-    target-configs= ["config1"]
+	target-configs = ["config1"]
 
-[table-configs]
+######################### Table config #########################
 [table-configs.config1]
-# tables need to use this specified config.
-# if use this config. target-tables should be a subset of #target-check-tables
-target-tables = ["diff_test.test"]
-
-range = "TRUE"#RANGE"a < 10 OR a > 200"
-index-fields = [""]
-ignore-columns = [""]#IGNORE
+    target-tables = ["collation_test.t"]
+    range = "TRUE"
+    collation = 'utf8mb4_general_ci'

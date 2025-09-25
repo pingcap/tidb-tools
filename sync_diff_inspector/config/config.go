@@ -108,12 +108,13 @@ type Security struct {
 
 // DataSource represents the Source Config.
 type DataSource struct {
-	Host     string             `toml:"host" json:"host"`
-	Port     int                `toml:"port" json:"port"`
-	User     string             `toml:"user" json:"user"`
-	Password utils.SecretString `toml:"password" json:"password"`
-	SqlMode  string             `toml:"sql-mode" json:"sql-mode"`
-	Snapshot string             `toml:"snapshot" json:"snapshot"`
+	Host            string             `toml:"host" json:"host"`
+	Port            int                `toml:"port" json:"port"`
+	User            string             `toml:"user" json:"user"`
+	Password        utils.SecretString `toml:"password" json:"password"`
+	SqlMode         string             `toml:"sql-mode" json:"sql-mode"`
+	Snapshot        string             `toml:"snapshot" json:"snapshot"`
+	SQLHintUseIndex string             `toml:"sql-hint-use-index" json:"sql-hint-use-index"`
 
 	Security *Security `toml:"security" json:"security"`
 
@@ -121,7 +122,8 @@ type DataSource struct {
 	Router         *router.Table
 	RouteTargetSet map[string]struct{} `json:"-"`
 
-	Conn *sql.DB
+	Conn          *sql.DB
+	SessionConfig SessionConfig `toml:"session" json:"session"`
 }
 
 // IsAutoSnapshot returns true if the tidb_snapshot is expected to automatically
@@ -192,6 +194,14 @@ func (d *DataSource) ToDriverConfig() *mysql.Config {
 		cfg.TLSConfig = d.Security.TLSName
 	}
 
+	for param, value := range d.SessionConfig {
+		switch v := value.(type) {
+		case string:
+			cfg.Params[param] = "'" + strings.ReplaceAll(v, "'", "''") + "'"
+		default:
+			cfg.Params[param] = fmt.Sprint(v)
+		}
+	}
 	return cfg
 }
 
@@ -356,6 +366,9 @@ func (t *TaskConfig) ComputeConfigHash() (string, error) {
 
 	return fmt.Sprintf("%x", sha256.Sum256(hash)), nil
 }
+
+// SessionConfig the the session level configuration for data source.
+type SessionConfig map[string]any
 
 // Config is the configuration.
 type Config struct {

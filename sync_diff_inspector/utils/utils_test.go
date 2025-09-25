@@ -163,81 +163,81 @@ func TestBasicTableUtilOperation(t *testing.T) {
 	require.Equal(t, GenerateDeleteDML(data1, tableInfo, "schema"), "DELETE FROM `schema`.`test` WHERE `a` = 1 AND `b` = 'a' AND `c` = 1.22 AND `d` = 'sdf' LIMIT 1;")
 
 	// same
-	equal, cmp, err := CompareData(data1, data1, orderKeyCols, columns)
+	equal, cmp, err := CompareData(data1, data1, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(0))
+	require.EqualValues(t, cmp, 0)
 	require.True(t, equal)
 
 	// orderkey same but other column different
-	equal, cmp, err = CompareData(data1, data3, orderKeyCols, columns)
+	equal, cmp, err = CompareData(data1, data3, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(-1))
+	require.EqualValues(t, cmp, -1)
 	require.False(t, equal)
 
-	equal, cmp, err = CompareData(data3, data1, orderKeyCols, columns)
+	equal, cmp, err = CompareData(data3, data1, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(1))
+	require.EqualValues(t, cmp, 1)
 	require.False(t, equal)
 
 	// orderKey different
-	equal, cmp, err = CompareData(data1, data2, orderKeyCols, columns)
+	equal, cmp, err = CompareData(data1, data2, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(-1))
+	require.EqualValues(t, cmp, -1)
 	require.False(t, equal)
 
-	equal, cmp, err = CompareData(data2, data1, orderKeyCols, columns)
+	equal, cmp, err = CompareData(data2, data1, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(1))
+	require.EqualValues(t, cmp, 1)
 	require.False(t, equal)
 
-	equal, cmp, err = CompareData(data4, data1, orderKeyCols, columns)
+	equal, cmp, err = CompareData(data4, data1, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(0))
+	require.EqualValues(t, cmp, 0)
 	require.False(t, equal)
 
-	equal, cmp, err = CompareData(data1, data4, orderKeyCols, columns)
+	equal, cmp, err = CompareData(data1, data4, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(0))
+	require.EqualValues(t, cmp, 0)
 	require.False(t, equal)
 
-	equal, cmp, err = CompareData(data5, data4, orderKeyCols, columns)
+	equal, cmp, err = CompareData(data5, data4, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(1))
+	require.EqualValues(t, cmp, 1)
 	require.False(t, equal)
 
-	equal, cmp, err = CompareData(data4, data5, orderKeyCols, columns)
+	equal, cmp, err = CompareData(data4, data5, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(-1))
+	require.EqualValues(t, cmp, -1)
 	require.False(t, equal)
 
-	equal, cmp, err = CompareData(data4, data6, orderKeyCols, columns)
+	equal, cmp, err = CompareData(data4, data6, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(1))
+	require.EqualValues(t, cmp, 1)
 	require.False(t, equal)
 
-	equal, cmp, err = CompareData(data6, data4, orderKeyCols, columns)
+	equal, cmp, err = CompareData(data6, data4, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(-1))
+	require.EqualValues(t, cmp, -1)
 	require.False(t, equal)
 
-	equal, cmp, err = CompareData(data6, data7, orderKeyCols, columns)
+	equal, cmp, err = CompareData(data6, data7, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(0))
+	require.EqualValues(t, cmp, 0)
 	require.True(t, equal)
 
-	equal, cmp, err = CompareData(data1, data8, orderKeyCols, columns)
+	equal, cmp, err = CompareData(data1, data8, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(0))
+	require.EqualValues(t, cmp, 0)
 	require.False(t, equal)
 
-	equal, cmp, err = CompareData(data8, data1, orderKeyCols, columns)
+	equal, cmp, err = CompareData(data8, data1, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(0))
+	require.EqualValues(t, cmp, 0)
 	require.False(t, equal)
 
-	equal, cmp, err = CompareData(data8, data9, orderKeyCols, columns)
+	equal, cmp, err = CompareData(data8, data9, orderKeyCols, columns, "")
 	require.NoError(t, err)
-	require.Equal(t, cmp, int32(0))
+	require.EqualValues(t, cmp, 0)
 	require.False(t, equal)
 
 	// Test ignore columns
@@ -271,7 +271,7 @@ func TestGetCountAndMd5Checksum(t *testing.T) {
 
 	mock.ExpectQuery("SELECT COUNT.*FROM `test_schema`\\.`test_table` WHERE \\[23 45\\].*").WithArgs("123", "234").WillReturnRows(sqlmock.NewRows([]string{"CNT", "CHECKSUM"}).AddRow(123, 456))
 
-	count, checksum, err := GetCountAndMd5Checksum(ctx, conn, "test_schema", "test_table", tableInfo, "[23 45]", []interface{}{"123", "234"})
+	count, checksum, err := GetCountAndMd5Checksum(ctx, conn, "test_schema", "test_table", tableInfo, "[23 45]", "", []interface{}{"123", "234"})
 	require.NoError(t, err)
 	require.Equal(t, count, int64(123))
 	require.Equal(t, checksum, uint64(0x1c8))
@@ -347,12 +347,12 @@ func TestGenerateSQLs(t *testing.T) {
 	require.Equal(t, replaceSQL, "REPLACE INTO `diff_test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (NULL,NULL,'2018-01-01 00:00:00','10:10:10',11.1111);")
 	require.Equal(t, deleteSQL, "DELETE FROM `diff_test`.`atest` WHERE `id` is NULL AND `name` is NULL AND `birthday` = '2018-01-01 00:00:00' AND `update_time` = '10:10:10' AND `money` = 11.1111 LIMIT 1;")
 
-	// test value with "'"
-	rowsData["name"] = &dbutil.ColumnData{Data: []byte("a'a"), IsNull: false}
+	// test value with special characters
+	rowsData["name"] = &dbutil.ColumnData{Data: []byte("\b\"\n\\1'`"), IsNull: false}
 	replaceSQL = GenerateReplaceDML(rowsData, tableInfo, "diff_test")
 	deleteSQL = GenerateDeleteDML(rowsData, tableInfo, "diff_test")
-	require.Equal(t, replaceSQL, "REPLACE INTO `diff_test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (NULL,'a\\'a','2018-01-01 00:00:00','10:10:10',11.1111);")
-	require.Equal(t, deleteSQL, "DELETE FROM `diff_test`.`atest` WHERE `id` is NULL AND `name` = 'a\\'a' AND `birthday` = '2018-01-01 00:00:00' AND `update_time` = '10:10:10' AND `money` = 11.1111 LIMIT 1;")
+	require.Equal(t, replaceSQL, "REPLACE INTO `diff_test`.`atest`(`id`,`name`,`birthday`,`update_time`,`money`) VALUES (NULL,'\b\"\n\\\\1\\'`','2018-01-01 00:00:00','10:10:10',11.1111);")
+	require.Equal(t, deleteSQL, "DELETE FROM `diff_test`.`atest` WHERE `id` is NULL AND `name` = '\b\"\n\\\\1\\'`' AND `birthday` = '2018-01-01 00:00:00' AND `update_time` = '10:10:10' AND `money` = 11.1111 LIMIT 1;")
 }
 
 func TestResetColumns(t *testing.T) {
@@ -673,15 +673,15 @@ func TestCompareBlob(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		equal, cmp, err := CompareData(c.data1, c.data1, orderKeyCols, columns)
+		equal, cmp, err := CompareData(c.data1, c.data1, orderKeyCols, columns, "")
 		require.NoError(t, err)
-		require.Equal(t, cmp, int32(0))
+		require.EqualValues(t, cmp, 0)
 		require.True(t, equal)
 
 		for _, data := range c.dataOthers {
-			equal, cmp, err = CompareData(c.data1, data, orderKeyCols, columns)
+			equal, cmp, err = CompareData(c.data1, data, orderKeyCols, columns, "")
 			require.NoError(t, err)
-			require.Equal(t, cmp, int32(0))
+			require.EqualValues(t, cmp, 0)
 			require.False(t, equal)
 		}
 	}

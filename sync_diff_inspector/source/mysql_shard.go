@@ -103,7 +103,7 @@ func (s *MySQLSources) GetCountAndMd5(ctx context.Context, tableRange *splitter.
 
 	for _, ms := range matchSources {
 		go func(ms *common.TableShardSource) {
-			count, checksum, err := utils.GetCountAndMd5Checksum(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info, chunk.Where, chunk.Args)
+			count, checksum, err := utils.GetCountAndMd5Checksum(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info, chunk.Where, "", chunk.Args)
 			infoCh <- &ChecksumInfo{
 				Checksum: checksum,
 				Count:    count,
@@ -197,6 +197,7 @@ func (s *MySQLSources) GetRowsIterator(ctx context.Context, tableRange *splitter
 	sourceRowDatas := &common.RowDatas{
 		Rows:         make([]common.RowData, 0, len(sourceRows)),
 		OrderKeyCols: orderKeyCols,
+		Collators:    common.GetCollatorsForTable(table, orderKeyCols),
 	}
 	heap.Init(sourceRowDatas)
 	// first push one row from all the sources into heap
