@@ -261,9 +261,9 @@ func (*testDBSuite) TestGetBucketsInfo(c *C) {
 		ID:   1001,
 		Name: pmodel.NewCIStr("test_table"),
 		Columns: []*model.ColumnInfo{
-			{Name: pmodel.NewCIStr("id"), Offset: 0},
-			{Name: pmodel.NewCIStr("name"), Offset: 1},
-			{Name: pmodel.NewCIStr("age"), Offset: 2},
+			{ID: 1, Name: pmodel.NewCIStr("id"), Offset: 0},
+			{ID: 2, Name: pmodel.NewCIStr("name"), Offset: 1},
+			{ID: 3, Name: pmodel.NewCIStr("age"), Offset: 2},
 		},
 		Indices: []*model.IndexInfo{
 			{
@@ -296,9 +296,9 @@ func (*testDBSuite) TestGetBucketsInfo(c *C) {
 		// idx_name index statistics (is_index=1, hist_id=2 maps to index ID 2)
 		AddRow(2, 1, 0, 150, "alice", "john").
 		AddRow(2, 1, 1, 300, "kate", "zoe").
-		// Column statistics (is_index=0, hist_id=2 maps to column index 2 = "age")
-		AddRow(2, 0, 0, 80, "18", "30").
-		AddRow(2, 0, 1, 120, "31", "60")
+		// Column statistics (is_index=0, hist_id=3 maps to column ID 3 = "age")
+		AddRow(3, 0, 0, 80, "18", "30").
+		AddRow(3, 0, 1, 120, "31", "60")
 
 	mock.ExpectQuery(expectedSQL).WithArgs(1001).WillReturnRows(rows)
 
@@ -351,7 +351,7 @@ func (*testDBSuite) TestGetBucketsInfoEmptyResult(c *C) {
 		ID:   1002,
 		Name: pmodel.NewCIStr("empty_table"),
 		Columns: []*model.ColumnInfo{
-			{Name: pmodel.NewCIStr("id"), Offset: 0},
+			{ID: 1, Name: pmodel.NewCIStr("id"), Offset: 0},
 		},
 		Indices: []*model.IndexInfo{
 			{

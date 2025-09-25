@@ -451,11 +451,11 @@ func createFakeResultForBucketSplit(mock sqlmock.Sqlmock, aRandomValues, bRandom
 		+---------+------------+-------------+----------+-----------+-------+---------+-------------+-------------+
 	*/
 
-	statsRows := sqlmock.NewRows([]string{"Db_name", "Table_name", "Column_name", "Is_index", "Bucket_id", "Count", "Repeats", "Lower_Bound", "Upper_Bound"})
+	statsRows := sqlmock.NewRows([]string{"hist_id", "is_index", "bucket_id", "count", "lower_bound", "upper_bound"})
 	for i := 0; i < 5; i++ {
-		statsRows.AddRow("test", "test", "PRIMARY", 1, (i+1)*64, (i+1)*64, 1, fmt.Sprintf("(%d, %d)", i*64, i*12), fmt.Sprintf("(%d, %d)", (i+1)*64-1, (i+1)*12-1))
+		statsRows.AddRow(1, 1, i, (i+1)*64, fmt.Sprintf("(%d, %d)", i*64, i*12), fmt.Sprintf("(%d, %d)", (i+1)*64-1, (i+1)*12-1))
 	}
-	mock.ExpectQuery("SHOW STATS_BUCKETS").WillReturnRows(statsRows)
+	mock.ExpectQuery("select hist_id,is_index,bucket_id,count,lower_bound,upper_bound from stats_buckets where table_id = \\?").WillReturnRows(statsRows)
 
 	for i := 0; i < len(aRandomValues); i++ {
 		aRandomRows := sqlmock.NewRows([]string{"a"})
