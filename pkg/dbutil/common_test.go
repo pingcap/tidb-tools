@@ -286,7 +286,7 @@ func (*testDBSuite) TestGetBucketsInfo(c *C) {
 	}
 
 	// Mock query and expected results
-	expectedSQL := "select hist_id,is_index,bucket_id,count,lower_bound,upper_bound from stats_buckets where table_id = \\?;"
+	expectedSQL := "select hist_id,is_index,bucket_id,count,lower_bound,upper_bound from mysql.stats_buckets where table_id = \\?;"
 
 	// Create mock rows for stats_buckets query
 	rows := sqlmock.NewRows([]string{"hist_id", "is_index", "bucket_id", "count", "lower_bound", "upper_bound"}).
@@ -366,7 +366,7 @@ func (*testDBSuite) TestGetBucketsInfoEmptyResult(c *C) {
 	}
 
 	// Mock empty result
-	expectedSQL := "select hist_id,is_index,bucket_id,count,lower_bound,upper_bound from stats_buckets where table_id = \\?;"
+	expectedSQL := "select hist_id,is_index,bucket_id,count,lower_bound,upper_bound from mysql.stats_buckets where table_id = \\?;"
 	rows := sqlmock.NewRows([]string{"hist_id", "is_index", "bucket_id", "count", "lower_bound", "upper_bound"})
 
 	mock.ExpectQuery(expectedSQL).WithArgs(1002).WillReturnRows(rows)

@@ -511,7 +511,7 @@ type Bucket struct {
 // GetBucketsInfo select from stats_buckets in TiDB.
 func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string, tableInfo *model.TableInfo) (map[string][]Bucket, error) {
 	buckets := make(map[string][]Bucket)
-	query := "select hist_id,is_index,bucket_id,count,lower_bound,upper_bound from stats_buckets where table_id = ?;"
+	query := "select hist_id,is_index,bucket_id,count,lower_bound,upper_bound from mysql.stats_buckets where table_id = ?;"
 	log.Debug("GetBucketsInfo", zap.String("sql", query), zap.String("schema", schema), zap.String("table", table))
 
 	rows, err := db.QueryContext(ctx, query, tableInfo.ID)

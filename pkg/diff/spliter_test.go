@@ -455,7 +455,7 @@ func createFakeResultForBucketSplit(mock sqlmock.Sqlmock, aRandomValues, bRandom
 	for i := 0; i < 5; i++ {
 		statsRows.AddRow(1, 1, i, (i+1)*64, fmt.Sprintf("(%d, %d)", i*64, i*12), fmt.Sprintf("(%d, %d)", (i+1)*64-1, (i+1)*12-1))
 	}
-	mock.ExpectQuery("select hist_id,is_index,bucket_id,count,lower_bound,upper_bound from stats_buckets where table_id = \\?").WillReturnRows(statsRows)
+	mock.ExpectQuery("select hist_id,is_index,bucket_id,count,lower_bound,upper_bound from mysql.stats_buckets where table_id = \\?").WillReturnRows(statsRows)
 
 	for i := 0; i < len(aRandomValues); i++ {
 		aRandomRows := sqlmock.NewRows([]string{"a"})
