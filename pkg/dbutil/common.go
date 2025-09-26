@@ -623,14 +623,6 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 			key = columnMap[histID.Int64]
 		}
 
-		if key == "" {
-			if isIndex.Int64 == 1 {
-				key = fmt.Sprintf("index_%d", histID.Int64)
-			} else {
-				key = fmt.Sprintf("col_%d", histID.Int64)
-			}
-		}
-
 		buckets[key] = append(buckets[key], b)
 	}
 
