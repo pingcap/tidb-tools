@@ -285,10 +285,15 @@ func (*testDBSuite) TestGetBucketsInfo(c *C) {
 		},
 	}
 
-	// Mock query and expected results - updated to match new implementation
-	expectedSQL := "SELECT is_index, hist_id, bucket_id, count, lower_bound, upper_bound FROM mysql.stats_buckets WHERE table_id IN \\(\\?\\) ORDER BY is_index, hist_id, bucket_id;"
+	// Mock table ID query
+	mock.ExpectQuery("SELECT tidb_table_id FROM information_schema.tables WHERE table_schema = \\? AND table_name = \\?").
+		WithArgs("test_db", "test_table").
+		WillReturnRows(sqlmock.NewRows([]string{"tidb_table_id"}).AddRow(1001))
 
-	// Create mock rows for stats_buckets query - updated column order to match new SELECT
+	// Mock query and expected results
+	expectedSQL := "SELECT is_index, hist_id, bucket_id, count, lower_bound, upper_bound FROM mysql.stats_buckets WHERE table_id IN \\(\\?\\) ORDER BY is_index, hist_id, bucket_id"
+
+	// Create mock rows for stats_buckets query
 	rows := sqlmock.NewRows([]string{"is_index", "hist_id", "bucket_id", "count", "lower_bound", "upper_bound"}).
 		// PRIMARY index statistics (is_index=1, hist_id=1 maps to index ID 1)
 		AddRow(1, 1, 0, 100, "1", "50").
@@ -356,8 +361,13 @@ func (*testDBSuite) TestGetBucketsInfoEmptyResult(c *C) {
 		Indices: []*model.IndexInfo{},
 	}
 
-	// Mock empty result - updated to match new implementation
-	expectedSQL := "SELECT is_index, hist_id, bucket_id, count, lower_bound, upper_bound FROM mysql.stats_buckets WHERE table_id IN \\(\\?\\) ORDER BY is_index, hist_id, bucket_id;"
+	// Mock table ID query
+	mock.ExpectQuery("SELECT tidb_table_id FROM information_schema.tables WHERE table_schema = \\? AND table_name = \\?").
+		WithArgs("test_db", "empty_table").
+		WillReturnRows(sqlmock.NewRows([]string{"tidb_table_id"}).AddRow(1002))
+
+	// Mock empty result
+	expectedSQL := "SELECT is_index, hist_id, bucket_id, count, lower_bound, upper_bound FROM mysql.stats_buckets WHERE table_id IN \\(\\?\\) ORDER BY is_index, hist_id, bucket_id"
 	rows := sqlmock.NewRows([]string{"is_index", "hist_id", "bucket_id", "count", "lower_bound", "upper_bound"})
 
 	mock.ExpectQuery(expectedSQL).WithArgs(1002).WillReturnRows(rows)
@@ -405,8 +415,22 @@ func (*testDBSuite) TestGetBucketsInfoPartitionedTable(c *C) {
 		},
 	}
 
+	// Mock table ID query
+	mock.ExpectQuery("SELECT tidb_table_id FROM information_schema.tables WHERE table_schema = \\? AND table_name = \\?").
+		WithArgs("test_db", "partitioned_table").
+		WillReturnRows(sqlmock.NewRows([]string{"tidb_table_id"}).AddRow(1003))
+
+	// Mock partition ID queries
+	mock.ExpectQuery("SELECT tidb_partition_id FROM information_schema.partitions WHERE table_schema = \\? AND table_name = \\? AND partition_name = \\?").
+		WithArgs("test_db", "partitioned_table", "p0").
+		WillReturnRows(sqlmock.NewRows([]string{"tidb_partition_id"}).AddRow(2001))
+
+	mock.ExpectQuery("SELECT tidb_partition_id FROM information_schema.partitions WHERE table_schema = \\? AND table_name = \\? AND partition_name = \\?").
+		WithArgs("test_db", "partitioned_table", "p1").
+		WillReturnRows(sqlmock.NewRows([]string{"tidb_partition_id"}).AddRow(2002))
+
 	// Mock query and expected results for partitioned table
-	expectedSQL := "SELECT is_index, hist_id, bucket_id, count, lower_bound, upper_bound FROM mysql.stats_buckets WHERE table_id IN \\(\\?,\\?,\\?\\) ORDER BY is_index, hist_id, bucket_id;"
+	expectedSQL := "SELECT is_index, hist_id, bucket_id, count, lower_bound, upper_bound FROM mysql.stats_buckets WHERE table_id IN \\(\\?,\\?,\\?\\) ORDER BY is_index, hist_id, bucket_id"
 
 	// Create mock rows for stats_buckets query - includes main table and partitions
 	rows := sqlmock.NewRows([]string{"is_index", "hist_id", "bucket_id", "count", "lower_bound", "upper_bound"}).

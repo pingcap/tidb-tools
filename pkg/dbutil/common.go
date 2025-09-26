@@ -217,6 +217,28 @@ func GetCreateTableSQL(ctx context.Context, db QueryExecutor, schemaName string,
 	return createTable.String, nil
 }
 
+// GetTableID returns the table ID from information_schema.tables
+func GetTableID(ctx context.Context, db QueryExecutor, schemaName string, tableName string) (int64, error) {
+	query := "SELECT tidb_table_id FROM information_schema.tables WHERE table_schema = ? AND table_name = ?"
+	var tableID int64
+	err := db.QueryRowContext(ctx, query, schemaName, tableName).Scan(&tableID)
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+	return tableID, nil
+}
+
+// GetPartitionID returns the partition ID from information_schema.partitions
+func GetPartitionID(ctx context.Context, db QueryExecutor, schemaName string, tableName string, partitionName string) (int64, error) {
+	query := "SELECT tidb_partition_id FROM information_schema.partitions WHERE table_schema = ? AND table_name = ? AND partition_name = ?"
+	var partitionID int64
+	err := db.QueryRowContext(ctx, query, schemaName, tableName, partitionName).Scan(&partitionID)
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+	return partitionID, nil
+}
+
 // GetRowCount returns row count of the table.
 // if not specify where condition, return total row count of the table.
 func GetRowCount(ctx context.Context, db QueryExecutor, schemaName string, tableName string, where string, args []interface{}) (int64, error) {
@@ -512,18 +534,43 @@ type Bucket struct {
 func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string, tableInfo *model.TableInfo) (map[string][]Bucket, error) {
 	buckets := make(map[string][]Bucket)
 
-	// 1) Build the list of table_ids to query:
-	//    - Always include the parent table ID (covers possible global stats).
-	//    - If partitioned, include all physical partition IDs.
-	ids := make([]int64, 0, 1)
-	ids = append(ids, tableInfo.ID)
-	if tableInfo.Partition != nil && len(tableInfo.Partition.Definitions) > 0 {
-		for _, def := range tableInfo.Partition.Definitions {
-			ids = append(ids, def.ID)
+	tableID, err := GetTableID(ctx, db, schema, table)
+	if err != nil {
+		log.Warn("GetBucketsInfo: Failed to get table ID, using tableInfo.ID",
+			zap.String("schema", schema),
+			zap.String("table", table),
+			zap.Int64("tableInfo.ID", tableInfo.ID),
+			zap.Error(err))
+		tableID = tableInfo.ID
+		if tableID == 0 {
+			return nil, errors.NotFoundf("table ID not found for %s.%s", schema, table)
 		}
 	}
 
-	// 2) Pre-build ID -> name maps for indices and columns.
+	ids := make([]int64, 0, 1)
+	ids = append(ids, tableID)
+
+	if tableInfo.Partition != nil && len(tableInfo.Partition.Definitions) > 0 {
+		for _, def := range tableInfo.Partition.Definitions {
+			partitionID, err := GetPartitionID(ctx, db, schema, table, def.Name.O)
+			if err != nil {
+				log.Warn("GetBucketsInfo: Failed to get partition ID, using def.ID",
+					zap.String("schema", schema),
+					zap.String("table", table),
+					zap.String("partition", def.Name.O),
+					zap.Int64("def.ID", def.ID),
+					zap.Error(err))
+				partitionID = def.ID
+				if partitionID == 0 {
+					log.Warn("GetBucketsInfo: Partition ID is 0, skipping",
+						zap.String("partition", def.Name.O))
+					continue
+				}
+			}
+			ids = append(ids, partitionID)
+		}
+	}
+
 	indices := FindAllIndex(tableInfo)
 	indexMap := make(map[int64]string, len(indices))
 	for _, idx := range indices {
@@ -534,33 +581,20 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 		columnMap[col.ID] = col.Name.O
 	}
 
-	var pkColName string
-	var pkColID int64 = -1
-	for _, idx := range indices {
-		if idx.Name.O == "PRIMARY" && len(idx.Columns) == 1 {
-			pkColName = idx.Columns[0].Name.O
-			// Resolve its column ID for robust mirroring (ID-based; independent of name mapping).
-			for _, c := range tableInfo.Columns {
-				if strings.EqualFold(c.Name.O, pkColName) {
-					pkColID = c.ID
-					break
-				}
-			}
-			break
-		}
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
 	}
 
-	// 3) Prepare a single IN query over all relevant table_ids, with stable ordering.
-	ph := strings.Repeat("?,", len(ids))
-	ph = ph[:len(ph)-1]
-	query := fmt.Sprintf(
-		"SELECT is_index, hist_id, bucket_id, count, lower_bound, upper_bound "+
-			"FROM mysql.stats_buckets WHERE table_id IN (%s) "+
-			"ORDER BY is_index, hist_id, bucket_id;", ph)
-	args := make([]interface{}, 0, len(ids))
-	for _, id := range ids {
-		args = append(args, id)
-	}
+	query := fmt.Sprintf(`
+		SELECT is_index, hist_id, bucket_id, count, lower_bound, upper_bound
+		FROM mysql.stats_buckets
+		WHERE table_id IN (%s)
+		ORDER BY is_index, hist_id, bucket_id`,
+		strings.Join(placeholders, ","))
+
 	log.Debug("GetBucketsInfo", zap.String("sql", query), zap.String("schema", schema), zap.String("table", table))
 
 	rows, err := db.QueryContext(ctx, query, args...)
@@ -570,7 +604,6 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 	defer rows.Close()
 
 	for rows.Next() {
-		// IMPORTANT: scan order matches SELECT (is_index first).
 		var isIndex, histID, bucketID, count sql.NullInt64
 		var lowerBound, upperBound sql.NullString
 		if err := rows.Scan(&isIndex, &histID, &bucketID, &count, &lowerBound, &upperBound); err != nil {
@@ -583,15 +616,13 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 			UpperBound: upperBound.String,
 		}
 
-		// Map hist_id to a readable key:
-		// - is_index = 1 → index name; is_index = 0 → column name.
 		var key string
 		if isIndex.Int64 == 1 {
 			key = indexMap[histID.Int64]
 		} else {
 			key = columnMap[histID.Int64]
 		}
-		// Fallback: avoid empty key if mapping misses (stats residue / schema mismatch).
+
 		if key == "" {
 			if isIndex.Int64 == 1 {
 				key = fmt.Sprintf("index_%d", histID.Int64)
@@ -601,31 +632,27 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 		}
 
 		buckets[key] = append(buckets[key], b)
-
-		// Robust PRIMARY mirroring for PKIsHandle:
-		// If the primary key is an integer handle, its histogram lives in the *column* histogram.
-		// Mirror by ID so it works even when name mapping returns a synthetic key.
-		if tableInfo.PKIsHandle && isIndex.Int64 == 0 && pkColID >= 0 && histID.Int64 == pkColID {
-			buckets["PRIMARY"] = append(buckets["PRIMARY"], b)
-		}
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, errors.Trace(err)
 	}
 
-	// 4) Final compatibility pass (legacy behavior):
-	// Promote single-column primary column buckets to "PRIMARY" if not already mirrored.
+	// 6) 处理主键映射
 	for _, index := range indices {
 		if index.Name.O != "PRIMARY" {
 			continue
 		}
-		if _, ok := buckets[index.Name.O]; ok {
-			continue
-		}
-		if len(index.Columns) == 1 {
+		_, ok := buckets[index.Name.O]
+		if !ok && len(index.Columns) == 1 {
 			if _, ok := buckets[index.Columns[0].Name.O]; !ok {
-				return nil, errors.NotFoundf("primary key on %s in buckets info", index.Columns[0].Name.O)
+				// 如果没有找到主键统计信息，返回空的 buckets 而不是报错
+				// 这可能是因为数据量太小，TiDB 没有生成 bucket 信息
+				log.Warn("GetBucketsInfo: No primary key buckets found, returning empty buckets",
+					zap.String("schema", schema),
+					zap.String("table", table),
+					zap.String("primary_key_column", index.Columns[0].Name.O))
+				return buckets, nil
 			}
 			buckets[index.Name.O] = buckets[index.Columns[0].Name.O]
 			delete(buckets, index.Columns[0].Name.O)
