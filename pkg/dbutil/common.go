@@ -512,9 +512,9 @@ type Bucket struct {
 func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string, tableInfo *model.TableInfo) (map[string][]Bucket, error) {
 	buckets := make(map[string][]Bucket)
 
-	// 1) Build the set of table_ids to query:
+	// 1) Build the list of table_ids to query:
 	//    - Always include the parent table ID (covers possible global stats).
-	//    - For partitioned tables, include all physical partition IDs.
+	//    - If partitioned, include all physical partition IDs.
 	ids := make([]int64, 0, 1)
 	ids = append(ids, tableInfo.ID)
 	if tableInfo.Partition != nil && len(tableInfo.Partition.Definitions) > 0 {
@@ -523,7 +523,7 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 		}
 	}
 
-	// 2) Pre-build index/column ID -> name maps, and detect single-column PRIMARY column name.
+	// 2) Pre-build ID -> name maps for indices and columns.
 	indices := FindAllIndex(tableInfo)
 	indexMap := make(map[int64]string, len(indices))
 	for _, idx := range indices {
@@ -533,15 +533,24 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 	for _, col := range tableInfo.Columns {
 		columnMap[col.ID] = col.Name.O
 	}
+
 	var pkColName string
+	var pkColID int64 = -1
 	for _, idx := range indices {
 		if idx.Name.O == "PRIMARY" && len(idx.Columns) == 1 {
 			pkColName = idx.Columns[0].Name.O
+			// Resolve its column ID for robust mirroring (ID-based; independent of name mapping).
+			for _, c := range tableInfo.Columns {
+				if strings.EqualFold(c.Name.O, pkColName) {
+					pkColID = c.ID
+					break
+				}
+			}
 			break
 		}
 	}
 
-	// 3) Build a single IN query over all relevant table_ids and use a stable ORDER BY.
+	// 3) Prepare a single IN query over all relevant table_ids, with stable ordering.
 	ph := strings.Repeat("?,", len(ids))
 	ph = ph[:len(ph)-1]
 	query := fmt.Sprintf(
@@ -561,30 +570,28 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 	defer rows.Close()
 
 	for rows.Next() {
-		// Keep scan order consistent with the SELECT: is_index first.
+		// IMPORTANT: scan order matches SELECT (is_index first).
 		var isIndex, histID, bucketID, count sql.NullInt64
 		var lowerBound, upperBound sql.NullString
 		if err := rows.Scan(&isIndex, &histID, &bucketID, &count, &lowerBound, &upperBound); err != nil {
 			return nil, errors.Trace(err)
 		}
 
-		bucket := Bucket{
+		b := Bucket{
 			Count:      count.Int64,
 			LowerBound: lowerBound.String,
 			UpperBound: upperBound.String,
 		}
 
 		// Map hist_id to a readable key:
-		// - is_index = 1 → index name via indexMap
-		// - is_index = 0 → column name via columnMap
+		// - is_index = 1 → index name; is_index = 0 → column name.
 		var key string
 		if isIndex.Int64 == 1 {
 			key = indexMap[histID.Int64]
 		} else {
 			key = columnMap[histID.Int64]
 		}
-		// Fallback to a synthetic key if the name mapping is missing
-		// (e.g., stats residue or schema/stats out-of-sync).
+		// Fallback: avoid empty key if mapping misses (stats residue / schema mismatch).
 		if key == "" {
 			if isIndex.Int64 == 1 {
 				key = fmt.Sprintf("index_%d", histID.Int64)
@@ -593,10 +600,13 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 			}
 		}
 
-		buckets[key] = append(buckets[key], bucket)
+		buckets[key] = append(buckets[key], b)
 
-		if tableInfo.PKIsHandle && isIndex.Int64 == 0 && pkColName != "" && strings.EqualFold(key, pkColName) {
-			buckets["PRIMARY"] = append(buckets["PRIMARY"], bucket)
+		// Robust PRIMARY mirroring for PKIsHandle:
+		// If the primary key is an integer handle, its histogram lives in the *column* histogram.
+		// Mirror by ID so it works even when name mapping returns a synthetic key.
+		if tableInfo.PKIsHandle && isIndex.Int64 == 0 && pkColID >= 0 && histID.Int64 == pkColID {
+			buckets["PRIMARY"] = append(buckets["PRIMARY"], b)
 		}
 	}
 
@@ -604,9 +614,8 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 		return nil, errors.Trace(err)
 	}
 
-	// Final compatibility pass:
-	// If the primary key is a single column and no "PRIMARY" entry exists yet,
-	// promote the column's buckets to "PRIMARY" (legacy behavior).
+	// 4) Final compatibility pass (legacy behavior):
+	// Promote single-column primary column buckets to "PRIMARY" if not already mirrored.
 	for _, index := range indices {
 		if index.Name.O != "PRIMARY" {
 			continue
