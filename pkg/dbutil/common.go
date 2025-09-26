@@ -638,7 +638,6 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 		return nil, errors.Trace(err)
 	}
 
-	// 6) 处理主键映射
 	for _, index := range indices {
 		if index.Name.O != "PRIMARY" {
 			continue
@@ -646,8 +645,6 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 		_, ok := buckets[index.Name.O]
 		if !ok && len(index.Columns) == 1 {
 			if _, ok := buckets[index.Columns[0].Name.O]; !ok {
-				// 如果没有找到主键统计信息，返回空的 buckets 而不是报错
-				// 这可能是因为数据量太小，TiDB 没有生成 bucket 信息
 				log.Warn("GetBucketsInfo: No primary key buckets found, returning empty buckets",
 					zap.String("schema", schema),
 					zap.String("table", table),
