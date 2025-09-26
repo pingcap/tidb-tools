@@ -285,20 +285,20 @@ func (*testDBSuite) TestGetBucketsInfo(c *C) {
 		},
 	}
 
-	// Mock query and expected results
-	expectedSQL := "select hist_id,is_index,bucket_id,count,lower_bound,upper_bound from mysql.stats_buckets where table_id = \\?;"
+	// Mock query and expected results - updated to match new implementation
+	expectedSQL := "SELECT is_index, hist_id, bucket_id, count, lower_bound, upper_bound FROM mysql.stats_buckets WHERE table_id IN \\(\\?\\) ORDER BY is_index, hist_id, bucket_id;"
 
-	// Create mock rows for stats_buckets query
-	rows := sqlmock.NewRows([]string{"hist_id", "is_index", "bucket_id", "count", "lower_bound", "upper_bound"}).
+	// Create mock rows for stats_buckets query - updated column order to match new SELECT
+	rows := sqlmock.NewRows([]string{"is_index", "hist_id", "bucket_id", "count", "lower_bound", "upper_bound"}).
 		// PRIMARY index statistics (is_index=1, hist_id=1 maps to index ID 1)
 		AddRow(1, 1, 0, 100, "1", "50").
 		AddRow(1, 1, 1, 200, "51", "100").
 		// idx_name index statistics (is_index=1, hist_id=2 maps to index ID 2)
-		AddRow(2, 1, 0, 150, "alice", "john").
-		AddRow(2, 1, 1, 300, "kate", "zoe").
+		AddRow(1, 2, 0, 150, "alice", "john").
+		AddRow(1, 2, 1, 300, "kate", "zoe").
 		// Column statistics (is_index=0, hist_id=3 maps to column ID 3 = "age")
-		AddRow(3, 0, 0, 80, "18", "30").
-		AddRow(3, 0, 1, 120, "31", "60")
+		AddRow(0, 3, 0, 80, "18", "30").
+		AddRow(0, 3, 1, 120, "31", "60")
 
 	mock.ExpectQuery(expectedSQL).WithArgs(1001).WillReturnRows(rows)
 
@@ -356,9 +356,9 @@ func (*testDBSuite) TestGetBucketsInfoEmptyResult(c *C) {
 		Indices: []*model.IndexInfo{},
 	}
 
-	// Mock empty result
-	expectedSQL := "select hist_id,is_index,bucket_id,count,lower_bound,upper_bound from mysql.stats_buckets where table_id = \\?;"
-	rows := sqlmock.NewRows([]string{"hist_id", "is_index", "bucket_id", "count", "lower_bound", "upper_bound"})
+	// Mock empty result - updated to match new implementation
+	expectedSQL := "SELECT is_index, hist_id, bucket_id, count, lower_bound, upper_bound FROM mysql.stats_buckets WHERE table_id IN \\(\\?\\) ORDER BY is_index, hist_id, bucket_id;"
+	rows := sqlmock.NewRows([]string{"is_index", "hist_id", "bucket_id", "count", "lower_bound", "upper_bound"})
 
 	mock.ExpectQuery(expectedSQL).WithArgs(1002).WillReturnRows(rows)
 
@@ -366,6 +366,73 @@ func (*testDBSuite) TestGetBucketsInfoEmptyResult(c *C) {
 	buckets, err := GetBucketsInfo(ctx, db, "test_db", "empty_table", tableInfo)
 	c.Assert(err, IsNil)
 	c.Assert(len(buckets), Equals, 0)
+
+	// Verify all expectations were met
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+}
+
+func (*testDBSuite) TestGetBucketsInfoPartitionedTable(c *C) {
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	defer db.Close()
+
+	ctx := context.Background()
+
+	// Create test partitioned table info
+	tableInfo := &model.TableInfo{
+		ID:   1003,
+		Name: pmodel.NewCIStr("partitioned_table"),
+		Columns: []*model.ColumnInfo{
+			{ID: 1, Name: pmodel.NewCIStr("id"), Offset: 0},
+			{ID: 2, Name: pmodel.NewCIStr("name"), Offset: 1},
+		},
+		Indices: []*model.IndexInfo{
+			{
+				ID:   1,
+				Name: pmodel.NewCIStr("PRIMARY"),
+				Columns: []*model.IndexColumn{
+					{Name: pmodel.NewCIStr("id"), Offset: 0},
+				},
+				Primary: true,
+			},
+		},
+		Partition: &model.PartitionInfo{
+			Type: pmodel.PartitionTypeRange,
+			Definitions: []model.PartitionDefinition{
+				{ID: 2001, Name: pmodel.NewCIStr("p0")},
+				{ID: 2002, Name: pmodel.NewCIStr("p1")},
+			},
+		},
+	}
+
+	// Mock query and expected results for partitioned table
+	expectedSQL := "SELECT is_index, hist_id, bucket_id, count, lower_bound, upper_bound FROM mysql.stats_buckets WHERE table_id IN \\(\\?,\\?,\\?\\) ORDER BY is_index, hist_id, bucket_id;"
+
+	// Create mock rows for stats_buckets query - includes main table and partitions
+	rows := sqlmock.NewRows([]string{"is_index", "hist_id", "bucket_id", "count", "lower_bound", "upper_bound"}).
+		// Main table statistics
+		AddRow(1, 1, 0, 50, "1", "25").   // PRIMARY index from main table
+		AddRow(1, 1, 1, 100, "26", "50"). // PRIMARY index from main table
+		// Partition p0 statistics
+		AddRow(1, 1, 0, 30, "1", "15").  // PRIMARY index from p0
+		AddRow(1, 1, 1, 60, "16", "30"). // PRIMARY index from p0
+		// Partition p1 statistics
+		AddRow(1, 1, 0, 20, "31", "40"). // PRIMARY index from p1
+		AddRow(1, 1, 1, 40, "41", "50")  // PRIMARY index from p1
+
+	mock.ExpectQuery(expectedSQL).WithArgs(1003, 2001, 2002).WillReturnRows(rows)
+
+	// Execute the function
+	buckets, err := GetBucketsInfo(ctx, db, "test_db", "partitioned_table", tableInfo)
+	c.Assert(err, IsNil)
+
+	// Verify results - should have combined buckets from all partitions
+	c.Assert(len(buckets), Equals, 1)
+
+	// Check PRIMARY index buckets (should be combined from all partitions)
+	primaryBuckets, exists := buckets["PRIMARY"]
+	c.Assert(exists, Equals, true)
+	c.Assert(len(primaryBuckets), Equals, 6) // 2 from main table + 2 from p0 + 2 from p1
 
 	// Verify all expectations were met
 	c.Assert(mock.ExpectationsWereMet(), IsNil)

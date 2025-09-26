@@ -511,31 +511,60 @@ type Bucket struct {
 // GetBucketsInfo select from stats_buckets in TiDB.
 func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string, tableInfo *model.TableInfo) (map[string][]Bucket, error) {
 	buckets := make(map[string][]Bucket)
-	query := "select hist_id,is_index,bucket_id,count,lower_bound,upper_bound from mysql.stats_buckets where table_id = ?;"
+
+	// 1) Build the set of table_ids to query:
+	//    - Always include the parent table ID (covers possible global stats).
+	//    - For partitioned tables, include all physical partition IDs.
+	ids := make([]int64, 0, 1)
+	ids = append(ids, tableInfo.ID)
+	if tableInfo.Partition != nil && len(tableInfo.Partition.Definitions) > 0 {
+		for _, def := range tableInfo.Partition.Definitions {
+			ids = append(ids, def.ID)
+		}
+	}
+
+	// 2) Pre-build index/column ID -> name maps, and detect single-column PRIMARY column name.
+	indices := FindAllIndex(tableInfo)
+	indexMap := make(map[int64]string, len(indices))
+	for _, idx := range indices {
+		indexMap[idx.ID] = idx.Name.O
+	}
+	columnMap := make(map[int64]string, len(tableInfo.Columns))
+	for _, col := range tableInfo.Columns {
+		columnMap[col.ID] = col.Name.O
+	}
+	var pkColName string
+	for _, idx := range indices {
+		if idx.Name.O == "PRIMARY" && len(idx.Columns) == 1 {
+			pkColName = idx.Columns[0].Name.O
+			break
+		}
+	}
+
+	// 3) Build a single IN query over all relevant table_ids and use a stable ORDER BY.
+	ph := strings.Repeat("?,", len(ids))
+	ph = ph[:len(ph)-1]
+	query := fmt.Sprintf(
+		"SELECT is_index, hist_id, bucket_id, count, lower_bound, upper_bound "+
+			"FROM mysql.stats_buckets WHERE table_id IN (%s) "+
+			"ORDER BY is_index, hist_id, bucket_id;", ph)
+	args := make([]interface{}, 0, len(ids))
+	for _, id := range ids {
+		args = append(args, id)
+	}
 	log.Debug("GetBucketsInfo", zap.String("sql", query), zap.String("schema", schema), zap.String("table", table))
 
-	rows, err := db.QueryContext(ctx, query, tableInfo.ID)
+	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	defer rows.Close()
 
-	indices := FindAllIndex(tableInfo)
-	indexMap := make(map[int64]string)
-	for _, index := range indices {
-		indexMap[index.ID] = index.Name.O
-	}
-
-	columnMap := make(map[int64]string)
-	for _, col := range tableInfo.Columns {
-		columnMap[col.ID] = col.Name.O
-	}
-
 	for rows.Next() {
-		var histID, isIndex, bucketID, count sql.NullInt64
+		// Keep scan order consistent with the SELECT: is_index first.
+		var isIndex, histID, bucketID, count sql.NullInt64
 		var lowerBound, upperBound sql.NullString
-		err := rows.Scan(&histID, &isIndex, &bucketID, &count, &lowerBound, &upperBound)
-		if err != nil {
+		if err := rows.Scan(&isIndex, &histID, &bucketID, &count, &lowerBound, &upperBound); err != nil {
 			return nil, errors.Trace(err)
 		}
 
@@ -545,26 +574,47 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 			UpperBound: upperBound.String,
 		}
 
-		var bucketKey string
+		// Map hist_id to a readable key:
+		// - is_index = 1 → index name via indexMap
+		// - is_index = 0 → column name via columnMap
+		var key string
 		if isIndex.Int64 == 1 {
-			bucketKey = indexMap[histID.Int64]
+			key = indexMap[histID.Int64]
 		} else {
-			bucketKey = columnMap[histID.Int64]
+			key = columnMap[histID.Int64]
+		}
+		// Fallback to a synthetic key if the name mapping is missing
+		// (e.g., stats residue or schema/stats out-of-sync).
+		if key == "" {
+			if isIndex.Int64 == 1 {
+				key = fmt.Sprintf("index_%d", histID.Int64)
+			} else {
+				key = fmt.Sprintf("col_%d", histID.Int64)
+			}
 		}
 
-		if _, ok := buckets[bucketKey]; !ok {
-			buckets[bucketKey] = make([]Bucket, 0, 100)
+		buckets[key] = append(buckets[key], bucket)
+
+		if tableInfo.PKIsHandle && isIndex.Int64 == 0 && pkColName != "" && strings.EqualFold(key, pkColName) {
+			buckets["PRIMARY"] = append(buckets["PRIMARY"], bucket)
 		}
-		buckets[bucketKey] = append(buckets[bucketKey], bucket)
 	}
 
-	// when primary key is int type, the columnName will be column's name, not `PRIMARY`, check and transform here.
+	if err := rows.Err(); err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	// Final compatibility pass:
+	// If the primary key is a single column and no "PRIMARY" entry exists yet,
+	// promote the column's buckets to "PRIMARY" (legacy behavior).
 	for _, index := range indices {
 		if index.Name.O != "PRIMARY" {
 			continue
 		}
-		_, ok := buckets[index.Name.O]
-		if !ok && len(index.Columns) == 1 {
+		if _, ok := buckets[index.Name.O]; ok {
+			continue
+		}
+		if len(index.Columns) == 1 {
 			if _, ok := buckets[index.Columns[0].Name.O]; !ok {
 				return nil, errors.NotFoundf("primary key on %s in buckets info", index.Columns[0].Name.O)
 			}
@@ -573,7 +623,7 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 		}
 	}
 
-	return buckets, errors.Trace(rows.Err())
+	return buckets, nil
 }
 
 // AnalyzeValuesFromBuckets analyze upperBound or lowerBound to string for each column.
