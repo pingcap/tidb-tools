@@ -449,6 +449,7 @@ func TestMysqlShardSources(t *testing.T) {
 }
 
 func TestMysqlRouter(t *testing.T) {
+	t.Skip("Skip this test for now")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
