@@ -451,15 +451,14 @@ func createFakeResultForBucketSplit(mock sqlmock.Sqlmock, aRandomValues, bRandom
 		+---------+------------+-------------+----------+-----------+-------+---------+-------------+-------------+
 	*/
 
-	// Mock GetTableID query
-	tableIDRows := sqlmock.NewRows([]string{"tidb_table_id"}).AddRow(1001)
-	mock.ExpectQuery("SELECT tidb_table_id FROM information_schema.tables WHERE table_schema = \\? AND table_name = \\?").WillReturnRows(tableIDRows)
-
+	// Mock query with subquery to get all table_ids (main table + partitions) at once
 	statsRows := sqlmock.NewRows([]string{"is_index", "hist_id", "bucket_id", "count", "lower_bound", "upper_bound"})
 	for i := 0; i < 5; i++ {
 		statsRows.AddRow(1, 1, i, (i+1)*64, fmt.Sprintf("(%d, %d)", i*64, i*12), fmt.Sprintf("(%d, %d)", (i+1)*64-1, (i+1)*12-1))
 	}
-	mock.ExpectQuery("SELECT is_index, hist_id, bucket_id, count, lower_bound, upper_bound FROM mysql.stats_buckets WHERE table_id IN \\(\\?\\) ORDER BY is_index, hist_id, bucket_id").WillReturnRows(statsRows)
+	mock.ExpectQuery("SELECT is_index, hist_id, bucket_id, count, lower_bound, upper_bound FROM mysql.stats_buckets WHERE table_id IN \\(\\s*SELECT tidb_table_id FROM information_schema.tables WHERE table_schema = \\? AND table_name = \\? UNION ALL SELECT tidb_partition_id FROM information_schema.partitions WHERE table_schema = \\? AND table_name = \\?\\s*\\) ORDER BY is_index, hist_id, bucket_id").
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WillReturnRows(statsRows)
 
 	for i := 0; i < len(aRandomValues); i++ {
 		aRandomRows := sqlmock.NewRows([]string{"a"})
