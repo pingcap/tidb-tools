@@ -528,7 +528,6 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 		columnMap[col.ID] = col.Name.O
 	}
 
-	// Use subqueries to get all table_ids (main table + partitions) at once
 	query := fmt.Sprintf(`SELECT is_index, hist_id, bucket_id, count, lower_bound, upper_bound
 		FROM mysql.stats_buckets
 		WHERE table_id IN (
