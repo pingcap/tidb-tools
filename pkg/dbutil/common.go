@@ -217,28 +217,6 @@ func GetCreateTableSQL(ctx context.Context, db QueryExecutor, schemaName string,
 	return createTable.String, nil
 }
 
-// GetTableID returns the table ID from information_schema.tables
-func GetTableID(ctx context.Context, db QueryExecutor, schemaName string, tableName string) (int64, error) {
-	query := "SELECT tidb_table_id FROM information_schema.tables WHERE table_schema = ? AND table_name = ?"
-	var tableID int64
-	err := db.QueryRowContext(ctx, query, schemaName, tableName).Scan(&tableID)
-	if err != nil {
-		return 0, errors.Trace(err)
-	}
-	return tableID, nil
-}
-
-// GetPartitionID returns the partition ID from information_schema.partitions
-func GetPartitionID(ctx context.Context, db QueryExecutor, schemaName string, tableName string, partitionName string) (int64, error) {
-	query := "SELECT tidb_partition_id FROM information_schema.partitions WHERE table_schema = ? AND table_name = ? AND partition_name = ?"
-	var partitionID int64
-	err := db.QueryRowContext(ctx, query, schemaName, tableName, partitionName).Scan(&partitionID)
-	if err != nil {
-		return 0, errors.Trace(err)
-	}
-	return partitionID, nil
-}
-
 // GetRowCount returns row count of the table.
 // if not specify where condition, return total row count of the table.
 func GetRowCount(ctx context.Context, db QueryExecutor, schemaName string, tableName string, where string, args []interface{}) (int64, error) {
@@ -530,46 +508,15 @@ type Bucket struct {
 	UpperBound string
 }
 
+// QueryTableIDSubquery is the subquery to get table ID from information_schema.tables
+const QueryTableIDSubquery = "SELECT tidb_table_id FROM information_schema.tables WHERE table_schema = ? AND table_name = ?"
+
+// QueryPartitionIDSubquery is the subquery to get partition ID from information_schema.partitions
+const QueryPartitionIDSubquery = "SELECT tidb_partition_id FROM information_schema.partitions WHERE table_schema = ? AND table_name = ?"
+
 // GetBucketsInfo select from stats_buckets in TiDB.
 func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string, tableInfo *model.TableInfo) (map[string][]Bucket, error) {
 	buckets := make(map[string][]Bucket)
-
-	tableID, err := GetTableID(ctx, db, schema, table)
-	if err != nil {
-		log.Warn("GetBucketsInfo: Failed to get table ID, using tableInfo.ID",
-			zap.String("schema", schema),
-			zap.String("table", table),
-			zap.Int64("tableInfo.ID", tableInfo.ID),
-			zap.Error(err))
-		tableID = tableInfo.ID
-		if tableID == 0 {
-			return nil, errors.NotFoundf("table ID not found for %s.%s", schema, table)
-		}
-	}
-
-	ids := make([]int64, 0, 1)
-	ids = append(ids, tableID)
-
-	if tableInfo.Partition != nil && len(tableInfo.Partition.Definitions) > 0 {
-		for _, def := range tableInfo.Partition.Definitions {
-			partitionID, err := GetPartitionID(ctx, db, schema, table, def.Name.O)
-			if err != nil {
-				log.Warn("GetBucketsInfo: Failed to get partition ID, using def.ID",
-					zap.String("schema", schema),
-					zap.String("table", table),
-					zap.String("partition", def.Name.O),
-					zap.Int64("def.ID", def.ID),
-					zap.Error(err))
-				partitionID = def.ID
-				if partitionID == 0 {
-					log.Warn("GetBucketsInfo: Partition ID is 0, skipping",
-						zap.String("partition", def.Name.O))
-					continue
-				}
-			}
-			ids = append(ids, partitionID)
-		}
-	}
 
 	indices := FindAllIndex(tableInfo)
 	indexMap := make(map[int64]string, len(indices))
@@ -581,23 +528,21 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 		columnMap[col.ID] = col.Name.O
 	}
 
-	placeholders := make([]string, len(ids))
-	args := make([]interface{}, len(ids))
-	for i, id := range ids {
-		placeholders[i] = "?"
-		args[i] = id
-	}
-
-	query := fmt.Sprintf(`
-		SELECT is_index, hist_id, bucket_id, count, lower_bound, upper_bound
+	// Use subqueries to get all table_ids (main table + partitions) at once
+	query := fmt.Sprintf(`SELECT is_index, hist_id, bucket_id, count, lower_bound, upper_bound
 		FROM mysql.stats_buckets
-		WHERE table_id IN (%s)
+		WHERE table_id IN (
+			%s
+			UNION ALL
+			%s
+		)
 		ORDER BY is_index, hist_id, bucket_id`,
-		strings.Join(placeholders, ","))
+		QueryTableIDSubquery,
+		QueryPartitionIDSubquery)
 
 	log.Debug("GetBucketsInfo", zap.String("sql", query), zap.String("schema", schema), zap.String("table", table))
 
-	rows, err := db.QueryContext(ctx, query, args...)
+	rows, err := db.QueryContext(ctx, query, schema, table, schema, table)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
