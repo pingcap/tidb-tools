@@ -508,12 +508,6 @@ type Bucket struct {
 	UpperBound string
 }
 
-// QueryTableIDSubquery is the subquery to get table ID from information_schema.tables
-const QueryTableIDSubquery = "SELECT tidb_table_id FROM information_schema.tables WHERE table_schema = ? AND table_name = ?"
-
-// QueryPartitionIDSubquery is the subquery to get partition ID from information_schema.partitions
-const QueryPartitionIDSubquery = "SELECT tidb_partition_id FROM information_schema.partitions WHERE table_schema = ? AND table_name = ?"
-
 // GetBucketsInfo select from stats_buckets in TiDB.
 func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string, tableInfo *model.TableInfo) (map[string][]Bucket, error) {
 	buckets := make(map[string][]Bucket)
@@ -528,16 +522,15 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 		columnMap[col.ID] = col.Name.O
 	}
 
-	query := fmt.Sprintf(`SELECT is_index, hist_id, bucket_id, count, lower_bound, upper_bound
+	// Use a single query with subquery to get all table_ids (main table + partitions) at once
+	query := `SELECT is_index, hist_id, bucket_id, count, lower_bound, upper_bound
 		FROM mysql.stats_buckets
 		WHERE table_id IN (
-			%s
+			SELECT tidb_table_id FROM information_schema.tables WHERE table_schema = ? AND table_name = ?
 			UNION ALL
-			%s
+			SELECT tidb_partition_id FROM information_schema.partitions WHERE table_schema = ? AND table_name = ?
 		)
-		ORDER BY is_index, hist_id, bucket_id`,
-		QueryTableIDSubquery,
-		QueryPartitionIDSubquery)
+		ORDER BY is_index, hist_id, bucket_id`
 
 	log.Debug("GetBucketsInfo", zap.String("sql", query), zap.String("schema", schema), zap.String("table", table))
 
