@@ -22,7 +22,7 @@ import (
 	"github.com/pingcap/tidb/pkg/parser"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/session"
-	"github.com/pingcap/tidb/pkg/session/types"
+	"github.com/pingcap/tidb/pkg/session/sessionapi"
 	"github.com/pingcap/tidb/pkg/store/mockstore"
 	"github.com/pingcap/tidb/pkg/util/logutil"
 	"go.uber.org/atomic"
@@ -30,7 +30,7 @@ import (
 
 // ExecutableChecker is a part of TiDB to check the sql's executability
 type ExecutableChecker struct {
-	session  types.Session
+	session  sessionapi.Session
 	parser   *parser.Parser
 	isClosed *atomic.Bool
 }
@@ -39,7 +39,7 @@ type ExecutableChecker struct {
 func NewExecutableChecker() (*ExecutableChecker, error) {
 	logutil.InitLogger(&logutil.LogConfig{
 		Config: log.Config{
-			Level: "error",
+			Level: "fatal",
 		},
 	})
 	mockTikv, err := mockstore.NewMockStore()
