@@ -508,64 +508,65 @@ type Bucket struct {
 	UpperBound string
 }
 
-// GetBucketsInfo SHOW STATS_BUCKETS in TiDB.
+// GetBucketsInfo select from stats_buckets in TiDB.
 func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string, tableInfo *model.TableInfo) (map[string][]Bucket, error) {
-	/*
-		example in tidb:
-		mysql> SHOW STATS_BUCKETS WHERE db_name= "test" AND table_name="testa";
-		+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
-		| Db_name | Table_name | Partition_name | Column_name | Is_index | Bucket_id | Count | Repeats | Lower_Bound         | Upper_Bound         |
-		+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
-		| test    | testa      |                | PRIMARY     |        1 |         0 |    64 |       1 | 1846693550524203008 | 1846838686059069440 |
-		| test    | testa      |                | PRIMARY     |        1 |         1 |   128 |       1 | 1846840885082324992 | 1847056389361369088 |
-		+---------+------------+----------------+-------------+----------+-----------+-------+---------+---------------------+---------------------+
-	*/
 	buckets := make(map[string][]Bucket)
-	query := "SHOW STATS_BUCKETS WHERE db_name= ? AND table_name= ?;"
+
+	indices := FindAllIndex(tableInfo)
+	indexMap := make(map[int64]string, len(indices))
+	for _, idx := range indices {
+		indexMap[idx.ID] = idx.Name.O
+	}
+	columnMap := make(map[int64]string, len(tableInfo.Columns))
+	for _, col := range tableInfo.Columns {
+		columnMap[col.ID] = col.Name.O
+	}
+
+	// Use a single query with subquery to get all table_ids (main table + partitions) at once
+	query := `SELECT is_index, hist_id, bucket_id, count, lower_bound, upper_bound
+		FROM mysql.stats_buckets
+		WHERE table_id IN (
+			SELECT tidb_table_id FROM information_schema.tables WHERE table_schema = ? AND table_name = ?
+			UNION ALL
+			SELECT tidb_partition_id FROM information_schema.partitions WHERE table_schema = ? AND table_name = ?
+		)
+		ORDER BY is_index, hist_id, bucket_id`
+
 	log.Debug("GetBucketsInfo", zap.String("sql", query), zap.String("schema", schema), zap.String("table", table))
 
-	rows, err := db.QueryContext(ctx, query, schema, table)
+	rows, err := db.QueryContext(ctx, query, schema, table, schema, table)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	defer rows.Close()
 
-	cols, err := rows.Columns()
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
 	for rows.Next() {
-		var dbName, tableName, partitionName, columnName, lowerBound, upperBound sql.NullString
-		var isIndex, bucketID, count, repeats, ndv sql.NullInt64
-
-		// add partiton_name in new version
-		switch len(cols) {
-		case 9:
-			err = rows.Scan(&dbName, &tableName, &columnName, &isIndex, &bucketID, &count, &repeats, &lowerBound, &upperBound)
-		case 10:
-			err = rows.Scan(&dbName, &tableName, &partitionName, &columnName, &isIndex, &bucketID, &count, &repeats, &lowerBound, &upperBound)
-		case 11:
-			err = rows.Scan(&dbName, &tableName, &partitionName, &columnName, &isIndex, &bucketID, &count, &repeats, &lowerBound, &upperBound, &ndv)
-		default:
-			return nil, errors.New("Unknown struct for buckets info")
-		}
-		if err != nil {
+		var isIndex, histID, bucketID, count sql.NullInt64
+		var lowerBound, upperBound sql.NullString
+		if err := rows.Scan(&isIndex, &histID, &bucketID, &count, &lowerBound, &upperBound); err != nil {
 			return nil, errors.Trace(err)
 		}
 
-		if _, ok := buckets[columnName.String]; !ok {
-			buckets[columnName.String] = make([]Bucket, 0, 100)
-		}
-		buckets[columnName.String] = append(buckets[columnName.String], Bucket{
+		b := Bucket{
 			Count:      count.Int64,
 			LowerBound: lowerBound.String,
 			UpperBound: upperBound.String,
-		})
+		}
+
+		var key string
+		if isIndex.Int64 == 1 {
+			key = indexMap[histID.Int64]
+		} else {
+			key = columnMap[histID.Int64]
+		}
+
+		buckets[key] = append(buckets[key], b)
 	}
 
-	// when primary key is int type, the columnName will be column's name, not `PRIMARY`, check and transform here.
-	indices := FindAllIndex(tableInfo)
+	if err := rows.Err(); err != nil {
+		return nil, errors.Trace(err)
+	}
+
 	for _, index := range indices {
 		if index.Name.O != "PRIMARY" {
 			continue
@@ -573,14 +574,18 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 		_, ok := buckets[index.Name.O]
 		if !ok && len(index.Columns) == 1 {
 			if _, ok := buckets[index.Columns[0].Name.O]; !ok {
-				return nil, errors.NotFoundf("primary key on %s in buckets info", index.Columns[0].Name.O)
+				log.Warn("GetBucketsInfo: No primary key buckets found, returning empty buckets",
+					zap.String("schema", schema),
+					zap.String("table", table),
+					zap.String("primary_key_column", index.Columns[0].Name.O))
+				return buckets, nil
 			}
 			buckets[index.Name.O] = buckets[index.Columns[0].Name.O]
 			delete(buckets, index.Columns[0].Name.O)
 		}
 	}
 
-	return buckets, errors.Trace(rows.Err())
+	return buckets, nil
 }
 
 // AnalyzeValuesFromBuckets analyze upperBound or lowerBound to string for each column.
