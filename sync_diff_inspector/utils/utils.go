@@ -566,6 +566,9 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 	}()
 
 	for _, column := range columns {
+		if column.Hidden {
+			continue
+		}
 		if data1, ok = map1[column.Name.O]; !ok {
 			return false, 0, errors.Errorf("upstream don't have key %s", column.Name.O)
 		}
