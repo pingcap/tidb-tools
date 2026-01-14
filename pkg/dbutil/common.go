@@ -576,8 +576,14 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 
 		if isIndex.Int64 == 1 {
 			// Index bucket (is_index = 1)
-			idxColumnTypes := indexColumnTypesMap[histID.Int64]
+			idxColumnTypes, ok := indexColumnTypesMap[histID.Int64]
 			indexName := indexNameMap[histID.Int64]
+			if !ok {
+				// If cannot determine key, skip this record
+				log.Warn("skipping index bucket with unknown key",
+					zap.Int64("histID", histID.Int64))
+				continue
+			}
 
 			key = indexName
 
@@ -599,11 +605,17 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 			}
 		} else {
 			// Column bucket (is_index = 0)
-			columnName := columnNameMap[histID.Int64]
+			columnName, ok := columnNameMap[histID.Int64]
 			columnTypes := columnTypeMap[histID.Int64]
 
-			key = columnName
+			if !ok {
+				// If cannot determine key, skip this record
+				log.Warn("skipping column bucket with unknown key",
+					zap.Int64("histID", histID.Int64))
+				continue
+			}
 
+			key = columnName
 			lowerBoundStr, decodeErr = decodeColumnBound(lowerBoundBytes, columnTypes)
 			if decodeErr != nil {
 				log.Warn("Failed to decode lower_bound for column",
@@ -619,14 +631,6 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 					zap.Int64("histID", histID.Int64))
 				upperBoundStr = fmt.Sprintf("0x%x", upperBoundBytes)
 			}
-		}
-
-		if key == "" {
-			// If cannot determine key, skip this record
-			log.Warn("Skipping bucket with unknown key",
-				zap.Int64("histID", histID.Int64),
-				zap.Bool("isIndex", isIndex.Int64 == 1))
-			continue
 		}
 
 		b := Bucket{
