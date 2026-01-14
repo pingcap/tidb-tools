@@ -576,8 +576,15 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 
 		if isIndex.Int64 == 1 {
 			// Index bucket (is_index = 1)
-			idxColumnTypes := indexColumnTypesMap[histID.Int64]
+			idxColumnTypes, ok := indexColumnTypesMap[histID.Int64]
 			indexName := indexNameMap[histID.Int64]
+			if !ok {
+				log.Warn("no index column info found for index bucket hist_id",
+					zap.String("schema", schema),
+					zap.String("table", table),
+					zap.Int64("histID", histID.Int64))
+				return nil, errors.New("index column types not found")
+			}
 
 			key = indexName
 
@@ -599,8 +606,16 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 			}
 		} else {
 			// Column bucket (is_index = 0)
-			columnName := columnNameMap[histID.Int64]
+			columnName, ok := columnNameMap[histID.Int64]
 			columnTypes := columnTypeMap[histID.Int64]
+
+			if !ok {
+				log.Warn("no column info found for column bucket hist_id",
+					zap.String("schema", schema),
+					zap.String("table", table),
+					zap.Int64("histID", histID.Int64))
+				return nil, errors.New("column types not found")
+			}
 
 			key = columnName
 
