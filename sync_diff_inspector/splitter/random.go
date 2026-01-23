@@ -27,18 +27,36 @@ import (
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/progress"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/source/common"
 	"github.com/pingcap/tidb-tools/sync_diff_inspector/utils"
+	lightningcommon "github.com/pingcap/tidb/pkg/lightning/common"
 	"github.com/pingcap/tidb/pkg/meta/model"
+	"github.com/pingcap/tidb/pkg/util/mathutil"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 type RandomIterator struct {
 	table     *common.TableDiff
 	chunkSize int64
-	chunks    []*chunk.Range
-	nextChunk uint
 
-	dbConn *sql.DB
+	chunksCh chan *chunk.Range
+	firstErr lightningcommon.OnceError
+	eg       *errgroup.Group
+	egCtx    context.Context
+	cancel   context.CancelFunc
+
+	dbConn     *sql.DB
+	progressID string
+
+	splitColumns  []*model.ColumnInfo
+	splitRange    *chunk.Range
+	totalChunkCnt int
+	beginIndex    int
+
+	coarseChunks      []*chunk.Range
+	coarseSplitCounts []int
 }
+
+const randomSplitCoarseChunks = 256
 
 func NewRandomIterator(ctx context.Context, progressID string, table *common.TableDiff, dbConn *sql.DB) (*RandomIterator, error) {
 	return NewRandomIteratorWithCheckpoint(ctx, progressID, table, dbConn, nil)
@@ -105,13 +123,14 @@ NEXTINDEX:
 	if startRange != nil {
 		c := startRange.GetChunk()
 		if c.IsLastChunkForTable() {
-			return &RandomIterator{
+			iter := &RandomIterator{
 				table:     table,
 				chunkSize: 0,
-				chunks:    nil,
-				nextChunk: 0,
 				dbConn:    dbConn,
-			}, nil
+				chunksCh:  make(chan *chunk.Range),
+			}
+			close(iter.chunksCh)
+			return iter, nil
 		}
 		// The sequences in `chunk.Range.Bounds` should be equivalent.
 		for _, bound := range c.Bounds {
@@ -121,7 +140,6 @@ NEXTINDEX:
 		// Recover the chunkIndex. Let it be next to the checkpoint node.
 		beginIndex = c.Index.ChunkIndex + 1
 		bucketChunkCnt = c.Index.ChunkCnt
-		// For chunk splitted by random splitter, the checkpoint chunk records the tableCnt.
 		chunkCnt = bucketChunkCnt - beginIndex
 	} else {
 		cnt, err := dbutil.GetRowCount(ctx, dbConn, table.Schema, table.Table, table.Range, nil)
@@ -130,75 +148,99 @@ NEXTINDEX:
 		}
 
 		chunkSize = table.ChunkSize
-		// We can use config file to fix chunkSize,
-		// otherwise chunkSize is 0.
 		if chunkSize <= 0 {
 			if len(table.Info.Indices) != 0 {
 				chunkSize = utils.CalculateChunkSize(cnt)
 			} else {
-				// no index
-				// will use table scan
-				// so we use one chunk
-				// plus 1 to avoid chunkSize is 0
-				// while chunkCnt = (2cnt)/(cnt+1) <= 1
+				// If table has no index, we use one chunk.
 				chunkSize = cnt + 1
 			}
 		}
+
 		log.Info("get chunk size for table", zap.Int64("chunk size", chunkSize),
 			zap.String("db", table.Schema), zap.String("table", table.Table))
 
-		// When cnt is 0, chunkCnt should be also 0.
-		// When cnt is in [1, chunkSize], chunkCnt should be 1.
 		chunkCnt = int((cnt + chunkSize - 1) / chunkSize)
-		log.Info("split range by random", zap.Int64("row count", cnt), zap.Int("split chunk num", chunkCnt))
+		log.Info("split range by random",
+			zap.Int64("row count", cnt),
+			zap.Int("split chunk num", chunkCnt))
 		bucketChunkCnt = chunkCnt
 	}
 
-	chunks, err := splitRangeByRandom(ctx, dbConn, chunkRange, chunkCnt, table.Schema, table.Table, fields, table.Range, table.Collation)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	chunk.InitChunks(chunks, chunk.Random, 0, 0, beginIndex, table.Collation, table.Range, bucketChunkCnt)
+	rctx, cancel := context.WithCancel(ctx)
+	eg, egctx := errgroup.WithContext(rctx)
 
-	failpoint.Inject("ignore-last-n-chunk-in-bucket", func(v failpoint.Value) {
-		log.Info("failpoint ignore-last-n-chunk-in-bucket injected (random splitter)", zap.Int("n", v.(int)))
-		if len(chunks) <= 1+v.(int) {
-			failpoint.Return(nil, nil)
+	iter := &RandomIterator{
+		table:         table,
+		chunkSize:     chunkSize,
+		dbConn:        dbConn,
+		egCtx:         egctx,
+		cancel:        cancel,
+		eg:            eg,
+		progressID:    progressID,
+		splitColumns:  fields,
+		splitRange:    chunkRange,
+		totalChunkCnt: bucketChunkCnt,
+		beginIndex:    beginIndex,
+		chunksCh:      make(chan *chunk.Range, DefaultChannelBuffer),
+	}
+
+	// First split the chunkRange to coarse chunks.
+	if chunkCnt <= randomSplitCoarseChunks {
+		iter.coarseChunks = []*chunk.Range{chunkRange}
+		iter.coarseSplitCounts = []int{max(chunkCnt, 1)}
+	} else {
+		coarseChunks, err := splitRangeByRandom(
+			rctx, dbConn, chunkRange, randomSplitCoarseChunks,
+			table.Schema, table.Table, fields, table.Range, table.Collation)
+		if err != nil {
+			return nil, errors.Trace(err)
 		}
-		chunks = chunks[:(len(chunks) - v.(int))]
+		iter.coarseChunks = coarseChunks
+		iter.coarseSplitCounts = mathutil.Divide2Batches(chunkCnt, len(coarseChunks))
+	}
+
+	// Then start to produce fine chunks from coarse chunks in background.
+	iter.eg.Go(func() error {
+		return iter.produceChunks()
 	})
 
-	progress.StartTable(progressID, len(chunks), true)
-	return &RandomIterator{
-		table:     table,
-		chunkSize: chunkSize,
-		chunks:    chunks,
-		nextChunk: 0,
-		dbConn:    dbConn,
-	}, nil
+	progress.StartTable(progressID, 0, false)
+	return iter, nil
 
 }
 
 func (s *RandomIterator) Next() (*chunk.Range, error) {
-	if uint(len(s.chunks)) <= s.nextChunk {
-		return nil, nil
-	}
-	c := s.chunks[s.nextChunk]
-	s.nextChunk = s.nextChunk + 1
-	failpoint.Inject("print-chunk-info", func() {
-		lowerBounds := make([]string, len(c.Bounds))
-		upperBounds := make([]string, len(c.Bounds))
-		for i, bound := range c.Bounds {
-			lowerBounds[i] = bound.Lower
-			upperBounds[i] = bound.Upper
+	select {
+	case <-s.egCtx.Done():
+		return nil, s.firstErr.Get()
+	case c, ok := <-s.chunksCh:
+		err := s.firstErr.Get()
+		if !ok || err != nil {
+			return nil, err
 		}
-		log.Info("failpoint print-chunk-info injected (random splitter)", zap.Strings("lowerBounds", lowerBounds), zap.Strings("upperBounds", upperBounds), zap.String("indexCode", c.Index.ToString()))
-	})
-	return c, nil
+
+		failpoint.Inject("print-chunk-info", func() {
+			lowerBounds := make([]string, len(c.Bounds))
+			upperBounds := make([]string, len(c.Bounds))
+			for i, bound := range c.Bounds {
+				lowerBounds[i] = bound.Lower
+				upperBounds[i] = bound.Upper
+			}
+			log.Info("failpoint print-chunk-info injected (random splitter)",
+				zap.Strings("lowerBounds", lowerBounds),
+				zap.Strings("upperBounds", upperBounds),
+				zap.String("indexCode", c.Index.ToString()))
+		})
+		return c, nil
+	}
 }
 
 func (s *RandomIterator) Close() {
-
+	if s.cancel != nil {
+		s.cancel()
+		_ = s.eg.Wait()
+	}
 }
 
 // GetSplitFields returns fields to split chunks, order by pk, uk, index, columns.
@@ -262,7 +304,7 @@ func splitRangeByRandom(ctx context.Context, db *sql.DB, chunk *chunk.Range, cou
 		return nil, errors.Trace(err)
 	}
 	log.Debug("get split values by random", zap.Stringer("chunk", chunk), zap.Int("random values num", len(randomValues)))
-	for i := 0; i <= len(randomValues); i++ {
+	for i := range len(randomValues) {
 		newChunk := chunk.Copy()
 
 		for j, column := range columns {
@@ -280,6 +322,46 @@ func splitRangeByRandom(ctx context.Context, db *sql.DB, chunk *chunk.Range, cou
 		}
 		chunks = append(chunks, newChunk)
 	}
-	log.Debug("split range by random", zap.Stringer("origin chunk", chunk), zap.Int("split num", len(chunks)))
+	log.Debug("split range by random",
+		zap.Stringer("origin chunk", chunk),
+		zap.Int("split num", len(chunks)))
 	return chunks, nil
+}
+
+func (s *RandomIterator) produceChunks() error {
+	defer close(s.chunksCh)
+	for i := range s.coarseChunks {
+		fineChunks, err := splitRangeByRandom(
+			s.egCtx, s.dbConn, s.coarseChunks[i], s.coarseSplitCounts[i],
+			s.table.Schema, s.table.Table,
+			s.splitColumns, s.table.Range, s.table.Collation)
+		if err != nil {
+			s.firstErr.Set(err)
+			return err
+		}
+
+		isLastCoarseChunk := i == len(s.coarseChunks)-1
+		if isLastCoarseChunk {
+			failpoint.Inject("ignore-last-n-chunk-in-bucket", func(v failpoint.Value) {
+				log.Info("failpoint ignore-last-n-chunk-in-bucket injected (random splitter)", zap.Int("n", v.(int)))
+				if len(fineChunks) <= 1+v.(int) {
+					fineChunks = nil
+					return
+				}
+				fineChunks = fineChunks[:(len(fineChunks) - v.(int))]
+			})
+		}
+
+		chunk.InitChunks(fineChunks, chunk.Random, 0, 0, s.beginIndex, s.totalChunkCnt, s.table.Collation, s.table.Range)
+		s.beginIndex += len(fineChunks)
+		progress.UpdateTotal(s.progressID, len(fineChunks), isLastCoarseChunk)
+		for _, fineChunk := range fineChunks {
+			select {
+			case <-s.egCtx.Done():
+				return nil
+			case s.chunksCh <- fineChunk:
+			}
+		}
+	}
+	return nil
 }
