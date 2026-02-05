@@ -62,6 +62,7 @@ type MySQLSources struct {
 	tableDiffs []*common.TableDiff
 
 	sourceTablesMap map[string][]*common.TableShardSource
+	checksumAlgorithm   config.ChecksumAlgorithm
 }
 
 func getMatchedSourcesForTable(sourceTablesMap map[string][]*common.TableShardSource, table *common.TableDiff) []*common.TableShardSource {
@@ -103,7 +104,7 @@ func (s *MySQLSources) GetCountAndMd5(ctx context.Context, tableRange *splitter.
 
 	for _, ms := range matchSources {
 		go func(ms *common.TableShardSource) {
-			count, checksum, err := utils.GetCountAndMd5Checksum(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info, chunk.Where, "", chunk.Args)
+			count, checksum, err := utils.GetCountAndChecksum(ctx, ms.DBConn, ms.OriginSchema, ms.OriginTable, table.Info, chunk.Where, "", chunk.Args, string(s.checksumAlgorithm))
 			infoCh <- &ChecksumInfo{
 				Checksum: checksum,
 				Count:    count,
@@ -383,9 +384,14 @@ func NewMySQLSources(ctx context.Context, tableDiffs []*common.TableDiff, ds []*
 		return nil, errors.Annotatef(err, "please make sure the filter is correct.")
 	}
 
+	checksumAlgorithm := config.MD5
+	if len(ds) > 0 {
+		checksumAlgorithm = ds[0].ChecksumAlgorithm
+	}
 	mss := &MySQLSources{
 		tableDiffs:      tableDiffs,
 		sourceTablesMap: sourceTablesMap,
+		checksumAlgorithm:   checksumAlgorithm,
 	}
 	return mss, nil
 }
