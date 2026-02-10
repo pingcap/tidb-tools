@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	SplitThreshold = 1000
+	SplitThreshold = 10000
 )
 
 // ChunkIterator generate next chunk for only one table lazily.
