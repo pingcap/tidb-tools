@@ -759,7 +759,9 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 			lastDownstreamData = nil
 		}
 
-		dml.sqls = append(dml.sqls, sql)
+		if df.exportFixSQL {
+			dml.sqls = append(dml.sqls, sql)
+	    }
 	}
 	dml.rowAdd = rowsAdd
 	dml.rowDelete = rowsDelete
