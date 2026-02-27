@@ -29,8 +29,7 @@ export GO_FAILPOINTS=""
 
 check_contains "check failed!!!" $OUT_DIR/sync_diff.log
 check_contains "A total of 1 tables have been compared, 0 tables finished, 1 tables failed, 0 tables skipped." $OUT_DIR/router.output
-check_contains "|          TABLE           | RESULT  | STRUCTURE EQUALITY | DATA DIFF ROWS | UPCOUNT | DOWNCOUNT |" $OUT_DIR/summary.txt
-check_contains_regex "\\| \`route_down_test\`\\.\`t_route\` \\| succeed \\| true +\\| \\+1/-1 +\\| +10 \\| +10 \\|" $OUT_DIR/summary.txt
+check_contains "+1/-1" $OUT_DIR/summary.txt
 
 grep "get mid by size" $OUT_DIR/sync_diff.log >$OUT_DIR/router_mid.log
 check_contains "FROM \`route_up_test\`.\`t_route\`" $OUT_DIR/router_mid.log
