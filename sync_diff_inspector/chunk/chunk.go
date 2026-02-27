@@ -59,15 +59,17 @@ type Bound struct {
 // ChunkID is to identify the sequence of chunks
 type ChunkID struct {
 	TableIndex int `json:"table-index"`
-	// we especially treat random split has only one bucket
-	// which is the whole table
-	// range is [left, right]
+	// One chunk may cross multiple buckets, which is expressed as:
+	//   [BucketIndexLeft, BucketIndexRight]
+	// For table with no stats collected, we treat it as a single bucket.
 	BucketIndexLeft  int `json:"bucket-index-left"`
 	BucketIndexRight int `json:"bucket-index-right"`
-	ChunkIndex       int `json:"chunk-index"`
-	//  `ChunkCnt` is the number of chunks in this bucket
-	//  We can compare `ChunkIndex` and `ChunkCnt` to know
-	// whether this chunk is the last one
+
+	// ChunkIndex is the index of this chunk in the bucket range.
+	ChunkIndex int `json:"chunk-index"`
+
+	// ChunkCnt is the number of chunks in the bucket range.
+	// The count is > 1 only when BucketIndexLeft = < BucketIndexRight.
 	ChunkCnt int `json:"chunk-count"`
 }
 
@@ -467,24 +469,24 @@ func (c *Range) CopyAndUpdate(column, lower, upper string, updateLower, updateUp
 	return newChunk
 }
 
-// Notice: chunk may contain not only one bucket, which can be expressed as a range [3, 5],
-//
-//	And `lastBucketID` means the `5` and `firstBucketID` means the `3`.
-func InitChunks(chunks []*Range, t ChunkType, firstBucketID, lastBucketID int, index int, collation, limits string, chunkCnt int) {
-	if chunks == nil {
-		return
-	}
+// InitChunks fills ChunkID/Type/Where/Args for a batch of ranges
+func InitChunks(
+	chunks []*Range,
+	t ChunkType,
+	firstBucketID, lastBucketID int,
+	index, chunkCnt int,
+	collation, limits string) {
 	for _, chunk := range chunks {
 		conditions, args := chunk.ToString(collation)
 		chunk.Where = fmt.Sprintf("((%s) AND (%s))", conditions, limits)
 		chunk.Args = args
+		chunk.Type = t
 		chunk.Index = &ChunkID{
 			BucketIndexLeft:  firstBucketID,
 			BucketIndexRight: lastBucketID,
 			ChunkIndex:       index,
 			ChunkCnt:         chunkCnt,
 		}
-		chunk.Type = t
 		index++
 	}
 }

@@ -42,7 +42,7 @@ type BucketIterator struct {
 
 	chunkSize int64
 	chunks    []*chunk.Range
-	nextChunk uint
+	nextChunk int
 
 	chunksCh   chan []*chunk.Range
 	errCh      chan error
@@ -94,7 +94,7 @@ func (s *BucketIterator) GetIndexID() int64 {
 
 func (s *BucketIterator) Next() (*chunk.Range, error) {
 	var ok bool
-	if uint(len(s.chunks)) <= s.nextChunk {
+	if len(s.chunks) <= s.nextChunk {
 		select {
 		case err := <-s.errCh:
 			return nil, errors.Trace(err)
@@ -228,7 +228,7 @@ func (s *BucketIterator) splitChunkForBucket(ctx context.Context, firstBucketID,
 			}
 			return
 		}
-		chunk.InitChunks(chunks, chunk.Bucket, firstBucketID, lastBucketID, beginIndex, s.table.Collation, s.table.Range, bucketChunkCnt)
+		chunk.InitChunks(chunks, chunk.Bucket, firstBucketID, lastBucketID, beginIndex, bucketChunkCnt, s.table.Collation, s.table.Range)
 		progress.UpdateTotal(s.progressID, len(chunks), false)
 		s.chunksCh <- chunks
 	})
