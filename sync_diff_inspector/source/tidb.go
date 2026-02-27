@@ -126,7 +126,7 @@ func (s *TiDBSource) GetCountAndMd5(ctx context.Context, tableRange *splitter.Ra
 	table := s.tableDiffs[tableRange.GetTableIndex()]
 	chunk := tableRange.GetChunk()
 
-	matchSource := getMatchSource(s.sourceTableMap, table)
+	sourceSchema, sourceTable := s.GetSourceTable(tableRange)
 	indexHint := ""
 	if s.sqlHint == "auto" && len(chunk.IndexColumnNames) > 0 {
 		// If sqlHint is set to "auto" and there are index column names in the chunk,
@@ -140,7 +140,7 @@ func (s *TiDBSource) GetCountAndMd5(ctx context.Context, tableRange *splitter.Ra
 			for _, index := range dbutil.FindAllIndex(tableInfos[0]) {
 				if utils.IsIndexMatchingColumns(index, chunk.IndexColumnNames) {
 					indexHint = fmt.Sprintf("/*+ USE_INDEX(%s, %s) */",
-						dbutil.TableName(matchSource.OriginSchema, matchSource.OriginTable),
+						dbutil.TableName(sourceSchema, sourceTable),
 						dbutil.ColumnName(index.Name.O),
 					)
 					break
@@ -150,7 +150,7 @@ func (s *TiDBSource) GetCountAndMd5(ctx context.Context, tableRange *splitter.Ra
 	}
 
 	count, checksum, err := utils.GetCountAndMd5Checksum(
-		ctx, s.dbConn, matchSource.OriginSchema, matchSource.OriginTable, table.Info,
+		ctx, s.dbConn, sourceSchema, sourceTable, table.Info,
 		chunk.Where, indexHint, chunk.Args)
 
 	cost := time.Since(beginTime)
@@ -163,17 +163,23 @@ func (s *TiDBSource) GetCountAndMd5(ctx context.Context, tableRange *splitter.Ra
 }
 
 func (s *TiDBSource) GetCountForLackTable(ctx context.Context, tableRange *splitter.RangeInfo) int64 {
-	table := s.tableDiffs[tableRange.GetTableIndex()]
-	matchSource := getMatchSource(s.sourceTableMap, table)
-	if matchSource != nil {
-		count, _ := dbutil.GetRowCount(ctx, s.dbConn, matchSource.OriginSchema, matchSource.OriginTable, "", nil)
-		return count
-	}
-	return 0
+	sourceSchema, sourceTable := s.GetSourceTable(tableRange)
+	count, _ := dbutil.GetRowCount(ctx, s.dbConn, sourceSchema, sourceTable, "", nil)
+	return count
 }
 
 func (s *TiDBSource) GetTables() []*common.TableDiff {
 	return s.tableDiffs
+}
+
+// GetSourceTable returns the physical source table mapped from tableDiff.
+func (s *TiDBSource) GetSourceTable(tableRange *splitter.RangeInfo) (schema string, table string) {
+	tableDiff := s.GetTables()[tableRange.GetTableIndex()]
+	matchSource := getMatchSource(s.sourceTableMap, tableDiff)
+	if matchSource == nil {
+		return tableDiff.Schema, tableDiff.Table
+	}
+	return matchSource.OriginSchema, matchSource.OriginTable
 }
 
 func (s *TiDBSource) GetSourceStructInfo(ctx context.Context, tableIndex int) ([]*model.TableInfo, error) {
@@ -181,7 +187,11 @@ func (s *TiDBSource) GetSourceStructInfo(ctx context.Context, tableIndex int) ([
 	tableInfos := make([]*model.TableInfo, 1)
 	tableDiff := s.GetTables()[tableIndex]
 	source := getMatchSource(s.sourceTableMap, tableDiff)
-	tableInfos[0], err = dbutil.GetTableInfoWithVersion(ctx, s.GetDB(), source.OriginSchema, source.OriginTable, s.version)
+	sourceSchema, sourceTable := tableDiff.Schema, tableDiff.Table
+	if source != nil {
+		sourceSchema, sourceTable = source.OriginSchema, source.OriginTable
+	}
+	tableInfos[0], err = dbutil.GetTableInfoWithVersion(ctx, s.GetDB(), sourceSchema, sourceTable, s.version)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -207,8 +217,8 @@ func (s *TiDBSource) GetRowsIterator(ctx context.Context, tableRange *splitter.R
 	chunk := tableRange.GetChunk()
 
 	table := s.tableDiffs[tableRange.GetTableIndex()]
-	matchedSource := getMatchSource(s.sourceTableMap, table)
-	rowsQuery, _ := utils.GetTableRowsQueryFormat(matchedSource.OriginSchema, matchedSource.OriginTable, table.Info, table.Collation)
+	sourceSchema, sourceTable := s.GetSourceTable(tableRange)
+	rowsQuery, _ := utils.GetTableRowsQueryFormat(sourceSchema, sourceTable, table.Info, table.Collation)
 	query := fmt.Sprintf(rowsQuery, chunk.Where)
 
 	log.Debug("select data", zap.String("sql", query), zap.Reflect("args", chunk.Args))
