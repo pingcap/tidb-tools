@@ -163,9 +163,13 @@ func (s *TiDBSource) GetCountAndMd5(ctx context.Context, tableRange *splitter.Ra
 }
 
 func (s *TiDBSource) GetCountForLackTable(ctx context.Context, tableRange *splitter.RangeInfo) int64 {
-	sourceSchema, sourceTable := s.GetSourceTable(tableRange)
-	count, _ := dbutil.GetRowCount(ctx, s.dbConn, sourceSchema, sourceTable, "", nil)
-	return count
+	table := s.tableDiffs[tableRange.GetTableIndex()]
+	matchSource := getMatchSource(s.sourceTableMap, table)
+	if matchSource != nil {
+		count, _ := dbutil.GetRowCount(ctx, s.dbConn, matchSource.OriginSchema, matchSource.OriginTable, "", nil)
+		return count
+	}
+	return 0
 }
 
 func (s *TiDBSource) GetTables() []*common.TableDiff {
@@ -187,11 +191,7 @@ func (s *TiDBSource) GetSourceStructInfo(ctx context.Context, tableIndex int) ([
 	tableInfos := make([]*model.TableInfo, 1)
 	tableDiff := s.GetTables()[tableIndex]
 	source := getMatchSource(s.sourceTableMap, tableDiff)
-	sourceSchema, sourceTable := tableDiff.Schema, tableDiff.Table
-	if source != nil {
-		sourceSchema, sourceTable = source.OriginSchema, source.OriginTable
-	}
-	tableInfos[0], err = dbutil.GetTableInfoWithVersion(ctx, s.GetDB(), sourceSchema, sourceTable, s.version)
+	tableInfos[0], err = dbutil.GetTableInfoWithVersion(ctx, s.GetDB(), source.OriginSchema, source.OriginTable, s.version)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
