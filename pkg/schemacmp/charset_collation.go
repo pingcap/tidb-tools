@@ -11,44 +11,50 @@ type charsetLattice struct {
 	kind  charsetKind
 }
 
-type charsetKind int
+type charsetKind struct {
+	family charsetFamily
+	key    string
+}
 
 const (
-	charsetKindEmpty charsetKind = iota
-	charsetKindLatin1
-	charsetKindUTF8
-	charsetKindUTF8MB4
-	charsetKindOther
+	charsetKeyLatin1  = tidbcharset.CharsetLatin1
+	charsetKeyUTF8    = tidbcharset.CharsetUTF8
+	charsetKeyUTF8MB4 = tidbcharset.CharsetUTF8MB4
+)
+
+type charsetFamily int
+
+const (
+	charsetFamilyOther charsetFamily = iota
+	charsetFamilyLatin1
+	charsetFamilyUTF8
+	charsetFamilyUTF8MB4
 )
 
 // Charset is a lattice for comparing/joining character sets.
-// It supports the ordering:
-//   - "" < latin1 < utf8mb4
-//   - "" < utf8(utf8mb3) < utf8mb4
-//
+// It supports the ordering: latin1 < utf8mb4 and utf8(utf8mb3) < utf8mb4.
 // Other charsets are only comparable when identical.
 func Charset(cs string) Lattice {
-	value := strings.ToLower(cs)
-	if value == tidbcharset.CharsetUTF8MB3 {
-		value = tidbcharset.CharsetUTF8
+	normalized := strings.ToLower(cs)
+	if normalized == tidbcharset.CharsetUTF8MB3 {
+		normalized = tidbcharset.CharsetUTF8
 	}
 
-	switch value {
-	case "":
-		return charsetLattice{value: value, kind: charsetKindEmpty}
+	switch normalized {
 	case tidbcharset.CharsetLatin1:
-		return charsetLattice{value: value, kind: charsetKindLatin1}
+		return charsetLattice{value: cs, kind: charsetKind{family: charsetFamilyLatin1, key: charsetKeyLatin1}}
 	case tidbcharset.CharsetUTF8:
-		return charsetLattice{value: value, kind: charsetKindUTF8}
+		return charsetLattice{value: cs, kind: charsetKind{family: charsetFamilyUTF8, key: charsetKeyUTF8}}
 	case tidbcharset.CharsetUTF8MB4:
-		return charsetLattice{value: value, kind: charsetKindUTF8MB4}
+		return charsetLattice{value: cs, kind: charsetKind{family: charsetFamilyUTF8MB4, key: charsetKeyUTF8MB4}}
 	default:
-		return charsetLattice{value: value, kind: charsetKindOther}
+		// Caller should always pass an explicit charset. Invalid/empty values are treated as "other".
+		return charsetLattice{value: cs, kind: charsetKind{family: charsetFamilyOther, key: normalized}}
 	}
 }
 
 func (a charsetLattice) Unwrap() interface{} {
-	return a.value
+	return a.kind.key
 }
 
 func (a charsetLattice) Compare(other Lattice) (int, error) {
@@ -57,23 +63,18 @@ func (a charsetLattice) Compare(other Lattice) (int, error) {
 		return 0, typeMismatchError(a, other)
 	}
 
-	if a.value == b.value {
+	if a.kind == b.kind {
 		return 0, nil
 	}
 
-	// Only latin1/utf8/utf8mb4 (plus empty) are ordered.
 	switch {
-	case a.kind == charsetKindEmpty && (b.kind == charsetKindLatin1 || b.kind == charsetKindUTF8 || b.kind == charsetKindUTF8MB4):
+	case a.kind.family == charsetFamilyUTF8 && b.kind.family == charsetFamilyUTF8MB4:
 		return -1, nil
-	case b.kind == charsetKindEmpty && (a.kind == charsetKindLatin1 || a.kind == charsetKindUTF8 || a.kind == charsetKindUTF8MB4):
+	case a.kind.family == charsetFamilyUTF8MB4 && b.kind.family == charsetFamilyUTF8:
 		return 1, nil
-	case a.kind == charsetKindUTF8 && b.kind == charsetKindUTF8MB4:
+	case a.kind.family == charsetFamilyLatin1 && b.kind.family == charsetFamilyUTF8MB4:
 		return -1, nil
-	case a.kind == charsetKindUTF8MB4 && b.kind == charsetKindUTF8:
-		return 1, nil
-	case a.kind == charsetKindLatin1 && b.kind == charsetKindUTF8MB4:
-		return -1, nil
-	case a.kind == charsetKindUTF8MB4 && b.kind == charsetKindLatin1:
+	case a.kind.family == charsetFamilyUTF8MB4 && b.kind.family == charsetFamilyLatin1:
 		return 1, nil
 	default:
 		return 0, distinctSingletonsErrors(a.value, b.value)
@@ -97,19 +98,23 @@ func (a charsetLattice) Join(other Lattice) (Lattice, error) {
 }
 
 type collationLattice struct {
-	value  string
-	kind   collationKind
-	suffix string
+	value string
+	kind  collationKind
 }
 
-type collationKind int
+type collationKind struct {
+	family collationFamily
+	suffix string
+	key    string
+}
+
+type collationFamily int
 
 const (
-	collationKindEmpty collationKind = iota
-	collationKindLatin1
-	collationKindUTF8
-	collationKindUTF8MB4
-	collationKindOther
+	collationFamilyOther collationFamily = iota
+	collationFamilyLatin1
+	collationFamilyUTF8
+	collationFamilyUTF8MB4
 )
 
 // Collation is a lattice for comparing/joining collations.
@@ -120,39 +125,29 @@ const (
 // (same suffix only).
 // Other collations are only comparable when identical.
 func Collation(co string) Lattice {
-	value := strings.ToLower(co)
-	if strings.HasPrefix(value, "utf8mb3_") {
-		value = "utf8_" + strings.TrimPrefix(value, "utf8mb3_")
+	normalized := strings.ToLower(co)
+	if strings.HasPrefix(normalized, "utf8mb3_") {
+		normalized = "utf8_" + strings.TrimPrefix(normalized, "utf8mb3_")
 	}
 
 	switch {
-	case value == "":
-		return collationLattice{value: value, kind: collationKindEmpty}
-	case strings.HasPrefix(value, "utf8mb4_"):
-		return collationLattice{
-			value:  value,
-			kind:   collationKindUTF8MB4,
-			suffix: strings.TrimPrefix(value, "utf8mb4_"),
-		}
-	case strings.HasPrefix(value, "utf8_"):
-		return collationLattice{
-			value:  value,
-			kind:   collationKindUTF8,
-			suffix: strings.TrimPrefix(value, "utf8_"),
-		}
-	case strings.HasPrefix(value, "latin1_"):
-		return collationLattice{
-			value:  value,
-			kind:   collationKindLatin1,
-			suffix: strings.TrimPrefix(value, "latin1_"),
-		}
+	case strings.HasPrefix(normalized, "utf8mb4_"):
+		suffix := strings.TrimPrefix(normalized, "utf8mb4_")
+		return collationLattice{value: co, kind: collationKind{family: collationFamilyUTF8MB4, suffix: suffix, key: "utf8mb4_" + suffix}}
+	case strings.HasPrefix(normalized, "utf8_"):
+		suffix := strings.TrimPrefix(normalized, "utf8_")
+		return collationLattice{value: co, kind: collationKind{family: collationFamilyUTF8, suffix: suffix, key: "utf8_" + suffix}}
+	case strings.HasPrefix(normalized, "latin1_"):
+		suffix := strings.TrimPrefix(normalized, "latin1_")
+		return collationLattice{value: co, kind: collationKind{family: collationFamilyLatin1, suffix: suffix, key: "latin1_" + suffix}}
 	default:
-		return collationLattice{value: value, kind: collationKindOther}
+		// Caller should always pass an explicit collation. Invalid/empty values are treated as "other".
+		return collationLattice{value: co, kind: collationKind{family: collationFamilyOther, key: normalized}}
 	}
 }
 
 func (a collationLattice) Unwrap() interface{} {
-	return a.value
+	return a.kind.key
 }
 
 func (a collationLattice) Compare(other Lattice) (int, error) {
@@ -161,28 +156,28 @@ func (a collationLattice) Compare(other Lattice) (int, error) {
 		return 0, typeMismatchError(a, other)
 	}
 
-	if a.value == b.value {
+	if a.kind == b.kind {
 		return 0, nil
 	}
 
-	// Collation without explicit value is not ordered (it depends on charset).
-	if a.kind == collationKindEmpty || b.kind == collationKindEmpty {
+	// If caller passed an invalid/empty collation, treat it as "other" and make it incomparable with valid ones.
+	if a.kind.family == collationFamilyOther || b.kind.family == collationFamilyOther {
 		return 0, distinctSingletonsErrors(a.value, b.value)
 	}
 
 	// Only latin1/utf8/utf8mb4 with the same suffix are ordered.
-	if a.suffix != b.suffix {
+	if a.kind.suffix != b.kind.suffix {
 		return 0, distinctSingletonsErrors(a.value, b.value)
 	}
 
 	switch {
-	case a.kind == collationKindUTF8 && b.kind == collationKindUTF8MB4:
+	case a.kind.family == collationFamilyUTF8 && b.kind.family == collationFamilyUTF8MB4:
 		return -1, nil
-	case a.kind == collationKindUTF8MB4 && b.kind == collationKindUTF8:
+	case a.kind.family == collationFamilyUTF8MB4 && b.kind.family == collationFamilyUTF8:
 		return 1, nil
-	case a.kind == collationKindLatin1 && b.kind == collationKindUTF8MB4:
+	case a.kind.family == collationFamilyLatin1 && b.kind.family == collationFamilyUTF8MB4:
 		return -1, nil
-	case a.kind == collationKindUTF8MB4 && b.kind == collationKindLatin1:
+	case a.kind.family == collationFamilyUTF8MB4 && b.kind.family == collationFamilyLatin1:
 		return 1, nil
 	default:
 		return 0, distinctSingletonsErrors(a.value, b.value)
