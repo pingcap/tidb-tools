@@ -48,7 +48,7 @@ func Charset(cs string) Lattice {
 	case tidbcharset.CharsetUTF8MB4:
 		return charsetLattice{value: cs, kind: charsetKind{family: charsetFamilyUTF8MB4, key: charsetKeyUTF8MB4}}
 	default:
-		// Caller should always pass an explicit charset. Invalid/empty values are treated as "other".
+		// Caller should always pass an explicit charset. Unrecognized values are treated as "other".
 		return charsetLattice{value: cs, kind: charsetKind{family: charsetFamilyOther, key: normalized}}
 	}
 }
@@ -141,7 +141,7 @@ func Collation(co string) Lattice {
 		suffix := strings.TrimPrefix(normalized, "latin1_")
 		return collationLattice{value: co, kind: collationKind{family: collationFamilyLatin1, suffix: suffix, key: "latin1_" + suffix}}
 	default:
-		// Caller should always pass an explicit collation. Invalid/empty values are treated as "other".
+		// Caller should always pass an explicit collation. Unrecognized values are treated as "other".
 		return collationLattice{value: co, kind: collationKind{family: collationFamilyOther, key: normalized}}
 	}
 }
@@ -160,7 +160,7 @@ func (a collationLattice) Compare(other Lattice) (int, error) {
 		return 0, nil
 	}
 
-	// If caller passed an invalid/empty collation, treat it as "other" and make it incomparable with valid ones.
+	// If caller passed an unrecognized collation, treat it as "other" and make it incomparable with valid ones.
 	if a.kind.family == collationFamilyOther || b.kind.family == collationFamilyOther {
 		return 0, distinctSingletonsErrors(a.value, b.value)
 	}
