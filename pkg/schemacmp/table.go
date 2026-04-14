@@ -267,8 +267,8 @@ func encodeTableInfoToLattice(ti *model.TableInfo) Tuple {
 	}
 
 	return Tuple{
-		Singleton(ti.Charset),
-		Singleton(ti.Collate),
+		Charset(ti.Charset),
+		Collation(ti.Collate),
 		Map(columns),
 		Map(indices),
 		// TODO ForeignKeys?

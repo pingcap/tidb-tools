@@ -194,11 +194,11 @@ func (s *tableSchema) TestJoinSchemas(c *C) {
 			join: "CREATE TABLE tb3 (a INT, b VARCHAR(10), col1 VARCHAR(10) CHARSET utf8 COLLATE utf8_bin)",
 		},
 		{
-			name:    "DM_040",
-			a:       "CREATE TABLE tb1 (a INT, b VARCHAR(10), col1 VARCHAR(10) CHARSET utf8 COLLATE utf8_bin)",
-			b:       "CREATE TABLE tb2 (a INT, b VARCHAR(10), col1 VARCHAR(10) CHARSET utf8mb4 COLLATE utf8mb4_bin)",
-			cmpErr:  `.*"col1".*distinct singletons.*`,
-			joinErr: `.*"col1".*distinct singletons.*`,
+			name: "DM_040",
+			a:    "CREATE TABLE tb1 (a INT, b VARCHAR(10), col1 VARCHAR(10) CHARSET utf8 COLLATE utf8_bin)",
+			b:    "CREATE TABLE tb2 (a INT, b VARCHAR(10), col1 VARCHAR(10) CHARSET utf8mb4 COLLATE utf8mb4_bin)",
+			cmp:  -1,
+			join: "CREATE TABLE tb3 (a INT, b VARCHAR(10), col1 VARCHAR(10) CHARSET utf8mb4 COLLATE utf8mb4_bin)",
 		},
 		{
 			name: "DM_041/1",
@@ -264,11 +264,11 @@ func (s *tableSchema) TestJoinSchemas(c *C) {
 			join:   "CREATE TABLE tb3 (a INT, b VARCHAR(10), c INT DEFAULT 1)",
 		},
 		{
-			name:    "DM_061",
-			a:       "CREATE TABLE tb1 (a INT, b VARCHAR(10))",
-			b:       "CREATE TABLE tb2 (a INT, b VARCHAR(10) CHARSET utf8)",
-			cmpErr:  `.*"b".*distinct singletons.*`,
-			joinErr: `.*"b".*distinct singletons.*`,
+			name: "DM_061",
+			a:    "CREATE TABLE tb1 (a INT, b VARCHAR(10))",
+			b:    "CREATE TABLE tb2 (a INT, b VARCHAR(10) CHARSET utf8)",
+			cmp:  1,
+			join: "CREATE TABLE tb3 (a INT, b VARCHAR(10))",
 		},
 		{
 			name: "DM_066",
@@ -534,4 +534,30 @@ func (s *tableSchema) TestTableString(c *C) {
 			c.Assert(err, IsNil)
 		}
 	}
+}
+
+func (s *tableSchema) TestJoinTableCharsetCollation(c *C) {
+	tiUTF8, err := s.toTableInfo("CREATE TABLE tb (a INT)")
+	c.Assert(err, IsNil)
+	tiUTF8.Charset = "utf8"
+	tiUTF8.Collate = "utf8_bin"
+
+	tiUTF8MB4, err := s.toTableInfo("CREATE TABLE tb (a INT)")
+	c.Assert(err, IsNil)
+	tiUTF8MB4.Charset = "utf8mb4"
+	tiUTF8MB4.Collate = "utf8mb4_bin"
+
+	a := Encode(tiUTF8)
+	b := Encode(tiUTF8MB4)
+
+	cmp, err := a.Compare(b)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, -1)
+
+	joined, err := a.Join(b)
+	c.Assert(err, IsNil)
+	c.Assert(joined, DeepEquals, b)
+	sql := strings.ToLower(joined.String())
+	c.Assert(strings.Contains(sql, "charset utf8mb4"), IsTrue)
+	c.Assert(strings.Contains(sql, "collate utf8mb4_bin"), IsTrue)
 }

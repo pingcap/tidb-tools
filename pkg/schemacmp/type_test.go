@@ -156,6 +156,30 @@ func init() {
 	typeChar123.SetCharset(mysql.UTF8MB4Charset)
 	typeChar123.SetCollate(mysql.UTF8MB4DefaultCollation)
 
+	// VARCHAR(10) CHARSET utf8 COLLATE utf8_bin
+	typeVarchar10UTF8Bin = types.NewFieldType(mysql.TypeVarchar)
+	typeVarchar10UTF8Bin.SetFlag(0)
+	typeVarchar10UTF8Bin.SetFlen(10)
+	typeVarchar10UTF8Bin.SetDecimal(0)
+	typeVarchar10UTF8Bin.SetCharset(mysql.UTF8Charset)
+	typeVarchar10UTF8Bin.SetCollate("utf8_bin")
+
+	// VARCHAR(10) CHARSET utf8 COLLATE utf8_general_ci
+	typeVarchar10UTF8GeneralCI = types.NewFieldType(mysql.TypeVarchar)
+	typeVarchar10UTF8GeneralCI.SetFlag(0)
+	typeVarchar10UTF8GeneralCI.SetFlen(10)
+	typeVarchar10UTF8GeneralCI.SetDecimal(0)
+	typeVarchar10UTF8GeneralCI.SetCharset(mysql.UTF8Charset)
+	typeVarchar10UTF8GeneralCI.SetCollate("utf8_general_ci")
+
+	// VARCHAR(10) CHARSET utf8mb4 COLLATE utf8mb4_bin
+	typeVarchar10UTF8MB4Bin = types.NewFieldType(mysql.TypeVarchar)
+	typeVarchar10UTF8MB4Bin.SetFlag(0)
+	typeVarchar10UTF8MB4Bin.SetFlen(10)
+	typeVarchar10UTF8MB4Bin.SetDecimal(0)
+	typeVarchar10UTF8MB4Bin.SetCharset(mysql.UTF8MB4Charset)
+	typeVarchar10UTF8MB4Bin.SetCollate(mysql.UTF8MB4DefaultCollation)
+
 	// VARCHAR(65432) CHARSET ascii
 	typeVarchar65432CharsetASCII = types.NewFieldType(mysql.TypeVarchar)
 	typeVarchar65432CharsetASCII.SetFlag(0)
@@ -301,6 +325,15 @@ var (
 	// VARCHAR(65432) CHARSET ascii
 	typeVarchar65432CharsetASCII *types.FieldType
 
+	// VARCHAR(10) CHARSET utf8 COLLATE utf8_bin
+	typeVarchar10UTF8Bin *types.FieldType
+
+	// VARCHAR(10) CHARSET utf8 COLLATE utf8_general_ci
+	typeVarchar10UTF8GeneralCI *types.FieldType
+
+	// VARCHAR(10) CHARSET utf8mb4 COLLATE utf8mb4_bin
+	typeVarchar10UTF8MB4Bin *types.FieldType
+
 	// BINARY(69)
 	typeBinary69 *types.FieldType
 
@@ -350,6 +383,9 @@ func (*typeSchema) TestTypeUnwrap(c *C) {
 		typeTime6,
 		typeYear4,
 		typeChar123,
+		typeVarchar10UTF8Bin,
+		typeVarchar10UTF8GeneralCI,
+		typeVarchar10UTF8MB4Bin,
 		typeVarchar65432CharsetASCII,
 		typeBinary69,
 		typeVarBinary420,
@@ -397,6 +433,20 @@ func (*typeSchema) TestTypeCompareJoin(c *C) {
 			b:             typeIntNotNull,
 			compareResult: 1,
 			join:          typeInt,
+		},
+		{
+			// utf8 < utf8mb4 (both charset and collation are ordered).
+			a:             typeVarchar10UTF8Bin,
+			b:             typeVarchar10UTF8MB4Bin,
+			compareResult: -1,
+			join:          typeVarchar10UTF8MB4Bin,
+		},
+		{
+			// Only collations with the same suffix can be ordered/joined.
+			a:            typeVarchar10UTF8GeneralCI,
+			b:            typeVarchar10UTF8MB4Bin,
+			compareError: `at tuple index \d+: distinct singletons.*`,
+			joinError:    `at tuple index \d+: distinct singletons.*`,
 		},
 		{
 			// Cannot join DEFAULT NULL with AUTO_INCREMENT.
