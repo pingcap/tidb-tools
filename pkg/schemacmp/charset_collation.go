@@ -15,13 +15,17 @@ type charsetKind int
 
 const (
 	charsetKindEmpty charsetKind = iota
+	charsetKindLatin1
 	charsetKindUTF8
 	charsetKindUTF8MB4
 	charsetKindOther
 )
 
 // Charset is a lattice for comparing/joining character sets.
-// It supports the ordering: "" < utf8(utf8mb3) < utf8mb4.
+// It supports the ordering:
+//   - "" < latin1 < utf8mb4
+//   - "" < utf8(utf8mb3) < utf8mb4
+//
 // Other charsets are only comparable when identical.
 func Charset(cs string) Lattice {
 	value := strings.ToLower(cs)
@@ -32,6 +36,8 @@ func Charset(cs string) Lattice {
 	switch value {
 	case "":
 		return charsetLattice{value: value, kind: charsetKindEmpty}
+	case tidbcharset.CharsetLatin1:
+		return charsetLattice{value: value, kind: charsetKindLatin1}
 	case tidbcharset.CharsetUTF8:
 		return charsetLattice{value: value, kind: charsetKindUTF8}
 	case tidbcharset.CharsetUTF8MB4:
@@ -55,15 +61,19 @@ func (a charsetLattice) Compare(other Lattice) (int, error) {
 		return 0, nil
 	}
 
-	// Only utf8/utf8mb4 (plus empty) are ordered.
+	// Only latin1/utf8/utf8mb4 (plus empty) are ordered.
 	switch {
-	case a.kind == charsetKindEmpty && (b.kind == charsetKindUTF8 || b.kind == charsetKindUTF8MB4):
+	case a.kind == charsetKindEmpty && (b.kind == charsetKindLatin1 || b.kind == charsetKindUTF8 || b.kind == charsetKindUTF8MB4):
 		return -1, nil
-	case b.kind == charsetKindEmpty && (a.kind == charsetKindUTF8 || a.kind == charsetKindUTF8MB4):
+	case b.kind == charsetKindEmpty && (a.kind == charsetKindLatin1 || a.kind == charsetKindUTF8 || a.kind == charsetKindUTF8MB4):
 		return 1, nil
 	case a.kind == charsetKindUTF8 && b.kind == charsetKindUTF8MB4:
 		return -1, nil
 	case a.kind == charsetKindUTF8MB4 && b.kind == charsetKindUTF8:
+		return 1, nil
+	case a.kind == charsetKindLatin1 && b.kind == charsetKindUTF8MB4:
+		return -1, nil
+	case a.kind == charsetKindUTF8MB4 && b.kind == charsetKindLatin1:
 		return 1, nil
 	default:
 		return 0, distinctSingletonsErrors(a.value, b.value)
@@ -96,13 +106,18 @@ type collationKind int
 
 const (
 	collationKindEmpty collationKind = iota
+	collationKindLatin1
 	collationKindUTF8
 	collationKindUTF8MB4
 	collationKindOther
 )
 
 // Collation is a lattice for comparing/joining collations.
-// It supports the ordering: utf8_<suffix> < utf8mb4_<suffix> (same suffix only).
+// It supports the ordering:
+//   - latin1_<suffix> < utf8mb4_<suffix>
+//   - utf8_<suffix> < utf8mb4_<suffix>
+//
+// (same suffix only).
 // Other collations are only comparable when identical.
 func Collation(co string) Lattice {
 	value := strings.ToLower(co)
@@ -124,6 +139,12 @@ func Collation(co string) Lattice {
 			value:  value,
 			kind:   collationKindUTF8,
 			suffix: strings.TrimPrefix(value, "utf8_"),
+		}
+	case strings.HasPrefix(value, "latin1_"):
+		return collationLattice{
+			value:  value,
+			kind:   collationKindLatin1,
+			suffix: strings.TrimPrefix(value, "latin1_"),
 		}
 	default:
 		return collationLattice{value: value, kind: collationKindOther}
@@ -149,24 +170,23 @@ func (a collationLattice) Compare(other Lattice) (int, error) {
 		return 0, distinctSingletonsErrors(a.value, b.value)
 	}
 
-	// Only utf8/utf8mb4 with the same suffix are ordered.
-	if (a.kind == collationKindUTF8 || a.kind == collationKindUTF8MB4) &&
-		(b.kind == collationKindUTF8 || b.kind == collationKindUTF8MB4) {
-		if a.suffix != b.suffix {
-			return 0, distinctSingletonsErrors(a.value, b.value)
-		}
-		switch {
-		case a.kind == collationKindUTF8 && b.kind == collationKindUTF8MB4:
-			return -1, nil
-		case a.kind == collationKindUTF8MB4 && b.kind == collationKindUTF8:
-			return 1, nil
-		default:
-			// Same kind but different value cannot happen because suffix differs is handled above.
-			return 0, distinctSingletonsErrors(a.value, b.value)
-		}
+	// Only latin1/utf8/utf8mb4 with the same suffix are ordered.
+	if a.suffix != b.suffix {
+		return 0, distinctSingletonsErrors(a.value, b.value)
 	}
 
-	return 0, distinctSingletonsErrors(a.value, b.value)
+	switch {
+	case a.kind == collationKindUTF8 && b.kind == collationKindUTF8MB4:
+		return -1, nil
+	case a.kind == collationKindUTF8MB4 && b.kind == collationKindUTF8:
+		return 1, nil
+	case a.kind == collationKindLatin1 && b.kind == collationKindUTF8MB4:
+		return -1, nil
+	case a.kind == collationKindUTF8MB4 && b.kind == collationKindLatin1:
+		return 1, nil
+	default:
+		return 0, distinctSingletonsErrors(a.value, b.value)
+	}
 }
 
 func (a collationLattice) Join(other Lattice) (Lattice, error) {

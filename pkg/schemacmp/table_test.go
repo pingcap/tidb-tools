@@ -201,6 +201,13 @@ func (s *tableSchema) TestJoinSchemas(c *C) {
 			join: "CREATE TABLE tb3 (a INT, b VARCHAR(10), col1 VARCHAR(10) CHARSET utf8mb4 COLLATE utf8mb4_bin)",
 		},
 		{
+			name: "latin1_to_utf8mb4",
+			a:    "CREATE TABLE tb1 (a INT, col1 VARCHAR(10) CHARSET latin1 COLLATE latin1_bin)",
+			b:    "CREATE TABLE tb2 (a INT, col1 VARCHAR(10) CHARSET utf8mb4 COLLATE utf8mb4_bin)",
+			cmp:  -1,
+			join: "CREATE TABLE tb3 (a INT, col1 VARCHAR(10) CHARSET utf8mb4 COLLATE utf8mb4_bin)",
+		},
+		{
 			name: "DM_041/1",
 			a:    "CREATE TABLE tb1 (a INT, b VARCHAR(10), new_col1 INT AS (a + 1))",
 			b:    "CREATE TABLE tb2 (a INT, b VARCHAR(10))",
@@ -560,4 +567,18 @@ func (s *tableSchema) TestJoinTableCharsetCollation(c *C) {
 	sql := strings.ToLower(joined.String())
 	c.Assert(strings.Contains(sql, "charset utf8mb4"), IsTrue)
 	c.Assert(strings.Contains(sql, "collate utf8mb4_bin"), IsTrue)
+
+	tiLatin1, err := s.toTableInfo("CREATE TABLE tb (a INT)")
+	c.Assert(err, IsNil)
+	tiLatin1.Charset = "latin1"
+	tiLatin1.Collate = "latin1_bin"
+
+	a = Encode(tiLatin1)
+	cmp, err = a.Compare(b)
+	c.Assert(err, IsNil)
+	c.Assert(cmp, Equals, -1)
+
+	joined, err = a.Join(b)
+	c.Assert(err, IsNil)
+	c.Assert(joined, DeepEquals, b)
 }

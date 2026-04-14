@@ -180,6 +180,14 @@ func init() {
 	typeVarchar10UTF8MB4Bin.SetCharset(mysql.UTF8MB4Charset)
 	typeVarchar10UTF8MB4Bin.SetCollate(mysql.UTF8MB4DefaultCollation)
 
+	// VARCHAR(10) CHARSET latin1 COLLATE latin1_bin
+	typeVarchar10Latin1Bin = types.NewFieldType(mysql.TypeVarchar)
+	typeVarchar10Latin1Bin.SetFlag(0)
+	typeVarchar10Latin1Bin.SetFlen(10)
+	typeVarchar10Latin1Bin.SetDecimal(0)
+	typeVarchar10Latin1Bin.SetCharset("latin1")
+	typeVarchar10Latin1Bin.SetCollate("latin1_bin")
+
 	// VARCHAR(65432) CHARSET ascii
 	typeVarchar65432CharsetASCII = types.NewFieldType(mysql.TypeVarchar)
 	typeVarchar65432CharsetASCII.SetFlag(0)
@@ -334,6 +342,9 @@ var (
 	// VARCHAR(10) CHARSET utf8mb4 COLLATE utf8mb4_bin
 	typeVarchar10UTF8MB4Bin *types.FieldType
 
+	// VARCHAR(10) CHARSET latin1 COLLATE latin1_bin
+	typeVarchar10Latin1Bin *types.FieldType
+
 	// BINARY(69)
 	typeBinary69 *types.FieldType
 
@@ -386,6 +397,7 @@ func (*typeSchema) TestTypeUnwrap(c *C) {
 		typeVarchar10UTF8Bin,
 		typeVarchar10UTF8GeneralCI,
 		typeVarchar10UTF8MB4Bin,
+		typeVarchar10Latin1Bin,
 		typeVarchar65432CharsetASCII,
 		typeBinary69,
 		typeVarBinary420,
@@ -440,6 +452,20 @@ func (*typeSchema) TestTypeCompareJoin(c *C) {
 			b:             typeVarchar10UTF8MB4Bin,
 			compareResult: -1,
 			join:          typeVarchar10UTF8MB4Bin,
+		},
+		{
+			// latin1 < utf8mb4 (both charset and collation are ordered).
+			a:             typeVarchar10Latin1Bin,
+			b:             typeVarchar10UTF8MB4Bin,
+			compareResult: -1,
+			join:          typeVarchar10UTF8MB4Bin,
+		},
+		{
+			// latin1 and utf8 are not comparable/joinable.
+			a:            typeVarchar10Latin1Bin,
+			b:            typeVarchar10UTF8Bin,
+			compareError: `at tuple index \d+: distinct singletons.*`,
+			joinError:    `at tuple index \d+: distinct singletons.*`,
 		},
 		{
 			// Only collations with the same suffix can be ordered/joined.
