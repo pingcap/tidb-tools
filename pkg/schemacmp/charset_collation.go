@@ -48,7 +48,7 @@ func Charset(cs string) Lattice {
 }
 
 func (a charsetLattice) Unwrap() interface{} {
-	return a.kind.key
+	return a.value
 }
 
 func (a charsetLattice) Compare(other Lattice) (int, error) {
@@ -141,7 +141,7 @@ func Collation(co string) Lattice {
 }
 
 func (a collationLattice) Unwrap() interface{} {
-	return a.kind.key
+	return a.value
 }
 
 func (a collationLattice) Compare(other Lattice) (int, error) {
