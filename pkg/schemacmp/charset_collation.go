@@ -16,12 +16,6 @@ type charsetKind struct {
 	key    string
 }
 
-const (
-	charsetKeyLatin1  = tidbcharset.CharsetLatin1
-	charsetKeyUTF8    = tidbcharset.CharsetUTF8
-	charsetKeyUTF8MB4 = tidbcharset.CharsetUTF8MB4
-)
-
 type charsetFamily int
 
 const (
@@ -42,11 +36,11 @@ func Charset(cs string) Lattice {
 
 	switch normalized {
 	case tidbcharset.CharsetLatin1:
-		return charsetLattice{value: cs, kind: charsetKind{family: charsetFamilyLatin1, key: charsetKeyLatin1}}
+		return charsetLattice{value: cs, kind: charsetKind{family: charsetFamilyLatin1, key: tidbcharset.CharsetLatin1}}
 	case tidbcharset.CharsetUTF8:
-		return charsetLattice{value: cs, kind: charsetKind{family: charsetFamilyUTF8, key: charsetKeyUTF8}}
+		return charsetLattice{value: cs, kind: charsetKind{family: charsetFamilyUTF8, key: tidbcharset.CharsetUTF8}}
 	case tidbcharset.CharsetUTF8MB4:
-		return charsetLattice{value: cs, kind: charsetKind{family: charsetFamilyUTF8MB4, key: charsetKeyUTF8MB4}}
+		return charsetLattice{value: cs, kind: charsetKind{family: charsetFamilyUTF8MB4, key: tidbcharset.CharsetUTF8MB4}}
 	default:
 		// Caller should always pass an explicit charset. Unrecognized values are treated as "other".
 		return charsetLattice{value: cs, kind: charsetKind{family: charsetFamilyOther, key: normalized}}
