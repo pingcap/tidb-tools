@@ -30,6 +30,8 @@ const (
 	ErrMsgTupleLengthMismatch    = "tuple length mismatch (%d vs %d)"
 	ErrMsgDistinctSingletons     = "distinct singletons (%v vs %v)"
 	ErrMsgIncompatibleType       = "incompatible mysql type (%v vs %v)"
+	ErrMsgIncompatibleCharset    = "incompatible mysql charset (%v vs %v)"
+	ErrMsgIncompatibleCollation  = "incompatible mysql collation (%v vs %v)"
 	ErrMsgAtTupleIndex           = "at tuple index %d: %v"
 	ErrMsgAtMapKey               = "at map key %q: %v"
 	ErrMsgNonInclusiveBitSets    = "non-inclusive bit sets (%#x vs %#x)"
@@ -65,6 +67,20 @@ func distinctSingletonsErrors(a, b interface{}) *IncompatibleError {
 func incompatibleTypeError(a, b interface{}) *IncompatibleError {
 	return &IncompatibleError{
 		Msg:  ErrMsgIncompatibleType,
+		Args: []interface{}{a, b},
+	}
+}
+
+func incompatibleCharsetError(a, b interface{}) *IncompatibleError {
+	return &IncompatibleError{
+		Msg:  ErrMsgIncompatibleCharset,
+		Args: []interface{}{a, b},
+	}
+}
+
+func incompatibleCollationError(a, b interface{}) *IncompatibleError {
+	return &IncompatibleError{
+		Msg:  ErrMsgIncompatibleCollation,
 		Args: []interface{}{a, b},
 	}
 }

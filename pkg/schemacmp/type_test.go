@@ -464,15 +464,15 @@ func (*typeSchema) TestTypeCompareJoin(c *C) {
 			// latin1 and utf8 are not comparable/joinable.
 			a:            typeVarchar10Latin1Bin,
 			b:            typeVarchar10UTF8Bin,
-			compareError: `at tuple index \d+: distinct singletons.*`,
-			joinError:    `at tuple index \d+: distinct singletons.*`,
+			compareError: `at tuple index \d+: incompatible mysql charset.*`,
+			joinError:    `at tuple index \d+: incompatible mysql charset.*`,
 		},
 		{
 			// Only collations with the same suffix can be ordered/joined.
 			a:            typeVarchar10UTF8GeneralCI,
 			b:            typeVarchar10UTF8MB4Bin,
-			compareError: `at tuple index \d+: distinct singletons.*`,
-			joinError:    `at tuple index \d+: distinct singletons.*`,
+			compareError: `at tuple index \d+: incompatible mysql collation.*`,
+			joinError:    `at tuple index \d+: incompatible mysql collation.*`,
 		},
 		{
 			// Cannot join DEFAULT NULL with AUTO_INCREMENT.
