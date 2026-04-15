@@ -31,6 +31,9 @@ func (*charsetCollationSuite) TestCharsetCompareUsesFamily(c *C) {
 	cmp, err = Charset("utf8mb4").Compare(Charset("utf8mb3"))
 	c.Assert(err, IsNil)
 	c.Assert(cmp, Equals, 1)
+
+	_, err = Charset("other1").Compare(Charset("other2"))
+	c.Assert(err, ErrorMatches, `incompatible mysql charset \(other1 vs other2\)`)
 }
 
 func (*charsetCollationSuite) TestCollationCompareUsesFamily(c *C) {

@@ -56,6 +56,9 @@ func (a charsetLattice) Compare(other Lattice) (int, error) {
 	}
 
 	if a.family == b.family {
+		if a.family == charsetFamilyOther && a.value != b.value {
+			return 0, incompatibleCharsetError(a.value, b.value)
+		}
 		return 0, nil
 	}
 
@@ -154,16 +157,12 @@ func (a collationLattice) Compare(other Lattice) (int, error) {
 		return 0, typeMismatchError(a, other)
 	}
 
-	if a.family == b.family {
-		if a.suffix == b.suffix {
-			return 0, nil
-		}
+	if a.suffix != b.suffix {
 		return 0, incompatibleCollationError(a.value, b.value)
 	}
 
-	// Only latin1/utf8/utf8mb4 with the same suffix are ordered.
-	if a.suffix != b.suffix {
-		return 0, incompatibleCollationError(a.value, b.value)
+	if a.family == b.family {
+		return 0, nil
 	}
 
 	switch {
