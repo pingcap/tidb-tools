@@ -1,3 +1,5 @@
+test CI
+
 # tidb-tools
 
 tidb-tools are some useful tool collections for [TiDB](https://github.com/pingcap/tidb).
