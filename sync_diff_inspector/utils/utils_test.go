@@ -686,3 +686,23 @@ func TestCompareBlob(t *testing.T) {
 		}
 	}
 }
+
+func TestTruncateInvalidUTF8(t *testing.T) {
+	testCases := []struct {
+		input    string
+		expected string
+	}{
+		{"", ""},
+		{"test", "test"},
+		{"abc\xffdef", "abc"},
+		{"\xffabc", ""},
+		{"a\xc3\x28", "a"},
+		{"ab\xe2\x82\x28", "ab"},
+		{"\xed\xa0\x80", ""},
+		{"abc\xe2\x28", "abc"},
+	}
+	for _, tc := range testCases {
+		got := TruncateInvalidUTF8(tc.input)
+		require.Equal(t, got, tc.expected, "input: %s", tc.input)
+	}
+}
