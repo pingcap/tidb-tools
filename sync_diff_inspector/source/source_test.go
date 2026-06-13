@@ -762,6 +762,63 @@ func TestSource(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestQueryAutoSnapshotPosition(t *testing.T) {
+	testCases := []struct {
+		name       string
+		changefeed string
+		query      string
+		args       []driver.Value
+	}{
+		{
+			name:  "without changefeed filter",
+			query: regexp.QuoteMeta(GetSyncPointQuery),
+		},
+		{
+			name:       "with changefeed filter",
+			changefeed: "ks2/random-cdc-000002-ks2",
+			query:      regexp.QuoteMeta(GetSyncPointByChangefeedQuery),
+			args:       []driver.Value{"ks2/random-cdc-000002-ks2"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			conn, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer conn.Close()
+
+			rows := sqlmock.NewRows([]string{"primary_ts", "secondary_ts"}).AddRow("466946054006767616", "466946054033768448")
+			expectation := mock.ExpectQuery(tc.query)
+			if len(tc.args) > 0 {
+				expectation.WithArgs(tc.args...)
+			}
+			expectation.WillReturnRows(rows)
+
+			primaryTs, secondaryTs, err := queryAutoSnapshotPosition(conn, tc.changefeed)
+			require.NoError(t, err)
+			require.Equal(t, "466946054006767616", primaryTs)
+			require.Equal(t, "466946054033768448", secondaryTs)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestQueryAutoSnapshotPositionNoChangefeedRow(t *testing.T) {
+	conn, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer conn.Close()
+
+	changefeed := "ks2/random-cdc-000002-ks2"
+	mock.ExpectQuery(regexp.QuoteMeta(GetSyncPointByChangefeedQuery)).
+		WithArgs(changefeed).
+		WillReturnRows(sqlmock.NewRows([]string{"primary_ts", "secondary_ts"}))
+
+	_, _, err = queryAutoSnapshotPosition(conn, changefeed)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "fetching auto-position tidb_snapshot failed: no syncpoint found for changefeed ks2/random-cdc-000002-ks2")
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestRouterRules(t *testing.T) {
 	host, isExist := os.LookupEnv("MYSQL_HOST")
 	if host == "" || !isExist {
@@ -874,6 +931,7 @@ func TestInitTables(t *testing.T) {
 	cfg := config.NewConfig()
 	// Test case 1: test2.t2 will parse after filter.
 	require.NoError(t, cfg.Parse([]string{"--config", "../config/config.toml"}))
+	require.NoError(t, os.RemoveAll(cfg.Task.OutputDir))
 	require.NoError(t, cfg.Init())
 
 	conn, mock, err := sqlmock.New()
@@ -905,6 +963,7 @@ func TestInitTables(t *testing.T) {
 	// Test case 2: init failed due to conflict table config point to one table.
 	cfg = config.NewConfig()
 	require.NoError(t, cfg.Parse([]string{"--config", "../config/config_conflict.toml"}))
+	require.NoError(t, os.RemoveAll(cfg.Task.OutputDir))
 	require.NoError(t, cfg.Init())
 	cfg.Task.TargetInstance.Conn = conn
 
