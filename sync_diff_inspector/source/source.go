@@ -269,15 +269,15 @@ func getAutoSnapshotPosition(cfg *mysql.Config, changefeed string) (string, stri
 	}
 	defer tmpConn.Close()
 	if changefeed == "" {
-		log.Info("resolve auto-position tidb_snapshot without changefeed filter")
+		log.Debug("resolve auto-position tidb_snapshot without changefeed filter")
 	} else {
-		log.Info("resolve auto-position tidb_snapshot with changefeed filter", zap.String("changefeed", changefeed))
+		log.Debug("resolve auto-position tidb_snapshot with changefeed filter", zap.String("changefeed", changefeed))
 	}
 	primaryTs, secondaryTs, err := queryAutoSnapshotPosition(tmpConn, changefeed)
 	if err != nil {
 		return "", "", errors.Trace(err)
 	}
-	log.Info("resolved auto-position tidb_snapshot",
+	log.Debug("resolved auto-position tidb_snapshot",
 		zap.String("changefeed", changefeed),
 		zap.String("primary-ts", primaryTs),
 		zap.String("secondary-ts", secondaryTs))

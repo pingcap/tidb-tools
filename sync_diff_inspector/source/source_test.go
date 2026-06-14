@@ -762,63 +762,6 @@ func TestSource(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestQueryAutoSnapshotPosition(t *testing.T) {
-	testCases := []struct {
-		name       string
-		changefeed string
-		query      string
-		args       []driver.Value
-	}{
-		{
-			name:  "without changefeed filter",
-			query: regexp.QuoteMeta(GetSyncPointQuery),
-		},
-		{
-			name:       "with changefeed filter",
-			changefeed: "ks2/random-cdc-000002-ks2",
-			query:      regexp.QuoteMeta(GetSyncPointByChangefeedQuery),
-			args:       []driver.Value{"ks2/random-cdc-000002-ks2"},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			conn, mock, err := sqlmock.New()
-			require.NoError(t, err)
-			defer conn.Close()
-
-			rows := sqlmock.NewRows([]string{"primary_ts", "secondary_ts"}).AddRow("466946054006767616", "466946054033768448")
-			expectation := mock.ExpectQuery(tc.query)
-			if len(tc.args) > 0 {
-				expectation.WithArgs(tc.args...)
-			}
-			expectation.WillReturnRows(rows)
-
-			primaryTs, secondaryTs, err := queryAutoSnapshotPosition(conn, tc.changefeed)
-			require.NoError(t, err)
-			require.Equal(t, "466946054006767616", primaryTs)
-			require.Equal(t, "466946054033768448", secondaryTs)
-			require.NoError(t, mock.ExpectationsWereMet())
-		})
-	}
-}
-
-func TestQueryAutoSnapshotPositionNoChangefeedRow(t *testing.T) {
-	conn, mock, err := sqlmock.New()
-	require.NoError(t, err)
-	defer conn.Close()
-
-	changefeed := "ks2/random-cdc-000002-ks2"
-	mock.ExpectQuery(regexp.QuoteMeta(GetSyncPointByChangefeedQuery)).
-		WithArgs(changefeed).
-		WillReturnRows(sqlmock.NewRows([]string{"primary_ts", "secondary_ts"}))
-
-	_, _, err = queryAutoSnapshotPosition(conn, changefeed)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "fetching auto-position tidb_snapshot failed: no syncpoint found for changefeed ks2/random-cdc-000002-ks2")
-	require.NoError(t, mock.ExpectationsWereMet())
-}
-
 func TestRouterRules(t *testing.T) {
 	host, isExist := os.LookupEnv("MYSQL_HOST")
 	if host == "" || !isExist {
@@ -1091,4 +1034,61 @@ func TestMySQLSourcesGetSourceTable(t *testing.T) {
 	schema, table = mysql.GetSourceTable(tableRange)
 	require.Equal(t, "target_schema", schema)
 	require.Equal(t, "target_table", table)
+}
+
+func TestQueryAutoSnapshotPosition(t *testing.T) {
+	testCases := []struct {
+		name       string
+		changefeed string
+		query      string
+		args       []driver.Value
+	}{
+		{
+			name:  "without changefeed filter",
+			query: regexp.QuoteMeta(GetSyncPointQuery),
+		},
+		{
+			name:       "with changefeed filter",
+			changefeed: "ks2/random-cdc-000002-ks2",
+			query:      regexp.QuoteMeta(GetSyncPointByChangefeedQuery),
+			args:       []driver.Value{"ks2/random-cdc-000002-ks2"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			conn, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer conn.Close()
+
+			rows := sqlmock.NewRows([]string{"primary_ts", "secondary_ts"}).AddRow("466946054006767616", "466946054033768448")
+			expectation := mock.ExpectQuery(tc.query)
+			if len(tc.args) > 0 {
+				expectation.WithArgs(tc.args...)
+			}
+			expectation.WillReturnRows(rows)
+
+			primaryTs, secondaryTs, err := queryAutoSnapshotPosition(conn, tc.changefeed)
+			require.NoError(t, err)
+			require.Equal(t, "466946054006767616", primaryTs)
+			require.Equal(t, "466946054033768448", secondaryTs)
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestQueryAutoSnapshotPositionNoChangefeedRow(t *testing.T) {
+	conn, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer conn.Close()
+
+	changefeed := "ks2/random-cdc-000002-ks2"
+	mock.ExpectQuery(regexp.QuoteMeta(GetSyncPointByChangefeedQuery)).
+		WithArgs(changefeed).
+		WillReturnRows(sqlmock.NewRows([]string{"primary_ts", "secondary_ts"}))
+
+	_, _, err = queryAutoSnapshotPosition(conn, changefeed)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "fetching auto-position tidb_snapshot failed: no syncpoint found for changefeed ks2/random-cdc-000002-ks2")
+	require.NoError(t, mock.ExpectationsWereMet())
 }
