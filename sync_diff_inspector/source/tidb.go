@@ -79,6 +79,9 @@ func (s *TiDBRowsIterator) Next() (map[string]*dbutil.ColumnData, error) {
 	if s.rows.Next() {
 		return dbutil.ScanRow(s.rows)
 	}
+	if err := s.rows.Err(); err != nil {
+		return nil, errors.Trace(err)
+	}
 	return nil, nil
 }
 
