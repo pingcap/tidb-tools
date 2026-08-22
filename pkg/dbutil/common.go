@@ -512,7 +512,13 @@ type Bucket struct {
 }
 
 func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string, tableInfo *model.TableInfo) (map[string][]Bucket, error) {
-	buckets := make(map[string][]Bucket)
+	// Column stats (is_index=0) and index stats (is_index=1) are collected
+	// separately and merged at the end: an index may share its name with a
+	// column (e.g. KEY `contentid` (`contentid`, ...)), and appending both
+	// bucket sequences under one key produced scalar column bounds where the
+	// caller expected index tuple bounds ("analyze value ... failed", #904).
+	columnBuckets := make(map[string][]Bucket)
+	indexBuckets := make(map[string][]Bucket)
 
 	indices := FindAllIndex(tableInfo)
 	// Pre-build lightweight maps for indices: index ID -> index name / column types.
@@ -562,6 +568,7 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 	}
 	defer rows.Close()
 
+	var buckets map[string][]Bucket
 	for rows.Next() {
 		var isIndex, histID, bucketID, count sql.NullInt64
 		var lowerBoundBytes, upperBoundBytes []byte
@@ -586,6 +593,7 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 			}
 
 			key = indexName
+			buckets = indexBuckets
 
 			// Decode index bound using pre-computed column types
 			lowerBoundStr, decodeErr = decodeIndexBound(lowerBoundBytes, idxColumnTypes)
@@ -616,6 +624,7 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 			}
 
 			key = columnName
+			buckets = columnBuckets
 			lowerBoundStr, decodeErr = decodeColumnBound(lowerBoundBytes, columnTypes)
 			if decodeErr != nil {
 				log.Warn("Failed to decode lower_bound for column",
@@ -646,21 +655,37 @@ func GetBucketsInfo(ctx context.Context, db QueryExecutor, schema, table string,
 		return nil, errors.Trace(err)
 	}
 
+	// Merge: an index sharing its name with a column wins that key — lookups
+	// by index name must get the index statistics.
+	buckets = make(map[string][]Bucket, len(columnBuckets)+len(indexBuckets))
+	for k, v := range columnBuckets {
+		buckets[k] = v
+	}
+	for k, v := range indexBuckets {
+		buckets[k] = v
+	}
+
 	for _, index := range indices {
 		if index.Name.O != "PRIMARY" {
 			continue
 		}
-		_, ok := buckets[index.Name.O]
-		if !ok && len(index.Columns) == 1 {
-			if _, ok := buckets[index.Columns[0].Name.O]; !ok {
+		if _, ok := indexBuckets[index.Name.O]; ok {
+			continue
+		}
+		if len(index.Columns) == 1 {
+			pkColBuckets, ok := columnBuckets[index.Columns[0].Name.O]
+			if !ok {
 				log.Warn("GetBucketsInfo: No primary key buckets found, returning empty buckets",
 					zap.String("schema", schema),
 					zap.String("table", table),
 					zap.String("primary_key_column", index.Columns[0].Name.O))
 				return buckets, nil
 			}
-			buckets[index.Name.O] = buckets[index.Columns[0].Name.O]
-			delete(buckets, index.Columns[0].Name.O)
+			buckets[index.Name.O] = pkColBuckets
+			// Keep the column entry when an index owns that name now.
+			if _, isIndex := indexBuckets[index.Columns[0].Name.O]; !isIndex {
+				delete(buckets, index.Columns[0].Name.O)
+			}
 		}
 	}
 
