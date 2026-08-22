@@ -623,3 +623,83 @@ func (*testDBSuite) TestGetBucketsInfoWithBlobDecoding(c *C) {
 	// Verify all expectations were met
 	c.Assert(mock.ExpectationsWereMet(), IsNil)
 }
+
+// Regression for #904: an index may share its name with a column
+// (KEY `contentid` (`contentid`,`flag`,`datetime`)). Both column stats
+// (is_index=0, scalar bounds) and index stats (is_index=1, tuple bounds)
+// exist for that name; they must not be merged under one key.
+func (*testDBSuite) TestGetBucketsInfoIndexNameCollidesWithColumn(c *C) {
+	db, mock, err := sqlmock.New()
+	c.Assert(err, IsNil)
+	defer db.Close()
+
+	ctx := context.Background()
+
+	ftContentID := types.NewFieldType(pmysql.TypeLong)
+	ftContentID.SetFlen(8)
+
+	ftFlag := types.NewFieldType(pmysql.TypeTiny)
+	ftFlag.SetFlen(1)
+
+	ftDatetime := types.NewFieldType(pmysql.TypeLong)
+	ftDatetime.SetFlen(10)
+
+	tableInfo := &model.TableInfo{
+		ID:   2001,
+		Name: pmodel.NewCIStr("cmstop_digg_log"),
+		Columns: []*model.ColumnInfo{
+			{ID: 1, Name: pmodel.NewCIStr("contentid"), Offset: 0, FieldType: *ftContentID},
+			{ID: 2, Name: pmodel.NewCIStr("flag"), Offset: 1, FieldType: *ftFlag},
+			{ID: 3, Name: pmodel.NewCIStr("datetime"), Offset: 2, FieldType: *ftDatetime},
+		},
+		Indices: []*model.IndexInfo{
+			{
+				ID:     11,
+				Name:   pmodel.NewCIStr("contentid"),
+				Columns: []*model.IndexColumn{
+					{Name: pmodel.NewCIStr("contentid"), Offset: 0},
+					{Name: pmodel.NewCIStr("flag"), Offset: 1},
+					{Name: pmodel.NewCIStr("datetime"), Offset: 2},
+				},
+			},
+		},
+	}
+
+	expectedSQL := "SELECT is_index, hist_id, bucket_id, count, lower_bound, upper_bound FROM mysql.stats_buckets WHERE table_id IN \\(\\s*SELECT tidb_table_id FROM information_schema.tables WHERE table_schema = \\? AND table_name = \\? UNION ALL SELECT tidb_partition_id FROM information_schema.partitions WHERE table_schema = \\? AND table_name = \\?\\s*\\) ORDER BY is_index, hist_id, bucket_id"
+
+	encodeIndexValue := func(values ...interface{}) []byte {
+		data := ttypes.MakeDatums(values...)
+		encoded, encodeErr := codec.EncodeKey(time.UTC, nil, data...)
+		c.Assert(encodeErr, IsNil)
+		return encoded
+	}
+
+	// Column stats for column contentid (hist_id=1 = column ID): scalar bounds.
+	// Index stats for index contentid (hist_id=11 = index ID): tuple bounds.
+	rows := sqlmock.NewRows([]string{"is_index", "hist_id", "bucket_id", "count", "lower_bound", "upper_bound"}).
+		AddRow(0, 1, 0, 50, []byte("1683800"), []byte("1683857")).
+		AddRow(0, 1, 1, 100, []byte("1683858"), []byte("1683900")).
+		AddRow(1, 11, 0, 150, encodeIndexValue(int64(882000), int64(0), int64(1585105600)), encodeIndexValue(int64(882856), int64(1), int64(1585105711))).
+		AddRow(1, 11, 1, 300, encodeIndexValue(int64(882857), int64(1), int64(1585105712)), encodeIndexValue(int64(883000), int64(1), int64(1585105800)))
+
+	mock.ExpectQuery(expectedSQL).WithArgs("test_db", "cmstop_digg_log", "test_db", "cmstop_digg_log").WillReturnRows(rows)
+
+	buckets, err := GetBucketsInfo(ctx, db, "test_db", "cmstop_digg_log", tableInfo)
+	c.Assert(err, IsNil)
+
+	// The index lookup must get ONLY the index buckets (tuple bounds), never
+	// the scalar column sequence — under the bug both were appended and
+	// AnalyzeValuesFromBuckets failed with "analyze value 1683857 failed".
+	idxBuckets, exists := buckets["contentid"]
+	c.Assert(exists, Equals, true)
+	c.Assert(len(idxBuckets), Equals, 2)
+	c.Assert(idxBuckets[0].Count, Equals, int64(150))
+	c.Assert(idxBuckets[0].UpperBound, Equals, "(882856, 1, 1585105711)")
+	c.Assert(idxBuckets[1].Count, Equals, int64(300))
+
+	// Column-name lookups no longer collide with the index entry.
+	_, hasColumnEntry := buckets["flag"]
+	c.Assert(hasColumnEntry, Equals, false)
+
+	c.Assert(mock.ExpectationsWereMet(), IsNil)
+}
