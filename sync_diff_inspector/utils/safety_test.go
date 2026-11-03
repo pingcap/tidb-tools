@@ -14,7 +14,6 @@
 package utils
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
@@ -47,14 +46,4 @@ func TestFixSQLAnnotationCannotEndComment(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestSQLCommentKeepsMetadataInert(t *testing.T) {
-	sql := SQLComment("table: test\r\n; DROP DATABASE prod;\n/*! SELECT 1 */") + "SELECT 1;"
-	stmts, _, err := parser.New().ParseSQL(sql)
-	require.NoError(t, err)
-	require.Len(t, stmts, 1)
-	_, ok := stmts[0].(*ast.SelectStmt)
-	require.True(t, ok)
-	require.True(t, strings.HasPrefix(sql, "-- table:"))
 }

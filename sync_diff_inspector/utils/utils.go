@@ -177,13 +177,6 @@ func escapeString(bs []byte) string {
 	return s
 }
 
-// SQLComment formats untrusted text as SQL line comments. Every physical line
-// must be prefixed, including lines introduced by carriage returns in row values.
-func SQLComment(text string) string {
-	text = strings.ReplaceAll(text, "\r", "\n")
-	return "-- " + strings.ReplaceAll(text, "\n", "\n-- ") + "\n"
-}
-
 // GenerateReplaceDML returns the insert SQL for the specific row values.
 func GenerateReplaceDML(data map[string]*dbutil.ColumnData, table *model.TableInfo, schema string) string {
 	colNames := make([]string, 0, len(table.Columns))
