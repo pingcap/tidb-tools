@@ -25,6 +25,8 @@ HTTPS verifies the server certificate and hostname against system roots by defau
 For a private CA or mutual TLS, configure `[dm-security]` with `ca-path`,
 `cert-path`, and `key-path` in the configuration file. See
 [config_dm.toml](./config/config_dm.toml) for an example.
+HTTPS alone does not restrict API access; configure `ssl-ca`, `ssl-cert`, `ssl-key`,
+and `cert-allowed-cn` on DM-master to require and verify client certificates.
 
 Configuring `[dm-security]` requires an HTTPS endpoint. HTTPS redirects are rejected.
 Existing HTTP endpoints remain supported when no DM TLS configuration is supplied;
