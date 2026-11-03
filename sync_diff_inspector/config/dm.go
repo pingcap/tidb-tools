@@ -54,7 +54,8 @@ func getDMTaskCfg(dmAddr, task string) ([]*SubTaskConfig, error) {
 	return getDMTaskCfgWithSecurity(dmAddr, task, nil)
 }
 
-func getDMTaskCfgWithSecurity(dmAddr, task string, security *Security) ([]*SubTaskConfig, error) {
+// newDMTLSConfig builds verified TLS settings for DM HTTP requests.
+func newDMTLSConfig(dmAddr string, security *Security) (*tls.Config, error) {
 	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
 	if security != nil {
 		endpoint, err := url.Parse(dmAddr)
@@ -85,6 +86,14 @@ func getDMTaskCfgWithSecurity(dmAddr, task string, security *Security) ([]*SubTa
 	}
 	// The database helper advertises HTTP/2; this transport uses HTTP/1.1.
 	tlsConfig.NextProtos = []string{"http/1.1"}
+	return tlsConfig, nil
+}
+
+func getDMTaskCfgWithSecurity(dmAddr, task string, security *Security) ([]*SubTaskConfig, error) {
+	tlsConfig, err := newDMTLSConfig(dmAddr, security)
+	if err != nil {
+		return nil, err
+	}
 	tr := &http.Transport{TLSClientConfig: tlsConfig}
 	defer tr.CloseIdleConnections()
 	client := &http.Client{Transport: tr}
