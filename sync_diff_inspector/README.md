@@ -26,7 +26,7 @@ For a private CA or mutual TLS, configure `[dm-security]` with `ca-path`,
 `cert-path`, and `key-path` in the configuration file. See
 [config_dm.toml](./config/config_dm.toml) for an example.
 
-Configuring `[dm-security]` requires an HTTPS endpoint. Redirects are rejected.
+Configuring `[dm-security]` requires an HTTPS endpoint. HTTPS redirects are rejected.
 Existing HTTP endpoints remain supported when no DM TLS configuration is supplied;
 use HTTPS to protect database credentials and configuration in transit.
 

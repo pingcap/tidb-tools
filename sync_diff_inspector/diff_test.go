@@ -14,7 +14,11 @@
 package main
 
 import (
+	"strings"
 	"testing"
+
+	"github.com/pingcap/tidb/pkg/parser"
+	"github.com/pingcap/tidb/pkg/parser/ast"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/require"
@@ -104,4 +108,14 @@ func TestGetSnapshot(t *testing.T) {
 		require.Equal(t, cs.expected, val, "case %d", i)
 	}
 
+}
+
+func TestSQLCommentKeepsMetadataInert(t *testing.T) {
+	sql := sqlComment("table: test\r\n; DROP DATABASE prod;\n/*! SELECT 1 */") + "SELECT 1;"
+	stmts, _, err := parser.New().ParseSQL(sql)
+	require.NoError(t, err)
+	require.Len(t, stmts, 1)
+	_, ok := stmts[0].(*ast.SelectStmt)
+	require.True(t, ok)
+	require.True(t, strings.HasPrefix(sql, "-- table:"))
 }

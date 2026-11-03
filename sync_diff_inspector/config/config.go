@@ -391,7 +391,7 @@ type Config struct {
 	SkipNonExistingTable bool `toml:"skip-non-existing-table" json:"-"`
 	// DMAddr is dm-master's address, the format should like "http://127.0.0.1:8261"
 	DMAddr string `toml:"dm-addr" json:"dm-addr"`
-	// DMTask identifies the DM task to compare.
+	// DMTask string `toml:"dm-task" json:"dm-task"`
 	DMTask string `toml:"dm-task" json:"dm-task"`
 	// DMSecurity configures server verification and optional mutual TLS for DM.
 	DMSecurity *Security `toml:"dm-security" json:"-"`
@@ -621,7 +621,7 @@ func (c *Config) CheckConfig() bool {
 	}
 	if len(c.DMAddr) != 0 {
 		u, err := url.Parse(c.DMAddr)
-		if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		if err != nil || u.Scheme == "" || u.Host == "" {
 			log.Error("dm-addr's format should like 'http://127.0.0.1:8261'")
 			return false
 		}

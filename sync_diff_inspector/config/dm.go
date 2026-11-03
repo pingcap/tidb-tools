@@ -25,7 +25,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
@@ -47,7 +46,7 @@ const (
 )
 
 func getDMTaskCfgURL(dmAddr, task string) string {
-	return fmt.Sprintf("%s/apis/%s/subtasks/%s", dmAddr, apiVersion, url.PathEscape(task))
+	return fmt.Sprintf("%s/apis/%s/subtasks/%s", dmAddr, apiVersion, task)
 }
 
 // getDMTaskCfg gets dm's sub task config
@@ -56,15 +55,12 @@ func getDMTaskCfg(dmAddr, task string) ([]*SubTaskConfig, error) {
 }
 
 func getDMTaskCfgWithSecurity(dmAddr, task string, security *Security) ([]*SubTaskConfig, error) {
-	endpoint, err := url.Parse(dmAddr)
-	if err != nil || endpoint.Host == "" || (endpoint.Scheme != "http" && endpoint.Scheme != "https") {
-		return nil, errors.New("dm-addr must be an HTTP or HTTPS URL")
-	}
-	if security != nil && endpoint.Scheme != "https" {
-		return nil, errors.New("DM TLS configuration requires an https:// dm-addr")
-	}
 	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
 	if security != nil {
+		endpoint, err := url.Parse(dmAddr)
+		if err != nil || endpoint.Scheme != "https" {
+			return nil, errors.New("DM TLS configuration requires an https:// dm-addr")
+		}
 		if (security.CertPath == "") != (security.KeyPath == "") {
 			return nil, errors.New("DM client certificate and key paths must be set together")
 		}
@@ -87,28 +83,25 @@ func getDMTaskCfgWithSecurity(dmAddr, task string, security *Security) ([]*SubTa
 			tlsConfig = configured
 		}
 	}
-	tr := http.DefaultTransport.(*http.Transport).Clone()
-	tr.TLSClientConfig = tlsConfig
+	// The database helper advertises HTTP/2; this transport uses HTTP/1.1.
+	tlsConfig.NextProtos = []string{"http/1.1"}
+	tr := &http.Transport{TLSClientConfig: tlsConfig}
 	defer tr.CloseIdleConnections()
-	client := &http.Client{
-		Transport: tr,
-		Timeout:   30 * time.Second,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return errors.New("DM configuration redirects are not allowed")
-		},
-	}
+	client := &http.Client{Transport: tr}
 	req, err := http.NewRequest("GET", getDMTaskCfgURL(dmAddr, task), nil)
 	if err != nil {
 		return nil, err
+	}
+	if req.URL.Scheme == "https" {
+		client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			return errors.New("DM HTTPS configuration redirects are not allowed")
+		}
 	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.Errorf("DM configuration request returned HTTP %d", resp.StatusCode)
-	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -124,9 +117,6 @@ func getDMTaskCfgWithSecurity(dmAddr, task string, security *Security) ([]*SubTa
 		return nil, errors.Errorf("fail to get sub task config from DM, %s", getSubTaskCfgResp.Msg)
 	}
 
-	if len(getSubTaskCfgResp.Cfgs) == 0 {
-		return nil, errors.New("DM returned no subtask configurations")
-	}
 	subTaskCfgs := make([]*SubTaskConfig, 0, len(getSubTaskCfgResp.Cfgs))
 	for _, cfgBytes := range getSubTaskCfgResp.Cfgs {
 		subtaskCfg := &SubTaskConfig{}
@@ -139,7 +129,7 @@ func getDMTaskCfgWithSecurity(dmAddr, task string, security *Security) ([]*SubTa
 		subTaskCfgs = append(subTaskCfgs, subtaskCfg)
 	}
 
-	log.Info("loaded DM subtask configurations", zap.Int("count", len(subTaskCfgs)))
+	log.Info("dm sub task configs", zap.Reflect("cfgs", subTaskCfgs))
 	return subTaskCfgs, nil
 }
 

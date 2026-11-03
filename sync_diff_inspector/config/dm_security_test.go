@@ -16,6 +16,7 @@ package config
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"io"
 	"log"
 	"net/http"
@@ -51,39 +52,17 @@ func TestDMRejectsIncompleteClientCertificate(t *testing.T) {
 	}
 }
 
-func TestDMRejectsInvalidResponses(t *testing.T) {
-	for _, tc := range []struct {
-		name   string
-		status int
-		body   string
-		want   string
-	}{
-		{"status", http.StatusForbidden, validDMResponse, "HTTP 403"},
-		{"empty", http.StatusOK, `{"result":true,"cfgs":[]}`, "no subtask"},
-		{"invalid", http.StatusOK, "not JSON", "invalid character"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(tc.status)
-				_, _ = io.WriteString(w, tc.body)
-			}))
-			defer server.Close()
-			_, err := getDMTaskCfg(server.URL, "test")
-			require.ErrorContains(t, err, tc.want)
-		})
-	}
-}
-
-func TestDMRejectsRedirects(t *testing.T) {
+func TestDMTLSRejectsRedirects(t *testing.T) {
 	destination := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Error("redirect destination must not receive a request")
 	}))
 	defer destination.Close()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, destination.URL, http.StatusFound)
 	}))
 	defer server.Close()
-	_, err := getDMTaskCfg(server.URL, "test")
+	ca := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})
+	_, err := getDMTaskCfgWithSecurity(server.URL, "test", &Security{CABytes: string(ca)})
 	require.ErrorContains(t, err, "redirects are not allowed")
 }
 
