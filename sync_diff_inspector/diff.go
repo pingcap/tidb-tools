@@ -773,6 +773,13 @@ func (df *Diff) compareRows(ctx context.Context, rangeInfo *splitter.RangeInfo, 
 	return equal, nil
 }
 
+// sqlComment formats untrusted text as SQL line comments. Every physical line
+// must be prefixed, including lines introduced by carriage returns in row values.
+func sqlComment(text string) string {
+	text = strings.ReplaceAll(text, "\r", "\n")
+	return "-- " + strings.ReplaceAll(text, "\n", "\n-- ") + "\n"
+}
+
 // WriteSQLs write sqls to file
 func (df *Diff) writeSQLs(ctx context.Context) {
 	log.Info("start writeSQLs goroutine")
@@ -804,7 +811,8 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 				}
 				// write chunk meta
 				chunkRange := dml.node.ChunkRange
-				fixSQLFile.WriteString(fmt.Sprintf("-- table: %s.%s\n-- %s\n", tableDiff.Schema, tableDiff.Table, chunkRange.ToMeta()))
+				fixSQLFile.WriteString(sqlComment(fmt.Sprintf("table: %s.%s", tableDiff.Schema, tableDiff.Table)))
+				fixSQLFile.WriteString(sqlComment(chunkRange.ToMeta()))
 				if tableDiff.NeedUnifiedTimeZone {
 					fixSQLFile.WriteString(fmt.Sprintf("set @@session.time_zone = \"%s\";\n", config.UnifiedTimeZone))
 				}
