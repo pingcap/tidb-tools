@@ -33,6 +33,24 @@ func TestDMTLSConfigurationRequiresHTTPS(t *testing.T) {
 	require.ErrorContains(t, err, "requires an https:// dm-addr")
 }
 
+func TestDMRejectsIncompleteClientCertificate(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		security Security
+		want     string
+	}{
+		{"certificate path", Security{CertPath: "client.pem"}, "paths must be set together"},
+		{"key path", Security{KeyPath: "client.key"}, "paths must be set together"},
+		{"certificate content", Security{CertBytes: "certificate"}, "contents must be set together"},
+		{"key content", Security{KeyBytes: "key"}, "contents must be set together"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := getDMTaskCfgWithSecurity("https://127.0.0.1:1", "test", &tc.security)
+			require.ErrorContains(t, err, tc.want)
+		})
+	}
+}
+
 func TestDMRejectsInvalidResponses(t *testing.T) {
 	for _, tc := range []struct {
 		name   string

@@ -67,6 +67,12 @@ func getDMTaskCfgWithSecurity(dmAddr, task string, security *Security) ([]*SubTa
 	}
 	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
 	if security != nil {
+		if (security.CertPath == "") != (security.KeyPath == "") {
+			return nil, errors.New("DM client certificate and key paths must be set together")
+		}
+		if (security.CertBytes == "") != (security.KeyBytes == "") {
+			return nil, errors.New("DM client certificate and key contents must be set together")
+		}
 		configured, err := tidbutil.NewTLSConfig(
 			tidbutil.WithCAPath(security.CAPath),
 			tidbutil.WithCertAndKeyPath(security.CertPath, security.KeyPath),
