@@ -278,8 +278,10 @@ func GenerateReplaceDMLWithAnnotation(source, target map[string]*dbutil.ColumnDa
 	diffTable.SetBorder(false)
 	diffTable.Render()
 
-	// Neutralize delimiters in both row values and column names after rendering.
-	annotation := strings.NewReplacer("/*", "/ *", "*/", "* /").Replace(tableString.String())
+	// Remove closing delimiters first so overlapping patterns such as /*/ cannot
+	// recreate a closing delimiter when opening delimiters are replaced.
+	annotation := strings.ReplaceAll(tableString.String(), "*/", "* /")
+	annotation = strings.ReplaceAll(annotation, "/*", "/ *")
 	return fmt.Sprintf("/*\n%s*/\nREPLACE INTO %s(%s) VALUES (%s);", annotation, dbutil.TableName(schema, table.Name.O), strings.Join(sqlColNames, ","), strings.Join(sqlValues, ","))
 }
 

@@ -25,7 +25,7 @@ import (
 func TestFixSQLAnnotationCannotEndComment(t *testing.T) {
 	table, err := dbutil.GetTableInfoBySQL("CREATE TABLE t (id INT PRIMARY KEY, v VARCHAR(1000))", parser.New())
 	require.NoError(t, err)
-	for _, payload := range []string{"x*/; DROP DATABASE prod; /*", "x\n*/; DROP DATABASE prod; /*", "/*! DROP DATABASE prod */", `x\'; DROP DATABASE prod; -- `} {
+	for _, payload := range []string{"x/*/; SELECT 42; */*", "/*/", "*/*", "/*/*/", "*/*/*", "x*/; DROP DATABASE prod; /*", "x\n*/; DROP DATABASE prod; /*", "/*! DROP DATABASE prod */", `x\'; DROP DATABASE prod; -- `} {
 		t.Run(payload, func(t *testing.T) {
 			source := map[string]*dbutil.ColumnData{"id": {Data: []byte("1")}, "v": {Data: []byte(payload)}}
 			target := map[string]*dbutil.ColumnData{"id": {Data: []byte("1")}, "v": {Data: []byte("old")}}
