@@ -391,8 +391,11 @@ type Config struct {
 	SkipNonExistingTable bool `toml:"skip-non-existing-table" json:"-"`
 	// DMAddr is dm-master's address, the format should like "http://127.0.0.1:8261"
 	DMAddr string `toml:"dm-addr" json:"dm-addr"`
-	// DMTask string `toml:"dm-task" json:"dm-task"`
+	// DMTask identifies the DM task to compare.
 	DMTask string `toml:"dm-task" json:"dm-task"`
+	// DMSecurity configures server verification and optional mutual TLS for DM.
+	DMSecurity          *Security `toml:"dm-security" json:"-"`
+	DMAllowInsecureHTTP bool      `toml:"dm-allow-insecure-http" json:"dm-allow-insecure-http,omitempty"`
 
 	DataSources map[string]*DataSource `toml:"data-sources" json:"data-sources"`
 
@@ -423,6 +426,7 @@ func NewConfig() *Config {
 	fs.StringVarP(&cfg.Template, "template", "T", "", "<dm|norm> export a template config file")
 	fs.StringVar(&cfg.DMAddr, "dm-addr", "", "the address of DM")
 	fs.StringVar(&cfg.DMTask, "dm-task", "", "identifier of dm task")
+	fs.BoolVar(&cfg.DMAllowInsecureHTTP, "dm-allow-insecure-http", false, "allow sending DM configuration over remote plaintext HTTP")
 	fs.IntVar(&cfg.CheckThreadCount, "check-thread-count", 4, "how many goroutines are created to check data")
 	fs.BoolVar(&cfg.ExportFixSQL, "export-fix-sql", true, "set true if want to compare rows or set to false will only compare checksum")
 	fs.BoolVar(&cfg.CheckStructOnly, "check-struct-only", false, "ignore check table's data")
@@ -520,7 +524,7 @@ func parseTLSFromDMConfig(config *security.Security) *Security {
 
 func (c *Config) adjustConfigByDMSubTasks() (err error) {
 	// DM's subtask config
-	subTaskCfgs, err := getDMTaskCfg(c.DMAddr, c.DMTask)
+	subTaskCfgs, err := getDMTaskCfgWithSecurity(c.DMAddr, c.DMTask, c.DMSecurity, c.DMAllowInsecureHTTP)
 	if err != nil {
 		log.Warn("failed to get config from DM tasks")
 		return errors.Trace(err)
@@ -619,7 +623,7 @@ func (c *Config) CheckConfig() bool {
 	}
 	if len(c.DMAddr) != 0 {
 		u, err := url.Parse(c.DMAddr)
-		if err != nil || u.Scheme == "" || u.Host == "" {
+		if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
 			log.Error("dm-addr's format should like 'http://127.0.0.1:8261'")
 			return false
 		}

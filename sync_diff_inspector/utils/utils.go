@@ -177,6 +177,13 @@ func escapeString(bs []byte) string {
 	return s
 }
 
+// SQLComment formats untrusted text as SQL line comments. Every physical line
+// must be prefixed, including lines introduced by carriage returns in row values.
+func SQLComment(text string) string {
+	text = strings.ReplaceAll(text, "\r", "\n")
+	return "-- " + strings.ReplaceAll(text, "\n", "\n-- ") + "\n"
+}
+
 // GenerateReplaceDML returns the insert SQL for the specific row values.
 func GenerateReplaceDML(data map[string]*dbutil.ColumnData, table *model.TableInfo, schema string) string {
 	colNames := make([]string, 0, len(table.Columns))
@@ -278,7 +285,9 @@ func GenerateReplaceDMLWithAnnotation(source, target map[string]*dbutil.ColumnDa
 	diffTable.SetBorder(false)
 	diffTable.Render()
 
-	return fmt.Sprintf("/*\n%s*/\nREPLACE INTO %s(%s) VALUES (%s);", tableString.String(), dbutil.TableName(schema, table.Name.O), strings.Join(sqlColNames, ","), strings.Join(sqlValues, ","))
+	// Neutralize delimiters in both row values and column names after rendering.
+	annotation := strings.NewReplacer("/*", "/ *", "*/", "* /").Replace(tableString.String())
+	return fmt.Sprintf("/*\n%s*/\nREPLACE INTO %s(%s) VALUES (%s);", annotation, dbutil.TableName(schema, table.Name.O), strings.Join(sqlColNames, ","), strings.Join(sqlValues, ","))
 }
 
 // GerateReplaceDMLWithAnnotation returns the delete SQL for the specific row.
@@ -541,11 +550,6 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 		ok           bool
 	)
 
-	if collation == "" {
-		collation = "utf8mb4_bin"
-	}
-	collator := collate.GetCollator(collation)
-
 	// For string comparison, ctx is not used, so just create a dummy context.
 	dummyCtx := types.Context{}
 
@@ -633,8 +637,17 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 		}
 
 		if NeedQuotes(col.FieldType.GetType()) {
-			strData1 := types.NewCollationStringDatum(string(data1.Data), collation)
-			strData2 := types.NewCollationStringDatum(string(data2.Data), collation)
+			// With no override, ORDER BY uses each column's declared collation.
+			keyCollation := collation
+			if keyCollation == "" {
+				keyCollation = col.FieldType.GetCollate()
+			}
+			if keyCollation == "" {
+				keyCollation = "utf8mb4_bin"
+			}
+			collator := collate.GetCollator(keyCollation)
+			strData1 := types.NewCollationStringDatum(string(data1.Data), keyCollation)
+			strData2 := types.NewCollationStringDatum(string(data2.Data), keyCollation)
 			cmp, err = strData1.Compare(dummyCtx, &strData2, collator)
 			if err != nil {
 				return false, 0, errors.Trace(err)

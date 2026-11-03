@@ -173,6 +173,12 @@ func (df *Diff) initCheckpoint() error {
 		if err != nil {
 			return errors.Annotate(err, "the checkpoint load process failed")
 		} else {
+			if node == nil || reportInfo == nil {
+				return errors.New("checkpoint is missing its chunk or report")
+			}
+			if err := reportInfo.ValidateCheckpoint(df.downstream.GetTables(), node.GetTableIndex()); err != nil {
+				return errors.Trace(err)
+			}
 			// this need not be synchronized, because at the moment, the is only one thread access the section
 			log.Info("load checkpoint",
 				zap.Any("chunk index", node.GetID()),
@@ -804,7 +810,8 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 				}
 				// write chunk meta
 				chunkRange := dml.node.ChunkRange
-				fixSQLFile.WriteString(fmt.Sprintf("-- table: %s.%s\n-- %s\n", tableDiff.Schema, tableDiff.Table, chunkRange.ToMeta()))
+				fixSQLFile.WriteString(utils.SQLComment(fmt.Sprintf("table: %s.%s", tableDiff.Schema, tableDiff.Table)))
+				fixSQLFile.WriteString(utils.SQLComment(chunkRange.ToMeta()))
 				if tableDiff.NeedUnifiedTimeZone {
 					fixSQLFile.WriteString(fmt.Sprintf("set @@session.time_zone = \"%s\";\n", config.UnifiedTimeZone))
 				}

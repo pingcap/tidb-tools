@@ -17,18 +17,23 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb-tools/pkg/column-mapping"
 	"github.com/pingcap/tidb-tools/pkg/filter"
+	tidbutil "github.com/pingcap/tidb/pkg/util"
 	router "github.com/pingcap/tidb/pkg/util/table-router"
 	"github.com/pingcap/tiflow/dm/config/security"
 	"github.com/pingcap/tiflow/dm/pb"
@@ -43,16 +48,54 @@ const (
 )
 
 func getDMTaskCfgURL(dmAddr, task string) string {
-	return fmt.Sprintf("%s/apis/%s/subtasks/%s", dmAddr, apiVersion, task)
+	return fmt.Sprintf("%s/apis/%s/subtasks/%s", dmAddr, apiVersion, url.PathEscape(task))
 }
 
 // getDMTaskCfg gets dm's sub task config
 func getDMTaskCfg(dmAddr, task string) ([]*SubTaskConfig, error) {
-	tr := &http.Transport{
-		// TODO: support tls
-		//TLSClientConfig: tlsCfg,
+	return getDMTaskCfgWithSecurity(dmAddr, task, nil, false)
+}
+
+const maxDMConfigBytes = 16 << 20
+
+func getDMTaskCfgWithSecurity(dmAddr, task string, security *Security, allowHTTP bool) ([]*SubTaskConfig, error) {
+	endpoint, err := url.Parse(dmAddr)
+	if err != nil || endpoint.Host == "" || (endpoint.Scheme != "http" && endpoint.Scheme != "https") {
+		return nil, errors.New("dm-addr must be an HTTP or HTTPS URL")
 	}
-	client := &http.Client{Transport: tr}
+	ip := net.ParseIP(endpoint.Hostname())
+	loopback := endpoint.Hostname() == "localhost" || (ip != nil && ip.IsLoopback())
+	if endpoint.Scheme == "http" && !loopback && !allowHTTP {
+		return nil, errors.New("remote dm-addr requires HTTPS; use dm-allow-insecure-http only on a trusted network")
+	}
+	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
+	if security != nil {
+		configured, err := tidbutil.NewTLSConfig(
+			tidbutil.WithCAPath(security.CAPath),
+			tidbutil.WithCertAndKeyPath(security.CertPath, security.KeyPath),
+			tidbutil.WithCAContent([]byte(security.CABytes)),
+			tidbutil.WithCertAndKeyContent([]byte(security.CertBytes), []byte(security.KeyBytes)),
+		)
+		if err != nil {
+			return nil, errors.Annotate(err, "invalid DM TLS configuration")
+		}
+		if configured != nil {
+			// Retain standard certificate-chain and hostname verification even when
+			// the database TLS helper installs its additional verification hook.
+			configured.InsecureSkipVerify = false
+			tlsConfig = configured
+		}
+	}
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.TLSClientConfig = tlsConfig
+	defer tr.CloseIdleConnections()
+	client := &http.Client{
+		Transport: tr,
+		Timeout:   30 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return errors.New("DM configuration redirects are not allowed")
+		},
+	}
 	req, err := http.NewRequest("GET", getDMTaskCfgURL(dmAddr, task), nil)
 	if err != nil {
 		return nil, err
@@ -62,11 +105,17 @@ func getDMTaskCfg(dmAddr, task string) ([]*SubTaskConfig, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.Errorf("DM configuration request returned HTTP %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxDMConfigBytes+1))
 	if err != nil {
 		return nil, err
 	}
 
+	if len(body) > maxDMConfigBytes {
+		return nil, errors.New("DM configuration response exceeds size limit")
+	}
 	getSubTaskCfgResp := &pb.GetSubTaskCfgResponse{}
 	err = json.Unmarshal(body, getSubTaskCfgResp)
 	if err != nil {
@@ -77,6 +126,9 @@ func getDMTaskCfg(dmAddr, task string) ([]*SubTaskConfig, error) {
 		return nil, errors.Errorf("fail to get sub task config from DM, %s", getSubTaskCfgResp.Msg)
 	}
 
+	if len(getSubTaskCfgResp.Cfgs) == 0 {
+		return nil, errors.New("DM returned no subtask configurations")
+	}
 	subTaskCfgs := make([]*SubTaskConfig, 0, len(getSubTaskCfgResp.Cfgs))
 	for _, cfgBytes := range getSubTaskCfgResp.Cfgs {
 		subtaskCfg := &SubTaskConfig{}
@@ -89,7 +141,7 @@ func getDMTaskCfg(dmAddr, task string) ([]*SubTaskConfig, error) {
 		subTaskCfgs = append(subTaskCfgs, subtaskCfg)
 	}
 
-	log.Info("dm sub task configs", zap.Reflect("cfgs", subTaskCfgs))
+	log.Info("loaded DM subtask configurations", zap.Int("count", len(subTaskCfgs)))
 	return subTaskCfgs, nil
 }
 

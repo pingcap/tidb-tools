@@ -102,8 +102,25 @@ func (r *Report) LoadReport(reportInfo *Report) {
 		}
 		for table, result := range tableMap {
 			r.TableResults[schema][table] = result
+			if (!result.StructEqual || !result.DataEqual) && common.AllTableExist(result.TableLack) && r.Result != Error {
+				r.Result = Fail
+			}
 		}
 	}
+}
+
+// ValidateCheckpoint rejects snapshots that omit tables which will not be
+// revisited on resume. Older snapshots could silently discard those results.
+func (r *Report) ValidateCheckpoint(tables []*common.TableDiff, tableIndex int) error {
+	if tableIndex < 0 || tableIndex >= len(tables) {
+		return errors.New("invalid checkpoint table index")
+	}
+	for _, table := range tables[:tableIndex+1] {
+		if r.TableResults[table.Schema][table.Table] == nil {
+			return errors.New("checkpoint is missing completed table results; restart the comparison with a new output directory")
+		}
+	}
+	return nil
 }
 
 func (r *Report) getSortedTables() [][]string {
@@ -186,6 +203,9 @@ func (r *Report) CommitSummary() error {
 	r.PassNum = passNum
 	r.FailedNum = failedNum
 	r.SkippedNum = skippedNum
+	if failedNum > 0 && r.Result != Error {
+		r.Result = Fail
+	}
 	summaryPath := filepath.Join(r.task.OutputDir, "summary.txt")
 	summaryFile, err := os.Create(summaryPath)
 	if err != nil {
@@ -377,7 +397,8 @@ func (r *Report) GetSnapshot(chunkID *chunk.ChunkID, schema, table string) (*Rep
 		reserveMap[schema] = make(map[string]*TableResult)
 		for table, result := range tableMap {
 			reportID := utils.UniqueID(schema, table)
-			if reportID >= targetID {
+			// Tables before the checkpoint will not be compared again after a restart.
+			if reportID <= targetID {
 				chunkRes := make(map[string]*ChunkResult)
 				reserveMap[schema][table] = &TableResult{
 					Schema:      result.Schema,
@@ -385,6 +406,12 @@ func (r *Report) GetSnapshot(chunkID *chunk.ChunkID, schema, table string) (*Rep
 					StructEqual: result.StructEqual,
 					DataEqual:   result.DataEqual,
 					MeetError:   result.MeetError,
+					DataSkip:    result.DataSkip,
+					TableLack:   result.TableLack,
+				}
+				if reportID < targetID {
+					reserveMap[schema][table].UpCount = result.UpCount
+					reserveMap[schema][table].DownCount = result.DownCount
 				}
 				for id, chunkResult := range result.ChunkMap {
 					sid := new(chunk.ChunkID)
@@ -393,7 +420,8 @@ func (r *Report) GetSnapshot(chunkID *chunk.ChunkID, schema, table string) (*Rep
 						return nil, errors.Trace(err)
 					}
 					if sid.Compare(chunkID) <= 0 {
-						chunkRes[id] = chunkResult
+						savedChunk := *chunkResult
+						chunkRes[id] = &savedChunk
 					}
 				}
 				reserveMap[schema][table].ChunkMap = chunkRes
