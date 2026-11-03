@@ -55,8 +55,6 @@ func getDMTaskCfg(dmAddr, task string) ([]*SubTaskConfig, error) {
 	return getDMTaskCfgWithSecurity(dmAddr, task, nil)
 }
 
-const maxDMConfigBytes = 16 << 20
-
 func getDMTaskCfgWithSecurity(dmAddr, task string, security *Security) ([]*SubTaskConfig, error) {
 	endpoint, err := url.Parse(dmAddr)
 	if err != nil || endpoint.Host == "" || (endpoint.Scheme != "http" && endpoint.Scheme != "https") {
@@ -111,14 +109,11 @@ func getDMTaskCfgWithSecurity(dmAddr, task string, security *Security) ([]*SubTa
 	if resp.StatusCode != http.StatusOK {
 		return nil, errors.Errorf("DM configuration request returned HTTP %d", resp.StatusCode)
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxDMConfigBytes+1))
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(body) > maxDMConfigBytes {
-		return nil, errors.New("DM configuration response exceeds size limit")
-	}
 	getSubTaskCfgResp := &pb.GetSubTaskCfgResponse{}
 	err = json.Unmarshal(body, getSubTaskCfgResp)
 	if err != nil {

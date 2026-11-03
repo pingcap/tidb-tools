@@ -61,19 +61,11 @@ func TestDMRejectsInvalidResponses(t *testing.T) {
 		{"status", http.StatusForbidden, validDMResponse, "HTTP 403"},
 		{"empty", http.StatusOK, `{"result":true,"cfgs":[]}`, "no subtask"},
 		{"invalid", http.StatusOK, "not JSON", "invalid character"},
-		{"large", http.StatusOK, "", "size limit"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tc.status)
-				if tc.name == "large" {
-					block := make([]byte, 1<<20)
-					for i := 0; i < 17; i++ {
-						_, _ = w.Write(block)
-					}
-				} else {
-					_, _ = io.WriteString(w, tc.body)
-				}
+				_, _ = io.WriteString(w, tc.body)
 			}))
 			defer server.Close()
 			_, err := getDMTaskCfg(server.URL, "test")
