@@ -173,12 +173,6 @@ func (df *Diff) initCheckpoint() error {
 		if err != nil {
 			return errors.Annotate(err, "the checkpoint load process failed")
 		} else {
-			if node == nil || reportInfo == nil {
-				return errors.New("checkpoint is missing its chunk or report")
-			}
-			if err := reportInfo.ValidateCheckpoint(df.downstream.GetTables(), node.GetTableIndex()); err != nil {
-				return errors.Trace(err)
-			}
 			// this need not be synchronized, because at the moment, the is only one thread access the section
 			log.Info("load checkpoint",
 				zap.Any("chunk index", node.GetID()),

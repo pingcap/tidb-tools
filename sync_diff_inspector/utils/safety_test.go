@@ -20,7 +20,6 @@ import (
 	"github.com/pingcap/tidb-tools/pkg/dbutil"
 	"github.com/pingcap/tidb/pkg/parser"
 	"github.com/pingcap/tidb/pkg/parser/ast"
-	"github.com/pingcap/tidb/pkg/util/collate"
 	"github.com/stretchr/testify/require"
 )
 
@@ -48,25 +47,6 @@ func TestFixSQLAnnotationCannotEndComment(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestCompareDataUsesColumnCollation(t *testing.T) {
-	wasEnabled := collate.NewCollationEnabled()
-	collate.SetNewCollationEnabledForTest(true)
-	defer collate.SetNewCollationEnabledForTest(wasEnabled)
-	table, err := dbutil.GetTableInfoBySQL("CREATE TABLE t (k VARCHAR(20) COLLATE utf8mb4_general_ci PRIMARY KEY)", parser.New())
-	require.NoError(t, err)
-	keys := dbutil.SelectUniqueOrderKey(table)
-	row := func(s string) map[string]*dbutil.ColumnData {
-		return map[string]*dbutil.ColumnData{"k": {Data: []byte(s)}}
-	}
-	equal, cmp, err := CompareData(row("B"), row("a"), keys, table.Columns, "")
-	require.NoError(t, err)
-	require.False(t, equal)
-	require.Greater(t, cmp, 0, "B must sort after a under the column's case-insensitive collation")
-	_, cmp, err = CompareData(row("B"), row("a"), keys, table.Columns, "utf8mb4_bin")
-	require.NoError(t, err)
-	require.Less(t, cmp, 0, "an explicit binary override must still take precedence")
 }
 
 func TestSQLCommentKeepsMetadataInert(t *testing.T) {

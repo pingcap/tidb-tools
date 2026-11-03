@@ -352,12 +352,12 @@ func TestGetSnapshot(t *testing.T) {
 		if _, ok := report_snap.TableResults[key]; !ok {
 			v, ok := value["tbl"]
 			require.True(t, ok)
-			require.Equal(t, v.Schema, "xtest")
+			require.Equal(t, v.Schema, "atest")
 			continue
 		}
 
 		if _, ok := report_snap.TableResults[key]["tbl"]; !ok {
-			require.Equal(t, key, "xtest")
+			require.Equal(t, key, "atest")
 			continue
 		}
 

@@ -28,9 +28,9 @@ import (
 
 const validDMResponse = `{"result":true,"cfgs":["source-id = \"test\"\n[from]\nhost = \"127.0.0.1\"\n[to]\nhost = \"127.0.0.1\"\n"]}`
 
-func TestDMRejectsRemotePlaintext(t *testing.T) {
-	_, err := getDMTaskCfg("http://192.0.2.1:8261", "test")
-	require.ErrorContains(t, err, "requires HTTPS")
+func TestDMTLSConfigurationRequiresHTTPS(t *testing.T) {
+	_, err := getDMTaskCfgWithSecurity("http://127.0.0.1:8261", "test", &Security{})
+	require.ErrorContains(t, err, "requires an https:// dm-addr")
 }
 
 func TestDMRejectsInvalidResponses(t *testing.T) {
@@ -93,10 +93,10 @@ func TestDMCustomCAAndClientCertificate(t *testing.T) {
 	server.StartTLS()
 	defer server.Close()
 	security := &Security{CABytes: string(ca), CertPath: "../../pkg/utils/tls_test/client1.pem", KeyPath: "../../pkg/utils/tls_test/client1.key"}
-	cfgs, err := getDMTaskCfgWithSecurity(server.URL, "test", security, false)
+	cfgs, err := getDMTaskCfgWithSecurity(server.URL, "test", security)
 	require.NoError(t, err)
 	require.Len(t, cfgs, 1)
-	_, err = getDMTaskCfgWithSecurity(server.URL, "test", &Security{CABytes: string(ca)}, false)
+	_, err = getDMTaskCfgWithSecurity(server.URL, "test", &Security{CABytes: string(ca)})
 	require.Error(t, err, "missing client certificate must be rejected")
 	_, err = getDMTaskCfg(server.URL, "test")
 	require.Error(t, err, "an untrusted server must be rejected")

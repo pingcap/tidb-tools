@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"time"
@@ -53,20 +52,18 @@ func getDMTaskCfgURL(dmAddr, task string) string {
 
 // getDMTaskCfg gets dm's sub task config
 func getDMTaskCfg(dmAddr, task string) ([]*SubTaskConfig, error) {
-	return getDMTaskCfgWithSecurity(dmAddr, task, nil, false)
+	return getDMTaskCfgWithSecurity(dmAddr, task, nil)
 }
 
 const maxDMConfigBytes = 16 << 20
 
-func getDMTaskCfgWithSecurity(dmAddr, task string, security *Security, allowHTTP bool) ([]*SubTaskConfig, error) {
+func getDMTaskCfgWithSecurity(dmAddr, task string, security *Security) ([]*SubTaskConfig, error) {
 	endpoint, err := url.Parse(dmAddr)
 	if err != nil || endpoint.Host == "" || (endpoint.Scheme != "http" && endpoint.Scheme != "https") {
 		return nil, errors.New("dm-addr must be an HTTP or HTTPS URL")
 	}
-	ip := net.ParseIP(endpoint.Hostname())
-	loopback := endpoint.Hostname() == "localhost" || (ip != nil && ip.IsLoopback())
-	if endpoint.Scheme == "http" && !loopback && !allowHTTP {
-		return nil, errors.New("remote dm-addr requires HTTPS; use dm-allow-insecure-http only on a trusted network")
+	if security != nil && endpoint.Scheme != "https" {
+		return nil, errors.New("DM TLS configuration requires an https:// dm-addr")
 	}
 	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
 	if security != nil {

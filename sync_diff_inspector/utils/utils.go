@@ -550,6 +550,11 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 		ok           bool
 	)
 
+	if collation == "" {
+		collation = "utf8mb4_bin"
+	}
+	collator := collate.GetCollator(collation)
+
 	// For string comparison, ctx is not used, so just create a dummy context.
 	dummyCtx := types.Context{}
 
@@ -637,17 +642,8 @@ func CompareData(map1, map2 map[string]*dbutil.ColumnData, orderKeyCols, columns
 		}
 
 		if NeedQuotes(col.FieldType.GetType()) {
-			// With no override, ORDER BY uses each column's declared collation.
-			keyCollation := collation
-			if keyCollation == "" {
-				keyCollation = col.FieldType.GetCollate()
-			}
-			if keyCollation == "" {
-				keyCollation = "utf8mb4_bin"
-			}
-			collator := collate.GetCollator(keyCollation)
-			strData1 := types.NewCollationStringDatum(string(data1.Data), keyCollation)
-			strData2 := types.NewCollationStringDatum(string(data2.Data), keyCollation)
+			strData1 := types.NewCollationStringDatum(string(data1.Data), collation)
+			strData2 := types.NewCollationStringDatum(string(data2.Data), collation)
 			cmp, err = strData1.Compare(dummyCtx, &strData2, collator)
 			if err != nil {
 				return false, 0, errors.Trace(err)
