@@ -56,33 +56,34 @@ func getDMTaskCfg(dmAddr, task string) ([]*SubTaskConfig, error) {
 
 // newDMTLSConfig builds verified TLS settings for DM HTTP requests.
 func newDMTLSConfig(dmAddr string, security *Security) (*tls.Config, error) {
-	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
-	if security != nil {
-		endpoint, err := url.Parse(dmAddr)
-		if err != nil || endpoint.Scheme != "https" {
-			return nil, errors.New("DM TLS configuration requires an https:// dm-addr")
-		}
-		if (security.CertPath == "") != (security.KeyPath == "") {
-			return nil, errors.New("DM client certificate and key paths must be set together")
-		}
-		if (security.CertBytes == "") != (security.KeyBytes == "") {
-			return nil, errors.New("DM client certificate and key contents must be set together")
-		}
-		configured, err := tidbutil.NewTLSConfig(
-			tidbutil.WithCAPath(security.CAPath),
-			tidbutil.WithCertAndKeyPath(security.CertPath, security.KeyPath),
-			tidbutil.WithCAContent([]byte(security.CABytes)),
-			tidbutil.WithCertAndKeyContent([]byte(security.CertBytes), []byte(security.KeyBytes)),
-		)
-		if err != nil {
-			return nil, errors.Annotate(err, "invalid DM TLS configuration")
-		}
-		if configured != nil {
-			// Retain standard certificate-chain and hostname verification even when
-			// the database TLS helper installs its additional verification hook.
-			configured.InsecureSkipVerify = false
-			tlsConfig = configured
-		}
+	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12, NextProtos: []string{"http/1.1"}}
+	if security == nil {
+		return tlsConfig, nil
+	}
+	endpoint, err := url.Parse(dmAddr)
+	if err != nil || endpoint.Scheme != "https" {
+		return nil, errors.New("DM TLS configuration requires an https:// dm-addr")
+	}
+	if (security.CertPath == "") != (security.KeyPath == "") {
+		return nil, errors.New("DM client certificate and key paths must be set together")
+	}
+	if (security.CertBytes == "") != (security.KeyBytes == "") {
+		return nil, errors.New("DM client certificate and key contents must be set together")
+	}
+	configured, err := tidbutil.NewTLSConfig(
+		tidbutil.WithCAPath(security.CAPath),
+		tidbutil.WithCertAndKeyPath(security.CertPath, security.KeyPath),
+		tidbutil.WithCAContent([]byte(security.CABytes)),
+		tidbutil.WithCertAndKeyContent([]byte(security.CertBytes), []byte(security.KeyBytes)),
+	)
+	if err != nil {
+		return nil, errors.Annotate(err, "invalid DM TLS configuration")
+	}
+	if configured != nil {
+		// Retain standard certificate-chain and hostname verification even when
+		// the database TLS helper installs its additional verification hook.
+		configured.InsecureSkipVerify = false
+		tlsConfig = configured
 	}
 	// The database helper advertises HTTP/2; this transport uses HTTP/1.1.
 	tlsConfig.NextProtos = []string{"http/1.1"}
