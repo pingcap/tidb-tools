@@ -780,6 +780,12 @@ func sqlComment(text string) string {
 	return "-- " + strings.ReplaceAll(text, "\n", "\n-- ") + "\n"
 }
 
+// fileNameEscaper escapes "/" and "\" so database identifiers cannot introduce
+// directory components. Combined with the fixed chunk suffix, the generated
+// filename is a single path component and cannot be "." or "..".
+// It also escapes "%" to avoid collisions with literal escape sequences.
+var fileNameEscaper = strings.NewReplacer("%", "%25", "/", "%2F", "\\", "%5C")
+
 // WriteSQLs write sqls to file
 func (df *Diff) writeSQLs(ctx context.Context) {
 	log.Info("start writeSQLs goroutine")
@@ -798,7 +804,8 @@ func (df *Diff) writeSQLs(ctx context.Context) {
 			}
 			if len(dml.sqls) > 0 {
 				tableDiff := df.downstream.GetTables()[dml.node.GetTableIndex()]
-				fileName := fmt.Sprintf("%s:%s:%s.sql", tableDiff.Schema, tableDiff.Table, utils.GetSQLFileName(dml.node.GetID()))
+				fileName := fmt.Sprintf("%s:%s:%s.sql", fileNameEscaper.Replace(tableDiff.Schema),
+					fileNameEscaper.Replace(tableDiff.Table), utils.GetSQLFileName(dml.node.GetID()))
 				fixSQLPath := filepath.Join(df.FixSQLDir, fileName)
 				if ok := ioutil2.FileExists(fixSQLPath); ok {
 					// unreachable
