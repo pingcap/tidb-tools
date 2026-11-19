@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -257,6 +258,26 @@ func TestTiDBSource(t *testing.T) {
 			"╍╍╍╍╍╍╍╍╍╍╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╋╍╍╍╍╍╍╍╋╍╍╍╍╍╍╍╍\n"+
 			"*/\n"+
 			"REPLACE INTO `source_test`.`test1`(`a`,`b`,`c`,`d`,`e`) VALUES (1,'a',1.2,x'aa',x'aa');")
+
+	rowIter.Close()
+
+	// Test RowIterator returns the underlying database/sql row-stream error instead of treating it as clean EOF.
+	rowsErr := errors.New("tidb row stream cancelled")
+	errorRows := sqlmock.NewRows(tableCase.rowColumns).
+		AddRow(tableCase.rows[0]...).
+		AddRow(tableCase.rows[1]...).
+		RowError(1, rowsErr)
+	mock.ExpectQuery(tableCase.rowQuery).WillReturnRows(errorRows)
+	rowIter, err = tidb.GetRowsIterator(ctx, tableCase.rangeInfo)
+	require.NoError(t, err)
+
+	columns, err := rowIter.Next()
+	require.NoError(t, err)
+	require.NotNil(t, columns)
+
+	columns, err = rowIter.Next()
+	require.ErrorIs(t, err, rowsErr)
+	require.Nil(t, columns)
 
 	rowIter.Close()
 
